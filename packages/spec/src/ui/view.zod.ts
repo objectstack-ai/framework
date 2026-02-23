@@ -354,6 +354,17 @@ export const ListViewSchema = z.object({
   
   /** Data Source Configuration */
   data: ViewDataSchema.optional().describe('Data source configuration (defaults to "object" provider)'),
+
+  /**
+   * Source Object Name (UI Extension)
+   * Shorthand identifier for the underlying data object this view is bound to.
+   * Used by UI settings panels and console tools to display the source object
+   * without needing to parse the full `data` configuration.
+   *
+   * @example 'project_task'
+   * @see data — full data source configuration
+   */
+  source: z.string().optional().describe('Source object name for this view (UI display shorthand)'),
   
   /** Shared Query Config */
   columns: z.union([
@@ -402,6 +413,19 @@ export const ListViewSchema = z.object({
   gallery: GalleryConfigSchema.optional(),
   timeline: TimelineConfigSchema.optional(),
 
+  /**
+   * Type-Specific Options (UI Extension)
+   * Extensible key-value map for view-type-specific configuration that goes
+   * beyond the built-in type configs (kanban, calendar, gantt, gallery, timeline).
+   * Useful for custom/third-party view types or advanced settings not covered
+   * by the standard typed configs above.
+   *
+   * @example { showWeekends: false, firstDayOfWeek: 1 }   // calendar extras
+   * @example { cardTemplate: 'compact', showAvatar: true } // custom card view
+   */
+  typeOptions: z.record(z.string(), z.unknown()).optional()
+    .describe('Extensible key-value options for view-type-specific configuration'),
+
   /** View Metadata (Airtable-style view management) */
   description: I18nLabelSchema.optional().describe('View description for documentation/tooltips'),
   sharing: ViewSharingSchema.optional().describe('View sharing and access configuration'),
@@ -411,6 +435,18 @@ export const ListViewSchema = z.object({
 
   /** Record Grouping (Airtable-style) */
   grouping: GroupingConfigSchema.optional().describe('Group records by one or more fields'),
+
+  /**
+   * Simple Group-By Field (UI Extension)
+   * A lightweight shorthand for grouping records by a single field name.
+   * UI settings panels use this for quick "Group by" dropdowns.
+   * For multi-level grouping with sort order and collapse state, use `grouping` instead.
+   *
+   * @example 'status'
+   * @example 'department'
+   * @see grouping — full multi-level grouping configuration
+   */
+  groupBy: z.string().optional().describe('Field name to group records by (simple shorthand for grouping)'),
 
   /** Row Color (Airtable-style) */
   rowColor: RowColorConfigSchema.optional().describe('Color rows based on field value'),

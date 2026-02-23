@@ -2300,3 +2300,170 @@ describe('ListViewSchema — Airtable Interface parity fields', () => {
     expect(listView.allowPrinting).toBeUndefined();
   });
 });
+
+// ============================================================================
+// UI Extension Fields: source, groupBy, typeOptions
+// ============================================================================
+
+describe('ListViewSchema — UI Extension fields (source, groupBy, typeOptions)', () => {
+  // --- source ---
+
+  it('should accept list view with source field', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+      source: 'project_task',
+    });
+    expect(listView.source).toBe('project_task');
+  });
+
+  it('should accept list view without source (optional)', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+    });
+    expect(listView.source).toBeUndefined();
+  });
+
+  it('should accept source alongside data provider', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+      source: 'project_task',
+      data: { provider: 'object', object: 'project_task' },
+    });
+    expect(listView.source).toBe('project_task');
+    expect(listView.data?.provider).toBe('object');
+  });
+
+  // --- groupBy ---
+
+  it('should accept list view with groupBy field', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status', 'department'],
+      groupBy: 'department',
+    });
+    expect(listView.groupBy).toBe('department');
+  });
+
+  it('should accept list view without groupBy (optional)', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+    });
+    expect(listView.groupBy).toBeUndefined();
+  });
+
+  it('should accept groupBy alongside full grouping config', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status', 'department'],
+      groupBy: 'status',
+      grouping: {
+        fields: [
+          { field: 'department', order: 'asc' },
+          { field: 'status', order: 'desc', collapsed: true },
+        ],
+      },
+    });
+    expect(listView.groupBy).toBe('status');
+    expect(listView.grouping?.fields).toHaveLength(2);
+  });
+
+  // --- typeOptions ---
+
+  it('should accept list view with typeOptions', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+      type: 'calendar',
+      typeOptions: {
+        showWeekends: false,
+        firstDayOfWeek: 1,
+      },
+    });
+    expect(listView.typeOptions).toEqual({
+      showWeekends: false,
+      firstDayOfWeek: 1,
+    });
+  });
+
+  it('should accept list view without typeOptions (optional)', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+    });
+    expect(listView.typeOptions).toBeUndefined();
+  });
+
+  it('should accept typeOptions with nested objects', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+      type: 'kanban',
+      typeOptions: {
+        cardTemplate: 'compact',
+        showAvatar: true,
+        cardLayout: { maxFields: 4, showCover: true },
+      },
+    });
+    expect(listView.typeOptions?.cardTemplate).toBe('compact');
+    expect(listView.typeOptions?.cardLayout).toEqual({ maxFields: 4, showCover: true });
+  });
+
+  it('should accept typeOptions alongside built-in type config', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+      type: 'kanban',
+      kanban: {
+        groupByField: 'stage',
+        summarizeField: 'amount',
+        columns: ['name', 'owner'],
+      },
+      typeOptions: {
+        swimlanes: true,
+        wipLimit: 5,
+      },
+    });
+    expect(listView.kanban?.groupByField).toBe('stage');
+    expect(listView.typeOptions?.swimlanes).toBe(true);
+    expect(listView.typeOptions?.wipLimit).toBe(5);
+  });
+
+  it('should accept empty typeOptions', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+      typeOptions: {},
+    });
+    expect(listView.typeOptions).toEqual({});
+  });
+
+  // --- Combined: all UI extension fields together ---
+
+  it('should accept all UI extension fields together', () => {
+    const listView = ListViewSchema.parse({
+      name: 'task_board',
+      label: 'Task Board',
+      description: 'Project task tracking board',
+      type: 'kanban',
+      columns: ['name', 'status', 'assignee'],
+      source: 'project_task',
+      groupBy: 'status',
+      typeOptions: {
+        swimlanes: true,
+        wipLimit: 10,
+      },
+      kanban: {
+        groupByField: 'status',
+        summarizeField: 'story_points',
+        columns: ['name', 'assignee', 'priority'],
+      },
+    });
+    expect(listView.name).toBe('task_board');
+    expect(listView.description).toBe('Project task tracking board');
+    expect(listView.source).toBe('project_task');
+    expect(listView.groupBy).toBe('status');
+    expect(listView.typeOptions?.swimlanes).toBe(true);
+  });
+
+  it('should maintain backward compatibility — new fields are all optional', () => {
+    const listView = ListViewSchema.parse({
+      columns: ['name', 'status'],
+    });
+    expect(listView.source).toBeUndefined();
+    expect(listView.groupBy).toBeUndefined();
+    expect(listView.typeOptions).toBeUndefined();
+  });
+});
