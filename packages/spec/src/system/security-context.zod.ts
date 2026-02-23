@@ -22,11 +22,31 @@ import { z } from 'zod';
  */
 
 /**
+ * Shared data classification enum used across security subsystems.
+ * Defines the canonical set of data sensitivity labels.
+ */
+export const DataClassificationSchema = z.enum([
+  'pii', 'phi', 'pci', 'financial', 'confidential', 'internal', 'public',
+]).describe('Data classification level');
+
+export type DataClassification = z.infer<typeof DataClassificationSchema>;
+
+/**
+ * Shared compliance framework enum used across compliance and security schemas.
+ * Defines the canonical set of regulatory frameworks.
+ */
+export const ComplianceFrameworkSchema = z.enum([
+  'gdpr', 'hipaa', 'sox', 'pci_dss', 'ccpa', 'iso27001',
+]).describe('Compliance framework identifier');
+
+export type ComplianceFramework = z.infer<typeof ComplianceFrameworkSchema>;
+
+/**
  * Compliance-driven audit requirement.
  * Maps specific compliance frameworks to the audit event types that MUST be captured.
  */
 export const ComplianceAuditRequirementSchema = z.object({
-  framework: z.enum(['gdpr', 'hipaa', 'sox', 'pci_dss', 'ccpa', 'iso27001'])
+  framework: ComplianceFrameworkSchema
     .describe('Compliance framework identifier'),
   requiredEvents: z.array(z.string())
     .describe('Audit event types required by this framework (e.g., "data.delete", "auth.login")'),
@@ -43,11 +63,10 @@ export type ComplianceAuditRequirement = z.infer<typeof ComplianceAuditRequireme
  * Maps compliance frameworks to encryption mandates for specific data classifications.
  */
 export const ComplianceEncryptionRequirementSchema = z.object({
-  framework: z.enum(['gdpr', 'hipaa', 'sox', 'pci_dss', 'ccpa', 'iso27001'])
+  framework: ComplianceFrameworkSchema
     .describe('Compliance framework identifier'),
-  dataClassifications: z.array(z.enum([
-    'pii', 'phi', 'pci', 'financial', 'confidential', 'internal', 'public',
-  ])).describe('Data classifications that must be encrypted under this framework'),
+  dataClassifications: z.array(DataClassificationSchema)
+    .describe('Data classifications that must be encrypted under this framework'),
   minimumAlgorithm: z.enum(['aes-256-gcm', 'aes-256-cbc', 'chacha20-poly1305']).default('aes-256-gcm')
     .describe('Minimum encryption algorithm strength required'),
   keyRotationMaxDays: z.number().min(1).default(90)
@@ -61,9 +80,8 @@ export type ComplianceEncryptionRequirement = z.infer<typeof ComplianceEncryptio
  * Controls which roles can view unmasked data with audit trail enforcement.
  */
 export const MaskingVisibilityRuleSchema = z.object({
-  dataClassification: z.enum([
-    'pii', 'phi', 'pci', 'financial', 'confidential', 'internal', 'public',
-  ]).describe('Data classification this rule applies to'),
+  dataClassification: DataClassificationSchema
+    .describe('Data classification this rule applies to'),
   defaultMasked: z.boolean().default(true)
     .describe('Whether data is masked by default'),
   unmaskRoles: z.array(z.string()).optional()
@@ -102,9 +120,8 @@ export type SecurityEventCorrelation = z.infer<typeof SecurityEventCorrelationSc
  * Assigns classification labels to fields/objects for unified security enforcement.
  */
 export const DataClassificationPolicySchema = z.object({
-  classification: z.enum([
-    'pii', 'phi', 'pci', 'financial', 'confidential', 'internal', 'public',
-  ]).describe('Data classification level'),
+  classification: DataClassificationSchema
+    .describe('Data classification level'),
   requireEncryption: z.boolean().default(false)
     .describe('Encryption required for this classification'),
   requireMasking: z.boolean().default(false)

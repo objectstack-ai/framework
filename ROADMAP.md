@@ -543,6 +543,31 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 - [ ] GDPR/CCPA compliance utilities (right to erasure, data export)
 - [ ] Change management and approval workflows for schema changes
 
+### 6.5 ISO 27001:2022 Compliance
+
+> **Goal:** Full schema coverage for ISO 27001:2022 Annex A controls to support certification readiness.
+
+#### 6.5.1 High Priority (Certification Blockers) — ✅ Schema Complete
+
+- [x] **Incident Response Protocol** (A.5.24–A.5.28) — `system/incident-response.zod.ts`: Incident classification, severity grading, response phases, notification matrix, escalation policies
+- [x] **Audit Scheduling & Finding Tracking** (A.5.35) — `system/compliance.zod.ts`: AuditScheduleSchema, AuditFindingSchema for independent review and remediation tracking
+- [x] **Change Management Security Approval** (A.8.32) — `system/change-management.zod.ts`: SecurityImpactAssessment with risk level, data classification, security reviewer workflow
+
+#### 6.5.2 Medium Priority (Compliance Completeness) — ✅ Schema Complete
+
+- [x] **Supplier Security Assessment** (A.5.19–A.5.22) — `system/supplier-security.zod.ts`: Supplier risk levels, security requirements, assessment lifecycle, remediation tracking
+- [x] **Information Security Training** (A.6.3) — `system/training.zod.ts`: Training courses, completion records, organizational training plans with recertification
+
+#### 6.5.3 Medium Priority (Pending)
+
+- [ ] **OAuth Scope Binding** (A.8.1) — API endpoint schema with required OAuth scopes
+- [ ] **Permission Registry** (A.8.2) — Transform `manifest.permissions` from `string[]` to structured registry enum
+
+#### 6.5.4 Low Priority (Enhancements)
+
+- [ ] Permission delegation and temporary privilege elevation protocol (AWS STS-style)
+- [ ] Device trust policy extensions
+
 ---
 
 ## Phase 7: AI & Intelligence (🔴 Planned)

@@ -32,6 +32,9 @@ export * from './compliance.zod';
 export * from './encryption.zod';
 export * from './masking.zod';
 export * from './security-context.zod';
+export * from './incident-response.zod';
+export * from './supplier-security.zod';
+export * from './training.zod';
 
 // Runtime Services
 export * from './job.zod';
