@@ -5,6 +5,10 @@ import {
   PCIDSSConfigSchema,
   AuditLogConfigSchema,
   ComplianceConfigSchema,
+  AuditFindingSeveritySchema,
+  AuditFindingStatusSchema,
+  AuditFindingSchema,
+  AuditScheduleSchema,
 } from './compliance.zod';
 
 describe('GDPRConfigSchema', () => {
@@ -225,5 +229,179 @@ describe('ComplianceConfigSchema', () => {
 
   it('should reject missing auditLog', () => {
     expect(() => ComplianceConfigSchema.parse({})).toThrow();
+  });
+
+  it('should accept configuration with audit schedules', () => {
+    const config = ComplianceConfigSchema.parse({
+      auditLog: {
+        events: ['create', 'update'],
+      },
+      auditSchedules: [
+        {
+          id: 'AUDIT-2024-Q1',
+          title: 'Q1 ISO 27001 Internal Audit',
+          scope: ['access_control', 'encryption'],
+          framework: 'iso27001',
+          scheduledAt: 1711929600000,
+          assessor: 'internal_audit_team',
+        },
+      ],
+    });
+
+    expect(config.auditSchedules).toHaveLength(1);
+    expect(config.auditSchedules![0].framework).toBe('iso27001');
+  });
+});
+
+describe('AuditFindingSeveritySchema', () => {
+  it('should accept all valid severities', () => {
+    const severities = ['critical', 'major', 'minor', 'observation'];
+
+    severities.forEach((severity) => {
+      expect(() => AuditFindingSeveritySchema.parse(severity)).not.toThrow();
+    });
+  });
+
+  it('should reject invalid severity', () => {
+    expect(() => AuditFindingSeveritySchema.parse('warning')).toThrow();
+  });
+});
+
+describe('AuditFindingStatusSchema', () => {
+  it('should accept all valid statuses', () => {
+    const statuses = ['open', 'in_remediation', 'remediated', 'verified', 'accepted_risk', 'closed'];
+
+    statuses.forEach((status) => {
+      expect(() => AuditFindingStatusSchema.parse(status)).not.toThrow();
+    });
+  });
+
+  it('should reject invalid status', () => {
+    expect(() => AuditFindingStatusSchema.parse('pending')).toThrow();
+  });
+});
+
+describe('AuditFindingSchema', () => {
+  it('should accept valid finding', () => {
+    const finding = AuditFindingSchema.parse({
+      id: 'FIND-2024-001',
+      title: 'Insufficient access logging',
+      description: 'PHI access events are not being logged for HIPAA compliance',
+      severity: 'major',
+      status: 'in_remediation',
+      controlReference: 'A.8.15',
+      framework: 'iso27001',
+      identifiedAt: 1704067200000,
+      identifiedBy: 'external_auditor',
+      remediationPlan: 'Implement audit logging for all PHI access events',
+      remediationDeadline: 1706745600000,
+    });
+
+    expect(finding.severity).toBe('major');
+    expect(finding.framework).toBe('iso27001');
+  });
+
+  it('should accept minimal finding', () => {
+    const finding = AuditFindingSchema.parse({
+      id: 'FIND-2024-002',
+      title: 'Missing encryption',
+      description: 'Field-level encryption not enabled',
+      severity: 'minor',
+      status: 'open',
+      identifiedAt: Date.now(),
+      identifiedBy: 'internal_audit',
+    });
+
+    expect(finding.controlReference).toBeUndefined();
+    expect(finding.remediationPlan).toBeUndefined();
+  });
+
+  it('should accept verified finding', () => {
+    const finding = AuditFindingSchema.parse({
+      id: 'FIND-2024-003',
+      title: 'Weak password policy',
+      description: 'Password minimum length below 12 characters',
+      severity: 'observation',
+      status: 'verified',
+      identifiedAt: 1704067200000,
+      identifiedBy: 'auditor',
+      verifiedAt: 1706745600000,
+      verifiedBy: 'senior_auditor',
+      notes: 'Password policy updated and verified',
+    });
+
+    expect(finding.verifiedAt).toBe(1706745600000);
+    expect(finding.verifiedBy).toBe('senior_auditor');
+  });
+
+  it('should reject missing required fields', () => {
+    expect(() => AuditFindingSchema.parse({})).toThrow();
+  });
+});
+
+describe('AuditScheduleSchema', () => {
+  it('should accept valid schedule with defaults', () => {
+    const schedule = AuditScheduleSchema.parse({
+      id: 'AUDIT-2024-Q1',
+      title: 'Q1 ISO 27001 Internal Audit',
+      scope: ['access_control', 'encryption', 'incident_response'],
+      framework: 'iso27001',
+      scheduledAt: 1711929600000,
+      assessor: 'internal_audit_team',
+    });
+
+    expect(schedule.isExternal).toBe(false);
+    expect(schedule.recurrenceMonths).toBe(0);
+    expect(schedule.findings).toBeUndefined();
+  });
+
+  it('should accept full schedule with findings', () => {
+    const schedule = AuditScheduleSchema.parse({
+      id: 'AUDIT-2024-EXT',
+      title: 'Annual External ISO 27001 Audit',
+      scope: ['all_controls'],
+      framework: 'iso27001',
+      scheduledAt: 1711929600000,
+      completedAt: 1712534400000,
+      assessor: 'External Audit Firm LLC',
+      isExternal: true,
+      recurrenceMonths: 12,
+      findings: [
+        {
+          id: 'FIND-001',
+          title: 'Missing incident response plan',
+          description: 'No documented incident response procedure',
+          severity: 'major',
+          status: 'open',
+          controlReference: 'A.5.24',
+          framework: 'iso27001',
+          identifiedAt: 1712534400000,
+          identifiedBy: 'External Audit Firm LLC',
+        },
+      ],
+    });
+
+    expect(schedule.isExternal).toBe(true);
+    expect(schedule.recurrenceMonths).toBe(12);
+    expect(schedule.findings).toHaveLength(1);
+  });
+
+  it('should accept all framework values', () => {
+    const frameworks = ['gdpr', 'hipaa', 'sox', 'pci_dss', 'ccpa', 'iso27001'];
+
+    frameworks.forEach((framework) => {
+      expect(() => AuditScheduleSchema.parse({
+        id: `AUDIT-${framework}`,
+        title: `${framework} audit`,
+        scope: ['general'],
+        framework,
+        scheduledAt: Date.now(),
+        assessor: 'auditor',
+      })).not.toThrow();
+    });
+  });
+
+  it('should reject missing required fields', () => {
+    expect(() => AuditScheduleSchema.parse({})).toThrow();
   });
 });

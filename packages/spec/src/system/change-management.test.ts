@@ -653,4 +653,120 @@ describe('ChangeRequestSchema', () => {
 
     expect(() => ChangeRequestSchema.parse(rolledBackChange)).not.toThrow();
   });
+
+  it('should accept change with security impact assessment (A.8.32)', () => {
+    const changeWithSecurityImpact = {
+      id: 'CHG-2024-SEC-001',
+      title: 'API Gateway Configuration Change',
+      description: 'Update API gateway security headers',
+      type: 'normal',
+      priority: 'high',
+      status: 'approved',
+      requestedBy: 'security_team',
+      requestedAt: Date.now(),
+      impact: {
+        level: 'high',
+        affectedSystems: ['api-gateway'],
+      },
+      implementation: {
+        description: 'Update security headers',
+        steps: [
+          {
+            order: 1,
+            description: 'Deploy configuration',
+            estimatedMinutes: 10,
+          },
+        ],
+      },
+      rollbackPlan: {
+        description: 'Revert configuration',
+        steps: [
+          {
+            order: 1,
+            description: 'Restore previous config',
+            estimatedMinutes: 5,
+          },
+        ],
+      },
+      securityImpact: {
+        assessed: true,
+        riskLevel: 'high',
+        affectedDataClassifications: ['pii', 'confidential'],
+        requiresSecurityApproval: true,
+        reviewedBy: 'ciso',
+        reviewedAt: Date.now(),
+        reviewNotes: 'Approved with monitoring requirement',
+      },
+    };
+
+    const parsed = ChangeRequestSchema.parse(changeWithSecurityImpact);
+    expect(parsed.securityImpact?.assessed).toBe(true);
+    expect(parsed.securityImpact?.riskLevel).toBe('high');
+    expect(parsed.securityImpact?.requiresSecurityApproval).toBe(true);
+  });
+
+  it('should accept change with minimal security impact', () => {
+    const change = {
+      id: 'CHG-2024-SEC-002',
+      title: 'Minor UI Change',
+      description: 'Update button color',
+      type: 'standard',
+      priority: 'low',
+      status: 'draft',
+      requestedBy: 'user_123',
+      requestedAt: Date.now(),
+      impact: {
+        level: 'low',
+        affectedSystems: ['ui'],
+      },
+      implementation: {
+        description: 'Update CSS',
+        steps: [{ order: 1, description: 'Deploy', estimatedMinutes: 5 }],
+      },
+      rollbackPlan: {
+        description: 'Revert CSS',
+        steps: [{ order: 1, description: 'Revert', estimatedMinutes: 5 }],
+      },
+      securityImpact: {
+        assessed: true,
+        riskLevel: 'none',
+      },
+    };
+
+    const parsed = ChangeRequestSchema.parse(change);
+    expect(parsed.securityImpact?.riskLevel).toBe('none');
+    expect(parsed.securityImpact?.requiresSecurityApproval).toBe(false);
+  });
+
+  it('should accept all security risk levels', () => {
+    const levels = ['none', 'low', 'medium', 'high', 'critical'] as const;
+
+    levels.forEach((riskLevel) => {
+      const change = {
+        id: `CHG-${riskLevel}`,
+        title: 'Test',
+        description: 'Test',
+        type: 'standard',
+        priority: 'low',
+        status: 'draft',
+        requestedBy: 'user',
+        requestedAt: Date.now(),
+        impact: { level: 'low', affectedSystems: ['test'] },
+        implementation: {
+          description: 'Test',
+          steps: [{ order: 1, description: 'Test', estimatedMinutes: 5 }],
+        },
+        rollbackPlan: {
+          description: 'Test',
+          steps: [{ order: 1, description: 'Test', estimatedMinutes: 5 }],
+        },
+        securityImpact: {
+          assessed: true,
+          riskLevel,
+        },
+      };
+
+      expect(() => ChangeRequestSchema.parse(change)).not.toThrow();
+    });
+  });
 });

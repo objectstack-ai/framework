@@ -320,6 +320,53 @@ export const ChangeRequestSchema = z.object({
   }).optional().describe('Schedule'),
 
   /**
+   * Security impact assessment for the change (A.8.32)
+   */
+  securityImpact: z.object({
+    /**
+     * Whether a security impact assessment has been performed
+     */
+    assessed: z.boolean().describe('Whether security impact has been assessed'),
+
+    /**
+     * Security risk level of this change
+     */
+    riskLevel: z.enum(['none', 'low', 'medium', 'high', 'critical']).optional()
+      .describe('Security risk level'),
+
+    /**
+     * Data classifications affected by this change
+     */
+    affectedDataClassifications: z.array(z.enum([
+      'pii', 'phi', 'pci', 'financial', 'confidential', 'internal', 'public',
+    ])).optional().describe('Affected data classifications'),
+
+    /**
+     * Whether the change requires security team approval
+     */
+    requiresSecurityApproval: z.boolean().default(false)
+      .describe('Whether security team approval is required'),
+
+    /**
+     * Security reviewer user ID
+     */
+    reviewedBy: z.string().optional()
+      .describe('Security reviewer user ID'),
+
+    /**
+     * Security review completion timestamp (Unix milliseconds)
+     */
+    reviewedAt: z.number().optional()
+      .describe('Security review timestamp'),
+
+    /**
+     * Security review notes or conditions
+     */
+    reviewNotes: z.string().optional()
+      .describe('Security review notes or conditions'),
+  }).optional().describe('Security impact assessment per ISO 27001:2022 A.8.32'),
+
+  /**
    * Approval workflow configuration
    */
   approval: z.object({
