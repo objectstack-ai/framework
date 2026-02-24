@@ -52,6 +52,9 @@ export const AppManifestSchema = z.object({
   /** Whether seed data is included */
   hasSeedData: z.boolean().default(false).describe('Whether app includes seed data'),
 
+  /** Seed data records to populate on install */
+  seedData: z.array(z.record(z.string(), z.unknown())).default([]).describe('Seed data records'),
+
   /** App dependencies (other apps that must be installed first) */
   dependencies: z.array(z.string()).default([]).describe('Required app dependencies'),
 }).describe('App manifest for marketplace installation');

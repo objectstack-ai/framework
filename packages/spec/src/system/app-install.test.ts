@@ -41,6 +41,7 @@ describe('AppManifestSchema', () => {
     expect(parsed.views).toEqual([]);
     expect(parsed.flows).toEqual([]);
     expect(parsed.hasSeedData).toBe(false);
+    expect(parsed.seedData).toEqual([]);
     expect(parsed.dependencies).toEqual([]);
   });
 

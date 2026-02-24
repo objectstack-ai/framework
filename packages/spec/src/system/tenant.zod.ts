@@ -103,13 +103,17 @@ export type TenantQuota = z.infer<typeof TenantQuotaSchema>;
  */
 export const TenantUsageSchema = z.object({
   /** Current number of custom objects */
-  objectCount: z.number().int().min(0).default(0).describe('Current number of custom objects'),
+  currentObjectCount: z.number().int().min(0).default(0).describe('Current number of custom objects'),
   /** Current total record count across all objects */
-  totalRecords: z.number().int().min(0).default(0).describe('Total records across all objects'),
+  currentRecordCount: z.number().int().min(0).default(0).describe('Total records across all objects'),
   /** Current storage usage in bytes */
-  storageBytes: z.number().int().min(0).default(0).describe('Current storage usage in bytes'),
+  currentStorageBytes: z.number().int().min(0).default(0).describe('Current storage usage in bytes'),
   /** Deployments executed today */
   deploymentsToday: z.number().int().min(0).default(0).describe('Deployments executed today'),
+  /** Current number of active users */
+  currentUsers: z.number().int().min(0).default(0).describe('Current number of active users'),
+  /** API requests in the current minute */
+  apiRequestsThisMinute: z.number().int().min(0).default(0).describe('API requests in the current minute'),
   /** Last updated timestamp (ISO 8601) */
   lastUpdatedAt: z.string().datetime().optional().describe('Last usage update time'),
 }).describe('Current tenant resource usage');

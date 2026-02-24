@@ -178,10 +178,12 @@ describe('DeployBundleSchema', () => {
       views: [{ name: 'task_list', type: 'grid' }],
       flows: [],
       permissions: [],
+      seedData: [{ object: 'task', records: [{ name: 'Sample Task' }] }],
     };
     const parsed = DeployBundleSchema.parse(bundle);
     expect(parsed.manifest.version).toBe('1.0.0');
     expect(parsed.objects).toHaveLength(1);
+    expect(parsed.seedData).toHaveLength(1);
   });
 
   it('should accept minimal bundle', () => {
@@ -193,6 +195,7 @@ describe('DeployBundleSchema', () => {
     expect(parsed.views).toEqual([]);
     expect(parsed.flows).toEqual([]);
     expect(parsed.permissions).toEqual([]);
+    expect(parsed.seedData).toEqual([]);
   });
 
   it('should reject missing manifest', () => {

@@ -219,6 +219,9 @@ export const DeployBundleSchema = z.object({
 
   /** Permission definitions */
   permissions: z.array(z.record(z.string(), z.unknown())).default([]).describe('Permission definitions'),
+
+  /** Seed data records to populate after schema migration */
+  seedData: z.array(z.record(z.string(), z.unknown())).default([]).describe('Seed data records'),
 }).describe('Deploy bundle containing all metadata for deployment');
 
 export type DeployBundle = z.infer<typeof DeployBundleSchema>;
