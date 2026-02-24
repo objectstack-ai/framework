@@ -46,6 +46,7 @@ export const TransitionConfigSchema = z.object({
   easing: EasingFunctionSchema.optional().describe('Easing function for the transition'),
   delay: z.number().optional().describe('Delay before transition starts in milliseconds'),
   customKeyframes: z.string().optional().describe('CSS @keyframes name for custom animations'),
+  themeToken: z.string().optional().describe('Reference to a theme animation token (e.g. "animation.duration.fast")'),
 }).describe('Animation transition configuration');
 
 export type TransitionConfig = z.infer<typeof TransitionConfigSchema>;

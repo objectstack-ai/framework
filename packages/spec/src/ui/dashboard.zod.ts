@@ -25,9 +25,11 @@ export const WidgetColorVariantSchema = z.enum([
  * Action type for widget action buttons.
  */
 export const WidgetActionTypeSchema = z.enum([
+  'script',
   'url',
   'modal',
   'flow',
+  'api',
 ]).describe('Widget action type');
 
 /**
@@ -86,6 +88,9 @@ export const WidgetMeasureSchema = z.object({
  * A single component on the dashboard grid.
  */
 export const DashboardWidgetSchema = z.object({
+  /** Unique widget identifier (snake_case, used for targetWidgets references) */
+  id: SnakeCaseIdentifierSchema.describe('Unique widget identifier (snake_case)'),
+
   /** Widget Title */
   title: I18nLabelSchema.optional().describe('Widget title'),
 

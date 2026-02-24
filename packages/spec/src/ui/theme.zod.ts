@@ -156,9 +156,9 @@ export const AnimationSchema = z.object({
   timing: z.object({
     linear: z.string().optional().describe('Linear timing function'),
     ease: z.string().optional().describe('Ease timing function'),
-    easeIn: z.string().optional().describe('Ease-in timing function'),
-    easeOut: z.string().optional().describe('Ease-out timing function'),
-    easeInOut: z.string().optional().describe('Ease-in-out timing function'),
+    ease_in: z.string().optional().describe('Ease-in timing function'),
+    ease_out: z.string().optional().describe('Ease-out timing function'),
+    ease_in_out: z.string().optional().describe('Ease-in-out timing function'),
   }).optional(),
 });
 
@@ -178,21 +178,30 @@ export const ZIndexSchema = z.object({
 });
 
 /**
- * Theme Mode Enum
+ * Theme Mode Schema
  */
-export const ThemeMode = z.enum(['light', 'dark', 'auto']);
+export const ThemeModeSchema = z.enum(['light', 'dark', 'auto']);
+
+/** @deprecated Use ThemeModeSchema instead */
+export const ThemeMode = ThemeModeSchema;
 
 /**
- * Density Mode Enum
+ * Density Mode Schema
  * Controls spacing and sizing for different use cases.
  */
-export const DensityMode = z.enum(['compact', 'regular', 'spacious']);
+export const DensityModeSchema = z.enum(['compact', 'regular', 'spacious']);
+
+/** @deprecated Use DensityModeSchema instead */
+export const DensityMode = DensityModeSchema;
 
 /**
- * WCAG Contrast Level
+ * WCAG Contrast Level Schema
  * Web Content Accessibility Guidelines color contrast requirements.
  */
-export const WcagContrastLevel = z.enum(['AA', 'AAA']);
+export const WcagContrastLevelSchema = z.enum(['AA', 'AAA']);
+
+/** @deprecated Use WcagContrastLevelSchema instead */
+export const WcagContrastLevel = WcagContrastLevelSchema;
 
 /**
  * Theme Configuration Schema
@@ -204,7 +213,7 @@ export const ThemeSchema = z.object({
   description: z.string().optional().describe('Theme description'),
   
   /** Theme mode */
-  mode: ThemeMode.default('light').describe('Theme mode (light, dark, or auto)'),
+  mode: ThemeModeSchema.default('light').describe('Theme mode (light, dark, or auto)'),
   
   /** Color system */
   colors: ColorPaletteSchema.describe('Color palette configuration'),
@@ -244,10 +253,10 @@ export const ThemeSchema = z.object({
   extends: z.string().optional().describe('Base theme to extend from'),
 
   /** Display density mode */
-  density: DensityMode.optional().describe('Display density: compact, regular, or spacious'),
+  density: DensityModeSchema.optional().describe('Display density: compact, regular, or spacious'),
 
   /** WCAG contrast level requirement */
-  wcagContrast: WcagContrastLevel.optional().describe('WCAG color contrast level (AA or AAA)'),
+  wcagContrast: WcagContrastLevelSchema.optional().describe('WCAG color contrast level (AA or AAA)'),
 
   /** Right-to-left language support */
   rtl: z.boolean().optional().describe('Enable right-to-left layout direction'),
@@ -268,6 +277,6 @@ export type Shadow = z.infer<typeof ShadowSchema>;
 export type Breakpoints = z.infer<typeof BreakpointsSchema>;
 export type Animation = z.infer<typeof AnimationSchema>;
 export type ZIndex = z.infer<typeof ZIndexSchema>;
-export type ThemeMode = z.infer<typeof ThemeMode>;
-export type DensityMode = z.infer<typeof DensityMode>;
-export type WcagContrastLevel = z.infer<typeof WcagContrastLevel>;
+export type ThemeMode = z.infer<typeof ThemeModeSchema>;
+export type DensityMode = z.infer<typeof DensityModeSchema>;
+export type WcagContrastLevel = z.infer<typeof WcagContrastLevelSchema>;

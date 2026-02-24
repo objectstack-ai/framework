@@ -1013,8 +1013,8 @@ describe('defineStack - Example-Level Strict Validation', () => {
           name: 'task_overview',
           label: 'Task Overview',
           widgets: [
-            { title: 'Total Tasks', type: 'metric', object: 'task', aggregate: 'count', layout: { x: 0, y: 0, w: 3, h: 2 } },
-            { title: 'By Status', type: 'pie', object: 'task', categoryField: 'status', aggregate: 'count', layout: { x: 3, y: 0, w: 6, h: 4 } },
+            { id: 'total_tasks', title: 'Total Tasks', type: 'metric', object: 'task', aggregate: 'count', layout: { x: 0, y: 0, w: 3, h: 2 } },
+            { id: 'by_status', title: 'By Status', type: 'pie', object: 'task', categoryField: 'status', aggregate: 'count', layout: { x: 3, y: 0, w: 6, h: 4 } },
           ],
         },
       ],
@@ -1094,7 +1094,7 @@ describe('defineStack - Example-Level Strict Validation', () => {
           name: 'sales_overview',
           label: 'Sales Overview',
           widgets: [
-            { title: 'Pipeline Value', type: 'metric', object: 'opportunity', valueField: 'amount', aggregate: 'sum', layout: { x: 0, y: 0, w: 4, h: 2 } },
+            { id: 'pipeline_value', title: 'Pipeline Value', type: 'metric', object: 'opportunity', valueField: 'amount', aggregate: 'sum', layout: { x: 0, y: 0, w: 4, h: 2 } },
           ],
         },
       ],

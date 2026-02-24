@@ -379,9 +379,9 @@ describe('ThemeSchema', () => {
         },
         timing: {
           ease: 'cubic-bezier(0.4, 0, 0.2, 1)',
-          easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
-          easeOut: 'cubic-bezier(0, 0, 0.2, 1)',
-          easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          ease_in: 'cubic-bezier(0.4, 0, 1, 1)',
+          ease_out: 'cubic-bezier(0, 0, 0.2, 1)',
+          ease_in_out: 'cubic-bezier(0.4, 0, 0.2, 1)',
         },
       },
     };
