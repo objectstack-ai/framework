@@ -1,6 +1,7 @@
 {
   "title": "System Protocol",
   "pages": [
+    "app-install",
     "audit",
     "auth-config",
     "cache",
@@ -8,9 +9,11 @@
     "collaboration",
     "compliance",
     "core-services",
+    "deploy-bundle",
     "disaster-recovery",
     "encryption",
     "http-server",
+    "incident-response",
     "job",
     "license",
     "logging",
@@ -21,11 +24,14 @@
     "migration",
     "notification",
     "object-storage",
+    "provisioning",
     "registry-config",
     "search-engine",
     "security-context",
+    "supplier-security",
     "tenant",
     "tracing",
+    "training",
     "translation",
     "worker"
   ]

@@ -46,12 +46,29 @@ express dependency conflicts, resolution results, and installation order.
 ## TypeScript Usage
 
 ```typescript
-import { DependencyStatusEnum, RequiredAction, ResolvedDependency } from '@objectstack/spec/kernel';
-import type { DependencyStatusEnum, RequiredAction, ResolvedDependency } from '@objectstack/spec/kernel';
+import { DependencyResolutionResult, DependencyStatusEnum, RequiredAction, ResolvedDependency } from '@objectstack/spec/kernel';
+import type { DependencyResolutionResult, DependencyStatusEnum, RequiredAction, ResolvedDependency } from '@objectstack/spec/kernel';
 
 // Validate data
-const result = DependencyStatusEnum.parse(data);
+const result = DependencyResolutionResult.parse(data);
 ```
+
+---
+
+## DependencyResolutionResult
+
+Complete dependency resolution result
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **dependencies** | `Object[]` | ✅ | Resolution result for each dependency |
+| **canProceed** | `boolean` | ✅ | Whether installation can proceed |
+| **requiredActions** | `Object[]` | ✅ | Actions required before proceeding |
+| **installOrder** | `string[]` | ✅ | Topologically sorted package IDs for installation |
+| **circularDependencies** | `string[][]` | optional | Circular dependency chains detected (e.g. [["A", "B", "A"]]) |
+
 
 ---
 

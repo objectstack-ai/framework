@@ -27,8 +27,6 @@ jobs:
           # Use configuration file for path remapping and settings
           args: >-
             --config lychee.toml
-            --exclude-path '(^|.*/)meta\.json$'
-            --exclude-path '(^|.*/)meta\.cn\.json$'
             'content/**/*.md'
             'content/**/*.mdx'
             'README.md'

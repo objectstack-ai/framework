@@ -62,7 +62,7 @@ const result = BlankPageLayout.parse(data);
 | :--- | :--- | :--- | :--- |
 | **object** | `string` | ✅ | Object to query |
 | **view** | `string` | optional | Named view to apply |
-| **filter** | `any` | optional | Additional filter criteria |
+| **filter** | `[__schema0](./__schema0)` | optional | Additional filter criteria |
 | **sort** | `Object[]` | optional | Sort order |
 | **limit** | `integer` | optional | Max records to display |
 
@@ -79,7 +79,7 @@ Interface-level page configuration (Airtable parity)
 | :--- | :--- | :--- | :--- |
 | **source** | `string` | optional | Source object name for the page |
 | **levels** | `integer` | optional | Number of hierarchy levels to display |
-| **filterBy** | `any[]` | optional | Page-level filter criteria |
+| **filterBy** | `Object[]` | optional | Page-level filter criteria |
 | **appearance** | `Object` | optional | Appearance and visualization configuration |
 | **userFilters** | `Object` | optional | User filter configuration |
 | **userActions** | `Object` | optional | User action toggles |
@@ -233,7 +233,7 @@ Page type — platform or interface page types
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **object** | `string` | ✅ | Target object for review |
-| **filter** | `any` | optional | Filter criteria for review queue |
+| **filter** | `[__schema0](./__schema0)` | optional | Filter criteria for review queue |
 | **sort** | `Object[]` | optional | Sort order for review queue |
 | **displayFields** | `string[]` | optional | Fields to display on the review page |
 | **actions** | `Object[]` | ✅ | Review actions |

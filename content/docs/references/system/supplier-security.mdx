@@ -1,0 +1,120 @@
+---
+title: Supplier Security
+description: Supplier Security protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Supplier Security Protocol — ISO 27001:2022 (A.5.19–A.5.22)
+
+Defines schemas for supplier information security management including
+
+risk assessment, security requirements, monitoring, and change control.
+
+@see https://www.iso.org/standard/27001
+
+@category Security
+
+<Callout type="info">
+**Source:** `packages/spec/src/system/supplier-security.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { SupplierAssessmentStatus, SupplierRiskLevel, SupplierSecurityAssessment, SupplierSecurityPolicy, SupplierSecurityRequirement } from '@objectstack/spec/system';
+import type { SupplierAssessmentStatus, SupplierRiskLevel, SupplierSecurityAssessment, SupplierSecurityPolicy, SupplierSecurityRequirement } from '@objectstack/spec/system';
+
+// Validate data
+const result = SupplierAssessmentStatus.parse(data);
+```
+
+---
+
+## SupplierAssessmentStatus
+
+### Allowed Values
+
+* `pending`
+* `in_progress`
+* `completed`
+* `expired`
+* `failed`
+
+
+---
+
+## SupplierRiskLevel
+
+### Allowed Values
+
+* `critical`
+* `high`
+* `medium`
+* `low`
+
+
+---
+
+## SupplierSecurityAssessment
+
+Supplier security assessment record per ISO 27001:2022 A.5.19–A.5.21
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **supplierId** | `string` | ✅ | Unique supplier identifier |
+| **supplierName** | `string` | ✅ | Supplier display name |
+| **riskLevel** | `Enum<'critical' \| 'high' \| 'medium' \| 'low'>` | ✅ | Supplier risk classification |
+| **status** | `Enum<'pending' \| 'in_progress' \| 'completed' \| 'expired' \| 'failed'>` | ✅ | Assessment status |
+| **assessedBy** | `string` | ✅ | Assessor user ID or team |
+| **assessedAt** | `number` | ✅ | Assessment timestamp |
+| **validUntil** | `number` | ✅ | Assessment validity expiry timestamp |
+| **requirements** | `Object[]` | ✅ | Security requirements and their compliance status |
+| **overallCompliant** | `boolean` | ✅ | Whether supplier meets all mandatory requirements |
+| **dataClassificationsShared** | `Enum<'pii' \| 'phi' \| 'pci' \| 'financial' \| 'confidential' \| 'internal' \| 'public'>[]` | optional | Data classifications shared with supplier |
+| **servicesProvided** | `string[]` | optional | Services provided by this supplier |
+| **certifications** | `string[]` | optional | Supplier certifications (e.g., ISO 27001, SOC 2) |
+| **remediationItems** | `Object[]` | optional | Remediation items for non-compliant requirements |
+| **metadata** | `Record<string, any>` | optional | Custom metadata key-value pairs |
+
+
+---
+
+## SupplierSecurityPolicy
+
+Organization-level supplier security management policy per ISO 27001:2022
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **enabled** | `boolean` | ✅ | Enable supplier security management |
+| **reassessmentIntervalDays** | `number` | ✅ | Supplier reassessment interval in days |
+| **requirePreOnboardingAssessment** | `boolean` | ✅ | Require security assessment before supplier onboarding |
+| **formalAssessmentThreshold** | `Enum<'critical' \| 'high' \| 'medium' \| 'low'>` | ✅ | Minimum risk level requiring formal assessment |
+| **monitorChanges** | `boolean` | ✅ | Monitor supplier security posture changes |
+| **requiredCertifications** | `string[]` | ✅ | Required certifications for critical-risk suppliers |
+
+
+---
+
+## SupplierSecurityRequirement
+
+Individual supplier security requirement
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Requirement identifier |
+| **description** | `string` | ✅ | Requirement description |
+| **controlReference** | `string` | optional | ISO 27001 control reference |
+| **mandatory** | `boolean` | ✅ | Whether this requirement is mandatory |
+| **compliant** | `boolean` | optional | Whether the supplier meets this requirement |
+| **evidence** | `string` | optional | Compliance evidence or assessment notes |
+
+
+---
+

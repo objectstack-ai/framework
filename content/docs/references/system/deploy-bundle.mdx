@@ -1,0 +1,190 @@
+---
+title: Deploy Bundle
+description: Deploy Bundle protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Deploy Bundle Protocol
+
+Defines the schemas for metadata-driven deployment:
+
+Schema Push → Zod Validate → Diff → DDL Sync → Register
+
+This eliminates traditional CI/CD pipelines for schema changes.
+
+A "deploy" is a bundle of metadata (objects, views, flows, permissions)
+
+that is validated, diffed against the current state, and applied
+
+as DDL migrations directly to the tenant database.
+
+Target: 2-5 second deploys vs. 2-15 minute traditional Docker/CI/CD.
+
+<Callout type="info">
+**Source:** `packages/spec/src/system/deploy-bundle.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { ChangeSchema, DeployBundle, DeployDiff, DeployManifest, DeployStatusEnum, DeployValidationIssue, DeployValidationResult, MigrationPlan, MigrationStatement } from '@objectstack/spec/system';
+import type { Change, DeployBundle, DeployDiff, DeployManifest, DeployStatusEnum, DeployValidationIssue, DeployValidationResult, MigrationPlan, MigrationStatement } from '@objectstack/spec/system';
+
+// Validate data
+const result = ChangeSchema.parse(data);
+```
+
+---
+
+## ChangeSchema
+
+Individual schema change
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **entityType** | `Enum<'object' \| 'field' \| 'index' \| 'view' \| 'flow' \| 'permission'>` | ✅ | Entity type |
+| **entityName** | `string` | ✅ | Entity name |
+| **parentEntity** | `string` | optional | Parent entity name |
+| **changeType** | `Enum<'added' \| 'modified' \| 'removed'>` | ✅ | Change type |
+| **oldValue** | `any` | optional | Previous value |
+| **newValue** | `any` | optional | New value |
+
+
+---
+
+## DeployBundle
+
+Deploy bundle containing all metadata for deployment
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifest** | `Object` | ✅ | Deployment manifest |
+| **objects** | `Record<string, any>[]` | ✅ | Object definitions |
+| **views** | `Record<string, any>[]` | ✅ | View definitions |
+| **flows** | `Record<string, any>[]` | ✅ | Flow definitions |
+| **permissions** | `Record<string, any>[]` | ✅ | Permission definitions |
+| **seedData** | `Record<string, any>[]` | ✅ | Seed data records |
+
+
+---
+
+## DeployDiff
+
+Schema diff between current and desired state
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **changes** | `Object[]` | ✅ | List of schema changes |
+| **summary** | `Object` | ✅ | Change summary counts |
+| **hasBreakingChanges** | `boolean` | ✅ | Whether diff contains breaking changes |
+
+
+---
+
+## DeployManifest
+
+Deployment manifest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **version** | `string` | ✅ | Deployment version |
+| **checksum** | `string` | optional | SHA256 checksum |
+| **objects** | `string[]` | ✅ | Object names included |
+| **views** | `string[]` | ✅ | View names included |
+| **flows** | `string[]` | ✅ | Flow names included |
+| **permissions** | `string[]` | ✅ | Permission names included |
+| **createdAt** | `string` | optional | Bundle creation time |
+
+
+---
+
+## DeployStatusEnum
+
+Deployment lifecycle status
+
+### Allowed Values
+
+* `validating`
+* `diffing`
+* `migrating`
+* `registering`
+* `ready`
+* `failed`
+* `rolling_back`
+
+
+---
+
+## DeployValidationIssue
+
+Validation issue
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ | Issue severity |
+| **path** | `string` | ✅ | Entity path (e.g., objects.project_task.fields.name) |
+| **message** | `string` | ✅ | Issue description |
+| **code** | `string` | optional | Validation error code |
+
+
+---
+
+## DeployValidationResult
+
+Bundle validation result
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **valid** | `boolean` | ✅ | Whether the bundle is valid |
+| **issues** | `Object[]` | ✅ | Validation issues |
+| **errorCount** | `integer` | ✅ | Number of errors |
+| **warningCount** | `integer` | ✅ | Number of warnings |
+
+
+---
+
+## MigrationPlan
+
+Ordered migration plan
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **statements** | `Object[]` | ✅ | Ordered DDL statements |
+| **dialect** | `string` | ✅ | Target SQL dialect |
+| **reversible** | `boolean` | ✅ | Whether the plan can be fully rolled back |
+| **estimatedDurationMs** | `integer` | optional | Estimated execution time |
+
+
+---
+
+## MigrationStatement
+
+Single DDL migration statement
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **sql** | `string` | ✅ | SQL DDL statement |
+| **reversible** | `boolean` | ✅ | Whether the statement can be reversed |
+| **rollbackSql** | `string` | optional | Reverse SQL for rollback |
+| **order** | `integer` | ✅ | Execution order |
+
+
+---
+

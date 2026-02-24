@@ -1,6 +1,7 @@
 {
   "title": "Studio Protocol",
   "pages": [
+    "flow-builder",
     "object-designer",
     "page-builder",
     "plugin"

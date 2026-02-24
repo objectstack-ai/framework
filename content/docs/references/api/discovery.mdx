@@ -16,8 +16,8 @@ Reports per-service availability so clients can adapt their UI accordingly.
 ## TypeScript Usage
 
 ```typescript
-import { ApiRoutes, Discovery, ServiceInfo } from '@objectstack/spec/api';
-import type { ApiRoutes, Discovery, ServiceInfo } from '@objectstack/spec/api';
+import { ApiRoutes, Discovery, ServiceInfo, WellKnownCapabilities } from '@objectstack/spec/api';
+import type { ApiRoutes, Discovery, ServiceInfo, WellKnownCapabilities } from '@objectstack/spec/api';
 
 // Validate data
 const result = ApiRoutes.parse(data);
@@ -81,6 +81,25 @@ const result = ApiRoutes.parse(data);
 | **version** | `string` | optional | Semantic version of the service implementation (e.g. "3.0.6") |
 | **message** | `string` | optional | e.g. "Install plugin-workflow to enable" |
 | **rateLimit** | `Object` | optional | Rate limit and quota info for this service |
+
+
+---
+
+## WellKnownCapabilities
+
+Well-known capability flags for frontend intelligent adaptation
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **feed** | `boolean` | ✅ | Whether the backend supports Feed / Chatter API |
+| **comments** | `boolean` | ✅ | Whether the backend supports comments (a subset of Feed) |
+| **automation** | `boolean` | ✅ | Whether the backend supports Automation CRUD (flows, triggers) |
+| **cron** | `boolean` | ✅ | Whether the backend supports cron scheduling |
+| **search** | `boolean` | ✅ | Whether the backend supports full-text search |
+| **export** | `boolean` | ✅ | Whether the backend supports async export |
+| **chunkedUpload** | `boolean` | ✅ | Whether the backend supports chunked (multipart) uploads |
 
 
 ---

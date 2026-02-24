@@ -68,7 +68,7 @@ Dashboard header action
 | :--- | :--- | :--- | :--- |
 | **label** | `string \| Object` | ✅ | Action button label |
 | **actionUrl** | `string` | ✅ | URL or target for the action |
-| **actionType** | `Enum<'url' \| 'modal' \| 'flow'>` | optional | Type of action |
+| **actionType** | `Enum<'script' \| 'url' \| 'modal' \| 'flow' \| 'api'>` | optional | Type of action |
 | **icon** | `string` | optional | Icon identifier for the action button |
 
 
@@ -80,13 +80,14 @@ Dashboard header action
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique widget identifier (snake_case) |
 | **title** | `string \| Object` | optional | Widget title |
 | **description** | `string \| Object` | optional | Widget description text below the header |
 | **type** | `Enum<'bar' \| 'horizontal-bar' \| 'column' \| 'grouped-bar' \| 'stacked-bar' \| 'bi-polar-bar' \| 'line' \| 'area' \| 'stacked-area' \| 'step-line' \| 'spline' \| 'pie' \| 'donut' \| 'funnel' \| 'pyramid' \| 'scatter' \| 'bubble' \| 'treemap' \| 'sunburst' \| 'sankey' \| 'word-cloud' \| 'gauge' \| 'solid-gauge' \| 'metric' \| 'kpi' \| 'bullet' \| 'choropleth' \| 'bubble-map' \| 'gl-map' \| 'heatmap' \| 'radar' \| 'waterfall' \| 'box-plot' \| 'violin' \| 'candlestick' \| 'stock' \| 'table' \| 'pivot'>` | ✅ | Visualization type |
 | **chartConfig** | `Object` | optional | Chart visualization configuration |
 | **colorVariant** | `Enum<'default' \| 'blue' \| 'teal' \| 'orange' \| 'purple' \| 'success' \| 'warning' \| 'danger'>` | optional | Widget color variant for theming |
 | **actionUrl** | `string` | optional | URL or target for the widget action button |
-| **actionType** | `Enum<'url' \| 'modal' \| 'flow'>` | optional | Type of action for the widget action button |
+| **actionType** | `Enum<'script' \| 'url' \| 'modal' \| 'flow' \| 'api'>` | optional | Type of action for the widget action button |
 | **actionIcon** | `string` | optional | Icon identifier for the widget action button |
 | **object** | `string` | optional | Data source object name |
 | **filter** | `[__schema0](./__schema0)` | optional | Data filter criteria |
@@ -113,7 +114,7 @@ Dashboard header action
 | **type** | `Enum<'text' \| 'select' \| 'date' \| 'number' \| 'lookup'>` | optional | Filter input type |
 | **options** | `Object[]` | optional | Static filter options |
 | **optionsFrom** | `Object` | optional | Dynamic filter options from object |
-| **defaultValue** | `any` | optional | Default filter value |
+| **defaultValue** | `string \| number \| boolean` | optional | Default filter value |
 | **scope** | `Enum<'dashboard' \| 'widget'>` | ✅ | Filter application scope |
 | **targetWidgets** | `string[]` | optional | Widget IDs to apply this filter to |
 
@@ -142,9 +143,11 @@ Widget action type
 
 ### Allowed Values
 
+* `script`
 * `url`
 * `modal`
 * `flow`
+* `api`
 
 
 ---

@@ -1,0 +1,326 @@
+---
+title: Package Api
+description: Package Api protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+# Package API Protocol
+
+REST API endpoint schemas for package lifecycle management.
+
+Base path: /api/v1/packages
+
+@example Endpoints
+
+POST   /api/v1/packages/install              — Install a package
+
+POST   /api/v1/packages/upgrade              — Upgrade a package
+
+POST   /api/v1/packages/resolve-dependencies — Resolve dependencies
+
+POST   /api/v1/packages/upload               — Upload an artifact
+
+GET    /api/v1/packages                      — List installed packages
+
+GET    /api/v1/packages/:packageId           — Get package details
+
+POST   /api/v1/packages/:packageId/rollback  — Rollback a package
+
+DELETE /api/v1/packages/:packageId           — Uninstall a package
+
+<Callout type="info">
+**Source:** `packages/spec/src/api/package-api.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { GetInstalledPackageRequest, GetInstalledPackageResponse, ListInstalledPackagesRequest, ListInstalledPackagesResponse, PackageApiErrorCode, PackageInstallRequest, PackageInstallResponse, PackagePathParams, PackageRollbackRequest, PackageRollbackResponse, PackageUpgradeRequest, PackageUpgradeResponse, ResolveDependenciesRequest, ResolveDependenciesResponse, UninstallPackageApiRequest, UninstallPackageApiResponse, UploadArtifactRequest, UploadArtifactResponse } from '@objectstack/spec/api';
+import type { GetInstalledPackageRequest, GetInstalledPackageResponse, ListInstalledPackagesRequest, ListInstalledPackagesResponse, PackageApiErrorCode, PackageInstallRequest, PackageInstallResponse, PackagePathParams, PackageRollbackRequest, PackageRollbackResponse, PackageUpgradeRequest, PackageUpgradeResponse, ResolveDependenciesRequest, ResolveDependenciesResponse, UninstallPackageApiRequest, UninstallPackageApiResponse, UploadArtifactRequest, UploadArtifactResponse } from '@objectstack/spec/api';
+
+// Validate data
+const result = GetInstalledPackageRequest.parse(data);
+```
+
+---
+
+## GetInstalledPackageRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageId** | `string` | ✅ | Package identifier |
+
+
+---
+
+## GetInstalledPackageResponse
+
+Get installed package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ | Installed package details |
+
+
+---
+
+## ListInstalledPackagesRequest
+
+List installed packages request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **status** | `Enum<'installed' \| 'disabled' \| 'installing' \| 'upgrading' \| 'uninstalling' \| 'error'>` | optional | Filter by package status |
+| **enabled** | `boolean` | optional | Filter by enabled state |
+| **limit** | `integer` | ✅ | Maximum number of packages to return |
+| **cursor** | `string` | optional | Cursor for pagination |
+
+
+---
+
+## ListInstalledPackagesResponse
+
+List installed packages response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ |  |
+
+
+---
+
+## PackageApiErrorCode
+
+### Allowed Values
+
+* `package_not_found`
+* `package_already_installed`
+* `version_not_found`
+* `dependency_conflict`
+* `namespace_conflict`
+* `platform_incompatible`
+* `artifact_invalid`
+* `checksum_mismatch`
+* `signature_invalid`
+* `upgrade_failed`
+* `rollback_failed`
+* `snapshot_not_found`
+* `upload_failed`
+
+
+---
+
+## PackageInstallRequest
+
+Install package request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifest** | `Object` | ✅ | Package manifest to install |
+| **settings** | `Record<string, any>` | optional | User-provided settings at install time |
+| **enableOnInstall** | `boolean` | ✅ | Whether to enable immediately after install |
+| **platformVersion** | `string` | optional | Current platform version for compatibility verification |
+| **artifactRef** | `Object` | optional | Artifact reference for marketplace installation |
+
+
+---
+
+## PackageInstallResponse
+
+Install package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ |  |
+
+
+---
+
+## PackagePathParams
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageId** | `string` | ✅ | Package identifier |
+
+
+---
+
+## PackageRollbackRequest
+
+Rollback package request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageId** | `string` | ✅ | Package identifier |
+| **snapshotId** | `string` | ✅ | Snapshot ID to restore from |
+| **rollbackCustomizations** | `boolean` | ✅ | Whether to restore pre-upgrade customizations |
+
+
+---
+
+## PackageRollbackResponse
+
+Rollback package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ |  |
+
+
+---
+
+## PackageUpgradeRequest
+
+Upgrade package request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageId** | `string` | ✅ | Package ID to upgrade |
+| **targetVersion** | `string` | optional | Target version (defaults to latest) |
+| **manifest** | `Object` | optional | New manifest for the target version |
+| **createSnapshot** | `boolean` | ✅ | Whether to create a pre-upgrade backup snapshot |
+| **mergeStrategy** | `Enum<'keep-custom' \| 'accept-incoming' \| 'three-way-merge'>` | ✅ | How to handle customer customizations |
+| **dryRun** | `boolean` | ✅ | Preview upgrade without making changes |
+| **skipValidation** | `boolean` | ✅ | Skip pre-upgrade compatibility checks |
+
+
+---
+
+## PackageUpgradeResponse
+
+Upgrade package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ |  |
+
+
+---
+
+## ResolveDependenciesRequest
+
+Resolve dependencies request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifest** | `Object` | ✅ | Package manifest to resolve dependencies for |
+| **platformVersion** | `string` | optional | Current platform version for compatibility filtering |
+
+
+---
+
+## ResolveDependenciesResponse
+
+Resolve dependencies response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ | Dependency resolution result with topological sort |
+
+
+---
+
+## UninstallPackageApiRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageId** | `string` | ✅ | Package identifier |
+
+
+---
+
+## UninstallPackageApiResponse
+
+Uninstall package response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ |  |
+
+
+---
+
+## UploadArtifactRequest
+
+Upload artifact request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **artifact** | `Object` | ✅ | Package artifact metadata |
+| **sha256** | `string` | optional | SHA256 checksum of the uploaded file |
+| **token** | `string` | optional | Publisher authentication token |
+| **releaseNotes** | `string` | optional | Release notes for this version |
+
+
+---
+
+## UploadArtifactResponse
+
+Upload artifact response
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Operation success status |
+| **error** | `Object` | optional | Error details if success is false |
+| **meta** | `Object` | optional | Response metadata |
+| **data** | `Object` | ✅ |  |
+
+
+---
+

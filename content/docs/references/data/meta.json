@@ -15,6 +15,7 @@
     "filter",
     "hook",
     "mapping",
+    "misc",
     "notification",
     "object",
     "query",

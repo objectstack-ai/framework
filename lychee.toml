@@ -34,8 +34,12 @@ remap = [
     "^/docs/(.*)$ content/docs/$1.md"
 ]
 
-# Exclude patterns (loaded from .lycheeignore file)
-exclude_path = [".lycheeignore"]
+# Exclude file paths matching these regex patterns
+exclude_path = [
+    "\\.lycheeignore$",
+    "(^|.*/)meta\\.json$",
+    "(^|.*/)meta\\.cn\\.json$"
+]
 
 # Additional exclude patterns for internal paths
 exclude = [

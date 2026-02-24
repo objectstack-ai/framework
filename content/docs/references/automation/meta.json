@@ -2,10 +2,12 @@
   "title": "Automation Protocol",
   "pages": [
     "approval",
+    "bpmn-interop",
     "connector",
     "etl",
     "execution",
     "flow",
+    "node-executor",
     "offline",
     "state-machine",
     "sync",

@@ -45,7 +45,7 @@ const result = Checkpoint.parse(data);
 | **completedNodeIds** | `string[]` | ✅ | List of node IDs already executed |
 | **createdAt** | `string` | ✅ | Checkpoint creation timestamp |
 | **expiresAt** | `string` | optional | Checkpoint expiration (auto-cleanup) |
-| **reason** | `Enum<'wait' \| 'screen_input' \| 'approval' \| 'error' \| 'manual_pause'>` | ✅ | Why the execution was checkpointed |
+| **reason** | `Enum<'wait' \| 'screen_input' \| 'approval' \| 'error' \| 'manual_pause' \| 'parallel_join' \| 'boundary_event'>` | ✅ | Why the execution was checkpointed |
 
 
 ---

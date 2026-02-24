@@ -16,6 +16,7 @@
     "export",
     "feed-api",
     "graphql",
+    "http",
     "http-cache",
     "identity",
     "metadata",
@@ -23,6 +24,7 @@
     "notification",
     "object",
     "odata",
+    "package-api",
     "package-registry",
     "plugin-rest-api",
     "protocol",
@@ -34,7 +36,6 @@
     "router",
     "storage",
     "versioning",
-    "view",
     "websocket"
   ]
 }

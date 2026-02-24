@@ -14,12 +14,64 @@ Compliance protocol for GDPR, CCPA, HIPAA, SOX, PCI-DSS
 ## TypeScript Usage
 
 ```typescript
-import { AuditLogConfig, ComplianceConfig, GDPRConfig, HIPAAConfig, PCIDSSConfig } from '@objectstack/spec/system';
-import type { AuditLogConfig, ComplianceConfig, GDPRConfig, HIPAAConfig, PCIDSSConfig } from '@objectstack/spec/system';
+import { AuditFinding, AuditFindingSeverity, AuditFindingStatus, AuditLogConfig, AuditSchedule, ComplianceConfig, GDPRConfig, HIPAAConfig, PCIDSSConfig } from '@objectstack/spec/system';
+import type { AuditFinding, AuditFindingSeverity, AuditFindingStatus, AuditLogConfig, AuditSchedule, ComplianceConfig, GDPRConfig, HIPAAConfig, PCIDSSConfig } from '@objectstack/spec/system';
 
 // Validate data
-const result = AuditLogConfig.parse(data);
+const result = AuditFinding.parse(data);
 ```
+
+---
+
+## AuditFinding
+
+Audit finding with remediation tracking per ISO 27001:2022 A.5.35
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique finding identifier |
+| **title** | `string` | ✅ | Finding title |
+| **description** | `string` | ✅ | Finding description |
+| **severity** | `Enum<'critical' \| 'major' \| 'minor' \| 'observation'>` | ✅ | Finding severity |
+| **status** | `Enum<'open' \| 'in_remediation' \| 'remediated' \| 'verified' \| 'accepted_risk' \| 'closed'>` | ✅ | Finding status |
+| **controlReference** | `string` | optional | ISO 27001 control reference |
+| **framework** | `Enum<'gdpr' \| 'hipaa' \| 'sox' \| 'pci_dss' \| 'ccpa' \| 'iso27001'>` | optional | Related compliance framework |
+| **identifiedAt** | `number` | ✅ | Identification timestamp |
+| **identifiedBy** | `string` | ✅ | Identifier (auditor name or system) |
+| **remediationPlan** | `string` | optional | Remediation plan |
+| **remediationDeadline** | `number` | optional | Remediation deadline timestamp |
+| **verifiedAt** | `number` | optional | Verification timestamp |
+| **verifiedBy** | `string` | optional | Verifier name or role |
+| **notes** | `string` | optional | Additional notes |
+
+
+---
+
+## AuditFindingSeverity
+
+### Allowed Values
+
+* `critical`
+* `major`
+* `minor`
+* `observation`
+
+
+---
+
+## AuditFindingStatus
+
+### Allowed Values
+
+* `open`
+* `in_remediation`
+* `remediated`
+* `verified`
+* `accepted_risk`
+* `closed`
+
 
 ---
 
@@ -40,9 +92,31 @@ Audit log configuration for compliance and security monitoring
 
 ---
 
+## AuditSchedule
+
+Audit schedule for independent security reviews per ISO 27001:2022 A.5.35
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique audit schedule identifier |
+| **title** | `string` | ✅ | Audit title |
+| **scope** | `string[]` | ✅ | Audit scope areas |
+| **framework** | `Enum<'gdpr' \| 'hipaa' \| 'sox' \| 'pci_dss' \| 'ccpa' \| 'iso27001'>` | ✅ | Target compliance framework |
+| **scheduledAt** | `number` | ✅ | Scheduled audit timestamp |
+| **completedAt** | `number` | optional | Completion timestamp |
+| **assessor** | `string` | ✅ | Assessor or audit team |
+| **isExternal** | `boolean` | ✅ | Whether this is an external audit |
+| **recurrenceMonths** | `number` | ✅ | Recurrence interval in months (0 = one-time) |
+| **findings** | `Object[]` | optional | Audit findings |
+
+
+---
+
 ## ComplianceConfig
 
-Unified compliance configuration spanning GDPR, HIPAA, and PCI-DSS
+Unified compliance configuration spanning GDPR, HIPAA, PCI-DSS, and audit governance
 
 ### Properties
 
@@ -52,6 +126,7 @@ Unified compliance configuration spanning GDPR, HIPAA, and PCI-DSS
 | **hipaa** | `Object` | optional | HIPAA compliance settings |
 | **pciDss** | `Object` | optional | PCI-DSS compliance settings |
 | **auditLog** | `Object` | ✅ | Audit log configuration |
+| **auditSchedules** | `Object[]` | optional | Scheduled compliance audits (A.5.35) |
 
 
 ---

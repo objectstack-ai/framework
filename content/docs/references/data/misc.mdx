@@ -1,0 +1,89 @@
+---
+title: Misc
+description: Misc protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+<Callout type="info">
+**Source:** `packages/spec/src/data/misc.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { TenantDatabaseLifecycle, TenantResolverStrategy, TursoGroup, TursoMultiTenantConfig } from '@objectstack/spec/data';
+import type { TenantDatabaseLifecycle, TenantResolverStrategy, TursoGroup, TursoMultiTenantConfig } from '@objectstack/spec/data';
+
+// Validate data
+const result = TenantDatabaseLifecycle.parse(data);
+```
+
+---
+
+## TenantDatabaseLifecycle
+
+Tenant database lifecycle hooks
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **onTenantCreate** | `Object` | ✅ | Tenant creation hook |
+| **onTenantDelete** | `Object` | ✅ | Tenant deletion hook |
+| **onTenantSuspend** | `Object` | ✅ | Tenant suspension hook |
+
+
+---
+
+## TenantResolverStrategy
+
+Strategy for resolving tenant identity from request context
+
+### Allowed Values
+
+* `header`
+* `subdomain`
+* `path`
+* `token`
+* `lookup`
+
+
+---
+
+## TursoGroup
+
+Turso database group configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Turso database group name |
+| **primaryLocation** | `string` | ✅ | Primary Turso region code (e.g., iad, lhr, nrt) |
+| **replicaLocations** | `string[]` | ✅ | Additional replica region codes |
+| **schemaDatabase** | `string` | optional | Schema database name for multi-db schemas |
+
+
+---
+
+## TursoMultiTenantConfig
+
+Turso multi-tenant router configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **organizationSlug** | `string` | ✅ | Turso organization slug |
+| **urlTemplate** | `string` | ✅ | URL template with `{tenant_id}` placeholder |
+| **groupAuthToken** | `string` | ✅ | Group-level auth token for platform operations |
+| **tenantResolverStrategy** | `Enum<'header' \| 'subdomain' \| 'path' \| 'token' \| 'lookup'>` | ✅ | Strategy for resolving tenant identity from request context |
+| **group** | `Object` | optional | Database group configuration |
+| **lifecycle** | `Object` | optional | Lifecycle hooks |
+| **maxCachedConnections** | `integer` | ✅ | Max cached tenant connections (LRU) |
+| **connectionCacheTTL** | `integer` | ✅ | Connection cache TTL in seconds |
+
+
+---
+

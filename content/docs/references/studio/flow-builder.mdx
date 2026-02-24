@@ -1,0 +1,215 @@
+---
+title: Flow Builder
+description: Flow Builder protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+@module studio/flow-builder
+
+Studio Flow Builder Protocol
+
+Defines the specification for the visual Flow Builder (automation canvas)
+
+within ObjectStack Studio. Covers:
+
+- **Node Shape Registry**: Shape and visual style per FlowNodeAction type
+
+- **Canvas Node**: Position, size, and rendering hints for each node on canvas
+
+- **Canvas Edge**: Visual properties for sequence flows (normal, default, fault)
+
+- **Flow Builder Config**: Canvas settings, palette, minimap, and toolbar
+
+## Architecture
+
+```
+
+┌──────────────────────────────────────────────────────────────┐
+
+│  Toolbar (run / save / undo / zoom / layout)                │
+
+├──────────┬───────────────────────────────────┬───────────────┤
+
+│  Node    │       Canvas                      │  Property     │
+
+│  Palette │  ┌─────┐    ┌──────────┐          │  Panel        │
+
+│          │  │start│───▶│ decision │──▶ ...   │  (node-aware) │
+
+│  ─ BPMN  │  └─────┘    └──────────┘          │               │
+
+│  ─ CRUD  │       ┌──────────┐                │  ─ config     │
+
+│  ─ Logic │       │parallel  │                │  ─ edges      │
+
+│  ─ HTTP  │       │ gateway  │                │  ─ validation │
+
+├──────────┴───────────────────────────────────┴───────────────┤
+
+│  Minimap / Zoom Controls                                     │
+
+└──────────────────────────────────────────────────────────────┘
+
+```
+
+<Callout type="info">
+**Source:** `packages/spec/src/studio/flow-builder.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { FlowBuilderConfig, FlowCanvasEdge, FlowCanvasEdgeStyle, FlowCanvasNode, FlowLayoutAlgorithm, FlowLayoutDirection, FlowNodeRenderDescriptor, FlowNodeShape } from '@objectstack/spec/studio';
+import type { FlowBuilderConfig, FlowCanvasEdge, FlowCanvasEdgeStyle, FlowCanvasNode, FlowLayoutAlgorithm, FlowLayoutDirection, FlowNodeRenderDescriptor, FlowNodeShape } from '@objectstack/spec/studio';
+
+// Validate data
+const result = FlowBuilderConfig.parse(data);
+```
+
+---
+
+## FlowBuilderConfig
+
+Studio Flow Builder configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **snap** | `Object` | ✅ | Canvas snap-to-grid settings |
+| **zoom** | `Object` | ✅ | Canvas zoom settings |
+| **layoutAlgorithm** | `Enum<'dagre' \| 'elk' \| 'force' \| 'manual'>` | ✅ | Default auto-layout algorithm |
+| **layoutDirection** | `Enum<'TB' \| 'BT' \| 'LR' \| 'RL'>` | ✅ | Default auto-layout direction |
+| **nodeDescriptors** | `Object[]` | optional | Custom node render descriptors (merged with built-in defaults) |
+| **showMinimap** | `boolean` | ✅ | Show minimap panel |
+| **showPropertyPanel** | `boolean` | ✅ | Show property panel |
+| **showPalette** | `boolean` | ✅ | Show node palette sidebar |
+| **undoLimit** | `integer` | ✅ | Maximum undo history steps |
+| **animateExecution** | `boolean` | ✅ | Animate edges during execution preview |
+| **connectionValidation** | `boolean` | ✅ | Validate connections before creating edges |
+
+
+---
+
+## FlowCanvasEdge
+
+Canvas layout and visual data for a flow edge
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **edgeId** | `string` | ✅ | Corresponding FlowEdge.id |
+| **style** | `Enum<'solid' \| 'dashed' \| 'dotted' \| 'bold'>` | ✅ | Line style |
+| **color** | `string` | ✅ | Edge line color |
+| **labelPosition** | `number` | ✅ | Position of the condition label along the edge |
+| **waypoints** | `Object[]` | optional | Manual waypoints for edge routing |
+| **animated** | `boolean` | ✅ | Show animated flow indicator |
+
+
+---
+
+## FlowCanvasEdgeStyle
+
+Edge line style
+
+### Allowed Values
+
+* `solid`
+* `dashed`
+* `dotted`
+* `bold`
+
+
+---
+
+## FlowCanvasNode
+
+Canvas layout data for a flow node
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **nodeId** | `string` | ✅ | Corresponding FlowNode.id |
+| **x** | `number` | ✅ | X position on canvas |
+| **y** | `number` | ✅ | Y position on canvas |
+| **width** | `integer` | optional | Width override in pixels |
+| **height** | `integer` | optional | Height override in pixels |
+| **collapsed** | `boolean` | ✅ | Whether the node is collapsed |
+| **fillColor** | `string` | optional | Fill color override |
+| **borderColor** | `string` | optional | Border color override |
+| **annotation** | `string` | optional | User annotation displayed near the node |
+
+
+---
+
+## FlowLayoutAlgorithm
+
+Auto-layout algorithm for the flow canvas
+
+### Allowed Values
+
+* `dagre`
+* `elk`
+* `force`
+* `manual`
+
+
+---
+
+## FlowLayoutDirection
+
+Auto-layout direction
+
+### Allowed Values
+
+* `TB`
+* `BT`
+* `LR`
+* `RL`
+
+
+---
+
+## FlowNodeRenderDescriptor
+
+Visual render descriptor for a flow node type
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **action** | `string` | ✅ | FlowNodeAction value (e.g., "parallel_gateway") |
+| **shape** | `Enum<'rounded_rect' \| 'circle' \| 'diamond' \| 'parallelogram' \| 'hexagon' \| 'diamond_thick' \| 'attached_circle' \| 'screen_rect'>` | ✅ | Shape to render |
+| **icon** | `string` | ✅ | Lucide icon name |
+| **defaultLabel** | `string` | ✅ | Default display label |
+| **defaultWidth** | `integer` | ✅ | Default width in pixels |
+| **defaultHeight** | `integer` | ✅ | Default height in pixels |
+| **fillColor** | `string` | ✅ | Node fill color (CSS value) |
+| **borderColor** | `string` | ✅ | Node border color (CSS value) |
+| **allowBoundaryEvents** | `boolean` | ✅ | Whether boundary events can be attached to this node type |
+| **paletteCategory** | `Enum<'event' \| 'gateway' \| 'activity' \| 'data' \| 'subflow'>` | ✅ | Palette category for grouping |
+
+
+---
+
+## FlowNodeShape
+
+Visual shape for rendering a flow node on the canvas
+
+### Allowed Values
+
+* `rounded_rect`
+* `circle`
+* `diamond`
+* `parallelogram`
+* `hexagon`
+* `diamond_thick`
+* `attached_circle`
+* `screen_rect`
+
+
+---
+

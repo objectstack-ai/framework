@@ -1,0 +1,130 @@
+---
+title: Node Executor
+description: Node Executor protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+@module automation/node-executor
+
+Node Executor Plugin Protocol — Wait Node Pause/Resume
+
+Defines the specification for node executor plugins, with a focus on
+
+the `wait` node executor that supports flow pause and external-event
+
+resume (signal, manual, webhook, condition).
+
+The protocol covers:
+
+- **WaitResumePayload**: The payload delivered when a paused flow is resumed
+
+- **WaitExecutorConfig**: Configuration for the wait executor plugin
+
+- **NodeExecutorDescriptor**: Generic node executor plugin descriptor
+
+<Callout type="info">
+**Source:** `packages/spec/src/automation/node-executor.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { NodeExecutorDescriptor, WaitEventType, WaitExecutorConfig, WaitResumePayload, WaitTimeoutBehavior } from '@objectstack/spec/automation';
+import type { NodeExecutorDescriptor, WaitEventType, WaitExecutorConfig, WaitResumePayload, WaitTimeoutBehavior } from '@objectstack/spec/automation';
+
+// Validate data
+const result = NodeExecutorDescriptor.parse(data);
+```
+
+---
+
+## NodeExecutorDescriptor
+
+Node executor plugin descriptor
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique executor plugin identifier |
+| **name** | `string` | ✅ | Display name |
+| **nodeTypes** | `string[]` | ✅ | FlowNodeAction types this executor handles |
+| **version** | `string` | ✅ | Plugin version (semver) |
+| **description** | `string` | optional | Executor description |
+| **supportsPause** | `boolean` | ✅ | Whether the executor supports async pause/resume |
+| **supportsCancellation** | `boolean` | ✅ | Whether the executor supports mid-execution cancellation |
+| **supportsRetry** | `boolean` | ✅ | Whether the executor supports retry on failure |
+| **configSchemaRef** | `string` | optional | JSON Schema $ref for executor-specific config |
+
+
+---
+
+## WaitEventType
+
+Wait event type determining how a paused flow is resumed
+
+### Allowed Values
+
+* `timer`
+* `signal`
+* `webhook`
+* `manual`
+* `condition`
+
+
+---
+
+## WaitExecutorConfig
+
+Wait node executor plugin configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **defaultTimeoutMs** | `integer` | ✅ | Default timeout in ms (default: 24 hours) |
+| **defaultTimeoutBehavior** | `Enum<'fail' \| 'continue' \| 'fallback'>` | ✅ | Default behavior when wait timeout is exceeded |
+| **conditionPollIntervalMs** | `integer` | ✅ | Polling interval for condition waits in ms (default: 30s) |
+| **conditionMaxPolls** | `integer` | ✅ | Max polling attempts for condition waits (0 = unlimited) |
+| **webhookUrlPattern** | `string` | ✅ | URL pattern for webhook resume endpoints |
+| **persistCheckpoints** | `boolean` | ✅ | Persist wait checkpoints to durable storage |
+| **maxPausedExecutions** | `integer` | ✅ | Max concurrent paused executions (0 = unlimited) |
+
+
+---
+
+## WaitResumePayload
+
+Payload for resuming a paused wait node
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **executionId** | `string` | ✅ | Execution ID of the paused flow |
+| **checkpointId** | `string` | ✅ | Checkpoint ID to resume from |
+| **nodeId** | `string` | ✅ | Wait node ID being resumed |
+| **eventType** | `Enum<'timer' \| 'signal' \| 'webhook' \| 'manual' \| 'condition'>` | ✅ | Event type that triggered resume |
+| **signalName** | `string` | optional | Signal name (when eventType is signal) |
+| **webhookPayload** | `Record<string, any>` | optional | Webhook request payload (when eventType is webhook) |
+| **resumedBy** | `string` | optional | User ID or system identifier that triggered resume |
+| **resumedAt** | `string` | ✅ | ISO 8601 timestamp of the resume event |
+| **variables** | `Record<string, any>` | optional | Variables to merge into flow context upon resume |
+
+
+---
+
+## WaitTimeoutBehavior
+
+Behavior when a wait node exceeds its timeout
+
+### Allowed Values
+
+* `fail`
+* `continue`
+* `fallback`
+
+
+---
+

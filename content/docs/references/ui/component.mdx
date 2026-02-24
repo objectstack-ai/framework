@@ -110,7 +110,7 @@ const result = AIChatWindowProps.parse(data);
 | **object** | `string` | ✅ | Source object |
 | **field** | `string` | optional | Field to aggregate |
 | **aggregate** | `Enum<'count' \| 'sum' \| 'avg' \| 'min' \| 'max'>` | ✅ | Aggregation function |
-| **filter** | `any` | optional | Filter criteria |
+| **filter** | `[__schema0](./__schema0)` | optional | Filter criteria |
 | **format** | `Enum<'number' \| 'currency' \| 'percent'>` | optional | Number display format |
 | **prefix** | `string` | optional | Prefix text (e.g. "$") |
 | **suffix** | `string` | optional | Suffix text (e.g. "%") |
@@ -128,7 +128,7 @@ const result = AIChatWindowProps.parse(data);
 | **object** | `string` | ✅ | Object to pick records from |
 | **displayField** | `string` | ✅ | Field to display as the record label |
 | **searchFields** | `string[]` | optional | Fields to search against |
-| **filter** | `any` | optional | Filter criteria for available records |
+| **filter** | `[__schema0](./__schema0)` | optional | Filter criteria for available records |
 | **multiple** | `boolean` | ✅ | Allow multiple record selection |
 | **targetVariable** | `string` | optional | Page variable to bind selected record ID(s) |
 | **placeholder** | `string \| Object` | optional | Placeholder text |
@@ -300,7 +300,7 @@ const result = AIChatWindowProps.parse(data);
 | **columns** | `string[]` | ✅ | Fields to display in the related list |
 | **sort** | `string \| Object[]` | optional | Sort order for related records |
 | **limit** | `integer` | ✅ | Number of records to display initially |
-| **filter** | `any[]` | optional | Additional filter criteria for related records |
+| **filter** | `Object[]` | optional | Additional filter criteria for related records |
 | **title** | `string \| Object` | optional | Custom title for the related list |
 | **showViewAll** | `boolean` | ✅ | Show "View All" link to see all related records |
 | **actions** | `string[]` | optional | Action IDs available for related records |

@@ -38,8 +38,8 @@ governance context.
 ## TypeScript Usage
 
 ```typescript
-import { ComplianceAuditRequirement, ComplianceEncryptionRequirement, DataClassificationPolicy, MaskingVisibilityRule, SecurityContextConfig, SecurityEventCorrelation } from '@objectstack/spec/system';
-import type { ComplianceAuditRequirement, ComplianceEncryptionRequirement, DataClassificationPolicy, MaskingVisibilityRule, SecurityContextConfig, SecurityEventCorrelation } from '@objectstack/spec/system';
+import { ComplianceAuditRequirement, ComplianceEncryptionRequirement, ComplianceFramework, DataClassification, DataClassificationPolicy, MaskingVisibilityRule, SecurityContextConfig, SecurityEventCorrelation } from '@objectstack/spec/system';
+import type { ComplianceAuditRequirement, ComplianceEncryptionRequirement, ComplianceFramework, DataClassification, DataClassificationPolicy, MaskingVisibilityRule, SecurityContextConfig, SecurityEventCorrelation } from '@objectstack/spec/system';
 
 // Validate data
 const result = ComplianceAuditRequirement.parse(data);
@@ -75,6 +75,39 @@ Compliance framework encryption requirements
 | **dataClassifications** | `Enum<'pii' \| 'phi' \| 'pci' \| 'financial' \| 'confidential' \| 'internal' \| 'public'>[]` | ✅ | Data classifications that must be encrypted under this framework |
 | **minimumAlgorithm** | `Enum<'aes-256-gcm' \| 'aes-256-cbc' \| 'chacha20-poly1305'>` | ✅ | Minimum encryption algorithm strength required |
 | **keyRotationMaxDays** | `number` | ✅ | Maximum key rotation interval required (in days) |
+
+
+---
+
+## ComplianceFramework
+
+Compliance framework identifier
+
+### Allowed Values
+
+* `gdpr`
+* `hipaa`
+* `sox`
+* `pci_dss`
+* `ccpa`
+* `iso27001`
+
+
+---
+
+## DataClassification
+
+Data classification level
+
+### Allowed Values
+
+* `pii`
+* `phi`
+* `pci`
+* `financial`
+* `confidential`
+* `internal`
+* `public`
 
 
 ---

@@ -28,8 +28,8 @@ Isolation Levels:
 ## TypeScript Usage
 
 ```typescript
-import { DatabaseLevelIsolationStrategy, LevelIsolationStrategySchema, RowLevelIsolationStrategy, Tenant, TenantIsolationConfig, TenantIsolationLevel, TenantQuota, TenantSecurityPolicy } from '@objectstack/spec/system';
-import type { DatabaseLevelIsolationStrategy, LevelIsolationStrategy, RowLevelIsolationStrategy, Tenant, TenantIsolationConfig, TenantIsolationLevel, TenantQuota, TenantSecurityPolicy } from '@objectstack/spec/system';
+import { DatabaseLevelIsolationStrategy, DatabaseProvider, LevelIsolationStrategySchema, QuotaEnforcementResult, RowLevelIsolationStrategy, Tenant, TenantConnectionConfig, TenantIsolationConfig, TenantIsolationLevel, TenantQuota, TenantSecurityPolicy, TenantUsage } from '@objectstack/spec/system';
+import type { DatabaseLevelIsolationStrategy, DatabaseProvider, LevelIsolationStrategy, QuotaEnforcementResult, RowLevelIsolationStrategy, Tenant, TenantConnectionConfig, TenantIsolationConfig, TenantIsolationLevel, TenantQuota, TenantSecurityPolicy, TenantUsage } from '@objectstack/spec/system';
 
 // Validate data
 const result = DatabaseLevelIsolationStrategy.parse(data);
@@ -52,6 +52,19 @@ const result = DatabaseLevelIsolationStrategy.parse(data);
 
 ---
 
+## DatabaseProvider
+
+Database provider for tenant data
+
+### Allowed Values
+
+* `turso`
+* `postgres`
+* `memory`
+
+
+---
+
 ## LevelIsolationStrategySchema
 
 ### Properties
@@ -62,6 +75,23 @@ const result = DatabaseLevelIsolationStrategy.parse(data);
 | **schema** | `Object` | optional | Schema configuration |
 | **migrations** | `Object` | optional | Migration configuration |
 | **performance** | `Object` | optional | Performance settings |
+
+
+---
+
+## QuotaEnforcementResult
+
+Quota enforcement check result
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **allowed** | `boolean` | ✅ | Whether the operation is within quota |
+| **exceededQuota** | `string` | optional | Name of the exceeded quota |
+| **currentUsage** | `number` | optional | Current usage value |
+| **limit** | `number` | optional | Quota limit |
+| **message** | `string` | optional | Human-readable quota message |
 
 
 ---
@@ -88,8 +118,27 @@ const result = DatabaseLevelIsolationStrategy.parse(data);
 | **id** | `string` | ✅ | Unique tenant identifier |
 | **name** | `string` | ✅ | Tenant display name |
 | **isolationLevel** | `Enum<'shared_schema' \| 'isolated_schema' \| 'isolated_db'>` | ✅ |  |
+| **databaseProvider** | `Enum<'turso' \| 'postgres' \| 'memory'>` | optional | Database provider |
+| **connectionConfig** | `Object` | optional | Database connection config |
+| **provisioningStatus** | `Enum<'provisioning' \| 'active' \| 'suspended' \| 'failed' \| 'destroying'>` | optional | Current provisioning lifecycle status |
+| **plan** | `Enum<'free' \| 'pro' \| 'enterprise'>` | optional | Subscription plan |
 | **customizations** | `Record<string, any>` | optional | Custom configuration values |
 | **quotas** | `Object` | optional |  |
+
+
+---
+
+## TenantConnectionConfig
+
+Tenant database connection configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **url** | `string` | ✅ | Database connection URL |
+| **authToken** | `string` | optional | Database auth token (encrypted at rest) |
+| **group** | `string` | optional | Turso database group name |
 
 
 ---
@@ -162,6 +211,10 @@ This schema accepts one of the following structures:
 | **maxUsers** | `integer` | optional | Maximum number of users |
 | **maxStorage** | `integer` | optional | Maximum storage in bytes |
 | **apiRateLimit** | `integer` | optional | API requests per minute |
+| **maxObjects** | `integer` | optional | Maximum number of custom objects |
+| **maxRecordsPerObject** | `integer` | optional | Maximum records per object |
+| **maxDeploymentsPerDay** | `integer` | optional | Maximum deployments per day |
+| **maxStorageBytes** | `integer` | optional | Maximum storage in bytes |
 
 
 ---
@@ -175,6 +228,25 @@ This schema accepts one of the following structures:
 | **encryption** | `Object` | optional | Encryption requirements |
 | **accessControl** | `Object` | optional | Access control requirements |
 | **compliance** | `Object` | optional | Compliance requirements |
+
+
+---
+
+## TenantUsage
+
+Current tenant resource usage
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **currentObjectCount** | `integer` | ✅ | Current number of custom objects |
+| **currentRecordCount** | `integer` | ✅ | Total records across all objects |
+| **currentStorageBytes** | `integer` | ✅ | Current storage usage in bytes |
+| **deploymentsToday** | `integer` | ✅ | Deployments executed today |
+| **currentUsers** | `integer` | ✅ | Current number of active users |
+| **apiRequestsThisMinute** | `integer` | ✅ | API requests in the current minute |
+| **lastUpdatedAt** | `string` | optional | Last usage update time |
 
 
 ---

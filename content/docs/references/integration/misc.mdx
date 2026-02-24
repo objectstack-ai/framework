@@ -12,8 +12,8 @@ description: Misc protocol schemas
 ## TypeScript Usage
 
 ```typescript
-import { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabaseConnector, DatabasePoolConfig, DatabaseProvider, DatabaseTable, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageConnector, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubConnector, GitHubIssueTracking, GitHubProvider, GitHubPullRequestConfig, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, MessageFormat, MessageQueueConnector, ProducerConfig, SaasConnector, SaasObjectType, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelConnector, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
-import type { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabaseConnector, DatabasePoolConfig, DatabaseProvider, DatabaseTable, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageConnector, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubConnector, GitHubIssueTracking, GitHubProvider, GitHubPullRequestConfig, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, MessageFormat, MessageQueueConnector, ProducerConfig, SaasConnector, SaasObjectType, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelConnector, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
+import { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabaseConnector, DatabasePoolConfig, DatabaseTable, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageConnector, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubConnector, GitHubIssueTracking, GitHubProvider, GitHubPullRequestConfig, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, MessageFormat, MessageQueueConnector, ProducerConfig, SaasConnector, SaasObjectType, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelConnector, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
+import type { AckMode, ApiVersionConfig, BuildConfig, CdcConfig, DatabaseConnector, DatabasePoolConfig, DatabaseTable, DeliveryGuarantee, DeploymentConfig, DlqConfig, DomainConfig, EdgeFunctionConfig, EnvironmentVariables, FileAccessPattern, FileFilterConfig, FileMetadataConfig, FileStorageConnector, FileStorageProvider, FileVersioningConfig, GitHubActionsWorkflow, GitHubCommitConfig, GitHubConnector, GitHubIssueTracking, GitHubProvider, GitHubPullRequestConfig, GitHubReleaseConfig, GitHubRepository, GitRepositoryConfig, MessageFormat, MessageQueueConnector, ProducerConfig, SaasConnector, SaasObjectType, SaasProvider, SslConfig, StorageBucket, TopicQueue, VercelConnector, VercelFramework, VercelMonitoring, VercelProject, VercelProvider, VercelTeam } from '@objectstack/spec/integration';
 
 // Validate data
 const result = AckMode.parse(data);
@@ -133,28 +133,6 @@ Message acknowledgment mode
 | **acquireTimeoutMs** | `number` | ✅ | Connection acquisition timeout in ms |
 | **evictionRunIntervalMs** | `number` | ✅ | Connection eviction check interval in ms |
 | **testOnBorrow** | `boolean` | ✅ | Test connection before use |
-
-
----
-
-## DatabaseProvider
-
-Database provider type
-
-### Allowed Values
-
-* `postgresql`
-* `mysql`
-* `mariadb`
-* `mssql`
-* `oracle`
-* `mongodb`
-* `redis`
-* `cassandra`
-* `snowflake`
-* `bigquery`
-* `redshift`
-* `custom`
 
 
 ---

@@ -1,0 +1,116 @@
+---
+title: App Install
+description: App Install protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+App Installation Protocol
+
+Defines the schemas for installing marketplace apps into tenant databases.
+
+An "app install" injects metadata (objects, views, flows) + schema sync
+
+into a tenant's isolated database.
+
+Install pipeline:
+
+1. Check compatibility (kernel version, existing objects, conflicts)
+
+2. Validate app manifest
+
+3. Apply schema changes (via deploy pipeline)
+
+4. Seed initial data
+
+5. Register app in tenant's metadata registry
+
+<Callout type="info">
+**Source:** `packages/spec/src/system/app-install.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { AppCompatibilityCheck, AppInstallRequest, AppInstallResult, AppManifest } from '@objectstack/spec/system';
+import type { AppCompatibilityCheck, AppInstallRequest, AppInstallResult, AppManifest } from '@objectstack/spec/system';
+
+// Validate data
+const result = AppCompatibilityCheck.parse(data);
+```
+
+---
+
+## AppCompatibilityCheck
+
+App compatibility check result
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **compatible** | `boolean` | ✅ | Whether the app is compatible |
+| **issues** | `Object[]` | ✅ | Compatibility issues |
+
+
+---
+
+## AppInstallRequest
+
+App install request
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **tenantId** | `string` | ✅ | Target tenant ID |
+| **appId** | `string` | ✅ | App identifier |
+| **configOverrides** | `Record<string, any>` | optional | Configuration overrides |
+| **skipSeedData** | `boolean` | ✅ | Skip seed data population |
+
+
+---
+
+## AppInstallResult
+
+App install result
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Whether installation succeeded |
+| **appId** | `string` | ✅ | Installed app identifier |
+| **version** | `string` | ✅ | Installed app version |
+| **installedObjects** | `string[]` | ✅ | Objects created/updated |
+| **createdTables** | `string[]` | ✅ | Database tables created |
+| **seededRecords** | `integer` | ✅ | Seed records inserted |
+| **durationMs** | `integer` | optional | Installation duration |
+| **error** | `string` | optional | Error message on failure |
+
+
+---
+
+## AppManifest
+
+App manifest for marketplace installation
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | App identifier (snake_case) |
+| **label** | `string` | ✅ | App display label |
+| **version** | `string` | ✅ | App version (semver) |
+| **description** | `string` | optional | App description |
+| **minKernelVersion** | `string` | optional | Minimum required kernel version |
+| **objects** | `string[]` | ✅ | Object names provided |
+| **views** | `string[]` | ✅ | View names provided |
+| **flows** | `string[]` | ✅ | Flow names provided |
+| **hasSeedData** | `boolean` | ✅ | Whether app includes seed data |
+| **seedData** | `Record<string, any>[]` | ✅ | Seed data records |
+| **dependencies** | `string[]` | ✅ | Required app dependencies |
+
+
+---
+

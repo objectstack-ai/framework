@@ -28,8 +28,8 @@ Based on semantic versioning (SemVer) with extensions for:
 ## TypeScript Usage
 
 ```typescript
-import { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DependencyResolutionResult, DeprecationNotice, MultiVersionSupport, PluginCompatibilityMatrix, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
-import type { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DependencyResolutionResult, DeprecationNotice, MultiVersionSupport, PluginCompatibilityMatrix, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
+import { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DeprecationNotice, MultiVersionSupport, PluginCompatibilityMatrix, PluginDependencyResolutionResult, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
+import type { BreakingChange, CompatibilityLevel, CompatibilityMatrixEntry, DependencyConflict, DeprecationNotice, MultiVersionSupport, PluginCompatibilityMatrix, PluginDependencyResolutionResult, PluginVersionMetadata, SemanticVersion, VersionConstraint } from '@objectstack/spec/kernel';
 
 // Validate data
 const result = BreakingChange.parse(data);
@@ -104,23 +104,6 @@ Compatibility level between versions
 
 ---
 
-## DependencyResolutionResult
-
-Complete dependency resolution result
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **dependencies** | `Object[]` | ✅ | Resolution result for each dependency |
-| **canProceed** | `boolean` | ✅ | Whether installation can proceed |
-| **requiredActions** | `Object[]` | ✅ | Actions required before proceeding |
-| **installOrder** | `string[]` | ✅ | Topologically sorted package IDs for installation |
-| **circularDependencies** | `string[][]` | optional | Circular dependency chains detected (e.g. [["A", "B", "A"]]) |
-
-
----
-
 ## DeprecationNotice
 
 ### Properties
@@ -163,6 +146,22 @@ Complete dependency resolution result
 | **compatibilityMatrix** | `Object[]` | ✅ |  |
 | **supportedVersions** | `Object[]` | ✅ |  |
 | **minimumCompatibleVersion** | `string` | optional | Oldest version that can be directly upgraded |
+
+
+---
+
+## PluginDependencyResolutionResult
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ |  |
+| **resolved** | `Object[]` | optional |  |
+| **conflicts** | `Object[]` | optional |  |
+| **warnings** | `string[]` | optional |  |
+| **installationOrder** | `string[]` | optional | Plugin IDs in order they should be installed |
+| **dependencyGraph** | `Record<string, string[]>` | optional | Map of plugin ID to its dependencies |
 
 
 ---

@@ -2,6 +2,7 @@
   "title": "Kernel Protocol",
   "pages": [
     "cli-extension",
+    "cli-plugin-commands",
     "context",
     "dependency-resolution",
     "dev-plugin",

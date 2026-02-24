@@ -18,8 +18,8 @@ These schemas ensure consistency across different parts of the stack.
 ## TypeScript Usage
 
 ```typescript
-import { CorsConfig, RateLimitConfig, StaticMount } from '@objectstack/spec/shared';
-import type { CorsConfig, RateLimitConfig, StaticMount } from '@objectstack/spec/shared';
+import { CorsConfig, HttpMethod, HttpRequest, RateLimitConfig, StaticMount } from '@objectstack/spec/shared';
+import type { CorsConfig, HttpMethod, HttpRequest, RateLimitConfig, StaticMount } from '@objectstack/spec/shared';
 
 // Validate data
 const result = CorsConfig.parse(data);
@@ -38,6 +38,34 @@ const result = CorsConfig.parse(data);
 | **methods** | `Enum<'GET' \| 'POST' \| 'PUT' \| 'DELETE' \| 'PATCH' \| 'HEAD' \| 'OPTIONS'>[]` | optional | Allowed HTTP methods |
 | **credentials** | `boolean` | ✅ | Allow credentials (cookies, authorization headers) |
 | **maxAge** | `integer` | optional | Preflight cache duration in seconds |
+
+
+---
+
+## HttpMethod
+
+### Allowed Values
+
+* `GET`
+* `POST`
+* `PUT`
+* `PATCH`
+* `DELETE`
+
+
+---
+
+## HttpRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **url** | `string` | ✅ | API endpoint URL |
+| **method** | `Enum<'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'>` | ✅ | HTTP method |
+| **headers** | `Record<string, string>` | optional | Custom HTTP headers |
+| **params** | `Record<string, any>` | optional | Query parameters |
+| **body** | `any` | optional | Request body for POST/PUT/PATCH |
 
 
 ---

@@ -56,8 +56,9 @@ const result = Flow.parse(data);
 | **source** | `string` | ✅ | Source Node ID |
 | **target** | `string` | ✅ | Target Node ID |
 | **condition** | `string` | optional | Expression returning boolean used for branching |
-| **type** | `Enum<'default' \| 'fault'>` | ✅ | Connection type: Standard (Success) or Fault (Error) path |
+| **type** | `Enum<'default' \| 'fault' \| 'conditional'>` | ✅ | Connection type: default (normal flow), fault (error path), or conditional (expression-guarded) |
 | **label** | `string` | optional | Label on the connector |
+| **isDefault** | `boolean` | ✅ | Marks this edge as the default path when no other conditions match |
 
 
 ---
@@ -69,7 +70,7 @@ const result = Flow.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Node unique ID |
-| **type** | `Enum<'start' \| 'end' \| 'decision' \| 'assignment' \| 'loop' \| 'create_record' \| 'update_record' \| 'delete_record' \| 'get_record' \| 'http_request' \| 'script' \| 'screen' \| 'wait' \| 'subflow' \| 'connector_action'>` | ✅ | Action type |
+| **type** | `Enum<'start' \| 'end' \| 'decision' \| 'assignment' \| 'loop' \| 'create_record' \| 'update_record' \| 'delete_record' \| 'get_record' \| 'http_request' \| 'script' \| 'screen' \| 'wait' \| 'subflow' \| 'connector_action' \| 'parallel_gateway' \| 'join_gateway' \| 'boundary_event'>` | ✅ | Action type |
 | **label** | `string` | ✅ | Node label |
 | **config** | `Record<string, any>` | optional | Node configuration |
 | **connectorConfig** | `Object` | optional |  |
@@ -77,6 +78,8 @@ const result = Flow.parse(data);
 | **timeoutMs** | `integer` | optional | Maximum execution time for this node in milliseconds |
 | **inputSchema** | `Record<string, Object>` | optional | Input parameter schema for this node |
 | **outputSchema** | `Record<string, Object>` | optional | Output schema declaration for this node |
+| **waitEventConfig** | `Object` | optional | Configuration for wait node event resumption |
+| **boundaryConfig** | `Object` | optional | Configuration for boundary events attached to host nodes |
 
 
 ---
@@ -100,6 +103,9 @@ const result = Flow.parse(data);
 * `wait`
 * `subflow`
 * `connector_action`
+* `parallel_gateway`
+* `join_gateway`
+* `boundary_event`
 
 
 ---

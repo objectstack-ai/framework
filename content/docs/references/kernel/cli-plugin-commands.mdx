@@ -1,0 +1,198 @@
+---
+title: Cli Plugin Commands
+description: Cli Plugin Commands protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+# CLI Plugin Commands Protocol
+
+Defines the input/output schemas for the `os plugin` CLI commands
+
+that manage the package build → validate → publish lifecycle.
+
+## Commands
+
+```
+
+os plugin build      — Build a .tgz artifact from the current project
+
+os plugin validate   — Validate an artifact's structure, checksums, and signature
+
+os plugin publish    — Upload an artifact to the marketplace
+
+```
+
+## Architecture Alignment
+
+- **npm**: `npm pack` → `npm publish`
+
+- **Helm**: `helm package` → `helm push`
+
+- **VS Code**: `vsce package` → `vsce publish`
+
+- **Salesforce**: `sf package version create` → `sf package version promote`
+
+<Callout type="info">
+**Source:** `packages/spec/src/kernel/cli-plugin-commands.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { PluginBuildOptions, PluginBuildResult, PluginPublishOptions, PluginPublishResult, PluginValidateOptions, PluginValidateResult, ValidationFinding, ValidationSeverityEnum } from '@objectstack/spec/kernel';
+import type { PluginBuildOptions, PluginBuildResult, PluginPublishOptions, PluginPublishResult, PluginValidateOptions, PluginValidateResult, ValidationFinding, ValidationSeverityEnum } from '@objectstack/spec/kernel';
+
+// Validate data
+const result = PluginBuildOptions.parse(data);
+```
+
+---
+
+## PluginBuildOptions
+
+Options for the os plugin build command
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **directory** | `string` | optional | Project root directory (defaults to current working directory) |
+| **outDir** | `string` | optional | Output directory for the built artifact (defaults to ./dist) |
+| **format** | `Enum<'tgz' \| 'zip'>` | ✅ | Archive format for the artifact |
+| **sign** | `boolean` | ✅ | Whether to digitally sign the artifact |
+| **privateKeyPath** | `string` | optional | Path to RSA/ECDSA private key file for signing |
+| **signAlgorithm** | `Enum<'RSA-SHA256' \| 'RSA-SHA384' \| 'RSA-SHA512' \| 'ECDSA-SHA256'>` | optional | Signing algorithm to use |
+| **checksumAlgorithm** | `Enum<'sha256' \| 'sha384' \| 'sha512'>` | ✅ | Hash algorithm for file checksums |
+| **includeData** | `boolean` | ✅ | Whether to include seed data in the artifact |
+| **includeLocales** | `boolean` | ✅ | Whether to include locale/translation files |
+
+
+---
+
+## PluginBuildResult
+
+Result of the os plugin build command
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Whether the build succeeded |
+| **artifactPath** | `string` | optional | Absolute path to the generated artifact file |
+| **artifact** | `Object` | optional | Artifact metadata |
+| **fileCount** | `integer` | optional | Total number of files in the artifact |
+| **size** | `integer` | optional | Total artifact size in bytes |
+| **durationMs** | `number` | optional | Build duration in milliseconds |
+| **errorMessage** | `string` | optional | Error message if build failed |
+| **warnings** | `string[]` | optional | Warnings emitted during build |
+
+
+---
+
+## PluginPublishOptions
+
+Options for the os plugin publish command
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **artifactPath** | `string` | ✅ | Path to the artifact file to publish |
+| **registryUrl** | `string` | optional | Marketplace API base URL |
+| **token** | `string` | optional | Authentication token for marketplace API |
+| **releaseNotes** | `string` | optional | Release notes for this version |
+| **preRelease** | `boolean` | ✅ | Whether this is a pre-release version |
+| **skipValidation** | `boolean` | ✅ | Whether to skip local validation before publish |
+| **access** | `Enum<'public' \| 'restricted'>` | ✅ | Package access level on the marketplace |
+| **tags** | `string[]` | optional | Tags for marketplace categorization |
+
+
+---
+
+## PluginPublishResult
+
+Result of the os plugin publish command
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Whether the publish succeeded |
+| **packageId** | `string` | optional | Published package identifier |
+| **version** | `string` | optional | Published version string |
+| **artifactUrl** | `string` | optional | URL of the published artifact in the marketplace |
+| **sha256** | `string` | optional | SHA256 checksum of the uploaded artifact |
+| **submissionId** | `string` | optional | Marketplace submission ID for review tracking |
+| **errorMessage** | `string` | optional | Error message if publish failed |
+| **message** | `string` | optional | Human-readable status message |
+
+
+---
+
+## PluginValidateOptions
+
+Options for the os plugin validate command
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **artifactPath** | `string` | ✅ | Path to the artifact file to validate |
+| **verifySignature** | `boolean` | ✅ | Whether to verify the digital signature |
+| **publicKeyPath** | `string` | optional | Path to the public key for signature verification |
+| **verifyChecksums** | `boolean` | ✅ | Whether to verify checksums of all files |
+| **validateMetadata** | `boolean` | ✅ | Whether to validate metadata against schemas |
+| **platformVersion** | `string` | optional | Platform version for compatibility verification |
+
+
+---
+
+## PluginValidateResult
+
+Result of the os plugin validate command
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **valid** | `boolean` | ✅ | Whether the artifact passed validation |
+| **artifact** | `Object` | optional | Extracted artifact metadata |
+| **checksumVerification** | `Object` | optional | Checksum verification result |
+| **signatureVerification** | `Object` | optional | Signature verification result |
+| **platformCompatibility** | `Object` | optional | Platform compatibility check result |
+| **findings** | `Object[]` | ✅ | All validation findings |
+| **summary** | `Object` | optional | Finding counts by severity |
+
+
+---
+
+## ValidationFinding
+
+A single validation finding
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ | Issue severity level |
+| **rule** | `string` | ✅ | Validation rule identifier |
+| **message** | `string` | ✅ | Human-readable finding description |
+| **path** | `string` | optional | Relative file path within the artifact |
+
+
+---
+
+## ValidationSeverityEnum
+
+Validation issue severity
+
+### Allowed Values
+
+* `error`
+* `warning`
+* `info`
+
+
+---
+
