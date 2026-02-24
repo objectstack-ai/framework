@@ -1095,3 +1095,82 @@ describe('PageSchema with interfaceConfig', () => {
     expect(page.interfaceConfig?.allowPrinting).toBe(false);
   });
 });
+
+// ============================================================================
+// Negative / Inverse Validation Tests
+// ============================================================================
+
+describe('PageSchema - Negative Validation', () => {
+  it('should reject page without name', () => {
+    expect(() => PageSchema.parse({
+      label: 'No Name Page',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should reject page without label', () => {
+    expect(() => PageSchema.parse({
+      name: 'no_label',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should reject page without regions', () => {
+    expect(() => PageSchema.parse({
+      name: 'no_regions',
+      label: 'No Regions',
+    })).toThrow();
+  });
+
+  it('should reject page with camelCase name', () => {
+    expect(() => PageSchema.parse({
+      name: 'myPage',
+      label: 'CamelCase Name',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should reject page with invalid type enum', () => {
+    expect(() => PageSchema.parse({
+      name: 'bad_type',
+      label: 'Bad Type',
+      type: 'nonexistent_type',
+      regions: [],
+    })).toThrow();
+  });
+});
+
+describe('PageComponentSchema - Negative Validation', () => {
+  it('should reject component without type', () => {
+    expect(() => PageComponentSchema.parse({
+      properties: {},
+    })).toThrow();
+  });
+
+  it('should reject component without properties', () => {
+    expect(() => PageComponentSchema.parse({
+      type: 'record:details',
+    })).toThrow();
+  });
+});
+
+describe('RecordReviewConfigSchema - Negative Validation', () => {
+  it('should reject review config without object', () => {
+    expect(() => RecordReviewConfigSchema.parse({
+      actions: [{ label: 'Approve', type: 'approve' }],
+    })).toThrow();
+  });
+
+  it('should reject review config without actions', () => {
+    expect(() => RecordReviewConfigSchema.parse({
+      object: 'lead',
+    })).toThrow();
+  });
+
+  it('should reject review action with invalid type enum', () => {
+    expect(() => RecordReviewConfigSchema.parse({
+      object: 'lead',
+      actions: [{ label: 'Bad', type: 'invalid_action' }],
+    })).toThrow();
+  });
+});

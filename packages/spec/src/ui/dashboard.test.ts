@@ -1597,3 +1597,91 @@ describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
     expect(dashboard.widgets[2].measures).toHaveLength(3);
   });
 });
+
+// ============================================================================
+// Negative / Inverse Validation Tests
+// ============================================================================
+
+describe('DashboardWidgetSchema - Negative Validation', () => {
+  it('should reject widget without layout', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      title: 'Bad Widget',
+      type: 'metric',
+    })).toThrow();
+  });
+
+  it('should reject widget with invalid type enum', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      type: 'nonexistent_chart',
+      layout: { x: 0, y: 0, w: 4, h: 2 },
+    })).toThrow();
+  });
+
+  it('should reject widget with non-numeric layout values', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      type: 'metric',
+      layout: { x: 'a', y: 0, w: 4, h: 2 },
+    })).toThrow();
+  });
+
+  it('should reject widget with incomplete layout', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      type: 'metric',
+      layout: { x: 0, y: 0 },
+    })).toThrow();
+  });
+
+  it('should reject widget with invalid aggregate enum', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      type: 'metric',
+      aggregate: 'median',
+      layout: { x: 0, y: 0, w: 4, h: 2 },
+    })).toThrow();
+  });
+});
+
+describe('DashboardSchema - Negative Validation', () => {
+  it('should reject dashboard without name', () => {
+    expect(() => DashboardSchema.parse({
+      label: 'No Name Dashboard',
+      widgets: [],
+    })).toThrow();
+  });
+
+  it('should reject dashboard without label', () => {
+    expect(() => DashboardSchema.parse({
+      name: 'no_label',
+      widgets: [],
+    })).toThrow();
+  });
+
+  it('should reject dashboard without widgets', () => {
+    expect(() => DashboardSchema.parse({
+      name: 'no_widgets',
+      label: 'Missing Widgets',
+    })).toThrow();
+  });
+
+  it('should reject dashboard with camelCase name', () => {
+    expect(() => DashboardSchema.parse({
+      name: 'salesDashboard',
+      label: 'Bad Name',
+      widgets: [],
+    })).toThrow();
+  });
+});
+
+describe('GlobalFilterSchema - Negative Validation', () => {
+  it('should reject filter without field', () => {
+    expect(() => GlobalFilterSchema.parse({
+      label: 'No Field',
+    })).toThrow();
+  });
+
+  it('should reject filter with invalid type enum', () => {
+    expect(() => GlobalFilterSchema.parse({
+      field: 'status',
+      type: 'invalid_type',
+    })).toThrow();
+  });
+});

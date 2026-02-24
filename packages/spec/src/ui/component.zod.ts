@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { z } from 'zod';
+import { FilterConditionSchema } from '../data/filter.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
 import { FeedItemType, FeedFilterMode } from '../data/feed.zod';
 
@@ -184,7 +185,7 @@ export const ElementNumberPropsSchema = z.object({
   field: z.string().optional().describe('Field to aggregate'),
   aggregate: z.enum(['count', 'sum', 'avg', 'min', 'max'])
     .describe('Aggregation function'),
-  filter: z.any().optional().describe('Filter criteria'),
+  filter: FilterConditionSchema.optional().describe('Filter criteria'),
   format: z.enum(['number', 'currency', 'percent']).optional().describe('Number display format'),
   prefix: z.string().optional().describe('Prefix text (e.g. "$")'),
   suffix: z.string().optional().describe('Suffix text (e.g. "%")'),
@@ -247,7 +248,7 @@ export const ElementRecordPickerPropsSchema = z.object({
   object: z.string().describe('Object to pick records from'),
   displayField: z.string().describe('Field to display as the record label'),
   searchFields: z.array(z.string()).optional().describe('Fields to search against'),
-  filter: z.any().optional().describe('Filter criteria for available records'),
+  filter: FilterConditionSchema.optional().describe('Filter criteria for available records'),
   multiple: z.boolean().optional().default(false).describe('Allow multiple record selection'),
   targetVariable: z.string().optional().describe('Page variable to bind selected record ID(s)'),
   placeholder: I18nLabelSchema.optional().describe('Placeholder text'),

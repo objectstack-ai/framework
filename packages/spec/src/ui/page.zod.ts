@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { SortItemSchema } from '../shared/enums.zod';
+import { FilterConditionSchema } from '../data/filter.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
 import { ResponsiveConfigSchema } from './responsive.zod';
 import {
@@ -50,7 +51,7 @@ export const PageComponentType = z.enum([
 export const ElementDataSourceSchema = z.object({
   object: z.string().describe('Object to query'),
   view: z.string().optional().describe('Named view to apply'),
-  filter: z.any().optional().describe('Additional filter criteria'),
+  filter: FilterConditionSchema.optional().describe('Additional filter criteria'),
   sort: z.array(SortItemSchema).optional().describe('Sort order'),
   limit: z.number().int().positive().optional().describe('Max records to display'),
 });
@@ -178,7 +179,7 @@ export const PageTypeSchema = z.enum([
  */
 export const RecordReviewConfigSchema = z.object({
   object: z.string().describe('Target object for review'),
-  filter: z.any().optional().describe('Filter criteria for review queue'),
+  filter: FilterConditionSchema.optional().describe('Filter criteria for review queue'),
   sort: z.array(SortItemSchema).optional().describe('Sort order for review queue'),
   displayFields: z.array(z.string()).optional()
     .describe('Fields to display on the review page'),
@@ -188,7 +189,7 @@ export const RecordReviewConfigSchema = z.object({
       .describe('Action type'),
     field: z.string().optional()
       .describe('Field to update on action'),
-    value: z.any().optional()
+    value: z.union([z.string(), z.number(), z.boolean()]).optional()
       .describe('Value to set on action'),
     nextRecord: z.boolean().optional().default(true)
       .describe('Auto-advance to next record after action'),

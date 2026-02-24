@@ -481,3 +481,66 @@ describe('Report Performance Integration', () => {
     })).not.toThrow();
   });
 });
+
+// ============================================================================
+// Negative / Inverse Validation Tests
+// ============================================================================
+
+describe('ReportSchema - Negative Validation', () => {
+  it('should reject report without name', () => {
+    expect(() => ReportSchema.parse({
+      label: 'No Name Report',
+      objectName: 'contact',
+      columns: [{ field: 'name' }],
+    })).toThrow();
+  });
+
+  it('should reject report without label', () => {
+    expect(() => ReportSchema.parse({
+      name: 'no_label',
+      objectName: 'contact',
+      columns: [{ field: 'name' }],
+    })).toThrow();
+  });
+
+  it('should reject report without objectName', () => {
+    expect(() => ReportSchema.parse({
+      name: 'no_object',
+      label: 'No Object Report',
+      columns: [{ field: 'name' }],
+    })).toThrow();
+  });
+
+  it('should reject report without columns', () => {
+    expect(() => ReportSchema.parse({
+      name: 'no_columns',
+      label: 'No Columns Report',
+      objectName: 'contact',
+    })).toThrow();
+  });
+
+  it('should reject report with camelCase name', () => {
+    expect(() => ReportSchema.parse({
+      name: 'myReport',
+      label: 'CamelCase Name',
+      objectName: 'contact',
+      columns: [{ field: 'name' }],
+    })).toThrow();
+  });
+
+  it('should reject report with invalid type enum', () => {
+    expect(() => ReportSchema.parse({
+      name: 'invalid_type',
+      label: 'Invalid Type',
+      objectName: 'contact',
+      type: 'pivot',
+      columns: [{ field: 'name' }],
+    })).toThrow();
+  });
+
+  it('should reject report column without field', () => {
+    expect(() => ReportColumnSchema.parse({
+      label: 'No Field',
+    })).toThrow();
+  });
+});

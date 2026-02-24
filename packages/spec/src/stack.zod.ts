@@ -332,6 +332,74 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
     }
   }
 
+  // Validate seed data → object references
+  if (config.data) {
+    for (const dataset of config.data) {
+      if (dataset.object && !objectNames.has(dataset.object)) {
+        errors.push(
+          `Seed data references object '${dataset.object}' which is not defined in objects.`,
+        );
+      }
+    }
+  }
+
+  // Validate app navigation → object/dashboard/page/report references
+  if (config.apps) {
+    const dashboardNames = new Set<string>();
+    if (config.dashboards) {
+      for (const d of config.dashboards) {
+        dashboardNames.add(d.name);
+      }
+    }
+    const pageNames = new Set<string>();
+    if (config.pages) {
+      for (const p of config.pages) {
+        pageNames.add(p.name);
+      }
+    }
+    const reportNames = new Set<string>();
+    if (config.reports) {
+      for (const r of config.reports) {
+        reportNames.add(r.name);
+      }
+    }
+
+    for (const app of config.apps) {
+      if (!app.navigation) continue;
+      const checkNavItems = (items: unknown[], appName: string) => {
+        for (const item of items) {
+          if (!item || typeof item !== 'object') continue;
+          const nav = item as Record<string, unknown>;
+          if (nav.type === 'object' && typeof nav.objectName === 'string' && !objectNames.has(nav.objectName)) {
+            errors.push(
+              `App '${appName}' navigation references object '${nav.objectName}' which is not defined in objects.`,
+            );
+          }
+          if (nav.type === 'dashboard' && typeof nav.dashboardName === 'string' && dashboardNames.size > 0 && !dashboardNames.has(nav.dashboardName)) {
+            errors.push(
+              `App '${appName}' navigation references dashboard '${nav.dashboardName}' which is not defined in dashboards.`,
+            );
+          }
+          if (nav.type === 'page' && typeof nav.pageName === 'string' && pageNames.size > 0 && !pageNames.has(nav.pageName)) {
+            errors.push(
+              `App '${appName}' navigation references page '${nav.pageName}' which is not defined in pages.`,
+            );
+          }
+          if (nav.type === 'report' && typeof nav.reportName === 'string' && reportNames.size > 0 && !reportNames.has(nav.reportName)) {
+            errors.push(
+              `App '${appName}' navigation references report '${nav.reportName}' which is not defined in reports.`,
+            );
+          }
+          // Recurse into group children
+          if (nav.type === 'group' && Array.isArray(nav.children)) {
+            checkNavItems(nav.children, appName);
+          }
+        }
+      };
+      checkNavItems(app.navigation, app.name);
+    }
+  }
+
   return errors;
 }
 

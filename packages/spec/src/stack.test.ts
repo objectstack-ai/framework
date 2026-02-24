@@ -847,3 +847,116 @@ describe('defineStack - Map Format Support', () => {
     expect(result.views![0].list?.type).toBe('grid');
   });
 });
+
+// ============================================================================
+// Negative / Inverse Validation Tests — Cross-Reference
+// ============================================================================
+
+describe('defineStack - Seed Data Cross-Reference Validation', () => {
+  const baseManifest = {
+    id: 'com.example.test',
+    name: 'test-project',
+    version: '1.0.0',
+    type: 'app' as const,
+  };
+
+  it('should detect seed data referencing undefined object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'account', fields: { name: { type: 'text' } } },
+      ],
+      data: [
+        { object: 'ghost_object', records: [{ name: 'Test' }] },
+      ],
+    };
+    expect(() => defineStack(config)).toThrow('ghost_object');
+    expect(() => defineStack(config)).toThrow('cross-reference validation failed');
+  });
+
+  it('should pass when seed data references defined object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'account', fields: { name: { type: 'text' } } },
+      ],
+      data: [
+        { object: 'account', records: [{ name: 'Acme Corp' }] },
+      ],
+    };
+    expect(() => defineStack(config)).not.toThrow();
+  });
+});
+
+describe('defineStack - Navigation Cross-Reference Validation', () => {
+  const baseManifest = {
+    id: 'com.example.test',
+    name: 'test-project',
+    version: '1.0.0',
+    type: 'app' as const,
+  };
+
+  it('should detect navigation referencing undefined object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' } } },
+      ],
+      apps: [
+        {
+          name: 'my_app',
+          label: 'My App',
+          navigation: [
+            { id: 'nav_missing', type: 'object' as const, label: 'Missing', objectName: 'nonexistent_object' },
+          ],
+        },
+      ],
+    };
+    expect(() => defineStack(config)).toThrow('nonexistent_object');
+  });
+
+  it('should detect navigation referencing undefined dashboard', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' } } },
+      ],
+      dashboards: [
+        { name: 'sales_dashboard', label: 'Sales', widgets: [] },
+      ],
+      apps: [
+        {
+          name: 'my_app',
+          label: 'My App',
+          navigation: [
+            { id: 'nav_ghost', type: 'dashboard' as const, label: 'Missing', dashboardName: 'ghost_dashboard' },
+          ],
+        },
+      ],
+    };
+    expect(() => defineStack(config)).toThrow('ghost_dashboard');
+  });
+
+  it('should pass when all navigation references are valid', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' } } },
+      ],
+      dashboards: [
+        { name: 'task_overview', label: 'Overview', widgets: [] },
+      ],
+      apps: [
+        {
+          name: 'my_app',
+          label: 'My App',
+          navigation: [
+            { id: 'nav_tasks', type: 'object' as const, label: 'Tasks', objectName: 'task' },
+            { id: 'nav_overview', type: 'dashboard' as const, label: 'Overview', dashboardName: 'task_overview' },
+          ],
+        },
+      ],
+    };
+    expect(() => defineStack(config)).not.toThrow();
+  });
+});

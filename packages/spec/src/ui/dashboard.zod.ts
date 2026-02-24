@@ -186,7 +186,7 @@ export const GlobalFilterSchema = z.object({
 
   /** Static options for select/lookup filters */
   options: z.array(z.object({
-    value: z.any(),
+    value: z.union([z.string(), z.number(), z.boolean()]).describe('Option value'),
     label: I18nLabelSchema,
   })).optional().describe('Static filter options'),
 
@@ -194,7 +194,7 @@ export const GlobalFilterSchema = z.object({
   optionsFrom: GlobalFilterOptionsFromSchema.optional().describe('Dynamic filter options from object'),
 
   /** Default filter value */
-  defaultValue: z.any().optional().describe('Default filter value'),
+  defaultValue: z.union([z.string(), z.number(), z.boolean()]).optional().describe('Default filter value'),
 
   /** Filter application scope */
   scope: z.enum(['dashboard', 'widget']).default('dashboard').describe('Filter application scope'),
