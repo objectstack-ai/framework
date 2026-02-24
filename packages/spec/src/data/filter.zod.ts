@@ -381,7 +381,7 @@ export function isFilterAST(filter: unknown): boolean {
   if (typeof first === 'string') {
     const lower = first.toLowerCase();
     if (lower === 'and' || lower === 'or') {
-      return filter.length >= 2 && filter.slice(1).every((child: unknown) => Array.isArray(child));
+      return filter.length >= 2 && filter.slice(1).every((child: unknown) => isFilterAST(child));
     }
 
     // Comparison node: [field, operator, value]
@@ -391,7 +391,7 @@ export function isFilterAST(filter: unknown): boolean {
   }
 
   // Legacy flat array: [[cond], [cond], ...]
-  if (filter.every((item: unknown) => Array.isArray(item))) {
+  if (filter.every((item: unknown) => isFilterAST(item))) {
     return filter.length > 0;
   }
 

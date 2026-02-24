@@ -1455,10 +1455,12 @@ export class ObjectStackClient {
              // Detect AST filter format vs simple key-value map. AST filters use an array structure
              // with [field, operator, value] or [logicOp, ...nodes] shape (see isFilterAST from spec).
              // For complex filter expressions, use .query() which builds a proper QueryAST.
-             if (this.isFilterAST(filterValue)) {
+             if (this.isFilterAST(filterValue) || Array.isArray(filterValue)) {
+                 // AST or any array → serialize as JSON in `filter` param
                  queryParams.set('filter', JSON.stringify(filterValue));
-             } else {
-                 Object.entries(filterValue).forEach(([k, v]) => {
+             } else if (typeof filterValue === 'object' && filterValue !== null) {
+                 // Plain key-value map → append each as individual query params
+                 Object.entries(filterValue as Record<string, unknown>).forEach(([k, v]) => {
                      if (v !== undefined && v !== null) {
                         queryParams.append(k, String(v));
                      }

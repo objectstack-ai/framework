@@ -380,7 +380,7 @@ export class HttpDispatcher {
                 // Spec: Only select/expand are allowlisted query params for GET by ID.
                 // All other query parameters are discarded to prevent parameter pollution.
                 const { select, expand } = query || {};
-                const allowedParams: Record<string, any> = {};
+                const allowedParams: Record<string, unknown> = {};
                 if (select != null) allowedParams.select = select;
                 if (expand != null) allowedParams.expand = expand;
                 // Spec: broker returns GetDataResponse = { object, id, record }

@@ -110,6 +110,10 @@ This strategy ensures rapid iteration while maintaining a clear path to producti
 | `defineStack()` strict by default | ✅ | `strict: true` default since v3.0.2, validates schemas + cross-references |
 | `z.any()` elimination in UI protocol | ✅ | All `filter` fields → `FilterConditionSchema` or `ViewFilterRuleSchema`, all `value` fields → typed unions |
 | Filter format unification | ✅ | MongoDB-style filters use `FilterConditionSchema`, declarative view/tab filters use `ViewFilterRuleSchema` — `z.array(z.unknown())` eliminated |
+| Filter parameter naming (`filter` vs `filters`) | ✅ | Canonical HTTP param: `filter` (singular). `filters` accepted for backward compat. `HttpFindQueryParamsSchema` added. Client SDK + protocol.ts unified. |
+| `isFilterAST()` structural validation | ✅ | Exported from `data/filter.zod.ts` — validates AST shape (comparison/logical/legacy) instead of naïve `Array.isArray`. `VALID_AST_OPERATORS` constant. |
+| GET by ID parameter pollution prevention | ✅ | `GetDataRequestSchema` allowlists `select`/`expand`. Dispatcher whitelists only safe params. |
+| Dispatcher response field mapping | ✅ | `handleApiEndpoint` uses spec-correct `result.records`/`result.total` instead of `result.data`/`result.count` |
 | Seed data → object cross-reference | ✅ | `validateCrossReferences` detects seed data referencing undefined objects |
 | Navigation → object/dashboard/page/report cross-reference | ✅ | App navigation items validated against defined metadata (recursive group support) |
 | Negative validation tests (dashboard, page, report, view) | ✅ | Missing required fields, invalid enums, type violations, cross-reference errors all covered |

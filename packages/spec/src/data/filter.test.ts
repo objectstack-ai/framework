@@ -984,6 +984,22 @@ describe('isFilterAST', () => {
     expect(isFilterAST(['and', 'not-an-array'])).toBe(false);
     expect(isFilterAST(['or', 123])).toBe(false);
   });
+
+  it('should recursively validate children of logical nodes', () => {
+    // Valid: children are valid AST nodes
+    expect(isFilterAST(['and', ['status', '=', 'active'], ['age', '>', 18]])).toBe(true);
+    // Invalid: children are arrays but not valid AST nodes
+    expect(isFilterAST(['and', [1, 2, 3]])).toBe(false);
+    // Nested valid AST
+    expect(isFilterAST(['and', ['or', ['a', '=', 1], ['b', '=', 2]], ['c', '>', 3]])).toBe(true);
+  });
+
+  it('should recursively validate legacy flat array children', () => {
+    // Valid: all children are valid comparison nodes
+    expect(isFilterAST([['status', '=', 'active'], ['age', '>', 18]])).toBe(true);
+    // Invalid: children are arbitrary arrays
+    expect(isFilterAST([[1, 2], [3, 4]])).toBe(false);
+  });
 });
 
 // ============================================================================
