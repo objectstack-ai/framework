@@ -13,6 +13,7 @@ import {
   FILTER_OPERATORS,
   LOGICAL_OPERATORS,
   ALL_OPERATORS,
+  parseFilterAST,
   type Filter,
   type QueryFilter,
   type FieldOperators,
@@ -751,5 +752,164 @@ describe('NormalizedFilterSchema', () => {
     };
     
     expect(() => NormalizedFilterSchema.parse(filter)).not.toThrow();
+  });
+});
+
+// ============================================================================
+// parseFilterAST Tests
+// ============================================================================
+
+describe('parseFilterAST', () => {
+  it('should return undefined for null/undefined input', () => {
+    expect(parseFilterAST(null)).toBeUndefined();
+    expect(parseFilterAST(undefined)).toBeUndefined();
+  });
+
+  it('should return undefined for empty array', () => {
+    expect(parseFilterAST([])).toBeUndefined();
+  });
+
+  it('should pass through object filters as-is', () => {
+    const filter = { status: 'active' };
+    expect(parseFilterAST(filter)).toEqual({ status: 'active' });
+  });
+
+  it('should pass through FilterCondition with $and/$or as-is', () => {
+    const filter = { $and: [{ priority: 'high' }, { status: 'active' }] };
+    expect(parseFilterAST(filter)).toEqual(filter);
+  });
+
+  it('should convert simple equality comparison', () => {
+    expect(parseFilterAST(['status', '=', 'active'])).toEqual({ status: 'active' });
+  });
+
+  it('should convert == equality comparison', () => {
+    expect(parseFilterAST(['status', '==', 'active'])).toEqual({ status: 'active' });
+  });
+
+  it('should convert != comparison', () => {
+    expect(parseFilterAST(['status', '!=', 'deleted'])).toEqual({ status: { $ne: 'deleted' } });
+  });
+
+  it('should convert <> comparison', () => {
+    expect(parseFilterAST(['status', '<>', 'deleted'])).toEqual({ status: { $ne: 'deleted' } });
+  });
+
+  it('should convert > comparison', () => {
+    expect(parseFilterAST(['age', '>', 18])).toEqual({ age: { $gt: 18 } });
+  });
+
+  it('should convert >= comparison', () => {
+    expect(parseFilterAST(['age', '>=', 18])).toEqual({ age: { $gte: 18 } });
+  });
+
+  it('should convert < comparison', () => {
+    expect(parseFilterAST(['age', '<', 65])).toEqual({ age: { $lt: 65 } });
+  });
+
+  it('should convert <= comparison', () => {
+    expect(parseFilterAST(['age', '<=', 65])).toEqual({ age: { $lte: 65 } });
+  });
+
+  it('should convert in operator', () => {
+    expect(parseFilterAST(['role', 'in', ['admin', 'editor']])).toEqual({ role: { $in: ['admin', 'editor'] } });
+  });
+
+  it('should convert not_in operator', () => {
+    expect(parseFilterAST(['role', 'not_in', ['guest']])).toEqual({ role: { $nin: ['guest'] } });
+  });
+
+  it('should convert contains/like operator', () => {
+    expect(parseFilterAST(['name', 'contains', 'John'])).toEqual({ name: { $contains: 'John' } });
+    expect(parseFilterAST(['name', 'like', 'John'])).toEqual({ name: { $contains: 'John' } });
+  });
+
+  it('should convert startswith operator', () => {
+    expect(parseFilterAST(['name', 'startswith', 'A'])).toEqual({ name: { $startsWith: 'A' } });
+    expect(parseFilterAST(['name', 'starts_with', 'A'])).toEqual({ name: { $startsWith: 'A' } });
+  });
+
+  it('should convert endswith operator', () => {
+    expect(parseFilterAST(['name', 'endswith', '.pdf'])).toEqual({ name: { $endsWith: '.pdf' } });
+    expect(parseFilterAST(['name', 'ends_with', '.pdf'])).toEqual({ name: { $endsWith: '.pdf' } });
+  });
+
+  it('should convert is_null operator', () => {
+    expect(parseFilterAST(['deleted_at', 'is_null', null])).toEqual({ deleted_at: { $null: true } });
+  });
+
+  it('should convert is_not_null operator', () => {
+    expect(parseFilterAST(['deleted_at', 'is_not_null', null])).toEqual({ deleted_at: { $null: false } });
+  });
+
+  it('should convert AND logical node', () => {
+    const input = ['and', ['priority', '=', 'high'], ['status', '=', 'active']];
+    expect(parseFilterAST(input)).toEqual({
+      $and: [{ priority: 'high' }, { status: 'active' }],
+    });
+  });
+
+  it('should convert OR logical node', () => {
+    const input = ['or', ['role', '=', 'admin'], ['role', '=', 'editor']];
+    expect(parseFilterAST(input)).toEqual({
+      $or: [{ role: 'admin' }, { role: 'editor' }],
+    });
+  });
+
+  it('should handle nested logical operators', () => {
+    const input = ['and', ['status', '=', 'active'], ['or', ['priority', '=', 'high'], ['priority', '=', 'critical']]];
+    expect(parseFilterAST(input)).toEqual({
+      $and: [
+        { status: 'active' },
+        { $or: [{ priority: 'high' }, { priority: 'critical' }] },
+      ],
+    });
+  });
+
+  it('should unwrap single-child logical nodes', () => {
+    const input = ['and', ['status', '=', 'active']];
+    expect(parseFilterAST(input)).toEqual({ status: 'active' });
+  });
+
+  it('should handle case-insensitive logical operators', () => {
+    const input = ['AND', ['status', '=', 'active'], ['priority', '=', 'high']];
+    expect(parseFilterAST(input)).toEqual({
+      $and: [{ status: 'active' }, { priority: 'high' }],
+    });
+  });
+
+  it('should handle legacy flat array of conditions', () => {
+    const input = [['status', '=', 'active'], ['priority', '=', 'high']];
+    expect(parseFilterAST(input)).toEqual({
+      $and: [{ status: 'active' }, { priority: 'high' }],
+    });
+  });
+
+  it('should handle real-world browser filter example from issue', () => {
+    const input = ['and', ['priority', '=', 'high'], ['status', '=', 'active']];
+    const result = parseFilterAST(input);
+    expect(result).toEqual({
+      $and: [{ priority: 'high' }, { status: 'active' }],
+    });
+    // Validate the result is a valid FilterCondition
+    expect(() => FilterConditionSchema.parse(result)).not.toThrow();
+  });
+
+  it('should produce valid FilterCondition for complex nested AST', () => {
+    const input = [
+      'and',
+      ['status', '!=', 'deleted'],
+      ['or', ['priority', '=', 'high'], ['age', '>', 18]],
+      ['role', 'in', ['admin', 'editor']],
+    ];
+    const result = parseFilterAST(input);
+    expect(result).toEqual({
+      $and: [
+        { status: { $ne: 'deleted' } },
+        { $or: [{ priority: 'high' }, { age: { $gt: 18 } }] },
+        { role: { $in: ['admin', 'editor'] } },
+      ],
+    });
+    expect(() => FilterConditionSchema.parse(result)).not.toThrow();
   });
 });

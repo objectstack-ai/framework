@@ -336,6 +336,124 @@ export const NormalizedFilterSchema: z.ZodType<any> = z.lazy(() =>
 export type NormalizedFilter = z.infer<typeof NormalizedFilterSchema>;
 
 // ============================================================================
+// AST Array → FilterCondition Conversion
+// ============================================================================
+
+/**
+ * Operator mapping from AST infix operators to FilterCondition `$`-prefixed operators.
+ */
+const AST_OPERATOR_MAP: Record<string, string> = {
+  '=': '$eq',
+  '==': '$eq',
+  '!=': '$ne',
+  '<>': '$ne',
+  '>': '$gt',
+  '>=': '$gte',
+  '<': '$lt',
+  '<=': '$lte',
+  'in': '$in',
+  'nin': '$nin',
+  'not_in': '$nin',
+  'contains': '$contains',
+  'like': '$contains',
+  'startswith': '$startsWith',
+  'starts_with': '$startsWith',
+  'endswith': '$endsWith',
+  'ends_with': '$endsWith',
+  'between': '$between',
+  'is_null': '$null',
+  'is_not_null': '$null',
+};
+
+/**
+ * Convert a single AST comparison node `[field, operator, value]` to a FilterCondition object.
+ */
+function convertComparison(node: [string, string, unknown]): FilterCondition {
+  const [field, operator, value] = node;
+  const op = operator.toLowerCase();
+
+  // Special case: equality shorthand
+  if (op === '=' || op === '==') {
+    return { [field]: value } as FilterCondition;
+  }
+
+  // Null check operators
+  if (op === 'is_null') {
+    return { [field]: { $null: true } } as FilterCondition;
+  }
+  if (op === 'is_not_null') {
+    return { [field]: { $null: false } } as FilterCondition;
+  }
+
+  const mapped = AST_OPERATOR_MAP[op];
+  if (mapped) {
+    return { [field]: { [mapped]: value } } as FilterCondition;
+  }
+
+  // Fallback: use the operator as-is with $ prefix
+  return { [field]: { [`$${op}`]: value } } as FilterCondition;
+}
+
+/**
+ * Parse a filter from AST array format to FilterCondition object format.
+ *
+ * The AST array format is used by the ObjectUI client and the `FilterBuilder`:
+ * - Comparison: `[field, operator, value]` → `{ field: value }` or `{ field: { $op: value } }`
+ * - Logical AND: `["and", cond1, cond2, ...]` → `{ $and: [...] }`
+ * - Logical OR: `["or", cond1, cond2, ...]` → `{ $or: [...] }`
+ *
+ * If the input is already a FilterCondition object (not an array), it is returned as-is.
+ * If the input is `null` or `undefined`, it is returned as-is.
+ *
+ * @example
+ * // Simple condition
+ * parseFilterAST(["status", "=", "active"])
+ * // → { status: "active" }
+ *
+ * @example
+ * // Compound AND
+ * parseFilterAST(["and", ["priority", "=", "high"], ["status", "=", "active"]])
+ * // → { $and: [{ priority: "high" }, { status: "active" }] }
+ *
+ * @example
+ * // Object passthrough
+ * parseFilterAST({ status: "active" })
+ * // → { status: "active" }
+ */
+export function parseFilterAST(filter: unknown): FilterCondition | undefined {
+  if (filter == null) return undefined;
+  if (!Array.isArray(filter)) return filter as FilterCondition;
+  if (filter.length === 0) return undefined;
+
+  const first = filter[0];
+
+  // Logical node: ["and", cond1, cond2, ...] or ["or", cond1, cond2, ...]
+  if (typeof first === 'string' && (first.toLowerCase() === 'and' || first.toLowerCase() === 'or')) {
+    const logicOp = `$${first.toLowerCase()}` as '$and' | '$or';
+    const children = filter.slice(1).map((child: unknown) => parseFilterAST(child)).filter(Boolean) as FilterCondition[];
+    if (children.length === 0) return undefined;
+    if (children.length === 1) return children[0];
+    return { [logicOp]: children } as FilterCondition;
+  }
+
+  // Comparison node: [field, operator, value]
+  if (filter.length >= 2 && typeof first === 'string') {
+    return convertComparison(filter as [string, string, unknown]);
+  }
+
+  // Legacy flat array: [[field, op, val], [field, op, val], ...]
+  // All elements are sub-arrays → treat as implicit AND
+  if (filter.every((item: unknown) => Array.isArray(item))) {
+    const children = filter.map((child: unknown) => parseFilterAST(child)).filter(Boolean) as FilterCondition[];
+    if (children.length === 0) return undefined;
+    if (children.length === 1) return children[0];
+    return { $and: children } as FilterCondition;
+  }
+
+  return undefined;
+}
+
+// ============================================================================
 // Constants & Metadata
 // ============================================================================
 

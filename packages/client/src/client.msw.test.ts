@@ -48,11 +48,13 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                         return record ? { object: params.object, id: params.id, record } : null;
                     }
                     if (method === 'query') {
-                        const records = await ql.find(params.object, { filter: params.filters });
+                        const queryOpts = params.query || {};
+                        const records = await ql.find(params.object, { filter: queryOpts.filters || queryOpts.filter });
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
-                        const records = await ql.find(params.object, { filter: params.filters });
+                        const queryOpts = params.query || {};
+                        const records = await ql.find(params.object, { filter: queryOpts.filters || queryOpts.filter });
                         return { object: params.object, records, total: records.length };
                     }
                 }

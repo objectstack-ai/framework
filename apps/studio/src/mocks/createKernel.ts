@@ -124,7 +124,7 @@ export async function createKernel(options: KernelOptions) {
                     
                     if (!all) all = [];
 
-                    const filters = params.filters;
+                    const filters = params.query || params.filters;
                     // Extract standard query options possibly passed via filters (due to MSW plugin mapping)
                     let queryOptions: any = {};
                     if (filters && typeof filters === 'object') {

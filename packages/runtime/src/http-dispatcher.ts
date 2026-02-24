@@ -401,7 +401,7 @@ export class HttpDispatcher {
             // GET /data/:object (List)
             if (m === 'GET') {
                 // Spec: broker returns FindDataResponse = { object, records, total?, hasMore? }
-                const result = await broker.call('data.query', { object: objectName, filters: query }, { request: context.request });
+                const result = await broker.call('data.query', { object: objectName, query }, { request: context.request });
                 return { handled: true, response: this.success(result) };
             }
 
@@ -941,7 +941,7 @@ export class HttpDispatcher {
                         const { object, operation } = endpoint.objectParams;
                         // Map standard CRUD operations
                         if (operation === 'find') {
-                             const result = await broker.call('data.query', { object, filters: query }, { request: context.request });
+                             const result = await broker.call('data.query', { object, query }, { request: context.request });
                              return { handled: true, response: this.success(result.data, { count: result.count }) };
                         }
                         if (operation === 'get' && query.id) {
