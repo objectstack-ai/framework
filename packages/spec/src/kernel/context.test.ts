@@ -3,7 +3,9 @@ import {
   RuntimeMode,
   KernelContextSchema,
   PreviewModeConfigSchema,
+  TenantRuntimeContextSchema,
   type KernelContext,
+  type TenantRuntimeContext,
 } from './context.zod';
 
 describe('RuntimeMode', () => {
@@ -165,5 +167,78 @@ describe('PreviewModeConfigSchema', () => {
 
   it('should reject non-integer expiresInSeconds', () => {
     expect(() => PreviewModeConfigSchema.parse({ expiresInSeconds: 1.5 })).toThrow();
+  });
+});
+
+describe('TenantRuntimeContextSchema', () => {
+  const baseContext = {
+    instanceId: '550e8400-e29b-41d4-a716-446655440000',
+    mode: 'production' as const,
+    version: '1.0.0',
+    cwd: '/app',
+    startTime: Date.now(),
+    features: {},
+  };
+
+  it('should accept valid tenant runtime context', () => {
+    const ctx: TenantRuntimeContext = {
+      ...baseContext,
+      tenantId: 'tenant_abc',
+      tenantPlan: 'pro',
+      tenantRegion: 'us-east',
+      tenantDbUrl: 'libsql://tenant-abc-myorg.turso.io',
+    };
+    const parsed = TenantRuntimeContextSchema.parse(ctx);
+    expect(parsed.tenantId).toBe('tenant_abc');
+    expect(parsed.tenantPlan).toBe('pro');
+    expect(parsed.tenantRegion).toBe('us-east');
+    expect(parsed.tenantDbUrl).toContain('turso.io');
+    // Inherited from KernelContextSchema
+    expect(parsed.instanceId).toBe('550e8400-e29b-41d4-a716-446655440000');
+    expect(parsed.mode).toBe('production');
+  });
+
+  it('should accept all tenant plans', () => {
+    const plans = ['free', 'pro', 'enterprise'] as const;
+    plans.forEach((plan) => {
+      const parsed = TenantRuntimeContextSchema.parse({
+        ...baseContext,
+        tenantId: 'tenant_test',
+        tenantPlan: plan,
+        tenantRegion: 'eu-west',
+        tenantDbUrl: 'libsql://test.turso.io',
+      });
+      expect(parsed.tenantPlan).toBe(plan);
+    });
+  });
+
+  it('should reject missing tenant fields', () => {
+    // Missing tenantId
+    expect(() => TenantRuntimeContextSchema.parse({
+      ...baseContext,
+      tenantPlan: 'free',
+      tenantRegion: 'us-east',
+      tenantDbUrl: 'libsql://test.turso.io',
+    })).toThrow();
+  });
+
+  it('should reject empty tenantId', () => {
+    expect(() => TenantRuntimeContextSchema.parse({
+      ...baseContext,
+      tenantId: '',
+      tenantPlan: 'free',
+      tenantRegion: 'us-east',
+      tenantDbUrl: 'libsql://test.turso.io',
+    })).toThrow();
+  });
+
+  it('should reject invalid tenant plan', () => {
+    expect(() => TenantRuntimeContextSchema.parse({
+      ...baseContext,
+      tenantId: 'tenant_test',
+      tenantPlan: 'basic',
+      tenantRegion: 'us-east',
+      tenantDbUrl: 'libsql://test.turso.io',
+    })).toThrow();
   });
 });

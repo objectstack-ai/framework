@@ -103,7 +103,7 @@
 
 **Checklist:**
 
-- [ ] Create deployment protocol with packages, validation, rollback, and history
+- [x] Create deployment protocol with packages, validation, rollback, and history — ✅ `system/deploy-bundle.zod.ts` (DeployBundle, MigrationPlan, DeployDiff, DeployValidationResult)
 - [ ] Create sandbox management with metadata/data cloning and PII masking
 - [ ] Create fiscal year and business calendar protocol
 - [ ] Enhance audit trail with structured query protocol
@@ -147,7 +147,7 @@
 **Checklist:**
 
 - [ ] Create IAuditService contract for audit trail querying and management
-- [ ] Create IDeploymentService contract for package deployment and rollback
+- [x] Create IDeploymentService contract for package deployment and rollback — ✅ `contracts/deploy-pipeline-service.ts` (IDeployPipelineService) + `contracts/schema-diff-service.ts` (ISchemaDiffService)
 - [ ] Create ISLAService contract for SLA evaluation and escalation
 - [ ] Create ISchedulerService contract for scheduled job management
 - [ ] Create IDocumentService contract for document generation

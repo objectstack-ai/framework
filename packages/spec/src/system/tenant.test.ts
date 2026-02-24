@@ -8,6 +8,10 @@ import {
   DatabaseLevelIsolationStrategySchema,
   TenantIsolationConfigSchema,
   TenantSecurityPolicySchema,
+  DatabaseProviderSchema,
+  TenantConnectionConfigSchema,
+  TenantUsageSchema,
+  QuotaEnforcementResultSchema,
   type Tenant,
   type TenantQuota,
   type RowLevelIsolationStrategy,
@@ -15,6 +19,10 @@ import {
   type DatabaseLevelIsolationStrategy,
   type TenantIsolationConfig,
   type TenantSecurityPolicy,
+  type DatabaseProvider,
+  type TenantConnectionConfig,
+  type TenantUsage,
+  type QuotaEnforcementResult,
 } from './tenant.zod';
 
 describe('TenantIsolationLevel', () => {
@@ -503,5 +511,188 @@ describe('TenantSecurityPolicySchema', () => {
     const parsed = TenantSecurityPolicySchema.parse(policy);
     expect(parsed.compliance?.requireAuditLog).toBe(true);
     expect(parsed.compliance?.auditRetentionDays).toBe(365);
+  });
+});
+
+describe('DatabaseProviderSchema', () => {
+  it('should accept valid database providers', () => {
+    const providers: DatabaseProvider[] = ['turso', 'postgres', 'memory'];
+    providers.forEach((p) => {
+      expect(() => DatabaseProviderSchema.parse(p)).not.toThrow();
+    });
+  });
+
+  it('should reject invalid database provider', () => {
+    expect(() => DatabaseProviderSchema.parse('mysql')).toThrow();
+    expect(() => DatabaseProviderSchema.parse('sqlite')).toThrow();
+  });
+});
+
+describe('TenantConnectionConfigSchema', () => {
+  it('should accept full connection config', () => {
+    const config: TenantConnectionConfig = {
+      url: 'libsql://tenant-abc-myorg.turso.io',
+      authToken: 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9...',
+      group: 'production',
+    };
+    const parsed = TenantConnectionConfigSchema.parse(config);
+    expect(parsed.url).toBe('libsql://tenant-abc-myorg.turso.io');
+    expect(parsed.authToken).toBeDefined();
+    expect(parsed.group).toBe('production');
+  });
+
+  it('should accept minimal connection config (url only)', () => {
+    const config = { url: 'file:local.db' };
+    const parsed = TenantConnectionConfigSchema.parse(config);
+    expect(parsed.url).toBe('file:local.db');
+    expect(parsed.authToken).toBeUndefined();
+    expect(parsed.group).toBeUndefined();
+  });
+
+  it('should reject missing url', () => {
+    expect(() => TenantConnectionConfigSchema.parse({})).toThrow();
+  });
+
+  it('should reject empty url', () => {
+    expect(() => TenantConnectionConfigSchema.parse({ url: '' })).toThrow();
+  });
+});
+
+describe('TenantSchema (extended fields)', () => {
+  it('should accept tenant with Turso provisioning fields', () => {
+    const tenant = {
+      id: 'tenant_turso_001',
+      name: 'Turso Tenant',
+      isolationLevel: 'isolated_db',
+      databaseProvider: 'turso',
+      connectionConfig: {
+        url: 'libsql://tenant-001-myorg.turso.io',
+        authToken: 'jwt-token',
+        group: 'production',
+      },
+      provisioningStatus: 'active',
+      plan: 'pro',
+    };
+    const parsed = TenantSchema.parse(tenant);
+    expect(parsed.databaseProvider).toBe('turso');
+    expect(parsed.connectionConfig?.url).toContain('turso.io');
+    expect(parsed.provisioningStatus).toBe('active');
+    expect(parsed.plan).toBe('pro');
+  });
+
+  it('should accept all provisioning statuses', () => {
+    const statuses = ['provisioning', 'active', 'suspended', 'failed', 'destroying'];
+    statuses.forEach((status) => {
+      const tenant = {
+        id: 'tenant_status',
+        name: 'Status Test',
+        isolationLevel: 'isolated_db',
+        provisioningStatus: status,
+      };
+      expect(() => TenantSchema.parse(tenant)).not.toThrow();
+    });
+  });
+
+  it('should accept all plan values', () => {
+    const plans = ['free', 'pro', 'enterprise'];
+    plans.forEach((plan) => {
+      const tenant = {
+        id: 'tenant_plan',
+        name: 'Plan Test',
+        isolationLevel: 'isolated_db',
+        plan,
+      };
+      expect(() => TenantSchema.parse(tenant)).not.toThrow();
+    });
+  });
+
+  it('should remain backward-compatible (new fields are optional)', () => {
+    const legacyTenant = {
+      id: 'tenant_legacy',
+      name: 'Legacy Tenant',
+      isolationLevel: 'shared_schema',
+    };
+    const parsed = TenantSchema.parse(legacyTenant);
+    expect(parsed.databaseProvider).toBeUndefined();
+    expect(parsed.connectionConfig).toBeUndefined();
+    expect(parsed.provisioningStatus).toBeUndefined();
+    expect(parsed.plan).toBeUndefined();
+  });
+});
+
+describe('TenantQuotaSchema (extended fields)', () => {
+  it('should accept extended quota fields', () => {
+    const quota: TenantQuota = {
+      maxUsers: 100,
+      maxStorage: 10737418240,
+      apiRateLimit: 1000,
+      maxObjects: 50,
+      maxRecordsPerObject: 100000,
+      maxDeploymentsPerDay: 10,
+      maxStorageBytes: 5368709120,
+    };
+    const parsed = TenantQuotaSchema.parse(quota);
+    expect(parsed.maxObjects).toBe(50);
+    expect(parsed.maxRecordsPerObject).toBe(100000);
+    expect(parsed.maxDeploymentsPerDay).toBe(10);
+    expect(parsed.maxStorageBytes).toBe(5368709120);
+  });
+
+  it('should accept empty quota (all optional)', () => {
+    const parsed = TenantQuotaSchema.parse({});
+    expect(parsed.maxObjects).toBeUndefined();
+    expect(parsed.maxRecordsPerObject).toBeUndefined();
+  });
+});
+
+describe('TenantUsageSchema', () => {
+  it('should accept full usage tracking', () => {
+    const usage: TenantUsage = {
+      objectCount: 15,
+      totalRecords: 50000,
+      storageBytes: 1073741824,
+      deploymentsToday: 3,
+      lastUpdatedAt: '2026-01-15T10:30:00Z',
+    };
+    const parsed = TenantUsageSchema.parse(usage);
+    expect(parsed.objectCount).toBe(15);
+    expect(parsed.totalRecords).toBe(50000);
+    expect(parsed.deploymentsToday).toBe(3);
+  });
+
+  it('should apply zero defaults', () => {
+    const parsed = TenantUsageSchema.parse({});
+    expect(parsed.objectCount).toBe(0);
+    expect(parsed.totalRecords).toBe(0);
+    expect(parsed.storageBytes).toBe(0);
+    expect(parsed.deploymentsToday).toBe(0);
+  });
+
+  it('should reject negative values', () => {
+    expect(() => TenantUsageSchema.parse({ objectCount: -1 })).toThrow();
+  });
+});
+
+describe('QuotaEnforcementResultSchema', () => {
+  it('should accept allowed result', () => {
+    const result: QuotaEnforcementResult = {
+      allowed: true,
+    };
+    expect(() => QuotaEnforcementResultSchema.parse(result)).not.toThrow();
+  });
+
+  it('should accept denied result with details', () => {
+    const result: QuotaEnforcementResult = {
+      allowed: false,
+      exceededQuota: 'maxObjects',
+      currentUsage: 50,
+      limit: 50,
+      message: 'Maximum number of custom objects reached (50/50)',
+    };
+    const parsed = QuotaEnforcementResultSchema.parse(result);
+    expect(parsed.allowed).toBe(false);
+    expect(parsed.exceededQuota).toBe('maxObjects');
+    expect(parsed.currentUsage).toBe(50);
+    expect(parsed.limit).toBe(50);
   });
 });

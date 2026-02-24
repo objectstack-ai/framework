@@ -50,6 +50,11 @@ export * from './tenant.zod';
 export * from './license.zod';
 export * from './registry-config.zod';
 
+// Provisioning & Deployment
+export * from './provisioning.zod';
+export * from './deploy-bundle.zod';
+export * from './app-install.zod';
+
 // Constants
 export * from './constants';
 

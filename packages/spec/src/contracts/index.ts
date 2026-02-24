@@ -35,3 +35,11 @@ export * from './workflow-service.js';
 export * from './feed-service.js';
 export * from './export-service.js';
 export * from './package-service.js';
+
+// Provisioning & Deployment
+export * from './turso-platform.js';
+export * from './provisioning-service.js';
+export * from './schema-diff-service.js';
+export * from './deploy-pipeline-service.js';
+export * from './tenant-router.js';
+export * from './app-lifecycle-service.js';
