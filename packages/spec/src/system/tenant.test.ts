@@ -652,12 +652,16 @@ describe('TenantUsageSchema', () => {
       totalRecords: 50000,
       storageBytes: 1073741824,
       deploymentsToday: 3,
+      currentUsers: 42,
+      apiRequestsThisMinute: 120,
       lastUpdatedAt: '2026-01-15T10:30:00Z',
     };
     const parsed = TenantUsageSchema.parse(usage);
     expect(parsed.objectCount).toBe(15);
     expect(parsed.totalRecords).toBe(50000);
     expect(parsed.deploymentsToday).toBe(3);
+    expect(parsed.currentUsers).toBe(42);
+    expect(parsed.apiRequestsThisMinute).toBe(120);
   });
 
   it('should apply zero defaults', () => {
@@ -666,10 +670,14 @@ describe('TenantUsageSchema', () => {
     expect(parsed.totalRecords).toBe(0);
     expect(parsed.storageBytes).toBe(0);
     expect(parsed.deploymentsToday).toBe(0);
+    expect(parsed.currentUsers).toBe(0);
+    expect(parsed.apiRequestsThisMinute).toBe(0);
   });
 
   it('should reject negative values', () => {
     expect(() => TenantUsageSchema.parse({ objectCount: -1 })).toThrow();
+    expect(() => TenantUsageSchema.parse({ currentUsers: -1 })).toThrow();
+    expect(() => TenantUsageSchema.parse({ apiRequestsThisMinute: -1 })).toThrow();
   });
 });
 

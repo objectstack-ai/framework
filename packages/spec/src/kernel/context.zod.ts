@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { z } from 'zod';
+import { TenantQuotaSchema } from '../system/tenant.zod.js';
 
 /**
  * Runtime Mode Enum
@@ -156,6 +157,9 @@ export const TenantRuntimeContextSchema = KernelContextSchema.extend({
 
   /** Tenant database connection URL */
   tenantDbUrl: z.string().min(1).describe('Tenant database connection URL'),
+
+  /** Optional tenant quotas for the current plan */
+  tenantQuotas: TenantQuotaSchema.optional().describe('Tenant resource quotas'),
 }).describe('Tenant-aware kernel runtime context');
 
 export type TenantRuntimeContext = z.infer<typeof TenantRuntimeContextSchema>;

@@ -110,6 +110,10 @@ export const TenantUsageSchema = z.object({
   storageBytes: z.number().int().min(0).default(0).describe('Current storage usage in bytes'),
   /** Deployments executed today */
   deploymentsToday: z.number().int().min(0).default(0).describe('Deployments executed today'),
+  /** Current number of active users */
+  currentUsers: z.number().int().min(0).default(0).describe('Current number of active users'),
+  /** API requests in the current minute */
+  apiRequestsThisMinute: z.number().int().min(0).default(0).describe('API requests in the current minute'),
   /** Last updated timestamp (ISO 8601) */
   lastUpdatedAt: z.string().datetime().optional().describe('Last usage update time'),
 }).describe('Current tenant resource usage');

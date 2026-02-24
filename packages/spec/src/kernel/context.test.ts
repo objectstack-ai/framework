@@ -241,4 +241,36 @@ describe('TenantRuntimeContextSchema', () => {
       tenantDbUrl: 'libsql://test.turso.io',
     })).toThrow();
   });
+
+  it('should accept tenant context with tenantQuotas', () => {
+    const parsed = TenantRuntimeContextSchema.parse({
+      ...baseContext,
+      tenantId: 'tenant_quota',
+      tenantPlan: 'enterprise',
+      tenantRegion: 'eu-west',
+      tenantDbUrl: 'libsql://quota.turso.io',
+      tenantQuotas: {
+        maxUsers: 500,
+        maxStorage: 53687091200,
+        apiRateLimit: 5000,
+        maxObjects: 100,
+        maxRecordsPerObject: 1000000,
+        maxDeploymentsPerDay: 50,
+      },
+    });
+    expect(parsed.tenantQuotas).toBeDefined();
+    expect(parsed.tenantQuotas?.maxUsers).toBe(500);
+    expect(parsed.tenantQuotas?.maxObjects).toBe(100);
+  });
+
+  it('should accept tenant context without tenantQuotas (optional)', () => {
+    const parsed = TenantRuntimeContextSchema.parse({
+      ...baseContext,
+      tenantId: 'tenant_noquota',
+      tenantPlan: 'free',
+      tenantRegion: 'us-east',
+      tenantDbUrl: 'libsql://noquota.turso.io',
+    });
+    expect(parsed.tenantQuotas).toBeUndefined();
+  });
 });

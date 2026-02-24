@@ -525,8 +525,12 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 
 ### 6.2 Multi-Tenancy
 
-- [ ] Tenant isolation strategies (schema-per-tenant, row-level, database-per-tenant)
-- [ ] Tenant provisioning and lifecycle management
+- [x] Tenant isolation strategies (schema-per-tenant, row-level, database-per-tenant) — `system/tenant.zod.ts`: `TenantIsolationConfigSchema` with `RowLevelIsolationStrategySchema`, `SchemaLevelIsolationStrategySchema`, `DatabaseLevelIsolationStrategySchema`
+- [x] Tenant provisioning and lifecycle management — `system/provisioning.zod.ts`: `TenantProvisioningRequestSchema`, `TenantProvisioningResultSchema`, `ProvisioningStepSchema`; `contracts/provisioning-service.ts`: `IProvisioningService`
+- [x] Tenant runtime context and quota enforcement — `kernel/context.zod.ts`: `TenantRuntimeContextSchema` with `tenantQuotas`; `system/tenant.zod.ts`: `TenantQuotaSchema`, `TenantUsageSchema`, `QuotaEnforcementResultSchema`
+- [x] Tenant routing contract — `contracts/tenant-router.ts`: `ITenantRouter` (session → tenantId → DB client)
+- [x] Metadata-driven deploy pipeline — `system/deploy-bundle.zod.ts`: `DeployBundleSchema`, `MigrationPlanSchema`, `DeployDiffSchema`; `contracts/deploy-pipeline-service.ts`: `IDeployPipelineService`
+- [x] App marketplace installation protocol — `system/app-install.zod.ts`: `AppManifestSchema`, `AppInstallResultSchema`, `AppCompatibilityCheckSchema`; `contracts/app-lifecycle-service.ts`: `IAppLifecycleService`
 - [ ] Cross-tenant data sharing policies
 
 ### 6.3 Observability
