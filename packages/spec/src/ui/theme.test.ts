@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   ThemeSchema,
   ThemeMode,
+  ThemeModeSchema,
+  DensityModeSchema,
+  WcagContrastLevelSchema,
   ColorPaletteSchema,
   TypographySchema,
   SpacingSchema,
@@ -379,9 +382,9 @@ describe('ThemeSchema', () => {
         },
         timing: {
           ease: 'cubic-bezier(0.4, 0, 0.2, 1)',
-          easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
-          easeOut: 'cubic-bezier(0, 0, 0.2, 1)',
-          easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          ease_in: 'cubic-bezier(0.4, 0, 1, 1)',
+          ease_out: 'cubic-bezier(0, 0, 0.2, 1)',
+          ease_in_out: 'cubic-bezier(0.4, 0, 0.2, 1)',
         },
       },
     };
@@ -539,5 +542,68 @@ describe('Theme Density, WCAG, and RTL', () => {
     expect(theme.density).toBe('spacious');
     expect(theme.wcagContrast).toBe('AA');
     expect(theme.rtl).toBe(false);
+  });
+});
+
+// ============================================================================
+// Issue #6: Easing naming unified to snake_case in theme animation tokens
+// ============================================================================
+describe('AnimationSchema - snake_case timing keys', () => {
+  it('should accept snake_case easing keys', () => {
+    const theme = ThemeSchema.parse({
+      name: 'snake_case_timing',
+      label: 'Snake Case Timing',
+      colors: { primary: '#000' },
+      animation: {
+        timing: {
+          linear: 'linear',
+          ease: 'ease',
+          ease_in: 'ease-in',
+          ease_out: 'ease-out',
+          ease_in_out: 'ease-in-out',
+        },
+      },
+    });
+    expect(theme.animation?.timing?.ease_in).toBe('ease-in');
+    expect(theme.animation?.timing?.ease_out).toBe('ease-out');
+    expect(theme.animation?.timing?.ease_in_out).toBe('ease-in-out');
+  });
+});
+
+// ============================================================================
+// Issue #9: ThemeModeSchema / DensityModeSchema / WcagContrastLevelSchema
+// ============================================================================
+describe('ThemeModeSchema (canonical name)', () => {
+  it('should accept valid theme modes', () => {
+    expect(() => ThemeModeSchema.parse('light')).not.toThrow();
+    expect(() => ThemeModeSchema.parse('dark')).not.toThrow();
+    expect(() => ThemeModeSchema.parse('auto')).not.toThrow();
+  });
+
+  it('should be the same as deprecated ThemeMode alias', () => {
+    expect(ThemeModeSchema).toBe(ThemeMode);
+  });
+});
+
+describe('DensityModeSchema (canonical name)', () => {
+  it('should accept valid density modes', () => {
+    expect(() => DensityModeSchema.parse('compact')).not.toThrow();
+    expect(() => DensityModeSchema.parse('regular')).not.toThrow();
+    expect(() => DensityModeSchema.parse('spacious')).not.toThrow();
+  });
+
+  it('should be the same as deprecated DensityMode alias', () => {
+    expect(DensityModeSchema).toBe(DensityMode);
+  });
+});
+
+describe('WcagContrastLevelSchema (canonical name)', () => {
+  it('should accept AA and AAA', () => {
+    expect(() => WcagContrastLevelSchema.parse('AA')).not.toThrow();
+    expect(() => WcagContrastLevelSchema.parse('AAA')).not.toThrow();
+  });
+
+  it('should be the same as deprecated WcagContrastLevel alias', () => {
+    expect(WcagContrastLevelSchema).toBe(WcagContrastLevel);
   });
 });

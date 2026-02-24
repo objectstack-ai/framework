@@ -4,22 +4,14 @@ import { z } from 'zod';
 import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
 import { SharingConfigSchema } from './sharing.zod';
+import { ResponsiveConfigSchema, PerformanceConfigSchema } from './responsive.zod';
 
 /**
- * HTTP Method Enum
+ * HTTP Method Enum & HTTP Request Schema
+ * Migrated to shared/http.zod.ts. Re-exported here for backward compatibility.
  */
-export const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-
-/**
- * HTTP Request Configuration for API Provider
- */
-export const HttpRequestSchema = z.object({
-  url: z.string().describe('API endpoint URL'),
-  method: HttpMethodSchema.optional().default('GET').describe('HTTP method'),
-  headers: z.record(z.string(), z.string()).optional().describe('Custom HTTP headers'),
-  params: z.record(z.string(), z.unknown()).optional().describe('Query parameters'),
-  body: z.unknown().optional().describe('Request body for POST/PUT/PATCH'),
-});
+import { HttpMethodSchema, HttpRequestSchema } from '../shared/http.zod';
+export { HttpMethodSchema, HttpRequestSchema };
 
 /**
  * View Data Source Configuration
@@ -491,6 +483,12 @@ export const ListViewSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes for the list view'),
+
+  /** Responsive layout overrides per breakpoint */
+  responsive: ResponsiveConfigSchema.optional().describe('Responsive layout configuration'),
+
+  /** Performance optimization settings */
+  performance: PerformanceConfigSchema.optional().describe('Performance optimization settings'),
 });
 
 /**

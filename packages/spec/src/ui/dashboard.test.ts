@@ -38,6 +38,7 @@ describe('ChartTypeSchema', () => {
 describe('DashboardWidgetSchema', () => {
   it('should accept minimal widget with layout', () => {
     const widget: DashboardWidget = {
+      id: 'widget_1',
       layout: {
         x: 0,
         y: 0,
@@ -53,6 +54,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept metric widget', () => {
     const widget: DashboardWidget = {
+      id: 'total_opportunities',
       title: 'Total Opportunities',
       type: 'metric',
       object: 'opportunity',
@@ -65,6 +67,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept bar chart widget', () => {
     const widget: DashboardWidget = {
+      id: 'opportunities_by_stage',
       title: 'Opportunities by Stage',
       type: 'bar',
       object: 'opportunity',
@@ -79,6 +82,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept line chart widget', () => {
     const widget: DashboardWidget = {
+      id: 'revenue_trend',
       title: 'Revenue Trend',
       type: 'line',
       object: 'opportunity',
@@ -93,6 +97,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept pie chart widget', () => {
     const widget: DashboardWidget = {
+      id: 'opportunities_by_type',
       title: 'Opportunities by Type',
       type: 'pie',
       object: 'opportunity',
@@ -106,6 +111,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept pivot widget', () => {
     const widget: DashboardWidget = {
+      id: 'revenue_by_region_product',
       title: 'Revenue by Region × Product',
       type: 'pivot',
       object: 'order',
@@ -124,6 +130,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept funnel widget', () => {
     const widget: DashboardWidget = {
+      id: 'sales_funnel',
       title: 'Sales Funnel',
       type: 'funnel',
       object: 'opportunity',
@@ -139,6 +146,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept grouped-bar widget', () => {
     const widget: DashboardWidget = {
+      id: 'quarterly_revenue_by_region',
       title: 'Quarterly Revenue by Region',
       type: 'grouped-bar',
       object: 'order',
@@ -154,6 +162,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept table widget', () => {
     const widget: DashboardWidget = {
+      id: 'top_accounts',
       title: 'Top Accounts',
       type: 'table',
       object: 'account',
@@ -166,6 +175,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept widget with filter', () => {
     const widget: DashboardWidget = {
+      id: 'active_opportunities',
       title: 'Active Opportunities',
       type: 'metric',
       object: 'opportunity',
@@ -182,6 +192,7 @@ describe('DashboardWidgetSchema', () => {
     
     aggregates.forEach(aggregate => {
       const widget: DashboardWidget = {
+        id: 'aggregate_test',
         type: 'metric',
         aggregate,
         layout: { x: 0, y: 0, w: 3, h: 2 },
@@ -192,6 +203,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept widget with custom options', () => {
     const widget: DashboardWidget = {
+      id: 'custom_chart',
       title: 'Custom Chart',
       type: 'bar',
       object: 'opportunity',
@@ -210,6 +222,7 @@ describe('DashboardWidgetSchema', () => {
 
   it('should accept metric widget for text/markdown content', () => {
     const widget: DashboardWidget = {
+      id: 'welcome_message',
       title: 'Welcome Message',
       type: 'metric',
       layout: { x: 0, y: 0, w: 12, h: 2 },
@@ -264,6 +277,7 @@ describe('DashboardSchema', () => {
         description: 'Overview of sales opportunities and pipeline health',
         widgets: [
           {
+            id: 'total_pipeline_value',
             title: 'Total Pipeline Value',
             type: 'metric',
             object: 'opportunity',
@@ -273,6 +287,7 @@ describe('DashboardSchema', () => {
             layout: { x: 0, y: 0, w: 3, h: 2 },
           },
           {
+            id: 'open_opportunities',
             title: 'Open Opportunities',
             type: 'metric',
             object: 'opportunity',
@@ -281,6 +296,7 @@ describe('DashboardSchema', () => {
             layout: { x: 3, y: 0, w: 3, h: 2 },
           },
           {
+            id: 'win_rate',
             title: 'Win Rate',
             type: 'metric',
             object: 'opportunity',
@@ -291,6 +307,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'avg_deal_size',
             title: 'Avg Deal Size',
             type: 'metric',
             object: 'opportunity',
@@ -300,6 +317,7 @@ describe('DashboardSchema', () => {
             layout: { x: 9, y: 0, w: 3, h: 2 },
           },
           {
+            id: 'pipeline_by_stage',
             title: 'Pipeline by Stage',
             type: 'bar',
             object: 'opportunity',
@@ -314,6 +332,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'opps_by_type',
             title: 'Opportunities by Type',
             type: 'pie',
             object: 'opportunity',
@@ -322,6 +341,7 @@ describe('DashboardSchema', () => {
             layout: { x: 8, y: 2, w: 4, h: 4 },
           },
           {
+            id: 'revenue_trend_12m',
             title: 'Revenue Trend (Last 12 Months)',
             type: 'line',
             object: 'opportunity',
@@ -348,6 +368,7 @@ describe('DashboardSchema', () => {
         description: 'Customer support metrics and case tracking',
         widgets: [
           {
+            id: 'open_cases',
             title: 'Open Cases',
             type: 'metric',
             object: 'case',
@@ -359,6 +380,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'cases_closed_today',
             title: 'Cases Closed Today',
             type: 'metric',
             object: 'case',
@@ -370,6 +392,7 @@ describe('DashboardSchema', () => {
             layout: { x: 3, y: 0, w: 3, h: 2 },
           },
           {
+            id: 'avg_response_time',
             title: 'Avg Response Time',
             type: 'metric',
             object: 'case',
@@ -381,6 +404,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'customer_satisfaction',
             title: 'Customer Satisfaction',
             type: 'metric',
             object: 'case',
@@ -394,6 +418,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'cases_by_priority',
             title: 'Cases by Priority',
             type: 'funnel',
             object: 'case',
@@ -403,6 +428,7 @@ describe('DashboardSchema', () => {
             layout: { x: 0, y: 2, w: 6, h: 4 },
           },
           {
+            id: 'cases_by_status',
             title: 'Cases by Status',
             type: 'pie',
             object: 'case',
@@ -411,6 +437,7 @@ describe('DashboardSchema', () => {
             layout: { x: 6, y: 2, w: 6, h: 4 },
           },
           {
+            id: 'recent_high_priority_cases',
             title: 'Recent High Priority Cases',
             type: 'table',
             object: 'case',
@@ -434,6 +461,7 @@ describe('DashboardSchema', () => {
         description: 'Key business metrics at a glance',
         widgets: [
           {
+            id: 'quarterly_revenue',
             title: 'Quarterly Revenue',
             type: 'metric',
             object: 'opportunity',
@@ -451,6 +479,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'new_customers',
             title: 'New Customers',
             type: 'metric',
             object: 'account',
@@ -459,6 +488,7 @@ describe('DashboardSchema', () => {
             layout: { x: 4, y: 0, w: 4, h: 3 },
           },
           {
+            id: 'active_users',
             title: 'Active Users',
             type: 'metric',
             object: 'user',
@@ -467,6 +497,7 @@ describe('DashboardSchema', () => {
             layout: { x: 8, y: 0, w: 4, h: 3 },
           },
           {
+            id: 'revenue_by_product_line',
             title: 'Revenue by Product Line',
             type: 'bar',
             object: 'opportunity',
@@ -477,6 +508,7 @@ describe('DashboardSchema', () => {
             layout: { x: 0, y: 3, w: 8, h: 4 },
           },
           {
+            id: 'team_performance',
             title: 'Team Performance',
             type: 'table',
             object: 'user',
@@ -486,6 +518,7 @@ describe('DashboardSchema', () => {
             },
           },
           {
+            id: 'welcome',
             title: 'Welcome',
             type: 'metric',
             layout: { x: 0, y: 7, w: 12, h: 1 },
@@ -508,6 +541,7 @@ describe('Dashboard Factory', () => {
       label: 'Test Dashboard',
       widgets: [
         {
+          id: 'test_widget',
           title: 'Test Widget',
           type: 'table',
           object: 'account',
@@ -527,6 +561,7 @@ describe('Dashboard Factory', () => {
       label: 'Sales Dashboard',
       widgets: [
         {
+          id: 'total_revenue',
           title: 'Total Revenue',
           type: 'metric',
           object: 'opportunity',
@@ -558,6 +593,7 @@ describe('Dashboard I18n Integration', () => {
   });
   it('should accept i18n object as widget title', () => {
     expect(() => DashboardWidgetSchema.parse({
+      id: 'total_revenue',
       title: { key: 'widgets.revenue', defaultValue: 'Total Revenue' },
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
@@ -588,6 +624,7 @@ describe('Dashboard ARIA Integration', () => {
   });
   it('should accept widget with ARIA attributes', () => {
     expect(() => DashboardWidgetSchema.parse({
+      id: 'revenue_metric',
       title: 'Revenue',
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
@@ -599,6 +636,7 @@ describe('Dashboard ARIA Integration', () => {
 describe('Dashboard Responsive Integration', () => {
   it('should accept widget with responsive config', () => {
     expect(() => DashboardWidgetSchema.parse({
+      id: 'responsive_metric',
       type: 'metric',
       layout: { x: 0, y: 0, w: 6, h: 2 },
       responsive: { hiddenOn: ['xs'] },
@@ -691,14 +729,13 @@ describe('WidgetColorVariantSchema', () => {
 
 describe('WidgetActionTypeSchema', () => {
   it('should accept all action types', () => {
-    const types = ['url', 'modal', 'flow'];
+    const types = ['script', 'url', 'modal', 'flow', 'api'];
     types.forEach(type => {
       expect(() => WidgetActionTypeSchema.parse(type)).not.toThrow();
     });
   });
 
   it('should reject invalid action types', () => {
-    expect(() => WidgetActionTypeSchema.parse('script')).toThrow();
     expect(() => WidgetActionTypeSchema.parse('invalid')).toThrow();
   });
 });
@@ -706,6 +743,7 @@ describe('WidgetActionTypeSchema', () => {
 describe('DashboardWidgetSchema - colorVariant', () => {
   it('should accept widget with colorVariant', () => {
     const widget: DashboardWidget = {
+      id: 'total_revenue',
       title: 'Total Revenue',
       type: 'metric',
       colorVariant: 'teal',
@@ -717,6 +755,7 @@ describe('DashboardWidgetSchema - colorVariant', () => {
 
   it('should accept widget without colorVariant (optional)', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'metric_widget',
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
     });
@@ -735,6 +774,7 @@ describe('DashboardWidgetSchema - colorVariant', () => {
 describe('DashboardWidgetSchema - description', () => {
   it('should accept widget with string description', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'revenue_widget',
       title: 'Revenue',
       description: 'Year-to-date total revenue',
       type: 'metric',
@@ -745,6 +785,7 @@ describe('DashboardWidgetSchema - description', () => {
 
   it('should accept widget with i18n description', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'revenue_i18n',
       title: 'Revenue',
       description: { key: 'widgets.revenue.desc', defaultValue: 'Total revenue' },
       type: 'metric',
@@ -755,6 +796,7 @@ describe('DashboardWidgetSchema - description', () => {
 
   it('should accept widget without description (optional)', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'no_desc_widget',
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
     });
@@ -765,6 +807,7 @@ describe('DashboardWidgetSchema - description', () => {
 describe('DashboardWidgetSchema - actionUrl/actionType/actionIcon', () => {
   it('should accept widget with actionUrl and actionType', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'open_tickets',
       title: 'Open Tickets',
       type: 'metric',
       actionUrl: 'https://example.com/tickets',
@@ -777,6 +820,7 @@ describe('DashboardWidgetSchema - actionUrl/actionType/actionIcon', () => {
 
   it('should accept widget with actionIcon', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'details_widget',
       title: 'Details',
       type: 'metric',
       actionUrl: '/details',
@@ -789,6 +833,7 @@ describe('DashboardWidgetSchema - actionUrl/actionType/actionIcon', () => {
 
   it('should accept widget with modal action type', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'breakdown_widget',
       title: 'Breakdown',
       type: 'metric',
       actionUrl: 'revenue_breakdown',
@@ -800,6 +845,7 @@ describe('DashboardWidgetSchema - actionUrl/actionType/actionIcon', () => {
 
   it('should accept widget with flow action type', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'refresh_data',
       title: 'Refresh Data',
       type: 'metric',
       actionUrl: 'refresh_pipeline_flow',
@@ -811,6 +857,7 @@ describe('DashboardWidgetSchema - actionUrl/actionType/actionIcon', () => {
 
   it('should accept widget without action fields (optional)', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'no_action_widget',
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
     });
@@ -831,6 +878,7 @@ describe('DashboardWidgetSchema - actionUrl/actionType/actionIcon', () => {
 describe('DashboardWidgetSchema - combined new fields', () => {
   it('should accept KPI widget with all new fields', () => {
     const widget: DashboardWidget = {
+      id: 'revenue_kpi',
       title: 'Revenue',
       description: 'Q4 total revenue across all regions',
       type: 'metric',
@@ -858,6 +906,7 @@ describe('DashboardWidgetSchema - combined new fields', () => {
       label: 'KPI Dashboard',
       widgets: [
         {
+          id: 'kpi_revenue',
           title: 'Revenue',
           description: 'Total quarterly revenue',
           type: 'metric',
@@ -868,6 +917,7 @@ describe('DashboardWidgetSchema - combined new fields', () => {
           layout: { x: 0, y: 0, w: 3, h: 2 },
         },
         {
+          id: 'open_issues',
           title: 'Open Issues',
           description: 'Unresolved support tickets',
           type: 'metric',
@@ -879,6 +929,7 @@ describe('DashboardWidgetSchema - combined new fields', () => {
           layout: { x: 3, y: 0, w: 3, h: 2 },
         },
         {
+          id: 'critical_bugs',
           title: 'Critical Bugs',
           description: 'P0/P1 bugs requiring attention',
           type: 'metric',
@@ -891,6 +942,7 @@ describe('DashboardWidgetSchema - combined new fields', () => {
           layout: { x: 6, y: 0, w: 3, h: 2 },
         },
         {
+          id: 'team_velocity',
           title: 'Team Velocity',
           type: 'bar',
           colorVariant: 'blue',
@@ -1137,8 +1189,8 @@ describe('DashboardSchema - enhanced globalFilters', () => {
       name: 'targeted_filter_dash',
       label: 'Targeted Filters',
       widgets: [
-        { title: 'Chart A', type: 'bar', layout: { x: 0, y: 0, w: 6, h: 4 } },
-        { title: 'Chart B', type: 'line', layout: { x: 6, y: 0, w: 6, h: 4 } },
+        { id: 'chart_a', title: 'Chart A', type: 'bar', layout: { x: 0, y: 0, w: 6, h: 4 } },
+        { id: 'chart_b', title: 'Chart B', type: 'line', layout: { x: 6, y: 0, w: 6, h: 4 } },
       ],
       globalFilters: [
         {
@@ -1164,6 +1216,7 @@ describe('DashboardSchema - enhanced globalFilters', () => {
       label: 'Airtable Style Dashboard',
       widgets: [
         {
+          id: 'revenue_by_region',
           title: 'Revenue by Region',
           type: 'bar',
           object: 'opportunity',
@@ -1342,7 +1395,7 @@ describe('DashboardSchema - header', () => {
         ],
       },
       widgets: [
-        { title: 'Revenue', type: 'metric', layout: { x: 0, y: 0, w: 3, h: 2 } },
+        { id: 'revenue_widget', title: 'Revenue', type: 'metric', layout: { x: 0, y: 0, w: 3, h: 2 } },
       ],
     });
     expect(dashboard.header!.showTitle).toBe(true);
@@ -1401,6 +1454,7 @@ describe('WidgetMeasureSchema', () => {
 describe('DashboardWidgetSchema - measures (multi-measure pivot)', () => {
   it('should accept pivot widget with measures', () => {
     const widget = DashboardWidgetSchema.parse({
+      id: 'sales_by_region_product',
       title: 'Sales by Region and Product',
       type: 'pivot',
       object: 'opportunity',
@@ -1420,6 +1474,7 @@ describe('DashboardWidgetSchema - measures (multi-measure pivot)', () => {
 
   it('should accept widget without measures (backward compat)', () => {
     const result = DashboardWidgetSchema.parse({
+      id: 'bar_widget',
       type: 'bar',
       object: 'opportunity',
       valueField: 'amount',
@@ -1431,6 +1486,7 @@ describe('DashboardWidgetSchema - measures (multi-measure pivot)', () => {
 
   it('should accept table widget with measures for multi-aggregate', () => {
     const widget = DashboardWidgetSchema.parse({
+      id: 'regional_summary',
       title: 'Regional Summary',
       type: 'table',
       object: 'order',
@@ -1456,6 +1512,7 @@ describe('DashboardWidgetSchema - measures (multi-measure pivot)', () => {
       },
       widgets: [
         {
+          id: 'revenue_metric',
           title: 'Revenue',
           type: 'metric',
           object: 'order',
@@ -1464,6 +1521,7 @@ describe('DashboardWidgetSchema - measures (multi-measure pivot)', () => {
           layout: { x: 0, y: 0, w: 4, h: 2 },
         },
         {
+          id: 'sales_pivot_analysis',
           title: 'Sales Pivot Analysis',
           type: 'pivot',
           object: 'opportunity',
@@ -1493,6 +1551,7 @@ describe('DashboardWidgetSchema - measures (multi-measure pivot)', () => {
 describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
   it('should accept funnel widget with chartConfig', () => {
     const widget = DashboardWidgetSchema.parse({
+      id: 'lead_conversion_funnel',
       title: 'Lead Conversion Funnel',
       type: 'funnel',
       object: 'lead',
@@ -1512,6 +1571,7 @@ describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
 
   it('should accept grouped-bar widget with chartConfig', () => {
     const widget = DashboardWidgetSchema.parse({
+      id: 'revenue_by_region_quarter',
       title: 'Revenue by Region & Quarter',
       type: 'grouped-bar',
       object: 'order',
@@ -1534,6 +1594,7 @@ describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
 
   it('should accept pivot widget with measures and chartConfig', () => {
     const widget = DashboardWidgetSchema.parse({
+      id: 'sales_cross_tab',
       title: 'Sales Cross-Tab Analysis',
       type: 'pivot',
       object: 'opportunity',
@@ -1559,6 +1620,7 @@ describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
       description: 'Dashboard combining pivot, funnel, and grouped-bar widgets',
       widgets: [
         {
+          id: 'sales_funnel',
           title: 'Sales Funnel',
           type: 'funnel',
           object: 'lead',
@@ -1567,6 +1629,7 @@ describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
           layout: { x: 0, y: 0, w: 6, h: 4 },
         },
         {
+          id: 'revenue_region_quarter',
           title: 'Revenue by Region & Quarter',
           type: 'grouped-bar',
           object: 'order',
@@ -1576,6 +1639,7 @@ describe('DashboardWidgetSchema - pivot/funnel/grouped-bar types', () => {
           layout: { x: 6, y: 0, w: 6, h: 4 },
         },
         {
+          id: 'regional_pivot_analysis',
           title: 'Regional Pivot Analysis',
           type: 'pivot',
           object: 'opportunity',
@@ -1683,5 +1747,81 @@ describe('GlobalFilterSchema - Negative Validation', () => {
       field: 'status',
       type: 'invalid_type',
     })).toThrow();
+  });
+});
+
+// ============================================================================
+// Issue #2: DashboardWidget required `id` field
+// ============================================================================
+describe('DashboardWidgetSchema - required id field', () => {
+  it('should reject widget without id', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      type: 'metric',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).toThrow();
+  });
+
+  it('should enforce snake_case for widget id', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'revenue_widget',
+      type: 'metric',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
+
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'revenueWidget',
+      type: 'metric',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).toThrow();
+  });
+
+  it('should allow targetWidgets to reference widget ids', () => {
+    const dashboard = DashboardSchema.parse({
+      name: 'filter_ref_dash',
+      label: 'Filter Reference Dashboard',
+      widgets: [
+        { id: 'revenue_chart', type: 'bar', layout: { x: 0, y: 0, w: 6, h: 4 } },
+        { id: 'pipeline_table', type: 'table', layout: { x: 6, y: 0, w: 6, h: 4 } },
+      ],
+      globalFilters: [{
+        field: 'region',
+        scope: 'widget',
+        targetWidgets: ['revenue_chart'],
+      }],
+    });
+    expect(dashboard.widgets[0].id).toBe('revenue_chart');
+    expect(dashboard.globalFilters![0].targetWidgets).toEqual(['revenue_chart']);
+  });
+});
+
+// ============================================================================
+// Issue #3: WidgetActionTypeSchema unified with ActionSchema.type
+// ============================================================================
+describe('WidgetActionTypeSchema - unified action types', () => {
+  it('should accept all five action types matching ActionSchema.type', () => {
+    const types = ['script', 'url', 'modal', 'flow', 'api'] as const;
+    types.forEach(type => {
+      expect(() => WidgetActionTypeSchema.parse(type)).not.toThrow();
+    });
+  });
+
+  it('should accept widget with script action type', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'script_widget',
+      type: 'metric',
+      actionType: 'script',
+      actionUrl: 'refresh_data',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
+  });
+
+  it('should accept widget with api action type', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'api_widget',
+      type: 'metric',
+      actionType: 'api',
+      actionUrl: '/api/refresh',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
   });
 });

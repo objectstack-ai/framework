@@ -235,3 +235,31 @@ describe('I18n and ARIA integration', () => {
     expect(result.role).toBeUndefined();
   });
 });
+
+// ============================================================================
+// Issue #6: TransitionConfigSchema themeToken support
+// ============================================================================
+describe('TransitionConfigSchema - themeToken', () => {
+  it('should accept transition with themeToken reference', () => {
+    const result = TransitionConfigSchema.parse({
+      themeToken: 'animation.duration.fast',
+    });
+    expect(result.themeToken).toBe('animation.duration.fast');
+  });
+
+  it('should accept transition combining themeToken with explicit values', () => {
+    const result = TransitionConfigSchema.parse({
+      preset: 'fade',
+      duration: 200,
+      easing: 'ease_in_out',
+      themeToken: 'animation.timing.ease_in_out',
+    });
+    expect(result.themeToken).toBe('animation.timing.ease_in_out');
+    expect(result.duration).toBe(200);
+  });
+
+  it('should leave themeToken undefined when not provided', () => {
+    const result = TransitionConfigSchema.parse({ duration: 300 });
+    expect(result.themeToken).toBeUndefined();
+  });
+});

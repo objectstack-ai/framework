@@ -28,6 +28,30 @@ export const HttpMethod = z.enum([
 
 export type HttpMethod = z.infer<typeof HttpMethod>;
 
+/**
+ * HTTP Method Schema (subset for UI/View data sources)
+ * Common HTTP methods used in view data source configurations.
+ * Migrated from ui/view.zod.ts to shared for reuse across modules.
+ */
+export const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+
+export type HttpMethodType = z.infer<typeof HttpMethodSchema>;
+
+/**
+ * HTTP Request Configuration Schema
+ * Defines a complete HTTP request configuration used by API data providers.
+ * Migrated from ui/view.zod.ts to shared for reuse across modules.
+ */
+export const HttpRequestSchema = z.object({
+  url: z.string().describe('API endpoint URL'),
+  method: HttpMethodSchema.optional().default('GET').describe('HTTP method'),
+  headers: z.record(z.string(), z.string()).optional().describe('Custom HTTP headers'),
+  params: z.record(z.string(), z.unknown()).optional().describe('Query parameters'),
+  body: z.unknown().optional().describe('Request body for POST/PUT/PATCH'),
+});
+
+export type HttpRequest = z.infer<typeof HttpRequestSchema>;
+
 // ==========================================
 // CORS Configuration
 // ==========================================

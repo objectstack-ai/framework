@@ -203,7 +203,7 @@ describe('PageSchema', () => {
     const types: Array<Page['type']> = [
       'record', 'home', 'app', 'utility',
       'dashboard', 'grid', 'list', 'gallery', 'kanban', 'calendar',
-      'timeline', 'form', 'record_detail', 'record_review', 'overview', 'blank',
+      'timeline', 'form', 'record_detail', 'overview',
     ];
 
     types.forEach(type => {
@@ -215,6 +215,29 @@ describe('PageSchema', () => {
       });
       expect(page.type).toBe(type);
     });
+
+    // record_review requires recordReview config
+    const reviewPage = PageSchema.parse({
+      name: 'test_page',
+      label: 'Test Page',
+      type: 'record_review',
+      regions: [],
+      recordReview: {
+        object: 'case',
+        actions: [{ label: 'Approve', type: 'approve' }],
+      },
+    });
+    expect(reviewPage.type).toBe('record_review');
+
+    // blank requires blankLayout config
+    const blankPage = PageSchema.parse({
+      name: 'test_page',
+      label: 'Test Page',
+      type: 'blank',
+      regions: [],
+      blankLayout: { items: [] },
+    });
+    expect(blankPage.type).toBe('blank');
   });
 
   it('should accept record page', () => {
@@ -564,6 +587,7 @@ describe('PageSchema with page types', () => {
       name: 'page_overview',
       label: 'Overview',
       type: 'blank',
+      blankLayout: { items: [] },
       regions: [],
     });
 
@@ -616,6 +640,7 @@ describe('PageSchema with page types', () => {
       name: 'page_filtered',
       label: 'Filtered View',
       type: 'blank',
+      blankLayout: { items: [] },
       variables: [
         { name: 'selectedId', type: 'string' },
         { name: 'showArchived', type: 'boolean', defaultValue: false },
@@ -627,12 +652,12 @@ describe('PageSchema with page types', () => {
   });
 
   it('should accept all interface page types', () => {
-    const types = [
+    const basicTypes = [
       'dashboard', 'grid', 'list', 'gallery', 'kanban', 'calendar',
-      'timeline', 'form', 'record_detail', 'record_review', 'overview', 'blank',
+      'timeline', 'form', 'record_detail', 'overview',
     ];
 
-    types.forEach(type => {
+    basicTypes.forEach(type => {
       expect(() => PageSchema.parse({
         name: 'test_page',
         label: 'Test',
@@ -640,6 +665,27 @@ describe('PageSchema with page types', () => {
         regions: [],
       })).not.toThrow();
     });
+
+    // record_review requires recordReview config
+    expect(() => PageSchema.parse({
+      name: 'test_page',
+      label: 'Test',
+      type: 'record_review',
+      regions: [],
+      recordReview: {
+        object: 'case',
+        actions: [{ label: 'Approve', type: 'approve' }],
+      },
+    })).not.toThrow();
+
+    // blank requires blankLayout config
+    expect(() => PageSchema.parse({
+      name: 'test_page',
+      label: 'Test',
+      type: 'blank',
+      regions: [],
+      blankLayout: { items: [] },
+    })).not.toThrow();
   });
 
   it('should accept page with icon', () => {
@@ -839,6 +885,7 @@ describe('PageVariableSchema record_id type', () => {
       name: 'blank_picker',
       label: 'Picker Page',
       type: 'blank',
+      blankLayout: { items: [] },
       variables: [
         { name: 'selected_id', type: 'record_id', source: 'account_picker' },
         { name: 'show_details', type: 'boolean', defaultValue: false },
@@ -1172,5 +1219,69 @@ describe('RecordReviewConfigSchema - Negative Validation', () => {
       object: 'lead',
       actions: [{ label: 'Bad', type: 'invalid_action' }],
     })).toThrow();
+  });
+});
+
+// ============================================================================
+// Issue #5: PageSchema conditional validation (superRefine)
+// ============================================================================
+describe('PageSchema - conditional validation', () => {
+  it('should reject record_review page without recordReview config', () => {
+    expect(() => PageSchema.parse({
+      name: 'review_page',
+      label: 'Review',
+      type: 'record_review',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should accept record_review page with recordReview config', () => {
+    expect(() => PageSchema.parse({
+      name: 'review_page',
+      label: 'Review',
+      type: 'record_review',
+      regions: [],
+      recordReview: {
+        object: 'order',
+        actions: [{ label: 'Approve', type: 'approve' }],
+      },
+    })).not.toThrow();
+  });
+
+  it('should reject blank page without blankLayout config', () => {
+    expect(() => PageSchema.parse({
+      name: 'blank_page',
+      label: 'Blank',
+      type: 'blank',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should accept blank page with blankLayout config', () => {
+    expect(() => PageSchema.parse({
+      name: 'blank_page',
+      label: 'Blank',
+      type: 'blank',
+      regions: [],
+      blankLayout: { items: [] },
+    })).not.toThrow();
+  });
+
+  it('should not require recordReview for non-record_review types', () => {
+    expect(() => PageSchema.parse({
+      name: 'grid_page',
+      label: 'Grid',
+      type: 'grid',
+      regions: [],
+    })).not.toThrow();
+  });
+
+  it('should not require blankLayout for non-blank types', () => {
+    expect(() => PageSchema.parse({
+      name: 'dashboard_page',
+      label: 'Dashboard',
+      type: 'dashboard',
+      regions: [],
+    })).not.toThrow();
   });
 });

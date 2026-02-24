@@ -300,6 +300,21 @@ export const PageSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
+}).superRefine((data, ctx) => {
+  if (data.type === 'record_review' && !data.recordReview) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['recordReview'],
+      message: 'recordReview is required when type is "record_review"',
+    });
+  }
+  if (data.type === 'blank' && !data.blankLayout) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['blankLayout'],
+      message: 'blankLayout is required when type is "blank"',
+    });
+  }
 });
 
 export type Page = z.infer<typeof PageSchema>;
