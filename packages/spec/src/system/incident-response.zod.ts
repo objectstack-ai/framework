@@ -365,4 +365,3 @@ export type IncidentCategory = z.infer<typeof IncidentCategorySchema>;
 export type IncidentStatus = z.infer<typeof IncidentStatusSchema>;
 export type Incident = z.infer<typeof IncidentSchema>;
 export type IncidentResponsePolicy = z.infer<typeof IncidentResponsePolicySchema>;
-export type IncidentNotificationMatrix = z.infer<typeof IncidentNotificationMatrixSchema>;
