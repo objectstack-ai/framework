@@ -131,3 +131,31 @@ export const KernelContextSchema = z.object({
 });
 
 export type KernelContext = z.infer<typeof KernelContextSchema>;
+
+// ==========================================================================
+// Tenant Runtime Context
+// ==========================================================================
+
+/**
+ * Tenant Runtime Context Schema.
+ *
+ * Extends the base KernelContext with tenant-specific information.
+ * Constructed per-request from: session → org → tenant lookup.
+ * Provides the tenant identity, plan, region, and database URL to all
+ * downstream services during request processing.
+ */
+export const TenantRuntimeContextSchema = KernelContextSchema.extend({
+  /** Unique tenant identifier resolved from the current session */
+  tenantId: z.string().min(1).describe('Resolved tenant identifier'),
+
+  /** Tenant subscription plan */
+  tenantPlan: z.enum(['free', 'pro', 'enterprise']).describe('Tenant subscription plan'),
+
+  /** Tenant deployment region */
+  tenantRegion: z.string().min(1).describe('Tenant deployment region'),
+
+  /** Tenant database connection URL */
+  tenantDbUrl: z.string().min(1).describe('Tenant database connection URL'),
+}).describe('Tenant-aware kernel runtime context');
+
+export type TenantRuntimeContext = z.infer<typeof TenantRuntimeContextSchema>;

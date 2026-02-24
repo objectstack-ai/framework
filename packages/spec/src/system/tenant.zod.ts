@@ -28,6 +28,33 @@ export const TenantIsolationLevel = z.enum([
 export type TenantIsolationLevel = z.infer<typeof TenantIsolationLevel>;
 
 /**
+ * Database Provider Enum
+ * Defines which database backend is used for the tenant
+ */
+export const DatabaseProviderSchema = z.enum([
+  'turso',     // Turso/libSQL (DB-per-Tenant, edge-native)
+  'postgres',  // PostgreSQL (traditional, self-hosted or managed)
+  'memory',    // In-memory (testing/development only)
+]).describe('Database provider for tenant data');
+
+export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
+
+/**
+ * Tenant Connection Config Schema
+ * Stores the database connection details for a tenant (encrypted at rest)
+ */
+export const TenantConnectionConfigSchema = z.object({
+  /** Database connection URL */
+  url: z.string().min(1).describe('Database connection URL'),
+  /** Authentication token (JWT for Turso, password for Postgres) */
+  authToken: z.string().optional().describe('Database auth token (encrypted at rest)'),
+  /** Turso database group name */
+  group: z.string().optional().describe('Turso database group name'),
+}).describe('Tenant database connection configuration');
+
+export type TenantConnectionConfig = z.infer<typeof TenantConnectionConfigSchema>;
+
+/**
  * Tenant Quota Schema
  * Defines resource limits and usage quotas for a tenant
  */
@@ -46,9 +73,67 @@ export const TenantQuotaSchema = z.object({
    * API rate limit (requests per minute)
    */
   apiRateLimit: z.number().int().positive().optional().describe('API requests per minute'),
+
+  /**
+   * Maximum number of custom objects the tenant can create
+   */
+  maxObjects: z.number().int().positive().optional().describe('Maximum number of custom objects'),
+
+  /**
+   * Maximum records per object/table
+   */
+  maxRecordsPerObject: z.number().int().positive().optional().describe('Maximum records per object'),
+
+  /**
+   * Maximum deployments allowed per day
+   */
+  maxDeploymentsPerDay: z.number().int().positive().optional().describe('Maximum deployments per day'),
+
+  /**
+   * Maximum storage in bytes
+   */
+  maxStorageBytes: z.number().int().positive().optional().describe('Maximum storage in bytes'),
 });
 
 export type TenantQuota = z.infer<typeof TenantQuotaSchema>;
+
+/**
+ * Tenant Usage Schema
+ * Tracks current resource usage for quota enforcement
+ */
+export const TenantUsageSchema = z.object({
+  /** Current number of custom objects */
+  objectCount: z.number().int().min(0).default(0).describe('Current number of custom objects'),
+  /** Current total record count across all objects */
+  totalRecords: z.number().int().min(0).default(0).describe('Total records across all objects'),
+  /** Current storage usage in bytes */
+  storageBytes: z.number().int().min(0).default(0).describe('Current storage usage in bytes'),
+  /** Deployments executed today */
+  deploymentsToday: z.number().int().min(0).default(0).describe('Deployments executed today'),
+  /** Last updated timestamp (ISO 8601) */
+  lastUpdatedAt: z.string().datetime().optional().describe('Last usage update time'),
+}).describe('Current tenant resource usage');
+
+export type TenantUsage = z.infer<typeof TenantUsageSchema>;
+
+/**
+ * Quota Enforcement Result
+ * Result of checking whether an operation would exceed tenant quotas
+ */
+export const QuotaEnforcementResultSchema = z.object({
+  /** Whether the operation is allowed */
+  allowed: z.boolean().describe('Whether the operation is within quota'),
+  /** Quota that would be exceeded (if not allowed) */
+  exceededQuota: z.string().optional().describe('Name of the exceeded quota'),
+  /** Current usage value */
+  currentUsage: z.number().optional().describe('Current usage value'),
+  /** Quota limit value */
+  limit: z.number().optional().describe('Quota limit'),
+  /** Human-readable message */
+  message: z.string().optional().describe('Human-readable quota message'),
+}).describe('Quota enforcement check result');
+
+export type QuotaEnforcementResult = z.infer<typeof QuotaEnforcementResultSchema>;
 
 /**
  * Tenant Schema
@@ -97,6 +182,28 @@ export const TenantSchema = z.object({
    * Data isolation level
    */
   isolationLevel: TenantIsolationLevel,
+
+  /**
+   * Database provider for this tenant
+   */
+  databaseProvider: DatabaseProviderSchema.optional().describe('Database provider'),
+
+  /**
+   * Database connection configuration (encrypted at rest)
+   */
+  connectionConfig: TenantConnectionConfigSchema.optional().describe('Database connection config'),
+
+  /**
+   * Current provisioning status
+   */
+  provisioningStatus: z.enum([
+    'provisioning', 'active', 'suspended', 'failed', 'destroying',
+  ]).optional().describe('Current provisioning lifecycle status'),
+
+  /**
+   * Tenant subscription plan
+   */
+  plan: z.enum(['free', 'pro', 'enterprise']).optional().describe('Subscription plan'),
   
   /**
    * Custom configuration values

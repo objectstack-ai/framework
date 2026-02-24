@@ -158,3 +158,61 @@ export const SQLDriverConfigSchema = DriverConfigSchema.extend({
 });
 
 export type SQLDriverConfig = z.infer<typeof SQLDriverConfigSchema>;
+
+// ==========================================================================
+// SQLite-Specific Constants
+// ==========================================================================
+
+/**
+ * Default data type mappings for SQLite/libSQL dialect.
+ *
+ * SQLite uses a simplified type system with type affinity:
+ * - TEXT: strings, dates, UUIDs
+ * - REAL: floating-point numbers
+ * - INTEGER: integers, booleans
+ * - BLOB: binary data
+ *
+ * @see https://www.sqlite.org/datatype3.html
+ */
+export const SQLiteDataTypeMappingDefaults: DataTypeMapping = {
+  text: 'TEXT',
+  number: 'REAL',
+  boolean: 'INTEGER',
+  date: 'TEXT',
+  datetime: 'TEXT',
+  json: 'TEXT',
+  uuid: 'TEXT',
+  binary: 'BLOB',
+};
+
+/**
+ * SQLite ALTER TABLE Limitations.
+ *
+ * SQLite has limited ALTER TABLE support compared to other SQL databases.
+ * This constant documents the known limitations that affect migration planning.
+ * The schema diff service must use the "table rebuild" strategy for operations
+ * that SQLite cannot perform natively.
+ *
+ * @see https://www.sqlite.org/lang_altertable.html
+ */
+export const SQLiteAlterTableLimitations = {
+  /** SQLite supports ADD COLUMN */
+  supportsAddColumn: true,
+  /** SQLite supports RENAME COLUMN (3.25.0+) */
+  supportsRenameColumn: true,
+  /** SQLite supports DROP COLUMN (3.35.0+) */
+  supportsDropColumn: true,
+  /** SQLite does NOT support MODIFY/ALTER COLUMN type */
+  supportsModifyColumn: false,
+  /** SQLite does NOT support adding constraints to existing columns */
+  supportsAddConstraint: false,
+  /**
+   * When an unsupported alteration is needed, the migration planner
+   * must use the 12-step table rebuild strategy:
+   * 1. CREATE new table with desired schema
+   * 2. Copy data from old table
+   * 3. DROP old table
+   * 4. RENAME new table to old name
+   */
+  rebuildStrategy: 'create_copy_drop_rename',
+} as const;
