@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   HttpMethod,
+  HttpMethodSchema,
+  HttpRequestSchema,
   CorsConfigSchema,
   RateLimitConfigSchema,
   StaticMountSchema,
@@ -132,5 +134,46 @@ describe('StaticMountSchema', () => {
 
   it('should reject missing directory', () => {
     expect(() => StaticMountSchema.parse({ path: '/static' })).toThrow();
+  });
+});
+
+// ============================================================================
+// Issue #8: HttpMethodSchema and HttpRequestSchema migrated to shared
+// ============================================================================
+describe('HttpMethodSchema (migrated from view.zod)', () => {
+  it('should accept common HTTP methods', () => {
+    const valid = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+    valid.forEach(m => {
+      expect(HttpMethodSchema.parse(m)).toBe(m);
+    });
+  });
+
+  it('should reject HEAD and OPTIONS (subset for UI data sources)', () => {
+    expect(() => HttpMethodSchema.parse('HEAD')).toThrow();
+    expect(() => HttpMethodSchema.parse('OPTIONS')).toThrow();
+  });
+});
+
+describe('HttpRequestSchema (migrated from view.zod)', () => {
+  it('should accept minimal request with url only', () => {
+    const result = HttpRequestSchema.parse({ url: 'https://api.example.com/data' });
+    expect(result.url).toBe('https://api.example.com/data');
+    expect(result.method).toBe('GET');
+  });
+
+  it('should accept full request with all fields', () => {
+    const result = HttpRequestSchema.parse({
+      url: 'https://api.example.com/data',
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer token' },
+      params: { page: 1 },
+      body: { name: 'test' },
+    });
+    expect(result.method).toBe('POST');
+    expect(result.headers?.['Authorization']).toBe('Bearer token');
+  });
+
+  it('should reject request without url', () => {
+    expect(() => HttpRequestSchema.parse({})).toThrow();
   });
 });

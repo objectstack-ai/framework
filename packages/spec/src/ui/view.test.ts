@@ -2369,3 +2369,62 @@ describe('ListViewSchema filter field', () => {
     })).toThrow();
   });
 });
+
+// ============================================================================
+// Issue #7: ListView responsive and performance config
+// ============================================================================
+describe('ListViewSchema - responsive and performance', () => {
+  it('should accept list view with responsive config', () => {
+    const view = ListViewSchema.parse({
+      type: 'grid',
+      columns: ['name', 'status'],
+      responsive: {
+        hiddenOn: ['xs'],
+        columns: { xs: 12, md: 6, lg: 4 },
+      },
+    });
+    expect(view.responsive?.hiddenOn).toEqual(['xs']);
+    expect(view.responsive?.columns?.md).toBe(6);
+  });
+
+  it('should accept list view with performance config', () => {
+    const view = ListViewSchema.parse({
+      type: 'grid',
+      columns: ['name'],
+      performance: {
+        lazyLoad: true,
+        virtualScroll: { enabled: true, itemHeight: 40, overscan: 5 },
+        cacheStrategy: 'stale-while-revalidate',
+        prefetch: true,
+      },
+    });
+    expect(view.performance?.lazyLoad).toBe(true);
+    expect(view.performance?.virtualScroll?.enabled).toBe(true);
+    expect(view.performance?.cacheStrategy).toBe('stale-while-revalidate');
+  });
+
+  it('should accept list view without responsive/performance (optional)', () => {
+    const view = ListViewSchema.parse({
+      type: 'grid',
+      columns: ['name'],
+    });
+    expect(view.responsive).toBeUndefined();
+    expect(view.performance).toBeUndefined();
+  });
+});
+
+// ============================================================================
+// Issue #8: HttpMethodSchema/HttpRequestSchema re-exported from view.zod
+// ============================================================================
+describe('HttpMethodSchema/HttpRequestSchema backward compat', () => {
+  it('should still be importable from view.zod', () => {
+    expect(HttpMethodSchema).toBeDefined();
+    expect(HttpRequestSchema).toBeDefined();
+  });
+
+  it('should still parse correctly when imported from view.zod', () => {
+    expect(HttpMethodSchema.parse('GET')).toBe('GET');
+    const result = HttpRequestSchema.parse({ url: '/api/test' });
+    expect(result.method).toBe('GET');
+  });
+});

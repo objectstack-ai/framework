@@ -1,6 +1,6 @@
 # ObjectStack Protocol — Road Map
 
-> **Last Updated:** 2026-02-22  
+> **Last Updated:** 2026-02-24  
 > **Current Version:** v3.0.8  
 > **Status:** Protocol Specification Complete · Runtime Implementation In Progress
 
@@ -696,6 +696,14 @@ Protocol enhancements and core component implementations for dashboard feature p
 - [x] Enhance `globalFilters` with `options`, `optionsFrom`, `defaultValue`, `scope`, `targetWidgets` ([#712](https://github.com/objectstack-ai/spec/issues/712))
 - [x] Add `header` configuration to `DashboardSchema` with `showTitle`, `showDescription`, `actions` ([#714](https://github.com/objectstack-ai/spec/issues/714))
 - [x] Add `pivotConfig` and `measures` array to `DashboardWidgetSchema` for multi-measure pivots ([#714](https://github.com/objectstack-ai/spec/issues/714))
+- [x] Add required `id` field (SnakeCaseIdentifier) to `DashboardWidgetSchema` for `targetWidgets` referencing
+- [x] Unify `WidgetActionTypeSchema` with `ActionSchema.type` — add `script` and `api` types
+- [x] Add `.superRefine` conditional validation to `PageSchema` (`recordReview` required for `record_review`, `blankLayout` for `blank`)
+- [x] Unify easing naming in `AnimationSchema` (theme.zod) to snake_case (`ease_in`, `ease_out`, `ease_in_out`)
+- [x] Add `themeToken` reference to `TransitionConfigSchema` for theme animation token binding
+- [x] Add `ResponsiveConfigSchema` and `PerformanceConfigSchema` to `ListViewSchema`
+- [x] Migrate `HttpMethodSchema` / `HttpRequestSchema` from `view.zod.ts` to `shared/http.zod.ts` (re-exported for backward compat)
+- [x] Rename `ThemeMode`→`ThemeModeSchema`, `DensityMode`→`DensityModeSchema`, `WcagContrastLevel`→`WcagContrastLevelSchema` (deprecated aliases kept)
 
 **ObjectUI Component Implementations:**
 - [ ] Implement `DashboardFilterBar` component for global filters ([objectui#588](https://github.com/objectstack-ai/objectui/issues/588))

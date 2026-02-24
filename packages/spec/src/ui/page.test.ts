@@ -1221,3 +1221,67 @@ describe('RecordReviewConfigSchema - Negative Validation', () => {
     })).toThrow();
   });
 });
+
+// ============================================================================
+// Issue #5: PageSchema conditional validation (superRefine)
+// ============================================================================
+describe('PageSchema - conditional validation', () => {
+  it('should reject record_review page without recordReview config', () => {
+    expect(() => PageSchema.parse({
+      name: 'review_page',
+      label: 'Review',
+      type: 'record_review',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should accept record_review page with recordReview config', () => {
+    expect(() => PageSchema.parse({
+      name: 'review_page',
+      label: 'Review',
+      type: 'record_review',
+      regions: [],
+      recordReview: {
+        object: 'order',
+        actions: [{ label: 'Approve', type: 'approve' }],
+      },
+    })).not.toThrow();
+  });
+
+  it('should reject blank page without blankLayout config', () => {
+    expect(() => PageSchema.parse({
+      name: 'blank_page',
+      label: 'Blank',
+      type: 'blank',
+      regions: [],
+    })).toThrow();
+  });
+
+  it('should accept blank page with blankLayout config', () => {
+    expect(() => PageSchema.parse({
+      name: 'blank_page',
+      label: 'Blank',
+      type: 'blank',
+      regions: [],
+      blankLayout: { items: [] },
+    })).not.toThrow();
+  });
+
+  it('should not require recordReview for non-record_review types', () => {
+    expect(() => PageSchema.parse({
+      name: 'grid_page',
+      label: 'Grid',
+      type: 'grid',
+      regions: [],
+    })).not.toThrow();
+  });
+
+  it('should not require blankLayout for non-blank types', () => {
+    expect(() => PageSchema.parse({
+      name: 'dashboard_page',
+      label: 'Dashboard',
+      type: 'dashboard',
+      regions: [],
+    })).not.toThrow();
+  });
+});

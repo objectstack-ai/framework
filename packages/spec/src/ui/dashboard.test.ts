@@ -1749,3 +1749,79 @@ describe('GlobalFilterSchema - Negative Validation', () => {
     })).toThrow();
   });
 });
+
+// ============================================================================
+// Issue #2: DashboardWidget required `id` field
+// ============================================================================
+describe('DashboardWidgetSchema - required id field', () => {
+  it('should reject widget without id', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      type: 'metric',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).toThrow();
+  });
+
+  it('should enforce snake_case for widget id', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'revenue_widget',
+      type: 'metric',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
+
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'revenueWidget',
+      type: 'metric',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).toThrow();
+  });
+
+  it('should allow targetWidgets to reference widget ids', () => {
+    const dashboard = DashboardSchema.parse({
+      name: 'filter_ref_dash',
+      label: 'Filter Reference Dashboard',
+      widgets: [
+        { id: 'revenue_chart', type: 'bar', layout: { x: 0, y: 0, w: 6, h: 4 } },
+        { id: 'pipeline_table', type: 'table', layout: { x: 6, y: 0, w: 6, h: 4 } },
+      ],
+      globalFilters: [{
+        field: 'region',
+        scope: 'widget',
+        targetWidgets: ['revenue_chart'],
+      }],
+    });
+    expect(dashboard.widgets[0].id).toBe('revenue_chart');
+    expect(dashboard.globalFilters![0].targetWidgets).toEqual(['revenue_chart']);
+  });
+});
+
+// ============================================================================
+// Issue #3: WidgetActionTypeSchema unified with ActionSchema.type
+// ============================================================================
+describe('WidgetActionTypeSchema - unified action types', () => {
+  it('should accept all five action types matching ActionSchema.type', () => {
+    const types = ['script', 'url', 'modal', 'flow', 'api'] as const;
+    types.forEach(type => {
+      expect(() => WidgetActionTypeSchema.parse(type)).not.toThrow();
+    });
+  });
+
+  it('should accept widget with script action type', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'script_widget',
+      type: 'metric',
+      actionType: 'script',
+      actionUrl: 'refresh_data',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
+  });
+
+  it('should accept widget with api action type', () => {
+    expect(() => DashboardWidgetSchema.parse({
+      id: 'api_widget',
+      type: 'metric',
+      actionType: 'api',
+      actionUrl: '/api/refresh',
+      layout: { x: 0, y: 0, w: 3, h: 2 },
+    })).not.toThrow();
+  });
+});
