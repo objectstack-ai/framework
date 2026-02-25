@@ -1,5 +1,11 @@
 # @objectstack/spec
 
+## 3.0.10
+
+### Patch Changes
+
+- d1e5d31: Fix UI protocol design issues
+
 ## 3.0.9
 
 ### Patch Changes

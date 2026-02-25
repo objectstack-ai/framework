@@ -1,5 +1,13 @@
 # @objectstack/plugin-hono-server
 
+## 3.0.10
+
+### Patch Changes
+
+- Updated dependencies [d1e5d31]
+  - @objectstack/spec@3.0.10
+  - @objectstack/core@3.0.10
+
 ## 3.0.9
 
 ### Patch Changes
