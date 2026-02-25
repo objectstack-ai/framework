@@ -36,7 +36,7 @@
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
-    "glob": "^13.0.5",
+    "glob": "^13.0.6",
     "js-yaml": "^4.1.0",
     "chokidar": "^5.0.0",
     "zod": "^4.3.6"
