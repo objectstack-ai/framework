@@ -10,6 +10,7 @@ export const ServiceDashboard: Dashboard = {
   widgets: [
     // Row 1: Key Metrics
     {
+      id: 'open_cases',
       title: 'Open Cases',
       type: 'metric',
       object: 'case',
@@ -19,6 +20,7 @@ export const ServiceDashboard: Dashboard = {
       options: { color: '#FFA500' }
     },
     {
+      id: 'critical_cases',
       title: 'Critical Cases',
       type: 'metric',
       object: 'case',
@@ -28,6 +30,7 @@ export const ServiceDashboard: Dashboard = {
       options: { color: '#FF0000' }
     },
     {
+      id: 'avg_resolution_time',
       title: 'Avg Resolution Time (hrs)',
       type: 'metric',
       object: 'case',
@@ -38,6 +41,7 @@ export const ServiceDashboard: Dashboard = {
       options: { suffix: 'h', color: '#4169E1' }
     },
     {
+      id: 'sla_violations',
       title: 'SLA Violations',
       type: 'metric',
       object: 'case',
@@ -49,6 +53,7 @@ export const ServiceDashboard: Dashboard = {
     
     // Row 2: Case Distribution
     {
+      id: 'cases_by_status',
       title: 'Cases by Status',
       type: 'pie',
       object: 'case',
@@ -59,6 +64,7 @@ export const ServiceDashboard: Dashboard = {
       options: { showLegend: true }
     },
     {
+      id: 'cases_by_priority',
       title: 'Cases by Priority',
       type: 'pie',
       object: 'case',
@@ -69,6 +75,7 @@ export const ServiceDashboard: Dashboard = {
       options: { showLegend: true }
     },
     {
+      id: 'cases_by_origin',
       title: 'Cases by Origin',
       type: 'bar',
       object: 'case',
@@ -79,6 +86,7 @@ export const ServiceDashboard: Dashboard = {
     
     // Row 3: Trends and Lists
     {
+      id: 'daily_case_volume',
       title: 'Daily Case Volume',
       type: 'line',
       object: 'case',
@@ -89,6 +97,7 @@ export const ServiceDashboard: Dashboard = {
       options: { dateGranularity: 'day' }
     },
     {
+      id: 'my_open_cases',
       title: 'My Open Cases',
       type: 'table',
       object: 'case',

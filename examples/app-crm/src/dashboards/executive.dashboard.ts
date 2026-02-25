@@ -10,6 +10,7 @@ export const ExecutiveDashboard: Dashboard = {
   widgets: [
     // Row 1: Revenue Metrics
     {
+      id: 'total_revenue_ytd',
       title: 'Total Revenue (YTD)',
       type: 'metric',
       object: 'opportunity',
@@ -20,6 +21,7 @@ export const ExecutiveDashboard: Dashboard = {
       options: { prefix: '$', color: '#00AA00' }
     },
     {
+      id: 'total_accounts',
       title: 'Total Accounts',
       type: 'metric',
       object: 'account',
@@ -29,6 +31,7 @@ export const ExecutiveDashboard: Dashboard = {
       options: { color: '#4169E1' }
     },
     {
+      id: 'total_contacts',
       title: 'Total Contacts',
       type: 'metric',
       object: 'contact',
@@ -37,6 +40,7 @@ export const ExecutiveDashboard: Dashboard = {
       options: { color: '#9370DB' }
     },
     {
+      id: 'total_leads',
       title: 'Total Leads',
       type: 'metric',
       object: 'lead',
@@ -48,6 +52,7 @@ export const ExecutiveDashboard: Dashboard = {
     
     // Row 2: Revenue Analysis
     {
+      id: 'revenue_by_industry',
       title: 'Revenue by Industry',
       type: 'bar',
       object: 'opportunity',
@@ -58,6 +63,7 @@ export const ExecutiveDashboard: Dashboard = {
       layout: { x: 0, y: 2, w: 6, h: 4 },
     },
     {
+      id: 'quarterly_revenue_trend',
       title: 'Quarterly Revenue Trend',
       type: 'line',
       object: 'opportunity',
@@ -71,6 +77,7 @@ export const ExecutiveDashboard: Dashboard = {
     
     // Row 3: Customer & Activity Metrics
     {
+      id: 'new_accounts_by_month',
       title: 'New Accounts by Month',
       type: 'bar',
       object: 'account',
@@ -81,6 +88,7 @@ export const ExecutiveDashboard: Dashboard = {
       options: { dateGranularity: 'month' }
     },
     {
+      id: 'lead_conversion_rate',
       title: 'Lead Conversion Rate',
       type: 'metric',
       object: 'lead',
@@ -90,6 +98,7 @@ export const ExecutiveDashboard: Dashboard = {
       options: { suffix: '%', color: '#00AA00' }
     },
     {
+      id: 'top_accounts_by_revenue',
       title: 'Top Accounts by Revenue',
       type: 'table',
       object: 'account',

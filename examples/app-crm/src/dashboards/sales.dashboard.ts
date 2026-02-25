@@ -10,6 +10,7 @@ export const SalesDashboard: Dashboard = {
   widgets: [
     // Row 1: Key Metrics
     {
+      id: 'total_pipeline_value',
       title: 'Total Pipeline Value',
       type: 'metric',
       object: 'opportunity',
@@ -20,6 +21,7 @@ export const SalesDashboard: Dashboard = {
       options: { prefix: '$', color: '#4169E1' }
     },
     {
+      id: 'closed_won_this_quarter',
       title: 'Closed Won This Quarter',
       type: 'metric',
       object: 'opportunity',
@@ -30,6 +32,7 @@ export const SalesDashboard: Dashboard = {
       options: { prefix: '$', color: '#00AA00' }
     },
     {
+      id: 'open_opportunities',
       title: 'Open Opportunities',
       type: 'metric',
       object: 'opportunity',
@@ -39,6 +42,7 @@ export const SalesDashboard: Dashboard = {
       options: { color: '#FFA500' }
     },
     {
+      id: 'win_rate',
       title: 'Win Rate',
       type: 'metric',
       object: 'opportunity',
@@ -51,6 +55,7 @@ export const SalesDashboard: Dashboard = {
     
     // Row 2: Pipeline Analysis
     {
+      id: 'pipeline_by_stage',
       title: 'Pipeline by Stage',
       type: 'funnel',
       object: 'opportunity',
@@ -62,6 +67,7 @@ export const SalesDashboard: Dashboard = {
       options: { showValues: true }
     },
     {
+      id: 'opportunities_by_owner',
       title: 'Opportunities by Owner',
       type: 'bar',
       object: 'opportunity',
@@ -75,6 +81,7 @@ export const SalesDashboard: Dashboard = {
     
     // Row 3: Trends
     {
+      id: 'monthly_revenue_trend',
       title: 'Monthly Revenue Trend',
       type: 'line',
       object: 'opportunity',
@@ -86,6 +93,7 @@ export const SalesDashboard: Dashboard = {
       options: { dateGranularity: 'month', showTrend: true }
     },
     {
+      id: 'top_opportunities',
       title: 'Top Opportunities',
       type: 'table',
       object: 'opportunity',
