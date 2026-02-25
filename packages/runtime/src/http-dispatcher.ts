@@ -173,7 +173,7 @@ export class HttpDispatcher {
      */
     async handleAuth(path: string, method: string, body: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         // 1. Try generic Auth Service
-        const authService = this.getService(CoreServiceName.enum.auth);
+        const authService = await this.getService(CoreServiceName.enum.auth);
         if (authService && typeof authService.handler === 'function') {
             const response = await authService.handler(context.request, context.response);
             return { handled: true, result: response };
@@ -202,7 +202,7 @@ export class HttpDispatcher {
         // GET /metadata/types
         if (parts[0] === 'types') {
             // Try protocol service for dynamic types
-            const protocol = this.kernel?.context?.getService ? this.kernel.context.getService('protocol') : null;
+            const protocol = this.kernel?.context?.getService ? await this.kernel.context.getService('protocol') : null;
             if (protocol && typeof protocol.getMetaTypes === 'function') {
                 const result = await protocol.getMetaTypes({});
                 return { handled: true, response: this.success(result) };
@@ -224,7 +224,7 @@ export class HttpDispatcher {
             // PUT /metadata/:type/:name (Save)
             if (method === 'PUT' && body) {
                 // Try to get the protocol service directly
-                const protocol = this.kernel?.context?.getService ? this.kernel.context.getService('protocol') : null;
+                const protocol = this.kernel?.context?.getService ? await this.kernel.context.getService('protocol') : null;
                 
                 if (protocol && typeof protocol.saveMetaItem === 'function') {
                     try {
@@ -257,7 +257,7 @@ export class HttpDispatcher {
                 const singularType = type.endsWith('s') ? type.slice(0, -1) : type;
                 
                 // Try Protocol Service First (Preferred)
-                const protocol = this.kernel?.context?.getService ? this.kernel.context.getService('protocol') : null;
+                const protocol = this.kernel?.context?.getService ? await this.kernel.context.getService('protocol') : null;
                 if (protocol && typeof protocol.getMetaItem === 'function') {
                      try {
                         const data = await protocol.getMetaItem({ type: singularType, name });
@@ -286,7 +286,7 @@ export class HttpDispatcher {
             const packageId = query?.package || undefined;
             
             // Try protocol service first for any type
-            const protocol = this.kernel?.context?.getService ? this.kernel.context.getService('protocol') : null;
+            const protocol = this.kernel?.context?.getService ? await this.kernel.context.getService('protocol') : null;
             if (protocol && typeof protocol.getMetaItems === 'function') {
                 try {
                     const data = await protocol.getMetaItems({ type: typeOrName, packageId });
@@ -325,7 +325,7 @@ export class HttpDispatcher {
         // GET /metadata — return available metadata types
         if (parts.length === 0) {
             // Try protocol service for dynamic types
-            const protocol = this.kernel?.context?.getService ? this.kernel.context.getService('protocol') : null;
+            const protocol = this.kernel?.context?.getService ? await this.kernel.context.getService('protocol') : null;
             if (protocol && typeof protocol.getMetaTypes === 'function') {
                 const result = await protocol.getMetaTypes({});
                 return { handled: true, response: this.success(result) };
@@ -429,7 +429,7 @@ export class HttpDispatcher {
      * path: sub-path after /analytics/
      */
     async handleAnalytics(path: string, method: string, body: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
-        const analyticsService = this.getService(CoreServiceName.enum.analytics);
+        const analyticsService = await this.getService(CoreServiceName.enum.analytics);
         if (!analyticsService) return { handled: false }; // 404 handled by caller if unhandled
 
         const m = method.toUpperCase();
@@ -476,7 +476,7 @@ export class HttpDispatcher {
         const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
 
         // Try to get SchemaRegistry from the ObjectQL service
-        const qlService = this.getObjectQLService();
+        const qlService = await this.getObjectQLService();
         const registry = qlService?.registry;
 
         // If no registry available, try broker as fallback
@@ -594,7 +594,7 @@ export class HttpDispatcher {
      * path: sub-path after /storage/
      */
     async handleStorage(path: string, method: string, file: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
-        const storageService = this.getService(CoreServiceName.enum['file-storage']) || this.kernel.services?.['file-storage'];
+        const storageService = await this.getService(CoreServiceName.enum['file-storage']) || this.kernel.services?.['file-storage'];
         if (!storageService) {
              return { handled: true, response: this.error('File storage not configured', 501) };
         }
@@ -656,7 +656,7 @@ export class HttpDispatcher {
             // Support both path param /view/obj/list AND query param /view/obj?type=list
             const type = parts[2] || query?.type || 'list';
 
-            const protocol = this.kernel?.context?.getService ? this.kernel.context.getService('protocol') : null;
+            const protocol = this.kernel?.context?.getService ? await this.kernel.context.getService('protocol') : null;
             
             if (protocol && typeof protocol.getUiView === 'function') {
                 try {
@@ -689,7 +689,7 @@ export class HttpDispatcher {
      *   GET    /:name/runs/:runId    → getRun
      */
     async handleAutomation(path: string, method: string, body: any, context: HttpProtocolContext, query?: any): Promise<HttpDispatcherResult> {
-        const automationService = this.getService(CoreServiceName.enum.automation);
+        const automationService = await this.getService(CoreServiceName.enum.automation);
         if (!automationService) return { handled: false };
 
         const m = method.toUpperCase();
@@ -799,9 +799,9 @@ export class HttpDispatcher {
         return this.kernel.services || {};
     }
 
-    private getService(name: CoreServiceName) {
+    private async getService(name: CoreServiceName) {
         if (typeof this.kernel.getService === 'function') {
-            return this.kernel.getService(name);
+            return await this.kernel.getService(name);
         }
         const services = this.getServicesMap();
         return services[name];
@@ -811,18 +811,18 @@ export class HttpDispatcher {
      * Get the ObjectQL service which provides access to SchemaRegistry.
      * Tries multiple access patterns since kernel structure varies.
      */
-    private getObjectQLService(): any {
+    private async getObjectQLService(): Promise<any> {
         // 1. Try via kernel.getService
         if (typeof this.kernel.getService === 'function') {
             try {
-                const svc = this.kernel.getService('objectql');
+                const svc = await this.kernel.getService('objectql');
                 if (svc?.registry) return svc;
             } catch { /* ignore */ }
         }
         // 2. Try via kernel context
         if (this.kernel?.context?.getService) {
             try {
-                const svc = this.kernel.context.getService('objectql');
+                const svc = await this.kernel.context.getService('objectql');
                 if (svc?.registry) return svc;
             } catch { /* ignore */ }
         }

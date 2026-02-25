@@ -204,4 +204,269 @@ describe('HttpDispatcher', () => {
             expect(mockAutomationService.trigger).toHaveBeenCalledWith('flow_a', { data: 1 }, { request: {} });
         });
     });
+
+    // ═══════════════════════════════════════════════════════════════
+    // Async Service Resolution Tests
+    // Covers: getService awaits Promise-based (async factory) services
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('Async service resolution (Promise-based injection)', () => {
+
+        describe('handleAnalytics with async service', () => {
+            it('should resolve analytics service from Promise (async factory)', async () => {
+                const mockAnalytics = {
+                    query: vi.fn().mockResolvedValue({ rows: [{ id: 1 }], total: 1 }),
+                    getMetadata: vi.fn().mockResolvedValue({ tables: ['t1'] }),
+                    generateSql: vi.fn().mockResolvedValue({ sql: 'SELECT 1' }),
+                };
+                // Inject as Promise (simulates async factory registration)
+                (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'analytics') return Promise.resolve(mockAnalytics);
+                    return null;
+                });
+
+                const result = await dispatcher.handleAnalytics('query', 'POST', { sql: 'SELECT 1' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(mockAnalytics.query).toHaveBeenCalled();
+            });
+
+            it('should handle POST /analytics/sql with async service', async () => {
+                const mockAnalytics = {
+                    generateSql: vi.fn().mockResolvedValue({ sql: 'SELECT * FROM t' }),
+                };
+                (kernel as any).getService = vi.fn().mockResolvedValue(mockAnalytics);
+
+                const result = await dispatcher.handleAnalytics('sql', 'POST', { object: 'test' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(mockAnalytics.generateSql).toHaveBeenCalled();
+            });
+
+            it('should handle GET /analytics/meta with async service', async () => {
+                const mockAnalytics = {
+                    getMetadata: vi.fn().mockResolvedValue({ tables: ['users', 'orders'] }),
+                };
+                (kernel as any).getService = vi.fn().mockResolvedValue(mockAnalytics);
+
+                const result = await dispatcher.handleAnalytics('meta', 'GET', {}, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body?.data?.tables).toEqual(['users', 'orders']);
+            });
+
+            it('should return unhandled when analytics service is not registered', async () => {
+                (kernel as any).getService = vi.fn().mockResolvedValue(null);
+                (kernel as any).services = new Map();
+
+                const result = await dispatcher.handleAnalytics('query', 'POST', {}, { request: {} });
+                expect(result.handled).toBe(false);
+            });
+
+            it('should return unhandled for unknown analytics sub-path', async () => {
+                const mockAnalytics = { query: vi.fn() };
+                (kernel as any).getService = vi.fn().mockResolvedValue(mockAnalytics);
+
+                const result = await dispatcher.handleAnalytics('unknown', 'POST', {}, { request: {} });
+                expect(result.handled).toBe(false);
+            });
+        });
+
+        describe('handleAuth with async service', () => {
+            it('should resolve auth service from Promise', async () => {
+                const mockAuth = {
+                    handler: vi.fn().mockResolvedValue({ user: { id: '1' } }),
+                };
+                (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'auth') return Promise.resolve(mockAuth);
+                    return null;
+                });
+
+                const result = await dispatcher.handleAuth('', 'POST', {}, { request: {}, response: {} });
+                expect(result.handled).toBe(true);
+                expect(mockAuth.handler).toHaveBeenCalled();
+            });
+
+            it('should fallback to legacy login when async auth service has no handler', async () => {
+                (kernel as any).getService = vi.fn().mockResolvedValue({});
+                mockBroker.call.mockResolvedValue({ token: 'abc' });
+
+                const result = await dispatcher.handleAuth('/login', 'POST', { user: 'a' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(mockBroker.call).toHaveBeenCalledWith('auth.login', { user: 'a' }, { request: {} });
+            });
+
+            it('should return unhandled when auth service not registered and no legacy match', async () => {
+                (kernel as any).getService = vi.fn().mockResolvedValue(null);
+                (kernel as any).services = new Map();
+
+                const result = await dispatcher.handleAuth('/profile', 'GET', {}, { request: {} });
+                expect(result.handled).toBe(false);
+            });
+        });
+
+        describe('handleStorage with async service', () => {
+            it('should resolve storage service from Promise', async () => {
+                const mockStorage = {
+                    upload: vi.fn().mockResolvedValue({ id: 'file_1', url: '/files/1' }),
+                };
+                (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'file-storage') return Promise.resolve(mockStorage);
+                    return null;
+                });
+
+                const result = await dispatcher.handleStorage('/upload', 'POST', { name: 'test.txt' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(mockStorage.upload).toHaveBeenCalled();
+            });
+
+            it('should return 501 when storage service is not registered (async null)', async () => {
+                (kernel as any).getService = vi.fn().mockResolvedValue(null);
+                (kernel as any).services = new Map();
+
+                const result = await dispatcher.handleStorage('/upload', 'POST', {}, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(501);
+                expect(result.response?.body?.error?.message).toBe('File storage not configured');
+            });
+
+            it('should handle GET /storage/file/:id with async service', async () => {
+                const mockStorage = {
+                    download: vi.fn().mockResolvedValue({ data: 'content', mimeType: 'text/plain' }),
+                };
+                (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'file-storage') return Promise.resolve(mockStorage);
+                    return null;
+                });
+
+                const result = await dispatcher.handleStorage('/file/abc123', 'GET', null, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(mockStorage.download).toHaveBeenCalledWith('abc123', { request: {} });
+            });
+
+            it('should return 400 when upload has no file', async () => {
+                const mockStorage = { upload: vi.fn() };
+                (kernel as any).getService = vi.fn().mockResolvedValue(mockStorage);
+
+                const result = await dispatcher.handleStorage('/upload', 'POST', null, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(400);
+                expect(result.response?.body?.error?.message).toBe('No file provided');
+            });
+        });
+
+        describe('handleAutomation with async service', () => {
+            it('should resolve automation service from Promise (async factory)', async () => {
+                const mockAuto = {
+                    listFlows: vi.fn().mockResolvedValue(['f1']),
+                };
+                (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'automation') return Promise.resolve(mockAuto);
+                    return null;
+                });
+
+                const result = await dispatcher.handleAutomation('', 'GET', {}, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.flows).toEqual(['f1']);
+            });
+
+            it('should return unhandled when automation service not registered', async () => {
+                (kernel as any).getService = vi.fn().mockResolvedValue(null);
+                (kernel as any).services = new Map();
+
+                const result = await dispatcher.handleAutomation('', 'GET', {}, { request: {} });
+                expect(result.handled).toBe(false);
+            });
+        });
+
+        describe('handleMetadata with async protocol service', () => {
+            it('should resolve protocol service from async getService', async () => {
+                const asyncProtocol = {
+                    saveMetaItem: vi.fn().mockResolvedValue({ success: true }),
+                };
+                (kernel as any).context.getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'protocol') return Promise.resolve(asyncProtocol);
+                    return null;
+                });
+
+                const result = await dispatcher.handleMetadata('/objects/my_obj', { request: {} }, 'PUT', { label: 'Test' });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(asyncProtocol.saveMetaItem).toHaveBeenCalled();
+            });
+
+            it('should fallback to broker when async protocol returns null', async () => {
+                (kernel as any).context.getService = vi.fn().mockResolvedValue(null);
+                mockBroker.call.mockResolvedValue({ name: 'my_obj' });
+
+                const result = await dispatcher.handleMetadata('/objects/my_obj', { request: {} }, 'GET');
+                expect(result.handled).toBe(true);
+                expect(mockBroker.call).toHaveBeenCalledWith(
+                    'metadata.getObject',
+                    { objectName: 'my_obj' },
+                    { request: {} }
+                );
+            });
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // Synchronous service resolution (backward compatibility)
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('Synchronous service resolution (backward compat)', () => {
+        it('should work with synchronous service from services Map', async () => {
+            const syncAnalytics = {
+                query: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+            };
+            (kernel as any).services = new Map([['analytics', syncAnalytics]]);
+
+            const result = await dispatcher.handleAnalytics('query', 'POST', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(syncAnalytics.query).toHaveBeenCalled();
+        });
+
+        it('should work with synchronous getService returning service directly', async () => {
+            const syncAuto = {
+                listFlows: vi.fn().mockResolvedValue(['flow_x']),
+            };
+            (kernel as any).getService = vi.fn().mockReturnValue(syncAuto);
+
+            const result = await dispatcher.handleAutomation('', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.body?.data?.flows).toEqual(['flow_x']);
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // Error handling for service method failures
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('Service method error handling', () => {
+        it('should propagate analytics query error', async () => {
+            const badAnalytics = {
+                query: vi.fn().mockRejectedValue(new Error('Query timeout')),
+            };
+            (kernel as any).getService = vi.fn().mockResolvedValue(badAnalytics);
+
+            await expect(
+                dispatcher.handleAnalytics('query', 'POST', {}, { request: {} })
+            ).rejects.toThrow('Query timeout');
+        });
+
+        it('should propagate storage upload error', async () => {
+            const badStorage = {
+                upload: vi.fn().mockRejectedValue(new Error('Disk full')),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'file-storage') return Promise.resolve(badStorage);
+                return null;
+            });
+
+            await expect(
+                dispatcher.handleStorage('/upload', 'POST', { data: 'file' }, { request: {} })
+            ).rejects.toThrow('Disk full');
+        });
+    });
 });
