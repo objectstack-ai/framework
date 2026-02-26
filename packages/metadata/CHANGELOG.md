@@ -1,5 +1,14 @@
 # @objectstack/metadata
 
+## 3.0.11
+
+### Patch Changes
+
+- Updated dependencies [92d9d99]
+  - @objectstack/spec@3.0.11
+  - @objectstack/core@3.0.11
+  - @objectstack/types@3.0.11
+
 ## 3.0.10
 
 ### Patch Changes
