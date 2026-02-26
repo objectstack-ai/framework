@@ -70,7 +70,7 @@ export class FileSystemPersistenceAdapter {
     }, this.autoSaveInterval);
 
     // Allow process to exit even if timer is running
-    if (this.timer && typeof this.timer === 'object' && 'unref' in this.timer) {
+    if (this.timer) {
       this.timer.unref();
     }
   }

@@ -25,6 +25,10 @@ import { DriverDefinitionSchema } from '../datasource.zod';
 /**
  * Persistence adapter interface for custom persistence implementations.
  * Adapters must implement load/save/flush lifecycle methods.
+ *
+ * Note: This schema validates presence of function properties only.
+ * Actual function signature enforcement is done at the TypeScript level
+ * via `PersistenceAdapterInterface` in the driver implementation.
  */
 export const PersistenceAdapterSchema = z.object({
   load: z.function().describe('Load persisted data on startup. Returns Promise<Record<string, any[]> | null>'),

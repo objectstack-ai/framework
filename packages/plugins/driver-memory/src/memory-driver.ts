@@ -14,6 +14,10 @@ export interface PersistenceAdapterInterface {
   load(): Promise<Record<string, any[]> | null>;
   save(db: Record<string, any[]>): Promise<void>;
   flush(): Promise<void>;
+  /** Optional: Start periodic auto-save (used by FileSystemPersistenceAdapter). */
+  startAutoSave?(): void;
+  /** Optional: Stop auto-save timer and flush pending writes. */
+  stopAutoSave?(): Promise<void>;
 }
 
 /**
@@ -138,9 +142,11 @@ export class InMemoryDriver implements DriverInterface {
           // Update ID counters based on persisted data
           for (const record of records) {
             if (record.id && typeof record.id === 'string') {
-              const match = record.id.match(/-(\d+)$/);
-              if (match) {
-                const counter = parseInt(match[1], 10);
+              // ID format: {objectName}-{timestamp}-{counter}
+              const parts = record.id.split('-');
+              const lastPart = parts[parts.length - 1];
+              const counter = parseInt(lastPart, 10);
+              if (!isNaN(counter)) {
                 const current = this.idCounters.get(objectName) || 0;
                 if (counter > current) {
                   this.idCounters.set(objectName, counter);
@@ -172,16 +178,16 @@ export class InMemoryDriver implements DriverInterface {
     }
 
     // Start auto-save if using file adapter
-    if (this.persistenceAdapter && 'startAutoSave' in this.persistenceAdapter) {
-      (this.persistenceAdapter as any).startAutoSave();
+    if (this.persistenceAdapter?.startAutoSave) {
+      this.persistenceAdapter.startAutoSave();
     }
   }
 
   async disconnect() {
     // Stop auto-save and flush pending writes
     if (this.persistenceAdapter) {
-      if ('stopAutoSave' in this.persistenceAdapter) {
-        await (this.persistenceAdapter as any).stopAutoSave();
+      if (this.persistenceAdapter.stopAutoSave) {
+        await this.persistenceAdapter.stopAutoSave();
       }
       await this.persistenceAdapter.flush();
     }

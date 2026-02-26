@@ -395,6 +395,7 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 - [x] **ObjectQL Engine** — CRUD, hooks (before/after), middleware chain, action registry
 - [x] **Schema Registry** — FQN namespacing, multi-package contribution, priority resolution
 - [x] **In-Memory Driver** — Full CRUD, bulk ops, transactions, aggregation pipeline (Mingo), streaming
+- [x] **In-Memory Driver Persistence** — File-system (Node.js) and localStorage (Browser) persistence adapters with auto-save, custom adapter support
 - [x] **Metadata Service** — CRUD, query, bulk ops, overlay system, dependency tracking, import/export, file watching
 - [x] **Serializers** — JSON, YAML, TypeScript format support
 - [x] **Loaders** — Memory, Filesystem, Remote (HTTP) loaders
