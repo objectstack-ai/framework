@@ -1,7 +1,7 @@
 # ObjectStack Protocol — Road Map
 
-> **Last Updated:** 2026-02-25  
-> **Current Version:** v3.0.8  
+> **Last Updated:** 2026-02-26  
+> **Current Version:** v3.0.11  
 > **Status:** Protocol Specification Complete · Runtime Implementation In Progress
 
 ---
@@ -846,40 +846,40 @@ Final polish and advanced features.
 
 | Package | Version | Tests | Status | Completeness |
 |:---|:---:|:---:|:---:|:---:|
-| `@objectstack/spec` | 3.0.8 | 5,269 | ✅ Stable | 10/10 |
-| `@objectstack/core` | 3.0.8 | 12 files | ✅ Stable | 10/10 |
-| `@objectstack/objectql` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/metadata` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/rest` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/client` | 3.0.8 | ✅ | ✅ Stable | 10/10 |
-| `@objectstack/client-react` | 3.0.8 | — | ✅ Stable | 9/10 |
-| `@objectstack/runtime` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/cli` | 3.0.8 | — | ✅ Stable | 9/10 |
-| `@objectstack/driver-memory` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/plugin-auth` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/plugin-security` | 3.0.8 | — | ✅ Stable | 9/10 |
-| `@objectstack/plugin-dev` | 3.0.8 | — | ✅ Stable | 10/10 |
-| `@objectstack/plugin-hono-server` | 3.0.8 | — | ✅ Stable | 9/10 |
-| `@objectstack/plugin-msw` | 3.0.8 | — | ✅ Stable | 9/10 |
-| `@objectstack/service-cache` | 3.0.8 | 13 | ✅ Stable | 7/10 |
-| `@objectstack/service-queue` | 3.0.8 | 8 | ✅ Stable | 7/10 |
-| `@objectstack/service-job` | 3.0.8 | 11 | ✅ Stable | 7/10 |
-| `@objectstack/service-storage` | 3.0.8 | 8 | ✅ Stable | 7/10 |
-| `@objectstack/service-i18n` | 3.0.8 | 20 | ✅ Stable | 7/10 |
-| `@objectstack/service-realtime` | 3.0.8 | 14 | ✅ Stable | 7/10 |
-| `@objectstack/service-feed` | 3.0.8 | 40 | ✅ Stable | 7/10 |
-| `@objectstack/nextjs` | 3.0.8 | ✅ | ✅ Stable | 10/10 |
-| `@objectstack/nestjs` | 3.0.8 | ✅ | ✅ Stable | 10/10 |
-| `@objectstack/hono` | 3.0.8 | ✅ | ✅ Stable | 10/10 |
-| `@objectstack/express` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/fastify` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/sveltekit` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/nuxt` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
-| `@objectstack/types` | 3.0.8 | — | 🟡 Minimal | 3/10 |
-| `objectstack-vscode` | 3.0.8 | — | 🟡 Early | 4/10 |
-| `create-objectstack` | 3.0.8 | — | 🟡 Basic | 5/10 |
-| `@objectstack/studio` | 3.0.8 | — | 🟡 In Progress | 5/10 |
-| `@objectstack/docs` | 3.0.8 | — | 🟡 In Progress | 6/10 |
+| `@objectstack/spec` | 3.0.11 | 5,269 | ✅ Stable | 10/10 |
+| `@objectstack/core` | 3.0.11 | 12 files | ✅ Stable | 10/10 |
+| `@objectstack/objectql` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/metadata` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/rest` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/client` | 3.0.11 | ✅ | ✅ Stable | 10/10 |
+| `@objectstack/client-react` | 3.0.11 | — | ✅ Stable | 9/10 |
+| `@objectstack/runtime` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/cli` | 3.0.11 | — | ✅ Stable | 9/10 |
+| `@objectstack/driver-memory` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/plugin-auth` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/plugin-security` | 3.0.11 | — | ✅ Stable | 9/10 |
+| `@objectstack/plugin-dev` | 3.0.11 | — | ✅ Stable | 10/10 |
+| `@objectstack/plugin-hono-server` | 3.0.11 | — | ✅ Stable | 9/10 |
+| `@objectstack/plugin-msw` | 3.0.11 | — | ✅ Stable | 9/10 |
+| `@objectstack/service-cache` | 3.0.11 | 13 | ✅ Stable | 7/10 |
+| `@objectstack/service-queue` | 3.0.11 | 8 | ✅ Stable | 7/10 |
+| `@objectstack/service-job` | 3.0.11 | 11 | ✅ Stable | 7/10 |
+| `@objectstack/service-storage` | 3.0.11 | 8 | ✅ Stable | 7/10 |
+| `@objectstack/service-i18n` | 3.0.11 | 20 | ✅ Stable | 7/10 |
+| `@objectstack/service-realtime` | 3.0.11 | 14 | ✅ Stable | 7/10 |
+| `@objectstack/service-feed` | 3.0.11 | 40 | ✅ Stable | 7/10 |
+| `@objectstack/nextjs` | 3.0.11 | ✅ | ✅ Stable | 10/10 |
+| `@objectstack/nestjs` | 3.0.11 | ✅ | ✅ Stable | 10/10 |
+| `@objectstack/hono` | 3.0.11 | ✅ | ✅ Stable | 10/10 |
+| `@objectstack/express` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/fastify` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/sveltekit` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/nuxt` | 3.0.11 | ✅ | ✅ Stable | 9/10 |
+| `@objectstack/types` | 3.0.11 | — | 🟡 Minimal | 3/10 |
+| `objectstack-vscode` | 3.0.11 | — | 🟡 Early | 4/10 |
+| `create-objectstack` | 3.0.11 | — | 🟡 Basic | 5/10 |
+| `@objectstack/studio` | 3.0.11 | — | 🟡 In Progress | 5/10 |
+| `@objectstack/docs` | 3.0.11 | — | 🟡 In Progress | 6/10 |
 
 ---
 
