@@ -7,7 +7,7 @@ dist/
 *.tsbuildinfo
 
 # ObjectStack data directory (persistence)
-.objectstack/data/
+**/.objectstack/data/
 
 # IDE
 .vscode/
