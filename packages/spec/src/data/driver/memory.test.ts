@@ -12,14 +12,22 @@ import {
 } from './memory.zod';
 
 describe('MemoryConfigSchema', () => {
-  it('should accept empty config (all optional)', () => {
+  it('should default persistence to "auto" when empty config', () => {
     const config = MemoryConfigSchema.parse({});
 
     expect(config.strictMode).toBe(false);
     expect(config.initialData).toBeUndefined();
-    expect(config.persistence).toBeUndefined();
+    expect(config.persistence).toBe('auto');
     expect(config.indexes).toBeUndefined();
     expect(config.maxRecordsPerObject).toBeUndefined();
+  });
+
+  it('should accept persistence: false to disable persistence', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: false,
+    });
+
+    expect(config.persistence).toBe(false);
   });
 
   it('should accept config with initial data', () => {

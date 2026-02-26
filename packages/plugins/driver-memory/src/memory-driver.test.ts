@@ -6,7 +6,7 @@ describe('InMemoryDriver', () => {
   const testTable = 'test_table';
 
   beforeEach(async () => {
-    driver = new InMemoryDriver();
+    driver = new InMemoryDriver({ persistence: false });
     await driver.connect();
   });
 

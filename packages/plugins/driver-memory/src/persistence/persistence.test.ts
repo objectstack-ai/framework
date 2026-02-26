@@ -139,8 +139,8 @@ describe('InMemoryDriver Persistence', () => {
   });
 
   describe('Pure Memory (No Persistence)', () => {
-    it('should work without persistence (default behavior)', async () => {
-      const driver = new InMemoryDriver();
+    it('should work without persistence when explicitly disabled', async () => {
+      const driver = new InMemoryDriver({ persistence: false });
       await driver.connect();
 
       await driver.create('items', { id: '1', name: 'Widget' });

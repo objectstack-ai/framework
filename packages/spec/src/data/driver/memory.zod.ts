@@ -178,28 +178,30 @@ export const MemoryConfigSchema = z.object({
   strictMode: z.boolean().default(false).describe('Throw on missing records instead of returning null'),
 
   /**
-   * Optional persistence configuration.
-   * When configured, the memory store automatically saves and restores data.
+   * Persistence configuration.
+   * Defaults to `'auto'` — the memory store automatically detects the environment
+   * and saves/restores data using the best available strategy.
    *
-   * - `'auto'`: Auto-detect environment (browser → localStorage, Node.js → file)
+   * - `'auto'` (default): Auto-detect environment (browser → localStorage, Node.js → file)
    * - `'file'`: Persist to disk file (Node.js only, default path: `.objectstack/data/memory-driver.json`)
    * - `'local'`: Persist to localStorage (Browser only, default key: `objectstack:memory-db`)
    * - `{ type: 'auto', path?: string, key?: string }`: Auto-detect with overrides
    * - `{ type: 'file', path?: string }`: File-system with custom path
    * - `{ type: 'local', key?: string }`: localStorage with custom key
    * - `{ adapter: PersistenceAdapter }`: Custom persistence adapter
+   * - `false`: Disable persistence (pure in-memory, data lost on disconnect)
    *
    * @example
-   * // Auto-detect environment
-   * new InMemoryDriver({ persistence: 'auto' })
+   * // Auto-detect environment (default)
+   * new InMemoryDriver()
    * // Node.js
    * new InMemoryDriver({ persistence: 'file' })
    * // Browser
    * new InMemoryDriver({ persistence: 'local' })
-   * // Pure memory (default)
-   * new InMemoryDriver()
+   * // Pure memory (no persistence)
+   * new InMemoryDriver({ persistence: false })
    */
-  persistence: MemoryPersistenceConfigSchema.optional().describe('Persistence configuration'),
+  persistence: MemoryPersistenceConfigSchema.or(z.literal(false)).default('auto').describe('Persistence configuration (defaults to auto-detect)'),
 
   /**
    * Fields to index for faster lookups.

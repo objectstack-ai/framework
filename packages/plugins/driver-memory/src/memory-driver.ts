@@ -32,16 +32,17 @@ export interface InMemoryDriverConfig {
   /** Optional: Logger instance */
   logger?: Logger;
   /**
-   * Optional persistence configuration.
+   * Persistence configuration. Defaults to `'auto'`.
+   * - `'auto'` (default) — Auto-detect environment (browser → localStorage, Node.js → file)
    * - `'file'` — File-system persistence with defaults (Node.js only)
    * - `'local'` — localStorage persistence with defaults (Browser only)
-   * - `'auto'` — Auto-detect environment (browser → localStorage, Node.js → file)
    * - `{ type: 'file', path?: string, autoSaveInterval?: number }` — File-system with options
    * - `{ type: 'local', key?: string }` — localStorage with options
    * - `{ type: 'auto', path?: string, key?: string, autoSaveInterval?: number }` — Auto-detect with options
    * - `{ adapter: PersistenceAdapterInterface }` — Custom adapter
+   * - `false` — Disable persistence (pure in-memory)
    */
-  persistence?: string | {
+  persistence?: string | false | {
     type?: 'file' | 'local' | 'auto';
     path?: string;
     key?: string;
@@ -933,10 +934,12 @@ export class InMemoryDriver implements DriverInterface {
 
   /**
    * Initialize the persistence adapter based on configuration.
+   * Defaults to 'auto' when persistence is not specified.
+   * Use `persistence: false` to explicitly disable persistence.
    */
   private async initPersistence(): Promise<void> {
-    const persistence = this.config.persistence;
-    if (!persistence) return;
+    const persistence = this.config.persistence === undefined ? 'auto' : this.config.persistence;
+    if (persistence === false) return;
 
     if (typeof persistence === 'string') {
       if (persistence === 'auto') {
