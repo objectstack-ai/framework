@@ -1,5 +1,11 @@
 # @objectstack/spec
 
+## 3.0.11
+
+### Patch Changes
+
+- 92d9d99: Add auto-detect persistence strategy for memory driver: automatically selects localStorage (browser) or file system (Node.js) based on runtime environment
+
 ## 3.0.10
 
 ### Patch Changes

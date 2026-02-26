@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/studio",
-  "version": "3.0.10",
+  "version": "3.0.11",
   "description": "ObjectStack Studio - A metadata-driven admin interface for managing data and configuration",
   "license": "Apache-2.0",
   "type": "module",
