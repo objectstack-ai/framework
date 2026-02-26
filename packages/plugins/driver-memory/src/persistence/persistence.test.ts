@@ -155,6 +155,40 @@ describe('InMemoryDriver Persistence', () => {
     });
   });
 
+  describe('Auto Persistence', () => {
+    it('should auto-detect Node.js environment and use file persistence with shorthand', async () => {
+      // In Node.js, 'auto' should select file persistence
+      const driver = new InMemoryDriver({ persistence: 'auto' });
+      await driver.connect();
+      await driver.create('items', { id: '1', name: 'Widget' });
+      await driver.disconnect();
+    });
+
+    it('should auto-detect Node.js environment and use file persistence with object config', async () => {
+      const filePath = path.join(TEST_DATA_DIR, 'auto-test-db.json');
+      const driver1 = new InMemoryDriver({
+        persistence: { type: 'auto', path: filePath, autoSaveInterval: 100 },
+      });
+      await driver1.connect();
+      await driver1.create('users', { id: '1', name: 'Alice' });
+      await driver1.flush();
+      await driver1.disconnect();
+
+      // Verify file was created (Node.js env selects file adapter)
+      expect(fs.existsSync(filePath)).toBe(true);
+
+      // Restore from file
+      const driver2 = new InMemoryDriver({
+        persistence: { type: 'auto', path: filePath, autoSaveInterval: 100 },
+      });
+      await driver2.connect();
+      const users = await driver2.find('users', { object: 'users' });
+      expect(users).toHaveLength(1);
+      expect(users[0].name).toBe('Alice');
+      await driver2.disconnect();
+    });
+  });
+
   describe('Bulk Operations with Persistence', () => {
     it('should persist bulk creates', async () => {
       const driver1 = new InMemoryDriver({

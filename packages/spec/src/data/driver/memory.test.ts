@@ -8,6 +8,7 @@ import {
   LocalStoragePersistenceConfigSchema,
   CustomPersistenceConfigSchema,
   PersistenceAdapterSchema,
+  AutoPersistenceConfigSchema,
 } from './memory.zod';
 
 describe('MemoryConfigSchema', () => {
@@ -63,6 +64,14 @@ describe('MemoryConfigSchema', () => {
     expect(config.persistence).toBe('local');
   });
 
+  it('should accept persistence shorthand "auto"', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: 'auto',
+    });
+
+    expect(config.persistence).toBe('auto');
+  });
+
   it('should accept persistence with file object config', () => {
     const config = MemoryConfigSchema.parse({
       persistence: {
@@ -102,6 +111,34 @@ describe('MemoryConfigSchema', () => {
     const p = config.persistence as { type: 'local'; key?: string };
     expect(p.type).toBe('local');
     expect(p.key).toBe('myapp:db');
+  });
+
+  it('should accept persistence with auto object config', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: {
+        type: 'auto',
+        path: '/var/data/memory.json',
+        key: 'myapp:db',
+        autoSaveInterval: 5000,
+      },
+    });
+
+    const p = config.persistence as { type: 'auto'; path?: string; key?: string; autoSaveInterval?: number };
+    expect(p.type).toBe('auto');
+    expect(p.path).toBe('/var/data/memory.json');
+    expect(p.key).toBe('myapp:db');
+    expect(p.autoSaveInterval).toBe(5000);
+  });
+
+  it('should accept auto persistence without overrides', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: {
+        type: 'auto',
+      },
+    });
+
+    const p = config.persistence as { type: 'auto' };
+    expect(p.type).toBe('auto');
   });
 
   it('should accept persistence with custom adapter', () => {
@@ -205,6 +242,10 @@ describe('PersistenceTypeSchema', () => {
     expect(PersistenceTypeSchema.parse('local')).toBe('local');
   });
 
+  it('should accept auto type', () => {
+    expect(PersistenceTypeSchema.parse('auto')).toBe('auto');
+  });
+
   it('should reject invalid type', () => {
     expect(() => PersistenceTypeSchema.parse('indexeddb')).toThrow();
   });
@@ -279,6 +320,40 @@ describe('CustomPersistenceConfigSchema', () => {
   });
 });
 
+describe('AutoPersistenceConfigSchema', () => {
+  it('should accept minimal auto config', () => {
+    const config = AutoPersistenceConfigSchema.parse({
+      type: 'auto',
+    });
+
+    expect(config.type).toBe('auto');
+    expect(config.path).toBeUndefined();
+    expect(config.key).toBeUndefined();
+    expect(config.autoSaveInterval).toBeUndefined();
+  });
+
+  it('should accept auto config with all overrides', () => {
+    const config = AutoPersistenceConfigSchema.parse({
+      type: 'auto',
+      path: '/data/store.json',
+      key: 'myapp:db',
+      autoSaveInterval: 5000,
+    });
+
+    expect(config.type).toBe('auto');
+    expect(config.path).toBe('/data/store.json');
+    expect(config.key).toBe('myapp:db');
+    expect(config.autoSaveInterval).toBe(5000);
+  });
+
+  it('should reject auto config with invalid autoSaveInterval', () => {
+    expect(() => AutoPersistenceConfigSchema.parse({
+      type: 'auto',
+      autoSaveInterval: 50, // Below minimum of 100
+    })).toThrow();
+  });
+});
+
 describe('MemoryPersistenceConfigSchema', () => {
   it('should accept shorthand "file"', () => {
     const config = MemoryPersistenceConfigSchema.parse('file');
@@ -288,6 +363,11 @@ describe('MemoryPersistenceConfigSchema', () => {
   it('should accept shorthand "local"', () => {
     const config = MemoryPersistenceConfigSchema.parse('local');
     expect(config).toBe('local');
+  });
+
+  it('should accept shorthand "auto"', () => {
+    const config = MemoryPersistenceConfigSchema.parse('auto');
+    expect(config).toBe('auto');
   });
 
   it('should accept file object config', () => {
@@ -304,6 +384,15 @@ describe('MemoryPersistenceConfigSchema', () => {
       key: 'myapp:db',
     });
     expect(config).toEqual({ type: 'local', key: 'myapp:db' });
+  });
+
+  it('should accept auto object config', () => {
+    const config = MemoryPersistenceConfigSchema.parse({
+      type: 'auto',
+      path: '/data/store.json',
+      key: 'myapp:db',
+    });
+    expect(config).toEqual({ type: 'auto', path: '/data/store.json', key: 'myapp:db' });
   });
 
   it('should accept custom adapter', () => {

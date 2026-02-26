@@ -42,8 +42,10 @@ export type PersistenceAdapter = z.infer<typeof PersistenceAdapterSchema>;
  * Persistence type enum.
  * - `file`: Persist to disk file (Node.js only).
  * - `local`: Persist to localStorage (Browser only).
+ * - `auto`: Auto-detect environment and choose the best strategy.
+ *   Uses `localStorage` in browser environments and `file` in Node.js.
  */
-export const PersistenceTypeSchema = z.enum(['file', 'local']).describe('Persistence backend type');
+export const PersistenceTypeSchema = z.enum(['file', 'local', 'auto']).describe('Persistence backend type');
 
 export type PersistenceType = z.infer<typeof PersistenceTypeSchema>;
 
@@ -84,21 +86,50 @@ export const CustomPersistenceConfigSchema = z.object({
 export type CustomPersistenceConfig = z.infer<typeof CustomPersistenceConfigSchema>;
 
 /**
+ * Auto-detect persistence configuration.
+ * Automatically selects the best persistence strategy based on the runtime environment:
+ * - Browser → localStorage persistence
+ * - Node.js → File-system persistence
+ *
+ * Optional overrides allow customizing the file path or localStorage key
+ * used by the auto-detected adapter.
+ */
+export const AutoPersistenceConfigSchema = z.object({
+  type: z.literal('auto'),
+  /** File path override when running in Node.js. */
+  path: z.string().optional().describe('File path override for Node.js environments'),
+  /** Auto-save interval override when running in Node.js. Default: 2000ms. */
+  autoSaveInterval: z.number().min(100).optional().describe('Auto-save interval override for Node.js environments'),
+  /** localStorage key override when running in a browser. */
+  key: z.string().optional().describe('localStorage key override for browser environments'),
+}).describe('Auto-detect persistence configuration');
+
+export type AutoPersistenceConfig = z.infer<typeof AutoPersistenceConfigSchema>;
+
+/**
  * Unified persistence configuration.
  *
  * Supports shorthand strings and detailed object configs:
  * - `'file'` — File-system persistence with defaults (Node.js)
  * - `'local'` — localStorage persistence with defaults (Browser)
+ * - `'auto'` — Auto-detect environment (browser → localStorage, Node.js → file)
  * - `{ type: 'file', path?: string }` — File-system with custom path
  * - `{ type: 'local', key?: string }` — localStorage with custom key
+ * - `{ type: 'auto', path?: string, key?: string }` — Auto-detect with overrides
  * - `{ adapter: PersistenceAdapter }` — Custom adapter
  *
  * @example
+ * // Auto-detect environment
+ * persistence: 'auto'
+ *
  * // Node.js with defaults
  * persistence: 'file'
  *
  * // Browser with defaults
  * persistence: 'local'
+ *
+ * // Auto-detect with overrides
+ * persistence: { type: 'auto', path: '/var/data/memory.json', key: 'myapp:db' }
  *
  * // Custom file path
  * persistence: { type: 'file', path: '/var/data/memory.json' }
@@ -110,6 +141,7 @@ export const MemoryPersistenceConfigSchema = z.union([
   PersistenceTypeSchema,
   FilePersistenceConfigSchema,
   LocalStoragePersistenceConfigSchema,
+  AutoPersistenceConfigSchema,
   CustomPersistenceConfigSchema,
 ]).describe('Persistence configuration for the memory driver');
 
@@ -149,13 +181,17 @@ export const MemoryConfigSchema = z.object({
    * Optional persistence configuration.
    * When configured, the memory store automatically saves and restores data.
    *
+   * - `'auto'`: Auto-detect environment (browser → localStorage, Node.js → file)
    * - `'file'`: Persist to disk file (Node.js only, default path: `.objectstack/data/memory-driver.json`)
    * - `'local'`: Persist to localStorage (Browser only, default key: `objectstack:memory-db`)
+   * - `{ type: 'auto', path?: string, key?: string }`: Auto-detect with overrides
    * - `{ type: 'file', path?: string }`: File-system with custom path
    * - `{ type: 'local', key?: string }`: localStorage with custom key
    * - `{ adapter: PersistenceAdapter }`: Custom persistence adapter
    *
    * @example
+   * // Auto-detect environment
+   * new InMemoryDriver({ persistence: 'auto' })
    * // Node.js
    * new InMemoryDriver({ persistence: 'file' })
    * // Browser

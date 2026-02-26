@@ -35,12 +35,14 @@ export interface InMemoryDriverConfig {
    * Optional persistence configuration.
    * - `'file'` — File-system persistence with defaults (Node.js only)
    * - `'local'` — localStorage persistence with defaults (Browser only)
+   * - `'auto'` — Auto-detect environment (browser → localStorage, Node.js → file)
    * - `{ type: 'file', path?: string, autoSaveInterval?: number }` — File-system with options
    * - `{ type: 'local', key?: string }` — localStorage with options
+   * - `{ type: 'auto', path?: string, key?: string, autoSaveInterval?: number }` — Auto-detect with options
    * - `{ adapter: PersistenceAdapterInterface }` — Custom adapter
    */
   persistence?: string | {
-    type?: 'file' | 'local';
+    type?: 'file' | 'local' | 'auto';
     path?: string;
     key?: string;
     autoSaveInterval?: number;
@@ -923,6 +925,13 @@ export class InMemoryDriver implements DriverInterface {
   }
 
   /**
+   * Detect whether the current runtime is a browser environment.
+   */
+  private isBrowserEnvironment(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  }
+
+  /**
    * Initialize the persistence adapter based on configuration.
    */
   private async initPersistence(): Promise<void> {
@@ -930,19 +939,44 @@ export class InMemoryDriver implements DriverInterface {
     if (!persistence) return;
 
     if (typeof persistence === 'string') {
-      if (persistence === 'file') {
+      if (persistence === 'auto') {
+        if (this.isBrowserEnvironment()) {
+          const { LocalStoragePersistenceAdapter } = await import('./persistence/local-storage-adapter.js');
+          this.persistenceAdapter = new LocalStoragePersistenceAdapter();
+          this.logger.debug('Auto-detected browser environment, using localStorage persistence');
+        } else {
+          const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
+          this.persistenceAdapter = new FileSystemPersistenceAdapter();
+          this.logger.debug('Auto-detected Node.js environment, using file persistence');
+        }
+      } else if (persistence === 'file') {
         const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
         this.persistenceAdapter = new FileSystemPersistenceAdapter();
       } else if (persistence === 'local') {
         const { LocalStoragePersistenceAdapter } = await import('./persistence/local-storage-adapter.js');
         this.persistenceAdapter = new LocalStoragePersistenceAdapter();
       } else {
-        throw new Error(`Unknown persistence type: "${persistence}". Use 'file' or 'local'.`);
+        throw new Error(`Unknown persistence type: "${persistence}". Use 'file', 'local', or 'auto'.`);
       }
     } else if ('adapter' in persistence && persistence.adapter) {
       this.persistenceAdapter = persistence.adapter;
     } else if ('type' in persistence) {
-      if (persistence.type === 'file') {
+      if (persistence.type === 'auto') {
+        if (this.isBrowserEnvironment()) {
+          const { LocalStoragePersistenceAdapter } = await import('./persistence/local-storage-adapter.js');
+          this.persistenceAdapter = new LocalStoragePersistenceAdapter({
+            key: persistence.key,
+          });
+          this.logger.debug('Auto-detected browser environment, using localStorage persistence');
+        } else {
+          const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
+          this.persistenceAdapter = new FileSystemPersistenceAdapter({
+            path: persistence.path,
+            autoSaveInterval: persistence.autoSaveInterval,
+          });
+          this.logger.debug('Auto-detected Node.js environment, using file persistence');
+        }
+      } else if (persistence.type === 'file') {
         const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
         this.persistenceAdapter = new FileSystemPersistenceAdapter({
           path: persistence.path,
