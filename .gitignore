@@ -6,6 +6,9 @@ package-lock.json
 dist/
 *.tsbuildinfo
 
+# ObjectStack data directory (persistence)
+.objectstack/data/
+
 # IDE
 .vscode/
 .idea/

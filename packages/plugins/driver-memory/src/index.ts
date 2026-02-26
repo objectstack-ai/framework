@@ -3,7 +3,10 @@
 import { InMemoryDriver } from './memory-driver.js';
 
 export { InMemoryDriver }; // Export class for direct usage
-export type { InMemoryDriverConfig } from './memory-driver.js';
+export type { InMemoryDriverConfig, PersistenceAdapterInterface } from './memory-driver.js';
+
+export { FileSystemPersistenceAdapter } from './persistence/file-adapter.js';
+export { LocalStoragePersistenceAdapter } from './persistence/local-storage-adapter.js';
 
 export { MemoryAnalyticsService } from './memory-analytics.js';
 export type { MemoryAnalyticsConfig } from './memory-analytics.js';

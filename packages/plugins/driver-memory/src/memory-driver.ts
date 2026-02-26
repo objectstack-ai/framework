@@ -7,6 +7,16 @@ import { Query, Aggregator } from 'mingo';
 import { getValueByPath } from './memory-matcher.js';
 
 /**
+ * Persistence adapter interface.
+ * Matches the PersistenceAdapterSchema contract from @objectstack/spec.
+ */
+export interface PersistenceAdapterInterface {
+  load(): Promise<Record<string, any[]> | null>;
+  save(db: Record<string, any[]>): Promise<void>;
+  flush(): Promise<void>;
+}
+
+/**
  * Configuration options for the InMemory driver.
  * Aligned with @objectstack/spec MemoryConfigSchema.
  */
@@ -17,6 +27,21 @@ export interface InMemoryDriverConfig {
   strictMode?: boolean;
   /** Optional: Logger instance */
   logger?: Logger;
+  /**
+   * Optional persistence configuration.
+   * - `'file'` — File-system persistence with defaults (Node.js only)
+   * - `'local'` — localStorage persistence with defaults (Browser only)
+   * - `{ type: 'file', path?: string, autoSaveInterval?: number }` — File-system with options
+   * - `{ type: 'local', key?: string }` — localStorage with options
+   * - `{ adapter: PersistenceAdapterInterface }` — Custom adapter
+   */
+  persistence?: string | {
+    type?: 'file' | 'local';
+    path?: string;
+    key?: string;
+    autoSaveInterval?: number;
+    adapter?: PersistenceAdapterInterface;
+  };
 }
 
 /**
@@ -51,6 +76,7 @@ export class InMemoryDriver implements DriverInterface {
   private logger: Logger;
   private idCounters: Map<string, number> = new Map();
   private transactions: Map<string, MemoryTransaction> = new Map();
+  private persistenceAdapter: PersistenceAdapterInterface | null = null;
 
   constructor(config?: InMemoryDriverConfig) {
     this.config = config || {};
@@ -100,6 +126,35 @@ export class InMemoryDriver implements DriverInterface {
   // ===================================
 
   async connect() {
+    // Initialize persistence adapter if configured
+    await this.initPersistence();
+
+    // Load persisted data if available
+    if (this.persistenceAdapter) {
+      const persisted = await this.persistenceAdapter.load();
+      if (persisted) {
+        for (const [objectName, records] of Object.entries(persisted)) {
+          this.db[objectName] = records;
+          // Update ID counters based on persisted data
+          for (const record of records) {
+            if (record.id && typeof record.id === 'string') {
+              const match = record.id.match(/-(\d+)$/);
+              if (match) {
+                const counter = parseInt(match[1], 10);
+                const current = this.idCounters.get(objectName) || 0;
+                if (counter > current) {
+                  this.idCounters.set(objectName, counter);
+                }
+              }
+            }
+          }
+        }
+        this.logger.info('InMemory Database restored from persistence', {
+          tables: Object.keys(persisted).length,
+        });
+      }
+    }
+
     // Load initial data if provided
     if (this.config.initialData) {
       for (const [objectName, records] of Object.entries(this.config.initialData)) {
@@ -115,9 +170,22 @@ export class InMemoryDriver implements DriverInterface {
     } else {
       this.logger.info('InMemory Database Connected (Virtual)');
     }
+
+    // Start auto-save if using file adapter
+    if (this.persistenceAdapter && 'startAutoSave' in this.persistenceAdapter) {
+      (this.persistenceAdapter as any).startAutoSave();
+    }
   }
 
   async disconnect() {
+    // Stop auto-save and flush pending writes
+    if (this.persistenceAdapter) {
+      if ('stopAutoSave' in this.persistenceAdapter) {
+        await (this.persistenceAdapter as any).stopAutoSave();
+      }
+      await this.persistenceAdapter.flush();
+    }
+
     const tableCount = Object.keys(this.db).length;
     const recordCount = Object.values(this.db).reduce((sum, table) => sum + table.length, 0);
     
@@ -226,6 +294,7 @@ export class InMemoryDriver implements DriverInterface {
     };
 
     table.push(newRecord);
+    this.markDirty();
     this.logger.debug('Record created', { object, id: newRecord.id, tableSize: table.length });
     return { ...newRecord };
   }
@@ -253,6 +322,7 @@ export class InMemoryDriver implements DriverInterface {
     };
     
     table[index] = updatedRecord;
+    this.markDirty();
     this.logger.debug('Record updated', { object, id });
     return { ...updatedRecord };
   }
@@ -293,6 +363,7 @@ export class InMemoryDriver implements DriverInterface {
     }
 
     table.splice(index, 1);
+    this.markDirty();
     this.logger.debug('Record deleted', { object, id, tableSize: table.length });
     return true;
   }
@@ -350,6 +421,7 @@ export class InMemoryDriver implements DriverInterface {
           }
       }
       
+      if (count > 0) this.markDirty();
       this.logger.debug('UpdateMany completed', { object, count });
       return { count };
   }
@@ -377,6 +449,7 @@ export class InMemoryDriver implements DriverInterface {
       }
       
       const count = initialLength - this.db[object].length;
+      if (count > 0) this.markDirty();
       this.logger.debug('DeleteMany completed', { object, count });
       return { count };
   }
@@ -435,6 +508,7 @@ export class InMemoryDriver implements DriverInterface {
     // Restore the snapshot
     this.db = tx.snapshot;
     this.transactions.delete(txId);
+    this.markDirty();
     this.logger.debug('Transaction rolled back', { txId });
   }
 
@@ -448,6 +522,7 @@ export class InMemoryDriver implements DriverInterface {
   async clear() {
     this.db = {};
     this.idCounters.clear();
+    this.markDirty();
     this.logger.debug('All data cleared');
   }
 
@@ -817,5 +892,66 @@ export class InMemoryDriver implements DriverInterface {
     this.idCounters.set(key, counter);
     const timestamp = Date.now();
     return `${key}-${timestamp}-${counter}`;
+  }
+
+  // ===================================
+  // Persistence
+  // ===================================
+
+  /**
+   * Mark the database as dirty, triggering persistence save.
+   */
+  private markDirty(): void {
+    if (this.persistenceAdapter) {
+      this.persistenceAdapter.save(this.db);
+    }
+  }
+
+  /**
+   * Flush pending persistence writes to ensure data is safely stored.
+   */
+  async flush(): Promise<void> {
+    if (this.persistenceAdapter) {
+      await this.persistenceAdapter.flush();
+    }
+  }
+
+  /**
+   * Initialize the persistence adapter based on configuration.
+   */
+  private async initPersistence(): Promise<void> {
+    const persistence = this.config.persistence;
+    if (!persistence) return;
+
+    if (typeof persistence === 'string') {
+      if (persistence === 'file') {
+        const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
+        this.persistenceAdapter = new FileSystemPersistenceAdapter();
+      } else if (persistence === 'local') {
+        const { LocalStoragePersistenceAdapter } = await import('./persistence/local-storage-adapter.js');
+        this.persistenceAdapter = new LocalStoragePersistenceAdapter();
+      } else {
+        throw new Error(`Unknown persistence type: "${persistence}". Use 'file' or 'local'.`);
+      }
+    } else if ('adapter' in persistence && persistence.adapter) {
+      this.persistenceAdapter = persistence.adapter;
+    } else if ('type' in persistence) {
+      if (persistence.type === 'file') {
+        const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
+        this.persistenceAdapter = new FileSystemPersistenceAdapter({
+          path: persistence.path,
+          autoSaveInterval: persistence.autoSaveInterval,
+        });
+      } else if (persistence.type === 'local') {
+        const { LocalStoragePersistenceAdapter } = await import('./persistence/local-storage-adapter.js');
+        this.persistenceAdapter = new LocalStoragePersistenceAdapter({
+          key: persistence.key,
+        });
+      }
+    }
+
+    if (this.persistenceAdapter) {
+      this.logger.debug('Persistence adapter initialized');
+    }
   }
 }
