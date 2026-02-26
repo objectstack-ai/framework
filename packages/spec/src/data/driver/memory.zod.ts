@@ -23,21 +23,91 @@ import { DriverDefinitionSchema } from '../datasource.zod';
 // ==========================================================================
 
 /**
- * Optional file-system persistence for the memory store.
- * Enables data survival across process restarts.
+ * Persistence adapter interface for custom persistence implementations.
+ * Adapters must implement load/save/flush lifecycle methods.
  */
-export const MemoryPersistenceConfigSchema = z.object({
-  /**
-   * File path to persist data (JSON format).
-   */
-  filePath: z.string().describe('File path to persist data'),
+export const PersistenceAdapterSchema = z.object({
+  load: z.function().describe('Load persisted data on startup. Returns Promise<Record<string, any[]> | null>'),
+  save: z.function().describe('Save data to persistent storage. Accepts Record<string, any[]>, returns Promise<void>'),
+  flush: z.function().describe('Flush pending writes and ensure data is persisted. Returns Promise<void>'),
+}).describe('Custom persistence adapter interface');
 
-  /**
-   * Auto-save interval in milliseconds.
-   * Data is written to disk on this cadence.
-   */
-  autoSaveInterval: z.number().min(100).default(5000).describe('Auto-save interval in ms'),
+export type PersistenceAdapter = z.infer<typeof PersistenceAdapterSchema>;
+
+/**
+ * Persistence type enum.
+ * - `file`: Persist to disk file (Node.js only).
+ * - `local`: Persist to localStorage (Browser only).
+ */
+export const PersistenceTypeSchema = z.enum(['file', 'local']).describe('Persistence backend type');
+
+export type PersistenceType = z.infer<typeof PersistenceTypeSchema>;
+
+/**
+ * File-system persistence configuration.
+ * Used in Node.js environments to save data to a JSON file.
+ */
+export const FilePersistenceConfigSchema = z.object({
+  type: z.literal('file'),
+  /** File path to persist data (JSON format). Defaults to `.objectstack/data/memory-driver.json`. */
+  path: z.string().optional().describe('File path to persist data'),
+  /** Auto-save interval in milliseconds. Default: 2000ms. */
+  autoSaveInterval: z.number().min(100).default(2000).describe('Auto-save interval in ms'),
 }).describe('File-system persistence configuration');
+
+export type FilePersistenceConfig = z.infer<typeof FilePersistenceConfigSchema>;
+
+/**
+ * localStorage persistence configuration.
+ * Used in browser environments to save data to localStorage.
+ */
+export const LocalStoragePersistenceConfigSchema = z.object({
+  type: z.literal('local'),
+  /** localStorage key. Defaults to `objectstack:memory-db`. */
+  key: z.string().optional().describe('localStorage key for persisted data'),
+}).describe('localStorage persistence configuration');
+
+export type LocalStoragePersistenceConfig = z.infer<typeof LocalStoragePersistenceConfigSchema>;
+
+/**
+ * Custom adapter persistence configuration.
+ * Allows injecting a custom PersistenceAdapter implementation.
+ */
+export const CustomPersistenceConfigSchema = z.object({
+  adapter: PersistenceAdapterSchema,
+}).describe('Custom adapter persistence configuration');
+
+export type CustomPersistenceConfig = z.infer<typeof CustomPersistenceConfigSchema>;
+
+/**
+ * Unified persistence configuration.
+ *
+ * Supports shorthand strings and detailed object configs:
+ * - `'file'` — File-system persistence with defaults (Node.js)
+ * - `'local'` — localStorage persistence with defaults (Browser)
+ * - `{ type: 'file', path?: string }` — File-system with custom path
+ * - `{ type: 'local', key?: string }` — localStorage with custom key
+ * - `{ adapter: PersistenceAdapter }` — Custom adapter
+ *
+ * @example
+ * // Node.js with defaults
+ * persistence: 'file'
+ *
+ * // Browser with defaults
+ * persistence: 'local'
+ *
+ * // Custom file path
+ * persistence: { type: 'file', path: '/var/data/memory.json' }
+ *
+ * // Custom localStorage key
+ * persistence: { type: 'local', key: 'myapp:db' }
+ */
+export const MemoryPersistenceConfigSchema = z.union([
+  PersistenceTypeSchema,
+  FilePersistenceConfigSchema,
+  LocalStoragePersistenceConfigSchema,
+  CustomPersistenceConfigSchema,
+]).describe('Persistence configuration for the memory driver');
 
 // ==========================================================================
 // 2. Connection Configuration
@@ -72,11 +142,24 @@ export const MemoryConfigSchema = z.object({
   strictMode: z.boolean().default(false).describe('Throw on missing records instead of returning null'),
 
   /**
-   * Optional file-system persistence.
-   * When configured, the memory store periodically saves to disk
-   * and loads existing data on startup.
+   * Optional persistence configuration.
+   * When configured, the memory store automatically saves and restores data.
+   *
+   * - `'file'`: Persist to disk file (Node.js only, default path: `.objectstack/data/memory-driver.json`)
+   * - `'local'`: Persist to localStorage (Browser only, default key: `objectstack:memory-db`)
+   * - `{ type: 'file', path?: string }`: File-system with custom path
+   * - `{ type: 'local', key?: string }`: localStorage with custom key
+   * - `{ adapter: PersistenceAdapter }`: Custom persistence adapter
+   *
+   * @example
+   * // Node.js
+   * new InMemoryDriver({ persistence: 'file' })
+   * // Browser
+   * new InMemoryDriver({ persistence: 'local' })
+   * // Pure memory (default)
+   * new InMemoryDriver()
    */
-  persistence: MemoryPersistenceConfigSchema.optional().describe('File-system persistence'),
+  persistence: MemoryPersistenceConfigSchema.optional().describe('Persistence configuration'),
 
   /**
    * Fields to index for faster lookups.

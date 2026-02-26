@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { MemoryConfigSchema, MemoryPersistenceConfigSchema, MemoryDriverSpec } from './memory.zod';
+import {
+  MemoryConfigSchema,
+  MemoryPersistenceConfigSchema,
+  MemoryDriverSpec,
+  PersistenceTypeSchema,
+  FilePersistenceConfigSchema,
+  LocalStoragePersistenceConfigSchema,
+  CustomPersistenceConfigSchema,
+  PersistenceAdapterSchema,
+} from './memory.zod';
 
 describe('MemoryConfigSchema', () => {
   it('should accept empty config (all optional)', () => {
@@ -38,27 +47,78 @@ describe('MemoryConfigSchema', () => {
     expect(config.strictMode).toBe(true);
   });
 
-  it('should accept config with persistence', () => {
+  it('should accept persistence shorthand "file"', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: 'file',
+    });
+
+    expect(config.persistence).toBe('file');
+  });
+
+  it('should accept persistence shorthand "local"', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: 'local',
+    });
+
+    expect(config.persistence).toBe('local');
+  });
+
+  it('should accept persistence with file object config', () => {
     const config = MemoryConfigSchema.parse({
       persistence: {
-        filePath: '/tmp/data.json',
+        type: 'file',
+        path: '/tmp/data.json',
         autoSaveInterval: 10000,
       },
     });
 
     expect(config.persistence).toBeDefined();
-    expect(config.persistence!.filePath).toBe('/tmp/data.json');
-    expect(config.persistence!.autoSaveInterval).toBe(10000);
+    const p = config.persistence as { type: 'file'; path?: string; autoSaveInterval: number };
+    expect(p.type).toBe('file');
+    expect(p.path).toBe('/tmp/data.json');
+    expect(p.autoSaveInterval).toBe(10000);
   });
 
-  it('should apply persistence autoSaveInterval default', () => {
+  it('should apply file persistence autoSaveInterval default', () => {
     const config = MemoryConfigSchema.parse({
       persistence: {
-        filePath: '/tmp/data.json',
+        type: 'file',
+        path: '/tmp/data.json',
       },
     });
 
-    expect(config.persistence!.autoSaveInterval).toBe(5000);
+    const p = config.persistence as { type: 'file'; autoSaveInterval: number };
+    expect(p.autoSaveInterval).toBe(2000);
+  });
+
+  it('should accept persistence with local object config', () => {
+    const config = MemoryConfigSchema.parse({
+      persistence: {
+        type: 'local',
+        key: 'myapp:db',
+      },
+    });
+
+    const p = config.persistence as { type: 'local'; key?: string };
+    expect(p.type).toBe('local');
+    expect(p.key).toBe('myapp:db');
+  });
+
+  it('should accept persistence with custom adapter', () => {
+    const mockAdapter = {
+      load: async () => null,
+      save: async () => {},
+      flush: async () => {},
+    };
+    const config = MemoryConfigSchema.parse({
+      persistence: { adapter: mockAdapter },
+    });
+
+    expect(config.persistence).toBeDefined();
+    const p = config.persistence as { adapter: any };
+    expect(typeof p.adapter.load).toBe('function');
+    expect(typeof p.adapter.save).toBe('function');
+    expect(typeof p.adapter.flush).toBe('function');
   });
 
   it('should accept config with indexes', () => {
@@ -89,7 +149,8 @@ describe('MemoryConfigSchema', () => {
       },
       strictMode: true,
       persistence: {
-        filePath: '/var/data/memory.json',
+        type: 'file',
+        path: '/var/data/memory.json',
         autoSaveInterval: 3000,
       },
       indexes: {
@@ -100,25 +161,25 @@ describe('MemoryConfigSchema', () => {
 
     expect(config.strictMode).toBe(true);
     expect(config.initialData!.users).toHaveLength(1);
-    expect(config.persistence!.filePath).toBe('/var/data/memory.json');
+    const p = config.persistence as { type: 'file'; path?: string };
+    expect(p.path).toBe('/var/data/memory.json');
     expect(config.indexes!.users).toEqual(['email']);
     expect(config.maxRecordsPerObject).toBe(50000);
   });
 
-  it('should reject persistence with invalid autoSaveInterval', () => {
+  it('should reject file persistence with invalid autoSaveInterval', () => {
     expect(() => MemoryConfigSchema.parse({
       persistence: {
-        filePath: '/tmp/data.json',
+        type: 'file',
+        path: '/tmp/data.json',
         autoSaveInterval: 50, // Below minimum of 100
       },
     })).toThrow();
   });
 
-  it('should reject persistence without filePath', () => {
+  it('should reject invalid persistence string', () => {
     expect(() => MemoryConfigSchema.parse({
-      persistence: {
-        autoSaveInterval: 5000,
-      },
+      persistence: 'indexeddb',
     })).toThrow();
   });
 
@@ -135,27 +196,128 @@ describe('MemoryConfigSchema', () => {
   });
 });
 
-describe('MemoryPersistenceConfigSchema', () => {
-  it('should accept valid persistence config', () => {
-    const config = MemoryPersistenceConfigSchema.parse({
-      filePath: '/data/store.json',
+describe('PersistenceTypeSchema', () => {
+  it('should accept file type', () => {
+    expect(PersistenceTypeSchema.parse('file')).toBe('file');
+  });
+
+  it('should accept local type', () => {
+    expect(PersistenceTypeSchema.parse('local')).toBe('local');
+  });
+
+  it('should reject invalid type', () => {
+    expect(() => PersistenceTypeSchema.parse('indexeddb')).toThrow();
+  });
+});
+
+describe('FilePersistenceConfigSchema', () => {
+  it('should accept valid file persistence config', () => {
+    const config = FilePersistenceConfigSchema.parse({
+      type: 'file',
+      path: '/data/store.json',
       autoSaveInterval: 10000,
     });
 
-    expect(config.filePath).toBe('/data/store.json');
+    expect(config.type).toBe('file');
+    expect(config.path).toBe('/data/store.json');
     expect(config.autoSaveInterval).toBe(10000);
   });
 
   it('should apply default autoSaveInterval', () => {
-    const config = MemoryPersistenceConfigSchema.parse({
-      filePath: '/data/store.json',
+    const config = FilePersistenceConfigSchema.parse({
+      type: 'file',
+      path: '/data/store.json',
     });
 
-    expect(config.autoSaveInterval).toBe(5000);
+    expect(config.autoSaveInterval).toBe(2000);
   });
 
-  it('should reject without filePath', () => {
-    expect(() => MemoryPersistenceConfigSchema.parse({})).toThrow();
+  it('should accept without path (uses default)', () => {
+    const config = FilePersistenceConfigSchema.parse({
+      type: 'file',
+    });
+
+    expect(config.type).toBe('file');
+    expect(config.path).toBeUndefined();
+  });
+});
+
+describe('LocalStoragePersistenceConfigSchema', () => {
+  it('should accept valid localStorage persistence config', () => {
+    const config = LocalStoragePersistenceConfigSchema.parse({
+      type: 'local',
+      key: 'myapp:db',
+    });
+
+    expect(config.type).toBe('local');
+    expect(config.key).toBe('myapp:db');
+  });
+
+  it('should accept without key (uses default)', () => {
+    const config = LocalStoragePersistenceConfigSchema.parse({
+      type: 'local',
+    });
+
+    expect(config.type).toBe('local');
+    expect(config.key).toBeUndefined();
+  });
+});
+
+describe('CustomPersistenceConfigSchema', () => {
+  it('should accept valid custom adapter', () => {
+    const config = CustomPersistenceConfigSchema.parse({
+      adapter: {
+        load: async () => null,
+        save: async () => {},
+        flush: async () => {},
+      },
+    });
+
+    expect(typeof config.adapter.load).toBe('function');
+    expect(typeof config.adapter.save).toBe('function');
+    expect(typeof config.adapter.flush).toBe('function');
+  });
+});
+
+describe('MemoryPersistenceConfigSchema', () => {
+  it('should accept shorthand "file"', () => {
+    const config = MemoryPersistenceConfigSchema.parse('file');
+    expect(config).toBe('file');
+  });
+
+  it('should accept shorthand "local"', () => {
+    const config = MemoryPersistenceConfigSchema.parse('local');
+    expect(config).toBe('local');
+  });
+
+  it('should accept file object config', () => {
+    const config = MemoryPersistenceConfigSchema.parse({
+      type: 'file',
+      path: '/tmp/data.json',
+    });
+    expect(config).toEqual({ type: 'file', path: '/tmp/data.json', autoSaveInterval: 2000 });
+  });
+
+  it('should accept local object config', () => {
+    const config = MemoryPersistenceConfigSchema.parse({
+      type: 'local',
+      key: 'myapp:db',
+    });
+    expect(config).toEqual({ type: 'local', key: 'myapp:db' });
+  });
+
+  it('should accept custom adapter', () => {
+    const adapter = {
+      load: async () => null,
+      save: async () => {},
+      flush: async () => {},
+    };
+    const config = MemoryPersistenceConfigSchema.parse({ adapter });
+    expect((config as any).adapter).toBeDefined();
+  });
+
+  it('should reject invalid string', () => {
+    expect(() => MemoryPersistenceConfigSchema.parse('redis')).toThrow();
   });
 });
 
