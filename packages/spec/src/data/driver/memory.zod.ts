@@ -98,7 +98,7 @@ export const AutoPersistenceConfigSchema = z.object({
   type: z.literal('auto'),
   /** File path override when running in Node.js. */
   path: z.string().optional().describe('File path override for Node.js environments'),
-  /** Auto-save interval override when running in Node.js. Default: 2000ms. */
+  /** Auto-save interval override when running in Node.js. */
   autoSaveInterval: z.number().min(100).optional().describe('Auto-save interval override for Node.js environments'),
   /** localStorage key override when running in a browser. */
   key: z.string().optional().describe('localStorage key override for browser environments'),

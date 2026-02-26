@@ -928,7 +928,7 @@ export class InMemoryDriver implements DriverInterface {
    * Detect whether the current runtime is a browser environment.
    */
   private isBrowserEnvironment(): boolean {
-    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+    return typeof globalThis.localStorage !== 'undefined';
   }
 
   /**
