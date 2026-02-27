@@ -469,4 +469,124 @@ describe('HttpDispatcher', () => {
             ).rejects.toThrow('Disk full');
         });
     });
+
+    // ═══════════════════════════════════════════════════════════════
+    // Package Publish / Revert Endpoints
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('Package publish/revert endpoints', () => {
+        it('should handle POST /packages/:id/publish via metadata service', async () => {
+            const mockMetadata = {
+                publishPackage: vi.fn().mockResolvedValue({
+                    success: true,
+                    packageId: 'com.acme.crm',
+                    version: 2,
+                    publishedAt: '2025-06-01T00:00:00Z',
+                    itemsPublished: 3,
+                }),
+            };
+            const mockRegistry = {
+                getAllPackages: vi.fn().mockReturnValue([]),
+                enablePackage: vi.fn(),
+                disablePackage: vi.fn(),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'metadata') return Promise.resolve(mockMetadata);
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/com.acme.crm/publish', 'POST', { publishedBy: 'admin' }, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockMetadata.publishPackage).toHaveBeenCalledWith('com.acme.crm', { publishedBy: 'admin' });
+        });
+
+        it('should handle POST /packages/:id/revert via metadata service', async () => {
+            const mockMetadata = {
+                revertPackage: vi.fn().mockResolvedValue(undefined),
+            };
+            const mockRegistry = {
+                getAllPackages: vi.fn().mockReturnValue([]),
+                enablePackage: vi.fn(),
+                disablePackage: vi.fn(),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'metadata') return Promise.resolve(mockMetadata);
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+
+            const result = await dispatcher.handlePackages('/com.acme.crm/revert', 'POST', {}, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockMetadata.revertPackage).toHaveBeenCalledWith('com.acme.crm');
+        });
+
+        it('should fallback to broker for publish when metadata service unavailable', async () => {
+            const mockRegistry = {
+                getAllPackages: vi.fn().mockReturnValue([]),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'metadata') return Promise.resolve(null);
+                if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
+                return null;
+            });
+            mockBroker.call.mockResolvedValue({ success: true, packageId: 'crm', version: 1, publishedAt: '2025-01-01T00:00:00Z', itemsPublished: 2 });
+
+            const result = await dispatcher.handlePackages('/crm/publish', 'POST', {}, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(mockBroker.call).toHaveBeenCalledWith('metadata.publishPackage', { packageId: 'crm' }, { request: {} });
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // Metadata getPublished Endpoint
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('Metadata getPublished endpoint', () => {
+        it('should handle GET /metadata/:type/:name/published via metadata service', async () => {
+            const mockMetadata = {
+                getPublished: vi.fn().mockResolvedValue({ name: 'account', label: 'Account' }),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'metadata') return Promise.resolve(mockMetadata);
+                return null;
+            });
+
+            const result = await dispatcher.handleMetadata('/object/account/published', { request: {} }, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data).toEqual({ name: 'account', label: 'Account' });
+            expect(mockMetadata.getPublished).toHaveBeenCalledWith('object', 'account');
+        });
+
+        it('should return 404 when published item not found', async () => {
+            const mockMetadata = {
+                getPublished: vi.fn().mockResolvedValue(undefined),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'metadata') return Promise.resolve(mockMetadata);
+                return null;
+            });
+
+            const result = await dispatcher.handleMetadata('/object/nonexistent/published', { request: {} }, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(404);
+        });
+
+        it('should fallback to broker for getPublished when metadata service unavailable', async () => {
+            (kernel as any).getService = vi.fn().mockResolvedValue(null);
+            mockBroker.call.mockResolvedValue({ name: 'account', fields: ['name'] });
+
+            const result = await dispatcher.handleMetadata('/object/account/published', { request: {} }, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockBroker.call).toHaveBeenCalledWith(
+                'metadata.getPublished',
+                { type: 'object', name: 'account' },
+                { request: {} }
+            );
+        });
+    });
 });
