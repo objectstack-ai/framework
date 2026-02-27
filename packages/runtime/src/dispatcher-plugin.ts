@@ -199,6 +199,24 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            server.post(`${prefix}/packages/:id/publish`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handlePackages(`/${req.params.id}/publish`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/packages/:id/revert`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handlePackages(`/${req.params.id}/revert`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Storage ─────────────────────────────────────────────────
             server.post(`${prefix}/storage/upload`, async (req: any, res: any) => {
                 try {

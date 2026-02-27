@@ -398,6 +398,7 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 - [x] **In-Memory Driver** — Full CRUD, bulk ops, transactions, aggregation pipeline (Mingo), streaming
 - [x] **In-Memory Driver Persistence** — File-system (Node.js) and localStorage (Browser) persistence adapters with auto-save, custom adapter support
 - [x] **Metadata Service** — CRUD, query, bulk ops, overlay system, dependency tracking, import/export, file watching
+- [x] **Metadata Package Publishing** — `publishPackage`, `revertPackage`, `getPublished` for atomic package-level metadata publishing with version snapshots
 - [x] **Serializers** — JSON, YAML, TypeScript format support
 - [x] **Loaders** — Memory, Filesystem, Remote (HTTP) loaders
 - [x] **REST API** — Auto-generated CRUD/Metadata/Batch/Discovery endpoints
@@ -452,6 +453,7 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 - User overlay persistence across sessions
 - Multi-instance metadata synchronization
 - Production-grade metadata storage
+- Package-level metadata publishing (publishPackage / revertPackage / getPublished)
 
 ### Phase 4b: Infrastructure Service Upgrades (P1 — Weeks 3-4)
 

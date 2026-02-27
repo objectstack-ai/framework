@@ -217,6 +217,24 @@ export class HttpDispatcher {
             }
         }
 
+        // GET /metadata/:type/:name/published → get published version
+        if (parts.length === 3 && parts[2] === 'published' && (!method || method === 'GET')) {
+            const [type, name] = parts;
+            const metadataService = await this.getService(CoreServiceName.enum.metadata);
+            if (metadataService && typeof (metadataService as any).getPublished === 'function') {
+                const data = await (metadataService as any).getPublished(type, name);
+                if (data === undefined) return { handled: true, response: this.error('Not found', 404) };
+                return { handled: true, response: this.success(data) };
+            }
+            // Broker fallback
+            try {
+                const data = await broker.call('metadata.getPublished', { type, name }, { request: context.request });
+                return { handled: true, response: this.success(data) };
+            } catch (e: any) {
+                return { handled: true, response: this.error(e.message, 404) };
+            }
+        }
+
         // /metadata/:type/:name
         if (parts.length === 2) {
             const [type, name] = parts;
@@ -467,6 +485,8 @@ export class HttpDispatcher {
      * - DELETE  /packages/:id      → uninstall a package
      * - PATCH  /packages/:id/enable  → enable a package
      * - PATCH  /packages/:id/disable → disable a package
+     * - POST   /packages/:id/publish → publish a package (metadata snapshot)
+     * - POST   /packages/:id/revert  → revert a package to last published state
      * 
      * Uses ObjectQL SchemaRegistry directly (via the 'objectql' service)
      * with broker fallback for backward compatibility.
@@ -523,6 +543,38 @@ export class HttpDispatcher {
                 const pkg = registry.disablePackage(id);
                 if (!pkg) return { handled: true, response: this.error(`Package '${id}' not found`, 404) };
                 return { handled: true, response: this.success(pkg) };
+            }
+
+            // POST /packages/:id/publish → publish package metadata
+            if (parts.length === 2 && parts[1] === 'publish' && m === 'POST') {
+                const id = decodeURIComponent(parts[0]);
+                const metadataService = await this.getService(CoreServiceName.enum.metadata);
+                if (metadataService && typeof (metadataService as any).publishPackage === 'function') {
+                    const result = await (metadataService as any).publishPackage(id, body || {});
+                    return { handled: true, response: this.success(result) };
+                }
+                // Broker fallback
+                if (this.kernel.broker) {
+                    const result = await this.kernel.broker.call('metadata.publishPackage', { packageId: id, ...body }, { request: context.request });
+                    return { handled: true, response: this.success(result) };
+                }
+                return { handled: true, response: this.error('Metadata service not available', 503) };
+            }
+
+            // POST /packages/:id/revert → revert package to last published state
+            if (parts.length === 2 && parts[1] === 'revert' && m === 'POST') {
+                const id = decodeURIComponent(parts[0]);
+                const metadataService = await this.getService(CoreServiceName.enum.metadata);
+                if (metadataService && typeof (metadataService as any).revertPackage === 'function') {
+                    await (metadataService as any).revertPackage(id);
+                    return { handled: true, response: this.success({ success: true }) };
+                }
+                // Broker fallback
+                if (this.kernel.broker) {
+                    await this.kernel.broker.call('metadata.revertPackage', { packageId: id }, { request: context.request });
+                    return { handled: true, response: this.success({ success: true }) };
+                }
+                return { handled: true, response: this.error('Metadata service not available', 503) };
             }
 
             // GET /packages/:id → get package

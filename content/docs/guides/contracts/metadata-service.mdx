@@ -352,3 +352,59 @@ const filteredViews = views.filter(view => {
   return !v.requiredPermission || userPermissions.includes(v.requiredPermission);
 });
 ```
+
+---
+
+## Package Publishing
+
+ObjectStack uses **package-level publishing** to ensure metadata consistency. All metadata items within a package are published atomically — either everything goes live, or nothing does.
+
+### publishPackage
+
+Publishes all metadata items in a package:
+1. Validates all items (optional)
+2. Snapshots each item's definition into `publishedDefinition`
+3. Increments the package version
+4. Sets all items to `active` state
+
+```typescript
+const result = await metadataService.publishPackage('com.acme.crm', {
+  publishedBy: 'admin-user',
+  validate: true,        // default: true
+  changeNote: 'Added opportunity fields',
+});
+
+console.log(result.success);         // true
+console.log(result.version);         // 2
+console.log(result.itemsPublished);  // 5
+console.log(result.publishedAt);     // "2025-06-01T12:00:00Z"
+```
+
+### revertPackage
+
+Reverts all metadata items in a package to their last published state. Discards any unpublished changes.
+
+```typescript
+await metadataService.revertPackage('com.acme.crm');
+// All items restored to their publishedDefinition snapshots
+```
+
+### getPublished
+
+Returns the published version of a metadata item (for runtime/end-user serving). Falls back to the current definition if the item has never been published.
+
+```typescript
+// End user sees the published version
+const published = await metadataService.getPublished('object', 'opportunity');
+
+// Designer sees the draft version (via regular get)
+const draft = await metadataService.get('object', 'opportunity');
+```
+
+### REST Endpoints
+
+| Method | Path | Description |
+|:---|:---|:---|
+| `POST` | `/packages/:id/publish` | Publish a package |
+| `POST` | `/packages/:id/revert` | Revert a package to last published state |
+| `GET` | `/metadata/:type/:name/published` | Get published version of a metadata item |

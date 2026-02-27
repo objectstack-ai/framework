@@ -86,6 +86,7 @@ The `MetadataManager` is the main orchestrator. It provides:
 - **Core CRUD**: `register`, `get`, `list`, `unregister`, `exists`, `listNames`
 - **Convenience**: `getObject`, `listObjects`
 - **Package Management**: `unregisterPackage` — unload all metadata from a package
+- **Package Publishing**: `publishPackage`, `revertPackage`, `getPublished` — atomic package-level metadata publishing
 - **Query / Search**: `query` with filtering, pagination, sorting by type/scope/state/tags
 - **Bulk Operations**: `bulkRegister`, `bulkUnregister` with error handling
 - **Import / Export**: `exportMetadata`, `importMetadata` with conflict resolution (skip/overwrite/merge)
@@ -199,6 +200,34 @@ const plugin = MetadataPlugin({
 });
 // Register with ObjectStack kernel
 kernel.use(plugin);
+```
+
+## Package Publishing
+
+ObjectStack supports **package-level metadata publishing** — all metadata items within a package are published atomically.
+
+### Publish a Package
+
+```typescript
+const result = await manager.publishPackage('com.acme.crm', {
+  publishedBy: 'admin',
+  validate: true,
+});
+// result: { success: true, version: 2, itemsPublished: 5, publishedAt: '...' }
+```
+
+### Revert to Last Published State
+
+```typescript
+await manager.revertPackage('com.acme.crm');
+// All items restored to their publishedDefinition snapshots
+```
+
+### Get Published Version (Runtime Serving)
+
+```typescript
+const published = await manager.getPublished('object', 'opportunity');
+// Returns publishedDefinition if exists, else current definition
 ```
 
 ## Package Structure

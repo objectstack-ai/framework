@@ -37,6 +37,7 @@
 
 import type { MetadataQuery, MetadataQueryResult, MetadataValidationResult, MetadataBulkResult, MetadataDependency } from '../kernel/metadata-plugin.zod';
 import type { MetadataOverlay } from '../kernel/metadata-customization.zod';
+import type { PackagePublishResult } from '../system/metadata-persistence.zod';
 
 /**
  * Metadata watch callback signature
@@ -212,6 +213,38 @@ export interface IMetadataService {
      * @param packageName - The package name whose items should be removed
      */
     unregisterPackage?(packageName: string): Promise<void>;
+
+    /**
+     * Publish an entire package:
+     * 1. Validate all draft items (dependency check)
+     * 2. Snapshot all items in the package
+     * 3. Increment package version
+     * 4. Set all items state → active
+     * @param packageId - The package ID to publish
+     * @param options - Publish options
+     * @returns Publish result with version and item count
+     */
+    publishPackage?(packageId: string, options?: {
+        changeNote?: string;
+        publishedBy?: string;
+        validate?: boolean;
+    }): Promise<PackagePublishResult>;
+
+    /**
+     * Revert entire package to last published state.
+     * Restores all metadata definitions from their published snapshots.
+     * @param packageId - The package ID to revert
+     */
+    revertPackage?(packageId: string): Promise<void>;
+
+    /**
+     * Get the published version of any metadata item (for runtime serving).
+     * Returns published_definition if exists, else current definition.
+     * @param type - Metadata type
+     * @param name - Item name/identifier
+     * @returns The published definition, or current definition if never published
+     */
+    getPublished?(type: string, name: string): Promise<unknown | undefined>;
 
     // ==========================================
     // Query / Search

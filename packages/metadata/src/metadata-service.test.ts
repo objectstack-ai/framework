@@ -693,4 +693,273 @@ describe('MetadataManager — IMetadataService Contract', () => {
       return deps.then(result => expect(result).toHaveLength(1));
     });
   });
+
+  // ==========================================
+  // Package Publish / Revert / getPublished
+  // ==========================================
+
+  describe('publishPackage', () => {
+    it('should publish all items in a package', async () => {
+      await manager.register('object', 'opportunity', {
+        name: 'opportunity', label: 'Opportunity', packageId: 'com.acme.crm', state: 'draft',
+        metadata: { fields: ['name', 'amount'] },
+      });
+      await manager.register('view', 'opp_list', {
+        name: 'opp_list', label: 'Opp List', packageId: 'com.acme.crm', state: 'draft',
+        metadata: { columns: ['name', 'amount'] },
+      });
+
+      const result = await manager.publishPackage('com.acme.crm', { publishedBy: 'admin' });
+
+      expect(result.success).toBe(true);
+      expect(result.packageId).toBe('com.acme.crm');
+      expect(result.version).toBe(1);
+      expect(result.itemsPublished).toBe(2);
+      expect(result.publishedAt).toBeDefined();
+
+      // Verify items are now active with published snapshots
+      const obj = await manager.get('object', 'opportunity') as any;
+      expect(obj.state).toBe('active');
+      expect(obj.publishedDefinition).toBeDefined();
+      expect(obj.publishedBy).toBe('admin');
+      expect(obj.publishedAt).toBeDefined();
+
+      const view = await manager.get('view', 'opp_list') as any;
+      expect(view.state).toBe('active');
+      expect(view.publishedDefinition).toBeDefined();
+    });
+
+    it('should increment version on each publish', async () => {
+      await manager.register('object', 'account', {
+        name: 'account', packageId: 'crm', state: 'draft', version: 0,
+        metadata: { fields: ['name'] },
+      });
+
+      const first = await manager.publishPackage('crm');
+      expect(first.version).toBe(1);
+
+      const second = await manager.publishPackage('crm');
+      expect(second.version).toBe(2);
+    });
+
+    it('should fail for empty package', async () => {
+      const result = await manager.publishPackage('nonexistent');
+      expect(result.success).toBe(false);
+      expect(result.itemsPublished).toBe(0);
+      expect(result.validationErrors).toBeDefined();
+    });
+
+    it('should fail validation when items are invalid', async () => {
+      // Register an item without a name (will fail validate)
+      await manager.register('object', 'bad_item', {
+        packageId: 'com.acme.bad', state: 'draft',
+        metadata: {},
+      });
+
+      const result = await manager.publishPackage('com.acme.bad', { validate: true });
+      expect(result.success).toBe(false);
+      expect(result.validationErrors).toBeDefined();
+      expect(result.validationErrors!.length).toBeGreaterThan(0);
+    });
+
+    it('should skip validation when validate=false', async () => {
+      await manager.register('object', 'skip_val', {
+        packageId: 'com.acme.skip', state: 'draft',
+        metadata: {},
+      });
+
+      const result = await manager.publishPackage('com.acme.skip', { validate: false });
+      expect(result.success).toBe(true);
+      expect(result.itemsPublished).toBe(1);
+    });
+
+    it('should fail when dependency is not found or not published', async () => {
+      await manager.register('view', 'opp_list', {
+        name: 'opp_list', label: 'Opp List', packageId: 'com.acme.dep',
+        metadata: { columns: ['name'] },
+      });
+
+      // Register a dependency pointing to a non-existent item
+      manager.addDependency({
+        sourceType: 'view',
+        sourceName: 'opp_list',
+        targetType: 'object',
+        targetName: 'opportunity',
+        kind: 'reference',
+      });
+
+      const result = await manager.publishPackage('com.acme.dep', { validate: true });
+      expect(result.success).toBe(false);
+      expect(result.validationErrors).toBeDefined();
+      expect(result.validationErrors!.some(e => e.message.includes('opportunity'))).toBe(true);
+    });
+
+    it('should pass dependency check when target is in the same package', async () => {
+      await manager.register('object', 'project', {
+        name: 'project', label: 'Project', packageId: 'com.acme.same',
+        metadata: { fields: ['name'] },
+      });
+      await manager.register('view', 'project_list', {
+        name: 'project_list', label: 'Project List', packageId: 'com.acme.same',
+        metadata: { columns: ['name'] },
+      });
+
+      // Dependency within the same package
+      manager.addDependency({
+        sourceType: 'view',
+        sourceName: 'project_list',
+        targetType: 'object',
+        targetName: 'project',
+        kind: 'reference',
+      });
+
+      const result = await manager.publishPackage('com.acme.same', { validate: true });
+      expect(result.success).toBe(true);
+      expect(result.itemsPublished).toBe(2);
+    });
+
+    it('should pass dependency check when target is already published', async () => {
+      // Pre-existing published object (different package)
+      await manager.register('object', 'account', {
+        name: 'account', label: 'Account', packageId: 'com.acme.core',
+        publishedDefinition: { fields: ['name'] },
+        state: 'active',
+      });
+
+      // View in a different package references the published object
+      await manager.register('view', 'account_list', {
+        name: 'account_list', label: 'Account List', packageId: 'com.acme.views',
+        metadata: { columns: ['name'] },
+      });
+
+      manager.addDependency({
+        sourceType: 'view',
+        sourceName: 'account_list',
+        targetType: 'object',
+        targetName: 'account',
+        kind: 'reference',
+      });
+
+      const result = await manager.publishPackage('com.acme.views', { validate: true });
+      expect(result.success).toBe(true);
+      expect(result.itemsPublished).toBe(1);
+    });
+  });
+
+  describe('revertPackage', () => {
+    it('should revert to last published state', async () => {
+      // Register and publish
+      await manager.register('object', 'account', {
+        name: 'account', label: 'Account', packageId: 'crm',
+        metadata: { fields: ['name', 'email'] },
+      });
+      await manager.publishPackage('crm');
+
+      // Make edits after publish
+      const item = await manager.get('object', 'account') as any;
+      await manager.register('object', 'account', {
+        ...item,
+        metadata: { fields: ['name', 'email', 'phone'] },
+        state: 'draft',
+      });
+
+      // Verify edit was saved
+      const edited = await manager.get('object', 'account') as any;
+      expect(edited.metadata.fields).toContain('phone');
+
+      // Revert
+      await manager.revertPackage('crm');
+
+      // Verify reverted to published state
+      const reverted = await manager.get('object', 'account') as any;
+      expect(reverted.state).toBe('active');
+      expect(reverted.metadata).toEqual(reverted.publishedDefinition);
+    });
+
+    it('should throw for non-existent package', async () => {
+      await expect(manager.revertPackage('nonexistent')).rejects.toThrow('No metadata items found');
+    });
+
+    it('should throw for never-published package', async () => {
+      await manager.register('object', 'new_item', {
+        name: 'new_item', packageId: 'com.acme.new',
+      });
+
+      await expect(manager.revertPackage('com.acme.new')).rejects.toThrow('has never been published');
+    });
+  });
+
+  describe('getPublished', () => {
+    it('should return published definition when available', async () => {
+      await manager.register('object', 'account', {
+        name: 'account', label: 'Account', packageId: 'crm',
+        metadata: { fields: ['name'] },
+      });
+      await manager.publishPackage('crm');
+
+      // Edit after publish
+      const item = await manager.get('object', 'account') as any;
+      await manager.register('object', 'account', {
+        ...item,
+        metadata: { fields: ['name', 'email', 'phone'] },
+      });
+
+      // getPublished should return the published snapshot, not the edited version
+      const published = await manager.getPublished('object', 'account');
+      expect(published).toBeDefined();
+      // The published snapshot was taken from the original metadata
+      const pubAny = published as any;
+      expect(pubAny.fields).toBeDefined();
+    });
+
+    it('should return current definition when never published', async () => {
+      await manager.register('object', 'contact', {
+        name: 'contact', label: 'Contact',
+        metadata: { fields: ['first_name'] },
+      });
+
+      const published = await manager.getPublished('object', 'contact');
+      expect(published).toBeDefined();
+      // Falls back to metadata field
+      expect((published as any).fields).toEqual(['first_name']);
+    });
+
+    it('should return undefined for non-existent item', async () => {
+      const result = await manager.getPublished('object', 'nonexistent');
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('integration: edit → publish → edit → revert', () => {
+    it('should preserve published version through edit-revert cycle', async () => {
+      // Step 1: Initial setup
+      await manager.register('object', 'project', {
+        name: 'project', label: 'Project', packageId: 'pm',
+        metadata: { fields: ['name', 'status'] },
+      });
+
+      // Step 2: Publish v1
+      const v1 = await manager.publishPackage('pm', { publishedBy: 'admin' });
+      expect(v1.success).toBe(true);
+      expect(v1.version).toBe(1);
+
+      // Step 3: Edit after publish
+      const item = await manager.get('object', 'project') as any;
+      await manager.register('object', 'project', {
+        ...item,
+        metadata: { fields: ['name', 'status', 'priority'] },
+        state: 'draft',
+      });
+
+      // Step 4: End user sees published version
+      const endUserView = await manager.getPublished('object', 'project') as any;
+      expect(endUserView.fields).toEqual(['name', 'status']);
+
+      // Step 5: Revert discards draft changes
+      await manager.revertPackage('pm');
+      const reverted = await manager.get('object', 'project') as any;
+      expect(reverted.state).toBe('active');
+      expect(reverted.metadata.fields).toEqual(['name', 'status']);
+    });
+  });
 });

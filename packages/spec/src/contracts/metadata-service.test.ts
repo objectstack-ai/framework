@@ -343,6 +343,15 @@ describe('Metadata Service Contract', () => {
       listObjects: async () => [],
       // Package
       unregisterPackage: async () => {},
+      publishPackage: async () => ({
+        success: true,
+        packageId: 'test',
+        version: 1,
+        publishedAt: new Date().toISOString(),
+        itemsPublished: 0,
+      }),
+      revertPackage: async () => {},
+      getPublished: async () => undefined,
       // Query
       query: async () => ({ items: [], total: 0, page: 1, pageSize: 50 }),
       // Bulk
@@ -378,5 +387,39 @@ describe('Metadata Service Contract', () => {
     expect(typeof service.validate).toBe('function');
     expect(typeof service.getRegisteredTypes).toBe('function');
     expect(typeof service.getDependencies).toBe('function');
+    expect(typeof service.publishPackage).toBe('function');
+    expect(typeof service.revertPackage).toBe('function');
+    expect(typeof service.getPublished).toBe('function');
+  });
+
+  it('should allow implementation with package publish support', async () => {
+    const service: IMetadataService = {
+      register: async () => {},
+      get: async () => undefined,
+      list: async () => [],
+      unregister: async () => {},
+      exists: async () => false,
+      listNames: async () => [],
+      getObject: async () => undefined,
+      listObjects: async () => [],
+      publishPackage: async (packageId, options) => ({
+        success: true,
+        packageId,
+        version: 2,
+        publishedAt: new Date().toISOString(),
+        itemsPublished: 3,
+      }),
+      revertPackage: async () => {},
+      getPublished: async (_type, _name) => ({ name: 'account', label: 'Account' }),
+    };
+
+    const result = await service.publishPackage!('com.acme.crm', { publishedBy: 'admin' });
+    expect(result.success).toBe(true);
+    expect(result.packageId).toBe('com.acme.crm');
+    expect(result.version).toBe(2);
+    expect(result.itemsPublished).toBe(3);
+
+    const published = await service.getPublished!('object', 'account');
+    expect(published).toEqual({ name: 'account', label: 'Account' });
   });
 });

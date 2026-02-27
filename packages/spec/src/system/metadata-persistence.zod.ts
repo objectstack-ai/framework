@@ -111,6 +111,14 @@ export const MetadataRecordSchema = z.object({
   /** Classification tags */
   tags: z.array(z.string()).optional().describe('Classification tags for filtering and grouping'),
   
+  /** Package Publishing */
+  publishedDefinition: z.unknown().optional()
+    .describe('Snapshot of the last published definition'),
+  publishedAt: z.string().datetime().optional()
+    .describe('When this metadata was last published'),
+  publishedBy: z.string().optional()
+    .describe('Who published this version'),
+
   /** Audit */
   createdBy: z.string().optional(),
   createdAt: z.string().datetime().optional().describe('Creation timestamp'),
@@ -120,6 +128,25 @@ export const MetadataRecordSchema = z.object({
 
 export type MetadataRecord = z.infer<typeof MetadataRecordSchema>;
 export type MetadataScope = z.infer<typeof MetadataScopeSchema>;
+
+/**
+ * Package Publish Result
+ * Returned by `publishPackage()` after a package-level metadata publish operation.
+ */
+export const PackagePublishResultSchema = z.object({
+  success: z.boolean().describe('Whether the publish succeeded'),
+  packageId: z.string().describe('The package ID that was published'),
+  version: z.number().int().describe('New version number after publish'),
+  publishedAt: z.string().datetime().describe('Publish timestamp'),
+  itemsPublished: z.number().int().describe('Total metadata items published'),
+  validationErrors: z.array(z.object({
+    type: z.string().describe('Metadata type that failed validation'),
+    name: z.string().describe('Item name that failed validation'),
+    message: z.string().describe('Validation error message'),
+  })).optional().describe('Validation errors if publish failed'),
+});
+
+export type PackagePublishResult = z.infer<typeof PackagePublishResultSchema>;
 
 /**
  * Metadata Format

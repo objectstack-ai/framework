@@ -15,6 +15,7 @@ import type {
   MetadataSaveResult,
   MetadataWatchEvent,
   MetadataFormat,
+  PackagePublishResult,
 } from '@objectstack/spec/system';
 import type {
   IMetadataService,
@@ -331,6 +332,187 @@ export class MetadataManager implements IMetadataService {
         this.registry.delete(type);
       }
     }
+  }
+
+  /**
+   * Publish an entire package:
+   * 1. Validate all draft items
+   * 2. Snapshot all items in the package (publishedDefinition = clone(metadata))
+   * 3. Increment version
+   * 4. Set all items state → active
+   */
+  async publishPackage(packageId: string, options?: {
+    changeNote?: string;
+    publishedBy?: string;
+    validate?: boolean;
+  }): Promise<PackagePublishResult> {
+    const now = new Date().toISOString();
+    const shouldValidate = options?.validate !== false;
+    const publishedBy = options?.publishedBy;
+
+    // Collect all items belonging to this package
+    const packageItems: Array<{ type: string; name: string; data: any }> = [];
+    for (const [type, typeStore] of this.registry) {
+      for (const [name, data] of typeStore) {
+        const meta = data as any;
+        if (meta?.packageId === packageId || meta?.package === packageId) {
+          packageItems.push({ type, name, data: meta });
+        }
+      }
+    }
+
+    if (packageItems.length === 0) {
+      return {
+        success: false,
+        packageId,
+        version: 0,
+        publishedAt: now,
+        itemsPublished: 0,
+        validationErrors: [{ type: '', name: '', message: `No metadata items found for package '${packageId}'` }],
+      };
+    }
+
+    // Validation pass
+    if (shouldValidate) {
+      const validationErrors: Array<{ type: string; name: string; message: string }> = [];
+
+      // Schema validation
+      for (const item of packageItems) {
+        const result = await this.validate(item.type, item.data);
+        if (!result.valid && result.errors) {
+          for (const err of result.errors) {
+            validationErrors.push({
+              type: item.type,
+              name: item.name,
+              message: err.message,
+            });
+          }
+        }
+      }
+
+      // Dependency validation: referenced items must be in the same package or already published
+      const packageItemKeys = new Set(packageItems.map(i => `${i.type}:${i.name}`));
+      for (const item of packageItems) {
+        const deps = await this.getDependencies(item.type, item.name);
+        for (const dep of deps) {
+          const depKey = `${dep.targetType}:${dep.targetName}`;
+          // Skip if the dependency is within this package
+          if (packageItemKeys.has(depKey)) continue;
+          // Check if the dependency exists and has been published
+          const depItem = await this.get(dep.targetType, dep.targetName);
+          if (!depItem) {
+            validationErrors.push({
+              type: item.type,
+              name: item.name,
+              message: `Dependency '${dep.targetType}:${dep.targetName}' not found`,
+            });
+          } else {
+            const depMeta = depItem as any;
+            if (depMeta.publishedDefinition === undefined && depMeta.state !== 'active') {
+              validationErrors.push({
+                type: item.type,
+                name: item.name,
+                message: `Dependency '${dep.targetType}:${dep.targetName}' is not published`,
+              });
+            }
+          }
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        return {
+          success: false,
+          packageId,
+          version: 0,
+          publishedAt: now,
+          itemsPublished: 0,
+          validationErrors,
+        };
+      }
+    }
+
+    // Determine the next version by finding the max current version across items
+    let maxVersion = 0;
+    for (const item of packageItems) {
+      const v = typeof item.data.version === 'number' ? item.data.version : 0;
+      if (v > maxVersion) maxVersion = v;
+    }
+    const newVersion = maxVersion + 1;
+
+    // Snapshot and update all items
+    for (const item of packageItems) {
+      const updated = {
+        ...item.data,
+        publishedDefinition: structuredClone(item.data.metadata ?? item.data),
+        publishedAt: now,
+        publishedBy: publishedBy ?? item.data.publishedBy,
+        version: newVersion,
+        state: 'active',
+      };
+      await this.register(item.type, item.name, updated);
+    }
+
+    return {
+      success: true,
+      packageId,
+      version: newVersion,
+      publishedAt: now,
+      itemsPublished: packageItems.length,
+    };
+  }
+
+  /**
+   * Revert entire package to last published state.
+   * Restores all metadata definitions from their published snapshots.
+   */
+  async revertPackage(packageId: string): Promise<void> {
+    const packageItems: Array<{ type: string; name: string; data: any }> = [];
+    for (const [type, typeStore] of this.registry) {
+      for (const [name, data] of typeStore) {
+        const meta = data as any;
+        if (meta?.packageId === packageId || meta?.package === packageId) {
+          packageItems.push({ type, name, data: meta });
+        }
+      }
+    }
+
+    if (packageItems.length === 0) {
+      throw new Error(`No metadata items found for package '${packageId}'`);
+    }
+
+    // Check that at least one item has a published snapshot
+    const hasPublished = packageItems.some(item => item.data.publishedDefinition !== undefined);
+    if (!hasPublished) {
+      throw new Error(`Package '${packageId}' has never been published`);
+    }
+
+    for (const item of packageItems) {
+      if (item.data.publishedDefinition !== undefined) {
+        const reverted = {
+          ...item.data,
+          metadata: structuredClone(item.data.publishedDefinition),
+          state: 'active',
+        };
+        await this.register(item.type, item.name, reverted);
+      }
+    }
+  }
+
+  /**
+   * Get the published version of any metadata item (for runtime serving).
+   * Returns publishedDefinition if exists, else current definition.
+   */
+  async getPublished(type: string, name: string): Promise<unknown | undefined> {
+    const item = await this.get(type, name);
+    if (!item) return undefined;
+
+    const meta = item as any;
+    if (meta.publishedDefinition !== undefined) {
+      return meta.publishedDefinition;
+    }
+
+    // Fall back to current definition (metadata field or the item itself)
+    return meta.metadata ?? item;
   }
 
   // ==========================================

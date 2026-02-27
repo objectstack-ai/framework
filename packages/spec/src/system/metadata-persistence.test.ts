@@ -17,6 +17,7 @@ import {
   MetadataManagerConfigSchema,
   MetadataFallbackStrategySchema,
   MetadataSourceSchema,
+  PackagePublishResultSchema,
 } from './metadata-persistence.zod';
 
 describe('MetadataScopeSchema', () => {
@@ -98,6 +99,35 @@ describe('MetadataRecordSchema', () => {
     expect(record.checksum).toBe('sha256:abc123');
     expect(record.source).toBe('database');
     expect(record.tags).toEqual(['crm', 'custom']);
+  });
+
+  it('should accept publishing fields', () => {
+    const record = MetadataRecordSchema.parse({
+      id: 'abc-123',
+      name: 'account_list_view',
+      type: 'view',
+      metadata: { columns: ['name'] },
+      publishedDefinition: { columns: ['name', 'email'] },
+      publishedAt: '2025-06-01T12:00:00Z',
+      publishedBy: 'admin-user',
+    });
+
+    expect(record.publishedDefinition).toEqual({ columns: ['name', 'email'] });
+    expect(record.publishedAt).toBe('2025-06-01T12:00:00Z');
+    expect(record.publishedBy).toBe('admin-user');
+  });
+
+  it('should allow omitting publishing fields (backward compatible)', () => {
+    const record = MetadataRecordSchema.parse({
+      id: 'abc-123',
+      name: 'test',
+      type: 'object',
+      metadata: {},
+    });
+
+    expect(record.publishedDefinition).toBeUndefined();
+    expect(record.publishedAt).toBeUndefined();
+    expect(record.publishedBy).toBeUndefined();
   });
 
   it('should default version to 1', () => {
@@ -516,5 +546,46 @@ describe('MetadataSourceSchema', () => {
 
   it('should reject invalid source', () => {
     expect(() => MetadataSourceSchema.parse('unknown')).toThrow();
+  });
+});
+
+describe('PackagePublishResultSchema', () => {
+  it('should accept a successful publish result', () => {
+    const result = PackagePublishResultSchema.parse({
+      success: true,
+      packageId: 'com.acme.crm',
+      version: 2,
+      publishedAt: '2025-06-01T12:00:00Z',
+      itemsPublished: 5,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.packageId).toBe('com.acme.crm');
+    expect(result.version).toBe(2);
+    expect(result.publishedAt).toBe('2025-06-01T12:00:00Z');
+    expect(result.itemsPublished).toBe(5);
+    expect(result.validationErrors).toBeUndefined();
+  });
+
+  it('should accept a failed publish result with validation errors', () => {
+    const result = PackagePublishResultSchema.parse({
+      success: false,
+      packageId: 'com.acme.crm',
+      version: 1,
+      publishedAt: '2025-06-01T12:00:00Z',
+      itemsPublished: 0,
+      validationErrors: [
+        { type: 'view', name: 'missing_view', message: 'Referenced object not found' },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.validationErrors).toHaveLength(1);
+    expect(result.validationErrors![0].type).toBe('view');
+  });
+
+  it('should reject missing required fields', () => {
+    expect(() => PackagePublishResultSchema.parse({})).toThrow();
+    expect(() => PackagePublishResultSchema.parse({ success: true })).toThrow();
   });
 });
