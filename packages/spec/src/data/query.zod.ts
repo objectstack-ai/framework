@@ -522,7 +522,7 @@ const BaseQuerySchema = z.object({
  * The `expand` property enables recursive loading of related records through
  * lookup and master_detail fields. Each key is a relationship field name; the
  * value is a nested QueryAST that can further filter, select, sort, and expand
- * the related records (up to `maxExpandDepth`, default 3).
+ * the related records (up to a default max depth of 3).
  *
  * @example
  * ```ts

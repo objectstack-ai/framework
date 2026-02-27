@@ -558,33 +558,27 @@ describe('ObjectQL Engine', () => {
             ]);
         });
 
-        it('should not expand beyond maxExpandDepth (default 3)', async () => {
-            // Simulate a 4-level expand chain: task → project → org → parent_org
+        it('should expand only fields specified in the expand map (populate creates flat expand)', async () => {
+            // populate: ['project'] creates expand: { project: { object: 'project' } } (1 level only)
+            // Nested fields like project.org should NOT be expanded unless explicitly nested in the AST
             vi.mocked(SchemaRegistry.getObject).mockImplementation((name) => {
                 const schemas: Record<string, any> = {
                     task: { name: 'task', fields: { project: { type: 'lookup', reference: 'project' } } },
                     project: { name: 'project', fields: { org: { type: 'lookup', reference: 'org' } } },
-                    org: { name: 'org', fields: { parent: { type: 'lookup', reference: 'parent_org' } } },
-                    parent_org: { name: 'parent_org', fields: { top: { type: 'lookup', reference: 'top_org' } } },
                 };
                 return schemas[name] as any;
             });
 
             vi.mocked(mockDriver.find)
-                .mockResolvedValueOnce([{ _id: 't1', project: 'p1' }])         // find task
-                .mockResolvedValueOnce([{ _id: 'p1', org: 'o1' }])             // expand project (depth 0)
-                .mockResolvedValueOnce([{ _id: 'o1', parent: 'po1' }])         // expand org (depth 1)
-                .mockResolvedValueOnce([{ _id: 'po1', top: 'top1' }]);         // expand parent (depth 2)
-                // depth 3 would NOT be reached (maxExpandDepth = 3)
+                .mockResolvedValueOnce([{ _id: 't1', project: 'p1' }])  // find task
+                .mockResolvedValueOnce([{ _id: 'p1', org: 'o1' }]);     // expand project (depth 0)
+                // org should NOT be expanded further — flat populate doesn't create nested expand
 
-            const result = await engine.find('task', {
-                populate: ['project'],
-            });
+            const result = await engine.find('task', { populate: ['project'] });
 
-            // Construct the nested expand AST manually since populate only does 1 level
-            // We need to verify depth limiting works — let's use a deeper test via the engine internals
-            // For this test, populate maps to flat expand, so only 1 level deep
+            // Project expanded, but org inside project remains as raw ID
             expect(result[0].project).toEqual({ _id: 'p1', org: 'o1' });
+            expect(mockDriver.find).toHaveBeenCalledTimes(2); // Only primary + 1 expand query
         });
 
         it('should return records unchanged when expand map is empty', async () => {

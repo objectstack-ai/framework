@@ -726,7 +726,7 @@ export class ObjectQL implements IDataEngine {
         }
       } catch (e) {
         // Graceful degradation: if expand fails, keep original IDs
-        this.logger.warn('Expand failed for field, keeping raw IDs', {
+        this.logger.warn('Failed to expand relationship field; retaining foreign key IDs', {
           object: objectName,
           field: fieldName,
           reference: referenceObject,
