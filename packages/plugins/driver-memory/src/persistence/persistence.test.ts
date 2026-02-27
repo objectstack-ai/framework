@@ -212,4 +212,87 @@ describe('InMemoryDriver Persistence', () => {
       await driver2.disconnect();
     });
   });
+
+  describe('Serverless Environment Detection', () => {
+    const serverlessEnvVars = [
+      'VERCEL',
+      'VERCEL_ENV',
+      'AWS_LAMBDA_FUNCTION_NAME',
+      'NETLIFY',
+      'FUNCTIONS_WORKER_RUNTIME',
+      'K_SERVICE',
+      'FUNCTION_TARGET',
+      'DENO_DEPLOYMENT_ID',
+    ];
+
+    afterEach(() => {
+      // Clean up all serverless env vars after each test
+      for (const key of serverlessEnvVars) {
+        delete process.env[key];
+      }
+    });
+
+    it('should disable file persistence in auto mode when VERCEL env is set', async () => {
+      process.env.VERCEL = '1';
+      const filePath = path.join(TEST_DATA_DIR, 'serverless-test.json');
+      const driver = new InMemoryDriver({
+        persistence: { type: 'auto', path: filePath },
+      });
+      await driver.connect();
+      await driver.create('items', { id: '1', name: 'Widget' });
+      await driver.flush();
+      await driver.disconnect();
+
+      // File should NOT have been created because auto mode skips file persistence in serverless
+      expect(fs.existsSync(filePath)).toBe(false);
+    });
+
+    it('should disable file persistence in auto shorthand mode when AWS_LAMBDA_FUNCTION_NAME is set', async () => {
+      process.env.AWS_LAMBDA_FUNCTION_NAME = 'my-function';
+      const driver = new InMemoryDriver({ persistence: 'auto' });
+      await driver.connect();
+      await driver.create('items', { id: '1', name: 'Widget' });
+
+      // Should work as pure in-memory without errors
+      const items = await driver.find('items', { object: 'items' });
+      expect(items).toHaveLength(1);
+
+      await driver.disconnect();
+    });
+
+    it('should still allow explicit file persistence in serverless if user requests it', async () => {
+      process.env.VERCEL = '1';
+      const filePath = path.join(TEST_DATA_DIR, 'explicit-file-serverless.json');
+      const driver = new InMemoryDriver({
+        persistence: { type: 'file', path: filePath, autoSaveInterval: 100 },
+      });
+      await driver.connect();
+      await driver.create('items', { id: '1', name: 'Widget' });
+      await driver.flush();
+      await driver.disconnect();
+
+      // Explicit 'file' type should still create the file even in serverless
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it('should still allow custom adapter in serverless', async () => {
+      process.env.NETLIFY = 'true';
+      const stored: Record<string, any[]> = {};
+      const customAdapter = {
+        load: async () => Object.keys(stored).length > 0 ? { ...stored } : null,
+        save: async (db: Record<string, any[]>) => {
+          for (const [k, v] of Object.entries(db)) { stored[k] = [...v]; }
+        },
+        flush: async () => {},
+      };
+
+      const driver = new InMemoryDriver({ persistence: { adapter: customAdapter } });
+      await driver.connect();
+      await driver.create('items', { id: '1', name: 'Widget' });
+      await driver.disconnect();
+
+      expect(stored.items).toBeDefined();
+      expect(stored.items).toHaveLength(1);
+    });
+  });
 });

@@ -43,7 +43,8 @@ export type PersistenceAdapter = z.infer<typeof PersistenceAdapterSchema>;
  * - `file`: Persist to disk file (Node.js only).
  * - `local`: Persist to localStorage (Browser only).
  * - `auto`: Auto-detect environment and choose the best strategy.
- *   Uses `localStorage` in browser environments and `file` in Node.js.
+ *   Uses `localStorage` in browser environments, `file` in standard Node.js,
+ *   and disables persistence with a warning in serverless/edge runtimes.
  */
 export const PersistenceTypeSchema = z.enum(['file', 'local', 'auto']).describe('Persistence backend type');
 
@@ -89,7 +90,14 @@ export type CustomPersistenceConfig = z.infer<typeof CustomPersistenceConfigSche
  * Auto-detect persistence configuration.
  * Automatically selects the best persistence strategy based on the runtime environment:
  * - Browser → localStorage persistence
- * - Node.js → File-system persistence
+ * - Serverless (Vercel, AWS Lambda, etc.) → Persistence disabled with warning
+ * - Node.js (standard) → File-system persistence
+ *
+ * **⚠️ Serverless Warning:** In serverless/edge environments the file system is
+ * ephemeral or read-only. Auto mode detects this and disables file persistence to
+ * prevent silent data loss. Use `persistence: false` to silence the warning, or
+ * supply a custom adapter (e.g. Upstash Redis, Vercel KV) via
+ * `persistence: { adapter: yourAdapter }`.
  *
  * Optional overrides allow customizing the file path or localStorage key
  * used by the auto-detected adapter.
@@ -112,7 +120,7 @@ export type AutoPersistenceConfig = z.infer<typeof AutoPersistenceConfigSchema>;
  * Supports shorthand strings and detailed object configs:
  * - `'file'` — File-system persistence with defaults (Node.js)
  * - `'local'` — localStorage persistence with defaults (Browser)
- * - `'auto'` — Auto-detect environment (browser → localStorage, Node.js → file)
+ * - `'auto'` — Auto-detect environment (browser → localStorage, Node.js → file, serverless → disabled)
  * - `{ type: 'file', path?: string }` — File-system with custom path
  * - `{ type: 'local', key?: string }` — localStorage with custom key
  * - `{ type: 'auto', path?: string, key?: string }` — Auto-detect with overrides
@@ -191,6 +199,11 @@ export const MemoryConfigSchema = z.object({
    * - `{ adapter: PersistenceAdapter }`: Custom persistence adapter
    * - `false`: Disable persistence (pure in-memory, data lost on disconnect)
    *
+   * **⚠️ Serverless / Edge environments (Vercel, AWS Lambda, Netlify, etc.):**
+   * Auto mode detects serverless runtimes and disables file persistence to prevent
+   * silent data loss. Set `persistence: false` to opt-in to pure in-memory mode,
+   * or supply a custom adapter (e.g. Upstash Redis, Vercel KV) for durable storage.
+   *
    * @example
    * // Auto-detect environment (default)
    * new InMemoryDriver()
@@ -200,6 +213,8 @@ export const MemoryConfigSchema = z.object({
    * new InMemoryDriver({ persistence: 'local' })
    * // Pure memory (no persistence)
    * new InMemoryDriver({ persistence: false })
+   * // Custom adapter for serverless
+   * new InMemoryDriver({ persistence: { adapter: upstashAdapter } })
    */
   persistence: MemoryPersistenceConfigSchema.or(z.literal(false)).default('auto').describe('Persistence configuration (defaults to auto-detect)'),
 

@@ -33,7 +33,7 @@ export interface InMemoryDriverConfig {
   logger?: Logger;
   /**
    * Persistence configuration. Defaults to `'auto'`.
-   * - `'auto'` (default) — Auto-detect environment (browser → localStorage, Node.js → file)
+   * - `'auto'` (default) — Auto-detect environment (browser → localStorage, Node.js → file, serverless → disabled)
    * - `'file'` — File-system persistence with defaults (Node.js only)
    * - `'local'` — localStorage persistence with defaults (Browser only)
    * - `{ type: 'file', path?: string, autoSaveInterval?: number }` — File-system with options
@@ -41,6 +41,10 @@ export interface InMemoryDriverConfig {
    * - `{ type: 'auto', path?: string, key?: string, autoSaveInterval?: number }` — Auto-detect with options
    * - `{ adapter: PersistenceAdapterInterface }` — Custom adapter
    * - `false` — Disable persistence (pure in-memory)
+   *
+   * ⚠️ In serverless environments (Vercel, AWS Lambda, Netlify, etc.),
+   * auto mode disables file persistence to prevent silent data loss.
+   * Use `persistence: false` or supply a custom adapter for serverless deployments.
    */
   persistence?: string | false | {
     type?: 'file' | 'local' | 'auto';
@@ -933,9 +937,51 @@ export class InMemoryDriver implements DriverInterface {
   }
 
   /**
+   * Detect whether the current runtime is a serverless/edge environment.
+   *
+   * Checks well-known environment variables set by serverless platforms:
+   * - `VERCEL` / `VERCEL_ENV` — Vercel Functions / Edge
+   * - `AWS_LAMBDA_FUNCTION_NAME` — AWS Lambda
+   * - `NETLIFY` — Netlify Functions
+   * - `FUNCTIONS_WORKER_RUNTIME` — Azure Functions
+   * - `K_SERVICE` — Google Cloud Run / Cloud Functions
+   * - `FUNCTION_TARGET` — Google Cloud Functions (Node.js)
+   * - `DENO_DEPLOYMENT_ID` — Deno Deploy
+   *
+   * Returns `false` when `process` or `process.env` is unavailable
+   * (e.g. browser or edge runtimes without a Node.js process object).
+   */
+  private isServerlessEnvironment(): boolean {
+    if (typeof globalThis.process === 'undefined' || !globalThis.process.env) {
+      return false;
+    }
+    const env = globalThis.process.env;
+    return !!(
+      env.VERCEL ||
+      env.VERCEL_ENV ||
+      env.AWS_LAMBDA_FUNCTION_NAME ||
+      env.NETLIFY ||
+      env.FUNCTIONS_WORKER_RUNTIME ||
+      env.K_SERVICE ||
+      env.FUNCTION_TARGET ||
+      env.DENO_DEPLOYMENT_ID
+    );
+  }
+
+  private static readonly SERVERLESS_PERSISTENCE_WARNING =
+    'Serverless environment detected — file-system persistence is disabled in auto mode. ' +
+    'Data will NOT be persisted across function invocations. ' +
+    'Set persistence: false to silence this warning, or provide a custom adapter ' +
+    '(e.g. Upstash Redis, Vercel KV) via persistence: { adapter: yourAdapter }.';
+
+  /**
    * Initialize the persistence adapter based on configuration.
    * Defaults to 'auto' when persistence is not specified.
    * Use `persistence: false` to explicitly disable persistence.
+   *
+   * In serverless environments (Vercel, AWS Lambda, etc.), auto mode disables
+   * file-system persistence and emits a warning. Use `persistence: false` or
+   * supply a custom adapter for serverless-safe operation.
    */
   private async initPersistence(): Promise<void> {
     const persistence = this.config.persistence === undefined ? 'auto' : this.config.persistence;
@@ -947,6 +993,8 @@ export class InMemoryDriver implements DriverInterface {
           const { LocalStoragePersistenceAdapter } = await import('./persistence/local-storage-adapter.js');
           this.persistenceAdapter = new LocalStoragePersistenceAdapter();
           this.logger.debug('Auto-detected browser environment, using localStorage persistence');
+        } else if (this.isServerlessEnvironment()) {
+          this.logger.warn(InMemoryDriver.SERVERLESS_PERSISTENCE_WARNING);
         } else {
           const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
           this.persistenceAdapter = new FileSystemPersistenceAdapter();
@@ -971,6 +1019,8 @@ export class InMemoryDriver implements DriverInterface {
             key: persistence.key,
           });
           this.logger.debug('Auto-detected browser environment, using localStorage persistence');
+        } else if (this.isServerlessEnvironment()) {
+          this.logger.warn(InMemoryDriver.SERVERLESS_PERSISTENCE_WARNING);
         } else {
           const { FileSystemPersistenceAdapter } = await import('./persistence/file-adapter.js');
           this.persistenceAdapter = new FileSystemPersistenceAdapter({
