@@ -393,6 +393,7 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 ### Completed
 
 - [x] **ObjectQL Engine** — CRUD, hooks (before/after), middleware chain, action registry
+- [x] **ObjectQL $expand** — Engine-level expand post-processing for lookup/master_detail fields via batch $in queries (driver-agnostic, max depth 3)
 - [x] **Schema Registry** — FQN namespacing, multi-package contribution, priority resolution
 - [x] **In-Memory Driver** — Full CRUD, bulk ops, transactions, aggregation pipeline (Mingo), streaming
 - [x] **In-Memory Driver Persistence** — File-system (Node.js) and localStorage (Browser) persistence adapters with auto-save, custom adapter support
@@ -400,7 +401,7 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 - [x] **Serializers** — JSON, YAML, TypeScript format support
 - [x] **Loaders** — Memory, Filesystem, Remote (HTTP) loaders
 - [x] **REST API** — Auto-generated CRUD/Metadata/Batch/Discovery endpoints
-- [x] **Protocol Implementation** — Discovery, ETag caching, batch operations, service status
+- [x] **Protocol Implementation** — Discovery, ETag caching, batch operations, service status, $expand/populate normalization for REST/JSON-RPC/OData
 
 ### Remaining
 

@@ -84,8 +84,15 @@ export const DataEngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
   top: z.number().int().min(1).optional(),
 
   /**
-   * Include related records (JOIN/Populate)
-   * List of relationship field names to expand
+   * Include related records ($expand / Populate)
+   * 
+   * List of relationship field names (lookup or master_detail) to expand.
+   * The engine resolves these by batch-loading referenced records using $in
+   * queries and replacing foreign key IDs with full objects in the result.
+   * 
+   * This is driver-agnostic — expand is handled at the engine layer via
+   * secondary queries, not via SQL JOINs or driver-specific features.
+   * Fields without a valid `reference` in the schema are silently skipped.
    */
   populate: z.array(z.string()).optional(),
 }).describe('Query options for IDataEngine.find() operations');

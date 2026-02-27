@@ -327,6 +327,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             options.populate = options.populate.split(',').map((s: string) => s.trim()).filter(Boolean);
         }
 
+        // Expand → Populate: normalize $expand/expand to populate array
+        // Supports OData $expand, REST expand, and JSON-RPC expand parameters
+        const expandValue = options.$expand ?? options.expand;
+        if (expandValue && !options.populate) {
+            if (typeof expandValue === 'string') {
+                options.populate = expandValue.split(',').map((s: string) => s.trim()).filter(Boolean);
+            } else if (Array.isArray(expandValue)) {
+                options.populate = expandValue;
+            }
+        }
+        delete options.$expand;
+        delete options.expand;
+
         // Boolean fields
         for (const key of ['distinct', 'count']) {
             if (options[key] === 'true') options[key] = true;
@@ -346,10 +359,26 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
-    async getData(request: { object: string, id: string }) {
-        const result = await this.engine.findOne(request.object, {
+    async getData(request: { object: string, id: string, expand?: string | string[], select?: string | string[] }) {
+        const queryOptions: any = {
             filter: { _id: request.id }
-        });
+        };
+
+        // Support select for single-record retrieval
+        if (request.select) {
+            queryOptions.select = typeof request.select === 'string'
+                ? request.select.split(',').map((s: string) => s.trim()).filter(Boolean)
+                : request.select;
+        }
+
+        // Support expand for single-record retrieval
+        if (request.expand) {
+            queryOptions.populate = typeof request.expand === 'string'
+                ? request.expand.split(',').map((s: string) => s.trim()).filter(Boolean)
+                : request.expand;
+        }
+
+        const result = await this.engine.findOne(request.object, queryOptions);
         if (result) {
             return {
                 object: request.object,

@@ -287,7 +287,10 @@ export const HttpFindQueryParamsSchema = z.object({
   orderBy: z.string().optional().describe('Alias for sort (OData compatibility).'),
   top: z.coerce.number().optional().describe('Max records to return (limit).'),
   skip: z.coerce.number().optional().describe('Records to skip (offset).'),
-  expand: z.string().optional().describe('Comma-separated list of relations to eager-load.'),
+  expand: z.string().optional().describe(
+    'Comma-separated list of lookup/master_detail field names to expand. '
+    + 'Resolved to populate array and passed to the engine for batch $in expansion.'
+  ),
   search: z.string().optional().describe('Full-text search query.'),
   distinct: z.coerce.boolean().optional().describe('SELECT DISTINCT flag.'),
   count: z.coerce.boolean().optional().describe('Include total count in response.'),
@@ -311,7 +314,10 @@ export const GetDataRequestSchema = z.object({
   object: z.string().describe('The object name.'),
   id: z.string().describe('The unique record identifier (primary key).'),
   select: z.array(z.string()).optional().describe('Fields to include in the response (allowlisted query param).'),
-  expand: z.array(z.string()).optional().describe('Relations to eager-load (allowlisted query param).'),
+  expand: z.array(z.string()).optional().describe(
+    'Lookup/master_detail field names to expand. '
+    + 'The engine resolves these via batch $in queries, replacing foreign key IDs with full objects.'
+  ),
 });
 
 /**

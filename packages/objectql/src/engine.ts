@@ -618,6 +618,127 @@ export class ObjectQL implements IDataEngine {
   }
 
   // ============================================
+  // Helper: Expand Related Records
+  // ============================================
+
+  /** Maximum depth for recursive expand to prevent infinite loops */
+  private static readonly MAX_EXPAND_DEPTH = 3;
+
+  /**
+   * Post-process expand: resolve lookup/master_detail fields by batch-loading related records.
+   * 
+   * This is a driver-agnostic implementation that uses secondary queries ($in batches)
+   * to load related records, then injects them into the result set.
+   * 
+   * @param objectName - The source object name
+   * @param records - The records returned by the driver
+   * @param expand - The expand map from QueryAST (field name → nested QueryAST)
+   * @param depth - Current recursion depth (0-based)
+   * @returns Records with expanded lookup fields (IDs replaced by full objects)
+   */
+  private async expandRelatedRecords(
+    objectName: string,
+    records: any[],
+    expand: Record<string, QueryAST>,
+    depth: number = 0,
+  ): Promise<any[]> {
+    if (!records || records.length === 0) return records;
+    if (depth >= ObjectQL.MAX_EXPAND_DEPTH) return records;
+
+    const objectSchema = SchemaRegistry.getObject(objectName);
+    // If no schema registered, skip expand — return raw data
+    if (!objectSchema || !objectSchema.fields) return records;
+
+    for (const [fieldName, nestedAST] of Object.entries(expand)) {
+      const fieldDef = objectSchema.fields[fieldName];
+
+      // Skip if field not found or not a relationship type
+      if (!fieldDef || !fieldDef.reference) continue;
+      if (fieldDef.type !== 'lookup' && fieldDef.type !== 'master_detail') continue;
+
+      const referenceObject = fieldDef.reference;
+
+      // Collect all foreign key IDs from records (handle both single and multiple values)
+      const allIds: any[] = [];
+      for (const record of records) {
+        const val = record[fieldName];
+        if (val == null) continue;
+        if (Array.isArray(val)) {
+          allIds.push(...val.filter((id: any) => id != null));
+        } else if (typeof val === 'object') {
+          // Already expanded — skip
+          continue;
+        } else {
+          allIds.push(val);
+        }
+      }
+
+      // De-duplicate IDs
+      const uniqueIds = [...new Set(allIds)];
+      if (uniqueIds.length === 0) continue;
+
+      // Batch-load related records using $in query
+      try {
+        const relatedQuery: QueryAST = {
+          object: referenceObject,
+          where: { _id: { $in: uniqueIds } },
+          ...(nestedAST.fields ? { fields: nestedAST.fields } : {}),
+          ...(nestedAST.orderBy ? { orderBy: nestedAST.orderBy } : {}),
+        };
+
+        const driver = this.getDriver(referenceObject);
+        const relatedRecords = await driver.find(referenceObject, relatedQuery) ?? [];
+
+        // Build a lookup map: id → record
+        const recordMap = new Map<string, any>();
+        for (const rec of relatedRecords) {
+          const id = rec._id ?? rec.id;
+          if (id != null) recordMap.set(String(id), rec);
+        }
+
+        // Recursively expand nested relations if present
+        if (nestedAST.expand && Object.keys(nestedAST.expand).length > 0) {
+          const expandedRelated = await this.expandRelatedRecords(
+            referenceObject,
+            relatedRecords,
+            nestedAST.expand,
+            depth + 1,
+          );
+          // Rebuild map with expanded records
+          recordMap.clear();
+          for (const rec of expandedRelated) {
+            const id = rec._id ?? rec.id;
+            if (id != null) recordMap.set(String(id), rec);
+          }
+        }
+
+        // Inject expanded records back into the original result set
+        for (const record of records) {
+          const val = record[fieldName];
+          if (val == null) continue;
+
+          if (Array.isArray(val)) {
+            record[fieldName] = val.map((id: any) => recordMap.get(String(id)) ?? id);
+          } else if (typeof val !== 'object') {
+            record[fieldName] = recordMap.get(String(val)) ?? val;
+          }
+          // If val is already an object, leave it as-is
+        }
+      } catch (e) {
+        // Graceful degradation: if expand fails, keep original IDs
+        this.logger.warn('Failed to expand relationship field; retaining foreign key IDs', {
+          object: objectName,
+          field: fieldName,
+          reference: referenceObject,
+          error: (e as Error).message,
+        });
+      }
+    }
+
+    return records;
+  }
+
+  // ============================================
   // Helper: Query Conversion
   // ============================================
 
@@ -691,7 +812,12 @@ export class ObjectQL implements IDataEngine {
       await this.triggerHooks('beforeFind', hookContext);
 
       try {
-          const result = await driver.find(object, hookContext.input.ast as QueryAST, hookContext.input.options as any);
+          let result = await driver.find(object, hookContext.input.ast as QueryAST, hookContext.input.options as any);
+
+          // Post-process: expand related records if expand is requested
+          if (ast.expand && Object.keys(ast.expand).length > 0 && Array.isArray(result)) {
+            result = await this.expandRelatedRecords(object, result, ast.expand, 0);
+          }
           
           hookContext.event = 'afterFind';
           hookContext.result = result;
@@ -723,7 +849,15 @@ export class ObjectQL implements IDataEngine {
     };
 
     await this.executeWithMiddleware(opCtx, async () => {
-      return driver.findOne(objectName, opCtx.ast as QueryAST);
+      let result = await driver.findOne(objectName, opCtx.ast as QueryAST);
+
+      // Post-process: expand related records if expand is requested
+      if (ast.expand && Object.keys(ast.expand).length > 0 && result != null) {
+        const expanded = await this.expandRelatedRecords(objectName, [result], ast.expand, 0);
+        result = expanded[0];
+      }
+
+      return result;
     });
 
     return opCtx.result;

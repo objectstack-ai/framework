@@ -143,10 +143,17 @@ export const ODataQuerySchema = z.object({
   $skip: z.number().int().min(0).optional().describe('Results to skip'),
 
   /**
-   * $expand - Include related entities
+   * $expand - Include related entities (lookup/master_detail fields)
    * 
-   * Comma-separated list of navigation properties to expand.
-   * Loads related data in the same request.
+   * Comma-separated list of navigation properties (relationship field names) to expand.
+   * Loads related data in the same request by resolving lookup and master_detail fields.
+   * The engine replaces foreign key IDs with full related objects via batch $in queries.
+   * Supports nested expand via OData parenthetical syntax.
+   * 
+   * Behavior:
+   * - Only fields with `type: 'lookup'` or `type: 'master_detail'` and a valid `reference` are expanded.
+   * - Fields without a schema or reference definition are silently skipped (ID returned as-is).
+   * - Maximum expand depth defaults to 3 (configurable via QueryAdapterConfig).
    * 
    * @example "orders"
    * @example "customer,products"
@@ -155,7 +162,7 @@ export const ODataQuerySchema = z.object({
   $expand: z.union([
     z.string(),           // "orders"
     z.array(z.string()),  // ["orders", "customer"]
-  ]).optional().describe('Navigation properties to expand'),
+  ]).optional().describe('Navigation properties to expand (lookup/master_detail fields)'),
 
   /**
    * $count - Include total count

@@ -516,6 +516,29 @@ const BaseQuerySchema = z.object({
   distinct: z.boolean().optional().describe('SELECT DISTINCT flag'),
 });
 
+/**
+ * QueryAST — Abstract Syntax Tree for data queries.
+ *
+ * The `expand` property enables recursive loading of related records through
+ * lookup and master_detail fields. Each key is a relationship field name; the
+ * value is a nested QueryAST that can further filter, select, sort, and expand
+ * the related records (up to a default max depth of 3).
+ *
+ * @example
+ * ```ts
+ * const ast: QueryAST = {
+ *   object: 'task',
+ *   fields: ['title', 'assignee'],
+ *   expand: {
+ *     assignee: { object: 'user', fields: ['name', 'email'] },
+ *     project: {
+ *       object: 'project',
+ *       expand: { org: { object: 'org' } }   // nested expand
+ *     }
+ *   }
+ * };
+ * ```
+ */
 export type QueryAST = z.infer<typeof BaseQuerySchema> & {
   expand?: Record<string, QueryAST>;
 };
@@ -525,7 +548,12 @@ export type QueryInput = z.input<typeof BaseQuerySchema> & {
 };
 
 export const QuerySchema: z.ZodType<QueryAST> = BaseQuerySchema.extend({
-  expand: z.lazy(() => z.record(z.string(), QuerySchema)).optional().describe('Recursive relation loading (nested queries)'),
+  expand: z.lazy(() => z.record(z.string(), QuerySchema)).optional().describe(
+    'Recursive relation loading map. Keys are lookup/master_detail field names; '
+    + 'values are nested QueryAST objects that control select, filter, sort, and '
+    + 'further expansion on the related object. The engine resolves expand via '
+    + 'batch $in queries (driver-agnostic) with a default max depth of 3.'
+  ),
 });
 
 export type SortNode = z.infer<typeof SortNodeSchema>;

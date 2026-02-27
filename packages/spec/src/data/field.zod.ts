@@ -372,8 +372,21 @@ export const FieldSchema = z.object({
   /** Selection Options */
   options: z.array(SelectOptionSchema).optional().describe('Static options for select/multiselect'),
 
-  /** Relationship Config */
-  reference: z.string().optional().describe('Target Object Name'),
+  /**
+   * Relationship Config
+   * 
+   * Used by `lookup` and `master_detail` field types to define cross-object references.
+   * The `reference` property is **required** for these types — it identifies the target
+   * object whose records this field links to. The engine uses `reference` during $expand
+   * post-processing to resolve foreign key IDs into full related objects via batch queries.
+   * 
+   * For `master_detail` fields, the parent record controls the lifecycle of child records
+   * (e.g., cascade delete). For `lookup` fields, the reference is a soft link.
+   */
+  reference: z.string().optional().describe(
+    'Target object name (snake_case) for lookup/master_detail fields. '
+    + 'Required for relationship types. Used by $expand to resolve foreign key IDs into full objects.'
+  ),
   referenceFilters: z.array(z.string()).optional().describe('Filters applied to lookup dialogs (e.g. "active = true")'),
   writeRequiresMasterRead: z.boolean().optional().describe('If true, user needs read access to master record to edit this field'),
   deleteBehavior: z.enum(['set_null', 'cascade', 'restrict']).optional().default('set_null').describe('What happens if referenced record is deleted'),
