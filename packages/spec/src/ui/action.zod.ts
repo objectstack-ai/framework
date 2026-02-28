@@ -28,8 +28,8 @@ export const ActionType = z.enum(['script', 'url', 'modal', 'flow', 'api']);
  * These types reference an external resource (URL, flow, modal, or API endpoint)
  * and cannot function without a target binding.
  */
-const TARGET_REQUIRED_TYPES = new Set(
-  ActionType.options.filter((t): t is Exclude<typeof t, 'script'> => t !== 'script'),
+const TARGET_REQUIRED_TYPES: ReadonlySet<string> = new Set(
+  ActionType.options.filter((t) => t !== 'script'),
 );
 
 /**
