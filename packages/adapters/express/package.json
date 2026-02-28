@@ -17,7 +17,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@objectstack/runtime": "workspace:*",
+    "@objectstack/runtime": "workspace:^",
     "express": "^5.1.0"
   },
   "devDependencies": {

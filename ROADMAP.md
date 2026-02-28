@@ -1,7 +1,7 @@
 # ObjectStack Protocol — Road Map
 
-> **Last Updated:** 2026-02-25  
-> **Current Version:** v3.0.8  
+> **Last Updated:** 2026-02-28  
+> **Current Version:** v3.0.11  
 > **Status:** Protocol Specification Complete · Runtime Implementation In Progress
 
 ---
@@ -902,6 +902,8 @@ Final polish and advanced features.
 ---
 
 ## Versioning Plan
+
+> **Release Process Note (2026-02-28):** Fixed a bug where `workspace:*` peer dependencies combined with changesets' default `onlyUpdatePeerDependentsWhenOutOfRange: false` caused minor version bumps to escalate to major bumps across the fixed group. Internal peer dependencies now use `workspace:^` and the changeset config enables `onlyUpdatePeerDependentsWhenOutOfRange`.
 
 | Version | Target | Focus |
 |:---|:---|:---|

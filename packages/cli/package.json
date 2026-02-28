@@ -53,7 +53,7 @@
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "@objectstack/core": "workspace:*"
+    "@objectstack/core": "workspace:^"
   },
   "devDependencies": {
     "@oclif/plugin-help": "^6.2.37",

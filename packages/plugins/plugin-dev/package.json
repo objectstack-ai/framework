@@ -21,13 +21,13 @@
     "@objectstack/spec": "workspace:*"
   },
   "peerDependencies": {
-    "@objectstack/driver-memory": "workspace:*",
-    "@objectstack/objectql": "workspace:*",
-    "@objectstack/runtime": "workspace:*",
-    "@objectstack/plugin-auth": "workspace:*",
-    "@objectstack/plugin-hono-server": "workspace:*",
-    "@objectstack/plugin-security": "workspace:*",
-    "@objectstack/rest": "workspace:*"
+    "@objectstack/driver-memory": "workspace:^",
+    "@objectstack/objectql": "workspace:^",
+    "@objectstack/runtime": "workspace:^",
+    "@objectstack/plugin-auth": "workspace:^",
+    "@objectstack/plugin-hono-server": "workspace:^",
+    "@objectstack/plugin-security": "workspace:^",
+    "@objectstack/rest": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@objectstack/driver-memory": {
