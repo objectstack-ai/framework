@@ -8,7 +8,7 @@ export const CloneOpportunityAction: Action = {
   label: 'Clone Opportunity',
   icon: 'copy',
   type: 'script',
-  execute: 'cloneRecord',
+  target: 'cloneRecord',
   locations: ['record_header', 'record_more'],
   successMessage: 'Opportunity cloned successfully!',
   refreshAfter: true,

@@ -77,7 +77,7 @@ describe('ActionSchema', () => {
   });
 
   describe('Action Types', () => {
-    it('should accept all action types', () => {
+    it('should accept all action types with target', () => {
       const types = ['script', 'url', 'modal', 'flow', 'api'] as const;
       
       types.forEach(type => {
@@ -85,8 +85,28 @@ describe('ActionSchema', () => {
           name: 'test_action',
           label: 'Test',
           type,
+          target: 'test_handler',
         };
         expect(() => ActionSchema.parse(action)).not.toThrow();
+      });
+    });
+
+    it('should accept script type without target', () => {
+      expect(() => ActionSchema.parse({
+        name: 'test_action',
+        label: 'Test',
+        type: 'script',
+      })).not.toThrow();
+    });
+
+    it('should reject url/flow/modal/api types without target', () => {
+      const targetRequiredTypes = ['url', 'flow', 'modal', 'api'] as const;
+      targetRequiredTypes.forEach(type => {
+        expect(() => ActionSchema.parse({
+          name: 'test_action',
+          label: 'Test',
+          type,
+        })).toThrow(/target/);
       });
     });
 
@@ -294,6 +314,7 @@ describe('ActionSchema', () => {
         label: 'Transfer Case',
         icon: 'arrow-right',
         type: 'modal',
+        target: 'transfer_case_modal',
         locations: ['record_more'],
         params: [
           {
@@ -559,5 +580,91 @@ describe('ActionSchema - variant', () => {
     });
     expect(result.variant).toBe('danger');
     expect(result.confirmText).toBe('Are you sure?');
+  });
+});
+
+// ============================================================================
+// Protocol Improvement Tests: execute → target migration & target validation
+// ============================================================================
+
+describe('ActionSchema - execute → target migration', () => {
+  it('should auto-migrate execute to target when target is not set', () => {
+    const result = ActionSchema.parse({
+      name: 'legacy_action',
+      label: 'Legacy',
+      type: 'script',
+      execute: 'legacyHandler',
+    });
+    expect(result.target).toBe('legacyHandler');
+  });
+
+  it('should preserve target over execute when both are set', () => {
+    const result = ActionSchema.parse({
+      name: 'both_fields',
+      label: 'Both',
+      type: 'script',
+      target: 'preferredHandler',
+      execute: 'legacyHandler',
+    });
+    expect(result.target).toBe('preferredHandler');
+  });
+
+  it('should allow script type without target or execute', () => {
+    expect(() => ActionSchema.parse({
+      name: 'inline_script',
+      label: 'Inline',
+      type: 'script',
+    })).not.toThrow();
+  });
+});
+
+describe('ActionSchema - target required for non-script types', () => {
+  it('should require target for url type', () => {
+    expect(() => ActionSchema.parse({
+      name: 'url_action',
+      label: 'Open URL',
+      type: 'url',
+    })).toThrow(/target/);
+  });
+
+  it('should require target for flow type', () => {
+    expect(() => ActionSchema.parse({
+      name: 'flow_action',
+      label: 'Run Flow',
+      type: 'flow',
+    })).toThrow(/target/);
+  });
+
+  it('should require target for modal type', () => {
+    expect(() => ActionSchema.parse({
+      name: 'modal_action',
+      label: 'Open Modal',
+      type: 'modal',
+    })).toThrow(/target/);
+  });
+
+  it('should require target for api type', () => {
+    expect(() => ActionSchema.parse({
+      name: 'api_action',
+      label: 'Call API',
+      type: 'api',
+    })).toThrow(/target/);
+  });
+
+  it('should accept non-script types when target is provided', () => {
+    expect(() => ActionSchema.parse({ name: 'url_ok', label: 'URL', type: 'url', target: 'https://example.com' })).not.toThrow();
+    expect(() => ActionSchema.parse({ name: 'flow_ok', label: 'Flow', type: 'flow', target: 'my_flow' })).not.toThrow();
+    expect(() => ActionSchema.parse({ name: 'modal_ok', label: 'Modal', type: 'modal', target: 'my_modal' })).not.toThrow();
+    expect(() => ActionSchema.parse({ name: 'api_ok', label: 'API', type: 'api', target: '/api/endpoint' })).not.toThrow();
+  });
+
+  it('should accept non-script types when execute is provided (auto-migrated)', () => {
+    const result = ActionSchema.parse({
+      name: 'flow_legacy',
+      label: 'Flow Legacy',
+      type: 'flow',
+      execute: 'my_flow',
+    });
+    expect(result.target).toBe('my_flow');
   });
 });

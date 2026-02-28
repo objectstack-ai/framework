@@ -40,7 +40,7 @@ export const ExportToCsvAction: Action = {
   label: 'Export to CSV',
   icon: 'download',
   type: 'script',
-  execute: 'exportToCSV',
+  target: 'exportToCSV',
   locations: ['list_toolbar'],
   successMessage: 'Export completed!',
   refreshAfter: false,

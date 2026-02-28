@@ -962,6 +962,82 @@ describe('defineStack - Navigation Cross-Reference Validation', () => {
 });
 
 // ============================================================================
+// Action Cross-Reference Validation — ensures action targets resolve
+// ============================================================================
+
+describe('defineStack - Action Cross-Reference Validation', () => {
+  const baseManifest = {
+    id: 'com.example.test',
+    name: 'test-project',
+    version: '1.0.0',
+    type: 'app' as const,
+  };
+
+  it('should detect action referencing undefined flow', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      flows: [
+        { name: 'existing_flow', label: 'Existing Flow', type: 'autolaunched' as const, nodes: [], edges: [] },
+      ],
+      actions: [
+        { name: 'run_flow', label: 'Run Flow', type: 'flow' as const, target: 'nonexistent_flow' },
+      ],
+    };
+
+    expect(() => defineStack(config)).toThrow('cross-reference validation failed');
+    expect(() => defineStack(config)).toThrow('nonexistent_flow');
+  });
+
+  it('should pass when action references a defined flow', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      flows: [
+        { name: 'approval_flow', label: 'Approval Flow', type: 'autolaunched' as const, nodes: [], edges: [] },
+      ],
+      actions: [
+        { name: 'run_approval', label: 'Run Approval', type: 'flow' as const, target: 'approval_flow' },
+      ],
+    };
+
+    expect(() => defineStack(config)).not.toThrow();
+  });
+
+  it('should skip action flow validation when no flows are defined', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'run_flow', label: 'Run Flow', type: 'flow' as const, target: 'some_flow' },
+      ],
+    };
+
+    expect(() => defineStack(config)).not.toThrow();
+  });
+
+  it('should accept script actions without cross-reference validation', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'approve_task', label: 'Approve', type: 'script' as const, target: 'approveTask' },
+      ],
+    };
+
+    expect(() => defineStack(config)).not.toThrow();
+  });
+});
+
+// ============================================================================
 // Example-Level Strict Validation — mirrors examples/app-todo & examples/app-crm
 // ============================================================================
 

@@ -8,7 +8,7 @@ export const MarkPrimaryContactAction: Action = {
   label: 'Mark as Primary Contact',
   icon: 'star',
   type: 'script',
-  execute: 'markAsPrimaryContact',
+  target: 'markAsPrimaryContact',
   locations: ['record_header', 'list_item'],
   visible: 'is_primary = false',
   confirmText: 'Mark this contact as the primary contact for the account?',

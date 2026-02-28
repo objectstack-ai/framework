@@ -18,10 +18,33 @@ export const ActionParamSchema = z.object({
 });
 
 /**
+ * Action type enum values.
+ */
+export const ActionType = z.enum(['script', 'url', 'modal', 'flow', 'api']);
+
+/**
+ * Action types that require a `target` field.
+ * These types reference an external resource (URL, flow, modal, or API endpoint)
+ * and cannot function without a target binding.
+ */
+const TARGET_REQUIRED_TYPES: readonly string[] = ['url', 'flow', 'modal', 'api'];
+
+/**
  * Action Schema
  * 
  * **NAMING CONVENTION:**
  * Action names are machine identifiers used in code and must be lowercase snake_case.
+ * 
+ * **TARGET BINDING:**
+ * The `target` field is the canonical way to bind an action to its handler.
+ * - `type: 'script'` — `target` is recommended (references a script/function name).
+ * - `type: 'url'`    — `target` is **required** (the URL to navigate to).
+ * - `type: 'flow'`   — `target` is **required** (the flow name to invoke).
+ * - `type: 'modal'`  — `target` is **required** (the modal/page name to open).
+ * - `type: 'api'`    — `target` is **required** (the API endpoint to call).
+ * 
+ * The `execute` field is **deprecated** and will be removed in a future version.
+ * If `execute` is provided without `target`, it is automatically migrated to `target`.
  * 
  * @example Good action names
  * - 'on_close_deal'
@@ -67,11 +90,19 @@ export const ActionSchema = z.object({
   ]).optional().describe('Visual component override'),
   
   /** What type of interaction? */
-  type: z.enum(['script', 'url', 'modal', 'flow', 'api']).default('script').describe('Action functionality type'),
+  type: ActionType.default('script').describe('Action functionality type'),
   
-  /** Payload / Target */
-  target: z.string().optional().describe('URL, Script Name, Flow ID, or API Endpoint'), // For URL/Flow types
-  execute: z.string().optional().describe('Legacy execution logic'),
+  /** 
+   * Payload / Target — the canonical binding for the action handler.
+   * Required for url, flow, modal, and api types.
+   * Recommended for script type.
+   */
+  target: z.string().optional().describe('URL, Script Name, Flow ID, or API Endpoint'),
+
+  /** 
+   * @deprecated Use `target` instead. This field is auto-migrated to `target` during parsing.
+   */
+  execute: z.string().optional().describe('@deprecated — Use target instead. Auto-migrated to target during parsing.'),
   
   /** User Input Requirements */
   params: z.array(ActionParamSchema).optional().describe('Input parameters required from user'),
@@ -99,6 +130,21 @@ export const ActionSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
+}).transform((data) => {
+  // Auto-migrate deprecated `execute` → `target` for backward compatibility
+  if (data.execute && !data.target) {
+    return { ...data, target: data.execute };
+  }
+  return data;
+}).refine((data) => {
+  // Require `target` for types that reference an external resource
+  if (TARGET_REQUIRED_TYPES.includes(data.type) && !data.target) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Action 'target' is required when type is 'url', 'flow', 'modal', or 'api'.",
+  path: ['target'],
 });
 
 export type Action = z.infer<typeof ActionSchema>;
