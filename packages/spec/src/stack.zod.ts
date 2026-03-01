@@ -475,7 +475,8 @@ function mergeActionsIntoObjects(config: ObjectStackDefinition): ObjectStackDefi
 
   if (actionsByObject.size === 0) return config;
 
-  // Merge into objects (creating new object references to avoid mutation)
+  // Merge into objects (shallow copy — only the `actions` field is modified;
+  // other fields are shared references, consistent with mergeObjects() and Zod output)
   const newObjects = config.objects.map((obj) => {
     const objActions = actionsByObject.get(obj.name);
     if (!objActions) return obj;
