@@ -406,7 +406,7 @@ export const AppTranslationBundleSchema = z.object({
   /** Global notification translations not bound to a specific object */
   notifications: z.record(z.string(), z.object({
     title: z.string().optional().describe('Translated notification title'),
-    body: z.string().optional().describe('Translated notification body'),
+    body: z.string().optional().describe('Translated notification body (supports ICU MessageFormat when enabled)'),
   })).optional().describe('Global notification translations keyed by notification name'),
 
   /** Global error message translations not bound to a specific object */
