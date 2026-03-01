@@ -1,5 +1,13 @@
 # @objectstack/service-automation
 
+## 3.1.1
+
+### Patch Changes
+
+- Updated dependencies [953d667]
+  - @objectstack/spec@3.1.1
+  - @objectstack/core@3.1.1
+
 ## 3.1.0
 
 ### Patch Changes

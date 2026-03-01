@@ -1,5 +1,11 @@
 # @objectstack/spec
 
+## 3.1.1
+
+### Patch Changes
+
+- 953d667: Add modal cross-reference validation, action handler examples, and action.mdx doc sync
+
 ## 3.1.0
 
 ### Minor Changes
