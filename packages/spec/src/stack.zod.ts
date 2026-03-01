@@ -430,7 +430,7 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
       // Validate modal-type actions reference a defined page
       if (action.type === 'modal' && action.target && pageNames.size > 0 && !pageNames.has(action.target)) {
         errors.push(
-          `Action '${action.name}' references modal '${action.target}' which is not defined in pages.`,
+          `Action '${action.name}' references page '${action.target}' (via modal target) which is not defined in pages.`,
         );
       }
     }
