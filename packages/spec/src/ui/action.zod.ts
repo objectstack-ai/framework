@@ -69,6 +69,9 @@ export const ActionSchema = z.object({
   
   /** Display label */
   label: I18nLabelSchema.describe('Display label'),
+
+  /** Target object this action belongs to (optional, snake_case) */
+  objectName: z.string().regex(/^[a-z_][a-z0-9_]*$/).optional().describe('Target object this action belongs to. When set, the action is auto-merged into the object\'s actions array by defineStack().'),
   
   /** Icon name (Lucide) */
   icon: z.string().optional().describe('Icon name'),

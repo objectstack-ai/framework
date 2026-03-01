@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { FieldSchema } from './field.zod';
 import { ValidationRuleSchema } from './validation.zod';
 import { StateMachineSchema } from '../automation/state-machine.zod';
+import { ActionSchema } from '../ui/action.zod';
 
 /**
  * API Operations Enum
@@ -329,6 +330,19 @@ const ObjectSchemaBase = z.object({
 
   /** Key Prefix */
   keyPrefix: z.string().max(5).optional().describe('Short prefix for record IDs (e.g., "001" for Account)'),
+
+  /**
+   * Object Actions
+   * 
+   * Actions associated with this object. Populated automatically by `defineStack()`
+   * when top-level actions specify `objectName` matching this object.
+   * Can also be defined directly on the object.
+   * 
+   * Aligns with Salesforce/ServiceNow patterns where actions are part of the
+   * object schema, so API responses (e.g., `/api/v1/meta/objects/:name`)
+   * include the action list without requiring downstream merge.
+   */
+  actions: z.array(ActionSchema).optional().describe('Actions associated with this object (auto-populated from top-level actions via objectName)'),
 });
 
 /**

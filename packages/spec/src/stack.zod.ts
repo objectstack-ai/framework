@@ -433,10 +433,59 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
           `Action '${action.name}' references page '${action.target}' (via modal target) which is not defined in pages.`,
         );
       }
+
+      // Validate action → object references (objectName)
+      if (action.objectName && !objectNames.has(action.objectName)) {
+        errors.push(
+          `Action '${action.name}' references object '${action.objectName}' which is not defined in objects.`,
+        );
+      }
     }
   }
 
   return errors;
+}
+
+/**
+ * Merge top-level actions into their target objects based on `objectName`.
+ * 
+ * Actions with `objectName` are appended to the corresponding object's `actions` array.
+ * Actions without `objectName` (global actions) are left untouched.
+ * The top-level `actions` array is preserved for global access (e.g., platform overview, search).
+ * 
+ * This aligns with Salesforce/ServiceNow patterns where object metadata includes its actions,
+ * so API responses like `/api/v1/meta/objects/:name` include actions without downstream merge.
+ * 
+ * @internal
+ */
+function mergeActionsIntoObjects(config: ObjectStackDefinition): ObjectStackDefinition {
+  if (!config.actions || !config.objects || config.objects.length === 0) {
+    return config;
+  }
+
+  // Build map: objectName → actions[]
+  const actionsByObject = new Map<string, NonNullable<ObjectStackDefinition['actions']>>();
+  for (const action of config.actions) {
+    if (action.objectName) {
+      const list = actionsByObject.get(action.objectName) ?? [];
+      list.push(action);
+      actionsByObject.set(action.objectName, list);
+    }
+  }
+
+  if (actionsByObject.size === 0) return config;
+
+  // Merge into objects (creating new object references to avoid mutation)
+  const newObjects = config.objects.map((obj) => {
+    const objActions = actionsByObject.get(obj.name);
+    if (!objActions) return obj;
+    return {
+      ...obj,
+      actions: [...(obj.actions ?? []), ...objActions],
+    };
+  });
+
+  return { ...config, objects: newObjects };
 }
 
 /**
@@ -485,7 +534,7 @@ export function defineStack(
 
   if (!strict) {
     // Non-strict mode: skip validation (advanced use cases only)
-    return normalized as ObjectStackDefinition;
+    return mergeActionsIntoObjects(normalized as ObjectStackDefinition);
   }
 
   // Strict mode (default): parse with custom error map, then cross-reference validate
@@ -504,7 +553,7 @@ export function defineStack(
     throw new Error(`${header}\n\n${lines.join('\n')}`);
   }
 
-  return result.data;
+  return mergeActionsIntoObjects(result.data);
 }
 
 
@@ -725,7 +774,7 @@ export function composeStacks(
     }
   }
 
-  return composed as ObjectStackDefinition;
+  return mergeActionsIntoObjects(composed as ObjectStackDefinition);
 }
 
 

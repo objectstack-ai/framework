@@ -152,6 +152,43 @@ describe('ActionSchema', () => {
     });
   });
 
+  describe('objectName', () => {
+    it('should accept action with objectName', () => {
+      const action = {
+        name: 'approve_task',
+        label: 'Approve Task',
+        objectName: 'task',
+      };
+
+      const result = ActionSchema.parse(action);
+      expect(result.objectName).toBe('task');
+    });
+
+    it('should accept action without objectName (global action)', () => {
+      const action = {
+        name: 'global_search',
+        label: 'Global Search',
+      };
+
+      const result = ActionSchema.parse(action);
+      expect(result.objectName).toBeUndefined();
+    });
+
+    it('should enforce snake_case for objectName', () => {
+      expect(() => ActionSchema.parse({
+        name: 'test_action',
+        label: 'Test',
+        objectName: 'myObject',
+      })).toThrow();
+
+      expect(() => ActionSchema.parse({
+        name: 'test_action',
+        label: 'Test',
+        objectName: 'my_object',
+      })).not.toThrow();
+    });
+  });
+
   describe('Action Targets', () => {
     it('should accept URL action with target', () => {
       const action: ActionType = {

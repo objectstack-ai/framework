@@ -486,4 +486,19 @@ describe('composeStacks + defineStack integration', () => {
     // Re-validate the composed result through defineStack
     expect(() => defineStack(combined)).not.toThrow();
   });
+
+  it('should merge actions into objects across composed stacks', () => {
+    const s1 = makeStack({
+      objects: [{ name: 'task', fields: { title: { type: 'text' } } }],
+    });
+    const s2 = makeStack({
+      actions: [{ name: 'complete_task', label: 'Complete', objectName: 'task' }],
+    });
+
+    const combined = composeStacks([s1, s2]);
+    expect(combined.objects![0].actions).toHaveLength(1);
+    expect(combined.objects![0].actions![0].name).toBe('complete_task');
+    // Top-level actions preserved
+    expect(combined.actions).toHaveLength(1);
+  });
 });

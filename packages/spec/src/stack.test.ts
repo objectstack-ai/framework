@@ -1038,6 +1038,170 @@ describe('defineStack - Action Cross-Reference Validation', () => {
 });
 
 // ============================================================================
+// Action → Object Auto-Merge — actions with objectName are merged into objects
+// ============================================================================
+
+describe('defineStack - Action Auto-Merge into Objects', () => {
+  const baseManifest = {
+    id: 'com.example.test',
+    name: 'test-project',
+    version: '1.0.0',
+    type: 'app' as const,
+  };
+
+  it('should merge actions with objectName into corresponding objects', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'approve_task', label: 'Approve', objectName: 'task' },
+      ],
+    };
+
+    const result = defineStack(config);
+    expect(result.objects![0].actions).toHaveLength(1);
+    expect(result.objects![0].actions![0].name).toBe('approve_task');
+  });
+
+  it('should merge multiple actions into the same object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'deal', fields: { amount: { type: 'number' as const } } },
+      ],
+      actions: [
+        { name: 'close_deal', label: 'Close Deal', objectName: 'deal' },
+        { name: 'reopen_deal', label: 'Reopen Deal', objectName: 'deal' },
+      ],
+    };
+
+    const result = defineStack(config);
+    expect(result.objects![0].actions).toHaveLength(2);
+    expect(result.objects![0].actions!.map(a => a.name)).toEqual(['close_deal', 'reopen_deal']);
+  });
+
+  it('should merge actions into different objects', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' as const } } },
+        { name: 'project', fields: { name: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'complete_task', label: 'Complete', objectName: 'task' },
+        { name: 'archive_project', label: 'Archive', objectName: 'project' },
+      ],
+    };
+
+    const result = defineStack(config);
+    expect(result.objects![0].actions).toHaveLength(1);
+    expect(result.objects![0].actions![0].name).toBe('complete_task');
+    expect(result.objects![1].actions).toHaveLength(1);
+    expect(result.objects![1].actions![0].name).toBe('archive_project');
+  });
+
+  it('should not modify objects when no actions have objectName', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'global_action', label: 'Global' },
+      ],
+    };
+
+    const result = defineStack(config);
+    expect(result.objects![0].actions).toBeUndefined();
+  });
+
+  it('should preserve top-level actions array after merge', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'approve_task', label: 'Approve', objectName: 'task' },
+        { name: 'global_search', label: 'Search' },
+      ],
+    };
+
+    const result = defineStack(config);
+    // Top-level actions are preserved
+    expect(result.actions).toHaveLength(2);
+    // Object has the merged action
+    expect(result.objects![0].actions).toHaveLength(1);
+  });
+
+  it('should append merged actions to existing object.actions', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        {
+          name: 'task',
+          fields: { title: { type: 'text' as const } },
+          actions: [{ name: 'inline_action', label: 'Inline' }],
+        },
+      ],
+      actions: [
+        { name: 'merged_action', label: 'Merged', objectName: 'task' },
+      ],
+    };
+
+    const result = defineStack(config);
+    expect(result.objects![0].actions).toHaveLength(2);
+    expect(result.objects![0].actions![0].name).toBe('inline_action');
+    expect(result.objects![0].actions![1].name).toBe('merged_action');
+  });
+
+  it('should work in non-strict mode', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'approve_task', label: 'Approve', objectName: 'task' },
+      ],
+    };
+
+    const result = defineStack(config, { strict: false });
+    expect(result.objects![0].actions).toHaveLength(1);
+    expect(result.objects![0].actions![0].name).toBe('approve_task');
+  });
+
+  it('should detect action objectName referencing undefined object', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'approve_deal', label: 'Approve', objectName: 'nonexistent_object' },
+      ],
+    };
+
+    expect(() => defineStack(config)).toThrow('cross-reference validation failed');
+    expect(() => defineStack(config)).toThrow('nonexistent_object');
+  });
+
+  it('should skip objectName validation when no objects are defined', () => {
+    const config = {
+      manifest: baseManifest,
+      actions: [
+        { name: 'approve_deal', label: 'Approve', objectName: 'deal' },
+      ],
+    };
+
+    // No objects defined, cross-ref validation is skipped
+    expect(() => defineStack(config)).not.toThrow();
+  });
+});
+
+// ============================================================================
 // Action → Modal Cross-Reference Validation — ensures modal targets resolve to pages
 // ============================================================================
 
