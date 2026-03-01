@@ -400,9 +400,9 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
     }
   }
 
-  // Validate action → flow/target cross-references
-  // Note: When no flows are defined (flowNames.size === 0), flow-type action targets
-  // are not validated because the referenced flow may be provided by a plugin.
+  // Validate action → flow/modal cross-references
+  // Note: When no flows/pages are defined (size === 0), targets are not validated
+  // because the referenced items may be provided by a plugin.
   // This is consistent with dashboard/page/report validation in navigation.
   if (config.actions) {
     const flowNames = new Set<string>();
@@ -412,11 +412,25 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
       }
     }
 
+    const pageNames = new Set<string>();
+    if (config.pages) {
+      for (const page of config.pages) {
+        pageNames.add(page.name);
+      }
+    }
+
     for (const action of config.actions) {
       // Validate flow-type actions reference a defined flow
       if (action.type === 'flow' && action.target && flowNames.size > 0 && !flowNames.has(action.target)) {
         errors.push(
           `Action '${action.name}' references flow '${action.target}' which is not defined in flows.`,
+        );
+      }
+
+      // Validate modal-type actions reference a defined page
+      if (action.type === 'modal' && action.target && pageNames.size > 0 && !pageNames.has(action.target)) {
+        errors.push(
+          `Action '${action.name}' references modal '${action.target}' which is not defined in pages.`,
         );
       }
     }
