@@ -7,9 +7,18 @@ import {
   ObjectTranslationDataSchema,
   TranslationFileOrganizationSchema,
   TranslationConfigSchema,
+  ObjectTranslationNodeSchema,
+  AppTranslationBundleSchema,
+  TranslationDiffStatusSchema,
+  TranslationDiffItemSchema,
+  TranslationCoverageResultSchema,
   type TranslationBundle,
   type ObjectTranslationData,
   type TranslationConfig,
+  type ObjectTranslationNode,
+  type AppTranslationBundle,
+  type TranslationDiffItem,
+  type TranslationCoverageResult,
 } from './translation.zod';
 
 describe('LocaleSchema', () => {
@@ -610,6 +619,347 @@ describe('TranslationConfigSchema', () => {
     expect(() =>
       TranslationConfigSchema.parse({
         defaultLocale: 'en',
+      }),
+    ).toThrow();
+  });
+});
+
+// ============================================================================
+// ObjectTranslationNodeSchema — object-first aggregated translation node
+// ============================================================================
+
+describe('ObjectTranslationNodeSchema', () => {
+  it('should accept minimal node with label only', () => {
+    const node: ObjectTranslationNode = ObjectTranslationNodeSchema.parse({
+      label: 'Account',
+    });
+    expect(node.label).toBe('Account');
+    expect(node.pluralLabel).toBeUndefined();
+    expect(node.description).toBeUndefined();
+    expect(node.helpText).toBeUndefined();
+    expect(node.fields).toBeUndefined();
+    expect(node._options).toBeUndefined();
+    expect(node._views).toBeUndefined();
+    expect(node._sections).toBeUndefined();
+    expect(node._actions).toBeUndefined();
+  });
+
+  it('should accept full object-first node with all sub-groups', () => {
+    const node: ObjectTranslationNode = ObjectTranslationNodeSchema.parse({
+      label: '客户',
+      pluralLabel: '客户',
+      description: '客户管理对象',
+      helpText: '用于管理公司的所有客户',
+      fields: {
+        name: { label: '客户名称', help: '公司或组织的法定名称' },
+        industry: {
+          label: '行业',
+          options: { tech: '科技', finance: '金融' },
+        },
+      },
+      _options: {
+        status: { active: '活跃', inactive: '停用' },
+      },
+      _views: {
+        all_accounts: { label: '全部客户', description: '查看所有客户' },
+      },
+      _sections: {
+        basic_info: { label: '基本信息' },
+      },
+      _actions: {
+        convert_lead: { label: '转换线索', confirmMessage: '确认转换？' },
+      },
+    });
+
+    expect(node.label).toBe('客户');
+    expect(node.pluralLabel).toBe('客户');
+    expect(node.description).toBe('客户管理对象');
+    expect(node.helpText).toBe('用于管理公司的所有客户');
+    expect(node.fields?.name.label).toBe('客户名称');
+    expect(node.fields?.industry.options?.tech).toBe('科技');
+    expect(node._options?.status.active).toBe('活跃');
+    expect(node._views?.all_accounts.label).toBe('全部客户');
+    expect(node._sections?.basic_info.label).toBe('基本信息');
+    expect(node._actions?.convert_lead.label).toBe('转换线索');
+    expect(node._actions?.convert_lead.confirmMessage).toBe('确认转换？');
+  });
+
+  it('should reject node without label', () => {
+    expect(() =>
+      ObjectTranslationNodeSchema.parse({ pluralLabel: 'Accounts' }),
+    ).toThrow();
+  });
+
+  it('should accept node with only fields and views', () => {
+    const node = ObjectTranslationNodeSchema.parse({
+      label: 'Opportunity',
+      fields: {
+        stage: { label: 'Stage', options: { open: 'Open', closed: 'Closed' } },
+      },
+      _views: {
+        pipeline: { label: 'Pipeline View' },
+      },
+    });
+    expect(node.fields?.stage.label).toBe('Stage');
+    expect(node._views?.pipeline.label).toBe('Pipeline View');
+  });
+});
+
+// ============================================================================
+// AppTranslationBundleSchema — object-first full app bundle
+// ============================================================================
+
+describe('AppTranslationBundleSchema', () => {
+  it('should accept empty bundle', () => {
+    const bundle: AppTranslationBundle = AppTranslationBundleSchema.parse({});
+    expect(bundle).toBeDefined();
+  });
+
+  it('should accept bundle with object-first translations', () => {
+    const bundle: AppTranslationBundle = AppTranslationBundleSchema.parse({
+      o: {
+        account: {
+          label: '客户',
+          fields: { name: { label: '客户名称' } },
+          _views: { all_accounts: { label: '全部客户' } },
+        },
+        contact: {
+          label: '联系人',
+          fields: { email: { label: '邮箱' } },
+        },
+      },
+    });
+
+    expect(bundle.o?.account.label).toBe('客户');
+    expect(bundle.o?.account.fields?.name.label).toBe('客户名称');
+    expect(bundle.o?.account._views?.all_accounts.label).toBe('全部客户');
+    expect(bundle.o?.contact.label).toBe('联系人');
+  });
+
+  it('should accept bundle with global options', () => {
+    const bundle = AppTranslationBundleSchema.parse({
+      _globalOptions: {
+        currency: { usd: '美元', eur: '欧元', gbp: '英镑' },
+        country: { us: '美国', cn: '中国' },
+      },
+    });
+
+    expect(bundle._globalOptions?.currency.usd).toBe('美元');
+    expect(bundle._globalOptions?.country.cn).toBe('中国');
+  });
+
+  it('should accept bundle with all global groups', () => {
+    const bundle: AppTranslationBundle = AppTranslationBundleSchema.parse({
+      app: {
+        crm: { label: 'CRM', description: 'Customer Relationship Management' },
+      },
+      nav: { home: 'Home', settings: 'Settings' },
+      dashboard: {
+        sales_overview: { label: 'Sales Overview', description: 'Key sales metrics' },
+      },
+      reports: {
+        pipeline_report: { label: 'Pipeline Report' },
+      },
+      pages: {
+        landing: { title: 'Welcome', description: 'Landing page' },
+      },
+      messages: {
+        'common.save': 'Save',
+        'common.cancel': 'Cancel',
+      },
+      validationMessages: {
+        'discount_limit': 'Discount cannot exceed 40%',
+      },
+    });
+
+    expect(bundle.app?.crm.label).toBe('CRM');
+    expect(bundle.nav?.home).toBe('Home');
+    expect(bundle.dashboard?.sales_overview.label).toBe('Sales Overview');
+    expect(bundle.reports?.pipeline_report.label).toBe('Pipeline Report');
+    expect(bundle.pages?.landing.title).toBe('Welcome');
+    expect(bundle.messages?.['common.save']).toBe('Save');
+    expect(bundle.validationMessages?.['discount_limit']).toBe('Discount cannot exceed 40%');
+  });
+
+  it('should accept a complete Chinese translation bundle', () => {
+    const zh: AppTranslationBundle = AppTranslationBundleSchema.parse({
+      o: {
+        account: {
+          label: '客户',
+          pluralLabel: '客户',
+          description: '客户管理对象',
+          fields: {
+            name: { label: '客户名称', help: '公司或组织的法定名称' },
+            industry: { label: '行业', options: { tech: '科技', finance: '金融' } },
+          },
+          _options: { status: { active: '活跃', inactive: '停用' } },
+          _views: { all_accounts: { label: '全部客户' } },
+          _sections: { basic_info: { label: '基本信息' } },
+          _actions: { convert: { label: '转换', confirmMessage: '确认转换？' } },
+        },
+        opportunity: {
+          label: '商机',
+          fields: {
+            stage: { label: '阶段', options: { open: '打开', closed: '关闭' } },
+          },
+        },
+      },
+      _globalOptions: { currency: { usd: '美元', eur: '欧元' } },
+      app: { crm: { label: '客户关系管理', description: '管理销售流程' } },
+      nav: { home: '首页', settings: '设置' },
+      dashboard: { sales_overview: { label: '销售概览' } },
+      reports: { pipeline_report: { label: '管道报表' } },
+      pages: { landing: { title: '欢迎' } },
+      messages: { 'common.save': '保存', 'common.cancel': '取消' },
+      validationMessages: { 'discount_limit': '折扣不能超过40%' },
+    });
+
+    expect(zh.o?.account.label).toBe('客户');
+    expect(zh.o?.account._options?.status.active).toBe('活跃');
+    expect(zh.o?.opportunity.fields?.stage.options?.open).toBe('打开');
+    expect(zh._globalOptions?.currency.usd).toBe('美元');
+    expect(zh.app?.crm.label).toBe('客户关系管理');
+    expect(zh.nav?.home).toBe('首页');
+    expect(zh.messages?.['common.save']).toBe('保存');
+  });
+});
+
+// ============================================================================
+// TranslationDiffStatusSchema
+// ============================================================================
+
+describe('TranslationDiffStatusSchema', () => {
+  it('should accept valid statuses', () => {
+    expect(TranslationDiffStatusSchema.parse('missing')).toBe('missing');
+    expect(TranslationDiffStatusSchema.parse('redundant')).toBe('redundant');
+    expect(TranslationDiffStatusSchema.parse('stale')).toBe('stale');
+  });
+
+  it('should reject invalid status', () => {
+    expect(() => TranslationDiffStatusSchema.parse('outdated')).toThrow();
+  });
+});
+
+// ============================================================================
+// TranslationDiffItemSchema
+// ============================================================================
+
+describe('TranslationDiffItemSchema', () => {
+  it('should accept a missing translation diff item', () => {
+    const item: TranslationDiffItem = TranslationDiffItemSchema.parse({
+      key: 'o.account.fields.website.label',
+      status: 'missing',
+      objectName: 'account',
+      locale: 'zh-CN',
+    });
+    expect(item.key).toBe('o.account.fields.website.label');
+    expect(item.status).toBe('missing');
+    expect(item.objectName).toBe('account');
+    expect(item.locale).toBe('zh-CN');
+  });
+
+  it('should accept a redundant diff item without objectName', () => {
+    const item = TranslationDiffItemSchema.parse({
+      key: 'messages.old_key',
+      status: 'redundant',
+      locale: 'en',
+    });
+    expect(item.objectName).toBeUndefined();
+    expect(item.status).toBe('redundant');
+  });
+
+  it('should accept a stale diff item', () => {
+    const item = TranslationDiffItemSchema.parse({
+      key: 'o.contact.label',
+      status: 'stale',
+      objectName: 'contact',
+      locale: 'ja',
+    });
+    expect(item.status).toBe('stale');
+  });
+
+  it('should reject diff item without key', () => {
+    expect(() =>
+      TranslationDiffItemSchema.parse({ status: 'missing', locale: 'en' }),
+    ).toThrow();
+  });
+});
+
+// ============================================================================
+// TranslationCoverageResultSchema
+// ============================================================================
+
+describe('TranslationCoverageResultSchema', () => {
+  it('should accept a full coverage result', () => {
+    const result: TranslationCoverageResult = TranslationCoverageResultSchema.parse({
+      locale: 'zh-CN',
+      totalKeys: 120,
+      translatedKeys: 105,
+      missingKeys: 12,
+      redundantKeys: 3,
+      staleKeys: 0,
+      coveragePercent: 87.5,
+      items: [
+        { key: 'o.account.fields.website.label', status: 'missing', objectName: 'account', locale: 'zh-CN' },
+        { key: 'messages.old_key', status: 'redundant', locale: 'zh-CN' },
+      ],
+    });
+
+    expect(result.locale).toBe('zh-CN');
+    expect(result.totalKeys).toBe(120);
+    expect(result.translatedKeys).toBe(105);
+    expect(result.missingKeys).toBe(12);
+    expect(result.redundantKeys).toBe(3);
+    expect(result.staleKeys).toBe(0);
+    expect(result.coveragePercent).toBe(87.5);
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].status).toBe('missing');
+  });
+
+  it('should accept a scoped coverage result for a single object', () => {
+    const result = TranslationCoverageResultSchema.parse({
+      locale: 'de',
+      objectName: 'account',
+      totalKeys: 15,
+      translatedKeys: 15,
+      missingKeys: 0,
+      redundantKeys: 0,
+      staleKeys: 0,
+      coveragePercent: 100,
+      items: [],
+    });
+
+    expect(result.objectName).toBe('account');
+    expect(result.coveragePercent).toBe(100);
+    expect(result.items).toHaveLength(0);
+  });
+
+  it('should reject result with negative counts', () => {
+    expect(() =>
+      TranslationCoverageResultSchema.parse({
+        locale: 'en',
+        totalKeys: -1,
+        translatedKeys: 0,
+        missingKeys: 0,
+        redundantKeys: 0,
+        staleKeys: 0,
+        coveragePercent: 0,
+        items: [],
+      }),
+    ).toThrow();
+  });
+
+  it('should reject result with coverage percent above 100', () => {
+    expect(() =>
+      TranslationCoverageResultSchema.parse({
+        locale: 'en',
+        totalKeys: 10,
+        translatedKeys: 10,
+        missingKeys: 0,
+        redundantKeys: 0,
+        staleKeys: 0,
+        coveragePercent: 101,
+        items: [],
       }),
     ).toThrow();
   });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { II18nService } from './i18n-service';
+import type { AppTranslationBundle, TranslationCoverageResult } from '../system/translation.zod';
 
 describe('I18n Service Contract', () => {
   it('should allow a minimal II18nService implementation with required methods', () => {
@@ -84,5 +85,82 @@ describe('I18n Service Contract', () => {
     expect(service.getDefaultLocale!()).toBe('en');
     service.setDefaultLocale!('zh-CN');
     expect(service.getDefaultLocale!()).toBe('zh-CN');
+  });
+
+  it('should allow implementation with getAppBundle and loadAppBundle', () => {
+    const bundles = new Map<string, AppTranslationBundle>();
+
+    const service: II18nService = {
+      t: () => '',
+      getTranslations: () => ({}),
+      loadTranslations: () => {},
+      getLocales: () => Array.from(bundles.keys()),
+      getAppBundle: (locale) => bundles.get(locale),
+      loadAppBundle: (locale, bundle) => { bundles.set(locale, bundle); },
+    };
+
+    const zhBundle: AppTranslationBundle = {
+      o: {
+        account: {
+          label: '客户',
+          fields: { name: { label: '客户名称' } },
+          _views: { all_accounts: { label: '全部客户' } },
+        },
+      },
+      messages: { 'common.save': '保存' },
+    };
+
+    service.loadAppBundle!('zh-CN', zhBundle);
+    const loaded = service.getAppBundle!('zh-CN');
+    expect(loaded).toBeDefined();
+    expect(loaded?.o?.account.label).toBe('客户');
+    expect(loaded?.o?.account._views?.all_accounts.label).toBe('全部客户');
+    expect(loaded?.messages?.['common.save']).toBe('保存');
+  });
+
+  it('should allow implementation with getCoverage', () => {
+    const service: II18nService = {
+      t: () => '',
+      getTranslations: () => ({}),
+      loadTranslations: () => {},
+      getLocales: () => ['en', 'zh-CN'],
+      getCoverage: (locale, objectName?) => {
+        const result: TranslationCoverageResult = {
+          locale,
+          objectName,
+          totalKeys: 50,
+          translatedKeys: 45,
+          missingKeys: 5,
+          redundantKeys: 0,
+          staleKeys: 0,
+          coveragePercent: 90,
+          items: [
+            { key: 'o.account.fields.website.label', status: 'missing', objectName: 'account', locale },
+          ],
+        };
+        return result;
+      },
+    };
+
+    const coverage = service.getCoverage!('zh-CN', 'account');
+    expect(coverage.locale).toBe('zh-CN');
+    expect(coverage.objectName).toBe('account');
+    expect(coverage.coveragePercent).toBe(90);
+    expect(coverage.missingKeys).toBe(5);
+    expect(coverage.items).toHaveLength(1);
+    expect(coverage.items[0].status).toBe('missing');
+  });
+
+  it('should keep backward compatibility — new methods are optional', () => {
+    const minimalService: II18nService = {
+      t: (_key, _locale) => '',
+      getTranslations: (_locale) => ({}),
+      loadTranslations: (_locale, _translations) => {},
+      getLocales: () => [],
+    };
+
+    expect(minimalService.getAppBundle).toBeUndefined();
+    expect(minimalService.loadAppBundle).toBeUndefined();
+    expect(minimalService.getCoverage).toBeUndefined();
   });
 });

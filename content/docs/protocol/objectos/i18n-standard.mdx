@@ -130,6 +130,52 @@ Fallback to: en (system default) ✓
 
 Translations are stored in **JSON files** organized by locale and namespace.
 
+### Object-First Convention (Recommended)
+
+ObjectOS uses an **object-first** convention where all translatable metadata
+for an object is aggregated under `o.{object_name}`. Global (non-object-bound)
+translations remain in dedicated top-level groups. This aligns with Salesforce DX
+and Dynamics conventions, enabling efficient translation workbench editing
+and automated coverage detection.
+
+```typescript
+// AppTranslationBundle for a single locale (e.g. zh-CN)
+const zh: AppTranslationBundle = {
+  // ── Object-first translations ─────────────────────────────────
+  o: {
+    account: {
+      label: '客户',
+      pluralLabel: '客户',
+      description: '客户管理对象',
+      fields: {
+        name: { label: '客户名称', help: '公司法定名称' },
+        industry: { label: '行业', options: { tech: '科技', finance: '金融' } },
+      },
+      _options: { status: { active: '活跃', inactive: '停用' } },
+      _views:  { all_accounts: { label: '全部客户' } },
+      _sections: { basic_info: { label: '基本信息' } },
+      _actions: { convert: { label: '转换', confirmMessage: '确认转换？' } },
+    },
+  },
+
+  // ── Global translations ───────────────────────────────────────
+  _globalOptions: { currency: { usd: '美元', eur: '欧元' } },
+  app: { crm: { label: '客户关系管理' } },
+  nav: { home: '首页', settings: '设置' },
+  dashboard: { sales_overview: { label: '销售概览' } },
+  reports: { pipeline_report: { label: '管道报表' } },
+  pages: { landing: { title: '欢迎' } },
+  messages: { 'common.save': '保存' },
+  validationMessages: { 'discount_limit': '折扣不能超过40%' },
+};
+```
+
+**Key benefits:**
+- ✅ All translatable content for one object in one place
+- ✅ CLI can generate translation skeletons per object
+- ✅ Workbench can show per-object coverage and diffs
+- ✅ No redundant category/fieldOptions/reports nodes
+
 ### Directory Structure
 
 ```
