@@ -11,6 +11,20 @@ import * as flows from './src/flows';
 import * as apps from './src/apps';
 import * as translations from './src/translations';
 
+// ─── Action Handler Registration (runtime lifecycle) ────────────────
+// Handlers are wired separately from metadata. The `onEnable` export
+// is called by the kernel's AppPlugin after the engine is ready.
+// See: src/actions/register-handlers.ts for the full registration flow.
+import { registerTaskActionHandlers } from './src/actions/register-handlers';
+
+/**
+ * Plugin lifecycle hook — called by AppPlugin when the engine is ready.
+ * This is where action handlers are registered on the ObjectQL engine.
+ */
+export const onEnable = async (ctx: { ql: { registerAction: (...args: unknown[]) => void } }) => {
+  registerTaskActionHandlers(ctx.ql);
+};
+
 export default defineStack({
   manifest: {
     id: 'com.example.todo',

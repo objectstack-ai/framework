@@ -1038,8 +1038,68 @@ describe('defineStack - Action Cross-Reference Validation', () => {
 });
 
 // ============================================================================
-// Example-Level Strict Validation — mirrors examples/app-todo & examples/app-crm
+// Action → Modal Cross-Reference Validation — ensures modal targets resolve to pages
 // ============================================================================
+
+describe('defineStack - Modal Cross-Reference Validation', () => {
+  const baseManifest = {
+    id: 'com.example.test',
+    name: 'test-project',
+    version: '1.0.0',
+    type: 'app' as const,
+  };
+
+  const makePage = (name: string) => ({
+    name,
+    label: name,
+    regions: [{ name: 'main', components: [] }],
+  });
+
+  it('should detect modal action referencing undefined page', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      pages: [makePage('existing_page')],
+      actions: [
+        { name: 'open_modal', label: 'Open Modal', type: 'modal' as const, target: 'nonexistent_page' },
+      ],
+    };
+
+    expect(() => defineStack(config)).toThrow('cross-reference validation failed');
+    expect(() => defineStack(config)).toThrow('nonexistent_page');
+  });
+
+  it('should pass when modal action references a defined page', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      pages: [makePage('defer_task_modal')],
+      actions: [
+        { name: 'defer_task', label: 'Defer Task', type: 'modal' as const, target: 'defer_task_modal' },
+      ],
+    };
+
+    expect(() => defineStack(config)).not.toThrow();
+  });
+
+  it('should skip modal validation when no pages are defined', () => {
+    const config = {
+      manifest: baseManifest,
+      objects: [
+        { name: 'task', label: 'Task', fields: { title: { type: 'text' as const } } },
+      ],
+      actions: [
+        { name: 'open_modal', label: 'Open Modal', type: 'modal' as const, target: 'some_modal' },
+      ],
+    };
+
+    expect(() => defineStack(config)).not.toThrow();
+  });
+});
 
 describe('defineStack - Example-Level Strict Validation', () => {
   it('should validate a Todo-style app config (strict mode)', () => {

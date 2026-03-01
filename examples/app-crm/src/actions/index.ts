@@ -2,6 +2,12 @@
 
 /**
  * Action Definitions Barrel
+ *
+ * Exports action metadata definitions only. Used by `Object.values()` in
+ * objectstack.config.ts to auto-collect all action declarations for defineStack().
+ *
+ * **Handler functions** are exported from `./handlers/` — see register-handlers.ts
+ * for the complete registration flow.
  */
 export { EscalateCaseAction, CloseCaseAction } from './case.actions';
 export { MarkPrimaryContactAction, SendEmailAction } from './contact.actions';
