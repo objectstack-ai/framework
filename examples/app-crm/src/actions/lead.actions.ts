@@ -8,7 +8,7 @@ export const ConvertLeadAction: Action = {
   label: 'Convert Lead',
   icon: 'arrow-right-circle',
   type: 'flow',
-  target: 'lead_conversion_flow',
+  target: 'lead_conversion',
   locations: ['record_header', 'list_item'],
   visible: 'status = "qualified" AND is_converted = false',
   confirmText: 'Are you sure you want to convert this lead?',
