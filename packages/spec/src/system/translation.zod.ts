@@ -185,3 +185,258 @@ export const TranslationConfigSchema = z.object({
 }).describe('Internationalization configuration');
 
 export type TranslationConfig = z.infer<typeof TranslationConfigSchema>;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Object-First Translation Node (object-first aggregated structure)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Translatable option map: option value → translated label */
+const OptionTranslationMapSchema = z.record(z.string(), z.string())
+  .describe('Option value to translated label map');
+
+/**
+ * ObjectTranslationNodeSchema
+ *
+ * Object-first aggregated translation node that groups **all** translatable
+ * content for a single object under one key. Aligns with Salesforce / Dynamics
+ * conventions where translations are organized per-object rather than per-category.
+ *
+ * Located at `o.{object_name}` inside an {@link AppTranslationBundle}.
+ *
+ * @example
+ * ```typescript
+ * const accountNode: ObjectTranslationNode = {
+ *   label: '客户',
+ *   pluralLabel: '客户',
+ *   description: '客户管理对象',
+ *   fields: {
+ *     name: { label: '客户名称', help: '公司或组织的法定名称' },
+ *     industry: { label: '行业', options: { tech: '科技', finance: '金融' } },
+ *   },
+ *   _options: { status: { active: '活跃', inactive: '停用' } },
+ *   _views: { all_accounts: { label: '全部客户' } },
+ *   _sections: { basic_info: { label: '基本信息' } },
+ *   _actions: {
+ *     convert_lead: { label: '转换线索', confirmMessage: '确认转换？' },
+ *   },
+ * };
+ * ```
+ */
+export const ObjectTranslationNodeSchema = z.object({
+  /** Translated singular label */
+  label: z.string().describe('Translated singular label'),
+  /** Translated plural label */
+  pluralLabel: z.string().optional().describe('Translated plural label'),
+  /** Translated object description */
+  description: z.string().optional().describe('Translated object description'),
+  /** Translated help text shown in tooltips or guidance panels */
+  helpText: z.string().optional().describe('Translated help text for the object'),
+
+  /** Field-level translations keyed by field name (snake_case) */
+  fields: z.record(z.string(), FieldTranslationSchema).optional()
+    .describe('Field translations keyed by field name'),
+
+  /**
+   * Global picklist / select option overrides scoped to this object.
+   * Keyed by field name → { optionValue: translatedLabel }.
+   */
+  _options: z.record(z.string(), OptionTranslationMapSchema).optional()
+    .describe('Object-scoped picklist option translations keyed by field name'),
+
+  /** View translations keyed by view name */
+  _views: z.record(z.string(), z.object({
+    label: z.string().optional().describe('Translated view label'),
+    description: z.string().optional().describe('Translated view description'),
+  })).optional().describe('View translations keyed by view name'),
+
+  /** Section (form section / tab) translations keyed by section name */
+  _sections: z.record(z.string(), z.object({
+    label: z.string().optional().describe('Translated section label'),
+  })).optional().describe('Section translations keyed by section name'),
+
+  /** Action translations keyed by action name */
+  _actions: z.record(z.string(), z.object({
+    label: z.string().optional().describe('Translated action label'),
+    confirmMessage: z.string().optional().describe('Translated confirmation message'),
+  })).optional().describe('Action translations keyed by action name'),
+}).describe('Object-first aggregated translation node');
+
+export type ObjectTranslationNode = z.infer<typeof ObjectTranslationNodeSchema>;
+
+// ────────────────────────────────────────────────────────────────────────────
+// App Translation Bundle (object-first, full application)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * AppTranslationBundleSchema
+ *
+ * Complete application translation bundle for a **single locale** using
+ * the **object-first** convention. All per-object translatable content
+ * is aggregated under `o.{object_name}`, while global (non-object-bound)
+ * translations are kept in dedicated top-level groups.
+ *
+ * This schema is designed for:
+ * - Translation workbench UIs (object-level editing & coverage)
+ * - CLI skeleton generation (`objectstack i18n extract`)
+ * - Automated diff/coverage detection
+ *
+ * @example
+ * ```typescript
+ * const zh: AppTranslationBundle = {
+ *   o: {
+ *     account: {
+ *       label: '客户',
+ *       fields: { name: { label: '客户名称' } },
+ *       _options: { industry: { tech: '科技' } },
+ *       _views: { all_accounts: { label: '全部客户' } },
+ *       _sections: { basic_info: { label: '基本信息' } },
+ *       _actions: { convert: { label: '转换' } },
+ *     },
+ *   },
+ *   _globalOptions: { currency: { usd: '美元', eur: '欧元' } },
+ *   app: { crm: { label: '客户关系管理', description: '管理销售流程' } },
+ *   nav: { home: '首页', settings: '设置' },
+ *   dashboard: { sales_overview: { label: '销售概览' } },
+ *   reports: { pipeline_report: { label: '管道报表' } },
+ *   pages: { landing: { title: '欢迎' } },
+ *   messages: { 'common.save': '保存' },
+ *   validationMessages: { 'discount_limit': '折扣不能超过40%' },
+ * };
+ * ```
+ */
+export const AppTranslationBundleSchema = z.object({
+  /** Object-first translations keyed by object name (snake_case) */
+  o: z.record(z.string(), ObjectTranslationNodeSchema).optional()
+    .describe('Object-first translations keyed by object name'),
+
+  /** Global picklist options not bound to any specific object */
+  _globalOptions: z.record(z.string(), OptionTranslationMapSchema).optional()
+    .describe('Global picklist option translations keyed by option set name'),
+
+  /** App-level translations */
+  app: z.record(z.string(), z.object({
+    label: z.string().describe('Translated app label'),
+    description: z.string().optional().describe('Translated app description'),
+  })).optional().describe('App translations keyed by app name'),
+
+  /** Navigation menu translations */
+  nav: z.record(z.string(), z.string()).optional()
+    .describe('Navigation item translations keyed by nav item name'),
+
+  /** Dashboard translations keyed by dashboard name */
+  dashboard: z.record(z.string(), z.object({
+    label: z.string().optional().describe('Translated dashboard label'),
+    description: z.string().optional().describe('Translated dashboard description'),
+  })).optional().describe('Dashboard translations keyed by dashboard name'),
+
+  /** Report translations keyed by report name */
+  reports: z.record(z.string(), z.object({
+    label: z.string().optional().describe('Translated report label'),
+    description: z.string().optional().describe('Translated report description'),
+  })).optional().describe('Report translations keyed by report name'),
+
+  /** Page translations keyed by page name */
+  pages: z.record(z.string(), z.object({
+    title: z.string().optional().describe('Translated page title'),
+    description: z.string().optional().describe('Translated page description'),
+  })).optional().describe('Page translations keyed by page name'),
+
+  /** UI message translations */
+  messages: z.record(z.string(), z.string()).optional()
+    .describe('UI message translations keyed by message ID'),
+
+  /** Validation error message translations */
+  validationMessages: z.record(z.string(), z.string()).optional()
+    .describe('Validation error message translations keyed by rule name'),
+}).describe('Object-first application translation bundle for a single locale');
+
+export type AppTranslationBundle = z.infer<typeof AppTranslationBundleSchema>;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Translation Diff & Coverage
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Translation Diff Status
+ *
+ * Status of a single translation entry compared to the source metadata.
+ */
+export const TranslationDiffStatusSchema = z.enum([
+  'missing',
+  'redundant',
+  'stale',
+]).describe('Translation diff status: missing from bundle, redundant (no matching metadata), or stale (metadata changed)');
+
+export type TranslationDiffStatus = z.infer<typeof TranslationDiffStatusSchema>;
+
+/**
+ * TranslationDiffItemSchema
+ *
+ * Describes a single translation key that is missing, redundant, or stale
+ * relative to the source metadata. Used by CLI/API diff detection.
+ *
+ * @example
+ * ```typescript
+ * const item: TranslationDiffItem = {
+ *   key: 'o.account.fields.website.label',
+ *   status: 'missing',
+ *   objectName: 'account',
+ *   locale: 'zh-CN',
+ * };
+ * ```
+ */
+export const TranslationDiffItemSchema = z.object({
+  /** Dot-path translation key (e.g. "o.account.fields.website.label") */
+  key: z.string().describe('Dot-path translation key'),
+  /** Diff status */
+  status: TranslationDiffStatusSchema.describe('Diff status of this translation key'),
+  /** Object name if the key belongs to an object translation node */
+  objectName: z.string().optional().describe('Associated object name (snake_case)'),
+  /** Locale code */
+  locale: z.string().describe('BCP-47 locale code'),
+}).describe('A single translation diff item');
+
+export type TranslationDiffItem = z.infer<typeof TranslationDiffItemSchema>;
+
+/**
+ * TranslationCoverageResultSchema
+ *
+ * Aggregated coverage result for a locale, optionally scoped to a single object.
+ * Returned by the i18n diff detection API.
+ *
+ * @example
+ * ```typescript
+ * const result: TranslationCoverageResult = {
+ *   locale: 'zh-CN',
+ *   totalKeys: 120,
+ *   translatedKeys: 105,
+ *   missingKeys: 12,
+ *   redundantKeys: 3,
+ *   staleKeys: 0,
+ *   coveragePercent: 87.5,
+ *   items: [ ... ],
+ * };
+ * ```
+ */
+export const TranslationCoverageResultSchema = z.object({
+  /** BCP-47 locale code */
+  locale: z.string().describe('BCP-47 locale code'),
+  /** Optional object name scope */
+  objectName: z.string().optional().describe('Object name scope (omit for full bundle)'),
+  /** Total translatable keys derived from metadata */
+  totalKeys: z.number().int().nonnegative().describe('Total translatable keys from metadata'),
+  /** Number of keys that have a translation */
+  translatedKeys: z.number().int().nonnegative().describe('Number of translated keys'),
+  /** Number of missing translations */
+  missingKeys: z.number().int().nonnegative().describe('Number of missing translations'),
+  /** Number of redundant (orphaned) translations */
+  redundantKeys: z.number().int().nonnegative().describe('Number of redundant translations'),
+  /** Number of stale translations */
+  staleKeys: z.number().int().nonnegative().describe('Number of stale translations'),
+  /** Coverage percentage (0-100) */
+  coveragePercent: z.number().min(0).max(100).describe('Translation coverage percentage'),
+  /** Individual diff items */
+  items: z.array(TranslationDiffItemSchema).describe('Detailed diff items'),
+}).describe('Aggregated translation coverage result');
+
+export type TranslationCoverageResult = z.infer<typeof TranslationCoverageResultSchema>;
