@@ -6,6 +6,7 @@ import type { Action } from '@objectstack/spec/ui';
 export const EscalateCaseAction: Action = {
   name: 'escalate_case',
   label: 'Escalate Case',
+  objectName: 'case',
   icon: 'alert-triangle',
   type: 'modal',
   target: 'escalate_case_modal',
@@ -28,6 +29,7 @@ export const EscalateCaseAction: Action = {
 export const CloseCaseAction: Action = {
   name: 'close_case',
   label: 'Close Case',
+  objectName: 'case',
   icon: 'check-circle',
   type: 'modal',
   target: 'close_case_modal',

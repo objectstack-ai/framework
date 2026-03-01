@@ -6,6 +6,7 @@ import type { Action } from '@objectstack/spec/ui';
 export const CloneOpportunityAction: Action = {
   name: 'clone_opportunity',
   label: 'Clone Opportunity',
+  objectName: 'opportunity',
   icon: 'copy',
   type: 'script',
   target: 'cloneRecord',
@@ -18,6 +19,7 @@ export const CloneOpportunityAction: Action = {
 export const MassUpdateStageAction: Action = {
   name: 'mass_update_stage',
   label: 'Update Stage',
+  objectName: 'opportunity',
   icon: 'layers',
   type: 'modal',
   target: 'mass_update_stage_modal',

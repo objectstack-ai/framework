@@ -6,6 +6,7 @@ import type { Action } from '@objectstack/spec/ui';
 export const ConvertLeadAction: Action = {
   name: 'convert_lead',
   label: 'Convert Lead',
+  objectName: 'lead',
   icon: 'arrow-right-circle',
   type: 'flow',
   target: 'lead_conversion',
@@ -20,6 +21,7 @@ export const ConvertLeadAction: Action = {
 export const CreateCampaignAction: Action = {
   name: 'create_campaign',
   label: 'Add to Campaign',
+  objectName: 'lead',
   icon: 'send',
   type: 'modal',
   target: 'add_to_campaign_modal',

@@ -6,6 +6,7 @@ import type { Action } from '@objectstack/spec/ui';
 export const MarkPrimaryContactAction: Action = {
   name: 'mark_primary',
   label: 'Mark as Primary Contact',
+  objectName: 'contact',
   icon: 'star',
   type: 'script',
   target: 'markAsPrimaryContact',
@@ -20,6 +21,7 @@ export const MarkPrimaryContactAction: Action = {
 export const SendEmailAction: Action = {
   name: 'send_email',
   label: 'Send Email',
+  objectName: 'contact',
   icon: 'mail',
   type: 'modal',
   target: 'email_composer',
