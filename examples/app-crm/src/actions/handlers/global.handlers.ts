@@ -8,6 +8,7 @@
  * @example Registration:
  * ```ts
  * engine.registerAction('*', 'exportToCSV', exportToCSV);
+ * engine.registerAction('*', 'logCall', logCall);
  * ```
  */
 
@@ -15,6 +16,7 @@ interface ActionContext {
   record: Record<string, unknown>;
   user: { id: string; name: string };
   engine: {
+    insert(object: string, data: Record<string, unknown>): Promise<{ _id: string }>;
     find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
   };
   params?: Record<string, unknown>;
@@ -31,4 +33,21 @@ export async function exportToCSV(ctx: ActionContext): Promise<string> {
   const header = keys.join(',');
   const rows = records.map((r) => keys.map((k) => r[k] ?? '').join(','));
   return [header, ...rows].join('\n');
+}
+
+/** Log a phone call as an activity record (modal form submission handler) */
+export async function logCall(ctx: ActionContext): Promise<{ activityId: string }> {
+  const { record, engine, user, params } = ctx;
+  const activity = await engine.insert('activity', {
+    type: 'call',
+    subject: params?.subject as string,
+    duration_minutes: params?.duration as number,
+    notes: params?.notes as string ?? '',
+    related_to_id: record._id as string,
+    direction: 'outbound',
+    status: 'completed',
+    created_by: user.id,
+    call_date: new Date().toISOString(),
+  });
+  return { activityId: activity._id };
 }

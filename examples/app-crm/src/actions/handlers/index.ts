@@ -8,5 +8,5 @@
 export { convertLead, addToCampaign } from './lead.handlers';
 export { cloneRecord, massUpdateStage } from './opportunity.handlers';
 export { escalateCase, closeCase } from './case.handlers';
-export { markAsPrimaryContact } from './contact.handlers';
-export { exportToCSV } from './global.handlers';
+export { markAsPrimaryContact, sendEmail } from './contact.handlers';
+export { exportToCSV, logCall } from './global.handlers';

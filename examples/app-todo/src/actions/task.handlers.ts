@@ -85,6 +85,25 @@ export async function deleteCompletedTasks(ctx: ActionContext): Promise<void> {
   }
 }
 
+/** Defer a task by updating its due date (modal form submission handler) */
+export async function deferTask(ctx: ActionContext): Promise<void> {
+  const { record, engine, params } = ctx;
+  await engine.update('task', record._id as string, {
+    due_date: params?.new_due_date as string,
+    defer_reason: params?.reason as string ?? null,
+    status: 'waiting',
+  });
+}
+
+/** Set a reminder on a task (modal form submission handler) */
+export async function setReminder(ctx: ActionContext): Promise<void> {
+  const { record, engine, params } = ctx;
+  await engine.update('task', record._id as string, {
+    reminder_date: params?.reminder_date as string,
+    has_reminder: true,
+  });
+}
+
 /** Export tasks to CSV format */
 export async function exportTasksToCSV(ctx: ActionContext): Promise<string> {
   const { engine } = ctx;

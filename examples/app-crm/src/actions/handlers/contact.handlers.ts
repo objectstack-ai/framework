@@ -8,6 +8,7 @@
  * @example Registration:
  * ```ts
  * engine.registerAction('contact', 'markAsPrimaryContact', markAsPrimaryContact);
+ * engine.registerAction('contact', 'sendEmail', sendEmail);
  * ```
  */
 
@@ -16,6 +17,7 @@ interface ActionContext {
   user: { id: string; name: string };
   engine: {
     update(object: string, id: string, data: Record<string, unknown>): Promise<void>;
+    insert(object: string, data: Record<string, unknown>): Promise<{ _id: string }>;
     find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
   };
   params?: Record<string, unknown>;
@@ -34,4 +36,21 @@ export async function markAsPrimaryContact(ctx: ActionContext): Promise<void> {
 
   // Set current contact as primary
   await engine.update('contact', record._id as string, { is_primary: true });
+}
+
+/** Send an email to a contact (modal form submission handler) */
+export async function sendEmail(ctx: ActionContext): Promise<{ activityId: string }> {
+  const { record, engine, user, params } = ctx;
+  const activity = await engine.insert('activity', {
+    type: 'email',
+    subject: params?.subject as string ?? `Email to ${record.email}`,
+    body: params?.body as string ?? '',
+    contact_id: record._id as string,
+    account_id: record.account_id as string,
+    direction: 'outbound',
+    status: 'sent',
+    created_by: user.id,
+    sent_at: new Date().toISOString(),
+  });
+  return { activityId: activity._id };
 }
