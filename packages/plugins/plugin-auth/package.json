@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.3.3",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
   }
