@@ -12,8 +12,8 @@ description: Migration protocol schemas
 ## TypeScript Usage
 
 ```typescript
-import { AddFieldOperation, ChangeSet, CreateObjectOperation, DeleteObjectOperation, ExecuteSqlOperation, MigrationDependency, MigrationOperation, ModifyFieldOperation, RemoveFieldOperation, RenameObjectOperation } from '@objectstack/spec/system';
-import type { AddFieldOperation, ChangeSet, CreateObjectOperation, DeleteObjectOperation, ExecuteSqlOperation, MigrationDependency, MigrationOperation, ModifyFieldOperation, RemoveFieldOperation, RenameObjectOperation } from '@objectstack/spec/system';
+import { AddFieldOperation, DeleteObjectOperation, ExecuteSqlOperation, MigrationDependency, ModifyFieldOperation, RemoveFieldOperation, RenameObjectOperation } from '@objectstack/spec/system';
+import type { AddFieldOperation, DeleteObjectOperation, ExecuteSqlOperation, MigrationDependency, ModifyFieldOperation, RemoveFieldOperation, RenameObjectOperation } from '@objectstack/spec/system';
 
 // Validate data
 const result = AddFieldOperation.parse(data);
@@ -33,40 +33,6 @@ Add a new field to an existing object
 | **objectName** | `string` | ✅ | Target object name |
 | **fieldName** | `string` | ✅ | Name of the field to add |
 | **field** | `Object` | ✅ | Full field definition to add |
-
-
----
-
-## ChangeSet
-
-A versioned set of atomic schema migration operations
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **id** | `string` | ✅ | Unique identifier for this change set |
-| **name** | `string` | ✅ | Human readable name for the migration |
-| **description** | `string` | optional | Detailed description of what this migration does |
-| **author** | `string` | optional | Author who created this migration |
-| **createdAt** | `string` | optional | ISO 8601 timestamp when the migration was created |
-| **dependencies** | `Object[]` | optional | Migrations that must run before this one |
-| **operations** | `Object \| Object \| Object \| Object \| Object \| Object \| Object[]` | ✅ | Ordered list of atomic migration operations |
-| **rollback** | `Object \| Object \| Object \| Object \| Object \| Object \| Object[]` | optional | Operations to reverse this migration |
-
-
----
-
-## CreateObjectOperation
-
-Create a new object
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **object** | `Object` | ✅ | Full object definition to create |
 
 
 ---
@@ -110,127 +76,6 @@ Dependency reference to another migration that must run first
 | :--- | :--- | :--- | :--- |
 | **migrationId** | `string` | ✅ | ID of the migration this depends on |
 | **package** | `string` | optional | Package that owns the dependency migration |
-
-
----
-
-## MigrationOperation
-
-### Union Options
-
-This schema accepts one of the following structures:
-
-#### Option 1
-
-Add a new field to an existing object
-
-**Type:** `add_field`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **objectName** | `string` | ✅ | Target object name |
-| **fieldName** | `string` | ✅ | Name of the field to add |
-| **field** | `Object` | ✅ | Full field definition to add |
-
----
-
-#### Option 2
-
-Modify properties of an existing field
-
-**Type:** `modify_field`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **objectName** | `string` | ✅ | Target object name |
-| **fieldName** | `string` | ✅ | Name of the field to modify |
-| **changes** | `Record<string, any>` | ✅ | Partial field definition updates |
-
----
-
-#### Option 3
-
-Remove a field from an existing object
-
-**Type:** `remove_field`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **objectName** | `string` | ✅ | Target object name |
-| **fieldName** | `string` | ✅ | Name of the field to remove |
-
----
-
-#### Option 4
-
-Create a new object
-
-**Type:** `create_object`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **object** | `Object` | ✅ | Full object definition to create |
-
----
-
-#### Option 5
-
-Rename an existing object
-
-**Type:** `rename_object`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **oldName** | `string` | ✅ | Current object name |
-| **newName** | `string` | ✅ | New object name |
-
----
-
-#### Option 6
-
-Delete an existing object
-
-**Type:** `delete_object`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **objectName** | `string` | ✅ | Name of the object to delete |
-
----
-
-#### Option 7
-
-Execute a raw SQL statement
-
-**Type:** `execute_sql`
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **type** | `string` | ✅ |  |
-| **sql** | `string` | ✅ | Raw SQL statement to execute |
-| **description** | `string` | optional | Human-readable description of the SQL |
-
----
 
 
 ---

@@ -16,86 +16,12 @@ Defines inputs required before executing an action.
 ## TypeScript Usage
 
 ```typescript
-import { Action, ActionParam } from '@objectstack/spec/ui';
-import type { Action, ActionParam } from '@objectstack/spec/ui';
+import { ActionParam, ActionType } from '@objectstack/spec/ui';
+import type { ActionParam, ActionType } from '@objectstack/spec/ui';
 
 // Validate data
-const result = Action.parse(data);
+const result = ActionParam.parse(data);
 ```
-
----
-
-## Action
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **name** | `string` | ✅ | Machine name (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display label |
-| **icon** | `string` | optional | Icon name |
-| **locations** | `Enum<'list_toolbar' \| 'list_item' \| 'record_header' \| 'record_more' \| 'record_related' \| 'global_nav'>[]` | optional | Locations where this action is visible |
-| **component** | `Enum<'action:button' \| 'action:icon' \| 'action:menu' \| 'action:group'>` | optional | Visual component override |
-| **type** | `Enum<'script' \| 'url' \| 'modal' \| 'flow' \| 'api'>` | ✅ | Action functionality type |
-| **target** | `string` | conditional | URL, Script Name, Flow ID, Modal/Page Name, or API Endpoint. **Required** for `url`, `flow`, `modal`, and `api` types; recommended for `script`. |
-| **execute** | `string` | optional | ⚠️ **Deprecated** — Use `target` instead. Auto-migrated to `target` during parsing. Will be removed in a future version. |
-| **params** | `Object[]` | optional | Input parameters required from user |
-| **variant** | `Enum<'primary' \| 'secondary' \| 'danger' \| 'ghost' \| 'link'>` | optional | Button visual variant for styling (primary = highlighted, danger = destructive, ghost = transparent) |
-| **confirmText** | `string \| Object` | optional | Confirmation message before execution |
-| **successMessage** | `string \| Object` | optional | Success message to show after execution |
-| **refreshAfter** | `boolean` | ✅ | Refresh view after execution |
-| **visible** | `string` | optional | Formula returning boolean |
-| **disabled** | `boolean \| string` | optional | Whether the action is disabled, or a condition expression string |
-| **shortcut** | `string` | optional | Keyboard shortcut to trigger this action (e.g., "Ctrl+S") |
-| **bulkEnabled** | `boolean` | optional | Whether this action can be applied to multiple selected records |
-| **timeout** | `number` | optional | Maximum execution time in milliseconds for the action |
-| **aria** | `Object` | optional | ARIA accessibility attributes |
-
-### Target Binding Rules
-
-The `target` field is the canonical way to bind an action to its handler:
-
-| Action Type | target | Description |
-| :--- | :--- | :--- |
-| `script` | Recommended | Function name to invoke (e.g. `completeTask`) |
-| `url` | **Required** | URL to navigate to |
-| `flow` | **Required** | Flow name to invoke (validated against defined flows) |
-| `modal` | **Required** | Page/modal name to open (validated against defined pages) |
-| `api` | **Required** | API endpoint to call |
-
-### Examples
-
-```typescript
-// Script action with handler target
-const action: Action = {
-  name: 'complete_task',
-  label: 'Mark Complete',
-  type: 'script',
-  target: 'completeTask',      // ← references a registered handler function
-  locations: ['record_header'],
-  refreshAfter: true,
-};
-
-// Flow action
-const flowAction: Action = {
-  name: 'convert_lead',
-  label: 'Convert Lead',
-  type: 'flow',
-  target: 'lead_conversion',   // ← must match a defined flow name
-};
-
-// Modal action
-const modalAction: Action = {
-  name: 'defer_task',
-  label: 'Defer Task',
-  type: 'modal',
-  target: 'defer_task_modal',  // ← must match a defined page name
-};
-```
-
-<Callout type="warn">
-**Migration Note:** The `execute` field is deprecated. If `execute` is provided without `target`, it is automatically migrated to `target` during schema parsing. Always use `target` in new code.
-</Callout>
 
 ---
 
@@ -114,25 +40,16 @@ const modalAction: Action = {
 
 ---
 
-## Cross-Reference Validation
+## ActionType
 
-`defineStack()` validates action cross-references at build time:
+### Allowed Values
 
-- **`type: 'flow'`** — `target` is checked against the `flows[]` collection (when flows are defined).
-- **`type: 'modal'`** — `target` is checked against the `pages[]` collection (when pages are defined).
+* `script`
+* `url`
+* `modal`
+* `flow`
+* `api`
 
-When the target collection is empty, validation is skipped because referenced items may come from plugins.
 
 ---
-
-## Platform Comparison
-
-| Capability | ObjectStack | Salesforce | ServiceNow | Power Platform |
-| :--- | :--- | :--- | :--- | :--- |
-| **Declarative actions** | `ActionSchema` with `target` binding | Lightning Actions (Quick Actions) | UI Actions / Client Scripts | Power Fx `OnSelect` |
-| **Action types** | `script`, `url`, `modal`, `flow`, `api` | URL, Flow, LWC, Visualforce | Client Script, UI Policy, Flow | Navigate, Patch, Launch |
-| **Handler binding** | `target` string → `engine.registerAction()` | Apex Controller `@AuraEnabled` | Script Include + GlideAjax | Power Automate Cloud Flow |
-| **Cross-ref validation** | Build-time (`defineStack`) | Deploy-time (Metadata API) | Update Set validation | Solution Checker |
-| **Modal integration** | `type: 'modal'` + page name target | `lightning:overlayLibrary` | GlideModal / GlideDialogWindow | `Navigate(Screen)` |
-| **Bulk operations** | `bulkEnabled` + `locations: ['list_toolbar']` | List Button + Mass Quick Action | List v3 Actions | Gallery `OnSelect` multi |
 

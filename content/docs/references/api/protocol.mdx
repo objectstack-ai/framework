@@ -395,7 +395,7 @@ const result = AiChatRequest.parse(data);
 | **object** | `string` | ✅ | The object name. |
 | **id** | `string` | ✅ | The unique record identifier (primary key). |
 | **select** | `string[]` | optional | Fields to include in the response (allowlisted query param). |
-| **expand** | `string[]` | optional | Relations to eager-load (allowlisted query param). |
+| **expand** | `string[]` | optional | Lookup/master_detail field names to expand. The engine resolves these via batch $in queries, replacing foreign key IDs with full objects. |
 
 
 ---
@@ -782,7 +782,7 @@ const result = AiChatRequest.parse(data);
 | **orderBy** | `string` | optional | Alias for sort (OData compatibility). |
 | **top** | `number` | optional | Max records to return (limit). |
 | **skip** | `number` | optional | Records to skip (offset). |
-| **expand** | `string` | optional | Comma-separated list of relations to eager-load. |
+| **expand** | `string` | optional | Comma-separated list of lookup/master_detail field names to expand. Resolved to populate array and passed to the engine for batch $in expansion. |
 | **search** | `string` | optional | Full-text search query. |
 | **distinct** | `boolean` | optional | SELECT DISTINCT flag. |
 | **count** | `boolean` | optional | Include total count in response. |

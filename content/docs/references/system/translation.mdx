@@ -16,12 +16,53 @@ Translation data for a single field.
 ## TypeScript Usage
 
 ```typescript
-import { FieldTranslation, Locale, ObjectTranslationData, TranslationBundle, TranslationConfig, TranslationData, TranslationFileOrganization } from '@objectstack/spec/system';
-import type { FieldTranslation, Locale, ObjectTranslationData, TranslationBundle, TranslationConfig, TranslationData, TranslationFileOrganization } from '@objectstack/spec/system';
+import { AppTranslationBundle, CoverageBreakdownEntry, FieldTranslation, Locale, MessageFormat, ObjectTranslationData, ObjectTranslationNode, TranslationBundle, TranslationConfig, TranslationCoverageResult, TranslationData, TranslationDiffItem, TranslationDiffStatus, TranslationFileOrganization } from '@objectstack/spec/system';
+import type { AppTranslationBundle, CoverageBreakdownEntry, FieldTranslation, Locale, MessageFormat, ObjectTranslationData, ObjectTranslationNode, TranslationBundle, TranslationConfig, TranslationCoverageResult, TranslationData, TranslationDiffItem, TranslationDiffStatus, TranslationFileOrganization } from '@objectstack/spec/system';
 
 // Validate data
-const result = FieldTranslation.parse(data);
+const result = AppTranslationBundle.parse(data);
 ```
+
+---
+
+## AppTranslationBundle
+
+Object-first application translation bundle for a single locale
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **_meta** | `Object` | optional | Bundle-level metadata (locale, bidi direction) |
+| **namespace** | `string` | optional | Namespace for plugin isolation to avoid translation key collisions |
+| **o** | `Record<string, Object>` | optional | Object-first translations keyed by object name |
+| **_globalOptions** | `Record<string, Record<string, string>>` | optional | Global picklist option translations keyed by option set name |
+| **app** | `Record<string, Object>` | optional | App translations keyed by app name |
+| **nav** | `Record<string, string>` | optional | Navigation item translations keyed by nav item name |
+| **dashboard** | `Record<string, Object>` | optional | Dashboard translations keyed by dashboard name |
+| **reports** | `Record<string, Object>` | optional | Report translations keyed by report name |
+| **pages** | `Record<string, Object>` | optional | Page translations keyed by page name |
+| **messages** | `Record<string, string>` | optional | UI message translations keyed by message ID (supports ICU MessageFormat) |
+| **validationMessages** | `Record<string, string>` | optional | Validation error message translations keyed by rule name (supports ICU MessageFormat) |
+| **notifications** | `Record<string, Object>` | optional | Global notification translations keyed by notification name |
+| **errors** | `Record<string, string>` | optional | Global error message translations keyed by error code |
+
+
+---
+
+## CoverageBreakdownEntry
+
+Coverage breakdown for a single translation group
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **group** | `string` | ✅ | Translation group category |
+| **totalKeys** | `integer` | ✅ | Total keys in this group |
+| **translatedKeys** | `integer` | ✅ | Translated keys in this group |
+| **coveragePercent** | `number` | ✅ | Coverage percentage for this group |
+
 
 ---
 
@@ -35,10 +76,23 @@ Translation data for a single field
 | :--- | :--- | :--- | :--- |
 | **label** | `string` | optional | Translated field label |
 | **help** | `string` | optional | Translated help text |
+| **placeholder** | `string` | optional | Translated placeholder text for form inputs |
 | **options** | `Record<string, string>` | optional | Option value to translated label map |
 
 
 ---
+
+
+---
+
+## MessageFormat
+
+Message interpolation format: ICU MessageFormat or simple `{variable}` replacement
+
+### Allowed Values
+
+* `icu`
+* `simple`
 
 
 ---
@@ -58,6 +112,29 @@ Translation data for a single object
 
 ---
 
+## ObjectTranslationNode
+
+Object-first aggregated translation node
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **label** | `string` | ✅ | Translated singular label |
+| **pluralLabel** | `string` | optional | Translated plural label |
+| **description** | `string` | optional | Translated object description |
+| **helpText** | `string` | optional | Translated help text for the object |
+| **fields** | `Record<string, Object>` | optional | Field translations keyed by field name |
+| **_options** | `Record<string, Record<string, string>>` | optional | Object-scoped picklist option translations keyed by field name |
+| **_views** | `Record<string, Object>` | optional | View translations keyed by view name |
+| **_sections** | `Record<string, Object>` | optional | Section translations keyed by section name |
+| **_actions** | `Record<string, Object>` | optional | Action translations keyed by action name |
+| **_notifications** | `Record<string, Object>` | optional | Notification translations keyed by notification name |
+| **_errors** | `Record<string, string>` | optional | Error message translations keyed by error code |
+
+
+---
+
 
 ---
 
@@ -73,8 +150,31 @@ Internationalization configuration
 | **supportedLocales** | `string[]` | ✅ | Supported BCP-47 locale codes |
 | **fallbackLocale** | `string` | optional | Fallback locale code |
 | **fileOrganization** | `Enum<'bundled' \| 'per_locale' \| 'per_namespace'>` | ✅ | File organization strategy |
+| **messageFormat** | `Enum<'icu' \| 'simple'>` | ✅ | Message interpolation format (ICU MessageFormat or simple) |
 | **lazyLoad** | `boolean` | ✅ | Load translations on demand |
 | **cache** | `boolean` | ✅ | Cache loaded translations |
+
+
+---
+
+## TranslationCoverageResult
+
+Aggregated translation coverage result
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **locale** | `string` | ✅ | BCP-47 locale code |
+| **objectName** | `string` | optional | Object name scope (omit for full bundle) |
+| **totalKeys** | `integer` | ✅ | Total translatable keys from metadata |
+| **translatedKeys** | `integer` | ✅ | Number of translated keys |
+| **missingKeys** | `integer` | ✅ | Number of missing translations |
+| **redundantKeys** | `integer` | ✅ | Number of redundant translations |
+| **staleKeys** | `integer` | ✅ | Number of stale translations |
+| **coveragePercent** | `number` | ✅ | Translation coverage percentage |
+| **items** | `Object[]` | ✅ | Detailed diff items |
+| **breakdown** | `Object[]` | optional | Per-group coverage breakdown |
 
 
 ---
@@ -91,6 +191,38 @@ Translation data for objects, apps, and UI messages
 | **apps** | `Record<string, Object>` | optional | App translations keyed by app name |
 | **messages** | `Record<string, string>` | optional | UI message translations keyed by message ID |
 | **validationMessages** | `Record<string, string>` | optional | Translatable validation error messages keyed by rule name (e.g., `{"discount_limit": "折扣不能超过40%"}`) |
+
+
+---
+
+## TranslationDiffItem
+
+A single translation diff item
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **key** | `string` | ✅ | Dot-path translation key |
+| **status** | `Enum<'missing' \| 'redundant' \| 'stale'>` | ✅ | Diff status of this translation key |
+| **objectName** | `string` | optional | Associated object name (snake_case) |
+| **locale** | `string` | ✅ | BCP-47 locale code |
+| **sourceHash** | `string` | optional | Hash of source metadata for precise stale detection |
+| **aiSuggested** | `string` | optional | AI-suggested translation for this key |
+| **aiConfidence** | `number` | optional | AI suggestion confidence score (0–1) |
+
+
+---
+
+## TranslationDiffStatus
+
+Translation diff status: missing from bundle, redundant (no matching metadata), or stale (metadata changed)
+
+### Allowed Values
+
+* `missing`
+* `redundant`
+* `stale`
 
 
 ---

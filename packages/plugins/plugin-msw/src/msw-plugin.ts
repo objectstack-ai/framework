@@ -372,7 +372,13 @@ export class ObjectStackServer {
     }
 
     static async getData(objectName: string, id: string, options?: { expand?: string | string[]; select?: string | string[] }) {
-        const body = await this.getProtocol().getData({ object: objectName, id, ...options });
+        const normalize = (v?: string | string[]) => v == null ? undefined : Array.isArray(v) ? v : [v];
+        const body = await this.getProtocol().getData({
+            object: objectName,
+            id,
+            select: normalize(options?.select),
+            expand: normalize(options?.expand),
+        });
         return { data: body, status: 200 };
     }
 

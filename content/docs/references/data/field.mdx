@@ -115,7 +115,7 @@ const result = Address.parse(data);
 | **min** | `number` | optional | Minimum value |
 | **max** | `number` | optional | Maximum value |
 | **options** | `Object[]` | optional | Static options for select/multiselect |
-| **reference** | `string` | optional | Target Object Name |
+| **reference** | `string` | optional | Target object name (snake_case) for lookup/master_detail fields. Required for relationship types. Used by $expand to resolve foreign key IDs into full objects. |
 | **referenceFilters** | `string[]` | optional | Filters applied to lookup dialogs (e.g. "active = true") |
 | **writeRequiresMasterRead** | `boolean` | optional | If true, user needs read access to master record to edit this field |
 | **deleteBehavior** | `Enum<'set_null' \| 'cascade' \| 'restrict'>` | ✅ | What happens if referenced record is deleted |

@@ -16,8 +16,8 @@ Defines the lifecycle and mutability of a metadata item.
 ## TypeScript Usage
 
 ```typescript
-import { MetadataCollectionInfo, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent } from '@objectstack/spec/system';
-import type { MetadataCollectionInfo, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent } from '@objectstack/spec/system';
+import { MetadataCollectionInfo, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent, PackagePublishResult } from '@objectstack/spec/system';
+import type { MetadataCollectionInfo, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent, PackagePublishResult } from '@objectstack/spec/system';
 
 // Validate data
 const result = MetadataCollectionInfo.parse(data);
@@ -189,6 +189,9 @@ const result = MetadataCollectionInfo.parse(data);
 | **checksum** | `string` | optional | Content checksum for change detection |
 | **source** | `Enum<'filesystem' \| 'database' \| 'api' \| 'migration'>` | optional | Origin of this metadata record |
 | **tags** | `string[]` | optional | Classification tags for filtering and grouping |
+| **publishedDefinition** | `any` | optional | Snapshot of the last published definition |
+| **publishedAt** | `string` | optional | When this metadata was last published |
+| **publishedBy** | `string` | optional | Who published this version |
 | **createdBy** | `string` | optional |  |
 | **createdAt** | `string` | optional | Creation timestamp |
 | **updatedBy** | `string` | optional |  |
@@ -299,6 +302,22 @@ const result = MetadataCollectionInfo.parse(data);
 | **metadataType** | `string` | optional |  |
 | **data** | `any` | optional |  |
 | **timestamp** | `string` | optional |  |
+
+
+---
+
+## PackagePublishResult
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ | Whether the publish succeeded |
+| **packageId** | `string` | ✅ | The package ID that was published |
+| **version** | `integer` | ✅ | New version number after publish |
+| **publishedAt** | `string` | ✅ | Publish timestamp |
+| **itemsPublished** | `integer` | ✅ | Total metadata items published |
+| **validationErrors** | `Object[]` | optional | Validation errors if publish failed |
 
 
 ---

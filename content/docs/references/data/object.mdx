@@ -14,8 +14,8 @@ API Operations Enum
 ## TypeScript Usage
 
 ```typescript
-import { ApiMethod, CDCConfig, Index, Object, ObjectCapabilities, ObjectExtension, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
-import type { ApiMethod, CDCConfig, Index, Object, ObjectCapabilities, ObjectExtension, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectExtension, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import type { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectExtension, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = ApiMethod.parse(data);
@@ -69,45 +69,6 @@ const result = ApiMethod.parse(data);
 | **type** | `Enum<'btree' \| 'hash' \| 'gin' \| 'gist' \| 'fulltext'>` | ✅ | Index algorithm type |
 | **unique** | `boolean` | ✅ | Whether the index enforces uniqueness |
 | **partial** | `string` | optional | Partial index condition (SQL WHERE clause for conditional indexes) |
-
-
----
-
-## Object
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **name** | `string` | ✅ | Machine unique key (snake_case). Immutable. |
-| **label** | `string` | optional | Human readable singular label (e.g. "Account") |
-| **pluralLabel** | `string` | optional | Human readable plural label (e.g. "Accounts") |
-| **description** | `string` | optional | Developer documentation / description |
-| **icon** | `string` | optional | Icon name (Lucide/Material) for UI representation |
-| **tags** | `string[]` | optional | Categorization tags (e.g. "sales", "system", "reference") |
-| **active** | `boolean` | ✅ | Is the object active and usable |
-| **isSystem** | `boolean` | ✅ | Is system object (protected from deletion) |
-| **abstract** | `boolean` | ✅ | Is abstract base object (cannot be instantiated) |
-| **datasource** | `string` | ✅ | Target Datasource ID. "default" is the primary DB. |
-| **tableName** | `string` | optional | Physical table/collection name in the target datasource |
-| **fields** | `Record<string, Object>` | ✅ | Field definitions map. Keys must be snake_case identifiers. |
-| **indexes** | `Object[]` | optional | Database performance indexes |
-| **tenancy** | `Object` | optional | Multi-tenancy configuration for SaaS applications |
-| **softDelete** | `Object` | optional | Soft delete (trash/recycle bin) configuration |
-| **versioning** | `Object` | optional | Record versioning and history tracking configuration |
-| **partitioning** | `Object` | optional | Table partitioning configuration for performance |
-| **cdc** | `Object` | optional | Change Data Capture (CDC) configuration for real-time data streaming |
-| **validations** | `[__schema0](./__schema0)[]` | optional | Object-level validation rules |
-| **stateMachines** | `Record<string, Object>` | optional | Named state machines for parallel lifecycles (e.g., status, payment, approval) |
-| **displayNameField** | `string` | optional | Field to use as the record display name (e.g., "name", "title"). Defaults to "name" if present. |
-| **recordName** | `Object` | optional | Record name generation configuration (Salesforce pattern) |
-| **titleFormat** | `string` | optional | Title expression (e.g. "`{name}` - `{code}`"). Overrides displayNameField. |
-| **compactLayout** | `string[]` | optional | Primary fields for hover/cards/lookups |
-| **search** | `Object` | optional | Search engine configuration |
-| **enable** | `Object` | optional | Enabled system features modules |
-| **recordTypes** | `string[]` | optional | Record type names for this object |
-| **sharingModel** | `Enum<'private' \| 'read' \| 'read_write' \| 'full'>` | optional | Default sharing model |
-| **keyPrefix** | `string` | optional | Short prefix for record IDs (e.g., "001" for Account) |
 
 
 ---
