@@ -37,14 +37,15 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                 
                 if (service === 'data') {
                     const ql = kernel.getService<any>('objectql');
+                    // Delegate to protocol service when available for proper expand/populate support
+                    let protocol: any;
+                    try { protocol = kernel.getService<any>('protocol'); } catch { /* not registered */ }
                     if (method === 'create') {
                          const res = await ql.insert(params.object, params.data);
                          const record = { ...params.data, ...res };
                          return { object: params.object, id: record.id || record._id, record };
                     }
                     if (method === 'get') {
-                        // Delegate to protocol for proper expand/select support
-                        const protocol = kernel.getService<any>('protocol');
                         if (protocol) {
                             return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
                         }
@@ -52,8 +53,6 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                         return record ? { object: params.object, id: params.id, record } : null;
                     }
                     if (method === 'query') {
-                        // Delegate to protocol for proper expand/populate support
-                        const protocol = kernel.getService<any>('protocol');
                         if (protocol) {
                             return await protocol.findData({ object: params.object, query: params.query });
                         }
@@ -62,8 +61,6 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
-                        // Delegate to protocol for proper expand/populate support
-                        const protocol = kernel.getService<any>('protocol');
                         if (protocol) {
                             return await protocol.findData({ object: params.object, query: params.query });
                         }

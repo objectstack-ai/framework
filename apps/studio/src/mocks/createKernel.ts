@@ -54,6 +54,8 @@ export async function createKernel(options: KernelOptions) {
             const ql = (kernel as any).context?.getService('objectql');
             
             if (service === 'data') {
+                // Delegate to protocol service when available for proper expand/populate support
+                const protocol = (kernel as any).context?.getService('protocol');
                 // All data responses conform to protocol.zod.ts schemas:
                 // CreateDataResponse = { object, id, record }
                 // GetDataResponse = { object, id, record }
@@ -67,7 +69,6 @@ export async function createKernel(options: KernelOptions) {
                 }
                 if (method === 'get') {
                      // Delegate to protocol for proper expand/select support
-                     const protocol = (kernel as any).context?.getService('protocol');
                      if (protocol) {
                          return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
                      }
@@ -116,7 +117,6 @@ export async function createKernel(options: KernelOptions) {
                 }
                 if (method === 'find' || method === 'query') {
                     // Delegate to protocol for proper expand/populate support
-                    const protocol = (kernel as any).context?.getService('protocol');
                     if (protocol) {
                         return await protocol.findData({ object: params.object, query: params.query || params.filters });
                     }

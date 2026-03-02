@@ -31,6 +31,9 @@ describe('ObjectStackClient (with Hono Server)', () => {
                 
                 if (service === 'data') {
                     const ql = kernel.getService<any>('objectql'); // Use 'objectql' service name for clarity
+                    // Delegate to protocol service when available for proper expand/populate support
+                    let protocol: any;
+                    try { protocol = kernel.getService<any>('protocol'); } catch { /* not registered */ }
                     if (method === 'create') {
                         const res = await ql.insert(params.object, params.data);
                         const record = { ...params.data, ...res };
@@ -38,8 +41,6 @@ describe('ObjectStackClient (with Hono Server)', () => {
                     }
                     // Params from HttpDispatcher: { object, id, ...query }
                     if (method === 'get') {
-                        // Delegate to protocol for proper expand/select support
-                        const protocol = kernel.getService<any>('protocol');
                         if (protocol) {
                             return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
                         }
@@ -48,8 +49,6 @@ describe('ObjectStackClient (with Hono Server)', () => {
                     }
                     // Params from HttpDispatcher: { object, filters }
                     if (method === 'query') {
-                        // Delegate to protocol for proper expand/populate support
-                        const protocol = kernel.getService<any>('protocol');
                         if (protocol) {
                             return await protocol.findData({ object: params.object, query: params.query || params.filters });
                         }
@@ -57,8 +56,6 @@ describe('ObjectStackClient (with Hono Server)', () => {
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
-                        // Delegate to protocol for proper expand/populate support
-                        const protocol = kernel.getService<any>('protocol');
                         if (protocol) {
                             return await protocol.findData({ object: params.object, query: params.query || params.filters });
                         }
