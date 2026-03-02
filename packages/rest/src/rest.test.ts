@@ -418,15 +418,18 @@ describe('RestServer', () => {
   });
 
   describe('getData handler expand/select forwarding', () => {
+    function getRoute(rest: any, pathSuffix: string) {
+      const routes = rest.getRoutes();
+      return routes.find(
+        (r: any) => r.method === 'GET' && r.path === `/api/v1/data/${pathSuffix}`,
+      );
+    }
+
     it('should pass expand and select query params to protocol.getData', async () => {
       const rest = new RestServer(server as any, protocol as any);
       rest.registerRoutes();
 
-      // Find the GET /data/:object/:id route handler
-      const routes = rest.getRoutes();
-      const getByIdRoute = routes.find(
-        (r) => r.method === 'GET' && r.path.includes(':id'),
-      );
+      const getByIdRoute = getRoute(rest, ':object/:id');
       expect(getByIdRoute).toBeDefined();
 
       // Simulate request with expand and select query params
@@ -461,10 +464,7 @@ describe('RestServer', () => {
       const rest = new RestServer(server as any, protocol as any);
       rest.registerRoutes();
 
-      const routes = rest.getRoutes();
-      const getByIdRoute = routes.find(
-        (r) => r.method === 'GET' && r.path.includes(':id'),
-      );
+      const getByIdRoute = getRoute(rest, ':object/:id');
 
       const mockReq = {
         params: { object: 'contact', id: 'c_1' },
@@ -490,15 +490,18 @@ describe('RestServer', () => {
   });
 
   describe('findData handler expand/populate forwarding', () => {
+    function getListRoute(rest: any) {
+      const routes = rest.getRoutes();
+      return routes.find(
+        (r: any) => r.method === 'GET' && r.path === '/api/v1/data/:object',
+      );
+    }
+
     it('should pass query params including expand to protocol.findData', async () => {
       const rest = new RestServer(server as any, protocol as any);
       rest.registerRoutes();
 
-      // Find the GET /data/:object route handler (list endpoint, not the :id one)
-      const routes = rest.getRoutes();
-      const listRoute = routes.find(
-        (r) => r.method === 'GET' && r.path.endsWith(':object'),
-      );
+      const listRoute = getListRoute(rest);
       expect(listRoute).toBeDefined();
 
       const mockReq = {
@@ -528,10 +531,7 @@ describe('RestServer', () => {
       const rest = new RestServer(server as any, protocol as any);
       rest.registerRoutes();
 
-      const routes = rest.getRoutes();
-      const listRoute = routes.find(
-        (r) => r.method === 'GET' && r.path.endsWith(':object'),
-      );
+      const listRoute = getListRoute(rest);
 
       const mockReq = {
         params: { object: 'task' },
