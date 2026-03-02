@@ -43,16 +43,30 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                          return { object: params.object, id: record.id || record._id, record };
                     }
                     if (method === 'get') {
-                        // Ensure we search by 'id' explicitly for InMemoryDriver
+                        // Delegate to protocol for proper expand/select support
+                        const protocol = kernel.getService<any>('protocol');
+                        if (protocol) {
+                            return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
+                        }
                         const record = await ql.findOne(params.object, { where: { id: params.id } });
                         return record ? { object: params.object, id: params.id, record } : null;
                     }
                     if (method === 'query') {
+                        // Delegate to protocol for proper expand/populate support
+                        const protocol = kernel.getService<any>('protocol');
+                        if (protocol) {
+                            return await protocol.findData({ object: params.object, query: params.query });
+                        }
                         const queryOpts = params.query || {};
                         const records = await ql.find(params.object, { filter: queryOpts.filters || queryOpts.filter });
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
+                        // Delegate to protocol for proper expand/populate support
+                        const protocol = kernel.getService<any>('protocol');
+                        if (protocol) {
+                            return await protocol.findData({ object: params.object, query: params.query });
+                        }
                         const queryOpts = params.query || {};
                         const records = await ql.find(params.object, { filter: queryOpts.filters || queryOpts.filter });
                         return { object: params.object, records, total: records.length };

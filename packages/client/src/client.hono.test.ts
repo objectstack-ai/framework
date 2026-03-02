@@ -38,15 +38,30 @@ describe('ObjectStackClient (with Hono Server)', () => {
                     }
                     // Params from HttpDispatcher: { object, id, ...query }
                     if (method === 'get') {
+                        // Delegate to protocol for proper expand/select support
+                        const protocol = kernel.getService<any>('protocol');
+                        if (protocol) {
+                            return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
+                        }
                         const record = await ql.findOne(params.object, { where: { id: params.id } });
                         return record ? { object: params.object, id: params.id, record } : null;
                     }
                     // Params from HttpDispatcher: { object, filters }
                     if (method === 'query') {
+                        // Delegate to protocol for proper expand/populate support
+                        const protocol = kernel.getService<any>('protocol');
+                        if (protocol) {
+                            return await protocol.findData({ object: params.object, query: params.query || params.filters });
+                        }
                         const records = await ql.find(params.object, { filter: params.filters });
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
+                        // Delegate to protocol for proper expand/populate support
+                        const protocol = kernel.getService<any>('protocol');
+                        if (protocol) {
+                            return await protocol.findData({ object: params.object, query: params.query || params.filters });
+                        }
                         const records = await ql.find(params.object, { filter: params.filters });
                         return { object: params.object, records, total: records.length };
                     }

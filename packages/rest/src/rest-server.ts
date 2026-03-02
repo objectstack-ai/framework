@@ -480,9 +480,12 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const { select, expand } = req.query || {};
                         const result = await this.protocol.getData({
                             object: req.params.object, 
-                            id: req.params.id
+                            id: req.params.id,
+                            ...(select != null ? { select } : {}),
+                            ...(expand != null ? { expand } : {}),
                         });
                         res.json(result);
                     } catch (error: any) {

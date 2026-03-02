@@ -66,6 +66,11 @@ export async function createKernel(options: KernelOptions) {
                      return { object: params.object, id: record.id || record._id, record };
                 }
                 if (method === 'get') {
+                     // Delegate to protocol for proper expand/select support
+                     const protocol = (kernel as any).context?.getService('protocol');
+                     if (protocol) {
+                         return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
+                     }
                      let all = await ql.find(params.object);
                      if (!all) all = [];
                      const match = all.find((i: any) => i.id === params.id || i._id === params.id);
@@ -110,6 +115,11 @@ export async function createKernel(options: KernelOptions) {
                     }
                 }
                 if (method === 'find' || method === 'query') {
+                    // Delegate to protocol for proper expand/populate support
+                    const protocol = (kernel as any).context?.getService('protocol');
+                    if (protocol) {
+                        return await protocol.findData({ object: params.object, query: params.query || params.filters });
+                    }
                     let all = await ql.find(params.object);
                     
                     // DEBUG SHIM 

@@ -416,6 +416,78 @@ describe('RestServer', () => {
       expect(rest.getRoutes()).toEqual([]);
     });
   });
+
+  describe('getData handler expand/select forwarding', () => {
+    it('should pass expand and select query params to protocol.getData', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      // Find the GET /data/:object/:id route handler
+      const routes = rest.getRoutes();
+      const getByIdRoute = routes.find(
+        (r) => r.method === 'GET' && r.path.includes(':id'),
+      );
+      expect(getByIdRoute).toBeDefined();
+
+      // Simulate request with expand and select query params
+      const mockReq = {
+        params: { object: 'order_item', id: 'oi_123' },
+        query: { expand: 'order,product', select: 'name,total' },
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.getData.mockResolvedValue({
+        object: 'order_item',
+        id: 'oi_123',
+        record: { _id: 'oi_123', name: 'Item 1' },
+      });
+
+      await getByIdRoute!.handler(mockReq, mockRes);
+
+      expect(protocol.getData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          object: 'order_item',
+          id: 'oi_123',
+          expand: 'order,product',
+          select: 'name,total',
+        }),
+      );
+    });
+
+    it('should omit expand/select when not present in query', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      const routes = rest.getRoutes();
+      const getByIdRoute = routes.find(
+        (r) => r.method === 'GET' && r.path.includes(':id'),
+      );
+
+      const mockReq = {
+        params: { object: 'contact', id: 'c_1' },
+        query: {},
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.getData.mockResolvedValue({
+        object: 'contact',
+        id: 'c_1',
+        record: { _id: 'c_1' },
+      });
+
+      await getByIdRoute!.handler(mockReq, mockRes);
+
+      // Should NOT have expand or select keys in the call
+      const callArg = protocol.getData.mock.calls[protocol.getData.mock.calls.length - 1][0];
+      expect(callArg).toEqual({ object: 'contact', id: 'c_1' });
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -371,8 +371,8 @@ export class ObjectStackServer {
         return { data: body, status: 200 };
     }
 
-    static async getData(objectName: string, id: string) {
-        const body = await this.getProtocol().getData({ object: objectName, id });
+    static async getData(objectName: string, id: string, options?: { expand?: string | string[]; select?: string | string[] }) {
+        const body = await this.getProtocol().getData({ object: objectName, id, ...options });
         return { data: body, status: 200 };
     }
 
