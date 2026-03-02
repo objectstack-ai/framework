@@ -416,6 +416,146 @@ describe('RestServer', () => {
       expect(rest.getRoutes()).toEqual([]);
     });
   });
+
+  describe('getData handler expand/select forwarding', () => {
+    function getRoute(rest: any, pathSuffix: string) {
+      const routes = rest.getRoutes();
+      return routes.find(
+        (r: any) => r.method === 'GET' && r.path === `/api/v1/data/${pathSuffix}`,
+      );
+    }
+
+    it('should pass expand and select query params to protocol.getData', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      const getByIdRoute = getRoute(rest, ':object/:id');
+      expect(getByIdRoute).toBeDefined();
+
+      // Simulate request with expand and select query params
+      const mockReq = {
+        params: { object: 'order_item', id: 'oi_123' },
+        query: { expand: 'order,product', select: 'name,total' },
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.getData.mockResolvedValue({
+        object: 'order_item',
+        id: 'oi_123',
+        record: { _id: 'oi_123', name: 'Item 1' },
+      });
+
+      await getByIdRoute!.handler(mockReq, mockRes);
+
+      expect(protocol.getData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          object: 'order_item',
+          id: 'oi_123',
+          expand: 'order,product',
+          select: 'name,total',
+        }),
+      );
+    });
+
+    it('should omit expand/select when not present in query', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      const getByIdRoute = getRoute(rest, ':object/:id');
+
+      const mockReq = {
+        params: { object: 'contact', id: 'c_1' },
+        query: {},
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.getData.mockResolvedValue({
+        object: 'contact',
+        id: 'c_1',
+        record: { _id: 'c_1' },
+      });
+
+      await getByIdRoute!.handler(mockReq, mockRes);
+
+      // Should NOT have expand or select keys in the call
+      const callArg = protocol.getData.mock.calls[protocol.getData.mock.calls.length - 1][0];
+      expect(callArg).toEqual({ object: 'contact', id: 'c_1' });
+    });
+  });
+
+  describe('findData handler expand/populate forwarding', () => {
+    function getListRoute(rest: any) {
+      const routes = rest.getRoutes();
+      return routes.find(
+        (r: any) => r.method === 'GET' && r.path === '/api/v1/data/:object',
+      );
+    }
+
+    it('should pass query params including expand to protocol.findData', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      const listRoute = getListRoute(rest);
+      expect(listRoute).toBeDefined();
+
+      const mockReq = {
+        params: { object: 'order_item' },
+        query: { expand: 'order,product', top: '10' },
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.findData.mockResolvedValue({
+        object: 'order_item',
+        records: [],
+        total: 0,
+      });
+
+      await listRoute!.handler(mockReq, mockRes);
+
+      expect(protocol.findData).toHaveBeenCalledWith({
+        object: 'order_item',
+        query: { expand: 'order,product', top: '10' },
+      });
+    });
+
+    it('should pass populate query param to protocol.findData', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      const listRoute = getListRoute(rest);
+
+      const mockReq = {
+        params: { object: 'task' },
+        query: { populate: 'assignee,project' },
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.findData.mockResolvedValue({
+        object: 'task',
+        records: [],
+        total: 0,
+      });
+
+      await listRoute!.handler(mockReq, mockRes);
+
+      expect(protocol.findData).toHaveBeenCalledWith({
+        object: 'task',
+        query: { populate: 'assignee,project' },
+      });
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

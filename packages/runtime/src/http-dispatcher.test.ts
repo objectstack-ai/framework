@@ -440,6 +440,101 @@ describe('HttpDispatcher', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // handleData — expand/populate parameter flow
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('handleData', () => {
+        it('should pass expand and select to broker for GET /data/:object/:id', async () => {
+            mockBroker.call.mockResolvedValue({ object: 'order_item', id: 'oi_1', record: { _id: 'oi_1' } });
+
+            const result = await dispatcher.handleData(
+                '/order_item/oi_1', 'GET', {},
+                { expand: 'order,product', select: 'name,total' },
+                { request: {} }
+            );
+
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockBroker.call).toHaveBeenCalledWith(
+                'data.get',
+                { object: 'order_item', id: 'oi_1', expand: 'order,product', select: 'name,total' },
+                { request: {} }
+            );
+        });
+
+        it('should NOT pass non-allowlisted params for GET /data/:object/:id', async () => {
+            mockBroker.call.mockResolvedValue({ object: 'task', id: 't1', record: {} });
+
+            await dispatcher.handleData(
+                '/task/t1', 'GET', {},
+                { expand: 'assignee', malicious: 'drop_table', filter: 'hack' },
+                { request: {} }
+            );
+
+            // Only expand is passed; malicious and filter are dropped
+            expect(mockBroker.call).toHaveBeenCalledWith(
+                'data.get',
+                { object: 'task', id: 't1', expand: 'assignee' },
+                { request: {} }
+            );
+        });
+
+        it('should pass full query (with expand/populate) for GET /data/:object list', async () => {
+            mockBroker.call.mockResolvedValue({ object: 'task', records: [], total: 0 });
+
+            const query = { populate: 'assignee,project', top: '10', skip: '0' };
+            const result = await dispatcher.handleData(
+                '/task', 'GET', {},
+                query,
+                { request: {} }
+            );
+
+            expect(result.handled).toBe(true);
+            expect(mockBroker.call).toHaveBeenCalledWith(
+                'data.query',
+                { object: 'task', query },
+                { request: {} }
+            );
+        });
+
+        it('should pass expand in query for GET /data/:object list', async () => {
+            mockBroker.call.mockResolvedValue({ object: 'order', records: [], total: 0 });
+
+            const query = { expand: 'customer,products' };
+            await dispatcher.handleData('/order', 'GET', {}, query, { request: {} });
+
+            expect(mockBroker.call).toHaveBeenCalledWith(
+                'data.query',
+                { object: 'order', query: { expand: 'customer,products' } },
+                { request: {} }
+            );
+        });
+
+        it('should return error if object name is missing', async () => {
+            const result = await dispatcher.handleData('/', 'GET', {}, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(400);
+        });
+
+        it('should handle POST /data/:object/query with body containing expand', async () => {
+            mockBroker.call.mockResolvedValue({ object: 'task', records: [] });
+
+            await dispatcher.handleData(
+                '/task/query', 'POST',
+                { filter: { status: 'active' }, populate: ['assignee'] },
+                {},
+                { request: {} }
+            );
+
+            expect(mockBroker.call).toHaveBeenCalledWith(
+                'data.query',
+                { object: 'task', filter: { status: 'active' }, populate: ['assignee'] },
+                { request: {} }
+            );
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // Error handling for service method failures
     // ═══════════════════════════════════════════════════════════════
 
