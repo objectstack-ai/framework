@@ -488,6 +488,74 @@ describe('RestServer', () => {
       expect(callArg).toEqual({ object: 'contact', id: 'c_1' });
     });
   });
+
+  describe('findData handler expand/populate forwarding', () => {
+    it('should pass query params including expand to protocol.findData', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      // Find the GET /data/:object route handler (list endpoint, not the :id one)
+      const routes = rest.getRoutes();
+      const listRoute = routes.find(
+        (r) => r.method === 'GET' && r.path.endsWith(':object'),
+      );
+      expect(listRoute).toBeDefined();
+
+      const mockReq = {
+        params: { object: 'order_item' },
+        query: { expand: 'order,product', top: '10' },
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.findData.mockResolvedValue({
+        object: 'order_item',
+        records: [],
+        total: 0,
+      });
+
+      await listRoute!.handler(mockReq, mockRes);
+
+      expect(protocol.findData).toHaveBeenCalledWith({
+        object: 'order_item',
+        query: { expand: 'order,product', top: '10' },
+      });
+    });
+
+    it('should pass populate query param to protocol.findData', async () => {
+      const rest = new RestServer(server as any, protocol as any);
+      rest.registerRoutes();
+
+      const routes = rest.getRoutes();
+      const listRoute = routes.find(
+        (r) => r.method === 'GET' && r.path.endsWith(':object'),
+      );
+
+      const mockReq = {
+        params: { object: 'task' },
+        query: { populate: 'assignee,project' },
+      };
+      const mockRes = {
+        json: vi.fn(),
+        status: vi.fn().mockReturnThis(),
+      };
+
+      protocol.findData.mockResolvedValue({
+        object: 'task',
+        records: [],
+        total: 0,
+      });
+
+      await listRoute!.handler(mockReq, mockRes);
+
+      expect(protocol.findData).toHaveBeenCalledWith({
+        object: 'task',
+        query: { populate: 'assignee,project' },
+      });
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
