@@ -154,7 +154,7 @@ const result = ApiError.parse(data);
 | **having** | `[__schema2](./__schema2)` | optional | HAVING clause for aggregation filtering |
 | **windowFunctions** | `Object[]` | optional | Window functions with OVER clause |
 | **distinct** | `boolean` | optional | SELECT DISTINCT flag |
-| **expand** | `Record<string, [__schema0](./__schema0)>` | optional | Recursive relation loading (nested queries) |
+| **expand** | `Record<string, [__schema0](./__schema0)>` | optional | Recursive relation loading map. Keys are lookup/master_detail field names; values are nested QueryAST objects that control select, filter, sort, and further expansion on the related object. The engine resolves expand via batch $in queries (driver-agnostic) with a default max depth of 3. |
 
 
 ---

@@ -160,7 +160,7 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
   
   // Add description with better formatting
   if (mainDef.description) {
-    md += `${mainDef.description}\n\n`;
+    md += `${mainDef.description.replace(/\{[^}]*\}/g, (m: string) => `\`${m}\``)}\n\n`;
   }
 
   const renderProperties = (props: any, required: Set<string> = new Set()) => {

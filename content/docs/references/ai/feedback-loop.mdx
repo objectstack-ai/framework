@@ -12,26 +12,12 @@ description: Feedback Loop protocol schemas
 ## TypeScript Usage
 
 ```typescript
-import { FeedbackLoop, Issue, Resolution } from '@objectstack/spec/ai';
-import type { FeedbackLoop, Issue, Resolution } from '@objectstack/spec/ai';
+import { Issue } from '@objectstack/spec/ai';
+import type { Issue } from '@objectstack/spec/ai';
 
 // Validate data
-const result = FeedbackLoop.parse(data);
+const result = Issue.parse(data);
 ```
-
----
-
-## FeedbackLoop
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **issue** | `Object` | ✅ |  |
-| **analysis** | `string` | optional | AI analysis of the root cause |
-| **resolutions** | `Object[]` | optional |  |
-| **status** | `Enum<'open' \| 'analyzing' \| 'resolved' \| 'ignored'>` | ✅ |  |
-
 
 ---
 
@@ -49,20 +35,6 @@ const result = FeedbackLoop.parse(data);
 | **userId** | `string` | optional |  |
 | **context** | `Record<string, any>` | optional |  |
 | **source** | `Object` | optional |  |
-
-
----
-
-## Resolution
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **issueId** | `string` | ✅ |  |
-| **reasoning** | `string` | ✅ | Explanation of why this fix is needed |
-| **confidence** | `number` | ✅ |  |
-| **fix** | `Object \| Object` | ✅ |  |
 
 
 ---
