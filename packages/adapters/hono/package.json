@@ -18,11 +18,11 @@
   },
   "peerDependencies": {
     "@objectstack/runtime": "workspace:^",
-    "hono": "^4.12.2"
+    "hono": "^4.12.3"
   },
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
-    "hono": "^4.12.2",
+    "hono": "^4.12.3",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"
   }
