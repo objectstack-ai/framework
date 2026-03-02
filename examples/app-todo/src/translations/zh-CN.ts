@@ -1,6 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { TranslationData } from '@objectstack/spec/system';
+import type { StrictObjectTranslation } from '@objectstack/spec/system';
+import { Task } from '../objects/task.object';
+
+type TaskTranslation = StrictObjectTranslation<typeof Task>;
 
 /**
  * 简体中文 (zh-CN) — Todo App Translations
@@ -34,7 +38,17 @@ export const zhCN: TranslationData = {
             urgent: '紧急',
           },
         },
-        category: { label: '分类' },
+        category: {
+          label: '分类',
+          options: {
+            personal: '个人',
+            work: '工作',
+            shopping: '购物',
+            health: '健康',
+            finance: '财务',
+            other: '其他',
+          },
+        },
         due_date: { label: '截止日期' },
         reminder_date: { label: '提醒日期/时间' },
         completed_date: { label: '完成日期' },
@@ -50,7 +64,15 @@ export const zhCN: TranslationData = {
           },
         },
         is_recurring: { label: '周期性任务' },
-        recurrence_type: { label: '重复类型' },
+        recurrence_type: {
+          label: '重复类型',
+          options: {
+            daily: '每天',
+            weekly: '每周',
+            monthly: '每月',
+            yearly: '每年',
+          },
+        },
         recurrence_interval: { label: '重复间隔' },
         is_completed: { label: '是否完成' },
         is_overdue: { label: '是否逾期' },
@@ -60,7 +82,7 @@ export const zhCN: TranslationData = {
         notes: { label: '备注' },
         category_color: { label: '分类颜色' },
       },
-    },
+    } satisfies TaskTranslation,
   },
   apps: {
     todo_app: {

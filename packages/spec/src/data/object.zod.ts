@@ -378,12 +378,12 @@ export const ObjectSchema = Object.assign(ObjectSchemaBase, {
    * });
    * ```
    */
-  create: (config: z.input<typeof ObjectSchemaBase>): ServiceObject => {
+  create: <const T extends z.input<typeof ObjectSchemaBase>>(config: T): ServiceObject & Pick<T, 'fields'> => {
     const withDefaults = {
       ...config,
       label: config.label ?? snakeCaseToLabel(config.name),
     };
-    return ObjectSchemaBase.parse(withDefaults);
+    return ObjectSchemaBase.parse(withDefaults) as ServiceObject & Pick<T, 'fields'>;
   },
 });
 
