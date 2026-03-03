@@ -1,5 +1,14 @@
 # @objectstack/client-react
 
+## 3.2.1
+
+### Patch Changes
+
+- Updated dependencies [850b546]
+  - @objectstack/spec@3.2.1
+  - @objectstack/client@3.2.1
+  - @objectstack/core@3.2.1
+
 ## 3.2.0
 
 ### Patch Changes

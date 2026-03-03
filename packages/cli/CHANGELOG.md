@@ -1,5 +1,18 @@
 # @objectstack/cli
 
+## 3.2.1
+
+### Patch Changes
+
+- Updated dependencies [850b546]
+  - @objectstack/spec@3.2.1
+  - @objectstack/core@3.2.1
+  - @objectstack/objectql@3.2.1
+  - @objectstack/driver-memory@3.2.1
+  - @objectstack/plugin-hono-server@3.2.1
+  - @objectstack/rest@3.2.1
+  - @objectstack/runtime@3.2.1
+
 ## 3.2.0
 
 ### Patch Changes
