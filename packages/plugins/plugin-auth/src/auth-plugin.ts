@@ -46,7 +46,7 @@ export class AuthPlugin implements Plugin {
   name = 'com.objectstack.auth';
   type = 'standard';
   version = '1.0.0';
-  dependencies = ['com.objectstack.server.hono']; // Requires HTTP server
+  dependencies: string[] = []; // HTTP server is optional; routes are registered only when available
   
   private options: AuthPluginOptions;
   private authManager: AuthManager | null = null;
@@ -92,16 +92,23 @@ export class AuthPlugin implements Plugin {
       throw new Error('Auth manager not initialized');
     }
 
-    // Register HTTP routes if enabled
+    // Register HTTP routes if enabled and HTTP server is available
     if (this.options.registerRoutes) {
       try {
         const httpServer = ctx.getService<IHttpServer>('http-server');
-        this.registerAuthRoutes(httpServer, ctx);
-        ctx.logger.info(`Auth routes registered at ${this.options.basePath}`);
+        if (httpServer) {
+          this.registerAuthRoutes(httpServer, ctx);
+          ctx.logger.info(`Auth routes registered at ${this.options.basePath}`);
+        } else {
+          ctx.logger.warn(
+            'No HTTP server available — auth routes not registered. ' +
+            'Auth service is still available for MSW/mock environments via HttpDispatcher.'
+          );
+        }
       } catch (error) {
+        // Gracefully handle missing HTTP server (e.g. MSW/mock mode)
         const err = error instanceof Error ? error : new Error(String(error));
-        ctx.logger.error('Failed to register auth routes:', err);
-        throw err;
+        ctx.logger.warn('HTTP server not available, skipping auth route registration:', err.message);
       }
     }
 

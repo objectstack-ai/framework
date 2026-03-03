@@ -34,7 +34,7 @@ describe('AuthPlugin', () => {
       expect(authPlugin.name).toBe('com.objectstack.auth');
       expect(authPlugin.type).toBe('standard');
       expect(authPlugin.version).toBe('1.0.0');
-      expect(authPlugin.dependencies).toContain('com.objectstack.server.hono');
+      expect(authPlugin.dependencies).toEqual([]);
     });
   });
 
@@ -147,6 +147,32 @@ describe('AuthPlugin', () => {
       await authPlugin.start(mockContext);
 
       expect(mockContext.getService).not.toHaveBeenCalledWith('http-server');
+    });
+
+    it('should gracefully skip routes when http-server is not available', async () => {
+      mockContext.getService = vi.fn(() => null);
+
+      await authPlugin.start(mockContext);
+
+      expect(mockContext.getService).toHaveBeenCalledWith('http-server');
+      expect(mockContext.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('No HTTP server available')
+      );
+      // Should NOT throw — auth service is still registered from init()
+    });
+
+    it('should gracefully handle http-server getService throwing', async () => {
+      mockContext.getService = vi.fn(() => {
+        throw new Error('Service not found: http-server');
+      });
+
+      await authPlugin.start(mockContext);
+
+      expect(mockContext.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('HTTP server not available'),
+        expect.any(String)
+      );
+      // Should NOT throw
     });
 
     it('should throw error if auth not initialized', async () => {

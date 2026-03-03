@@ -305,6 +305,59 @@ describe('HttpDispatcher', () => {
             });
         });
 
+        describe('handleAuth mock fallback (MSW/test mode)', () => {
+            beforeEach(() => {
+                // No auth service, no broker — simulates MSW/mock mode
+                (kernel as any).getService = vi.fn().mockResolvedValue(null);
+                (kernel as any).services = new Map();
+                (kernel as any).broker = null;
+            });
+
+            it('should mock sign-up/email endpoint', async () => {
+                const result = await dispatcher.handleAuth('/sign-up/email', 'POST', { email: 'test@example.com', name: 'Test' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body.user).toBeDefined();
+                expect(result.response?.body.user.email).toBe('test@example.com');
+                expect(result.response?.body.session).toBeDefined();
+            });
+
+            it('should mock sign-in/email endpoint', async () => {
+                const result = await dispatcher.handleAuth('/sign-in/email', 'POST', { email: 'test@example.com' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body.user).toBeDefined();
+                expect(result.response?.body.session).toBeDefined();
+            });
+
+            it('should mock get-session endpoint', async () => {
+                const result = await dispatcher.handleAuth('/get-session', 'GET', {}, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body).toEqual({ session: null, user: null });
+            });
+
+            it('should mock sign-out endpoint', async () => {
+                const result = await dispatcher.handleAuth('/sign-out', 'POST', {}, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body).toEqual({ success: true });
+            });
+
+            it('should mock login fallback when broker unavailable', async () => {
+                const result = await dispatcher.handleAuth('/login', 'POST', { email: 'test@example.com' }, { request: {} });
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body.user).toBeDefined();
+                expect(result.response?.body.session).toBeDefined();
+            });
+
+            it('should return unhandled for unknown auth path in mock mode', async () => {
+                const result = await dispatcher.handleAuth('/unknown', 'GET', {}, { request: {} });
+                expect(result.handled).toBe(false);
+            });
+        });
+
         describe('handleStorage with async service', () => {
             it('should resolve storage service from Promise', async () => {
                 const mockStorage = {

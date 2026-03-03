@@ -49,6 +49,7 @@ the ecosystem for enterprise workloads.
 | Client SDK (TypeScript) | ✅ | `@objectstack/client` |
 | React Hooks | ✅ | `@objectstack/client-react` |
 | Authentication (better-auth) | ✅ | `@objectstack/plugin-auth` |
+| Auth in MSW/Mock Mode | ✅ | `@objectstack/plugin-auth` + `@objectstack/runtime` |
 | RBAC / RLS / FLS Security | ✅ | `@objectstack/plugin-security` |
 | CLI (16 commands) | ✅ | `@objectstack/cli` |
 | Dev Mode Plugin | ✅ | `@objectstack/plugin-dev` |
