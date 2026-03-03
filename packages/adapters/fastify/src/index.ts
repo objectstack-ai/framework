@@ -84,10 +84,18 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
       const path = request.url.substring(`${prefix}/auth/`.length).split('?')[0];
       const method = request.method;
 
-      // Try AuthPlugin service first
-      const authService = typeof options.kernel.getService === 'function'
-        ? options.kernel.getService<AuthService>('auth')
-        : null;
+      // Try AuthPlugin service first (prefer async to support factory-based services)
+      let authService: AuthService | null = null;
+      try {
+        if (typeof options.kernel.getServiceAsync === 'function') {
+          authService = await options.kernel.getServiceAsync<AuthService>('auth');
+        } else if (typeof options.kernel.getService === 'function') {
+          authService = options.kernel.getService<AuthService>('auth');
+        }
+      } catch {
+        // Service not registered — fall through to dispatcher
+        authService = null;
+      }
 
       if (authService && typeof authService.handleRequest === 'function') {
         const protocol = request.protocol || 'http';

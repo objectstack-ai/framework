@@ -113,11 +113,19 @@ export class ObjectStackController {
   @All('auth/*')
   async auth(@Req() req: any, @Res() res: any, @Body() body: any) {
     try {
-        // Try AuthPlugin service first (preferred path)
+        // Try AuthPlugin service first (prefer async to support factory-based services)
         const kernel = this.service.getKernel();
-        const authService = typeof kernel.getService === 'function'
-          ? kernel.getService<AuthService>('auth')
-          : null;
+        let authService: AuthService | null = null;
+        try {
+          if (typeof kernel.getServiceAsync === 'function') {
+            authService = await kernel.getServiceAsync<AuthService>('auth');
+          } else if (typeof kernel.getService === 'function') {
+            authService = kernel.getService<AuthService>('auth');
+          }
+        } catch {
+          // Service not registered — fall through to legacy dispatcher
+          authService = null;
+        }
 
         if (authService && typeof authService.handleRequest === 'function') {
           // Construct a Web standard Request from the Express/Fastify request

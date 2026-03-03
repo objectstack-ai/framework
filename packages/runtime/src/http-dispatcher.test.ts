@@ -440,6 +440,108 @@ describe('HttpDispatcher', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // getServiceAsync preferred path
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('getServiceAsync preferred path', () => {
+        it('should prefer getServiceAsync over getService for analytics', async () => {
+            const asyncAnalytics = {
+                query: vi.fn().mockResolvedValue({ rows: [1], total: 1 }),
+            };
+            (kernel as any).getServiceAsync = vi.fn().mockResolvedValue(asyncAnalytics);
+            (kernel as any).getService = vi.fn().mockImplementation(() => {
+                throw new Error("Service 'analytics' is async - use await");
+            });
+
+            const result = await dispatcher.handleAnalytics('query', 'POST', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(asyncAnalytics.query).toHaveBeenCalled();
+            expect((kernel as any).getServiceAsync).toHaveBeenCalledWith('analytics');
+        });
+
+        it('should prefer getServiceAsync over getService for auth', async () => {
+            const asyncAuth = {
+                handler: vi.fn().mockResolvedValue({ user: { id: '1' } }),
+            };
+            (kernel as any).getServiceAsync = vi.fn().mockResolvedValue(asyncAuth);
+            (kernel as any).getService = vi.fn().mockImplementation(() => {
+                throw new Error("Service 'auth' is async - use await");
+            });
+
+            const result = await dispatcher.handleAuth('', 'POST', {}, { request: {}, response: {} });
+            expect(result.handled).toBe(true);
+            expect(asyncAuth.handler).toHaveBeenCalled();
+            expect((kernel as any).getServiceAsync).toHaveBeenCalledWith('auth');
+        });
+
+        it('should prefer getServiceAsync over getService for automation', async () => {
+            const asyncAuto = {
+                listFlows: vi.fn().mockResolvedValue(['flow_async']),
+            };
+            (kernel as any).getServiceAsync = vi.fn().mockResolvedValue(asyncAuto);
+
+            const result = await dispatcher.handleAutomation('', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.body?.data?.flows).toEqual(['flow_async']);
+            expect((kernel as any).getServiceAsync).toHaveBeenCalledWith('automation');
+        });
+
+        it('should prefer getServiceAsync over getService for file-storage', async () => {
+            const asyncStorage = {
+                upload: vi.fn().mockResolvedValue({ id: 'file_1', url: '/files/1' }),
+            };
+            (kernel as any).getServiceAsync = vi.fn().mockResolvedValue(asyncStorage);
+
+            const result = await dispatcher.handleStorage('/upload', 'POST', { name: 'test.txt' }, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect((kernel as any).getServiceAsync).toHaveBeenCalledWith('file-storage');
+        });
+
+        it('should resolve protocol service via getServiceAsync for handleMetadata', async () => {
+            const asyncProtocol = {
+                saveMetaItem: vi.fn().mockResolvedValue({ success: true }),
+            };
+            (kernel as any).getServiceAsync = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return Promise.resolve(asyncProtocol);
+                return Promise.resolve(null);
+            });
+            // Remove context.getService to ensure getServiceAsync is used
+            (kernel as any).context = {};
+
+            const result = await dispatcher.handleMetadata('/objects/my_obj', { request: {} }, 'PUT', { label: 'Test' });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(asyncProtocol.saveMetaItem).toHaveBeenCalled();
+            expect((kernel as any).getServiceAsync).toHaveBeenCalledWith('protocol');
+        });
+
+        it('should fall through when getServiceAsync returns null', async () => {
+            (kernel as any).getServiceAsync = vi.fn().mockResolvedValue(null);
+            const syncAnalytics = {
+                query: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+            };
+            (kernel as any).services = new Map([['analytics', syncAnalytics]]);
+
+            const result = await dispatcher.handleAnalytics('query', 'POST', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(syncAnalytics.query).toHaveBeenCalled();
+        });
+
+        it('should fall through when getServiceAsync throws', async () => {
+            (kernel as any).getServiceAsync = vi.fn().mockRejectedValue(new Error('not found'));
+            const syncAnalytics = {
+                query: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+            };
+            (kernel as any).services = new Map([['analytics', syncAnalytics]]);
+
+            const result = await dispatcher.handleAnalytics('query', 'POST', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(syncAnalytics.query).toHaveBeenCalled();
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // handleData — expand/populate parameter flow
     // ═══════════════════════════════════════════════════════════════
 

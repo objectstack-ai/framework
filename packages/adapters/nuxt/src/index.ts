@@ -104,10 +104,18 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
         const path = urlPath.substring(`${prefix}/auth/`.length).split('?')[0];
         const method = event.method;
 
-        // Try AuthPlugin service first
-        const authService = typeof options.kernel.getService === 'function'
-          ? options.kernel.getService<AuthService>('auth')
-          : null;
+        // Try AuthPlugin service first (prefer async to support factory-based services)
+        let authService: AuthService | null = null;
+        try {
+          if (typeof options.kernel.getServiceAsync === 'function') {
+            authService = await options.kernel.getServiceAsync<AuthService>('auth');
+          } else if (typeof options.kernel.getService === 'function') {
+            authService = options.kernel.getService<AuthService>('auth');
+          }
+        } catch {
+          // Service not registered — fall through to dispatcher
+          authService = null;
+        }
 
         if (authService && typeof authService.handleRequest === 'function') {
           const host = event.node.req.headers.host || 'localhost';

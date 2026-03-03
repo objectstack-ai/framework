@@ -119,6 +119,37 @@ describe('createRequestHandler', () => {
       expect(kernelWithAuth.getService).toHaveBeenCalledWith('auth');
       expect(mockHandleRequest).toHaveBeenCalled();
     });
+
+    it('uses kernel.getServiceAsync("auth") when available (async factory)', async () => {
+      const mockHandleRequest = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ user: { id: '2' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const kernelWithAsyncAuth = {
+        ...mockKernel,
+        getServiceAsync: vi.fn().mockResolvedValue({ handleRequest: mockHandleRequest }),
+      };
+      const authHandler = createRequestHandler({ kernel: kernelWithAsyncAuth });
+      const event = makeEvent('http://localhost/api/auth/sign-in/email', 'POST', { email: 'a@b.com' });
+      const res = await authHandler(event);
+      expect(res.status).toBe(200);
+      expect(kernelWithAsyncAuth.getServiceAsync).toHaveBeenCalledWith('auth');
+      expect(mockHandleRequest).toHaveBeenCalled();
+    });
+
+    it('falls back to dispatcher when getServiceAsync throws', async () => {
+      const kernelWithFailingAsync = {
+        ...mockKernel,
+        getServiceAsync: vi.fn().mockRejectedValue(new Error("Service 'auth' not found")),
+      };
+      const authHandler = createRequestHandler({ kernel: kernelWithFailingAsync });
+      const event = makeEvent('http://localhost/api/auth/login', 'POST', { email: 'a@b.com' });
+      const res = await authHandler(event);
+      expect(res.status).toBe(200);
+      expect(mockDispatcher.handleAuth).toHaveBeenCalled();
+    });
   });
 
   describe('GraphQL', () => {
