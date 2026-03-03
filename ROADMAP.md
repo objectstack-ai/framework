@@ -123,7 +123,7 @@ This strategy ensures rapid iteration while maintaining a clear path to producti
 | `z.unknown()` in extensibility fields | ✅ Justified | `properties`, `children`, `context`, `options`, `body` — inherently dynamic extensibility points |
 | DashboardWidget discriminated union by type | 🔴 | Planned — chart/metric/pivot subtypes with type-specific required fields |
 | CI lint rule rejecting new `z.any()` | 🔴 | Planned — eslint or custom lint rule to block `z.any()` additions |
-| Dispatcher async `getService` bug fix | ✅ | All `getService`/`getObjectQLService` calls in `http-dispatcher.ts` now properly `await` async service factories. Covers `handleAnalytics`, `handleAuth`, `handleStorage`, `handleAutomation`, `handleMetadata`, `handleUi`, `handlePackages`. 20 new tests for async/sync/error scenarios. |
+| Dispatcher async `getService` bug fix | ✅ | All `getService`/`getObjectQLService` calls in `http-dispatcher.ts` now properly `await` async service factories. Covers `handleAnalytics`, `handleAuth`, `handleStorage`, `handleAutomation`, `handleMetadata`, `handleUi`, `handlePackages`. All 7 framework adapters (Express, Fastify, Hono, Next.js, SvelteKit, NestJS, Nuxt) updated to use `getServiceAsync()` for auth service resolution. |
 
 ---
 
