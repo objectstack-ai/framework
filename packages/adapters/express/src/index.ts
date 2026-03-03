@@ -81,10 +81,17 @@ export function createExpressRouter(options: ExpressAdapterOptions): Router {
       const path = (req.params as any).path;
       const method = req.method;
 
-      // Try AuthPlugin service first
-      const authService = typeof options.kernel.getService === 'function'
-        ? options.kernel.getService<AuthService>('auth')
-        : null;
+      // Try AuthPlugin service first (prefer async to support factory-based services)
+      let authService: AuthService | null = null;
+      try {
+        if (typeof options.kernel.getServiceAsync === 'function') {
+          authService = await options.kernel.getServiceAsync<AuthService>('auth');
+        } else if (typeof options.kernel.getService === 'function') {
+          authService = options.kernel.getService<AuthService>('auth');
+        }
+      } catch {
+        authService = null;
+      }
 
       if (authService && typeof authService.handleRequest === 'function') {
         const protocol = req.protocol || 'http';

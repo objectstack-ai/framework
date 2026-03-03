@@ -87,10 +87,17 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
       const path = c.req.path.substring(`${prefix}/auth/`.length);
       const method = c.req.method;
 
-      // Try AuthPlugin service first (preferred path)
-      const authService = typeof options.kernel.getService === 'function'
-        ? options.kernel.getService<AuthService>('auth')
-        : null;
+      // Try AuthPlugin service first (prefer async to support factory-based services)
+      let authService: AuthService | null = null;
+      try {
+        if (typeof options.kernel.getServiceAsync === 'function') {
+          authService = await options.kernel.getServiceAsync<AuthService>('auth');
+        } else if (typeof options.kernel.getService === 'function') {
+          authService = options.kernel.getService<AuthService>('auth');
+        }
+      } catch {
+        authService = null;
+      }
 
       if (authService && typeof authService.handleRequest === 'function') {
         const response = await authService.handleRequest(c.req.raw);

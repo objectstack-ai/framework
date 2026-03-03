@@ -852,8 +852,20 @@ export class HttpDispatcher {
     }
 
     private async getService(name: CoreServiceName) {
+        // Prefer async resolution to support factory-based services (e.g. auth, analytics)
+        if (typeof this.kernel.getServiceAsync === 'function') {
+            try {
+                return await this.kernel.getServiceAsync(name);
+            } catch {
+                // Fall through to sync/map lookup
+            }
+        }
         if (typeof this.kernel.getService === 'function') {
-            return await this.kernel.getService(name);
+            try {
+                return await this.kernel.getService(name);
+            } catch {
+                // Fall through to map lookup
+            }
         }
         const services = this.getServicesMap();
         return services[name];
@@ -864,21 +876,28 @@ export class HttpDispatcher {
      * Tries multiple access patterns since kernel structure varies.
      */
     private async getObjectQLService(): Promise<any> {
-        // 1. Try via kernel.getService
+        // 1. Try via kernel.getServiceAsync (supports factory-based services)
+        if (typeof this.kernel.getServiceAsync === 'function') {
+            try {
+                const svc = await this.kernel.getServiceAsync('objectql');
+                if (svc?.registry) return svc;
+            } catch { /* ignore */ }
+        }
+        // 2. Try via kernel.getService (sync fallback)
         if (typeof this.kernel.getService === 'function') {
             try {
                 const svc = await this.kernel.getService('objectql');
                 if (svc?.registry) return svc;
             } catch { /* ignore */ }
         }
-        // 2. Try via kernel context
+        // 3. Try via kernel context
         if (this.kernel?.context?.getService) {
             try {
                 const svc = await this.kernel.context.getService('objectql');
                 if (svc?.registry) return svc;
             } catch { /* ignore */ }
         }
-        // 3. Try via services map
+        // 4. Try via services map
         const services = this.getServicesMap();
         if (services['objectql']?.registry) return services['objectql'];
         return null;

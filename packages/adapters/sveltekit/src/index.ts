@@ -108,10 +108,17 @@ export function createRequestHandler(options: SvelteKitAdapterOptions) {
       if (segments[0] === 'auth') {
         const subPath = segments.slice(1).join('/');
 
-        // Try AuthPlugin service first
-        const authService = typeof options.kernel.getService === 'function'
-          ? options.kernel.getService<AuthService>('auth')
-          : null;
+        // Try AuthPlugin service first (prefer async to support factory-based services)
+        let authService: AuthService | null = null;
+        try {
+          if (typeof options.kernel.getServiceAsync === 'function') {
+            authService = await options.kernel.getServiceAsync<AuthService>('auth');
+          } else if (typeof options.kernel.getService === 'function') {
+            authService = options.kernel.getService<AuthService>('auth');
+          }
+        } catch {
+          authService = null;
+        }
 
         if (authService && typeof authService.handleRequest === 'function') {
           return await authService.handleRequest(request);

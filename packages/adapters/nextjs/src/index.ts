@@ -68,10 +68,17 @@ export function createRouteHandler(options: NextAdapterOptions) {
 
         // --- 1. Auth ---
         if (segments[0] === 'auth') {
-           // Try AuthPlugin service first (preferred path)
-           const authService = typeof options.kernel.getService === 'function'
-             ? options.kernel.getService<AuthService>('auth')
-             : null;
+           // Try AuthPlugin service first (prefer async to support factory-based services)
+           let authService: AuthService | null = null;
+           try {
+             if (typeof options.kernel.getServiceAsync === 'function') {
+               authService = await options.kernel.getServiceAsync<AuthService>('auth');
+             } else if (typeof options.kernel.getService === 'function') {
+               authService = options.kernel.getService<AuthService>('auth');
+             }
+           } catch {
+             authService = null;
+           }
 
            if (authService && typeof authService.handleRequest === 'function') {
              const response = await authService.handleRequest(req);
