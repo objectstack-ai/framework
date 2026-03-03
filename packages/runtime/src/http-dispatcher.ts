@@ -503,7 +503,7 @@ export class HttpDispatcher {
 
         // GET /i18n/translations/:locale  OR  /i18n/translations?locale=xx
         if (parts[0] === 'translations') {
-            const locale = parts[1] || query?.locale;
+            const locale = parts[1] ? decodeURIComponent(parts[1]) : query?.locale;
             if (!locale) return { handled: true, response: this.error('Missing locale parameter', 400) };
             const translations = i18nService.getTranslations(locale);
             return { handled: true, response: this.success({ locale, translations }) };
@@ -521,10 +521,10 @@ export class HttpDispatcher {
             // Fallback: derive field labels from full translation bundle
             const translations = i18nService.getTranslations(locale);
             const prefix = `o.${objectName}.fields.`;
-            const labels: Record<string, unknown> = {};
+            const labels: Record<string, string> = {};
             for (const [key, value] of Object.entries(translations)) {
                 if (key.startsWith(prefix)) {
-                    labels[key.substring(prefix.length)] = value;
+                    labels[key.substring(prefix.length)] = value as string;
                 }
             }
             return { handled: true, response: this.success({ object: objectName, locale, labels }) };
