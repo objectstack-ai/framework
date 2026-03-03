@@ -111,6 +111,11 @@ describe('StringOperatorSchema', () => {
     expect(() => StringOperatorSchema.parse(filter)).not.toThrow();
   });
 
+  it('should accept $notContains operator', () => {
+    const filter = { $notContains: 'spam' };
+    expect(() => StringOperatorSchema.parse(filter)).not.toThrow();
+  });
+
   it('should accept $endsWith operator', () => {
     const filter = { $endsWith: '.pdf' };
     expect(() => StringOperatorSchema.parse(filter)).not.toThrow();
@@ -826,6 +831,11 @@ describe('parseFilterAST', () => {
     expect(parseFilterAST(['name', 'like', 'John'])).toEqual({ name: { $contains: 'John' } });
   });
 
+  it('should convert notcontains/not_contains operator', () => {
+    expect(parseFilterAST(['name', 'notcontains', 'spam'])).toEqual({ name: { $notContains: 'spam' } });
+    expect(parseFilterAST(['name', 'not_contains', 'spam'])).toEqual({ name: { $notContains: 'spam' } });
+  });
+
   it('should convert startswith operator', () => {
     expect(parseFilterAST(['name', 'startswith', 'A'])).toEqual({ name: { $startsWith: 'A' } });
     expect(parseFilterAST(['name', 'starts_with', 'A'])).toEqual({ name: { $startsWith: 'A' } });
@@ -948,6 +958,8 @@ describe('isFilterAST', () => {
     expect(isFilterAST(['age', '>=', 18])).toBe(true);
     expect(isFilterAST(['role', 'in', ['admin', 'editor']])).toBe(true);
     expect(isFilterAST(['name', 'contains', 'John'])).toBe(true);
+    expect(isFilterAST(['name', 'notcontains', 'spam'])).toBe(true);
+    expect(isFilterAST(['name', 'not_contains', 'spam'])).toBe(true);
     expect(isFilterAST(['name', 'like', 'John'])).toBe(true);
     expect(isFilterAST(['created_at', 'between', ['2024-01-01', '2024-12-31']])).toBe(true);
     expect(isFilterAST(['deleted_at', 'is_null', null])).toBe(true);
@@ -1009,7 +1021,7 @@ describe('isFilterAST', () => {
 describe('VALID_AST_OPERATORS', () => {
   it('should contain all standard comparison operators', () => {
     const expected = ['=', '==', '!=', '<>', '>', '>=', '<', '<=', 'in', 'nin', 'not_in',
-      'contains', 'like', 'startswith', 'starts_with', 'endswith', 'ends_with',
+      'contains', 'notcontains', 'not_contains', 'like', 'startswith', 'starts_with', 'endswith', 'ends_with',
       'between', 'is_null', 'is_not_null'];
     for (const op of expected) {
       expect(VALID_AST_OPERATORS.has(op)).toBe(true);

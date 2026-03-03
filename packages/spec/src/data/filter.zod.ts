@@ -112,6 +112,9 @@ export const StringOperatorSchema = z.object({
   /** Contains substring - SQL: LIKE %?% | MongoDB: $regex */
   $contains: z.string().optional(),
   
+  /** Does not contain substring - SQL: NOT LIKE %?% | MongoDB: $not: $regex */
+  $notContains: z.string().optional(),
+  
   /** Starts with prefix - SQL: LIKE ?% | MongoDB: $regex */
   $startsWith: z.string().optional(),
   
@@ -163,6 +166,7 @@ export const FieldOperatorsSchema = z.object({
   
   // String-specific
   $contains: z.string().optional(),
+  $notContains: z.string().optional(),
   $startsWith: z.string().optional(),
   $endsWith: z.string().optional(),
   
@@ -272,6 +276,7 @@ export type Filter<T = any> = {
         $nin?: T[K][];
         $between?: T[K] extends number | Date ? [T[K], T[K]] : never;
         $contains?: T[K] extends string ? string : never;
+        $notContains?: T[K] extends string ? string : never;
         $startsWith?: T[K] extends string ? string : never;
         $endsWith?: T[K] extends string ? string : never;
         $null?: boolean;
@@ -346,7 +351,7 @@ export type NormalizedFilter = z.infer<typeof NormalizedFilterSchema>;
 export const VALID_AST_OPERATORS = new Set([
   '=', '==', '!=', '<>', '>', '>=', '<', '<=',
   'in', 'nin', 'not_in',
-  'contains', 'like',
+  'contains', 'notcontains', 'not_contains', 'like',
   'startswith', 'starts_with',
   'endswith', 'ends_with',
   'between',
@@ -418,6 +423,8 @@ const AST_OPERATOR_MAP: Record<string, string> = {
   'nin': '$nin',
   'not_in': '$nin',
   'contains': '$contains',
+  'notcontains': '$notContains',
+  'not_contains': '$notContains',
   'like': '$contains',
   'startswith': '$startsWith',
   'starts_with': '$startsWith',
@@ -532,7 +539,7 @@ export const FILTER_OPERATORS = [
   // Set & Range
   '$in', '$nin', '$between',
   // String
-  '$contains', '$startsWith', '$endsWith',
+  '$contains', '$notContains', '$startsWith', '$endsWith',
   // Special
   '$null', '$exists',
 ] as const;
