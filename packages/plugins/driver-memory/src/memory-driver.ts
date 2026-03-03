@@ -693,11 +693,10 @@ export class InMemoryDriver implements DriverInterface {
         return { [field]: { $in: value } };
       case 'nin': case 'not in':
         return { [field]: { $nin: value } };
-      case 'contains': case 'like': case 'notcontains': case 'not_contains':
-        if (operator === 'notcontains' || operator === 'not_contains') {
-          return { [field]: { $not: { $regex: new RegExp(this.escapeRegex(value), 'i') } } };
-        }
+      case 'contains': case 'like':
         return { [field]: { $regex: new RegExp(this.escapeRegex(value), 'i') } };
+      case 'notcontains': case 'not_contains':
+        return { [field]: { $not: { $regex: new RegExp(this.escapeRegex(value), 'i') } } };
       case 'startswith': case 'starts_with':
         return { [field]: { $regex: new RegExp(`^${this.escapeRegex(value)}`, 'i') } };
       case 'endswith': case 'ends_with':
