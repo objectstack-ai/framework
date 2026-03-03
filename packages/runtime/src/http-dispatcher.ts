@@ -5,9 +5,8 @@ import { CoreServiceName } from '@objectstack/spec/system';
 
 /** Browser-safe UUID generator — prefers Web Crypto, falls back to RFC 4122 v4 */
 function randomUUID(): string {
-    const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined;
-    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
-        return cryptoObj.randomUUID();
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+        return globalThis.crypto.randomUUID();
     }
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = (Math.random() * 16) | 0;
@@ -200,17 +199,10 @@ export class HttpDispatcher {
                 const data = await broker.call('auth.login', body, { request: context.request });
                 return { handled: true, response: { status: 200, body: data } };
             } catch (error: any) {
-                // Only fall through to mock when the broker is truly unavailable.
-                const msg = error?.message || '';
+                // Only fall through to mock when the broker is truly unavailable
+                // (ensureBroker throws statusCode 500 when kernel.broker is null)
                 const statusCode = error?.statusCode ?? error?.status;
-                const isBrokerUnavailable =
-                    msg.includes('not available') ||
-                    msg.includes('not found') ||
-                    msg.includes('not registered') ||
-                    statusCode === 503;
-
-                if (!isBrokerUnavailable) {
-                    // Propagate real auth failures so callers see the correct error
+                if (statusCode !== 500 || !error?.message?.includes('Broker not available')) {
                     throw error;
                 }
             }

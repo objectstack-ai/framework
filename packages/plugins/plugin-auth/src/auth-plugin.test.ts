@@ -171,6 +171,8 @@ describe('AuthPlugin', () => {
       expect(mockContext.logger.warn).toHaveBeenCalledWith(
         expect.stringContaining('No HTTP server available')
       );
+      // Auth service should still be registered from init()
+      expect(mockContext.registerService).toHaveBeenCalledWith('auth', expect.anything());
       // Should NOT throw
     });
 
