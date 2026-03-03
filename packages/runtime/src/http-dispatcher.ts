@@ -550,7 +550,7 @@ export class HttpDispatcher {
      *   GET /labels/:object/:locale     → getFieldLabels  (both from path)
      *   GET /labels/:object?locale=xx   → getFieldLabels  (locale from query)
      */
-    async handleI18n(path: string, method: string, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+    async handleI18n(path: string, method: string, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const i18nService = await this.getService(CoreServiceName.enum.i18n);
         if (!i18nService) return { handled: true, response: this.error('i18n service not available', 501) };
 
