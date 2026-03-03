@@ -684,4 +684,119 @@ describe('HttpDispatcher', () => {
             );
         });
     });
+
+    // ═══════════════════════════════════════════════════════════════
+    // handleI18n — i18n route dispatching
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('handleI18n', () => {
+        let mockI18nService: any;
+
+        beforeEach(() => {
+            mockI18nService = {
+                getLocales: vi.fn().mockReturnValue(['en', 'zh-CN', 'ja']),
+                getTranslations: vi.fn().mockReturnValue({ 'o.account.label': '客户', 'o.account.fields.name': '名称' }),
+                getFieldLabels: vi.fn().mockReturnValue({ name: '名称', industry: '行业' }),
+            };
+
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'i18n') return mockI18nService;
+                return null;
+            });
+        });
+
+        it('should list locales via GET /locales', async () => {
+            const result = await dispatcher.handleI18n('/locales', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.locales).toEqual(['en', 'zh-CN', 'ja']);
+            expect(mockI18nService.getLocales).toHaveBeenCalled();
+        });
+
+        it('should get translations via GET /translations/:locale', async () => {
+            const result = await dispatcher.handleI18n('/translations/zh-CN', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.locale).toBe('zh-CN');
+            expect(result.response?.body?.data?.translations).toEqual({ 'o.account.label': '客户', 'o.account.fields.name': '名称' });
+            expect(mockI18nService.getTranslations).toHaveBeenCalledWith('zh-CN');
+        });
+
+        it('should get translations via GET /translations?locale=zh-CN (query param)', async () => {
+            const result = await dispatcher.handleI18n('/translations', 'GET', { locale: 'zh-CN' }, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.locale).toBe('zh-CN');
+            expect(mockI18nService.getTranslations).toHaveBeenCalledWith('zh-CN');
+        });
+
+        it('should return 400 when translations requested without locale', async () => {
+            const result = await dispatcher.handleI18n('/translations', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(400);
+            expect(result.response?.body?.error?.message).toBe('Missing locale parameter');
+        });
+
+        it('should get field labels via GET /labels/:object/:locale', async () => {
+            const result = await dispatcher.handleI18n('/labels/account/zh-CN', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.object).toBe('account');
+            expect(result.response?.body?.data?.locale).toBe('zh-CN');
+            expect(result.response?.body?.data?.labels).toEqual({ name: '名称', industry: '行业' });
+            expect(mockI18nService.getFieldLabels).toHaveBeenCalledWith('account', 'zh-CN');
+        });
+
+        it('should get field labels via GET /labels/:object?locale=zh-CN (query param)', async () => {
+            const result = await dispatcher.handleI18n('/labels/account', 'GET', { locale: 'zh-CN' }, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.object).toBe('account');
+            expect(mockI18nService.getFieldLabels).toHaveBeenCalledWith('account', 'zh-CN');
+        });
+
+        it('should return 400 when labels requested without locale', async () => {
+            const result = await dispatcher.handleI18n('/labels/account', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(400);
+            expect(result.response?.body?.error?.message).toBe('Missing locale parameter');
+        });
+
+        it('should fallback to deriving labels from translations when getFieldLabels is missing', async () => {
+            delete mockI18nService.getFieldLabels;
+            mockI18nService.getTranslations.mockReturnValue({
+                'o.contact.fields.first_name': 'First Name',
+                'o.contact.fields.email': 'Email',
+                'o.contact.label': 'Contact',
+            });
+
+            const result = await dispatcher.handleI18n('/labels/contact/en', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.labels).toEqual({
+                first_name: 'First Name',
+                email: 'Email',
+            });
+        });
+
+        it('should return 501 when i18n service is not available', async () => {
+            (kernel as any).getService = vi.fn().mockResolvedValue(null);
+            (kernel as any).services = new Map();
+
+            const result = await dispatcher.handleI18n('/locales', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(501);
+        });
+
+        it('should return unhandled for non-GET methods', async () => {
+            const result = await dispatcher.handleI18n('/locales', 'POST', {}, { request: {} });
+            expect(result.handled).toBe(false);
+        });
+
+        it('should dispatch /i18n routes via dispatch()', async () => {
+            const result = await dispatcher.dispatch('GET', '/i18n/locales', undefined, {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.body?.data?.locales).toEqual(['en', 'zh-CN', 'ja']);
+        });
+    });
 });

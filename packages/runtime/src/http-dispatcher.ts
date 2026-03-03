@@ -476,6 +476,64 @@ export class HttpDispatcher {
     }
 
     /**
+     * Handles i18n requests
+     * path: sub-path after /i18n/
+     *
+     * Routes:
+     *   GET /locales                    → getLocales
+     *   GET /translations/:locale       → getTranslations (locale from path)
+     *   GET /translations?locale=xx     → getTranslations (locale from query)
+     *   GET /labels/:object/:locale     → getFieldLabels  (both from path)
+     *   GET /labels/:object?locale=xx   → getFieldLabels  (locale from query)
+     */
+    async handleI18n(path: string, method: string, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        const i18nService = await this.getService(CoreServiceName.enum.i18n);
+        if (!i18nService) return { handled: true, response: this.error('i18n service not available', 501) };
+
+        const m = method.toUpperCase();
+        const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
+
+        if (m !== 'GET') return { handled: false };
+
+        // GET /i18n/locales
+        if (parts[0] === 'locales' && parts.length === 1) {
+            const locales = i18nService.getLocales();
+            return { handled: true, response: this.success({ locales }) };
+        }
+
+        // GET /i18n/translations/:locale  OR  /i18n/translations?locale=xx
+        if (parts[0] === 'translations') {
+            const locale = parts[1] || query?.locale;
+            if (!locale) return { handled: true, response: this.error('Missing locale parameter', 400) };
+            const translations = i18nService.getTranslations(locale);
+            return { handled: true, response: this.success({ locale, translations }) };
+        }
+
+        // GET /i18n/labels/:object/:locale  OR  /i18n/labels/:object?locale=xx
+        if (parts[0] === 'labels' && parts.length >= 2) {
+            const objectName = decodeURIComponent(parts[1]);
+            const locale = parts[2] ? decodeURIComponent(parts[2]) : query?.locale;
+            if (!locale) return { handled: true, response: this.error('Missing locale parameter', 400) };
+            if (typeof i18nService.getFieldLabels === 'function') {
+                const labels = i18nService.getFieldLabels(objectName, locale);
+                return { handled: true, response: this.success({ object: objectName, locale, labels }) };
+            }
+            // Fallback: derive field labels from full translation bundle
+            const translations = i18nService.getTranslations(locale);
+            const prefix = `o.${objectName}.fields.`;
+            const labels: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(translations)) {
+                if (key.startsWith(prefix)) {
+                    labels[key.substring(prefix.length)] = value;
+                }
+            }
+            return { handled: true, response: this.success({ object: objectName, locale, labels }) };
+        }
+
+        return { handled: false };
+    }
+
+    /**
      * Handles Package Management requests
      * 
      * REST Endpoints:
@@ -942,6 +1000,10 @@ export class HttpDispatcher {
 
         if (cleanPath.startsWith('/packages')) {
              return this.handlePackages(cleanPath.substring(9), method, body, query, context);
+        }
+
+        if (cleanPath.startsWith('/i18n')) {
+             return this.handleI18n(cleanPath.substring(5), method, query, context);
         }
 
         // OpenAPI Specification
