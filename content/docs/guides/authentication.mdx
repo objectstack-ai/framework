@@ -18,6 +18,7 @@ Complete guide to implementing authentication in ObjectStack applications using 
 7. [Client Integration](#client-integration)
 8. [API Reference](#api-reference)
 9. [Best Practices](#best-practices)
+10. [MSW/Mock Mode](#mswmock-mode)
 
 ---
 
@@ -89,7 +90,7 @@ import { HonoServerPlugin } from '@objectstack/plugin-hono-server';
 
 const kernel = new ObjectKernel({
   plugins: [
-    // HTTP server (required for auth routes)
+    // HTTP server (optional — auth works without it in MSW/mock mode)
     new HonoServerPlugin({
       port: 3000,
     }),
@@ -106,6 +107,10 @@ await kernel.start();
 ```
 
 That's it! Your authentication endpoints are now available at `/api/v1/auth/*`.
+
+> **MSW/Mock Mode:** AuthPlugin does **not** require an HTTP server. When HonoServerPlugin
+> is absent, the plugin gracefully skips route registration and still registers the `auth`
+> service. See [MSW/Mock Mode](#mswmock-mode) below for details.
 
 ### 3. ObjectQL Data Persistence
 
@@ -583,6 +588,66 @@ better-auth internally uses model names like `user` and `session`. The ObjectQL 
 > **Upgrade note:** If you have custom adapters or plugins that reference auth objects by name,
 > update them to use `sys_user`, `sys_session`, `sys_account`, `sys_verification`
 > (or import from `SystemObjectName` constants).
+
+---
+
+## MSW/Mock Mode
+
+AuthPlugin is designed to work in **both** server and MSW/mock (browser-only) environments. This means you can develop and test authentication flows without running a real HTTP server.
+
+### How It Works
+
+- **Server mode** (HonoServerPlugin active): AuthPlugin registers HTTP routes at `/api/v1/auth/*` and forwards all requests to better-auth.
+- **MSW/mock mode** (no HTTP server): AuthPlugin gracefully skips route registration but still registers the `auth` service. The `HttpDispatcher` provides mock fallback responses for core auth endpoints.
+
+### Minimal Configuration for Mock Mode
+
+```typescript
+import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
+import { ObjectQLPlugin } from '@objectstack/objectql';
+import { InMemoryDriver } from '@objectstack/driver-memory';
+import { AuthPlugin } from '@objectstack/plugin-auth';
+
+const kernel = new ObjectKernel();
+
+await kernel.use(new ObjectQLPlugin());
+await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
+
+// AuthPlugin works without HonoServerPlugin — no HTTP server needed
+await kernel.use(new AuthPlugin({
+  secret: 'mock-dev-secret-at-least-32-characters-long',
+  baseUrl: 'http://localhost:5173',
+}));
+
+await kernel.bootstrap();
+```
+
+### Mock Fallback Endpoints
+
+When no auth service handler or broker is available, `HttpDispatcher.handleAuth()` automatically provides mock responses for:
+
+| Endpoint | Method | Description |
+|:---|:---:|:---|
+| `sign-up/email` | POST | Returns mock user + session |
+| `sign-in/email` | POST | Returns mock user + session |
+| `login` | POST | Legacy login — returns mock user + session |
+| `register` | POST | Alias for sign-up |
+| `get-session` | GET | Returns `{ session: null, user: null }` |
+| `sign-out` | POST | Returns `{ success: true }` |
+
+This ensures that registration and sign-in flows do not return 404 errors in MSW/browser-only environments.
+
+### Studio Kernel Factory
+
+The Studio app's `createKernel()` factory includes AuthPlugin by default:
+
+```typescript
+// apps/studio/src/mocks/createKernel.ts
+await kernel.use(new AuthPlugin({
+  secret: 'mock-dev-secret-at-least-32-characters-long',
+  baseUrl: 'http://localhost:5173',
+}));
+```
 
 ---
 

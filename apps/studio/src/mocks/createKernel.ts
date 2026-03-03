@@ -4,6 +4,7 @@ import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin, SchemaRegistry } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { MSWPlugin } from '@objectstack/plugin-msw';
+import { AuthPlugin } from '@objectstack/plugin-auth';
 
 export interface KernelOptions {
     appConfigs?: any[];      // Multiple app configs
@@ -41,6 +42,12 @@ export async function createKernel(options: KernelOptions) {
     // Do NOT manually set 'protocol' on kernel.services — it would conflict with
     // ObjectQLPlugin's ctx.registerService('protocol', ...) during bootstrap.
     console.log('[KernelFactory] Protocol service will be registered by ObjectQLPlugin');
+
+    // Register AuthPlugin for MSW/mock mode (gracefully skips HTTP route registration)
+    await kernel.use(new AuthPlugin({
+        secret: 'mock-dev-secret-at-least-32-characters-long',
+        baseUrl: 'http://localhost:5173',
+    }));
 
     // --- BROKER SHIM (MUST be registered BEFORE MSWPlugin) ---
     // HttpDispatcher requires a broker to function. We inject a shim.
