@@ -216,7 +216,7 @@ describe('HttpDispatcher', () => {
             it('should resolve analytics service from Promise (async factory)', async () => {
                 const mockAnalytics = {
                     query: vi.fn().mockResolvedValue({ rows: [{ id: 1 }], total: 1 }),
-                    getMetadata: vi.fn().mockResolvedValue({ tables: ['t1'] }),
+                    getMeta: vi.fn().mockResolvedValue({ tables: ['t1'] }),
                     generateSql: vi.fn().mockResolvedValue({ sql: 'SELECT 1' }),
                 };
                 // Inject as Promise (simulates async factory registration)
@@ -245,7 +245,7 @@ describe('HttpDispatcher', () => {
 
             it('should handle GET /analytics/meta with async service', async () => {
                 const mockAnalytics = {
-                    getMetadata: vi.fn().mockResolvedValue({ tables: ['users', 'orders'] }),
+                    getMeta: vi.fn().mockResolvedValue({ tables: ['users', 'orders'] }),
                 };
                 (kernel as any).getService = vi.fn().mockResolvedValue(mockAnalytics);
 

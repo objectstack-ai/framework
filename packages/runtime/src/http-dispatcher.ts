@@ -526,7 +526,7 @@ export class HttpDispatcher {
      * Handles Analytics requests
      * path: sub-path after /analytics/
      */
-    async handleAnalytics(path: string, method: string, body: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+    async handleAnalytics(path: string, method: string, body: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const analyticsService = await this.getService(CoreServiceName.enum.analytics);
         if (!analyticsService) return { handled: false }; // 404 handled by caller if unhandled
 
@@ -535,20 +535,20 @@ export class HttpDispatcher {
 
         // POST /analytics/query
         if (subPath === 'query' && m === 'POST') {
-            const result = await analyticsService.query(body, { request: context.request });
+            const result = await analyticsService.query(body);
             return { handled: true, response: this.success(result) };
         }
 
         // GET /analytics/meta
         if (subPath === 'meta' && m === 'GET') {
-            const result = await analyticsService.getMetadata({ request: context.request });
+            const result = await analyticsService.getMeta();
              return { handled: true, response: this.success(result) };
         }
 
         // POST /analytics/sql (Dry-run or debug)
         if (subPath === 'sql' && m === 'POST') {
              // Assuming service has generateSql method
-             const result = await analyticsService.generateSql(body, { request: context.request });
+             const result = await analyticsService.generateSql(body);
              return { handled: true, response: this.success(result) };
         }
 
