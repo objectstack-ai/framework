@@ -535,7 +535,7 @@ export class HttpDispatcher {
 
         // POST /analytics/query
         if (subPath === 'query' && m === 'POST') {
-            const result = await analyticsService.query(body, { request: context.request });
+            const result = await analyticsService.query(body);
             return { handled: true, response: this.success(result) };
         }
 
@@ -548,7 +548,7 @@ export class HttpDispatcher {
         // POST /analytics/sql (Dry-run or debug)
         if (subPath === 'sql' && m === 'POST') {
              // Assuming service has generateSql method
-             const result = await analyticsService.generateSql(body, { request: context.request });
+             const result = await analyticsService.generateSql(body);
              return { handled: true, response: this.success(result) };
         }
 
