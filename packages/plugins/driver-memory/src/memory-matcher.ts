@@ -62,11 +62,6 @@ export function match(record: RecordType, filter: any): boolean {
  * Access nested properties via dot-notation (e.g. "user.name")
  */
 export function getValueByPath(obj: any, path: string): any {
-    // Compatibility: Map _id to id if _id is missing
-    if (path === '_id' && obj._id === undefined && obj.id !== undefined) {
-        return obj.id;
-    }
-
     if (!path.includes('.')) return obj[path];
     return path.split('.').reduce((o, i) => (o ? o[i] : undefined), obj);
 }

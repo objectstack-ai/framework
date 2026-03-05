@@ -49,8 +49,8 @@ export class HttpTestAdapter implements TestExecutionAdapter {
   }
 
   private async updateRecord(objectName: string, data: Record<string, unknown>, headers: Record<string, string>) {
-    const id = data._id || data.id;
-    if (!id) throw new Error('Update record requires _id or id in payload');
+    const id = data.id;
+    if (!id) throw new Error('Update record requires id in payload');
     const response = await fetch(`${this.baseUrl}/api/data/${objectName}/${id}`, {
       method: 'PUT',
       headers,
@@ -60,8 +60,8 @@ export class HttpTestAdapter implements TestExecutionAdapter {
   }
 
   private async deleteRecord(objectName: string, data: Record<string, unknown>, headers: Record<string, string>) {
-    const id = data._id || data.id;
-    if (!id) throw new Error('Delete record requires _id or id in payload');
+    const id = data.id;
+    if (!id) throw new Error('Delete record requires id in payload');
     const response = await fetch(`${this.baseUrl}/api/data/${objectName}/${id}`, {
       method: 'DELETE',
       headers
@@ -70,8 +70,8 @@ export class HttpTestAdapter implements TestExecutionAdapter {
   }
 
   private async readRecord(objectName: string, data: Record<string, unknown>, headers: Record<string, string>) {
-    const id = data._id || data.id;
-    if (!id) throw new Error('Read record requires _id or id in payload');
+    const id = data.id;
+    if (!id) throw new Error('Read record requires id in payload');
     const response = await fetch(`${this.baseUrl}/api/data/${objectName}/${id}`, {
       method: 'GET',
       headers

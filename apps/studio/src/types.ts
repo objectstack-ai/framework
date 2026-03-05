@@ -4,8 +4,7 @@
  * Task type definition (todo_task)
  */
 export interface Task {
-  _id: string; // Internal ID
-  id: string; // External ID usually, but here we might get _id or id depending on driver
+  id: string;
   subject: string;
   priority: number;
   is_completed: boolean;

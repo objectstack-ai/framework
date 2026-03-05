@@ -95,7 +95,7 @@ describe('FieldMappingSchema', () => {
       params: {
         object: 'account',
         fromField: 'name',
-        toField: '_id',
+        toField: 'id',
         autoCreate: false
       }
     });
@@ -103,7 +103,7 @@ describe('FieldMappingSchema', () => {
     expect(mapping.transform).toBe('lookup');
     expect(mapping.params?.object).toBe('account');
     expect(mapping.params?.fromField).toBe('name');
-    expect(mapping.params?.toField).toBe('_id');
+    expect(mapping.params?.toField).toBe('id');
   });
 
   it('should accept map transform', () => {
@@ -297,7 +297,7 @@ describe('MappingSchema', () => {
       fieldMapping: [{ source: 'email', target: 'email' }],
       extractQuery: {
         object: 'contact',
-        fields: ['_id', 'email', 'name'],
+        fields: ['id', 'email', 'name'],
         filters: ['status', '=', 'active']
       }
     });
@@ -361,7 +361,7 @@ describe('MappingSchema', () => {
           params: {
             object: 'account',
             fromField: 'name',
-            toField: '_id'
+            toField: 'id'
           }
         },
         {
