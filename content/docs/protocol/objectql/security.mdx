@@ -256,7 +256,7 @@ const user = await ObjectQL.findOne('user', '123');
 
 // Result (salary/ssn stripped):
 // {
-//   _id: '123',
+//   id: '123',
 //   name: 'John Doe',
 //   email: 'john@example.com'
 //   // salary: REMOVED
@@ -268,7 +268,7 @@ const user = await ObjectQL.findOne('user', '123');
 
 // Result (salary visible):
 // {
-//   _id: '123',
+//   id: '123',
 //   name: 'John Doe',
 //   email: 'john@example.com',
 //   salary: { amount: 120000, currency: 'USD' }
