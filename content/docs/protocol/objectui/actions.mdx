@@ -524,7 +524,7 @@ listView:
     - type: api
       label: Send Email
       icon: mail
-      endpoint: /api/customers/{_id}/send-email
+      endpoint: /api/customers/{id}/send-email
 ```
 
 ### Dropdown Menu Actions
@@ -541,7 +541,7 @@ actions:
         label: Clone Customer
       - type: api
         label: Export to PDF
-        endpoint: /api/customers/{_id}/export-pdf
+        endpoint: /api/customers/{id}/export-pdf
       - type: separator
       - type: workflow
         label: Merge Duplicate
