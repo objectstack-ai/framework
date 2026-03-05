@@ -258,7 +258,7 @@ const sapConnector: Connector = {
     direction: 'bidirectional',
     schedule: '*/15 * * * *', // Every 15 minutes
     realtimeSync: true,
-    timestampField: 'last_modified_at',
+    timestampField: 'updated_at',
     conflictResolution: 'latest_wins',
     batchSize: 1000,
     deleteMode: 'soft_delete'

@@ -681,7 +681,7 @@ export class ObjectQL implements IDataEngine {
       try {
         const relatedQuery: QueryAST = {
           object: referenceObject,
-          where: { _id: { $in: uniqueIds } },
+          where: { id: { $in: uniqueIds } },
           ...(nestedAST.fields ? { fields: nestedAST.fields } : {}),
           ...(nestedAST.orderBy ? { orderBy: nestedAST.orderBy } : {}),
         };
@@ -692,7 +692,7 @@ export class ObjectQL implements IDataEngine {
         // Build a lookup map: id → record
         const recordMap = new Map<string, any>();
         for (const rec of relatedRecords) {
-          const id = rec._id ?? rec.id;
+          const id = rec.id;
           if (id != null) recordMap.set(String(id), rec);
         }
 
@@ -707,7 +707,7 @@ export class ObjectQL implements IDataEngine {
           // Rebuild map with expanded records
           recordMap.clear();
           for (const rec of expandedRelated) {
-            const id = rec._id ?? rec.id;
+            const id = rec.id;
             if (id != null) recordMap.set(String(id), rec);
           }
         }
@@ -921,10 +921,9 @@ export class ObjectQL implements IDataEngine {
      const driver = this.getDriver(object);
      
      // 1. Extract ID from data or filter if it's a single update by ID
-     let id = data.id || data._id;
+     let id = data.id;
      if (!id && options?.filter) {
          if (typeof options.filter === 'string') id = options.filter;
-         else if (options.filter._id) id = options.filter._id;
          else if (options.filter.id) id = options.filter.id;
      }
 
@@ -980,7 +979,6 @@ export class ObjectQL implements IDataEngine {
     let id: any = undefined;
     if (options?.filter) {
          if (typeof options.filter === 'string') id = options.filter;
-         else if (options.filter._id) id = options.filter._id;
          else if (options.filter.id) id = options.filter.id;
     }
 
@@ -1043,7 +1041,7 @@ export class ObjectQL implements IDataEngine {
            return driver.count(object, ast);
        }
        // Fallback to find().length
-       const res = await this.find(object, { filter: query?.filter, select: ['_id'] });
+       const res = await this.find(object, { filter: query?.filter, select: ['id'] });
        return res.length;
      });
 
@@ -1335,8 +1333,8 @@ export class ObjectRepository {
 
   /** Update a single record by ID */
   async updateById(id: string | number, data: any): Promise<any> {
-    return this.engine.update(this.objectName, { ...data, _id: id }, {
-      filter: { _id: id },
+    return this.engine.update(this.objectName, { ...data, id: id }, {
+      filter: { id: id },
       context: this.context,
     });
   }
@@ -1351,7 +1349,7 @@ export class ObjectRepository {
   /** Delete a single record by ID */
   async deleteById(id: string | number): Promise<any> {
     return this.engine.delete(this.objectName, {
-      filter: { _id: id },
+      filter: { id: id },
       context: this.context,
     });
   }

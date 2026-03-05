@@ -129,35 +129,35 @@ export class ObjectQLPlugin implements Plugin {
   }
 
   /**
-   * Register built-in audit hooks for auto-stamping createdBy/modifiedBy
+   * Register built-in audit hooks for auto-stamping created_by/updated_by
    * and fetching previousData for update/delete operations.
    */
   private registerAuditHooks(ctx: PluginContext) {
     if (!this.ql) return;
 
-    // Auto-stamp createdBy/modifiedBy on insert
+    // Auto-stamp created_by/updated_by on insert
     this.ql.registerHook('beforeInsert', async (hookCtx) => {
       if (hookCtx.session?.userId && hookCtx.input?.data) {
         const data = hookCtx.input.data as Record<string, any>;
         if (typeof data === 'object' && data !== null) {
           data.created_by = data.created_by ?? hookCtx.session.userId;
-          data.modified_by = hookCtx.session.userId;
+          data.updated_by = hookCtx.session.userId;
           data.created_at = data.created_at ?? new Date().toISOString();
-          data.modified_at = new Date().toISOString();
+          data.updated_at = new Date().toISOString();
           if (hookCtx.session.tenantId) {
-            data.space_id = data.space_id ?? hookCtx.session.tenantId;
+            data.tenant_id = data.tenant_id ?? hookCtx.session.tenantId;
           }
         }
       }
     }, { object: '*', priority: 10 });
 
-    // Auto-stamp modifiedBy on update
+    // Auto-stamp updated_by on update
     this.ql.registerHook('beforeUpdate', async (hookCtx) => {
       if (hookCtx.session?.userId && hookCtx.input?.data) {
         const data = hookCtx.input.data as Record<string, any>;
         if (typeof data === 'object' && data !== null) {
-          data.modified_by = hookCtx.session.userId;
-          data.modified_at = new Date().toISOString();
+          data.updated_by = hookCtx.session.userId;
+          data.updated_at = new Date().toISOString();
         }
       }
     }, { object: '*', priority: 10 });
@@ -167,7 +167,7 @@ export class ObjectQLPlugin implements Plugin {
       if (hookCtx.input?.id && !hookCtx.previous) {
         try {
           const existing = await this.ql!.findOne(hookCtx.object, {
-            filter: { _id: hookCtx.input.id }
+            filter: { id: hookCtx.input.id }
           });
           if (existing) {
             hookCtx.previous = existing;
@@ -183,7 +183,7 @@ export class ObjectQLPlugin implements Plugin {
       if (hookCtx.input?.id && !hookCtx.previous) {
         try {
           const existing = await this.ql!.findOne(hookCtx.object, {
-            filter: { _id: hookCtx.input.id }
+            filter: { id: hookCtx.input.id }
           });
           if (existing) {
             hookCtx.previous = existing;
@@ -194,11 +194,11 @@ export class ObjectQLPlugin implements Plugin {
       }
     }, { object: '*', priority: 5 });
 
-    ctx.logger.debug('Audit hooks registered (createdBy/modifiedBy, previousData)');
+    ctx.logger.debug('Audit hooks registered (created_by/updated_by, previousData)');
   }
 
   /**
-   * Register tenant isolation middleware that auto-injects space_id filter
+   * Register tenant isolation middleware that auto-injects tenant_id filter
    * for multi-tenant operations.
    */
   private registerTenantMiddleware(ctx: PluginContext) {
@@ -210,10 +210,10 @@ export class ObjectQLPlugin implements Plugin {
         return next();
       }
 
-      // Read operations: inject space_id filter into AST
+      // Read operations: inject tenant_id filter into AST
       if (['find', 'findOne', 'count', 'aggregate'].includes(opCtx.operation)) {
         if (opCtx.ast) {
-          const tenantFilter = { space_id: opCtx.context.tenantId };
+          const tenantFilter = { tenant_id: opCtx.context.tenantId };
           if (opCtx.ast.where) {
             opCtx.ast.where = { $and: [opCtx.ast.where, tenantFilter] };
           } else {

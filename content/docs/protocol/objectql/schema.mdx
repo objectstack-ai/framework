@@ -75,7 +75,7 @@ label: Project
 ```
 
 This 2-line definition creates:
-- Database table `project` with system fields (`_id`, `created_at`, `updated_at`)
+- Database table `project` with system fields (`id`, `created_at`, `updated_at`)
 - REST API: `GET/POST/PUT/DELETE /api/project`
 - Admin UI: List view + Form
 - TypeScript types
@@ -303,7 +303,7 @@ Every object automatically includes system fields:
 
 ```yaml
 # Auto-generated (not defined in .object.yml)
-_id:
+id:
   type: id
   label: Record ID
   read_only: true
@@ -637,7 +637,7 @@ parent_id:
 Query polymorphic fields:
 ```typescript
 const activity = await ObjectQL.findOne('activity', id);
-// activity.parent_id = { _id: '123', _type: 'account' }
+// activity.parent_id = { id: '123', _type: 'account' }
 ```
 
 ### Computed Fields (Virtual)

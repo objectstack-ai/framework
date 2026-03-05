@@ -24,7 +24,7 @@ interface ActionContext {
 /** Escalate a case to the escalation team */
 export async function escalateCase(ctx: ActionContext): Promise<void> {
   const { record, engine, user, params } = ctx;
-  await engine.update('case', record._id as string, {
+  await engine.update('case', record.id as string, {
     is_escalated: true,
     escalation_reason: params?.reason as string,
     escalated_by: user.id,
@@ -36,7 +36,7 @@ export async function escalateCase(ctx: ActionContext): Promise<void> {
 /** Close a case with a resolution */
 export async function closeCase(ctx: ActionContext): Promise<void> {
   const { record, engine, user, params } = ctx;
-  await engine.update('case', record._id as string, {
+  await engine.update('case', record.id as string, {
     is_closed: true,
     resolution: params?.resolution as string,
     closed_by: user.id,

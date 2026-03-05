@@ -39,7 +39,7 @@ export const FieldMappingSchema = z.object({
     // Lookup
     object: z.string().optional(), // Lookup Object
     fromField: z.string().optional(), // Match on (e.g. "name")
-    toField: z.string().optional(), // Value to take (e.g. "_id")
+    toField: z.string().optional(), // Value to take (e.g. "id")
     autoCreate: z.boolean().optional(), // Create if missing
     
     // Map

@@ -533,7 +533,7 @@ account_id:
   deleteBehavior: set_null  # or restrict, cascade
 ```
 
-**Storage:** Stores `_id` of referenced record
+**Storage:** Stores `id` of referenced record
 
 **Query behavior:**
 ```typescript
@@ -617,7 +617,7 @@ parent:
 **Storage:**
 ```json
 {
-  "_id": "123",
+  "id": "123",
   "_type": "account"
 }
 ```
@@ -628,12 +628,12 @@ const activity = await ObjectQL.findOne('activity', id, {
   expand: ['parent']  // Resolves based on _type
 });
 
-// activity.parent = { _id: '123', _type: 'account', company_name: 'Acme' }
+// activity.parent = { id: '123', _type: 'account', company_name: 'Acme' }
 ```
 
 **Database mapping:**
 - PostgreSQL: Two columns `parent_id` + `parent_type`
-- MongoDB: `{ _id: String, _type: String }`
+- MongoDB: `{ id: String, _type: String }`
 
 **Use cases:**
 - Activity feeds (related to Account OR Contact)

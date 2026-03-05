@@ -445,7 +445,7 @@ describe('RestServer', () => {
       protocol.getData.mockResolvedValue({
         object: 'order_item',
         id: 'oi_123',
-        record: { _id: 'oi_123', name: 'Item 1' },
+        record: { id: 'oi_123', name: 'Item 1' },
       });
 
       await getByIdRoute!.handler(mockReq, mockRes);
@@ -478,7 +478,7 @@ describe('RestServer', () => {
       protocol.getData.mockResolvedValue({
         object: 'contact',
         id: 'c_1',
-        record: { _id: 'c_1' },
+        record: { id: 'c_1' },
       });
 
       await getByIdRoute!.handler(mockReq, mockRes);

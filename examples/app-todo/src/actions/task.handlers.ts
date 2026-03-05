@@ -23,7 +23,7 @@ interface ActionContext {
   /** Data engine for CRUD operations */
   engine: {
     update(object: string, id: string, data: Record<string, unknown>): Promise<void>;
-    insert(object: string, data: Record<string, unknown>): Promise<{ _id: string }>;
+    insert(object: string, data: Record<string, unknown>): Promise<{ id: string }>;
     find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
     delete(object: string, ids: string[]): Promise<void>;
   };
@@ -34,7 +34,7 @@ interface ActionContext {
 /** Mark a single task as complete */
 export async function completeTask(ctx: ActionContext): Promise<void> {
   const { record, engine, user } = ctx;
-  await engine.update('task', record._id as string, {
+  await engine.update('task', record.id as string, {
     status: 'completed',
     completed_at: new Date().toISOString(),
     completed_by: user.id,
@@ -44,16 +44,16 @@ export async function completeTask(ctx: ActionContext): Promise<void> {
 /** Mark a task as in-progress */
 export async function startTask(ctx: ActionContext): Promise<void> {
   const { record, engine } = ctx;
-  await engine.update('task', record._id as string, {
+  await engine.update('task', record.id as string, {
     status: 'in_progress',
     started_at: new Date().toISOString(),
   });
 }
 
 /** Clone a task (duplicate with reset status) */
-export async function cloneTask(ctx: ActionContext): Promise<{ _id: string }> {
+export async function cloneTask(ctx: ActionContext): Promise<{ id: string }> {
   const { record, engine } = ctx;
-  const { _id, created_at, updated_at, completed_at, completed_by, ...fields } = record as Record<string, unknown>;
+  const { id, created_at, updated_at, completed_at, completed_by, ...fields } = record as Record<string, unknown>;
   return engine.insert('task', {
     ...fields,
     status: 'not_started',
@@ -79,7 +79,7 @@ export async function massCompleteTasks(ctx: ActionContext): Promise<void> {
 export async function deleteCompletedTasks(ctx: ActionContext): Promise<void> {
   const { engine } = ctx;
   const completed = await engine.find('task', { status: 'completed' });
-  const ids = completed.map((r) => r._id as string);
+  const ids = completed.map((r) => r.id as string);
   if (ids.length > 0) {
     await engine.delete('task', ids);
   }
@@ -88,7 +88,7 @@ export async function deleteCompletedTasks(ctx: ActionContext): Promise<void> {
 /** Defer a task by updating its due date (modal form submission handler) */
 export async function deferTask(ctx: ActionContext): Promise<void> {
   const { record, engine, params } = ctx;
-  await engine.update('task', record._id as string, {
+  await engine.update('task', record.id as string, {
     due_date: params?.new_due_date ? String(params.new_due_date) : null,
     defer_reason: params?.reason ? String(params.reason) : null,
     status: 'waiting',
@@ -98,7 +98,7 @@ export async function deferTask(ctx: ActionContext): Promise<void> {
 /** Set a reminder on a task (modal form submission handler) */
 export async function setReminder(ctx: ActionContext): Promise<void> {
   const { record, engine, params } = ctx;
-  await engine.update('task', record._id as string, {
+  await engine.update('task', record.id as string, {
     reminder_date: params?.reminder_date ? String(params.reminder_date) : null,
     has_reminder: true,
   });

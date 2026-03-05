@@ -54,7 +54,7 @@ export const TestStepSchema = z.object({
   action: TestActionSchema.describe('The action to execute in this step'),
   assertions: z.array(TestAssertionSchema).optional().describe('Assertions to validate after the action completes'),
   // Capture outputs to variables for subsequent steps
-  capture: z.record(z.string(), z.string()).optional().describe('Map result fields to context variables: { "newId": "body._id" }')
+  capture: z.record(z.string(), z.string()).optional().describe('Map result fields to context variables: { "newId": "body.id" }')
 }).describe('A single step in a test scenario, consisting of an action and optional assertions');
 
 export const TestScenarioSchema = z.object({

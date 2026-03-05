@@ -46,7 +46,7 @@ export async function seedRoles() {
       await object.insert(role);
       console.log(`Created Role: ${role.name}`);
     } else {
-      await object.update(existing._id, role);
+      await object.update(existing.id, role);
       console.log(`Updated Role: ${role.name}`);
     }
   }
@@ -103,7 +103,7 @@ export const SplitNamesJob: JobSchema = {
     for (const c of contacts) {
        const [first, ...rest] = c.full_name.split(' ');
        await ctx.broker.call('contact.update', { 
-           id: c._id, 
+           id: c.id, 
            data: { first_name: first, last_name: rest.join(' ') } 
        });
     }

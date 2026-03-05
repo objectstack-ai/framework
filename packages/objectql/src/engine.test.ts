@@ -239,20 +239,20 @@ describe('ObjectQL Engine', () => {
             // Primary find returns tasks with assignee IDs
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', title: 'Task 1', assignee: 'u1' },
-                    { _id: 't2', title: 'Task 2', assignee: 'u2' },
+                    { id: 't1', title: 'Task 1', assignee: 'u1' },
+                    { id: 't2', title: 'Task 2', assignee: 'u2' },
                 ])
                 // Second call (expand): returns user records
                 .mockResolvedValueOnce([
-                    { _id: 'u1', name: 'Alice' },
-                    { _id: 'u2', name: 'Bob' },
+                    { id: 'u1', name: 'Alice' },
+                    { id: 'u2', name: 'Bob' },
                 ]);
 
             const result = await engine.find('task', { populate: ['assignee'] });
 
             expect(result).toHaveLength(2);
-            expect(result[0].assignee).toEqual({ _id: 'u1', name: 'Alice' });
-            expect(result[1].assignee).toEqual({ _id: 'u2', name: 'Bob' });
+            expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice' });
+            expect(result[1].assignee).toEqual({ id: 'u2', name: 'Bob' });
 
             // Verify the expand query used $in
             expect(mockDriver.find).toHaveBeenCalledTimes(2);
@@ -260,7 +260,7 @@ describe('ObjectQL Engine', () => {
                 'user',
                 expect.objectContaining({
                     object: 'user',
-                    where: { _id: { $in: ['u1', 'u2'] } },
+                    where: { id: { $in: ['u1', 'u2'] } },
                 }),
             );
         });
@@ -282,14 +282,14 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 'oi1', order: 'o1' },
+                    { id: 'oi1', order: 'o1' },
                 ])
                 .mockResolvedValueOnce([
-                    { _id: 'o1', total: 100 },
+                    { id: 'o1', total: 100 },
                 ]);
 
             const result = await engine.find('order_item', { populate: ['order'] });
-            expect(result[0].order).toEqual({ _id: 'o1', total: 100 });
+            expect(result[0].order).toEqual({ id: 'o1', total: 100 });
         });
 
         it('should skip expand for fields without reference definition', async () => {
@@ -301,7 +301,7 @@ describe('ObjectQL Engine', () => {
             } as any);
 
             vi.mocked(mockDriver.find).mockResolvedValueOnce([
-                { _id: 't1', title: 'Task 1' },
+                { id: 't1', title: 'Task 1' },
             ]);
 
             const result = await engine.find('task', { populate: ['title'] });
@@ -313,7 +313,7 @@ describe('ObjectQL Engine', () => {
             vi.mocked(SchemaRegistry.getObject).mockReturnValue(undefined);
 
             vi.mocked(mockDriver.find).mockResolvedValueOnce([
-                { _id: 't1', assignee: 'u1' },
+                { id: 't1', assignee: 'u1' },
             ]);
 
             const result = await engine.find('task', { populate: ['assignee'] });
@@ -338,16 +338,16 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', assignee: null },
-                    { _id: 't2', assignee: 'u1' },
+                    { id: 't1', assignee: null },
+                    { id: 't2', assignee: 'u1' },
                 ])
                 .mockResolvedValueOnce([
-                    { _id: 'u1', name: 'Alice' },
+                    { id: 'u1', name: 'Alice' },
                 ]);
 
             const result = await engine.find('task', { populate: ['assignee'] });
             expect(result[0].assignee).toBeNull();
-            expect(result[1].assignee).toEqual({ _id: 'u1', name: 'Alice' });
+            expect(result[1].assignee).toEqual({ id: 'u1', name: 'Alice' });
         });
 
         it('should de-duplicate foreign key IDs in batch query', async () => {
@@ -367,13 +367,13 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', assignee: 'u1' },
-                    { _id: 't2', assignee: 'u1' }, // Same user
-                    { _id: 't3', assignee: 'u2' },
+                    { id: 't1', assignee: 'u1' },
+                    { id: 't2', assignee: 'u1' }, // Same user
+                    { id: 't3', assignee: 'u2' },
                 ])
                 .mockResolvedValueOnce([
-                    { _id: 'u1', name: 'Alice' },
-                    { _id: 'u2', name: 'Bob' },
+                    { id: 'u1', name: 'Alice' },
+                    { id: 'u2', name: 'Bob' },
                 ]);
 
             const result = await engine.find('task', { populate: ['assignee'] });
@@ -382,11 +382,11 @@ describe('ObjectQL Engine', () => {
             expect(mockDriver.find).toHaveBeenLastCalledWith(
                 'user',
                 expect.objectContaining({
-                    where: { _id: { $in: ['u1', 'u2'] } },
+                    where: { id: { $in: ['u1', 'u2'] } },
                 }),
             );
-            expect(result[0].assignee).toEqual({ _id: 'u1', name: 'Alice' });
-            expect(result[1].assignee).toEqual({ _id: 'u1', name: 'Alice' });
+            expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice' });
+            expect(result[1].assignee).toEqual({ id: 'u1', name: 'Alice' });
         });
 
         it('should keep raw ID when referenced record not found', async () => {
@@ -406,7 +406,7 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', assignee: 'u_deleted' },
+                    { id: 't1', assignee: 'u_deleted' },
                 ])
                 .mockResolvedValueOnce([]); // No records found
 
@@ -436,15 +436,15 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', assignee: 'u1', project: 'p1' },
+                    { id: 't1', assignee: 'u1', project: 'p1' },
                 ])
-                .mockResolvedValueOnce([{ _id: 'u1', name: 'Alice' }])
-                .mockResolvedValueOnce([{ _id: 'p1', name: 'Project X' }]);
+                .mockResolvedValueOnce([{ id: 'u1', name: 'Alice' }])
+                .mockResolvedValueOnce([{ id: 'p1', name: 'Project X' }]);
 
             const result = await engine.find('task', { populate: ['assignee', 'project'] });
 
-            expect(result[0].assignee).toEqual({ _id: 'u1', name: 'Alice' });
-            expect(result[0].project).toEqual({ _id: 'p1', name: 'Project X' });
+            expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice' });
+            expect(result[0].project).toEqual({ id: 'p1', name: 'Project X' });
             expect(mockDriver.find).toHaveBeenCalledTimes(3);
         });
 
@@ -464,15 +464,15 @@ describe('ObjectQL Engine', () => {
             });
 
             vi.mocked(mockDriver.findOne as any).mockResolvedValueOnce(
-                { _id: 't1', title: 'Task 1', assignee: 'u1' },
+                { id: 't1', title: 'Task 1', assignee: 'u1' },
             );
             vi.mocked(mockDriver.find).mockResolvedValueOnce([
-                { _id: 'u1', name: 'Alice' },
+                { id: 'u1', name: 'Alice' },
             ]);
 
             const result = await engine.findOne('task', { populate: ['assignee'] });
 
-            expect(result.assignee).toEqual({ _id: 'u1', name: 'Alice' });
+            expect(result.assignee).toEqual({ id: 'u1', name: 'Alice' });
         });
 
         it('should handle already-expanded objects (skip re-expansion)', async () => {
@@ -492,14 +492,14 @@ describe('ObjectQL Engine', () => {
 
             // Driver returns an already-expanded object
             vi.mocked(mockDriver.find).mockResolvedValueOnce([
-                { _id: 't1', assignee: { _id: 'u1', name: 'Alice' } },
+                { id: 't1', assignee: { id: 'u1', name: 'Alice' } },
             ]);
 
             const result = await engine.find('task', { populate: ['assignee'] });
 
             // No expand query should have been made — the value was already an object
             expect(mockDriver.find).toHaveBeenCalledTimes(1);
-            expect(result[0].assignee).toEqual({ _id: 'u1', name: 'Alice' });
+            expect(result[0].assignee).toEqual({ id: 'u1', name: 'Alice' });
         });
 
         it('should gracefully handle expand errors and keep raw IDs', async () => {
@@ -519,7 +519,7 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', assignee: 'u1' },
+                    { id: 't1', assignee: 'u1' },
                 ])
                 .mockRejectedValueOnce(new Error('Driver connection failed'));
 
@@ -544,17 +544,17 @@ describe('ObjectQL Engine', () => {
 
             vi.mocked(mockDriver.find)
                 .mockResolvedValueOnce([
-                    { _id: 't1', watchers: ['u1', 'u2'] },
+                    { id: 't1', watchers: ['u1', 'u2'] },
                 ])
                 .mockResolvedValueOnce([
-                    { _id: 'u1', name: 'Alice' },
-                    { _id: 'u2', name: 'Bob' },
+                    { id: 'u1', name: 'Alice' },
+                    { id: 'u2', name: 'Bob' },
                 ]);
 
             const result = await engine.find('task', { populate: ['watchers'] });
             expect(result[0].watchers).toEqual([
-                { _id: 'u1', name: 'Alice' },
-                { _id: 'u2', name: 'Bob' },
+                { id: 'u1', name: 'Alice' },
+                { id: 'u2', name: 'Bob' },
             ]);
         });
 
@@ -570,14 +570,14 @@ describe('ObjectQL Engine', () => {
             });
 
             vi.mocked(mockDriver.find)
-                .mockResolvedValueOnce([{ _id: 't1', project: 'p1' }])  // find task
-                .mockResolvedValueOnce([{ _id: 'p1', org: 'o1' }]);     // expand project (depth 0)
+                .mockResolvedValueOnce([{ id: 't1', project: 'p1' }])  // find task
+                .mockResolvedValueOnce([{ id: 'p1', org: 'o1' }]);     // expand project (depth 0)
                 // org should NOT be expanded further — flat populate doesn't create nested expand
 
             const result = await engine.find('task', { populate: ['project'] });
 
             // Project expanded, but org inside project remains as raw ID
-            expect(result[0].project).toEqual({ _id: 'p1', org: 'o1' });
+            expect(result[0].project).toEqual({ id: 'p1', org: 'o1' });
             expect(mockDriver.find).toHaveBeenCalledTimes(2); // Only primary + 1 expand query
         });
 
@@ -588,11 +588,11 @@ describe('ObjectQL Engine', () => {
             } as any);
 
             vi.mocked(mockDriver.find).mockResolvedValueOnce([
-                { _id: 't1', title: 'Task 1' },
+                { id: 't1', title: 'Task 1' },
             ]);
 
             const result = await engine.find('task', {});
-            expect(result).toEqual([{ _id: 't1', title: 'Task 1' }]);
+            expect(result).toEqual([{ id: 't1', title: 'Task 1' }]);
             expect(mockDriver.find).toHaveBeenCalledTimes(1);
         });
     });

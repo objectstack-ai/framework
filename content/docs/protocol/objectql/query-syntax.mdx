@@ -407,7 +407,7 @@ SELECT
   o.amount, 
   a.company_name AS "account.company_name"
 FROM opportunity o
-LEFT JOIN account a ON o.account_id = a._id
+LEFT JOIN account a ON o.account_id = a.id
 ```
 
 ### Multiple Relationships
@@ -594,7 +594,7 @@ const query = {
     ['exists', {
       object: 'opportunity',
       filters: [
-        ['account_id', '=', '{{parent._id}}'],
+        ['account_id', '=', '{{parent.id}}'],
         ['stage', '=', 'Closed Won']
       ]
     }]
@@ -603,7 +603,7 @@ const query = {
 
 // SQL: WHERE EXISTS (
 //   SELECT 1 FROM opportunity 
-//   WHERE opportunity.account_id = account._id 
+//   WHERE opportunity.account_id = account.id 
 //   AND opportunity.stage = 'Closed Won'
 // )
 ```
@@ -617,7 +617,7 @@ const query = {
     ['not_exists', {
       object: 'opportunity',
       filters: [
-        ['account_id', '=', '{{parent._id}}']
+        ['account_id', '=', '{{parent.id}}']
       ]
     }]
   ]
@@ -778,17 +778,17 @@ const page2 = await ObjectQL.query({
 const result = await ObjectQL.query({
   object: 'customer',
   limit: 10,
-  sort: [{ field: '_id', order: 'asc' }]
+  sort: [{ field: 'id', order: 'asc' }]
 });
 
-// Next page (use last _id as cursor)
+// Next page (use last id as cursor)
 const nextResult = await ObjectQL.query({
   object: 'customer',
   filters: [
-    ['_id', '>', result[result.length - 1]._id]
+    ['id', '>', result[result.length - 1].id]
   ],
   limit: 10,
-  sort: [{ field: '_id', order: 'asc' }]
+  sort: [{ field: 'id', order: 'asc' }]
 });
 ```
 
@@ -808,7 +808,7 @@ const customer = await ObjectQL.findOne('customer', '123');
 // Equivalent to:
 await ObjectQL.query({
   object: 'customer',
-  filters: [['_id', '=', '123']],
+  filters: [['id', '=', '123']],
   limit: 1
 });
 ```

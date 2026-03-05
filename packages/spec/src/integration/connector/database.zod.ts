@@ -277,7 +277,7 @@ export const mongoConnectorExample = {
       name: 'event',
       label: 'Event',
       tableName: 'events',
-      primaryKey: '_id',
+      primaryKey: 'id',
       enabled: true,
     },
   ],

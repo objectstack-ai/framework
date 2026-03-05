@@ -115,8 +115,8 @@ describe('TestStepSchema', () => {
     const step = {
       ...minimalStep,
       description: 'Creates a new account record',
-      assertions: [{ field: 'body._id', operator: 'not_null', expectedValue: null }],
-      capture: { newId: 'body._id' },
+      assertions: [{ field: 'body.id', operator: 'not_null', expectedValue: null }],
+      capture: { newId: 'body.id' },
     };
     expect(() => TestStepSchema.parse(step)).not.toThrow();
   });

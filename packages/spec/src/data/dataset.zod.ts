@@ -34,7 +34,7 @@ export const DatasetSchema = z.object({
    * Idempotency Key (The "Upsert" Key)
    * The field used to check if a record already exists.
    * Best Practice: Use a natural key like 'code', 'slug', 'username' or 'external_id'.
-   * Standard: '_id' (internal ID) is rarely used for portable seed data.
+   * Standard: 'id' is rarely used for portable seed data — prefer natural keys.
    */
   externalId: z.string().default('name').describe('Field match for uniqueness check'),
 

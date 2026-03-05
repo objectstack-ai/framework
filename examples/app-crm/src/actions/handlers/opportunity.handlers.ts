@@ -16,16 +16,16 @@ interface ActionContext {
   user: { id: string; name: string };
   engine: {
     update(object: string, id: string, data: Record<string, unknown>): Promise<void>;
-    insert(object: string, data: Record<string, unknown>): Promise<{ _id: string }>;
+    insert(object: string, data: Record<string, unknown>): Promise<{ id: string }>;
     find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
   };
   params?: Record<string, unknown>;
 }
 
 /** Clone an opportunity record */
-export async function cloneRecord(ctx: ActionContext): Promise<{ _id: string }> {
+export async function cloneRecord(ctx: ActionContext): Promise<{ id: string }> {
   const { record, engine } = ctx;
-  const { _id, created_at, updated_at, ...fields } = record as Record<string, unknown>;
+  const { id, created_at, updated_at, ...fields } = record as Record<string, unknown>;
   return engine.insert('opportunity', {
     ...fields,
     name: `Copy of ${fields.name ?? 'Untitled'}`,

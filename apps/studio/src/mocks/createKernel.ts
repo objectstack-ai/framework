@@ -65,7 +65,7 @@ export async function createKernel(options: KernelOptions) {
                 if (method === 'create') {
                      const res = await ql.insert(params.object, params.data);
                      const record = { ...params.data, ...res };
-                     return { object: params.object, id: record.id || record._id, record };
+                     return { object: params.object, id: record.id, record };
                 }
                 if (method === 'get') {
                      // Delegate to protocol for proper expand/select support
@@ -74,7 +74,7 @@ export async function createKernel(options: KernelOptions) {
                      }
                      let all = await ql.find(params.object);
                      if (!all) all = [];
-                     const match = all.find((i: any) => i.id === params.id || i._id === params.id);
+                     const match = all.find((i: any) => i.id === params.id);
                      return match ? { object: params.object, id: params.id, record: match } : null;
                 }
                 if (method === 'update') {
@@ -85,7 +85,7 @@ export async function createKernel(options: KernelOptions) {
                          if (all && (all as any).value) all = (all as any).value;
                          if (!all) all = [];
                          
-                         const existing = all.find((i: any) => i.id === params.id || i._id === params.id);
+                         const existing = all.find((i: any) => i.id === params.id);
                          
                          if (!existing) {
                              console.warn(`[BrokerShim] Update failed: Record ${params.id} not found.`);
@@ -183,7 +183,7 @@ export async function createKernel(options: KernelOptions) {
                              : String(queryOptions.select).split(',').map((s: string) => s.trim());
                         
                         all = all.map((item: any) => {
-                            const projected: any = { id: item.id, _id: item._id }; // Always include ID
+                            const projected: any = { id: item.id }; // Always include ID
                             selectFields.forEach((f: string) => {
                                 if (item[f] !== undefined) projected[f] = item[f];
                             });

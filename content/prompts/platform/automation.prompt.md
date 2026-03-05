@@ -85,7 +85,7 @@ export const LeadQualifyFlow: FlowSchema = {
       label: 'Get Lead Details',
       config: {
         object: 'lead',
-        filter: [['_id', '=', '{leadId}']]
+        filter: [['id', '=', '{leadId}']]
       }
     },
     {

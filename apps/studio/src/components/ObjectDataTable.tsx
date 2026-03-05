@@ -277,7 +277,7 @@ export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps)
                             {loading && records.length === 0 ? (
                                 <TableSkeleton cols={columns.length} />
                             ) : filteredRecords.map(record => (
-                                <TableRow key={record.id || record._id} className="group">
+                                <TableRow key={record.id} className="group">
                                     {columns.map(col => (
                                         <TableCell key={col.name} className="py-2.5">
                                             <CellValue value={record[col.name]} type={col.type} />
@@ -302,7 +302,7 @@ export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps)
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem 
-                                                    onClick={() => handleDelete(record.id || record._id)}
+                                                    onClick={() => handleDelete(record.id)}
                                                     className="text-destructive focus:text-destructive"
                                                 >
                                                     <Trash2 className="mr-2 h-4 w-4" />

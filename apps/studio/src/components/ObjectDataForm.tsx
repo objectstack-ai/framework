@@ -57,7 +57,6 @@ export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: O
         
         try {
             const dataToSubmit = { ...formData };
-            delete dataToSubmit._id;
             delete dataToSubmit.id;
             delete dataToSubmit.created_at;
             delete dataToSubmit.updated_at;
@@ -71,8 +70,8 @@ export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: O
                 });
             }
 
-            if (record && (record.id || record._id)) {
-                await client.data.update(objectApiName, record.id || record._id, dataToSubmit);
+            if (record && record.id) {
+                await client.data.update(objectApiName, record.id, dataToSubmit);
             } else {
                 await client.data.create(objectApiName, dataToSubmit);
             }
@@ -109,10 +108,10 @@ export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: O
 
     const fields = def.fields || {};
     const fieldKeys = Object.keys(fields).filter(k => {
-        return !['created_at', 'updated_at', 'created_by', 'modified_by'].includes(k);
+        return !['created_at', 'updated_at', 'created_by', 'updated_by'].includes(k);
     });
 
-    const isEdit = !!(record && (record.id || record._id));
+    const isEdit = !!(record && record.id);
 
     return (
         <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>

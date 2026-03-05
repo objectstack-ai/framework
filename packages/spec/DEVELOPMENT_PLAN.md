@@ -232,7 +232,7 @@ export const MetricType = z.enum(['counter', 'gauge', 'histogram', 'summary']);
 
 ```typescript
 // Before (snake_case — violates camelCase property key rule)
-_id: z.string(),
+id: z.string(),
 created_by: z.string(),
 created_at: z.string().datetime(),
 updated_by: z.string(),

@@ -129,14 +129,14 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
         });
 
         it('should return records and standard response shape', async () => {
-            mockEngine.find.mockResolvedValue([{ _id: 't1', name: 'Task 1' }]);
+            mockEngine.find.mockResolvedValue([{ id: 't1', name: 'Task 1' }]);
 
             const result = await protocol.findData({ object: 'task', query: {} });
 
             expect(result).toEqual(
                 expect.objectContaining({
                     object: 'task',
-                    records: [{ _id: 't1', name: 'Task 1' }],
+                    records: [{ id: 't1', name: 'Task 1' }],
                     total: 1,
                 }),
             );
@@ -149,21 +149,21 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
 
     describe('getData', () => {
         it('should convert expand string to populate array', async () => {
-            mockEngine.findOne.mockResolvedValue({ _id: 'oi_1', name: 'Item 1' });
+            mockEngine.findOne.mockResolvedValue({ id: 'oi_1', name: 'Item 1' });
 
             await protocol.getData({ object: 'order_item', id: 'oi_1', expand: 'order,product' });
 
             expect(mockEngine.findOne).toHaveBeenCalledWith(
                 'order_item',
                 expect.objectContaining({
-                    filter: { _id: 'oi_1' },
+                    filter: { id: 'oi_1' },
                     populate: ['order', 'product'],
                 }),
             );
         });
 
         it('should convert expand array to populate array', async () => {
-            mockEngine.findOne.mockResolvedValue({ _id: 't1' });
+            mockEngine.findOne.mockResolvedValue({ id: 't1' });
 
             await protocol.getData({ object: 'task', id: 't1', expand: ['assignee', 'project'] });
 
@@ -176,7 +176,7 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
         });
 
         it('should convert select string to array', async () => {
-            mockEngine.findOne.mockResolvedValue({ _id: 't1', name: 'Test' });
+            mockEngine.findOne.mockResolvedValue({ id: 't1', name: 'Test' });
 
             await protocol.getData({ object: 'task', id: 't1', select: 'name,status' });
 
@@ -189,7 +189,7 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
         });
 
         it('should pass both expand and select together', async () => {
-            mockEngine.findOne.mockResolvedValue({ _id: 'oi_1' });
+            mockEngine.findOne.mockResolvedValue({ id: 'oi_1' });
 
             await protocol.getData({
                 object: 'order_item',
@@ -201,7 +201,7 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
             expect(mockEngine.findOne).toHaveBeenCalledWith(
                 'order_item',
                 expect.objectContaining({
-                    filter: { _id: 'oi_1' },
+                    filter: { id: 'oi_1' },
                     populate: ['order'],
                     select: ['name', 'total'],
                 }),
@@ -209,25 +209,25 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
         });
 
         it('should work without expand or select', async () => {
-            mockEngine.findOne.mockResolvedValue({ _id: 't1' });
+            mockEngine.findOne.mockResolvedValue({ id: 't1' });
 
             await protocol.getData({ object: 'task', id: 't1' });
 
             expect(mockEngine.findOne).toHaveBeenCalledWith(
                 'task',
-                { filter: { _id: 't1' } },
+                { filter: { id: 't1' } },
             );
         });
 
         it('should return standard GetDataResponse shape', async () => {
-            mockEngine.findOne.mockResolvedValue({ _id: 'oi_1', name: 'Item 1' });
+            mockEngine.findOne.mockResolvedValue({ id: 'oi_1', name: 'Item 1' });
 
             const result = await protocol.getData({ object: 'order_item', id: 'oi_1' });
 
             expect(result).toEqual({
                 object: 'order_item',
                 id: 'oi_1',
-                record: { _id: 'oi_1', name: 'Item 1' },
+                record: { id: 'oi_1', name: 'Item 1' },
             });
         });
 

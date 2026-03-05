@@ -147,7 +147,7 @@ const query: Query = {
 -- PostgreSQL (with JOIN)
 SELECT c.company_name, c.industry, u.name AS "owner.name"
 FROM customer c
-LEFT JOIN user u ON c.owner_id = u._id
+LEFT JOIN user u ON c.owner_id = u.id
 WHERE c.industry = 'tech' AND c.annual_revenue > 1000000
 ORDER BY c.created_at DESC
 LIMIT 10;

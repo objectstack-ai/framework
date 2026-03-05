@@ -16,7 +16,7 @@ interface ActionContext {
   record: Record<string, unknown>;
   user: { id: string; name: string };
   engine: {
-    insert(object: string, data: Record<string, unknown>): Promise<{ _id: string }>;
+    insert(object: string, data: Record<string, unknown>): Promise<{ id: string }>;
     find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
   };
   params?: Record<string, unknown>;
@@ -43,11 +43,11 @@ export async function logCall(ctx: ActionContext): Promise<{ activityId: string 
     subject: params?.subject ? String(params.subject) : 'Untitled Call',
     duration_minutes: params?.duration ? Number(params.duration) : 0,
     notes: params?.notes ? String(params.notes) : '',
-    related_to_id: record._id as string,
+    related_to_id: record.id as string,
     direction: 'outbound',
     status: 'completed',
     created_by: user.id,
     call_date: new Date().toISOString(),
   });
-  return { activityId: activity._id };
+  return { activityId: activity.id };
 }

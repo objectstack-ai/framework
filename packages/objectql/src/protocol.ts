@@ -246,7 +246,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
              // Form View Generation
              // Simple single-section layout for now
              const formFields = fieldKeys
-                .filter(k => k !== 'id' && k !== 'created_at' && k !== 'modified_at' && !fields[k].hidden)
+                .filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at' && !fields[k].hidden)
                 .map(f => ({
                     field: f,
                     label: fields[f]?.label,
@@ -361,7 +361,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async getData(request: { object: string, id: string, expand?: string | string[], select?: string | string[] }) {
         const queryOptions: any = {
-            filter: { _id: request.id }
+            filter: { id: request.id }
         };
 
         // Support select for single-record retrieval
@@ -393,14 +393,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const result = await this.engine.insert(request.object, request.data);
         return {
             object: request.object,
-            id: result._id || result.id,
+            id: result.id,
             record: result
         };
     }
 
     async updateData(request: { object: string, id: string, data: any }) {
         // Adapt: update(obj, id, data) -> update(obj, data, options)
-        const result = await this.engine.update(request.object, request.data, { filter: { _id: request.id } });
+        const result = await this.engine.update(request.object, request.data, { filter: { id: request.id } });
         return {
             object: request.object,
             id: request.id,
@@ -410,7 +410,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async deleteData(request: { object: string, id: string }) {
         // Adapt: delete(obj, id) -> delete(obj, options)
-        await this.engine.delete(request.object, { filter: { _id: request.id } });
+        await this.engine.delete(request.object, { filter: { id: request.id } });
         return {
             object: request.object,
             id: request.id,
@@ -478,13 +478,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 switch (operation) {
                     case 'create': {
                         const created = await this.engine.insert(object, record.data || record);
-                        results.push({ id: created._id || created.id, success: true, record: created });
+                        results.push({ id: created.id, success: true, record: created });
                         succeeded++;
                         break;
                     }
                     case 'update': {
                         if (!record.id) throw new Error('Record id is required for update');
-                        const updated = await this.engine.update(object, record.data || {}, { filter: { _id: record.id } });
+                        const updated = await this.engine.update(object, record.data || {}, { filter: { id: record.id } });
                         results.push({ id: record.id, success: true, record: updated });
                         succeeded++;
                         break;
@@ -493,28 +493,28 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         // Try update first, then create if not found
                         if (record.id) {
                             try {
-                                const existing = await this.engine.findOne(object, { filter: { _id: record.id } });
+                                const existing = await this.engine.findOne(object, { filter: { id: record.id } });
                                 if (existing) {
-                                    const updated = await this.engine.update(object, record.data || {}, { filter: { _id: record.id } });
+                                    const updated = await this.engine.update(object, record.data || {}, { filter: { id: record.id } });
                                     results.push({ id: record.id, success: true, record: updated });
                                 } else {
-                                    const created = await this.engine.insert(object, { _id: record.id, ...(record.data || {}) });
-                                    results.push({ id: created._id || created.id, success: true, record: created });
+                                    const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) });
+                                    results.push({ id: created.id, success: true, record: created });
                                 }
                             } catch {
-                                const created = await this.engine.insert(object, { _id: record.id, ...(record.data || {}) });
-                                results.push({ id: created._id || created.id, success: true, record: created });
+                                const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) });
+                                results.push({ id: created.id, success: true, record: created });
                             }
                         } else {
                             const created = await this.engine.insert(object, record.data || record);
-                            results.push({ id: created._id || created.id, success: true, record: created });
+                            results.push({ id: created.id, success: true, record: created });
                         }
                         succeeded++;
                         break;
                     }
                     case 'delete': {
                         if (!record.id) throw new Error('Record id is required for delete');
-                        await this.engine.delete(object, { filter: { _id: record.id } });
+                        await this.engine.delete(object, { filter: { id: record.id } });
                         results.push({ id: record.id, success: true });
                         succeeded++;
                         break;
@@ -563,7 +563,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         for (const record of records) {
             try {
-                const updated = await this.engine.update(object, record.data, { filter: { _id: record.id } });
+                const updated = await this.engine.update(object, record.data, { filter: { id: record.id } });
                 results.push({ id: record.id, success: true, record: updated });
                 succeeded++;
             } catch (err: any) {
@@ -765,7 +765,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     async deleteManyData(request: DeleteManyDataRequest): Promise<any> {
         // This expects deleting by IDs.
         return this.engine.delete(request.object, {
-            filter: { _id: { $in: request.ids } },
+            filter: { id: { $in: request.ids } },
             ...request.options
         });
     }

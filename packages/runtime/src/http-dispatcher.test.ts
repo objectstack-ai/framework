@@ -600,7 +600,7 @@ describe('HttpDispatcher', () => {
 
     describe('handleData', () => {
         it('should pass expand and select to broker for GET /data/:object/:id', async () => {
-            mockBroker.call.mockResolvedValue({ object: 'order_item', id: 'oi_1', record: { _id: 'oi_1' } });
+            mockBroker.call.mockResolvedValue({ object: 'order_item', id: 'oi_1', record: { id: 'oi_1' } });
 
             const result = await dispatcher.handleData(
                 '/order_item/oi_1', 'GET', {},

@@ -43,7 +43,7 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                     if (method === 'create') {
                          const res = await ql.insert(params.object, params.data);
                          const record = { ...params.data, ...res };
-                         return { object: params.object, id: record.id || record._id, record };
+                         return { object: params.object, id: record.id, record };
                     }
                     if (method === 'get') {
                         if (protocol) {

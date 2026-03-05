@@ -20,7 +20,7 @@ interface ActionContext {
   user: { id: string; name: string };
   engine: {
     update(object: string, id: string, data: Record<string, unknown>): Promise<void>;
-    insert(object: string, data: Record<string, unknown>): Promise<{ _id: string }>;
+    insert(object: string, data: Record<string, unknown>): Promise<{ id: string }>;
     find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>>;
   };
   params?: Record<string, unknown>;
@@ -46,29 +46,29 @@ export async function convertLead(ctx: ActionContext): Promise<{
     last_name: record.last_name,
     email: record.email,
     phone: record.phone,
-    account_id: account._id,
+    account_id: account.id,
   });
 
   const opportunity = await engine.insert('opportunity', {
     name: `${record.company} - New Opportunity`,
-    account_id: account._id,
-    contact_id: contact._id,
+    account_id: account.id,
+    contact_id: contact.id,
     stage: 'prospecting',
     amount: record.estimated_value ?? 0,
   });
 
-  await engine.update('lead', record._id as string, {
+  await engine.update('lead', record.id as string, {
     is_converted: true,
     status: 'converted',
-    converted_account_id: account._id,
-    converted_contact_id: contact._id,
-    converted_opportunity_id: opportunity._id,
+    converted_account_id: account.id,
+    converted_contact_id: contact.id,
+    converted_opportunity_id: opportunity.id,
   });
 
   return {
-    accountId: account._id,
-    contactId: contact._id,
-    opportunityId: opportunity._id,
+    accountId: account.id,
+    contactId: contact.id,
+    opportunityId: opportunity.id,
   };
 }
 
