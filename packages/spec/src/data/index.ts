@@ -14,6 +14,9 @@ export * from './driver-nosql.zod';
 
 export * from './dataset.zod';
 
+// Seed Loader Protocol (Relationship Resolution & Dependency Ordering)
+export * from './seed-loader.zod';
+
 // Document Management Protocol
 export * from './document.zod';
 
