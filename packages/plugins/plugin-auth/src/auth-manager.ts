@@ -91,11 +91,26 @@ export class AuthManager {
 
   /**
    * Create database configuration using ObjectQL adapter
+   *
+   * better-auth resolves the `database` option as follows:
+   * - `undefined`            → in-memory adapter
+   * - `typeof fn === "function"` → treated as `DBAdapterInstance`, called with `(options)`
+   * - otherwise              → forwarded to Kysely adapter factory (pool/dialect)
+   *
+   * A raw `CustomAdapter` object would fall into the third branch and fail
+   * silently.  We therefore wrap the ObjectQL adapter in a factory function
+   * so it is correctly recognised as a `DBAdapterInstance`.
    */
   private createDatabaseConfig(): any {
     // Use ObjectQL adapter if dataEngine is provided
     if (this.config.dataEngine) {
-      return createObjectQLAdapter(this.config.dataEngine);
+      const adapter = createObjectQLAdapter(this.config.dataEngine);
+      // Return a DBAdapterInstance factory function
+      return (_options: any) => ({
+        id: 'objectql',
+        ...adapter,
+        transaction: async <R>(cb: (trx: any) => Promise<R>): Promise<R> => cb(adapter),
+      });
     }
     
     // Fallback warning if no dataEngine is provided
@@ -145,13 +160,28 @@ export class AuthManager {
   /**
    * Handle an authentication request
    * Forwards the request directly to better-auth's universal handler
+   *
+   * better-auth catches internal errors (database / adapter / ORM) and
+   * returns a 500 Response instead of throwing.  We therefore inspect the
+   * response status and log server errors so they are not silently swallowed.
    * 
    * @param request - Web standard Request object
    * @returns Web standard Response object
    */
   async handleRequest(request: Request): Promise<Response> {
     const auth = this.getOrCreateAuth();
-    return await auth.handler(request);
+    const response = await auth.handler(request);
+
+    if (response.status >= 500) {
+      try {
+        const body = await response.clone().text();
+        console.error('[AuthManager] better-auth returned error:', response.status, body);
+      } catch {
+        console.error('[AuthManager] better-auth returned error:', response.status, '(unable to read body)');
+      }
+    }
+
+    return response;
   }
 
   /**

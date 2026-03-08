@@ -136,6 +136,61 @@ describe('AuthPlugin', () => {
       );
     });
 
+    it('should log via ctx.logger when better-auth returns a 500 response', async () => {
+      const mockRawApp = {
+        all: vi.fn(),
+      };
+
+      const mockHttpServer = {
+        post: vi.fn(),
+        get: vi.fn(),
+        put: vi.fn(),
+        delete: vi.fn(),
+        patch: vi.fn(),
+        use: vi.fn(),
+        getRawApp: vi.fn(() => mockRawApp),
+      };
+
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'http-server') return mockHttpServer;
+        throw new Error(`Service not found: ${name}`);
+      });
+
+      await authPlugin.start(mockContext);
+
+      // Extract the registered route handler
+      const routeHandler = mockRawApp.all.mock.calls[0][1];
+
+      // Create a mock Hono context with a request that will trigger a 500 response
+      const errorResponse = new Response(
+        JSON.stringify({ error: 'Database connection failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+
+      // Mock the authManager's handleRequest to return a 500 response
+      // We access the private authManager through the registered service
+      const registeredAuthManager = (mockContext.registerService as any).mock.calls[0][1];
+      vi.spyOn(registeredAuthManager, 'handleRequest').mockResolvedValue(errorResponse);
+
+      const mockHonoCtx = {
+        req: {
+          raw: new Request('http://localhost:3000/api/v1/auth/sign-up/email', {
+            method: 'POST',
+            body: JSON.stringify({ email: 'a@b.com', password: 'pass' }),
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        },
+      };
+
+      const result = await routeHandler(mockHonoCtx);
+
+      expect(result.status).toBe(500);
+      expect(mockContext.logger.error).toHaveBeenCalledWith(
+        '[AuthPlugin] better-auth returned server error',
+        expect.any(Error)
+      );
+    });
+
     it('should skip route registration when disabled', async () => {
       authPlugin = new AuthPlugin({
         secret: 'test-secret-at-least-32-chars-long',

@@ -199,6 +199,18 @@ export class AuthPlugin implements Plugin {
 
         // Forward to better-auth handler
         const response = await this.authManager!.handleRequest(rewrittenRequest);
+
+        // better-auth catches internal errors and returns error Responses
+        // without throwing, so the catch block below would never trigger.
+        // We proactively log server errors here for observability.
+        if (response.status >= 500) {
+          try {
+            const body = await response.clone().text();
+            ctx.logger.error('[AuthPlugin] better-auth returned server error', new Error(`HTTP ${response.status}: ${body}`));
+          } catch {
+            ctx.logger.error('[AuthPlugin] better-auth returned server error', new Error(`HTTP ${response.status}: (unable to read body)`));
+          }
+        }
         
         return response;
       } catch (error) {
