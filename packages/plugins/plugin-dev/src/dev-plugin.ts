@@ -282,9 +282,9 @@ function createSecurityFieldMaskerStub() {
  * from `packages/spec/src/contracts/`.
  */
 const DEV_STUB_FACTORIES: Record<string, () => Record<string, any>> = {
-  'cache':       createMemoryCache,
-  'queue':       createMemoryQueue,
-  'job':         createMemoryJob,
+  'cache':       () => ({ ...createMemoryCache(), _dev: true }),
+  'queue':       () => ({ ...createMemoryQueue(), _dev: true }),
+  'job':         () => ({ ...createMemoryJob(), _dev: true }),
   'file-storage': createStorageStub,
   'search':      createSearchStub,
   'automation':  createAutomationStub,

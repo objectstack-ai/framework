@@ -152,6 +152,7 @@ describe('InMemoryDriver', () => {
   describe('Initial Data', () => {
     it('should load initial data on connect', async () => {
       const driverWithData = new InMemoryDriver({
+        persistence: false,
         initialData: {
           users: [
             { id: '1', name: 'Alice' },
@@ -174,6 +175,7 @@ describe('InMemoryDriver', () => {
 
     it('should generate IDs for initial data without IDs', async () => {
       const driverWithData = new InMemoryDriver({
+        persistence: false,
         initialData: {
           items: [{ name: 'Widget' }],
         },

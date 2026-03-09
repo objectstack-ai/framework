@@ -225,7 +225,12 @@ export class HonoServerPlugin implements Plugin {
 
         // Start server on kernel:ready hook
         ctx.hook('kernel:ready', async () => {
-            const port = this.options.port || 3000;
+            // Register standard endpoints before starting to listen
+            if (this.options.registerStandardEndpoints) {
+                this.registerDiscoveryAndCrudEndpoints(ctx);
+            }
+
+            const port = this.options.port ?? 3000;
             ctx.logger.debug('Starting HTTP server', { port });
             
             await this.server.listen(port);
@@ -236,6 +241,77 @@ export class HonoServerPlugin implements Plugin {
                 url: `http://localhost:${actualPort}` 
             });
         });
+    }
+
+    /**
+     * Register discovery and basic CRUD endpoints.
+     * Called when `registerStandardEndpoints` is true, before the server starts listening.
+     */
+    private registerDiscoveryAndCrudEndpoints(ctx: PluginContext) {
+        const rawApp = this.server.getRawApp();
+        const prefix = '/api/v1';
+
+        // Build the standard discovery response
+        const discovery = {
+            version: 'v1',
+            apiName: 'ObjectStack API',
+            routes: {
+                data:          `${prefix}/data`,
+                metadata:      `${prefix}/meta`,
+                auth:          `${prefix}/auth`,
+                packages:      `${prefix}/packages`,
+                analytics:     `${prefix}/analytics`,
+                realtime:      `${prefix}/realtime`,
+                workflow:      `${prefix}/workflow`,
+                automation:    `${prefix}/automation`,
+                ai:            `${prefix}/ai`,
+                notifications: `${prefix}/notifications`,
+                i18n:          `${prefix}/i18n`,
+                storage:       `${prefix}/storage`,
+                ui:            `${prefix}/ui`,
+            },
+        };
+
+        // Discovery endpoints
+        rawApp.get('/.well-known/objectstack', (c: any) => c.json({ data: discovery }));
+        rawApp.get(prefix, (c: any) => c.json({ data: discovery }));
+
+        ctx.logger.info('Registered discovery endpoints', { prefix });
+
+        // Basic CRUD data endpoints — delegate to kernel.broker when available
+        const getBroker = () => (ctx.getKernel() as any).broker;
+
+        // Create
+        rawApp.post(`${prefix}/data/:object`, async (c: any) => {
+            const broker = getBroker();
+            if (!broker) return c.json({ error: 'Broker not available' }, 500);
+            const object = c.req.param('object');
+            const data = await c.req.json().catch(() => ({}));
+            const result = await broker.call('data.create', { object, data }, {});
+            return c.json(result);
+        });
+
+        // Get by ID
+        rawApp.get(`${prefix}/data/:object/:id`, async (c: any) => {
+            const broker = getBroker();
+            if (!broker) return c.json({ error: 'Broker not available' }, 500);
+            const object = c.req.param('object');
+            const id = c.req.param('id');
+            const result = await broker.call('data.get', { object, id }, {});
+            return result ? c.json(result) : c.json({ error: 'Not found' }, 404);
+        });
+
+        // Find / List
+        rawApp.get(`${prefix}/data/:object`, async (c: any) => {
+            const broker = getBroker();
+            if (!broker) return c.json({ error: 'Broker not available' }, 500);
+            const object = c.req.param('object');
+            const filters = c.req.query();
+            const result = await broker.call('data.find', { object, filters }, {});
+            return c.json(result);
+        });
+
+        ctx.logger.debug('Registered standard CRUD data endpoints', { prefix });
     }
 
     /**

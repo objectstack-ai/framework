@@ -16,7 +16,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
     it('should register ObjectQL as metadata service provider', async () => {
       // Arrange
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
 
       // Act
       await kernel.bootstrap();
@@ -24,16 +24,19 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Assert
       const metadataService = kernel.getService('metadata');
       expect(metadataService).toBeDefined();
-      
-      // Should be the ObjectQL instance
+
+      // ObjectQL registers a MetadataFacade as the metadata service;
+      // it is separate from (but backed by the same registry as) the objectql service.
       const objectql = kernel.getService('objectql');
-      expect(metadataService).toBe(objectql);
+      expect(objectql).toBeDefined();
+      // metadata and objectql are distinct service instances
+      expect(metadataService).not.toBe(objectql);
     });
 
     it('should serve in-memory metadata definitions', async () => {
       // Arrange
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
       await kernel.bootstrap();
 
       const objectql = kernel.getService('objectql') as any;
@@ -49,17 +52,13 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
         }
       };
 
-      // Act - Register object programmatically
-      objectql.registry.registerObject({
-        packageId: 'test',
-        namespace: 'test',
-        ownership: 'own',
-        object: testObject
-      });
+      // Act - Register object programmatically via the SchemaRegistry API
+      objectql.registry.registerObject(testObject, 'test', 'test');
 
-      // Assert - Should be retrievable via registry
-      const objects = objectql.registry.listObjects();
-      expect(objects).toContain('test__test_object');
+      // Assert - Should be retrievable via registry (getAllObjects returns ServiceObject[])
+      const objects = objectql.registry.getAllObjects();
+      const fqns = objects.map((o: any) => o.name);
+      expect(fqns).toContain('test__test_object');
     });
   });
 
@@ -67,7 +66,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
     it('should register objectql, data, and protocol services', async () => {
       // Arrange
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
 
       // Act
       await kernel.bootstrap();
@@ -88,7 +87,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
         list: async () => []
       };
 
-      kernel.use({
+      await kernel.use({
         name: 'mock-metadata',
         type: 'test',
         version: '1.0.0',
@@ -98,7 +97,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       });
 
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
 
       // Act
       await kernel.bootstrap();
@@ -125,7 +124,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
         delete: async () => ({ count: 1 })
       };
 
-      kernel.use({
+      await kernel.use({
         name: 'mock-driver-plugin',
         type: 'driver',
         version: '1.0.0',
@@ -135,7 +134,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       });
 
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
 
       // Act
       await kernel.bootstrap();
@@ -156,7 +155,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
         }
       };
 
-      kernel.use({
+      await kernel.use({
         name: 'mock-app-plugin',
         type: 'app',
         version: '1.0.0',
@@ -166,7 +165,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       });
 
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
 
       // Act
       await kernel.bootstrap();
@@ -212,7 +211,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       };
 
       // Register mock metadata service BEFORE ObjectQL
-      kernel.use({
+      await kernel.use({
         name: 'mock-metadata',
         type: 'metadata',
         version: '1.0.0',
@@ -222,7 +221,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       });
 
       const plugin = new ObjectQLPlugin();
-      kernel.use(plugin);
+      await kernel.use(plugin);
 
       // Act
       await kernel.bootstrap();
