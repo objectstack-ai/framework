@@ -1,5 +1,13 @@
 # @objectstack/objectql
 
+## 3.2.3
+
+### Patch Changes
+
+- @objectstack/spec@3.2.3
+- @objectstack/core@3.2.3
+- @objectstack/types@3.2.3
+
 ## 3.2.2
 
 ### Patch Changes

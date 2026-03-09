@@ -1,5 +1,19 @@
 # @objectstack/example-host
 
+## 3.0.17
+
+### Patch Changes
+
+- @objectstack/spec@3.2.3
+- @objectstack/metadata@3.2.3
+- @objectstack/objectql@3.2.3
+- @objectstack/runtime@3.2.3
+- @objectstack/driver-memory@3.2.3
+- @objectstack/plugin-hono-server@3.2.3
+- @example/app-crm@3.0.17
+- @example/app-todo@3.0.17
+- @example/plugin-bi@3.0.17
+
 ## 3.0.16
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/client",
-  "version": "3.2.2",
+  "version": "3.2.3",
   "license": "Apache-2.0",
   "description": "Official Client SDK for ObjectStack Protocol",
   "main": "dist/index.js",
