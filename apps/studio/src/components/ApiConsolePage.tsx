@@ -5,7 +5,7 @@ import { useClient } from '@objectstack/client-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Globe, Play, Copy, Check, ChevronDown, ChevronRight, Clock,
-  Loader2, Search, RefreshCw, Trash2,
+  Loader2, Search, RefreshCw, Trash2, Plus, X,
 } from 'lucide-react';
 import { useApiDiscovery, type EndpointDef, type HttpMethod } from '@/hooks/use-api-discovery';
 import {
@@ -31,6 +31,23 @@ const STATUS_COLORS: Record<string, string> = {
   '5': 'text-red-600 dark:text-red-400',
 };
 
+/** Common OData-style query parameter presets for quick-add */
+const QUERY_PARAM_PRESETS = [
+  { key: '$top', placeholder: '10', hint: 'limit' },
+  { key: '$skip', placeholder: '0', hint: 'offset' },
+  { key: '$sort', placeholder: 'name', hint: 'sort field' },
+  { key: '$select', placeholder: 'name,email', hint: 'fields' },
+  { key: '$count', placeholder: 'true', hint: 'total count' },
+  { key: '$filter', placeholder: "status eq 'active'", hint: 'OData filter' },
+];
+
+interface QueryParam {
+  id: number;
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
 interface RequestHistoryEntry {
   id: number;
   method: HttpMethod;
@@ -54,6 +71,7 @@ export function ApiConsolePage() {
   const [methodOverride, setMethodOverride] = useState<HttpMethod | ''>('');
   const [urlOverride, setUrlOverride] = useState('');
   const [requestBody, setRequestBody] = useState('');
+  const [queryParams, setQueryParams] = useState<QueryParam[]>([]);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<{ status: number; body: string; duration: number } | null>(null);
   const [history, setHistory] = useState<RequestHistoryEntry[]>([]);
@@ -89,11 +107,38 @@ export function ApiConsolePage() {
     setMethodOverride(ep.method);
     setUrlOverride(ep.path);
     setRequestBody(ep.bodyTemplate ? JSON.stringify(ep.bodyTemplate, null, 2) : '');
+    setQueryParams([]);
     setResponse(null);
   }, []);
 
   const effectiveMethod = (methodOverride || selectedEndpoint?.method || 'GET') as HttpMethod;
-  const effectiveUrl = urlOverride || selectedEndpoint?.path || '';
+  const basePath = urlOverride || selectedEndpoint?.path || '';
+
+  // Build full URL with query params
+  const effectiveUrl = useMemo(() => {
+    const enabledParams = queryParams.filter(p => p.enabled && p.key.trim());
+    if (enabledParams.length === 0) return basePath;
+    const qs = enabledParams.map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
+    return `${basePath}?${qs}`;
+  }, [basePath, queryParams]);
+
+  // ─── Query Param Helpers ────────────────────────────────────────────
+
+  const addQueryParam = useCallback((key = '', value = '') => {
+    setQueryParams(prev => [...prev, { id: Date.now(), key, value, enabled: true }]);
+  }, []);
+
+  const removeQueryParam = useCallback((id: number) => {
+    setQueryParams(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  const updateQueryParam = useCallback((id: number, field: 'key' | 'value', val: string) => {
+    setQueryParams(prev => prev.map(p => p.id === id ? { ...p, [field]: val } : p));
+  }, []);
+
+  const toggleQueryParam = useCallback((id: number) => {
+    setQueryParams(prev => prev.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+  }, []);
 
   const sendRequest = useCallback(async () => {
     if (loading || !effectiveUrl) return;
@@ -153,8 +198,20 @@ export function ApiConsolePage() {
 
   const replayHistoryEntry = useCallback((entry: RequestHistoryEntry) => {
     setMethodOverride(entry.method);
-    setUrlOverride(entry.url);
+    // Separate path and query params from history URL
+    const [path, qs] = entry.url.split('?');
+    setUrlOverride(path);
     setRequestBody(entry.body || '');
+    if (qs) {
+      const params = new URLSearchParams(qs);
+      const restored: QueryParam[] = [];
+      params.forEach((value, key) => {
+        restored.push({ id: Date.now() + Math.random(), key, value, enabled: true });
+      });
+      setQueryParams(restored);
+    } else {
+      setQueryParams([]);
+    }
     setResponse(null);
     setSelectedEndpoint(null);
   }, []);
@@ -252,23 +309,75 @@ export function ApiConsolePage() {
           )}
         </div>
 
-        {/* Query params cheatsheet */}
-        <div className="p-3 border-t">
-          <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Query Parameters</h4>
-          <div className="space-y-0.5 text-[10px] text-muted-foreground">
-            <p><code className="text-foreground">?$top=10</code> — limit</p>
-            <p><code className="text-foreground">?$skip=20</code> — offset</p>
-            <p><code className="text-foreground">?$sort=name</code> — sort</p>
-            <p><code className="text-foreground">?$select=name,email</code> — fields</p>
-            <p><code className="text-foreground">?$count=true</code> — total count</p>
+        {/* Query params form */}
+        <div className="p-3 border-t space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Query Parameters</h4>
+            <button
+              onClick={() => addQueryParam()}
+              className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </button>
           </div>
+
+          {/* Preset quick-add buttons */}
+          <div className="flex flex-wrap gap-1">
+            {QUERY_PARAM_PRESETS.map(preset => (
+              <button
+                key={preset.key}
+                onClick={() => addQueryParam(preset.key, '')}
+                className="text-[10px] px-1.5 py-0.5 rounded border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors font-mono"
+                title={preset.hint}
+              >
+                {preset.key}
+              </button>
+            ))}
+          </div>
+
+          {/* Param rows */}
+          {queryParams.length > 0 && (
+            <div className="space-y-1">
+              {queryParams.map(param => (
+                <div key={param.id} className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={param.enabled}
+                    onChange={() => toggleQueryParam(param.id)}
+                    className="h-3 w-3 shrink-0 rounded border accent-primary"
+                  />
+                  <input
+                    type="text"
+                    value={param.key}
+                    onChange={e => updateQueryParam(param.id, 'key', e.target.value)}
+                    placeholder="key"
+                    className="flex-1 min-w-0 rounded border bg-background px-1.5 py-0.5 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <input
+                    type="text"
+                    value={param.value}
+                    onChange={e => updateQueryParam(param.id, 'value', e.target.value)}
+                    placeholder="value"
+                    className="flex-1 min-w-0 rounded border bg-background px-1.5 py-0.5 text-[10px] font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <button
+                    onClick={() => removeQueryParam(param.id)}
+                    className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Right: Request / Response ──────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* URL bar */}
-        <div className="p-3 border-b">
+        <div className="p-3 border-b space-y-1">
           <div className="flex items-center gap-2">
             <select
               value={effectiveMethod}
@@ -281,7 +390,7 @@ export function ApiConsolePage() {
             </select>
             <input
               type="text"
-              value={effectiveUrl}
+              value={basePath}
               onChange={e => setUrlOverride(e.target.value)}
               className="flex-1 rounded-md border bg-background px-3 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder="/api/v1/..."
@@ -296,6 +405,11 @@ export function ApiConsolePage() {
               Send
             </button>
           </div>
+          {queryParams.some(p => p.enabled && p.key.trim()) && (
+            <div className="text-[10px] font-mono text-muted-foreground truncate pl-1">
+              → {effectiveUrl}
+            </div>
+          )}
         </div>
 
         {/* Body + Response split */}

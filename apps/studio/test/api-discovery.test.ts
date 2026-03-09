@@ -110,4 +110,36 @@ describe('API Discovery for Global Console', () => {
 
         expect(items2.length).toBe(count1);
     });
+
+    it('should build effective URL with query params appended', () => {
+        const basePath = '/api/v1/data/task';
+        const params = [
+            { id: 1, key: '$top', value: '10', enabled: true },
+            { id: 2, key: '$skip', value: '20', enabled: true },
+            { id: 3, key: '$sort', value: 'name', enabled: false }, // disabled
+            { id: 4, key: '$select', value: 'name,email', enabled: true },
+            { id: 5, key: '', value: 'ignored', enabled: true }, // empty key
+        ];
+
+        // Replicate the effective URL building logic from ApiConsolePage
+        const enabledParams = params.filter(p => p.enabled && p.key.trim());
+        let effectiveUrl: string;
+        if (enabledParams.length === 0) {
+            effectiveUrl = basePath;
+        } else {
+            const qs = enabledParams.map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&');
+            effectiveUrl = `${basePath}?${qs}`;
+        }
+
+        // Should include enabled params with non-empty keys only
+        expect(effectiveUrl).toContain('%24top=10');
+        expect(effectiveUrl).toContain('%24skip=20');
+        expect(effectiveUrl).toContain('%24select=name%2Cemail');
+        // Disabled param should not appear
+        expect(effectiveUrl).not.toContain('sort');
+        // Empty key param should not appear
+        expect(effectiveUrl).not.toContain('ignored');
+        // Should start with basePath
+        expect(effectiveUrl.startsWith(basePath)).toBe(true);
+    });
 });
