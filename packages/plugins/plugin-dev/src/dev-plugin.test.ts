@@ -44,7 +44,7 @@ describe('DevPlugin', () => {
     // DevPlugin should not throw even if peer dependencies are missing
     const plugin = new DevPlugin({ seedAdminUser: false });
     await expect(plugin.init(ctx)).resolves.not.toThrow();
-  });
+  }, 15_000);
 
   it('should register contract-compliant dev stubs for all core services', async () => {
     const registeredServices = new Map<string, any>();

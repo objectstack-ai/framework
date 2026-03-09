@@ -213,18 +213,23 @@ function createMetadataStub() {
   const store = new Map<string, Map<string, unknown>>(); // type → (name → def)
   return {
     _dev: true, _serviceName: 'metadata',
-    async register(type: string, name: string, data: unknown) {
+    register(type: string, nameOrDef: string | Record<string, any>, data?: unknown) {
       if (!store.has(type)) store.set(type, new Map());
-      store.get(type)!.set(name, data);
+      if (typeof nameOrDef === 'object' && nameOrDef !== null) {
+        const key = nameOrDef.name ?? nameOrDef.id ?? 'unknown';
+        store.get(type)!.set(key, nameOrDef);
+      } else {
+        store.get(type)!.set(nameOrDef, data);
+      }
     },
-    async get(type: string, name: string) { return store.get(type)?.get(name); },
-    async list(type: string) { return [...(store.get(type)?.values() ?? [])]; },
-    async unregister(type: string, name: string) { store.get(type)?.delete(name); },
-    async exists(type: string, name: string) { return store.get(type)?.has(name) ?? false; },
-    async listNames(type: string) { return [...(store.get(type)?.keys() ?? [])]; },
-    async getObject(name: string) { return store.get('object')?.get(name); },
-    async listObjects() { return [...(store.get('object')?.values() ?? [])]; },
-    async unregisterPackage() {},
+    get(type: string, name: string) { return store.get(type)?.get(name); },
+    list(type: string) { return [...(store.get(type)?.values() ?? [])]; },
+    unregister(type: string, name: string) { store.get(type)?.delete(name); },
+    exists(type: string, name: string) { return store.get(type)?.has(name) ?? false; },
+    listNames(type: string) { return [...(store.get(type)?.keys() ?? [])]; },
+    getObject(name: string) { return store.get('object')?.get(name); },
+    listObjects() { return [...(store.get('object')?.values() ?? [])]; },
+    unregisterPackage() {},
   };
 }
 
