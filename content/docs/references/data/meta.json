@@ -20,6 +20,7 @@
     "object",
     "query",
     "search-engine",
+    "seed-loader",
     "subscription",
     "validation"
   ]
