@@ -58,8 +58,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.1
 
       - name: Get pnpm store directory
         shell: bash
@@ -109,8 +107,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.1
 
       - name: Get pnpm store directory
         shell: bash
@@ -174,8 +170,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.1
 
       - name: Get pnpm store directory
         shell: bash
