@@ -200,7 +200,26 @@ export default class Serve extends Command {
         }
       }
 
-      
+      // Add HTTP server plugin BEFORE config plugins so that the
+      // http-server service is available for any plugin that needs it
+      // during init/start (e.g. AuthPlugin).
+      // Skip if config already contains a HonoServerPlugin to avoid
+      // duplicate registration.
+      const configHasHonoServer = plugins.some(
+        (p: any) => p.name === 'com.objectstack.server.hono' || p.constructor?.name === 'HonoServerPlugin'
+      );
+
+      if (flags.server && !configHasHonoServer) {
+        try {
+          const { HonoServerPlugin } = await import('@objectstack/plugin-hono-server');
+          const serverPlugin = new HonoServerPlugin({ port });
+          await kernel.use(serverPlugin);
+          trackPlugin('HonoServer');
+        } catch (e: any) {
+          console.warn(chalk.yellow(`  ⚠ HTTP server plugin not available: ${e.message}`));
+        }
+      }
+
       if (plugins.length > 0) {
         for (const plugin of plugins) {
           try {
@@ -236,18 +255,8 @@ export default class Serve extends Command {
         }
       }
 
-      // Add HTTP server plugin if not disabled
+      // Register REST API and Dispatcher plugins (consume http.server + protocol services)
       if (flags.server) {
-        try {
-          const { HonoServerPlugin } = await import('@objectstack/plugin-hono-server');
-          const serverPlugin = new HonoServerPlugin({ port });
-          await kernel.use(serverPlugin);
-          trackPlugin('HonoServer');
-        } catch (e: any) {
-          console.warn(chalk.yellow(`  ⚠ HTTP server plugin not available: ${e.message}`));
-        }
-
-        // Register REST API plugin (consumes http.server + protocol services)
         try {
           const { createRestApiPlugin } = await import('@objectstack/rest');
           await kernel.use(createRestApiPlugin());

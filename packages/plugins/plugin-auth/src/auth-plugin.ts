@@ -99,25 +99,31 @@ export class AuthPlugin implements Plugin {
       throw new Error('Auth manager not initialized');
     }
 
-    // Register HTTP routes if enabled and HTTP server is available
+    // Defer HTTP route registration to kernel:ready hook.
+    // This ensures all plugins (including HonoServerPlugin) have completed
+    // their init and start phases before we attempt to look up the
+    // http-server service — making AuthPlugin resilient to plugin
+    // loading order.
     if (this.options.registerRoutes) {
-      let httpServer: IHttpServer | null = null;
-      try {
-        httpServer = ctx.getService<IHttpServer>('http-server');
-      } catch {
-        // Service not found — expected in MSW/mock mode
-      }
+      ctx.hook('kernel:ready', async () => {
+        let httpServer: IHttpServer | null = null;
+        try {
+          httpServer = ctx.getService<IHttpServer>('http-server');
+        } catch {
+          // Service not found — expected in MSW/mock mode
+        }
 
-      if (httpServer) {
-        // Route registration errors should propagate (server misconfiguration)
-        this.registerAuthRoutes(httpServer, ctx);
-        ctx.logger.info(`Auth routes registered at ${this.options.basePath}`);
-      } else {
-        ctx.logger.warn(
-          'No HTTP server available — auth routes not registered. ' +
-          'Auth service is still available for MSW/mock environments via HttpDispatcher.'
-        );
-      }
+        if (httpServer) {
+          // Route registration errors should propagate (server misconfiguration)
+          this.registerAuthRoutes(httpServer, ctx);
+          ctx.logger.info(`Auth routes registered at ${this.options.basePath}`);
+        } else {
+          ctx.logger.warn(
+            'No HTTP server available — auth routes not registered. ' +
+            'Auth service is still available for MSW/mock environments via HttpDispatcher.'
+          );
+        }
+      });
     }
 
     // Register auth middleware on ObjectQL engine (if available)
