@@ -1,5 +1,11 @@
 # @objectstack/express
 
+## 3.2.2
+
+### Patch Changes
+
+- @objectstack/runtime@3.2.2
+
 ## 3.2.1
 
 ### Patch Changes

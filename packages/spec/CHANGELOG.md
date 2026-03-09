@@ -1,5 +1,17 @@
 # @objectstack/spec
 
+## 3.2.2
+
+### Patch Changes
+
+- 46defbb: Fix filter operators (contains, notContains, startsWith, endsWith, between, null) broken across spec and memory driver
+
+  - Add `$notContains` to `StringOperatorSchema`, `FieldOperatorsSchema`, `FILTER_OPERATORS`, and `Filter` type
+  - Add `notcontains` / `not_contains` to `VALID_AST_OPERATORS` and `AST_OPERATOR_MAP`
+  - Fix memory driver `convertToMongoQuery()` passthrough to normalize non-standard operators to Mingo-compatible format
+  - Add `$notContains` and `$null` operators to memory matcher
+  - Fix undefined value guard in memory matcher to exclude `$exists`, `$ne`, and `$null`
+
 ## 3.2.1
 
 ### Patch Changes

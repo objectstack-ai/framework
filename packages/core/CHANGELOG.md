@@ -1,5 +1,12 @@
 # @objectstack/core
 
+## 3.2.2
+
+### Patch Changes
+
+- Updated dependencies [46defbb]
+  - @objectstack/spec@3.2.2
+
 ## 3.2.1
 
 ### Patch Changes
