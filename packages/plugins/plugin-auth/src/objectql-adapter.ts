@@ -26,6 +26,50 @@ export function resolveProtocolName(model: string): string {
 }
 
 /**
+ * Convert a camelCase string to snake_case.
+ * Single-word or already snake_case strings pass through unchanged.
+ *
+ * @example toSnakeCase('providerId') // 'provider_id'
+ * @example toSnakeCase('id')         // 'id'
+ */
+export function toSnakeCase(str: string): string {
+  return str.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+}
+
+/**
+ * Convert a snake_case string to camelCase.
+ * Single-word or already camelCase strings pass through unchanged.
+ *
+ * @example toCamelCase('provider_id') // 'providerId'
+ * @example toCamelCase('id')          // 'id'
+ */
+export function toCamelCase(str: string): string {
+  return str.replace(/_([a-z0-9])/g, (_, ch) => ch.toUpperCase());
+}
+
+/**
+ * Convert all top-level keys of a record from camelCase to snake_case.
+ */
+function convertKeysToSnake<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    result[toSnakeCase(key)] = obj[key];
+  }
+  return result;
+}
+
+/**
+ * Convert all top-level keys of a record from snake_case to camelCase.
+ */
+function convertKeysToCamel<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const key of Object.keys(obj)) {
+    result[toCamelCase(key)] = obj[key];
+  }
+  return result;
+}
+
+/**
  * ObjectQL Adapter for better-auth
  * 
  * Bridges better-auth's database adapter interface with ObjectQL's IDataEngine.
@@ -35,19 +79,22 @@ export function resolveProtocolName(model: string): string {
  * Model names from better-auth (e.g. 'user') are automatically mapped to
  * ObjectStack protocol names (e.g. 'sys_user') via {@link AUTH_MODEL_TO_PROTOCOL}.
  * 
+ * Field names are automatically converted between camelCase (better-auth) and
+ * snake_case (ObjectStack protocol) in both directions.
+ * 
  * @param dataEngine - ObjectQL data engine instance
  * @returns better-auth CustomAdapter
  */
 export function createObjectQLAdapter(dataEngine: IDataEngine) {
   /**
-   * Convert better-auth where clause to ObjectQL query format
+   * Convert better-auth where clause to ObjectQL query format.
+   * Field names are converted from camelCase to snake_case.
    */
   function convertWhere(where: CleanedWhere[]): Record<string, any> {
     const filter: Record<string, any> = {};
     
     for (const condition of where) {
-      // Use field names as-is (no conversion needed)
-      const fieldName = condition.field;
+      const fieldName = toSnakeCase(condition.field);
       
       if (condition.operator === 'eq') {
         filter[fieldName] = condition.value;
@@ -77,13 +124,15 @@ export function createObjectQLAdapter(dataEngine: IDataEngine) {
       
       // Note: select parameter is currently not supported by ObjectQL's insert operation
       // The full record is always returned after insertion
-      const result = await dataEngine.insert(objectName, data);
-      return result as T;
+      const snakeData = convertKeysToSnake(data);
+      const result = await dataEngine.insert(objectName, snakeData);
+      return convertKeysToCamel(result) as T;
     },
     
     findOne: async <T>({ model, where, select, join: _join }: { model: string; where: CleanedWhere[]; select?: string[]; join?: any }): Promise<T | null> => {
       const objectName = resolveProtocolName(model);
       const filter = convertWhere(where);
+      const snakeSelect = select ? select.map(toSnakeCase) : undefined;
       
       // Note: join parameter is not currently supported by ObjectQL's findOne operation
       // Joins/populate functionality is planned for future ObjectQL releases
@@ -91,10 +140,10 @@ export function createObjectQLAdapter(dataEngine: IDataEngine) {
       
       const result = await dataEngine.findOne(objectName, {
         filter,
-        select,
+        select: snakeSelect,
       });
       
-      return result ? result as T : null;
+      return result ? convertKeysToCamel(result) as T : null;
     },
     
     findMany: async <T>({ model, where, limit, offset, sortBy, join: _join }: { model: string; where?: CleanedWhere[]; limit: number; offset?: number; sortBy?: { field: string; direction: 'asc' | 'desc' }; join?: any }): Promise<T[]> => {
@@ -105,7 +154,7 @@ export function createObjectQLAdapter(dataEngine: IDataEngine) {
       // Joins/populate functionality is planned for future ObjectQL releases
       
       const sort = sortBy ? [{
-        field: sortBy.field,
+        field: toSnakeCase(sortBy.field),
         order: sortBy.direction as 'asc' | 'desc',
       }] : undefined;
       
@@ -116,7 +165,7 @@ export function createObjectQLAdapter(dataEngine: IDataEngine) {
         sort,
       });
       
-      return results as T[];
+      return results.map(r => convertKeysToCamel(r)) as T[];
     },
     
     count: async ({ model, where }: { model: string; where?: CleanedWhere[] }): Promise<number> => {
@@ -136,17 +185,19 @@ export function createObjectQLAdapter(dataEngine: IDataEngine) {
         return null;
       }
       
+      const snakeUpdate = convertKeysToSnake(update);
       const result = await dataEngine.update(objectName, {
-        ...update,
+        ...snakeUpdate,
         id: record.id,
       });
       
-      return result ? result as T : null;
+      return result ? convertKeysToCamel(result) as T : null;
     },
     
     updateMany: async ({ model, where, update }: { model: string; where: CleanedWhere[]; update: Record<string, any> }): Promise<number> => {
       const objectName = resolveProtocolName(model);
       const filter = convertWhere(where);
+      const snakeUpdate = convertKeysToSnake(update);
       
       // Note: Sequential updates are used here because ObjectQL's IDataEngine interface
       // requires an ID for updates. A future optimization could use a bulk update
@@ -158,7 +209,7 @@ export function createObjectQLAdapter(dataEngine: IDataEngine) {
       // Update each record
       for (const record of records) {
         await dataEngine.update(objectName, {
-          ...update,
+          ...snakeUpdate,
           id: record.id,
         });
       }
