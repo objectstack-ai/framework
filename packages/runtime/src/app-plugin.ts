@@ -2,6 +2,7 @@
 
 import { Plugin, PluginContext } from '@objectstack/core';
 import { SeedLoaderService } from './seed-loader.js';
+import type { IMetadataService } from '@objectstack/spec/contracts';
 
 /**
  * AppPlugin
@@ -139,7 +140,7 @@ export class AppPlugin implements Plugin {
 
              // Use SeedLoaderService for metadata-driven loading with reference resolution
              try {
-                 const metadata = ctx.getService('metadata') as any;
+                 const metadata = ctx.getService('metadata') as IMetadataService | undefined;
                  if (metadata) {
                      const seedLoader = new SeedLoaderService(ql, metadata, ctx.logger);
                      const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');

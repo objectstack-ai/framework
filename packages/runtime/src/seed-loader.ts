@@ -21,6 +21,9 @@ interface Logger {
   debug(message: string, meta?: Record<string, any>): void;
 }
 
+/** Default field used for externalId matching on target objects */
+const DEFAULT_EXTERNAL_ID_FIELD = 'name';
+
 /**
  * SeedLoaderService — Runtime implementation of ISeedLoaderService
  *
@@ -132,7 +135,7 @@ export class SeedLoaderService implements ISeedLoaderService {
             references.push({
               field: fieldName,
               targetObject,
-              targetField: 'name', // Default externalId
+              targetField: DEFAULT_EXTERNAL_ID_FIELD,
               fieldType: fieldDef.type as 'lookup' | 'master_detail',
             });
           }
@@ -483,6 +486,8 @@ export class SeedLoaderService implements ISeedLoaderService {
     // Build adjacency list and in-degree counts
     for (const node of nodes) {
       for (const dep of node.dependsOn) {
+        // Exclude self-references from ordering (e.g., employee.manager_id → employee).
+        // Self-referencing fields are still tracked in node.references for resolution.
         if (objectSet.has(dep) && dep !== node.object) {
           adjacency.get(dep)!.push(node.object);
           inDegree.set(node.object, (inDegree.get(node.object) || 0) + 1);
@@ -578,7 +583,7 @@ export class SeedLoaderService implements ISeedLoaderService {
 
   private filterByEnv(datasets: Dataset[], env?: string): Dataset[] {
     if (!env) return datasets;
-    return datasets.filter(d => d.env.includes(env as any));
+    return datasets.filter(d => (d.env as string[]).includes(env));
   }
 
   private orderDatasets(datasets: Dataset[], insertOrder: string[]): Dataset[] {

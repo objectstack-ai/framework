@@ -30,6 +30,12 @@ export interface ISeedLoaderService {
   /**
    * Load one or more datasets with full reference resolution and dependency ordering.
    *
+   * The loader automatically:
+   * 1. Filters datasets by environment if `config.env` is set
+   * 2. Builds a dependency graph from object metadata (lookup/master_detail fields)
+   * 3. Topologically sorts datasets so parent objects are inserted before children
+   * 4. Resolves references via externalId, with multi-pass for circular dependencies
+   *
    * @param request - Parsed SeedLoaderRequest (datasets + config)
    * @returns Structured result with per-object stats, errors, and summary
    */
