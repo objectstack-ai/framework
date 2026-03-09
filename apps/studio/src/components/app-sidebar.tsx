@@ -143,8 +143,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   packages: InstalledPackage[];
   selectedPackage: InstalledPackage | null;
   onSelectPackage: (pkg: InstalledPackage) => void;
-  onSelectView?: (view: 'overview' | 'packages') => void;
-  selectedView?: 'overview' | 'packages' | 'object' | 'metadata';
+  onSelectView?: (view: 'overview' | 'packages' | 'api-console') => void;
+  selectedView?: 'overview' | 'packages' | 'object' | 'metadata' | 'api-console';
 }
 
 export function AppSidebar({
@@ -411,6 +411,16 @@ export function AppSidebar({
           <SidebarGroupLabel>System</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="API Console"
+                  isActive={selectedView === 'api-console'}
+                  onClick={() => onSelectView?.('api-console')}
+                >
+                  <Globe className="h-4 w-4" />
+                  <span>API Console</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Packages"

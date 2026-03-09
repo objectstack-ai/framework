@@ -9,13 +9,14 @@ import { SiteHeader } from "@/components/site-header"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { DeveloperOverview } from './components/DeveloperOverview';
 import { PackageManager } from './components/PackageManager';
+import { ApiConsolePage } from './components/ApiConsolePage';
 import { Toaster } from "@/components/ui/toaster"
 import { getApiBaseUrl, config } from './lib/config';
 import { PluginRegistryProvider, PluginHost } from './plugins';
 import { builtInPlugins } from './plugins/built-in';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
-type ViewType = 'overview' | 'packages' | 'object' | 'metadata';
+type ViewType = 'overview' | 'packages' | 'object' | 'metadata' | 'api-console';
 
 export default function App() {
   const [client, setClient] = useState<ObjectStackClient | null>(null);
@@ -129,6 +130,8 @@ export default function App() {
               <PluginHost metadataType={selectedMeta.type} metadataName={selectedMeta.name} />
             ) : selectedView === 'packages' ? (
               <PackageManager />
+            ) : selectedView === 'api-console' ? (
+              <ApiConsolePage />
             ) : (
               <DeveloperOverview
                 packages={packages}

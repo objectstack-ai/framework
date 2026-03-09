@@ -18,7 +18,7 @@ import { config } from '@/lib/config'
 interface SiteHeaderProps {
   selectedObject: string | null;
   selectedMeta?: { type: string; name: string } | null;
-  selectedView: 'overview' | 'packages' | 'object' | 'metadata';
+  selectedView: 'overview' | 'packages' | 'object' | 'metadata' | 'api-console';
   packageLabel?: string;
 }
 
@@ -39,6 +39,7 @@ export function SiteHeader({ selectedObject, selectedMeta, selectedView, package
   const viewLabels: Record<string, string> = {
     overview: 'Overview',
     packages: 'Package Manager',
+    'api-console': 'API Console',
     object: selectedObject || 'Object',
     metadata: selectedMeta ? (META_TYPE_LABELS[selectedMeta.type] || selectedMeta.type) : 'Metadata',
   };
