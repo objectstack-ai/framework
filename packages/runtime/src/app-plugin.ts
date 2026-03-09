@@ -1,6 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Plugin, PluginContext } from '@objectstack/core';
+import { SeedLoaderService } from './seed-loader.js';
+import type { IMetadataService } from '@objectstack/spec/contracts';
 
 /**
  * AppPlugin
@@ -127,24 +129,60 @@ export class AppPlugin implements Plugin {
         
         if (seedDatasets.length > 0) {
              ctx.logger.info(`[AppPlugin] Found ${seedDatasets.length} seed datasets for ${appId}`);
-             for (const dataset of seedDatasets) {
-                 if (dataset.object && Array.isArray(dataset.records)) {
-                     const objectFQN = toFQN(dataset.object);
-                     ctx.logger.info(`[Seeder] Seeding ${dataset.records.length} records for ${objectFQN}`);
+
+             // Normalize dataset object names to FQN
+             const normalizedDatasets = seedDatasets
+                 .filter((d: any) => d.object && Array.isArray(d.records))
+                 .map((d: any) => ({
+                     ...d,
+                     object: toFQN(d.object),
+                 }));
+
+             // Use SeedLoaderService for metadata-driven loading with reference resolution
+             try {
+                 const metadata = ctx.getService('metadata') as IMetadataService | undefined;
+                 if (metadata) {
+                     const seedLoader = new SeedLoaderService(ql, metadata, ctx.logger);
+                     const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
+                     const request = SeedLoaderRequestSchema.parse({
+                         datasets: normalizedDatasets,
+                         config: { defaultMode: 'upsert', multiPass: true },
+                     });
+                     const result = await seedLoader.load(request);
+                     ctx.logger.info('[Seeder] Seed loading complete', {
+                         inserted: result.summary.totalInserted,
+                         updated: result.summary.totalUpdated,
+                         errors: result.errors.length,
+                     });
+                 } else {
+                     // Fallback: basic insert when metadata service is not available
+                     ctx.logger.debug('[Seeder] No metadata service; using basic insert fallback');
+                     for (const dataset of normalizedDatasets) {
+                         ctx.logger.info(`[Seeder] Seeding ${dataset.records.length} records for ${dataset.object}`);
+                         for (const record of dataset.records) {
+                             try {
+                                 await ql.insert(dataset.object, record);
+                             } catch (err: any) {
+                                 ctx.logger.warn(`[Seeder] Failed to insert ${dataset.object} record:`, { error: err.message });
+                             }
+                         }
+                     }
+                     ctx.logger.info('[Seeder] Data seeding complete.');
+                 }
+             } catch (err: any) {
+                 // If SeedLoaderService fails (e.g., metadata not available), fall back to basic insert
+                 ctx.logger.warn('[Seeder] SeedLoaderService failed, falling back to basic insert', { error: err.message });
+                 for (const dataset of normalizedDatasets) {
                      for (const record of dataset.records) {
-                          try {
-                              // Use ObjectQL engine to insert data
-                              // This ensures driver resolution and hook execution
-                              // Use 'insert' which corresponds to 'create' in driver
-                              await ql.insert(objectFQN, record);
-                          } catch (err: any) {
-                              // Ignore duplicate errors if needed, or log/warn
-                              ctx.logger.warn(`[Seeder] Failed to insert ${objectFQN} record:`, { error: err.message });
-                          }
+                         try {
+                             await ql.insert(dataset.object, record);
+                         } catch (insertErr: any) {
+                             ctx.logger.warn(`[Seeder] Failed to insert ${dataset.object} record:`, { error: insertErr.message });
+                         }
                      }
                  }
+                 ctx.logger.info('[Seeder] Data seeding complete (fallback).');
              }
-             ctx.logger.info('[Seeder] Data seeding complete.');
         }
     }
 }

@@ -1,0 +1,713 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import type { IDataEngine, IMetadataService, ISeedLoaderService } from '@objectstack/spec/contracts';
+import type {
+  SeedLoaderRequest,
+  SeedLoaderResult,
+  SeedLoaderConfig,
+  SeedLoaderConfigInput,
+  ObjectDependencyGraph,
+  ObjectDependencyNode,
+  ReferenceResolution,
+  ReferenceResolutionError,
+  DatasetLoadResult,
+  Dataset,
+} from '@objectstack/spec/data';
+
+interface Logger {
+  info(message: string, meta?: Record<string, any>): void;
+  warn(message: string, meta?: Record<string, any>): void;
+  error(message: string, error?: Error, meta?: Record<string, any>): void;
+  debug(message: string, meta?: Record<string, any>): void;
+}
+
+/** Default field used for externalId matching on target objects */
+const DEFAULT_EXTERNAL_ID_FIELD = 'name';
+
+/**
+ * SeedLoaderService — Runtime implementation of ISeedLoaderService
+ *
+ * Provides metadata-driven seed data loading with:
+ * - Automatic lookup/master_detail reference resolution via externalId
+ * - Topological dependency ordering (parents before children)
+ * - Multi-pass loading for circular references
+ * - Dry-run validation mode
+ * - Upsert support honoring DatasetSchema mode
+ * - Actionable error reporting
+ */
+export class SeedLoaderService implements ISeedLoaderService {
+  private engine: IDataEngine;
+  private metadata: IMetadataService;
+  private logger: Logger;
+
+  constructor(engine: IDataEngine, metadata: IMetadataService, logger: Logger) {
+    this.engine = engine;
+    this.metadata = metadata;
+    this.logger = logger;
+  }
+
+  // ==========================================================================
+  // Public API
+  // ==========================================================================
+
+  async load(request: SeedLoaderRequest): Promise<SeedLoaderResult> {
+    const startTime = Date.now();
+    const config = request.config;
+    const allErrors: ReferenceResolutionError[] = [];
+    const allResults: DatasetLoadResult[] = [];
+
+    // 1. Filter datasets by environment
+    const datasets = this.filterByEnv(request.datasets, config.env);
+
+    if (datasets.length === 0) {
+      return this.buildEmptyResult(config, Date.now() - startTime);
+    }
+
+    // 2. Build dependency graph
+    const objectNames = datasets.map(d => d.object);
+    const graph = await this.buildDependencyGraph(objectNames);
+
+    this.logger.info('[SeedLoader] Dependency graph built', {
+      objects: objectNames.length,
+      insertOrder: graph.insertOrder,
+      circularDeps: graph.circularDependencies.length,
+    });
+
+    // 3. Order datasets by topological insert order
+    const orderedDatasets = this.orderDatasets(datasets, graph.insertOrder);
+
+    // 4. Build reference lookup map from metadata (field → target object)
+    const refMap = this.buildReferenceMap(graph);
+
+    // 5. Pass 1: Insert/upsert records, resolving references
+    const insertedRecords = new Map<string, Map<string, string>>(); // object → externalIdValue → internalId
+    const deferredUpdates: DeferredUpdate[] = [];
+
+    for (const dataset of orderedDatasets) {
+      const result = await this.loadDataset(
+        dataset, config, refMap, insertedRecords, deferredUpdates, allErrors
+      );
+      allResults.push(result);
+
+      if (config.haltOnError && result.errored > 0) {
+        this.logger.warn('[SeedLoader] Halting on first error', { object: dataset.object });
+        break;
+      }
+    }
+
+    // 6. Pass 2: Resolve deferred references (circular dependencies)
+    if (config.multiPass && deferredUpdates.length > 0 && !config.dryRun) {
+      this.logger.info('[SeedLoader] Pass 2: resolving deferred references', {
+        count: deferredUpdates.length,
+      });
+      await this.resolveDeferredUpdates(deferredUpdates, insertedRecords, allResults, allErrors);
+    }
+
+    // 7. Build final result
+    const durationMs = Date.now() - startTime;
+    return this.buildResult(config, graph, allResults, allErrors, durationMs);
+  }
+
+  async buildDependencyGraph(objectNames: string[]): Promise<ObjectDependencyGraph> {
+    const nodes: ObjectDependencyNode[] = [];
+    const objectSet = new Set(objectNames);
+
+    for (const objectName of objectNames) {
+      const objDef = await this.metadata.getObject(objectName) as any;
+      const dependsOn: string[] = [];
+      const references: ReferenceResolution[] = [];
+
+      if (objDef && objDef.fields) {
+        const fields = objDef.fields as Record<string, any>;
+        for (const [fieldName, fieldDef] of Object.entries(fields)) {
+          if (
+            (fieldDef.type === 'lookup' || fieldDef.type === 'master_detail') &&
+            fieldDef.reference
+          ) {
+            const targetObject = fieldDef.reference as string;
+
+            // Track dependency ordering only for objects within the graph
+            if (objectSet.has(targetObject) && !dependsOn.includes(targetObject)) {
+              dependsOn.push(targetObject);
+            }
+
+            // Track ALL references for resolution (target may exist in database)
+            references.push({
+              field: fieldName,
+              targetObject,
+              targetField: DEFAULT_EXTERNAL_ID_FIELD,
+              fieldType: fieldDef.type as 'lookup' | 'master_detail',
+            });
+          }
+        }
+      }
+
+      nodes.push({ object: objectName, dependsOn, references });
+    }
+
+    // Topological sort
+    const { insertOrder, circularDependencies } = this.topologicalSort(nodes);
+
+    return { nodes, insertOrder, circularDependencies };
+  }
+
+  async validate(datasets: Dataset[], config?: SeedLoaderConfigInput): Promise<SeedLoaderResult> {
+    const { SeedLoaderConfigSchema } = await import('@objectstack/spec/data');
+    const parsedConfig = SeedLoaderConfigSchema.parse({ ...config, dryRun: true });
+    return this.load({ datasets, config: parsedConfig });
+  }
+
+  // ==========================================================================
+  // Internal: Dataset Loading
+  // ==========================================================================
+
+  private async loadDataset(
+    dataset: Dataset,
+    config: SeedLoaderConfig,
+    refMap: Map<string, ReferenceResolution[]>,
+    insertedRecords: Map<string, Map<string, string>>,
+    deferredUpdates: DeferredUpdate[],
+    allErrors: ReferenceResolutionError[],
+  ): Promise<DatasetLoadResult> {
+    const objectName = dataset.object;
+    const mode = dataset.mode || config.defaultMode;
+    const externalId = dataset.externalId || 'name';
+
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+    let errored = 0;
+    let referencesResolved = 0;
+    let referencesDeferred = 0;
+    const errors: ReferenceResolutionError[] = [];
+
+    // Ensure the object's record map exists
+    if (!insertedRecords.has(objectName)) {
+      insertedRecords.set(objectName, new Map());
+    }
+
+    // Pre-load existing records for upsert matching
+    let existingRecords: Map<string, any> | undefined;
+    if ((mode === 'upsert' || mode === 'update' || mode === 'ignore') && !config.dryRun) {
+      existingRecords = await this.loadExistingRecords(objectName, externalId);
+    }
+
+    // Get reference resolutions for this object
+    const objectRefs = refMap.get(objectName) || [];
+
+    for (let i = 0; i < dataset.records.length; i++) {
+      const record = { ...dataset.records[i] }; // Clone to avoid mutation
+
+      // Resolve references
+      for (const ref of objectRefs) {
+        const fieldValue = record[ref.field];
+        if (fieldValue === undefined || fieldValue === null) continue;
+
+        // Skip if value looks like an internal ID (not a natural key)
+        if (typeof fieldValue !== 'string' || this.looksLikeInternalId(fieldValue)) continue;
+
+        // Try to resolve via already-inserted records
+        const targetMap = insertedRecords.get(ref.targetObject);
+        const resolvedId = targetMap?.get(String(fieldValue));
+
+        if (resolvedId) {
+          record[ref.field] = resolvedId;
+          referencesResolved++;
+        } else if (!config.dryRun) {
+          // Try to resolve from existing data in the database
+          const dbId = await this.resolveFromDatabase(ref.targetObject, ref.targetField, fieldValue);
+          if (dbId) {
+            record[ref.field] = dbId;
+            referencesResolved++;
+          } else if (config.multiPass) {
+            // Defer to pass 2
+            record[ref.field] = null;
+            deferredUpdates.push({
+              objectName,
+              recordExternalId: String(record[externalId] ?? ''),
+              field: ref.field,
+              targetObject: ref.targetObject,
+              targetField: ref.targetField,
+              attemptedValue: fieldValue,
+              recordIndex: i,
+            });
+            referencesDeferred++;
+          } else {
+            // Cannot resolve - record error
+            const error: ReferenceResolutionError = {
+              sourceObject: objectName,
+              field: ref.field,
+              targetObject: ref.targetObject,
+              targetField: ref.targetField,
+              attemptedValue: fieldValue,
+              recordIndex: i,
+              message: `Cannot resolve reference: ${objectName}.${ref.field} = '${fieldValue}' → ${ref.targetObject}.${ref.targetField} not found`,
+            };
+            errors.push(error);
+            allErrors.push(error);
+          }
+        } else {
+          // Dry-run: attempt resolution, report error if not found
+          const targetMap2 = insertedRecords.get(ref.targetObject);
+          if (!targetMap2?.has(String(fieldValue))) {
+            const error: ReferenceResolutionError = {
+              sourceObject: objectName,
+              field: ref.field,
+              targetObject: ref.targetObject,
+              targetField: ref.targetField,
+              attemptedValue: fieldValue,
+              recordIndex: i,
+              message: `[dry-run] Reference may not resolve: ${objectName}.${ref.field} = '${fieldValue}' → ${ref.targetObject}.${ref.targetField}`,
+            };
+            errors.push(error);
+            allErrors.push(error);
+          }
+        }
+      }
+
+      // Insert/upsert the record
+      if (!config.dryRun) {
+        try {
+          const result = await this.writeRecord(
+            objectName, record, mode, externalId, existingRecords
+          );
+
+          if (result.action === 'inserted') inserted++;
+          else if (result.action === 'updated') updated++;
+          else if (result.action === 'skipped') skipped++;
+
+          // Track the inserted/updated record's ID for reference resolution
+          const externalIdValue = String(record[externalId] ?? '');
+          const internalId = result.id;
+          if (externalIdValue && internalId) {
+            insertedRecords.get(objectName)!.set(externalIdValue, String(internalId));
+          }
+        } catch (err: any) {
+          errored++;
+          this.logger.warn(`[SeedLoader] Failed to write ${objectName} record`, {
+            error: err.message,
+            recordIndex: i,
+          });
+        }
+      } else {
+        // Dry-run: simulate insert tracking
+        const externalIdValue = String(record[externalId] ?? '');
+        if (externalIdValue) {
+          insertedRecords.get(objectName)!.set(externalIdValue, `dry-run-id-${i}`);
+        }
+        inserted++; // Count as "would be inserted"
+      }
+    }
+
+    return {
+      object: objectName,
+      mode,
+      inserted,
+      updated,
+      skipped,
+      errored,
+      total: dataset.records.length,
+      referencesResolved,
+      referencesDeferred,
+      errors,
+    };
+  }
+
+  // ==========================================================================
+  // Internal: Reference Resolution
+  // ==========================================================================
+
+  private async resolveFromDatabase(
+    targetObject: string,
+    targetField: string,
+    value: unknown,
+  ): Promise<string | null> {
+    try {
+      const records = await this.engine.find(targetObject, {
+        filter: { [targetField]: value },
+        select: ['id'],
+        limit: 1,
+      });
+      if (records && records.length > 0) {
+        return String(records[0].id || records[0]._id);
+      }
+    } catch {
+      // Target object may not exist yet
+    }
+    return null;
+  }
+
+  private async resolveDeferredUpdates(
+    deferredUpdates: DeferredUpdate[],
+    insertedRecords: Map<string, Map<string, string>>,
+    allResults: DatasetLoadResult[],
+    allErrors: ReferenceResolutionError[],
+  ): Promise<void> {
+    for (const deferred of deferredUpdates) {
+      // Try to resolve from inserted records
+      const targetMap = insertedRecords.get(deferred.targetObject);
+      let resolvedId = targetMap?.get(String(deferred.attemptedValue));
+
+      // Try database fallback
+      if (!resolvedId) {
+        resolvedId = (await this.resolveFromDatabase(
+          deferred.targetObject, deferred.targetField, deferred.attemptedValue
+        )) ?? undefined;
+      }
+
+      if (resolvedId) {
+        // Find the record and update the reference
+        const objectRecordMap = insertedRecords.get(deferred.objectName);
+        const recordId = objectRecordMap?.get(deferred.recordExternalId);
+
+        if (recordId) {
+          try {
+            await this.engine.update(deferred.objectName, {
+              id: recordId,
+              [deferred.field]: resolvedId,
+            });
+
+            // Update result stats
+            const resultEntry = allResults.find(r => r.object === deferred.objectName);
+            if (resultEntry) {
+              resultEntry.referencesResolved++;
+              resultEntry.referencesDeferred--;
+            }
+          } catch (err: any) {
+            this.logger.warn('[SeedLoader] Failed to resolve deferred reference', {
+              object: deferred.objectName,
+              field: deferred.field,
+              error: err.message,
+            });
+          }
+        }
+      } else {
+        // Still unresolved after pass 2
+        const error: ReferenceResolutionError = {
+          sourceObject: deferred.objectName,
+          field: deferred.field,
+          targetObject: deferred.targetObject,
+          targetField: deferred.targetField,
+          attemptedValue: deferred.attemptedValue,
+          recordIndex: deferred.recordIndex,
+          message: `Deferred reference unresolved after pass 2: ${deferred.objectName}.${deferred.field} = '${deferred.attemptedValue}' → ${deferred.targetObject}.${deferred.targetField} not found`,
+        };
+
+        const resultEntry = allResults.find(r => r.object === deferred.objectName);
+        if (resultEntry) {
+          resultEntry.errors.push(error);
+        }
+        allErrors.push(error);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // Internal: Write Operations
+  // ==========================================================================
+
+  private async writeRecord(
+    objectName: string,
+    record: Record<string, unknown>,
+    mode: string,
+    externalId: string,
+    existingRecords?: Map<string, any>,
+  ): Promise<{ action: 'inserted' | 'updated' | 'skipped'; id?: string }> {
+    const externalIdValue = record[externalId];
+    const existing = existingRecords?.get(String(externalIdValue ?? ''));
+
+    switch (mode) {
+      case 'insert': {
+        const result = await this.engine.insert(objectName, record);
+        return { action: 'inserted', id: this.extractId(result) };
+      }
+
+      case 'update': {
+        if (!existing) {
+          return { action: 'skipped' };
+        }
+        const id = this.extractId(existing);
+        await this.engine.update(objectName, { ...record, id });
+        return { action: 'updated', id };
+      }
+
+      case 'upsert': {
+        if (existing) {
+          const id = this.extractId(existing);
+          await this.engine.update(objectName, { ...record, id });
+          return { action: 'updated', id };
+        } else {
+          const result = await this.engine.insert(objectName, record);
+          return { action: 'inserted', id: this.extractId(result) };
+        }
+      }
+
+      case 'ignore': {
+        if (existing) {
+          return { action: 'skipped', id: this.extractId(existing) };
+        }
+        const result = await this.engine.insert(objectName, record);
+        return { action: 'inserted', id: this.extractId(result) };
+      }
+
+      case 'replace': {
+        // Replace mode: just insert (caller should have cleared the table)
+        const result = await this.engine.insert(objectName, record);
+        return { action: 'inserted', id: this.extractId(result) };
+      }
+
+      default: {
+        const result = await this.engine.insert(objectName, record);
+        return { action: 'inserted', id: this.extractId(result) };
+      }
+    }
+  }
+
+  // ==========================================================================
+  // Internal: Dependency Graph
+  // ==========================================================================
+
+  /**
+   * Kahn's algorithm for topological sort with cycle detection.
+   */
+  private topologicalSort(
+    nodes: ObjectDependencyNode[],
+  ): { insertOrder: string[]; circularDependencies: string[][] } {
+    const inDegree = new Map<string, number>();
+    const adjacency = new Map<string, string[]>();
+    const objectSet = new Set(nodes.map(n => n.object));
+
+    // Initialize
+    for (const node of nodes) {
+      inDegree.set(node.object, 0);
+      adjacency.set(node.object, []);
+    }
+
+    // Build adjacency list and in-degree counts
+    for (const node of nodes) {
+      for (const dep of node.dependsOn) {
+        // Exclude self-references from ordering (e.g., employee.manager_id → employee).
+        // Self-referencing fields are still tracked in node.references for resolution.
+        if (objectSet.has(dep) && dep !== node.object) {
+          adjacency.get(dep)!.push(node.object);
+          inDegree.set(node.object, (inDegree.get(node.object) || 0) + 1);
+        }
+      }
+    }
+
+    // Kahn's algorithm
+    const queue: string[] = [];
+    for (const [obj, degree] of inDegree) {
+      if (degree === 0) queue.push(obj);
+    }
+
+    const insertOrder: string[] = [];
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      insertOrder.push(current);
+
+      for (const neighbor of (adjacency.get(current) || [])) {
+        const newDegree = (inDegree.get(neighbor) || 0) - 1;
+        inDegree.set(neighbor, newDegree);
+        if (newDegree === 0) {
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    // Detect circular dependencies
+    const circularDependencies: string[][] = [];
+    const remaining = nodes.filter(n => !insertOrder.includes(n.object));
+
+    if (remaining.length > 0) {
+      // Find cycles using DFS
+      const cycles = this.findCycles(remaining);
+      circularDependencies.push(...cycles);
+
+      // Add remaining objects to insertOrder (they'll need multi-pass)
+      for (const node of remaining) {
+        if (!insertOrder.includes(node.object)) {
+          insertOrder.push(node.object);
+        }
+      }
+    }
+
+    return { insertOrder, circularDependencies };
+  }
+
+  private findCycles(nodes: ObjectDependencyNode[]): string[][] {
+    const cycles: string[][] = [];
+    const nodeMap = new Map(nodes.map(n => [n.object, n]));
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+
+    const dfs = (current: string, path: string[]) => {
+      if (inStack.has(current)) {
+        // Found a cycle
+        const cycleStart = path.indexOf(current);
+        if (cycleStart !== -1) {
+          cycles.push([...path.slice(cycleStart), current]);
+        }
+        return;
+      }
+      if (visited.has(current)) return;
+
+      visited.add(current);
+      inStack.add(current);
+      path.push(current);
+
+      const node = nodeMap.get(current);
+      if (node) {
+        for (const dep of node.dependsOn) {
+          if (nodeMap.has(dep)) {
+            dfs(dep, [...path]);
+          }
+        }
+      }
+
+      inStack.delete(current);
+    };
+
+    for (const node of nodes) {
+      if (!visited.has(node.object)) {
+        dfs(node.object, []);
+      }
+    }
+
+    return cycles;
+  }
+
+  // ==========================================================================
+  // Internal: Helpers
+  // ==========================================================================
+
+  private filterByEnv(datasets: Dataset[], env?: string): Dataset[] {
+    if (!env) return datasets;
+    return datasets.filter(d => (d.env as string[]).includes(env));
+  }
+
+  private orderDatasets(datasets: Dataset[], insertOrder: string[]): Dataset[] {
+    const orderMap = new Map(insertOrder.map((name, i) => [name, i]));
+    return [...datasets].sort((a, b) => {
+      const orderA = orderMap.get(a.object) ?? Number.MAX_SAFE_INTEGER;
+      const orderB = orderMap.get(b.object) ?? Number.MAX_SAFE_INTEGER;
+      return orderA - orderB;
+    });
+  }
+
+  private buildReferenceMap(graph: ObjectDependencyGraph): Map<string, ReferenceResolution[]> {
+    const map = new Map<string, ReferenceResolution[]>();
+    for (const node of graph.nodes) {
+      if (node.references.length > 0) {
+        map.set(node.object, node.references);
+      }
+    }
+    return map;
+  }
+
+  private async loadExistingRecords(
+    objectName: string,
+    externalId: string,
+  ): Promise<Map<string, any>> {
+    const map = new Map<string, any>();
+    try {
+      const records = await this.engine.find(objectName, {
+        select: ['id', externalId],
+      });
+      for (const record of records || []) {
+        const key = String(record[externalId] ?? '');
+        if (key) {
+          map.set(key, record);
+        }
+      }
+    } catch {
+      // Object may not have records yet
+    }
+    return map;
+  }
+
+  private looksLikeInternalId(value: string): boolean {
+    // UUID v4 pattern
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+      return true;
+    }
+    // MongoDB ObjectId pattern (24 hex chars)
+    if (/^[0-9a-f]{24}$/i.test(value)) {
+      return true;
+    }
+    return false;
+  }
+
+  private extractId(record: any): string | undefined {
+    if (!record) return undefined;
+    return String(record.id || record._id || '');
+  }
+
+  private buildEmptyResult(config: SeedLoaderConfig, durationMs: number): SeedLoaderResult {
+    return {
+      success: true,
+      dryRun: config.dryRun,
+      dependencyGraph: { nodes: [], insertOrder: [], circularDependencies: [] },
+      results: [],
+      errors: [],
+      summary: {
+        objectsProcessed: 0,
+        totalRecords: 0,
+        totalInserted: 0,
+        totalUpdated: 0,
+        totalSkipped: 0,
+        totalErrored: 0,
+        totalReferencesResolved: 0,
+        totalReferencesDeferred: 0,
+        circularDependencyCount: 0,
+        durationMs,
+      },
+    };
+  }
+
+  private buildResult(
+    config: SeedLoaderConfig,
+    graph: ObjectDependencyGraph,
+    results: DatasetLoadResult[],
+    errors: ReferenceResolutionError[],
+    durationMs: number,
+  ): SeedLoaderResult {
+    const summary = {
+      objectsProcessed: results.length,
+      totalRecords: results.reduce((sum, r) => sum + r.total, 0),
+      totalInserted: results.reduce((sum, r) => sum + r.inserted, 0),
+      totalUpdated: results.reduce((sum, r) => sum + r.updated, 0),
+      totalSkipped: results.reduce((sum, r) => sum + r.skipped, 0),
+      totalErrored: results.reduce((sum, r) => sum + r.errored, 0),
+      totalReferencesResolved: results.reduce((sum, r) => sum + r.referencesResolved, 0),
+      totalReferencesDeferred: results.reduce((sum, r) => sum + r.referencesDeferred, 0),
+      circularDependencyCount: graph.circularDependencies.length,
+      durationMs,
+    };
+
+    const hasErrors = errors.length > 0 || summary.totalErrored > 0;
+
+    return {
+      success: !hasErrors,
+      dryRun: config.dryRun,
+      dependencyGraph: graph,
+      results,
+      errors,
+      summary,
+    };
+  }
+}
+
+// ==========================================================================
+// Internal Types
+// ==========================================================================
+
+interface DeferredUpdate {
+  objectName: string;
+  recordExternalId: string;
+  field: string;
+  targetObject: string;
+  targetField: string;
+  attemptedValue: unknown;
+  recordIndex: number;
+}

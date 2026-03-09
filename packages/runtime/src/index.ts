@@ -10,6 +10,7 @@ export type { RuntimeConfig } from './runtime.js';
 // Export Plugins
 export { DriverPlugin } from './driver-plugin.js';
 export { AppPlugin } from './app-plugin.js';
+export { SeedLoaderService } from './seed-loader.js';
 export { createDispatcherPlugin } from './dispatcher-plugin.js';
 export type { DispatcherPluginConfig } from './dispatcher-plugin.js';
 

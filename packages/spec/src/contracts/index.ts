@@ -43,3 +43,4 @@ export * from './schema-diff-service.js';
 export * from './deploy-pipeline-service.js';
 export * from './tenant-router.js';
 export * from './app-lifecycle-service.js';
+export * from './seed-loader-service.js';
