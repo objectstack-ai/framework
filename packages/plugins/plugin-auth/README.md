@@ -232,12 +232,21 @@ const adapter = createObjectQLAdapter(dataEngine);
 // Mapping: { user: 'sys_user', session: 'sys_session', account: 'sys_account', verification: 'sys_verification' }
 console.log(AUTH_MODEL_TO_PROTOCOL);
 
-// Better-auth uses this adapter for all database operations
+// better-auth requires a DBAdapterInstance (factory function), not a raw adapter object.
+// Passing a plain object falls through to the Kysely adapter path and fails silently.
+// Wrap the adapter in a factory function:
 const auth = betterAuth({
-  database: adapter,
+  database: (options) => ({
+    id: 'objectql',
+    ...adapter,
+    transaction: async (cb) => cb(adapter),
+  }),
   // ... other config
 });
 ```
+
+> **Note:** `AuthManager` handles this wrapping automatically when you provide a `dataEngine`.
+> You only need the factory pattern above when using `createObjectQLAdapter()` directly.
 
 ## Development
 

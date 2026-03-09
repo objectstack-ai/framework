@@ -329,6 +329,7 @@ business/custom objects, aligning with industry best practices (e.g., ServiceNow
 **Migration (v3.x → v4.0):**
 - v3.x: The `SystemObjectName` constants now emit `sys_`-prefixed names. Implementations using `StorageNameMapping.resolveTableName()` can set `tableName` to preserve legacy physical table names during the transition.
 - v3.x: The `@objectstack/plugin-auth` ObjectQL adapter now includes `AUTH_MODEL_TO_PROTOCOL` mapping to translate better-auth's hardcoded model names (`user`, `session`, `account`, `verification`) to protocol names (`sys_user`, `sys_session`, `sys_account`, `sys_verification`). Custom adapters must adopt the same mapping.
+- v3.x: **Bug fix** — `AuthManager.createDatabaseConfig()` now wraps the ObjectQL adapter as a `DBAdapterInstance` factory function (`(options) => DBAdapter`). Previously the raw adapter object was passed, which fell through to the Kysely adapter path and failed silently. `AuthManager.handleRequest()` and `AuthPlugin.registerAuthRoutes()` now inspect `response.status >= 500` and log the error body, since better-auth catches internal errors and returns 500 Responses without throwing.
 - v4.0: Legacy un-prefixed aliases will be fully removed.
 
 ---
