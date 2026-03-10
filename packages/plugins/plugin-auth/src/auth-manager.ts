@@ -4,7 +4,13 @@ import { betterAuth } from 'better-auth';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import type { AuthConfig } from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
-import { createObjectQLAdapter } from './objectql-adapter.js';
+import { createObjectQLAdapterFactory } from './objectql-adapter.js';
+import {
+  AUTH_USER_CONFIG,
+  AUTH_SESSION_CONFIG,
+  AUTH_ACCOUNT_CONFIG,
+  AUTH_VERIFICATION_CONFIG,
+} from './auth-schema-config.js';
 
 /**
  * Extended options for AuthManager
@@ -71,9 +77,21 @@ export class AuthManager {
       basePath: '/',  // ← 关键修复！告诉 better-auth 路径已被剥离
       
       // Database adapter configuration
-      // For now, we configure a basic setup that will be enhanced
-      // when database URL is provided and drizzle-orm is available
       database: this.createDatabaseConfig(),
+      
+      // Model/field mapping: camelCase (better-auth) → snake_case (ObjectStack)
+      // These declarations tell better-auth the actual table/column names used
+      // by ObjectStack's protocol layer, enabling automatic transformation via
+      // createAdapterFactory.
+      user: {
+        ...AUTH_USER_CONFIG,
+      },
+      account: {
+        ...AUTH_ACCOUNT_CONFIG,
+      },
+      verification: {
+        ...AUTH_VERIFICATION_CONFIG,
+      },
       
       // Email configuration
       emailAndPassword: {
@@ -82,6 +100,7 @@ export class AuthManager {
       
       // Session configuration
       session: {
+        ...AUTH_SESSION_CONFIG,
         expiresIn: this.config.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days default
         updateAge: this.config.session?.updateAge || 60 * 60 * 24, // 1 day default
       },
@@ -103,19 +122,14 @@ export class AuthManager {
    * so it is correctly recognised as a `DBAdapterInstance`.
    */
   private createDatabaseConfig(): any {
-    // Use ObjectQL adapter if dataEngine is provided
+    // Use ObjectQL adapter factory if dataEngine is provided
     if (this.config.dataEngine) {
-      const adapter = createObjectQLAdapter(this.config.dataEngine);
-      // Return a DBAdapterInstance factory function
-      return (_options: any) => ({
-        id: 'objectql',
-        ...adapter,
-        // ObjectQL does not yet expose a separate transaction context,
-        // so we pass the adapter itself.  better-auth patches this
-        // automatically when missing, but providing it avoids a
-        // runtime warning from getBaseAdapter().
-        transaction: async <R>(cb: (trx: any) => Promise<R>): Promise<R> => cb(adapter),
-      });
+      // createObjectQLAdapterFactory returns an AdapterFactory
+      // (options => DBAdapter) which better-auth invokes via getBaseAdapter().
+      // The factory is created by better-auth's createAdapterFactory and
+      // automatically applies modelName/fields transformations declared in
+      // the betterAuth config above.
+      return createObjectQLAdapterFactory(this.config.dataEngine);
     }
     
     // Fallback warning if no dataEngine is provided

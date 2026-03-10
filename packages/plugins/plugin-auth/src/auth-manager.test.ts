@@ -107,7 +107,7 @@ describe('AuthManager', () => {
   });
 
   describe('createDatabaseConfig – adapter wrapping', () => {
-    it('should pass a function (DBAdapterInstance) to betterAuth when dataEngine is provided', () => {
+    it('should pass a function (AdapterFactory) to betterAuth when dataEngine is provided', () => {
       const mockDataEngine = {
         insert: vi.fn(),
         findOne: vi.fn(),
@@ -128,7 +128,7 @@ describe('AuthManager', () => {
       // We need to trigger the lazy init first
     });
 
-    it('should provide a factory function as database config that returns adapter with id and transaction', () => {
+    it('should provide a factory function as database config', () => {
       const mockDataEngine = {
         insert: vi.fn().mockResolvedValue({ id: '1' }),
         findOne: vi.fn().mockResolvedValue({ id: '1' }),
@@ -153,21 +153,75 @@ describe('AuthManager', () => {
       // Trigger lazy initialisation
       manager.getAuthInstance();
 
-      // The database config should be a function (DBAdapterInstance)
+      // The database config should be a function (AdapterFactory)
       expect(typeof capturedConfig.database).toBe('function');
+    });
 
-      // Calling the factory should return an adapter object
-      const adapterResult = capturedConfig.database({});
-      expect(adapterResult).toHaveProperty('id', 'objectql');
-      expect(typeof adapterResult.create).toBe('function');
-      expect(typeof adapterResult.findOne).toBe('function');
-      expect(typeof adapterResult.findMany).toBe('function');
-      expect(typeof adapterResult.count).toBe('function');
-      expect(typeof adapterResult.update).toBe('function');
-      expect(typeof adapterResult.delete).toBe('function');
-      expect(typeof adapterResult.deleteMany).toBe('function');
-      expect(typeof adapterResult.updateMany).toBe('function');
-      expect(typeof adapterResult.transaction).toBe('function');
+    it('should include modelName and fields mapping for user, session, account, verification', () => {
+      const mockDataEngine = {
+        insert: vi.fn().mockResolvedValue({ id: '1' }),
+        findOne: vi.fn().mockResolvedValue({ id: '1' }),
+        find: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+        update: vi.fn().mockResolvedValue({ id: '1' }),
+        delete: vi.fn().mockResolvedValue(undefined),
+      };
+
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        dataEngine: mockDataEngine as any,
+      });
+
+      manager.getAuthInstance();
+
+      // Verify user model config
+      expect(capturedConfig.user).toBeDefined();
+      expect(capturedConfig.user.modelName).toBe('sys_user');
+      expect(capturedConfig.user.fields).toEqual(expect.objectContaining({
+        emailVerified: 'email_verified',
+        createdAt: 'created_at',
+        updatedAt: 'updated_at',
+      }));
+
+      // Verify session model config (merged with session timing config)
+      expect(capturedConfig.session).toBeDefined();
+      expect(capturedConfig.session.modelName).toBe('sys_session');
+      expect(capturedConfig.session.fields).toEqual(expect.objectContaining({
+        userId: 'user_id',
+        expiresAt: 'expires_at',
+        ipAddress: 'ip_address',
+        userAgent: 'user_agent',
+      }));
+
+      // Verify account model config
+      expect(capturedConfig.account).toBeDefined();
+      expect(capturedConfig.account.modelName).toBe('sys_account');
+      expect(capturedConfig.account.fields).toEqual(expect.objectContaining({
+        userId: 'user_id',
+        providerId: 'provider_id',
+        accountId: 'account_id',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        idToken: 'id_token',
+        accessTokenExpiresAt: 'access_token_expires_at',
+        refreshTokenExpiresAt: 'refresh_token_expires_at',
+      }));
+
+      // Verify verification model config
+      expect(capturedConfig.verification).toBeDefined();
+      expect(capturedConfig.verification.modelName).toBe('sys_verification');
+      expect(capturedConfig.verification.fields).toEqual(expect.objectContaining({
+        expiresAt: 'expires_at',
+        createdAt: 'created_at',
+        updatedAt: 'updated_at',
+      }));
     });
 
     it('should return undefined (in-memory fallback) when no dataEngine is provided', () => {
