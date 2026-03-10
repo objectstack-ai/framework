@@ -33,12 +33,15 @@ const SYSTEM_ENDPOINTS: EndpointDef[] = [
   { method: 'GET', path: '/api/v1/health', desc: 'Health check', group: 'System' },
 ];
 
-const AUTH_ENDPOINTS: EndpointDef[] = [
-  { method: 'POST', path: '/api/auth/sign-in/email', desc: 'Sign in (email)', group: 'Auth', bodyTemplate: { email: 'user@example.com', password: '' } },
-  { method: 'POST', path: '/api/auth/sign-up/email', desc: 'Sign up (email)', group: 'Auth', bodyTemplate: { email: '', password: '', name: '' } },
-  { method: 'POST', path: '/api/auth/sign-out', desc: 'Sign out', group: 'Auth' },
-  { method: 'GET', path: '/api/auth/session', desc: 'Get session', group: 'Auth' },
-];
+/** Build auth endpoints from the discovered auth base path. */
+function buildAuthEndpoints(authBase: string): EndpointDef[] {
+  return [
+    { method: 'POST', path: `${authBase}/sign-in/email`, desc: 'Sign in (email)', group: 'Auth', bodyTemplate: { email: 'user@example.com', password: '' } },
+    { method: 'POST', path: `${authBase}/sign-up/email`, desc: 'Sign up (email)', group: 'Auth', bodyTemplate: { email: '', password: '', name: '' } },
+    { method: 'POST', path: `${authBase}/sign-out`, desc: 'Sign out', group: 'Auth' },
+    { method: 'GET', path: `${authBase}/get-session`, desc: 'Get session', group: 'Auth' },
+  ];
+}
 
 // ─── Hook ───────────────────────────────────────────────────────────
 
@@ -54,7 +57,20 @@ export function useApiDiscovery() {
     setError(null);
 
     try {
-      // 1. Fetch metadata types
+      // 1. Resolve auth base path from discovery
+      let authBase = '/api/v1/auth';
+      try {
+        const discRes = await fetch('/api/v1/discovery');
+        if (discRes.ok) {
+          const discData = await discRes.json();
+          const routes = discData?.data?.routes ?? discData?.routes;
+          if (routes?.auth) authBase = routes.auth;
+        }
+      } catch {
+        // Keep default /api/v1/auth
+      }
+
+      // 2. Fetch metadata types
       let metaTypes: string[] = [];
       try {
         const typesResult = await client.meta.getTypes();
@@ -67,7 +83,7 @@ export function useApiDiscovery() {
         // Meta types may not be available
       }
 
-      // 2. Fetch object names from metadata
+      // 3. Fetch object names from metadata
       let objectNames: string[] = [];
       try {
         const objectType = metaTypes.includes('objects') ? 'objects' : metaTypes.includes('object') ? 'object' : null;
@@ -83,7 +99,7 @@ export function useApiDiscovery() {
         // Objects may not be available
       }
 
-      // 3. Build dynamic data endpoints for each object
+      // 4. Build dynamic data endpoints for each object
       const dataEndpoints: EndpointDef[] = objectNames.flatMap(name => [
         { method: 'GET' as HttpMethod, path: `/api/v1/data/${name}`, desc: `List ${name}`, group: `Data: ${name}` },
         { method: 'POST' as HttpMethod, path: `/api/v1/data/${name}`, desc: `Create ${name}`, group: `Data: ${name}`, bodyTemplate: { name: 'example' } },
@@ -92,7 +108,7 @@ export function useApiDiscovery() {
         { method: 'DELETE' as HttpMethod, path: `/api/v1/data/${name}/:id`, desc: `Delete ${name}`, group: `Data: ${name}` },
       ]);
 
-      // 4. Build metadata endpoints for each type
+      // 5. Build metadata endpoints for each type
       const metaEndpoints: EndpointDef[] = metaTypes
         .filter(t => !EXCLUDED_META_TYPES.includes(t))
         .map(type => ({
@@ -102,7 +118,7 @@ export function useApiDiscovery() {
           group: 'Metadata',
         }));
 
-      // 5. Build per-object schema endpoints
+      // 6. Build per-object schema endpoints
       const schemaEndpoints: EndpointDef[] = objectNames.map(name => ({
         method: 'GET' as HttpMethod,
         path: `/api/v1/meta/object/${name}`,
@@ -110,16 +126,16 @@ export function useApiDiscovery() {
         group: 'Metadata',
       }));
 
-      // 6. Combine all endpoints
+      // 7. Combine all endpoints
       const all = [
         ...SYSTEM_ENDPOINTS,
-        ...AUTH_ENDPOINTS,
+        ...buildAuthEndpoints(authBase),
         ...metaEndpoints,
         ...schemaEndpoints,
         ...dataEndpoints,
       ];
 
-      // 7. Group endpoints
+      // 8. Group endpoints
       const groupMap = new Map<string, EndpointDef[]>();
       for (const ep of all) {
         const existing = groupMap.get(ep.group) || [];
