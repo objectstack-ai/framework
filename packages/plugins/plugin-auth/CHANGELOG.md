@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.4
+
+### Patch Changes
+
+- f490991: fix better-auth
+  - @objectstack/spec@3.2.4
+  - @objectstack/core@3.2.4
+
 ## 3.2.3
 
 ### Patch Changes

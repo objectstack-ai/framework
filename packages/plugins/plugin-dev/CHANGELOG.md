@@ -1,5 +1,20 @@
 # @objectstack/plugin-dev
 
+## 3.2.4
+
+### Patch Changes
+
+- Updated dependencies [f490991]
+  - @objectstack/plugin-auth@3.2.4
+  - @objectstack/spec@3.2.4
+  - @objectstack/core@3.2.4
+  - @objectstack/objectql@3.2.4
+  - @objectstack/runtime@3.2.4
+  - @objectstack/rest@3.2.4
+  - @objectstack/driver-memory@3.2.4
+  - @objectstack/plugin-hono-server@3.2.4
+  - @objectstack/plugin-security@3.2.4
+
 ## 3.2.3
 
 ### Patch Changes
