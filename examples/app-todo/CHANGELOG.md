@@ -1,5 +1,15 @@
 # @objectstack/example-todo
 
+## 3.0.19
+
+### Patch Changes
+
+- @objectstack/spec@3.2.5
+- @objectstack/client@3.2.5
+- @objectstack/objectql@3.2.5
+- @objectstack/runtime@3.2.5
+- @objectstack/driver-memory@3.2.5
+
 ## 3.0.18
 
 ### Patch Changes

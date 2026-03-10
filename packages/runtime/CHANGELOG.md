@@ -1,5 +1,14 @@
 # @objectstack/runtime
 
+## 3.2.5
+
+### Patch Changes
+
+- @objectstack/spec@3.2.5
+- @objectstack/core@3.2.5
+- @objectstack/types@3.2.5
+- @objectstack/rest@3.2.5
+
 ## 3.2.4
 
 ### Patch Changes

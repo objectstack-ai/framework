@@ -1,5 +1,17 @@
 # @objectstack/cli
 
+## 3.2.5
+
+### Patch Changes
+
+- @objectstack/spec@3.2.5
+- @objectstack/core@3.2.5
+- @objectstack/objectql@3.2.5
+- @objectstack/runtime@3.2.5
+- @objectstack/rest@3.2.5
+- @objectstack/driver-memory@3.2.5
+- @objectstack/plugin-hono-server@3.2.5
+
 ## 3.2.4
 
 ### Patch Changes
