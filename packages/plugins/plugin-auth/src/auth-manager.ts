@@ -26,7 +26,7 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * If not provided, one will be created from config
    */
   authInstance?: Auth<any>;
-  
+
   /**
    * ObjectQL Data Engine instance
    * Required for database operations using ObjectQL instead of third-party ORMs
@@ -36,7 +36,7 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
 
 /**
  * Authentication Manager
- * 
+ *
  * Wraps better-auth and provides authentication services for ObjectStack.
  * Supports multiple authentication methods:
  * - Email/password
@@ -52,7 +52,7 @@ export class AuthManager {
 
   constructor(config: AuthManagerOptions) {
     this.config = config;
-    
+
     // Use provided auth instance
     if (config.authInstance) {
       this.auth = config.authInstance;
@@ -80,10 +80,10 @@ export class AuthManager {
       secret: this.config.secret || this.generateSecret(),
       baseURL: this.config.baseUrl || 'http://localhost:3000',
       basePath: '/',  // ← 关键修复！告诉 better-auth 路径已被剥离
-      
+
       // Database adapter configuration
       database: this.createDatabaseConfig(),
-      
+
       // Model/field mapping: camelCase (better-auth) → snake_case (ObjectStack)
       // These declarations tell better-auth the actual table/column names used
       // by ObjectStack's protocol layer, enabling automatic transformation via
@@ -97,19 +97,19 @@ export class AuthManager {
       verification: {
         ...AUTH_VERIFICATION_CONFIG,
       },
-      
+
       // Email configuration
       emailAndPassword: {
         enabled: true,
       },
-      
+
       // Session configuration
       session: {
         ...AUTH_SESSION_CONFIG,
         expiresIn: this.config.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days default
         updateAge: this.config.session?.updateAge || 60 * 60 * 24, // 1 day default
       },
-      
+
       // better-auth plugins — registered based on AuthPluginConfig flags
       plugins: this.buildPluginList(),
     };
@@ -127,13 +127,13 @@ export class AuthManager {
   private buildPluginList(): any[] {
     const pluginConfig = this.config.plugins;
     const plugins: any[] = [];
-    
+
     if (pluginConfig?.organization) {
       plugins.push(organization({
         schema: buildOrganizationPluginSchema(),
       }));
     }
-    
+
     if (pluginConfig?.twoFactor) {
       plugins.push(twoFactor({
         schema: buildTwoFactorPluginSchema(),
@@ -153,7 +153,7 @@ export class AuthManager {
         },
       }));
     }
-    
+
     return plugins;
   }
 
@@ -179,14 +179,14 @@ export class AuthManager {
       // the betterAuth config above.
       return createObjectQLAdapterFactory(this.config.dataEngine);
     }
-    
+
     // Fallback warning if no dataEngine is provided
     console.warn(
       '⚠️  WARNING: No dataEngine provided to AuthManager! ' +
       'Using in-memory storage. This is NOT suitable for production. ' +
       'Please provide a dataEngine instance (e.g., ObjectQL) in AuthManagerOptions.'
     );
-    
+
     // Return a minimal in-memory configuration as fallback
     // This allows the system to work in development/testing without a real database
     return undefined; // better-auth will use its default in-memory adapter
@@ -197,22 +197,22 @@ export class AuthManager {
    */
   private generateSecret(): string {
     const envSecret = process.env.AUTH_SECRET;
-    
+
     if (!envSecret) {
       // In production, a secret MUST be provided
       // For development/testing, we'll use a fallback but warn about it
       const fallbackSecret = 'dev-secret-' + Date.now();
-      
+
       console.warn(
         '⚠️  WARNING: No AUTH_SECRET environment variable set! ' +
         'Using a temporary development secret. ' +
         'This is NOT secure for production use. ' +
         'Please set AUTH_SECRET in your environment variables.'
       );
-      
+
       return fallbackSecret;
     }
-    
+
     return envSecret;
   }
 
@@ -231,7 +231,7 @@ export class AuthManager {
    * better-auth catches internal errors (database / adapter / ORM) and
    * returns a 500 Response instead of throwing.  We therefore inspect the
    * response status and log server errors so they are not silently swallowed.
-   * 
+   *
    * @param request - Web standard Request object
    * @returns Web standard Response object
    */
