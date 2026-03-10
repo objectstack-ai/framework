@@ -583,7 +583,20 @@ The plugin uses ObjectStack's `sys_` prefix convention for protocol object names
 - Object names: `sys_user`, `sys_session`, `sys_account`, `sys_verification` (protocol names)
 - Field names: `email_verified`, `created_at`, `user_id` (snake_case)
 
-better-auth internally uses model names like `user` and `session`. The ObjectQL adapter (`AUTH_MODEL_TO_PROTOCOL` mapping) automatically translates these to `sys_`-prefixed protocol names, providing seamless integration.
+better-auth internally uses camelCase model and field names (`user`, `emailVerified`, `userId`).
+The plugin bridges this gap using better-auth's official **`modelName` / `fields` schema customisation API**:
+
+```typescript
+// Declared in the betterAuth() config via AUTH_*_CONFIG constants:
+user:         { modelName: 'sys_user',         fields: { emailVerified: 'email_verified', … } },
+session:      { modelName: 'sys_session',      fields: { userId: 'user_id', expiresAt: 'expires_at', … } },
+account:      { modelName: 'sys_account',      fields: { providerId: 'provider_id', accountId: 'account_id', … } },
+verification: { modelName: 'sys_verification', fields: { expiresAt: 'expires_at', … } },
+```
+
+The ObjectQL adapter factory (`createObjectQLAdapterFactory`) then uses better-auth's `createAdapterFactory`
+which automatically transforms all data and where-clauses using these mappings — no manual
+camelCase ↔ snake_case conversion is needed in the adapter.
 
 > **Upgrade note:** If you have custom adapters or plugins that reference auth objects by name,
 > update them to use `sys_user`, `sys_session`, `sys_account`, `sys_verification`

@@ -215,38 +215,75 @@ export const AuthUser = ObjectSchema.create({
 **Database Objects:**
 Uses ObjectStack `sys_` prefixed protocol names with snake_case field naming.
 The adapter automatically maps better-auth model names to protocol names:
+
+*Core models:*
 - `sys_user` (← better-auth `user`) - User accounts (id, email, name, email_verified, created_at, etc.)
 - `sys_session` (← better-auth `session`) - Active sessions (id, token, user_id, expires_at, ip_address, etc.)
 - `sys_account` (← better-auth `account`) - OAuth provider accounts (id, provider_id, account_id, user_id, tokens, etc.)
 - `sys_verification` (← better-auth `verification`) - Verification tokens (id, value, identifier, expires_at, etc.)
 
-**Adapter:**
-The `createObjectQLAdapter()` function bridges better-auth's database interface to ObjectQL's IDataEngine. It includes a model→protocol name mapping (`AUTH_MODEL_TO_PROTOCOL`) that translates better-auth's hardcoded model names (e.g. `user`) to ObjectStack protocol names (e.g. `sys_user`):
+*Organization plugin (when `plugins.organization: true`):*
+- `sys_organization` (← `organization`) - Organizations (id, name, slug, logo, created_at, etc.)
+- `sys_member` (← `member`) - Organization members (id, organization_id, user_id, role, created_at)
+- `sys_invitation` (← `invitation`) - Invitations (id, organization_id, inviter_id, email, role, expires_at, etc.)
+- `sys_team` (← `team`) - Teams (id, name, organization_id, created_at, etc.)
+- `sys_team_member` (← `teamMember`) - Team members (id, team_id, user_id, created_at)
+
+*Two-Factor plugin (when `plugins.twoFactor: true`):*
+- `sys_two_factor` (← `twoFactor`) - 2FA secrets (id, secret, backup_codes, user_id)
+
+**Schema Mapping (modelName + fields):**
+
+better-auth uses camelCase field names internally (`emailVerified`, `userId`, `createdAt`, etc.)
+while ObjectStack's protocol layer uses snake_case (`email_verified`, `user_id`, `created_at`).
+
+The plugin leverages better-auth's official `modelName` / `fields` schema customisation API
+to declare the mapping at configuration time. The `createAdapterFactory` wrapper then
+transforms data and where-clauses automatically — no runtime camelCase ↔ snake_case
+conversion is needed in the adapter itself.
 
 ```typescript
-// Better-auth → ObjectQL Adapter (handles model name mapping + field transformation)
-import { createObjectQLAdapter, AUTH_MODEL_TO_PROTOCOL } from '@objectstack/plugin-auth';
+// Schema mapping constants (auth-schema-config.ts)
+import {
+  AUTH_USER_CONFIG,
+  AUTH_SESSION_CONFIG,
+  AUTH_ACCOUNT_CONFIG,
+  AUTH_VERIFICATION_CONFIG,
+  buildOrganizationPluginSchema,
+  buildTwoFactorPluginSchema,
+} from '@objectstack/plugin-auth';
 
-const adapter = createObjectQLAdapter(dataEngine);
-
-// Mapping: { user: 'sys_user', session: 'sys_session', account: 'sys_account', verification: 'sys_verification' }
-console.log(AUTH_MODEL_TO_PROTOCOL);
-
-// better-auth requires a DBAdapterInstance (factory function), not a raw adapter object.
-// Passing a plain object falls through to the Kysely adapter path and fails silently.
-// Wrap the adapter in a factory function:
+// Applied to the betterAuth() config:
 const auth = betterAuth({
-  database: (options) => ({
-    id: 'objectql',
-    ...adapter,
-    transaction: async (cb) => cb(adapter),
-  }),
-  // ... other config
+  database: createObjectQLAdapterFactory(dataEngine),
+  user:         { ...AUTH_USER_CONFIG },
+  session:      { ...AUTH_SESSION_CONFIG, expiresIn: 604800 },
+  account:      { ...AUTH_ACCOUNT_CONFIG },
+  verification: { ...AUTH_VERIFICATION_CONFIG },
+  plugins: [
+    organization({ schema: buildOrganizationPluginSchema() }),
+    twoFactor({ schema: buildTwoFactorPluginSchema() }),
+  ],
 });
 ```
 
-> **Note:** `AuthManager` handles this wrapping automatically when you provide a `dataEngine`.
-> You only need the factory pattern above when using `createObjectQLAdapter()` directly.
+**Adapter Factory:**
+The `createObjectQLAdapterFactory()` function uses better-auth's `createAdapterFactory` to
+bridge ObjectQL's IDataEngine with better-auth. Model-name and field-name transformations
+are applied by the factory wrapper so the adapter code stays simple:
+
+```typescript
+import { createObjectQLAdapterFactory } from '@objectstack/plugin-auth';
+
+const adapterFactory = createObjectQLAdapterFactory(dataEngine);
+// adapterFactory is (options: BetterAuthOptions) => DBAdapter
+```
+
+> **Note:** `AuthManager` handles all of this automatically when you provide a `dataEngine`.
+> You only need the factory/config above when using the adapter directly.
+
+A legacy `createObjectQLAdapter()` function (with manual model-name mapping via
+`AUTH_MODEL_TO_PROTOCOL`) is still exported for backward compatibility.
 
 ## Development
 

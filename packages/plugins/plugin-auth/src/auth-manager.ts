@@ -2,9 +2,20 @@
 
 import { betterAuth } from 'better-auth';
 import type { Auth, BetterAuthOptions } from 'better-auth';
+import { organization } from 'better-auth/plugins/organization';
+import { twoFactor } from 'better-auth/plugins/two-factor';
+import { magicLink } from 'better-auth/plugins/magic-link';
 import type { AuthConfig } from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
-import { createObjectQLAdapter } from './objectql-adapter.js';
+import { createObjectQLAdapterFactory } from './objectql-adapter.js';
+import {
+  AUTH_USER_CONFIG,
+  AUTH_SESSION_CONFIG,
+  AUTH_ACCOUNT_CONFIG,
+  AUTH_VERIFICATION_CONFIG,
+  buildOrganizationPluginSchema,
+  buildTwoFactorPluginSchema,
+} from './auth-schema-config.js';
 
 /**
  * Extended options for AuthManager
@@ -15,7 +26,7 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * If not provided, one will be created from config
    */
   authInstance?: Auth<any>;
-  
+
   /**
    * ObjectQL Data Engine instance
    * Required for database operations using ObjectQL instead of third-party ORMs
@@ -25,7 +36,7 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
 
 /**
  * Authentication Manager
- * 
+ *
  * Wraps better-auth and provides authentication services for ObjectStack.
  * Supports multiple authentication methods:
  * - Email/password
@@ -41,7 +52,7 @@ export class AuthManager {
 
   constructor(config: AuthManagerOptions) {
     this.config = config;
-    
+
     // Use provided auth instance
     if (config.authInstance) {
       this.auth = config.authInstance;
@@ -69,25 +80,81 @@ export class AuthManager {
       secret: this.config.secret || this.generateSecret(),
       baseURL: this.config.baseUrl || 'http://localhost:3000',
       basePath: '/',  // ← 关键修复！告诉 better-auth 路径已被剥离
-      
+
       // Database adapter configuration
-      // For now, we configure a basic setup that will be enhanced
-      // when database URL is provided and drizzle-orm is available
       database: this.createDatabaseConfig(),
-      
+
+      // Model/field mapping: camelCase (better-auth) → snake_case (ObjectStack)
+      // These declarations tell better-auth the actual table/column names used
+      // by ObjectStack's protocol layer, enabling automatic transformation via
+      // createAdapterFactory.
+      user: {
+        ...AUTH_USER_CONFIG,
+      },
+      account: {
+        ...AUTH_ACCOUNT_CONFIG,
+      },
+      verification: {
+        ...AUTH_VERIFICATION_CONFIG,
+      },
+
       // Email configuration
       emailAndPassword: {
         enabled: true,
       },
-      
+
       // Session configuration
       session: {
+        ...AUTH_SESSION_CONFIG,
         expiresIn: this.config.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days default
         updateAge: this.config.session?.updateAge || 60 * 60 * 24, // 1 day default
       },
+
+      // better-auth plugins — registered based on AuthPluginConfig flags
+      plugins: this.buildPluginList(),
     };
 
     return betterAuth(betterAuthConfig);
+  }
+
+  /**
+   * Build the list of better-auth plugins based on AuthPluginConfig flags.
+   *
+   * Each plugin that introduces its own database tables is configured with
+   * a `schema` option containing the appropriate snake_case field mappings,
+   * so that `createAdapterFactory` transforms them automatically.
+   */
+  private buildPluginList(): any[] {
+    const pluginConfig = this.config.plugins;
+    const plugins: any[] = [];
+
+    if (pluginConfig?.organization) {
+      plugins.push(organization({
+        schema: buildOrganizationPluginSchema(),
+      }));
+    }
+
+    if (pluginConfig?.twoFactor) {
+      plugins.push(twoFactor({
+        schema: buildTwoFactorPluginSchema(),
+      }));
+    }
+
+    if (pluginConfig?.magicLink) {
+      // magic-link reuses the `verification` table — no extra schema mapping needed.
+      // The sendMagicLink callback must be provided by the application at a higher level.
+      // Here we provide a no-op default that logs a warning; real applications should
+      // override this via AuthManagerOptions or a config extension point.
+      plugins.push(magicLink({
+        sendMagicLink: async ({ email, url }) => {
+          console.warn(
+            `[AuthManager] Magic-link requested for ${email} but no sendMagicLink handler configured. URL: ${url}`,
+          );
+        },
+      }));
+    }
+
+    return plugins;
   }
 
   /**
@@ -103,28 +170,23 @@ export class AuthManager {
    * so it is correctly recognised as a `DBAdapterInstance`.
    */
   private createDatabaseConfig(): any {
-    // Use ObjectQL adapter if dataEngine is provided
+    // Use ObjectQL adapter factory if dataEngine is provided
     if (this.config.dataEngine) {
-      const adapter = createObjectQLAdapter(this.config.dataEngine);
-      // Return a DBAdapterInstance factory function
-      return (_options: any) => ({
-        id: 'objectql',
-        ...adapter,
-        // ObjectQL does not yet expose a separate transaction context,
-        // so we pass the adapter itself.  better-auth patches this
-        // automatically when missing, but providing it avoids a
-        // runtime warning from getBaseAdapter().
-        transaction: async <R>(cb: (trx: any) => Promise<R>): Promise<R> => cb(adapter),
-      });
+      // createObjectQLAdapterFactory returns an AdapterFactory
+      // (options => DBAdapter) which better-auth invokes via getBaseAdapter().
+      // The factory is created by better-auth's createAdapterFactory and
+      // automatically applies modelName/fields transformations declared in
+      // the betterAuth config above.
+      return createObjectQLAdapterFactory(this.config.dataEngine);
     }
-    
+
     // Fallback warning if no dataEngine is provided
     console.warn(
       '⚠️  WARNING: No dataEngine provided to AuthManager! ' +
       'Using in-memory storage. This is NOT suitable for production. ' +
       'Please provide a dataEngine instance (e.g., ObjectQL) in AuthManagerOptions.'
     );
-    
+
     // Return a minimal in-memory configuration as fallback
     // This allows the system to work in development/testing without a real database
     return undefined; // better-auth will use its default in-memory adapter
@@ -135,22 +197,22 @@ export class AuthManager {
    */
   private generateSecret(): string {
     const envSecret = process.env.AUTH_SECRET;
-    
+
     if (!envSecret) {
       // In production, a secret MUST be provided
       // For development/testing, we'll use a fallback but warn about it
       const fallbackSecret = 'dev-secret-' + Date.now();
-      
+
       console.warn(
         '⚠️  WARNING: No AUTH_SECRET environment variable set! ' +
         'Using a temporary development secret. ' +
         'This is NOT secure for production use. ' +
         'Please set AUTH_SECRET in your environment variables.'
       );
-      
+
       return fallbackSecret;
     }
-    
+
     return envSecret;
   }
 
@@ -169,7 +231,7 @@ export class AuthManager {
    * better-auth catches internal errors (database / adapter / ORM) and
    * returns a 500 Response instead of throwing.  We therefore inspect the
    * response status and log server errors so they are not silently swallowed.
-   * 
+   *
    * @param request - Web standard Request object
    * @returns Web standard Response object
    */
