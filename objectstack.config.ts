@@ -12,6 +12,7 @@ import CrmApp from './examples/app-crm/objectstack.config';
 import TodoApp from './examples/app-todo/objectstack.config';
 import BiPlugin from './examples/plugin-bi/objectstack.config';
 import { AuthPlugin } from '@objectstack/plugin-auth';
+import { I18nServicePlugin } from '@objectstack/service-i18n';
 
 export default defineStack({
   manifest: {
@@ -24,6 +25,11 @@ export default defineStack({
   plugins: [
     new ObjectQLPlugin(),
     new DriverPlugin(new InMemoryDriver()),
+    new I18nServicePlugin({       
+      defaultLocale: 'en',
+      fallbackLocale: 'en',
+      registerRoutes: true,          // 自动注册 /api/v1/i18n/* 路由
+    }),
     new AuthPlugin({
       secret: 'dev-secret-please-change-in-production-min-32-chars',
       baseUrl: 'http://localhost:3000',

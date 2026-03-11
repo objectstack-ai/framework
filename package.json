@@ -41,6 +41,7 @@
     "@objectstack/plugin-auth": "workspace:*",
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/runtime": "workspace:*",
+    "@objectstack/service-i18n": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "lucide-react": "^0.577.0"
   },
