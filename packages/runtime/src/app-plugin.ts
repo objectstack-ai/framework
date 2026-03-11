@@ -60,9 +60,15 @@ export class AppPlugin implements Plugin {
         
         // Execute Runtime Step
         // Retrieve ObjectQL engine from services
-        // We cast to any/ObjectQL because ctx.getService returns unknown
-        const ql = ctx.getService('objectql') as any;
-        
+        // ctx.getService throws when a service is not registered, so we
+        // must use try/catch instead of a null-check.
+        let ql: any;
+        try {
+            ql = ctx.getService('objectql');
+        } catch {
+            // Service not registered — handled below
+        }
+
         if (!ql) {
             ctx.logger.warn('ObjectQL engine service not found', { 
                 appName: this.name,
@@ -201,7 +207,15 @@ export class AppPlugin implements Plugin {
      * this keeps AppPlugin resilient across server/dev/mock environments.
      */
     private loadTranslations(ctx: PluginContext, appId: string): void {
-        const i18nService = ctx.getService('i18n') as II18nService | undefined;
+        // ctx.getService throws when a service is not registered, so we
+        // must use try/catch to gracefully skip when no i18n plugin is loaded.
+        let i18nService: II18nService | undefined;
+        try {
+            i18nService = ctx.getService('i18n') as II18nService;
+        } catch {
+            // Service not registered — handled below
+        }
+
         if (!i18nService) {
             ctx.logger.debug('[i18n] No i18n service registered; skipping translation loading', { appId });
             return;

@@ -7,6 +7,7 @@ import net from 'net';
 import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
 import { loadConfig } from '../utils/config.js';
+import { isHostConfig } from '../utils/plugin-detection.js';
 import {
   printHeader,
   printKV,
@@ -190,7 +191,10 @@ export default class Serve extends Command {
       }
 
       // 3. Auto-register AppPlugin if config contains app definitions
-      if (config.objects || config.manifest || config.apps) {
+      // Skip if config is a host/aggregator config that already contains
+      // instantiated plugins — wrapping it would cause duplicate registration
+      // and startup failures (e.g. plugin.app.dev-workspace).
+      if (!isHostConfig(config) && (config.objects || config.manifest || config.apps)) {
         try {
            const { AppPlugin } = await import('@objectstack/runtime');
            await kernel.use(new AppPlugin(config));

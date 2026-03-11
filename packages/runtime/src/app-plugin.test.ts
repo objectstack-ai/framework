@@ -100,6 +100,22 @@ describe('AppPlugin', () => {
         );
     });
 
+    it('start should handle getService throwing for objectql', async () => {
+        const bundle = { id: 'com.test.throw' };
+        const plugin = new AppPlugin(bundle);
+        
+        vi.mocked(mockContext.getService).mockImplementation(() => {
+            throw new Error("[Kernel] Service 'objectql' not found");
+        });
+        
+        await plugin.start!(mockContext);
+        
+        expect(mockContext.logger.warn).toHaveBeenCalledWith(
+            expect.stringContaining('ObjectQL engine service not found'), 
+            expect.any(Object)
+        );
+    });
+
     // ═══════════════════════════════════════════════════════════════
     // i18n translation auto-loading
     // ═══════════════════════════════════════════════════════════════
@@ -161,6 +177,26 @@ describe('AppPlugin', () => {
 
             const bundle = {
                 id: 'com.test.noi18n',
+                translations: [{ en: { messages: { hello: 'Hello' } } }],
+            };
+            const plugin = new AppPlugin(bundle);
+            await plugin.start!(mockContext);
+
+            // Should log debug but not throw
+            expect(mockContext.logger.debug).toHaveBeenCalledWith(
+                expect.stringContaining('No i18n service registered'),
+                expect.any(Object)
+            );
+        });
+
+        it('should skip translation loading when getService throws for i18n', async () => {
+            vi.mocked(mockContext.getService).mockImplementation((name: string) => {
+                if (name === 'objectql') return mockQL;
+                throw new Error("[Kernel] Service 'i18n' not found");
+            });
+
+            const bundle = {
+                id: 'com.test.i18nthrow',
                 translations: [{ en: { messages: { hello: 'Hello' } } }],
             };
             const plugin = new AppPlugin(bundle);
