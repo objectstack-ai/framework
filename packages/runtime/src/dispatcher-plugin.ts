@@ -53,7 +53,7 @@ function errorResponse(err: any, res: any): void {
  *   - /graphql   (GraphQL)
  *   - /analytics (BI queries)
  *   - /packages  (package management)
-
+ *   - /i18n      (internationalization — locales, translations, field labels)
  *   - /storage   (file storage)
  *   - /automation (CRUD + triggers + runs)
  *
@@ -231,6 +231,36 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             server.get(`${prefix}/storage/file/:id`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleStorage(`file/${req.params.id}`, 'GET', undefined, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            // ── i18n ────────────────────────────────────────────────────
+            // Bridges to HttpDispatcher.handleI18n() which resolves the i18n
+            // service from the kernel (either I18nServicePlugin or memory fallback).
+            server.get(`${prefix}/i18n/locales`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleI18n('/locales', 'GET', req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.get(`${prefix}/i18n/translations/:locale`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleI18n(`/translations/${req.params.locale}`, 'GET', req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.get(`${prefix}/i18n/labels/:object/:locale`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleI18n(`/labels/${req.params.object}/${req.params.locale}`, 'GET', req.query, { request: req });
                     sendResult(result, res);
                 } catch (err: any) {
                     errorResponse(err, res);

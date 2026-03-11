@@ -7,19 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **i18n route self-registration** — Moved i18n REST endpoint registration from `RestServer` to
+  `I18nServicePlugin` (and kernel fallback). The i18n plugin now self-registers `/api/v1/i18n/*`
+  routes via the `kernel:ready` hook, following the same autonomous plugin pattern used by
+  `AuthPlugin`, `WorkflowPlugin`, and other service plugins. `RestServer` no longer registers or
+  manages any i18n endpoints, keeping it strictly a protocol-driven gateway.
+- Removed `enableI18n` flag from `RestApiConfig` schema (`rest-server.zod.ts`) — i18n endpoints
+  are now controlled by the i18n service plugin's own `registerRoutes` option (default: `true`).
+- Removed `registerI18nEndpoints()` method from `RestServer` class.
+- `I18nServicePlugin` now accepts `registerRoutes` and `basePath` options for HTTP route control.
+- i18n endpoints now work independently of `RestServer`, enabling MSW/mock test environments
+  to serve i18n routes without any REST API gateway dependency.
+- **Dispatcher i18n bridge routes** — `createDispatcherPlugin()` now registers i18n HTTP route
+  bridges (`GET /i18n/locales`, `GET /i18n/translations/:locale`, `GET /i18n/labels/:object/:locale`)
+  via `HttpDispatcher.handleI18n()`, ensuring i18n endpoints work even when only the kernel's
+  memory fallback i18n is active (no explicit `I18nServicePlugin` loaded). This is consistent with
+  how auth, analytics, packages, storage, and automation services are bridged.
+
 ### Added
 - **i18n as core built-in service** — The i18n service is now a `core` criticality service with
   automatic in-memory fallback. When no plugin (e.g. `I18nServicePlugin`) registers an i18n service,
   the kernel auto-injects `createMemoryI18n` (in-memory Map-backed II18nService implementation)
   during `validateSystemRequirements()`. This ensures `/api/v1/i18n/*` routes and discovery always
   report i18n as available, even without `plugin-i18n` installed.
-- **REST i18n route auto-registration** — `RestServer.registerRoutes()` now automatically registers
-  `/api/v1/i18n/locales` and `/api/v1/i18n/translations/:locale` endpoints, controlled by the new
-  `enableI18n` config flag (default: `true`).
 - `createMemoryI18n` fallback factory in `@objectstack/core` (packages/core/src/fallbacks/memory-i18n.ts)
   implementing `II18nService` contract with translation loading, dot-notation key resolution, parameter
   interpolation, and locale management.
-- `enableI18n` flag in `RestApiConfig` schema (`rest-server.zod.ts`) for toggling i18n API endpoints.
 
 ### Changed
 - `ServiceRequirementDef.i18n` upgraded from `'optional'` to `'core'` — kernel now warns (instead

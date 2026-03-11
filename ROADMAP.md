@@ -842,7 +842,7 @@ Final polish and advanced features.
 | 19 | Automation Service | `IAutomationService` | ✅ | `@objectstack/service-automation` | DAG engine + HTTP API CRUD + Client SDK + typed returns (67 tests) |
 | 20 | Workflow Service | `IWorkflowService` | ❌ | `@objectstack/service-workflow` (planned) | Spec only |
 | 21 | GraphQL Service | `IGraphQLService` | ❌ | `@objectstack/service-graphql` (planned) | Spec only |
-| 22 | i18n Service | `II18nService` | ✅ | `@objectstack/service-i18n` | File-based locale loading |
+| 22 | i18n Service | `II18nService` | ✅ | `@objectstack/service-i18n` | File-based locale loading, self-registered REST routes |
 | 23 | UI Service | `IUIService` | ⚠️ | — | **Deprecated** — merged into `IMetadataService` |
 | 24 | Schema Driver | `ISchemaDriver` | ❌ | — | Spec only |
 | 25 | Startup Orchestrator | `IStartupOrchestrator` | ❌ | — | Kernel handles basics |
