@@ -2,7 +2,7 @@
 
 import { Plugin, PluginContext } from '@objectstack/core';
 import { SeedLoaderService } from './seed-loader.js';
-import type { IMetadataService } from '@objectstack/spec/contracts';
+import type { IMetadataService, II18nService } from '@objectstack/spec/contracts';
 
 /**
  * AppPlugin
@@ -12,6 +12,7 @@ import type { IMetadataService } from '@objectstack/spec/contracts';
  * Responsibilities:
  * 1. Register App Manifest as a service (for ObjectQL discovery)
  * 2. Execute Runtime `onEnable` hook (for code logic)
+ * 3. Auto-load i18n translation bundles into the kernel's i18n service
  */
 export class AppPlugin implements Plugin {
     name: string;
@@ -102,6 +103,11 @@ export class AppPlugin implements Plugin {
              ctx.logger.debug('No runtime.onEnable function found', { appId });
         }
 
+        // ── i18n Translation Loading ─────────────────────────────────────
+        // Auto-load translation bundles from the app config into the
+        // kernel's i18n service, so discovery and handlers stay consistent.
+        this.loadTranslations(ctx, appId);
+
         // Data Seeding
         // Collect seed data from multiple locations (top-level `data` preferred, `manifest.data` for backward compat)
         const seedDatasets: any[] = [];
@@ -184,5 +190,55 @@ export class AppPlugin implements Plugin {
                  ctx.logger.info('[Seeder] Data seeding complete (fallback).');
              }
         }
+    }
+
+    /**
+     * Auto-load i18n translation bundles from the app config into the
+     * kernel's i18n service. Handles both `translations` (array of
+     * TranslationBundle) and `i18n` config (default locale, etc.).
+     *
+     * Gracefully skips when the i18n service is not registered —
+     * this keeps AppPlugin resilient across server/dev/mock environments.
+     */
+    private loadTranslations(ctx: PluginContext, appId: string): void {
+        const i18nService = ctx.getService('i18n') as II18nService | undefined;
+        if (!i18nService) {
+            ctx.logger.debug('[i18n] No i18n service registered; skipping translation loading', { appId });
+            return;
+        }
+
+        // Apply i18n config (default locale, etc.)
+        const i18nConfig = this.bundle.i18n || (this.bundle.manifest || this.bundle)?.i18n;
+        if (i18nConfig?.defaultLocale && typeof i18nService.setDefaultLocale === 'function') {
+            i18nService.setDefaultLocale(i18nConfig.defaultLocale);
+            ctx.logger.debug('[i18n] Set default locale', { appId, locale: i18nConfig.defaultLocale });
+        }
+
+        // Collect translation bundles from top-level and legacy locations
+        const bundles: Array<Record<string, unknown>> = [];
+        if (Array.isArray(this.bundle.translations)) {
+            bundles.push(...this.bundle.translations);
+        }
+        const manifest = this.bundle.manifest || this.bundle;
+        if (manifest && Array.isArray(manifest.translations) && manifest.translations !== this.bundle.translations) {
+            bundles.push(...manifest.translations);
+        }
+
+        if (bundles.length === 0) {
+            return;
+        }
+
+        let loadedLocales = 0;
+        for (const bundle of bundles) {
+            // Each bundle is a TranslationBundle: Record<locale, TranslationData>
+            for (const [locale, data] of Object.entries(bundle)) {
+                if (data && typeof data === 'object') {
+                    i18nService.loadTranslations(locale, data as Record<string, unknown>);
+                    loadedLocales++;
+                }
+            }
+        }
+
+        ctx.logger.info('[i18n] Loaded translation bundles', { appId, bundles: bundles.length, locales: loadedLocales });
     }
 }

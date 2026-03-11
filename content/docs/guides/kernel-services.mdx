@@ -246,6 +246,68 @@ Trigger engine, event triggers from ObjectQL hooks, flow executor, scheduled tri
 ### 11. i18n — 3 methods
 `getLocales`, `getTranslations`, `getFieldLabels`
 
+**Service Name**: `i18n` · **Criticality**: `optional`  
+**Implementations**: `@objectstack/service-i18n` (production — file-based) · Dev Plugin (in-memory stub)  
+**Route Mount**: `/api/v1/i18n`  
+**Contract**: `II18nService` in `@objectstack/spec/contracts`
+
+#### Service Registration
+
+The i18n service is registered by a **plugin** during the `init` phase:
+
+| Environment | Provider | Registration |
+|:------------|:---------|:-------------|
+| **Production** | `I18nServicePlugin` | File-based `FileI18nAdapter` loads JSON locale files from disk |
+| **Development** | `DevPlugin` | In-memory Map-backed stub, supports `loadTranslations()` |
+| **Mock / MSW** | `MswPlugin` | Routes via `HttpDispatcher.dispatch()` catch-all — requires one of the above |
+
+```typescript
+// Production
+kernel.use(new I18nServicePlugin({ defaultLocale: 'en', localesDir: './i18n' }));
+
+// Development (automatic — DevPlugin registers i18n stub for all 17 core services)
+kernel.use(new DevPlugin());
+```
+
+#### Discovery & Handler Consistency
+
+The Discovery API (`/api/v1` or `/.well-known/objectstack`) and the i18n route handler (`/api/v1/i18n/*`) both use the **same async resolution chain** to detect i18n availability:
+
+```
+getServiceAsync() → getService() → context.getService() → services Map
+```
+
+This ensures that `discovery.services.i18n.status` always matches the actual runtime behavior — a service registered via any mechanism (sync Map, async factory, or context) will be reported correctly in both places.
+
+The `locale` field in the discovery response is populated from the actual i18n service:
+- `locale.default` — from `i18nService.getDefaultLocale()` (falls back to `'en'`)
+- `locale.supported` — from `i18nService.getLocales()` (falls back to `[default]`)
+
+#### AppPlugin Auto-Loading
+
+When an app bundle includes an `i18n` config and `translations` array, `AppPlugin` automatically loads the translation data into the i18n service during the `start` phase:
+
+```typescript
+export default defineStack({
+  manifest: { id: 'com.example.crm', namespace: 'crm' },
+  i18n: { defaultLocale: 'en', supportedLocales: ['en', 'zh-CN'] },
+  translations: [CrmTranslations],   // TranslationBundle[]
+});
+```
+
+AppPlugin will:
+1. Set the default locale via `i18nService.setDefaultLocale()`
+2. Call `i18nService.loadTranslations(locale, data)` for each locale in every bundle
+3. Skip gracefully if no i18n service is registered (no errors, just a debug log)
+
+#### REST API Endpoints
+
+| Method | Path | Description |
+|:-------|:-----|:------------|
+| `GET` | `/api/v1/i18n/locales` | List available locales |
+| `GET` | `/api/v1/i18n/translations/:locale` | Get all translations for a locale |
+| `GET` | `/api/v1/i18n/labels/:object/:locale` | Get translated field labels for an object |
+
 ---
 
 ## 12–17. Infrastructure Services ❌ Plugin Required

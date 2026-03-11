@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated all framework adapters (Hono, Express, Fastify, Next.js, NestJS, Nuxt, SvelteKit),
   the dispatcher plugin, and the MSW plugin to `await` the now-async `getDiscoveryInfo()`.
 
+### Added
+- **AppPlugin i18n auto-loading** — `AppPlugin` now automatically loads translation bundles from
+  app configs (`translations` array) into the kernel's i18n service during the `start` phase,
+  coordinating i18n data loading across server/dev/mock environments.
+- i18n service registration guide in `content/docs/guides/kernel-services.mdx` documenting
+  service registration patterns, discovery consistency, and AppPlugin auto-loading behavior.
+
 ### Changed
 - Updated ROADMAP.md for v3.0 release preparation with full codebase scan results
 - Audited all @deprecated items: 14 in spec, 9 in runtime packages (23 total)
