@@ -28,6 +28,22 @@ export const SystemObjectName = {
   ACCOUNT: 'sys_account',
   /** Authentication: email / phone verification */
   VERIFICATION: 'sys_verification',
+  /** Authentication: organization (multi-org support) */
+  ORGANIZATION: 'sys_organization',
+  /** Authentication: organization member */
+  MEMBER: 'sys_member',
+  /** Authentication: organization invitation */
+  INVITATION: 'sys_invitation',
+  /** Authentication: API key for programmatic access */
+  API_KEY: 'sys_api_key',
+  /** Authentication: two-factor authentication credentials */
+  TWO_FACTOR: 'sys_two_factor',
+  /** Security: role definition for RBAC */
+  ROLE: 'sys_role',
+  /** Security: permission set grouping */
+  PERMISSION_SET: 'sys_permission_set',
+  /** Audit: system audit log */
+  AUDIT_LOG: 'sys_audit_log',
   /** System metadata storage */
   METADATA: 'sys_metadata',
 } as const;
@@ -87,13 +103,13 @@ export type SystemFieldName = typeof SystemFieldName[keyof typeof SystemFieldNam
 export const StorageNameMapping = {
   /**
    * Resolve the physical table name for an object.
-   * Falls back to `object.name` when `tableName` is not set.
+   * Priority: explicit `tableName` → auto-derived `{namespace}_{name}` → `name`.
    *
-   * @param object - Object definition (at minimum `{ name: string; tableName?: string }`)
+   * @param object - Object definition (at minimum `{ name: string; namespace?: string; tableName?: string }`)
    * @returns The physical table / collection name to use in storage operations.
    */
-  resolveTableName(object: { name: string; tableName?: string }): string {
-    return object.tableName ?? object.name;
+  resolveTableName(object: { name: string; namespace?: string; tableName?: string }): string {
+    return object.tableName ?? (object.namespace ? `${object.namespace}_${object.name}` : object.name);
   },
 
   /**

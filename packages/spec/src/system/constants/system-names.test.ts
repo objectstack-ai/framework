@@ -15,6 +15,14 @@ describe('SystemObjectName', () => {
     expect(SystemObjectName.SESSION).toBe('sys_session');
     expect(SystemObjectName.ACCOUNT).toBe('sys_account');
     expect(SystemObjectName.VERIFICATION).toBe('sys_verification');
+    expect(SystemObjectName.ORGANIZATION).toBe('sys_organization');
+    expect(SystemObjectName.MEMBER).toBe('sys_member');
+    expect(SystemObjectName.INVITATION).toBe('sys_invitation');
+    expect(SystemObjectName.API_KEY).toBe('sys_api_key');
+    expect(SystemObjectName.TWO_FACTOR).toBe('sys_two_factor');
+    expect(SystemObjectName.ROLE).toBe('sys_role');
+    expect(SystemObjectName.PERMISSION_SET).toBe('sys_permission_set');
+    expect(SystemObjectName.AUDIT_LOG).toBe('sys_audit_log');
     expect(SystemObjectName.METADATA).toBe('sys_metadata');
   });
 
@@ -22,6 +30,26 @@ describe('SystemObjectName', () => {
     const names: readonly string[] = Object.values(SystemObjectName);
     expect(names).toContain('sys_user');
     expect(names).toContain('sys_session');
+    expect(names).toContain('sys_organization');
+    expect(names).toContain('sys_role');
+    expect(names).toContain('sys_audit_log');
+  });
+
+  it('should have all expected keys', () => {
+    const keys = Object.keys(SystemObjectName);
+    expect(keys).toContain('USER');
+    expect(keys).toContain('SESSION');
+    expect(keys).toContain('ACCOUNT');
+    expect(keys).toContain('VERIFICATION');
+    expect(keys).toContain('ORGANIZATION');
+    expect(keys).toContain('MEMBER');
+    expect(keys).toContain('INVITATION');
+    expect(keys).toContain('API_KEY');
+    expect(keys).toContain('TWO_FACTOR');
+    expect(keys).toContain('ROLE');
+    expect(keys).toContain('PERMISSION_SET');
+    expect(keys).toContain('AUDIT_LOG');
+    expect(keys).toContain('METADATA');
   });
 });
 
@@ -63,6 +91,22 @@ describe('StorageNameMapping', () => {
 
     it('should fall back to name when tableName is undefined', () => {
       expect(StorageNameMapping.resolveTableName({ name: 'session', tableName: undefined })).toBe('session');
+    });
+
+    it('should auto-derive table name from namespace + name', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'user', namespace: 'sys' })).toBe('sys_user');
+    });
+
+    it('should prefer explicit tableName over namespace derivation', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'user', namespace: 'sys', tableName: 'custom_users' })).toBe('custom_users');
+    });
+
+    it('should derive multi-word name with namespace', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'audit_log', namespace: 'sys' })).toBe('sys_audit_log');
+    });
+
+    it('should fall back to name when namespace is undefined', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'account', namespace: undefined })).toBe('account');
     });
   });
 

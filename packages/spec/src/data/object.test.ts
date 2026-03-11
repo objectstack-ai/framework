@@ -744,3 +744,106 @@ describe('ObjectSchema.create()', () => {
     })).toThrow();
   });
 });
+
+// ============================================================================
+// Namespace & Auto-Derivation
+// ============================================================================
+
+describe('ObjectSchema namespace', () => {
+  it('should accept namespace property', () => {
+    const result = ObjectSchema.safeParse({
+      namespace: 'sys',
+      name: 'user',
+      fields: {},
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.namespace).toBe('sys');
+    }
+  });
+
+  it('should accept object without namespace (optional)', () => {
+    const result = ObjectSchema.safeParse({
+      name: 'account',
+      fields: {},
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.namespace).toBeUndefined();
+    }
+  });
+
+  it('should reject invalid namespace format (must be lowercase alpha)', () => {
+    const result = ObjectSchema.safeParse({
+      namespace: 'Sys',
+      name: 'user',
+      fields: {},
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject namespace with underscores', () => {
+    const result = ObjectSchema.safeParse({
+      namespace: 'my_ns',
+      name: 'user',
+      fields: {},
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject namespace with hyphens', () => {
+    const result = ObjectSchema.safeParse({
+      namespace: 'my-ns',
+      name: 'user',
+      fields: {},
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('ObjectSchema.create() namespace auto-derivation', () => {
+  it('should auto-derive tableName from namespace + name', () => {
+    const obj = ObjectSchema.create({
+      namespace: 'sys',
+      name: 'user',
+      fields: {},
+    });
+    expect(obj.tableName).toBe('sys_user');
+  });
+
+  it('should auto-derive tableName for multi-word name', () => {
+    const obj = ObjectSchema.create({
+      namespace: 'sys',
+      name: 'audit_log',
+      fields: {},
+    });
+    expect(obj.tableName).toBe('sys_audit_log');
+  });
+
+  it('should prefer explicit tableName over auto-derived', () => {
+    const obj = ObjectSchema.create({
+      namespace: 'sys',
+      name: 'user',
+      tableName: 'custom_users',
+      fields: {},
+    });
+    expect(obj.tableName).toBe('custom_users');
+  });
+
+  it('should not set tableName when namespace is absent', () => {
+    const obj = ObjectSchema.create({
+      name: 'account',
+      fields: {},
+    });
+    expect(obj.tableName).toBeUndefined();
+  });
+
+  it('should auto-derive tableName for business namespace', () => {
+    const obj = ObjectSchema.create({
+      namespace: 'crm',
+      name: 'deal',
+      fields: {},
+    });
+    expect(obj.tableName).toBe('crm_deal');
+  });
+});
