@@ -953,6 +953,37 @@ describe('HttpDispatcher', () => {
             expect(result.handled).toBe(true);
             expect(result.response?.body?.data?.locales).toEqual(['en', 'zh-CN', 'ja']);
         });
+
+        it('should resolve locale via fallback (zh → zh-CN) for translations', async () => {
+            // Override mock to be locale-aware: only 'zh-CN' has data, 'zh' returns empty
+            mockI18nService.getTranslations = vi.fn().mockImplementation((locale: string) => {
+                if (locale === 'zh-CN') return { 'o.task.label': '任务' };
+                return {};
+            });
+
+            const result = await dispatcher.handleI18n('/translations/zh', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            const data = result.response?.body?.data;
+            expect(data.locale).toBe('zh-CN');
+            expect(data.requestedLocale).toBe('zh');
+            expect(data.translations).toEqual({ 'o.task.label': '任务' });
+        });
+
+        it('should resolve locale via case-insensitive fallback (ZH-CN → zh-CN) for translations', async () => {
+            // Override mock to be locale-aware: 'ZH-CN' returns empty, 'zh-CN' has data
+            mockI18nService.getTranslations = vi.fn().mockImplementation((locale: string) => {
+                if (locale === 'zh-CN') return { 'o.task.label': '任务' };
+                return {};
+            });
+
+            const result = await dispatcher.handleI18n('/translations/ZH-CN', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            const data = result.response?.body?.data;
+            expect(data.locale).toBe('zh-CN');
+            expect(data.translations).toEqual({ 'o.task.label': '任务' });
+        });
     });
 
     // ═══════════════════════════════════════════════════════════════

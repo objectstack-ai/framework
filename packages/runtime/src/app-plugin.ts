@@ -267,7 +267,7 @@ export class AppPlugin implements Plugin {
         }
 
         // Emit diagnostic when the active i18n service is a fallback/stub
-        const svcAny = i18nService as Record<string, unknown>;
+        const svcAny = i18nService as unknown as Record<string, unknown>;
         if (svcAny._fallback || svcAny._dev) {
             ctx.logger.info(
                 `[i18n] Loaded ${loadedLocales} locale(s) into in-memory i18n fallback for "${appId}". ` +
