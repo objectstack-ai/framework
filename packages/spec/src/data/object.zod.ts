@@ -253,10 +253,13 @@ const ObjectSchemaBase = z.object({
    * When set, `tableName` is auto-derived as `{namespace}_{name}` by
    * `ObjectSchema.create()` unless an explicit `tableName` is provided.
    * 
+   * Namespace must be a single lowercase word (no underscores or hyphens)
+   * to ensure clean auto-derivation of `{namespace}_{name}` table names.
+   * 
    * @example namespace: 'sys'   → tableName defaults to 'sys_user'
    * @example namespace: 'crm'   → tableName defaults to 'crm_account'
    */
-  namespace: z.string().regex(/^[a-z][a-z0-9]*$/).optional().describe('Logical domain namespace (e.g. "sys", "crm"). Used for routing, permissions, and auto-deriving tableName.'),
+  namespace: z.string().regex(/^[a-z][a-z0-9]*$/).optional().describe('Logical domain namespace — single lowercase word (e.g. "sys", "crm"). Used for routing, permissions, and auto-deriving tableName as {namespace}_{name}.'),
 
   /**
    * Taxonomy & Organization

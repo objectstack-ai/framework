@@ -44,6 +44,7 @@ export const SysAuditLog = ObjectSchema.create({
     action: Field.select(['create', 'update', 'delete', 'restore', 'login', 'logout', 'permission_change', 'config_change', 'export', 'import'], {
       label: 'Action',
       required: true,
+      description: 'Action type (snake_case). Values: create, update, delete, restore, login, logout, permission_change, config_change, export, import',
     }),
     
     object_name: Field.text({
@@ -107,7 +108,7 @@ export const SysAuditLog = ObjectSchema.create({
     trackHistory: false, // Audit logs are themselves the audit trail
     searchable: true,
     apiEnabled: true,
-    apiMethods: ['get', 'list'], // Read-only — audit logs are immutable
+    apiMethods: ['get', 'list'], // Read-only — audit logs are immutable; creation happens via internal system hooks only
     trash: false, // Never soft-delete audit logs
     mru: false,
     clone: false,
