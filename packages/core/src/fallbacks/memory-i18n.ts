@@ -35,6 +35,7 @@ export function createMemoryI18n() {
       const value = data ? resolveKey(data, key) : undefined;
       if (value == null) return key;
       if (!params) return value;
+      // Interpolation format: {{paramName}} — matches FileI18nAdapter convention
       return value.replace(/\{\{(\w+)\}\}/g, (_, name) => String(params[name] ?? `{{${name}}}`));
     },
 

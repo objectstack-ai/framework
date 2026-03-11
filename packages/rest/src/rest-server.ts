@@ -695,7 +695,7 @@ export class RestServer {
                         const locales = await this.protocol.getLocales({});
                         res.json(locales);
                     } else {
-                        res.status(501).json({ error: 'i18n locales not supported by protocol implementation' });
+                        res.status(501).json({ error: 'i18n service not available in protocol' });
                     }
                 } catch (error: any) {
                     res.status(500).json({ error: error.message });
@@ -717,7 +717,7 @@ export class RestServer {
                         const translations = await this.protocol.getTranslations({ locale: req.params.locale });
                         res.json(translations);
                     } else {
-                        res.status(501).json({ error: 'i18n translations not supported by protocol implementation' });
+                        res.status(501).json({ error: 'i18n service not available in protocol' });
                     }
                 } catch (error: any) {
                     res.status(500).json({ error: error.message });
