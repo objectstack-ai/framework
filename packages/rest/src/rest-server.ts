@@ -19,7 +19,6 @@ type NormalizedRestServerConfig = {
         enableUi: boolean;
         enableBatch: boolean;
         enableDiscovery: boolean;
-        enableI18n: boolean;
         documentation: RestApiConfig['documentation'];
         responseFormat: RestApiConfig['responseFormat'];
     };
@@ -127,7 +126,6 @@ export class RestServer {
                 enableUi: api.enableUi ?? true,
                 enableBatch: api.enableBatch ?? true,
                 enableDiscovery: api.enableDiscovery ?? true,
-                enableI18n: api.enableI18n ?? true,
                 documentation: api.documentation,
                 responseFormat: api.responseFormat,
             },
@@ -211,11 +209,6 @@ export class RestServer {
         // Batch endpoints
         if (this.config.api.enableBatch) {
             this.registerBatchEndpoints(basePath);
-        }
-
-        // i18n endpoints
-        if (this.config.api.enableI18n) {
-            this.registerI18nEndpoints(basePath);
         }
     }
     
@@ -679,56 +672,6 @@ export class RestServer {
         }
     }
 
-    /**
-     * Register i18n endpoints for locale and translation operations
-     */
-    private registerI18nEndpoints(basePath: string): void {
-        const i18nPath = `${basePath}/i18n`;
-
-        // GET /i18n/locales - List available locales
-        this.routeManager.register({
-            method: 'GET',
-            path: `${i18nPath}/locales`,
-            handler: async (_req: any, res: any) => {
-                try {
-                    if (this.protocol.getLocales) {
-                        const locales = await this.protocol.getLocales({});
-                        res.json(locales);
-                    } else {
-                        res.status(501).json({ error: 'i18n service not available in protocol' });
-                    }
-                } catch (error: any) {
-                    res.status(500).json({ error: error.message });
-                }
-            },
-            metadata: {
-                summary: 'Get available locales',
-                tags: ['i18n'],
-            },
-        });
-
-        // GET /i18n/translations/:locale - Get translations for a locale
-        this.routeManager.register({
-            method: 'GET',
-            path: `${i18nPath}/translations/:locale`,
-            handler: async (req: any, res: any) => {
-                try {
-                    if (this.protocol.getTranslations) {
-                        const translations = await this.protocol.getTranslations({ locale: req.params.locale });
-                        res.json(translations);
-                    } else {
-                        res.status(501).json({ error: 'i18n service not available in protocol' });
-                    }
-                } catch (error: any) {
-                    res.status(500).json({ error: error.message });
-                }
-            },
-            metadata: {
-                summary: 'Get translations for a locale',
-                tags: ['i18n'],
-            },
-        });
-    }
     
     /**
      * Get the route manager

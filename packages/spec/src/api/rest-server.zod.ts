@@ -85,11 +85,6 @@ export const RestApiConfigSchema = z.object({
   enableDiscovery: z.boolean().default(true).describe('Enable API discovery endpoint'),
 
   /**
-   * Enable i18n endpoints (locales, translations)
-   */
-  enableI18n: z.boolean().default(true).describe('Enable i18n API endpoints (locales, translations)'),
-  
-  /**
    * API documentation configuration
    */
   documentation: z.object({

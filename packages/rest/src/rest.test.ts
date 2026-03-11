@@ -399,23 +399,8 @@ describe('RestServer', () => {
       expect(uiRoutes.length).toBeGreaterThan(0);
     });
 
-    it('should register i18n endpoints by default', () => {
+    it('should not register i18n endpoints (i18n routes are self-registered by service-i18n)', () => {
       const rest = new RestServer(server as any, protocol as any);
-      rest.registerRoutes();
-
-      const i18nRoutes = rest.getRoutes().filter((r) =>
-        r.metadata?.tags?.includes('i18n'),
-      );
-      expect(i18nRoutes.length).toBeGreaterThan(0);
-      const paths = i18nRoutes.map((r) => r.path);
-      expect(paths).toContain('/api/v1/i18n/locales');
-      expect(paths).toContain('/api/v1/i18n/translations/:locale');
-    });
-
-    it('should skip i18n routes when enableI18n is false', () => {
-      const rest = new RestServer(server as any, protocol as any, {
-        api: { enableI18n: false },
-      } as any);
       rest.registerRoutes();
 
       const i18nRoutes = rest.getRoutes().filter((r) =>
