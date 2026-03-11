@@ -1,13 +1,48 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
+ * Resolve a locale code against available locales with fallback.
+ *
+ * Fallback chain:
+ *   1. Exact match (e.g. `zh-CN` → `zh-CN`)
+ *   2. Case-insensitive match (e.g. `zh-cn` → `zh-CN`)
+ *   3. Base language match (e.g. `zh-CN` → `zh`)
+ *   4. Variant expansion (e.g. `zh` → `zh-CN`)
+ *
+ * Returns the matched locale code, or `undefined` when no match is found.
+ */
+export function resolveLocale(requestedLocale: string, availableLocales: string[]): string | undefined {
+  if (availableLocales.length === 0) return undefined;
+
+  // 1. Exact match
+  if (availableLocales.includes(requestedLocale)) return requestedLocale;
+
+  // 2. Case-insensitive match
+  const lower = requestedLocale.toLowerCase();
+  const caseMatch = availableLocales.find(l => l.toLowerCase() === lower);
+  if (caseMatch) return caseMatch;
+
+  // 3. Base language match (zh-CN → zh)
+  const baseLang = requestedLocale.split('-')[0].toLowerCase();
+  const baseMatch = availableLocales.find(l => l.toLowerCase() === baseLang);
+  if (baseMatch) return baseMatch;
+
+  // 4. Variant expansion (zh → zh-CN, zh-TW, etc. — first match wins)
+  const variantMatch = availableLocales.find(l => l.split('-')[0].toLowerCase() === baseLang);
+  if (variantMatch) return variantMatch;
+
+  return undefined;
+}
+
+/**
  * In-memory i18n service fallback.
  *
  * Implements the II18nService contract with basic translate/load/getLocales
  * operations.  Used by ObjectKernel as an automatic fallback when no real
  * i18n plugin (e.g. I18nServicePlugin) is registered.
  *
- * Supports runtime translation loading and locale management.
+ * Supports runtime translation loading, locale management, and
+ * locale code fallback (e.g. `zh` → `zh-CN`).
  * Does not load files from disk — operates purely in-memory.
  */
 export function createMemoryI18n() {
@@ -27,11 +62,25 @@ export function createMemoryI18n() {
     return typeof current === 'string' ? current : undefined;
   }
 
+  /**
+   * Find translation data for a locale, with fallback resolution.
+   */
+  function resolveTranslations(locale: string): Record<string, unknown> | undefined {
+    // Exact match
+    if (translations.has(locale)) return translations.get(locale);
+
+    // Locale fallback (zh → zh-CN, en-us → en-US, etc.)
+    const resolved = resolveLocale(locale, [...translations.keys()]);
+    if (resolved) return translations.get(resolved);
+
+    return undefined;
+  }
+
   return {
     _fallback: true, _serviceName: 'i18n',
 
     t(key: string, locale: string, params?: Record<string, unknown>): string {
-      const data = translations.get(locale) ?? translations.get(defaultLocale);
+      const data = resolveTranslations(locale) ?? translations.get(defaultLocale);
       const value = data ? resolveKey(data, key) : undefined;
       if (value == null) return key;
       if (!params) return value;
@@ -40,7 +89,7 @@ export function createMemoryI18n() {
     },
 
     getTranslations(locale: string): Record<string, unknown> {
-      return translations.get(locale) ?? {};
+      return resolveTranslations(locale) ?? {};
     },
 
     loadTranslations(locale: string, data: Record<string, unknown>): void {

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Locale code fallback** — New `resolveLocale()` helper in `@objectstack/core` that resolves
+  locale codes through a 4-step fallback chain: exact match → case-insensitive match
+  (`zh-cn` → `zh-CN`) → base language match (`zh-CN` → `zh`) → variant expansion
+  (`zh` → `zh-CN`). Used by `createMemoryI18n`, `HttpDispatcher.handleI18n()`, and
+  `I18nServicePlugin` route handlers.
+- **Auto-detection of I18nServicePlugin** — Both `DevPlugin` and CLI `serve` command now
+  automatically detect `translations`/`i18n` config in the stack definition and register
+  `I18nServicePlugin` from `@objectstack/service-i18n` when available. Falls back to
+  the core in-memory i18n (with locale resolution) if the package is not installed.
+- **Enhanced i18n diagnostics** — `AppPlugin` now emits clear warnings when:
+  - Translations exist but no i18n service is registered (guides user to add the plugin).
+  - Translations are loaded into a fallback/stub i18n service (recommends production plugin).
+- **i18n locale fallback in REST routes** — `HttpDispatcher.handleI18n()` translations and labels
+  endpoints now resolve locale codes via fallback when exact match returns empty translations.
+  The response includes `requestedLocale` when a fallback was used.
+
+### Changed
+- **DevPlugin i18n stub** — Replaced the duplicate `createI18nStub()` in `DevPlugin` with
+  `createMemoryI18n` from `@objectstack/core`, ensuring locale fallback works consistently
+  in dev mode. DevPlugin now tries `I18nServicePlugin` before the stub when stack has translations.
+- `createMemoryI18n` now uses `resolveLocale()` internally for `t()` and `getTranslations()`,
+  enabling locale fallback (e.g. `zh` → `zh-CN`) without any plugin changes.
+- CLI `serve` command now auto-registers `I18nServicePlugin` when config has translations/i18n,
+  mirroring DevPlugin's auto-detection behavior for production environments.
+
 ### Changed
 - **i18n route self-registration** — Moved i18n REST endpoint registration from `RestServer` to
   `I18nServicePlugin` (and kernel fallback). The i18n plugin now self-registers `/api/v1/i18n/*`

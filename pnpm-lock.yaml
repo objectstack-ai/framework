@@ -757,6 +757,9 @@ importers:
       '@objectstack/runtime':
         specifier: workspace:*
         version: link:../../runtime
+      '@objectstack/service-i18n':
+        specifier: workspace:*
+        version: link:../../services/service-i18n
       '@types/node':
         specifier: ^25.3.5
         version: 25.3.5

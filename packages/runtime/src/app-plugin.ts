@@ -216,8 +216,27 @@ export class AppPlugin implements Plugin {
             // Service not registered — handled below
         }
 
+        // Collect translation bundles early to determine if we have data
+        const bundles: Array<Record<string, unknown>> = [];
+        if (Array.isArray(this.bundle.translations)) {
+            bundles.push(...this.bundle.translations);
+        }
+        const manifest = this.bundle.manifest || this.bundle;
+        if (manifest && Array.isArray(manifest.translations) && manifest.translations !== this.bundle.translations) {
+            bundles.push(...manifest.translations);
+        }
+
         if (!i18nService) {
-            ctx.logger.debug('[i18n] No i18n service registered; skipping translation loading', { appId });
+            if (bundles.length > 0) {
+                ctx.logger.warn(
+                    `[i18n] App "${appId}" has ${bundles.length} translation bundle(s) but no i18n service is registered. ` +
+                    'Translations will not be served via REST API. ' +
+                    'Register I18nServicePlugin from @objectstack/service-i18n, or use DevPlugin ' +
+                    'which auto-detects translations and registers the i18n service automatically.'
+                );
+            } else {
+                ctx.logger.debug('[i18n] No i18n service registered; skipping translation loading', { appId });
+            }
             return;
         }
 
@@ -226,16 +245,6 @@ export class AppPlugin implements Plugin {
         if (i18nConfig?.defaultLocale && typeof i18nService.setDefaultLocale === 'function') {
             i18nService.setDefaultLocale(i18nConfig.defaultLocale);
             ctx.logger.debug('[i18n] Set default locale', { appId, locale: i18nConfig.defaultLocale });
-        }
-
-        // Collect translation bundles from top-level and legacy locations
-        const bundles: Array<Record<string, unknown>> = [];
-        if (Array.isArray(this.bundle.translations)) {
-            bundles.push(...this.bundle.translations);
-        }
-        const manifest = this.bundle.manifest || this.bundle;
-        if (manifest && Array.isArray(manifest.translations) && manifest.translations !== this.bundle.translations) {
-            bundles.push(...manifest.translations);
         }
 
         if (bundles.length === 0) {
@@ -257,6 +266,15 @@ export class AppPlugin implements Plugin {
             }
         }
 
-        ctx.logger.info('[i18n] Loaded translation bundles', { appId, bundles: bundles.length, locales: loadedLocales });
+        // Emit diagnostic when the active i18n service is a fallback/stub
+        const svcAny = i18nService as unknown as Record<string, unknown>;
+        if (svcAny._fallback || svcAny._dev) {
+            ctx.logger.info(
+                `[i18n] Loaded ${loadedLocales} locale(s) into in-memory i18n fallback for "${appId}". ` +
+                'For production, consider registering I18nServicePlugin from @objectstack/service-i18n.'
+            );
+        } else {
+            ctx.logger.info('[i18n] Loaded translation bundles', { appId, bundles: bundles.length, locales: loadedLocales });
+        }
     }
 }

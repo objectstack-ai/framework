@@ -182,10 +182,9 @@ describe('AppPlugin', () => {
             const plugin = new AppPlugin(bundle);
             await plugin.start!(mockContext);
 
-            // Should log debug but not throw
-            expect(mockContext.logger.debug).toHaveBeenCalledWith(
-                expect.stringContaining('No i18n service registered'),
-                expect.any(Object)
+            // Should log warning (translations exist but no i18n service) and not throw
+            expect(mockContext.logger.warn).toHaveBeenCalledWith(
+                expect.stringContaining('no i18n service is registered')
             );
         });
 
@@ -202,10 +201,9 @@ describe('AppPlugin', () => {
             const plugin = new AppPlugin(bundle);
             await plugin.start!(mockContext);
 
-            // Should log debug but not throw
-            expect(mockContext.logger.debug).toHaveBeenCalledWith(
-                expect.stringContaining('No i18n service registered'),
-                expect.any(Object)
+            // Should log warning (translations exist but no i18n service) and not throw
+            expect(mockContext.logger.warn).toHaveBeenCalledWith(
+                expect.stringContaining('no i18n service is registered')
             );
         });
 

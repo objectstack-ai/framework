@@ -8,7 +8,7 @@ import { createMemoryI18n } from './memory-i18n.js';
 export { createMemoryCache } from './memory-cache.js';
 export { createMemoryQueue } from './memory-queue.js';
 export { createMemoryJob } from './memory-job.js';
-export { createMemoryI18n } from './memory-i18n.js';
+export { createMemoryI18n, resolveLocale } from './memory-i18n.js';
 
 /**
  * Map of core-criticality service names to their in-memory fallback factories.

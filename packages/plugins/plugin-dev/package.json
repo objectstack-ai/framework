@@ -27,7 +27,8 @@
     "@objectstack/plugin-auth": "workspace:^",
     "@objectstack/plugin-hono-server": "workspace:^",
     "@objectstack/plugin-security": "workspace:^",
-    "@objectstack/rest": "workspace:^"
+    "@objectstack/rest": "workspace:^",
+    "@objectstack/service-i18n": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@objectstack/driver-memory": {
@@ -50,6 +51,9 @@
     },
     "@objectstack/rest": {
       "optional": true
+    },
+    "@objectstack/service-i18n": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -60,6 +64,7 @@
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/rest": "workspace:*",
+    "@objectstack/service-i18n": "workspace:*",
     "@types/node": "^25.3.5",
     "typescript": "^5.0.0",
     "vitest": "^4.0.18"

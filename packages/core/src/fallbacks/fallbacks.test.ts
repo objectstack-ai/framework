@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createMemoryCache } from './memory-cache';
 import { createMemoryQueue } from './memory-queue';
 import { createMemoryJob } from './memory-job';
-import { createMemoryI18n } from './memory-i18n';
+import { createMemoryI18n, resolveLocale } from './memory-i18n';
 import { CORE_FALLBACK_FACTORIES } from './index';
 
 describe('CORE_FALLBACK_FACTORIES', () => {
@@ -220,5 +220,62 @@ describe('createMemoryI18n', () => {
         i18n.loadTranslations('en', { hello: 'Hello' });
         i18n.loadTranslations('en', { bye: 'Goodbye' });
         expect(i18n.getTranslations('en')).toEqual({ hello: 'Hello', bye: 'Goodbye' });
+    });
+});
+
+describe('resolveLocale', () => {
+    it('should return exact match', () => {
+        expect(resolveLocale('zh-CN', ['en', 'zh-CN', 'ja'])).toBe('zh-CN');
+    });
+
+    it('should return case-insensitive match', () => {
+        expect(resolveLocale('zh-cn', ['en', 'zh-CN'])).toBe('zh-CN');
+        expect(resolveLocale('EN-US', ['en-US', 'zh-CN'])).toBe('en-US');
+    });
+
+    it('should return base language match', () => {
+        expect(resolveLocale('zh-TW', ['en', 'zh'])).toBe('zh');
+    });
+
+    it('should return variant expansion (zh → zh-CN)', () => {
+        expect(resolveLocale('zh', ['en', 'zh-CN', 'zh-TW'])).toBe('zh-CN');
+    });
+
+    it('should return undefined for no match', () => {
+        expect(resolveLocale('fr', ['en', 'zh-CN'])).toBeUndefined();
+    });
+
+    it('should return undefined for empty available locales', () => {
+        expect(resolveLocale('en', [])).toBeUndefined();
+    });
+
+    it('should handle es → es-ES expansion', () => {
+        expect(resolveLocale('es', ['en', 'es-ES', 'fr'])).toBe('es-ES');
+    });
+});
+
+describe('createMemoryI18n locale fallback', () => {
+    it('should resolve translations via locale fallback (zh → zh-CN)', () => {
+        const i18n = createMemoryI18n();
+        i18n.loadTranslations('zh-CN', { hello: '你好' });
+        expect(i18n.getTranslations('zh')).toEqual({ hello: '你好' });
+    });
+
+    it('should resolve translations via case-insensitive fallback (zh-cn → zh-CN)', () => {
+        const i18n = createMemoryI18n();
+        i18n.loadTranslations('zh-CN', { hello: '你好' });
+        expect(i18n.getTranslations('zh-cn')).toEqual({ hello: '你好' });
+    });
+
+    it('should translate via locale fallback (zh → zh-CN)', () => {
+        const i18n = createMemoryI18n();
+        i18n.loadTranslations('zh-CN', { greeting: '你好世界' });
+        expect(i18n.t('greeting', 'zh')).toBe('你好世界');
+    });
+
+    it('should still fall back to default locale when no locale match at all', () => {
+        const i18n = createMemoryI18n();
+        i18n.loadTranslations('en', { hello: 'Hello' });
+        expect(i18n.t('hello', 'ja')).toBe('Hello');
     });
 });

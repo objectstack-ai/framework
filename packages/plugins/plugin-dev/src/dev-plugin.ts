@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Plugin, PluginContext, createMemoryCache, createMemoryQueue, createMemoryJob } from '@objectstack/core';
+import { Plugin, PluginContext, createMemoryCache, createMemoryQueue, createMemoryJob, createMemoryI18n } from '@objectstack/core';
 
 /**
  * All 17 core kernel service names as defined in CoreServiceName.
@@ -150,25 +150,12 @@ function createAIStub() {
   };
 }
 
-/** II18nService — in-memory translation stub */
+/** II18nService — delegates to createMemoryI18n from core with locale fallback */
 function createI18nStub() {
-  const translations = new Map<string, Record<string, unknown>>();
-  let defaultLocale = 'en';
+  const base = createMemoryI18n();
   return {
+    ...base,
     _dev: true, _serviceName: 'i18n',
-    t(key: string, locale: string, params?: Record<string, unknown>): string {
-      const t = translations.get(locale);
-      const val = t?.[key];
-      if (typeof val === 'string') {
-        return params ? val.replace(/\{\{(\w+)\}\}/g, (_, k) => String(params[k] ?? `{{${k}}}`)) : val;
-      }
-      return key;
-    },
-    getTranslations(locale: string): Record<string, unknown> { return translations.get(locale) ?? {}; },
-    loadTranslations(locale: string, data: Record<string, unknown>) { translations.set(locale, { ...translations.get(locale), ...data }); },
-    getLocales() { return [...translations.keys()]; },
-    getDefaultLocale() { return defaultLocale; },
-    setDefaultLocale(locale: string) { defaultLocale = locale; },
   };
 }
 
@@ -511,6 +498,35 @@ export class DevPlugin implements Plugin {
         ctx.logger.info('  ✔ App metadata loaded from stack definition');
       } catch {
         ctx.logger.warn('  ✘ @objectstack/runtime not installed — skipping app metadata');
+      }
+    }
+
+    // 3b. I18n Plugin — auto-detect translations in stack definition
+    //     When the stack contains i18n/translations config, try to use
+    //     I18nServicePlugin (from @objectstack/service-i18n) for full-featured
+    //     file-based i18n. Falls back to the core in-memory i18n fallback
+    //     (with locale resolution) if the package is not installed.
+    if (enabled('i18n') && this.options.stack) {
+      const stack = this.options.stack;
+      const hasTranslations = Array.isArray(stack.translations) && stack.translations.length > 0;
+      const hasI18nConfig = !!(stack.i18n || (stack.manifest && stack.manifest.i18n));
+      const hasManifestTranslations = !!(stack.manifest && Array.isArray(stack.manifest.translations) && stack.manifest.translations.length > 0);
+
+      if (hasTranslations || hasI18nConfig || hasManifestTranslations) {
+        try {
+          const { I18nServicePlugin } = await import('@objectstack/service-i18n') as any;
+          const i18nConfig = stack.i18n || (stack.manifest || stack)?.i18n || {};
+          const i18nPlugin = new I18nServicePlugin({
+            defaultLocale: i18nConfig.defaultLocale,
+            fallbackLocale: i18nConfig.fallbackLocale || i18nConfig.defaultLocale || 'en',
+          });
+          this.childPlugins.push(i18nPlugin);
+          ctx.logger.info('  ✔ I18nServicePlugin auto-registered (translations detected in stack)');
+        } catch {
+          ctx.logger.info(
+            '  ℹ @objectstack/service-i18n not installed — using core in-memory i18n fallback with locale resolution'
+          );
+        }
       }
     }
 

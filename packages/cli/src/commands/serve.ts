@@ -196,12 +196,44 @@ export default class Serve extends Command {
       // and startup failures (e.g. plugin.app.dev-workspace).
       if (!isHostConfig(config) && (config.objects || config.manifest || config.apps)) {
         try {
-           const { AppPlugin } = await import('@objectstack/runtime');
-           await kernel.use(new AppPlugin(config));
-           trackPlugin('App');
+            const { AppPlugin } = await import('@objectstack/runtime');
+            await kernel.use(new AppPlugin(config));
+            trackPlugin('App');
         } catch (e: any) {
-           // silent
+            // silent
         }
+      }
+
+      // 3b. Auto-register I18nServicePlugin if config contains translations/i18n
+      // This ensures i18n REST routes work out of the box without manual plugin registration.
+      const hasI18nPlugin = plugins.some(
+        (p: any) => p.name === 'com.objectstack.service.i18n'
+            || p.constructor?.name === 'I18nServicePlugin'
+      );
+      const configHasTranslations = (
+        (Array.isArray(config.translations) && config.translations.length > 0)
+        || config.i18n
+        || (config.manifest && (
+            (Array.isArray(config.manifest.translations) && config.manifest.translations.length > 0)
+            || config.manifest.i18n
+          ))
+      );
+      if (!hasI18nPlugin && configHasTranslations) {
+        try {
+          // Dynamic import with variable to prevent tsc from resolving the optional package
+          const i18nPkg = '@objectstack/service-i18n';
+          const { I18nServicePlugin } = await import(/* webpackIgnore: true */ i18nPkg);
+          const i18nCfg = config.i18n || config.manifest?.i18n || {};
+          await kernel.use(new I18nServicePlugin({
+            defaultLocale: i18nCfg.defaultLocale,
+            fallbackLocale: i18nCfg.fallbackLocale || i18nCfg.defaultLocale || 'en',
+          }));
+          trackPlugin('I18nService');
+        } catch {
+          // @objectstack/service-i18n not installed — kernel memory fallback will handle i18n
+        }
+      } else if (!hasI18nPlugin && !configHasTranslations) {
+        // No translations and no explicit i18n plugin — this is fine, kernel fallback works
       }
 
       // Add HTTP server plugin BEFORE config plugins so that the
