@@ -190,7 +190,13 @@ export default class Serve extends Command {
       }
 
       // 3. Auto-register AppPlugin if config contains app definitions
-      if (config.objects || config.manifest || config.apps) {
+      // Skip if config is a host/aggregator config that already contains
+      // instantiated plugins — wrapping it would cause duplicate registration
+      // and startup failures (e.g. plugin.app.dev-workspace).
+      const isHostConfig = Array.isArray(config.plugins) &&
+        config.plugins.some((p: any) => typeof p?.init === 'function');
+
+      if (!isHostConfig && (config.objects || config.manifest || config.apps)) {
         try {
            const { AppPlugin } = await import('@objectstack/runtime');
            await kernel.use(new AppPlugin(config));

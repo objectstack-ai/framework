@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **CLI serve: host config AppPlugin mis-wrap** — `serve.ts` no longer wraps a host/aggregator config
+  (one that already contains instantiated plugins in its `plugins` array) with an extra `AppPlugin`.
+  This prevents the `plugin.app.dev-workspace failed to start` error and eliminates duplicate plugin
+  registration when running `pnpm dev`.
+- **plugin-auth CJS→ESM interop** — Added `module` and `exports` fields to
+  `@objectstack/plugin-auth` package.json so Node.js resolves the ESM build (`.mjs`) when using
+  dynamic `import()`, eliminating the `ExperimentalWarning: CommonJS module … is loading ES Module`
+  warning caused by `better-auth` being ESM-only.
 - **i18n service registration & state inconsistency** — Discovery API (`getDiscoveryInfo`) now uses
   the same async `resolveService()` fallback chain that request handlers (`handleI18n`) use, ensuring
   the reported service status is always consistent with actual runtime availability.
