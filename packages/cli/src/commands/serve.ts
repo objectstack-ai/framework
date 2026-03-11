@@ -220,7 +220,9 @@ export default class Serve extends Command {
       );
       if (!hasI18nPlugin && configHasTranslations) {
         try {
-          const { I18nServicePlugin } = await import('@objectstack/service-i18n');
+          // Dynamic import with variable to prevent tsc from resolving the optional package
+          const i18nPkg = '@objectstack/service-i18n';
+          const { I18nServicePlugin } = await import(/* webpackIgnore: true */ i18nPkg);
           const i18nCfg = config.i18n || config.manifest?.i18n || {};
           await kernel.use(new I18nServicePlugin({
             defaultLocale: i18nCfg.defaultLocale,
