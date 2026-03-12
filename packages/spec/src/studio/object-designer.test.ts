@@ -448,6 +448,7 @@ describe('ObjectDesignerConfigSchema', () => {
     expect(result.erDiagram.enabled).toBe(true);
     expect(result.objectManager).toBeDefined();
     expect(result.objectManager.defaultDisplayMode).toBe('table');
+    expect(result.objectManager.defaultFilter.includeSystem).toBe(true);
     expect(result.objectPreview).toBeDefined();
     expect(result.objectPreview.tabs.length).toBe(8);
   });

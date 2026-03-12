@@ -130,13 +130,22 @@ const PROTOCOL_GROUPS: ProtocolGroup[] = [
 /** Types that are internal / should be hidden from the sidebar */
 const HIDDEN_TYPES = new Set(['plugin', 'plugins', 'kind', 'app', 'apps', 'package']);
 
-/** System object name prefix — objects with this prefix are grouped under "System" */
-const SYSTEM_OBJECT_PREFIX = 'sys_';
+/** System namespace used for FQN-based names (e.g., sys__user) */
+const SYSTEM_NAMESPACE = 'sys';
+
+/** System object FQN prefix (namespace + double underscore separator) */
+const SYSTEM_FQN_PREFIX = `${SYSTEM_NAMESPACE}__`;
+
+/** Legacy system object name prefix (namespace + single underscore) */
+const SYSTEM_LEGACY_PREFIX = `${SYSTEM_NAMESPACE}_`;
 
 /** Check if an object item is a system object */
 function isSystemObject(item: any): boolean {
+  if (item.isSystem === true) return true;
+  if (item.namespace === SYSTEM_NAMESPACE) return true;
   const name = item.name || item.id || '';
-  return item.isSystem === true || name.startsWith(SYSTEM_OBJECT_PREFIX);
+  // Match FQN format (sys__user) or legacy format (sys_user)
+  return name.startsWith(SYSTEM_FQN_PREFIX) || name.startsWith(SYSTEM_LEGACY_PREFIX);
 }
 
 /** Icon mapping for package types */
@@ -368,7 +377,9 @@ export function AppSidebar({
                 {/* System objects filter toggle for Data group */}
                 {group.key === 'data' && systemObjects.length > 0 && (
                   <button
+                    type="button"
                     title={showSystemInData ? 'Hide system objects' : 'Show system objects'}
+                    aria-label={showSystemInData ? 'Hide system objects' : 'Show system objects'}
                     onClick={(e) => { e.stopPropagation(); setShowSystemInData(!showSystemInData); }}
                     className="ml-1 shrink-0 rounded p-0.5 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                   >
@@ -470,7 +481,11 @@ export function AppSidebar({
               {systemObjects.length > 0 && (
                 <Collapsible
                   open={expandedTypes.has('_system_objects') || !!searchQuery}
-                  onOpenChange={() => toggleTypeExpanded('_system_objects')}
+                  onOpenChange={(open) => {
+                    const isExpanded = expandedTypes.has('_system_objects');
+                    if (open && !isExpanded) toggleTypeExpanded('_system_objects');
+                    if (!open && isExpanded) toggleTypeExpanded('_system_objects');
+                  }}
                   asChild
                 >
                   <SidebarMenuItem>
@@ -497,8 +512,8 @@ export function AppSidebar({
                                   onClick={() => onSelectObject(itemName)}
                                 >
                                   <span className="truncate">
-                                    {itemName.startsWith(SYSTEM_OBJECT_PREFIX) && (
-                                      <span className="text-muted-foreground font-mono text-xs">{SYSTEM_OBJECT_PREFIX}</span>
+                                    {(itemName.startsWith(SYSTEM_FQN_PREFIX) || itemName.startsWith(SYSTEM_LEGACY_PREFIX)) && (
+                                      <span className="text-muted-foreground font-mono text-xs">{SYSTEM_NAMESPACE}:</span>
                                     )}
                                     {itemLabel}
                                   </span>

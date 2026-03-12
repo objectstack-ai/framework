@@ -547,7 +547,7 @@ export const ObjectDesignerConfigSchema = z.object({
     defaultSortField: 'label',
     defaultSortDirection: 'asc',
     defaultFilter: {
-      includeSystem: false,
+      includeSystem: true,
       includeAbstract: false,
     },
     showFieldCount: true,
