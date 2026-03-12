@@ -1,5 +1,18 @@
 # @objectstack/studio
 
+## 3.2.6
+
+### Patch Changes
+
+- @objectstack/spec@3.2.6
+- @objectstack/client@3.2.6
+- @objectstack/client-react@3.2.6
+- @objectstack/metadata@3.2.6
+- @objectstack/objectql@3.2.6
+- @objectstack/runtime@3.2.6
+- @objectstack/driver-memory@3.2.6
+- @objectstack/plugin-msw@3.2.6
+
 ## 3.2.5
 
 ### Patch Changes

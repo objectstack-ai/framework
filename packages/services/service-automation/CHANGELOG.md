@@ -1,5 +1,12 @@
 # @objectstack/service-automation
 
+## 3.2.6
+
+### Patch Changes
+
+- @objectstack/spec@3.2.6
+- @objectstack/core@3.2.6
+
 ## 3.2.5
 
 ### Patch Changes
