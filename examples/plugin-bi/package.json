@@ -1,6 +1,6 @@
 {
   "name": "@example/plugin-bi",
-  "version": "3.0.19",
+  "version": "3.0.20",
   "license": "Apache-2.0",
   "private": true,
   "main": "objectstack.config.ts",

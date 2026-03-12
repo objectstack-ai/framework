@@ -1,5 +1,13 @@
 # @objectstack/service-i18n
 
+## 3.2.6
+
+### Patch Changes
+
+- 83151bc: fix i18n
+  - @objectstack/spec@3.2.6
+  - @objectstack/core@3.2.6
+
 ## 3.2.5
 
 ### Patch Changes
