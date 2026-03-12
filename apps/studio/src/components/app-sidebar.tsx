@@ -19,6 +19,7 @@ import {
   AppWindow,
   Layers,
   Eye,
+  EyeOff,
   FileCode,
   Palette,
   CheckSquare,
@@ -30,9 +31,10 @@ import {
   Anchor,
   UserCog,
   ChevronRight,
+  Settings,
   type LucideIcon,
 } from "lucide-react"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useClient } from '@objectstack/client-react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
@@ -128,6 +130,24 @@ const PROTOCOL_GROUPS: ProtocolGroup[] = [
 /** Types that are internal / should be hidden from the sidebar */
 const HIDDEN_TYPES = new Set(['plugin', 'plugins', 'kind', 'app', 'apps', 'package']);
 
+/** System namespace used for FQN-based names (e.g., sys__user) */
+const SYSTEM_NAMESPACE = 'sys';
+
+/** System object FQN prefix (namespace + double underscore separator) */
+const SYSTEM_FQN_PREFIX = `${SYSTEM_NAMESPACE}__`;
+
+/** Legacy system object name prefix (namespace + single underscore) */
+const SYSTEM_LEGACY_PREFIX = `${SYSTEM_NAMESPACE}_`;
+
+/** Check if an object item is a system object */
+function isSystemObject(item: any): boolean {
+  if (item.isSystem === true) return true;
+  if (item.namespace === SYSTEM_NAMESPACE) return true;
+  const name = item.name || item.id || '';
+  // Match FQN format (sys__user) or legacy format (sys_user)
+  return name.startsWith(SYSTEM_FQN_PREFIX) || name.startsWith(SYSTEM_LEGACY_PREFIX);
+}
+
 /** Icon mapping for package types */
 const PKG_TYPE_ICONS: Record<string, LucideIcon> = {
   app: AppWindow, plugin: Layers, driver: Database, server: Globe,
@@ -160,6 +180,9 @@ export function AppSidebar({
 
   // Track which metadata *types* are expanded (show individual items)
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(['object', 'objects']));
+
+  // Toggle to show/hide system objects in the Data protocol group
+  const [showSystemInData, setShowSystemInData] = useState(true);
 
   const toggleTypeExpanded = (type: string) => {
     setExpandedTypes(prev => {
@@ -216,12 +239,35 @@ export function AppSidebar({
     label.toLowerCase().includes(searchQuery.toLowerCase()) ||
     name.toLowerCase().includes(searchQuery.toLowerCase());
 
+  // Extract system objects from loaded metadata (object/objects types)
+  const systemObjects = useMemo(() => {
+    const objectTypes = ['object', 'objects'];
+    const sysItems: any[] = [];
+    for (const type of objectTypes) {
+      const items = metaItems[type] || [];
+      sysItems.push(...items.filter(isSystemObject));
+    }
+    return sysItems;
+  }, [metaItems]);
+
+  // Filter system objects out of the Data protocol group when toggled off
+  const filteredMetaItems = useMemo(() => {
+    if (showSystemInData) return metaItems;
+    const result = { ...metaItems };
+    for (const type of ['object', 'objects']) {
+      if (result[type]) {
+        result[type] = result[type].filter((item: any) => !isSystemObject(item));
+      }
+    }
+    return result;
+  }, [metaItems, showSystemInData]);
+
   // Compute visible groups: only show groups that have at least one type with items
   const visibleGroups = PROTOCOL_GROUPS.map(group => {
     const visibleTypes = group.types.filter(t =>
-      metaTypes.includes(t) && !HIDDEN_TYPES.has(t) && (metaItems[t]?.length ?? 0) > 0
+      metaTypes.includes(t) && !HIDDEN_TYPES.has(t) && (filteredMetaItems[t]?.length ?? 0) > 0
     );
-    const totalItems = visibleTypes.reduce((sum, t) => sum + (metaItems[t]?.length ?? 0), 0);
+    const totalItems = visibleTypes.reduce((sum, t) => sum + (filteredMetaItems[t]?.length ?? 0), 0);
     return { ...group, visibleTypes, totalItems };
   }).filter(g => g.totalItems > 0);
 
@@ -328,11 +374,25 @@ export function AppSidebar({
                 <group.icon className="mr-1.5 h-3.5 w-3.5" />
                 <span className="flex-1 min-w-0 truncate">{group.label}</span>
                 <span className="shrink-0 text-xs tabular-nums text-sidebar-foreground/50">{group.totalItems}</span>
+                {/* System objects filter toggle for Data group */}
+                {group.key === 'data' && systemObjects.length > 0 && (
+                  <button
+                    type="button"
+                    title={showSystemInData ? 'Hide system objects' : 'Show system objects'}
+                    aria-label={showSystemInData ? 'Hide system objects' : 'Show system objects'}
+                    onClick={(e) => { e.stopPropagation(); setShowSystemInData(!showSystemInData); }}
+                    className="ml-1 shrink-0 rounded p-0.5 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                  >
+                    {showSystemInData
+                      ? <Eye className="h-3 w-3" />
+                      : <EyeOff className="h-3 w-3" />}
+                  </button>
+                )}
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {group.visibleTypes.map(type => {
-                    const items = metaItems[type] || [];
+                    const items = filteredMetaItems[type] || [];
                     const TypeIcon = getTypeIcon(type);
                     const typeLabel = getTypeLabel(type);
                     const isObjectType = type === 'object' || type === 'objects';
@@ -408,9 +468,66 @@ export function AppSidebar({
 
         {/* ── System ── */}
         <SidebarGroup>
-          <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarGroupLabel>
+            <Settings className="mr-1.5 h-3.5 w-3.5" />
+            <span className="flex-1 min-w-0 truncate">System</span>
+            {systemObjects.length > 0 && (
+              <span className="shrink-0 text-xs tabular-nums text-sidebar-foreground/50">{systemObjects.length}</span>
+            )}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* Dynamic system objects */}
+              {systemObjects.length > 0 && (
+                <Collapsible
+                  open={expandedTypes.has('_system_objects') || !!searchQuery}
+                  onOpenChange={(open) => {
+                    const isExpanded = expandedTypes.has('_system_objects');
+                    if (open && !isExpanded) toggleTypeExpanded('_system_objects');
+                    if (!open && isExpanded) toggleTypeExpanded('_system_objects');
+                  }}
+                  asChild
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={`System Objects (${systemObjects.length})`}>
+                        <Database className="h-4 w-4" />
+                        <span className="flex-1 min-w-0 truncate">System Objects</span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{systemObjects.length}</span>
+                        <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${(expandedTypes.has('_system_objects') || !!searchQuery) ? 'rotate-90' : ''}`} />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {systemObjects
+                          .filter((item: any) => matchesSearch(item.label || item.name || '', item.name || ''))
+                          .map((item: any) => {
+                            const itemName = item.name || item.id || 'unknown';
+                            const itemLabel = item.label || item.name || 'Untitled';
+
+                            return (
+                              <SidebarMenuSubItem key={itemName}>
+                                <SidebarMenuSubButton
+                                  isActive={selectedObject === itemName}
+                                  onClick={() => onSelectObject(itemName)}
+                                >
+                                  <span className="truncate">
+                                    {isSystemObject(item) && (
+                                      <span className="text-muted-foreground font-mono text-xs">{SYSTEM_NAMESPACE}:</span>
+                                    )}
+                                    {itemLabel}
+                                  </span>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            );
+                          })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
+
+              {/* Static system items */}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="API Console"

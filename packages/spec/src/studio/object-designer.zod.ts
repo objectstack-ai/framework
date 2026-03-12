@@ -328,7 +328,7 @@ export const ObjectFilterSchema = z.object({
   tags: z.array(z.string()).optional().describe('Filter by object tags'),
 
   /** Show system objects */
-  includeSystem: z.boolean().default(false).describe('Include system-level objects'),
+  includeSystem: z.boolean().default(true).describe('Include system-level objects'),
 
   /** Show abstract objects */
   includeAbstract: z.boolean().default(false).describe('Include abstract base objects'),
@@ -361,7 +361,7 @@ export const ObjectManagerConfigSchema = z.object({
 
   /** Default filters */
   defaultFilter: ObjectFilterSchema.default({
-    includeSystem: false,
+    includeSystem: true,
     includeAbstract: false,
   }).describe('Default filter configuration'),
 
@@ -547,7 +547,7 @@ export const ObjectDesignerConfigSchema = z.object({
     defaultSortField: 'label',
     defaultSortDirection: 'asc',
     defaultFilter: {
-      includeSystem: false,
+      includeSystem: true,
       includeAbstract: false,
     },
     showFieldCount: true,

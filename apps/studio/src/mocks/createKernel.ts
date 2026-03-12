@@ -5,6 +5,29 @@ import { ObjectQLPlugin, SchemaRegistry } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { MSWPlugin } from '@objectstack/plugin-msw';
 
+// System object definitions — resolved via Vite aliases to plugin source (no runtime deps)
+import {
+    SysUser, SysSession, SysAccount, SysVerification,
+    SysOrganization, SysMember, SysInvitation,
+    SysTeam, SysTeamMember,
+    SysApiKey, SysTwoFactor,
+} from '@objectstack/plugin-auth/objects';
+import { SysRole, SysPermissionSet } from '@objectstack/plugin-security/objects';
+import { SysAuditLog } from '@objectstack/plugin-audit/objects';
+
+/** All system objects from auth, security, and audit plugins */
+const SYSTEM_OBJECTS = [
+    // Auth
+    SysUser, SysSession, SysAccount, SysVerification,
+    SysOrganization, SysMember, SysInvitation,
+    SysTeam, SysTeamMember,
+    SysApiKey, SysTwoFactor,
+    // Security
+    SysRole, SysPermissionSet,
+    // Audit
+    SysAuditLog,
+];
+
 export interface KernelOptions {
     appConfigs?: any[];      // Multiple app configs
     appConfig?: any;         // Legacy single app config (backward compat)
@@ -29,6 +52,21 @@ export async function createKernel(options: KernelOptions) {
     
     // Register the driver
     await kernel.use(new DriverPlugin(driver, 'memory'));
+    
+    // Register system objects (auth, security, audit) as a built-in system package
+    const systemConfig = {
+        name: 'system',
+        manifest: {
+            id: 'com.objectstack.system',
+            name: 'System',
+            version: '1.0.0',
+            type: 'plugin',
+            namespace: 'sys',
+        },
+        objects: SYSTEM_OBJECTS,
+    };
+    console.log('[KernelFactory] Loading system objects:', SYSTEM_OBJECTS.length);
+    await kernel.use(new AppPlugin(systemConfig));
     
     // Load all app configs as plugins (handles object registration & seeding)
     for (const appConfig of allConfigs) {

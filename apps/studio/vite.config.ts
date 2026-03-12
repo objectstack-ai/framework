@@ -16,6 +16,10 @@ export default defineConfig({
       'react': path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
       '@': path.resolve(__dirname, './src'),
+      // System object definitions — resolve to plugin source (no runtime deps)
+      '@objectstack/plugin-auth/objects': path.resolve(__dirname, '../../packages/plugins/plugin-auth/src/objects/index.ts'),
+      '@objectstack/plugin-security/objects': path.resolve(__dirname, '../../packages/plugins/plugin-security/src/objects/index.ts'),
+      '@objectstack/plugin-audit/objects': path.resolve(__dirname, '../../packages/plugins/plugin-audit/src/objects/index.ts'),
       'node:fs/promises': path.resolve(__dirname, './mocks/node-polyfills.ts'),
       'node:fs': path.resolve(__dirname, './mocks/node-polyfills.ts'),
       'node:events': path.resolve(__dirname, './mocks/node-polyfills.ts'),

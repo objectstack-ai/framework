@@ -307,7 +307,7 @@ describe('ObjectSortFieldSchema', () => {
 describe('ObjectFilterSchema', () => {
   it('should accept empty object with defaults', () => {
     const result = ObjectFilterSchema.parse({});
-    expect(result.includeSystem).toBe(false);
+    expect(result.includeSystem).toBe(true);
     expect(result.includeAbstract).toBe(false);
     expect(result.package).toBeUndefined();
     expect(result.tags).toBeUndefined();
@@ -448,6 +448,7 @@ describe('ObjectDesignerConfigSchema', () => {
     expect(result.erDiagram.enabled).toBe(true);
     expect(result.objectManager).toBeDefined();
     expect(result.objectManager.defaultDisplayMode).toBe('table');
+    expect(result.objectManager.defaultFilter.includeSystem).toBe(true);
     expect(result.objectPreview).toBeDefined();
     expect(result.objectPreview.tabs.length).toBe(8);
   });
