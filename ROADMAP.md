@@ -779,6 +779,7 @@ Final polish and advanced features.
 ### 8.3 Studio IDE
 
 - [x] Object Designer Protocol — field editor, relationship mapper, ER diagram, object manager schemas defined (`studio/object-designer.zod.ts`)
+- [x] System Objects Visibility — Studio sidebar dynamically lists all system objects (sys_user, sys_role, sys_audit_log, etc.) under a "System Objects" collapsible group. Mock kernel auto-registers auth/security/audit system objects. Data group filter toggle to show/hide system objects.
 - [ ] Object Designer Runtime — visual field editor with inline editing, drag-reorder, type-aware property panels
 - [ ] Relationship Mapper — visual lookup/master-detail/tree creation with drag-to-connect
 - [ ] ER Diagram — interactive entity-relationship diagram with force/hierarchy/grid layouts, minimap, zoom, export (PNG/SVG)

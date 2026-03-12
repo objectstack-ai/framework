@@ -307,7 +307,7 @@ describe('ObjectSortFieldSchema', () => {
 describe('ObjectFilterSchema', () => {
   it('should accept empty object with defaults', () => {
     const result = ObjectFilterSchema.parse({});
-    expect(result.includeSystem).toBe(false);
+    expect(result.includeSystem).toBe(true);
     expect(result.includeAbstract).toBe(false);
     expect(result.package).toBeUndefined();
     expect(result.tags).toBeUndefined();

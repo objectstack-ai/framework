@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Studio system objects visibility** — Studio now auto-registers all system objects (sys_user,
+  sys_role, sys_audit_log, etc.) from plugin-auth, plugin-security, and plugin-audit at kernel
+  initialization. The sidebar "System" group dynamically lists all `isSystem=true` objects
+  with a collapsible "System Objects" section. A filter toggle on the Data group allows
+  showing/hiding system objects from the main object list.
 - **ObjectSchema `namespace` property** — New optional `namespace` field on `ObjectSchema` for logical domain
   classification (e.g., `'sys'`, `'crm'`). When set, `tableName` is auto-derived as `{namespace}_{name}` by
   `ObjectSchema.create()` unless an explicit `tableName` is provided. This decouples the logical object name
@@ -24,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`{namespace}_{name}` fallback when no explicit `tableName` is set).
 
 ### Changed
+- **ObjectFilterSchema `includeSystem` default** — Changed from `false` to `true`. Studio
+  ObjectManager now includes system objects by default. Users can toggle visibility via the
+  Data group filter control.
 - **System object naming convention** — All system objects now use `namespace: 'sys'` with short `name`
   (e.g., `name: 'user'` instead of `name: 'sys_user'`). The `sys_` prefix is auto-derived via
   `tableName` = `{namespace}_{name}`. File naming follows `sys-{name}.object.ts` pattern.

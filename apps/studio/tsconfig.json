@@ -21,7 +21,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@objectstack/plugin-auth/objects": ["../../packages/plugins/plugin-auth/src/objects/index.ts"],
+      "@objectstack/plugin-security/objects": ["../../packages/plugins/plugin-security/src/objects/index.ts"],
+      "@objectstack/plugin-audit/objects": ["../../packages/plugins/plugin-audit/src/objects/index.ts"]
     }
   },
   "include": ["src", "test"],

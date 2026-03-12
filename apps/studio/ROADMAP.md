@@ -39,6 +39,7 @@
 | No component-level tests | Regression risk | 🟡 Medium |
 | Data refresh via `setTimeout` hack | Race conditions | 🟡 Medium |
 | Sidebar groups hardcoded (not reading from plugins) | Plugin contributions ignored | 🟡 Medium |
+| System objects not visible in Studio | Cannot manage users, roles, audit logs | ✅ Fixed |
 
 ### Protocol Coverage Gap
 
