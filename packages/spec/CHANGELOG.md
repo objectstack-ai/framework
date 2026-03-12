@@ -2,6 +2,18 @@
 
 ## 3.2.5
 
+### Minor Changes
+
+- feat: system object naming architecture completion (`sys::` convention)
+
+  - Added `SYSTEM_NAMESPACE` constant (`'sys'`) as canonical namespace identifier
+  - Added `SystemPermissionName` — 14 `sys::` prefixed permission constants (manage_users, view_all_data, manage_metadata, etc.)
+  - Added `SystemEventName` — 16 `sys::` prefixed event constants following `sys::{object}.{action}` pattern (user.created, session.expired, role.assigned, etc.)
+  - Added `SystemRoutePath` — 7 canonical frontend + API route pattern constants
+  - Added `SystemRef` — builder/guard utilities: `permission()`, `event()`, `isSystemObject()`, `isSystemPermission()`, `isSystemEvent()`
+  - All new constants enforce the `sys::` prefix convention for permissions and events per issue #907
+  - Added 26 new tests (46 total) for complete coverage of all new constants and utilities
+
 ## 3.2.4
 
 ## 3.2.3

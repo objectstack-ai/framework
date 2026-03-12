@@ -127,6 +127,28 @@ This strategy ensures rapid iteration while maintaining a clear path to producti
 | Dispatcher async `getService` bug fix | ✅ | All `getService`/`getObjectQLService` calls in `http-dispatcher.ts` now properly `await` async service factories. Covers `handleAnalytics`, `handleAuth`, `handleStorage`, `handleAutomation`, `handleMetadata`, `handleUi`, `handlePackages`. All 7 framework adapters (Express, Fastify, Hono, Next.js, SvelteKit, NestJS, Nuxt) updated to use `getServiceAsync()` for auth service resolution. |
 | Analytics `getMetadata` → `getMeta` naming fix | ✅ | `handleAnalytics` in `http-dispatcher.ts` called `getMetadata({ request })` which didn't match the `IAnalyticsService` contract (`getMeta(cubeName?: string)`). Renamed to `getMeta()` and aligned call signature. Updated test mocks accordingly. |
 | Unified ID/audit/tenant field naming | ✅ | Eliminated `_id`/`modified_at`/`modified_by`/`space_id` from protocol layer. All protocol code uses `id`, `updated_at`, `updated_by`, `tenant_id` per `SystemFieldName`. Storage-layer (NoSQL driver internals) retains `_id` for MongoDB/Mingo compat. |
+| System object naming architecture (`sys::` convention) | ✅ | `SYSTEM_NAMESPACE`, `SystemPermissionName` (14 `sys::` prefixed permissions), `SystemEventName` (16 `sys::` prefixed events), `SystemRoutePath` (7 canonical routes), `SystemRef` (builder/guard utilities) — all in `system-names.ts` with 46 tests. |
+
+### System Object & Naming Convention Architecture Completion
+
+> **Ref:** [#907](https://github.com/objectstack-ai/spec/issues/907) (follow-up to [#906](https://github.com/objectstack-ai/spec/issues/906))
+> **Status:** Protocol layer ✅ Complete · Runtime & Frontend 🔴 Pending
+
+Protocol-level constants and naming conventions for system objects are now fully defined.
+The following runtime and application-layer tasks remain:
+
+| Item | Status | Details |
+|:---|:---:|:---|
+| `SYSTEM_NAMESPACE` constant | ✅ | Canonical `'sys'` namespace literal in `system-names.ts` |
+| `SystemPermissionName` constants (`sys::` prefix) | ✅ | 14 formalized permission identifiers |
+| `SystemEventName` constants (`sys::` prefix) | ✅ | 16 formalized event identifiers |
+| `SystemRoutePath` constants | ✅ | 7 canonical API + frontend route patterns |
+| `SystemRef` helper utilities | ✅ | `permission()`, `event()`, `isSystemObject()`, `isSystemPermission()`, `isSystemEvent()` |
+| Studio `sys` namespace full consumption | 🔴 | Studio panels must support all `sys` domain objects with auto-generated forms/tables |
+| Frontend route unification (`/system/{name}`) | 🔴 | Admin console and object center must auto-group by namespace/type |
+| API route unification (`/api/v1/objects?namespace=sys`) | 🔴 | REST endpoints must support namespace filtering across all handlers |
+| Plugin hardcode elimination | 🔴 | Workflow engine, role management, approval plugins must reference `SystemObjectName` / `SystemPermissionName` constants |
+| E2E verification (object management, auth, audit) | 🔴 | End-to-end tests covering system object CRUD, authorization, and audit trail |
 
 ---
 
