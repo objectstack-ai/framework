@@ -24,7 +24,7 @@
     "@objectstack/objectql": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
-    "msw": "^2.12.10"
+    "msw": "^2.12.11"
   },
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
