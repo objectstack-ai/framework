@@ -20,8 +20,8 @@
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "vitest": "^4.0.18",
-    "@types/node": "^25.3.5"
+    "vitest": "^4.1.0",
+    "@types/node": "^25.5.0"
   },
   "dependencies": {
     "@objectstack/spec": "workspace:*",

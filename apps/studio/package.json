@@ -55,13 +55,13 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.27",
-    "happy-dom": "^20.8.3",
+    "happy-dom": "^20.8.4",
     "msw": "^2.12.10",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.0.0",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.0"
   },
   "msw": {
     "workerDirectory": [
