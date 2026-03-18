@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.7
+
+### Patch Changes
+
+- 35a1ebb: fix auth
+  - @objectstack/spec@3.2.7
+  - @objectstack/core@3.2.7
+
 ## 3.2.6
 
 ### Patch Changes
