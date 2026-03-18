@@ -6,10 +6,11 @@
   "outputDirectory": "dist",
   "build": {
     "env": {
-      "VITE_RUNTIME_MODE": "msw"
+      "VITE_RUNTIME_MODE": "server",
+      "VITE_SERVER_URL": ""
     }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

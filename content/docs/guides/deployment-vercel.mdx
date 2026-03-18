@@ -1,16 +1,16 @@
 ---
 title: Deploy to Vercel
-description: Deploy ObjectStack applications to Vercel — MSW mode for static demos and Server mode for full-stack production
+description: Deploy ObjectStack applications to Vercel — Server mode (recommended) for real API endpoints or MSW mode for static demos
 ---
 
 # Deploy to Vercel
 
-ObjectStack supports two deployment modes on Vercel. Choose the mode that fits your use case:
+ObjectStack supports two deployment modes on Vercel. **Server mode is recommended** for production and is the default for ObjectStack Studio.
 
 | Mode | Runtime | Vercel Feature | Use Case |
 | :--- | :--- | :--- | :--- |
-| **MSW** | Browser (Service Worker) | Static Site | Demos, prototypes, offline-capable apps |
-| **Server** | Node.js / Edge | Serverless Functions | Production apps with real database |
+| **Server** (default) | Node.js / Edge | Serverless Functions | Production apps, Studio, real database |
+| **MSW** | Browser (Service Worker) | Static Site | Offline-only demos, prototypes |
 
 ---
 
@@ -264,77 +264,82 @@ export { handler as GET, handler as POST, handler as PATCH, handler as DELETE };
 }
 ```
 
-### Option B: Hono on Vercel Edge
+### Option B: Hono + `@objectstack/hono` (Vite SPA)
 
-Use the `@objectstack/hono` adapter for lightweight Edge Function deployments:
+This is what ObjectStack Studio uses. The Vite SPA is served as static assets, and a Hono-based serverless function handles `/api/*` requests.
+
+**1. Create the kernel singleton** (`api/_kernel.ts` — prefixed with `_` to prevent Vercel from creating a route):
 
 ```typescript
-// api/[...route].ts  (Vercel Edge Function)
-import { Hono } from 'hono';
-import { handle } from 'hono/vercel';
-import { ObjectKernel, DriverPlugin, AppPlugin, HttpDispatcher } from '@objectstack/runtime';
+// api/_kernel.ts
+import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
+import { InMemoryDriver } from '@objectstack/driver-memory';
+import { createHonoApp } from '@objectstack/hono';
+import { Hono } from 'hono';
 import appConfig from '../objectstack.config';
 
-export const config = { runtime: 'edge' };
+let _kernel: ObjectKernel | null = null;
+let _app: Hono | null = null;
 
-const app = new Hono().basePath('/api');
-
-// Initialize kernel (singleton — survives across warm invocations)
-let kernel: ObjectKernel | null = null;
-async function getKernel() {
-  if (kernel) return kernel;
-  kernel = new ObjectKernel();
-  await kernel.use(new ObjectQLPlugin());
-  // await kernel.use(new DriverPlugin(yourDriver));
-  await kernel.use(new AppPlugin(appConfig));
-  await kernel.bootstrap();
-  return kernel;
+async function bootKernel(): Promise<ObjectKernel> {
+  if (_kernel) return _kernel;
+  _kernel = new ObjectKernel();
+  await _kernel.use(new ObjectQLPlugin());
+  await _kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
+  await _kernel.use(new AppPlugin(appConfig));
+  await _kernel.bootstrap();
+  return _kernel;
 }
 
-// Catch-all route — delegates to HttpDispatcher
+export async function getApp(): Promise<Hono> {
+  if (_app) return _app;
+  const kernel = await bootKernel();
+  _app = createHonoApp({ kernel, prefix: '/api/v1' });
+  return _app;
+}
+```
+
+**2. Create the catch-all serverless function** (`api/[...path].ts`):
+
+```typescript
+// api/[...path].ts
+import { Hono } from 'hono';
+import { handle } from 'hono/vercel';
+import { getApp } from './_kernel';
+
+const app = new Hono();
+
 app.all('/*', async (c) => {
-  const k = await getKernel();
-  const dispatcher = new HttpDispatcher(k);
-  const method = c.req.method;
-  const url = new URL(c.req.url);
-  const segments = url.pathname.replace(/^\/api\//, '').split('/').filter(Boolean);
-
-  // Dispatch based on first segment (data, meta, auth, etc.)
-  const body = ['POST', 'PATCH', 'PUT'].includes(method)
-    ? await c.req.json().catch(() => ({}))
-    : {};
-
-  const subPath = segments.slice(1).join('/');
-  let result;
-
-  switch (segments[0]) {
-    case 'data':
-      const queryParams: Record<string, any> = {};
-      url.searchParams.forEach((v, k) => (queryParams[k] = v));
-      result = await dispatcher.handleData(subPath, method, body, queryParams, {});
-      break;
-    case 'meta':
-      result = await dispatcher.handleMetadata(subPath, {}, method, body);
-      break;
-    default:
-      return c.json({ error: 'Not Found' }, 404);
-  }
-
-  if (result.handled && result.response) {
-    return c.json(result.response.body, result.response.status as any);
-  }
-  return c.json({ error: 'Not Found' }, 404);
+  const inner = await getApp();
+  return inner.fetch(c.req.raw);
 });
 
-export const GET = handle(app);
-export const POST = handle(app);
-export const PATCH = handle(app);
-export const DELETE = handle(app);
+export default handle(app);
+```
+
+**3. `vercel.json`:**
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "build": {
+    "env": {
+      "VITE_RUNTIME_MODE": "server",
+      "VITE_SERVER_URL": ""
+    }
+  },
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
 ```
 
 <Callout type="info">
-The Next.js adapter (Option A) is recommended for most Vercel deployments because it handles all protocol endpoints automatically. Use the Hono approach when you need fine-grained control over routing or Edge runtime.
+Setting `VITE_SERVER_URL` to empty string tells the client SDK to use same-origin API calls. The `rewrites` rule excludes `/api/` paths so they reach the serverless function, while all other paths serve the SPA.
 </Callout>
 
 ---
@@ -374,19 +379,21 @@ This is controlled by the config module which checks (in priority order):
 
 ## Deployment Checklist
 
-### MSW Mode
+### Server Mode (Recommended)
+
+- [ ] `api/[...path].ts` catch-all serverless function exists
+- [ ] `api/_kernel.ts` boots the kernel with the correct driver and broker shim
+- [ ] `vercel.json` sets `VITE_RUNTIME_MODE=server` and `VITE_SERVER_URL=` (empty)
+- [ ] Rewrite rule excludes `/api/` paths: `/((?!api/).*)`
+- [ ] `DATABASE_URL` is configured in Vercel environment variables (for production drivers)
+- [ ] CORS is configured if frontend and API are on different origins
+
+### MSW Mode (Static Demo)
 
 - [ ] `msw init public --save` has been run (Service Worker in `public/`)
 - [ ] `vercel.json` specifies `"framework": "vite"` and SPA rewrites
 - [ ] `VITE_RUNTIME_MODE=msw` is set in build environment
 - [ ] Seed data is defined in `objectstack.config.ts` (`data` array)
-
-### Server Mode
-
-- [ ] API route handler is configured (`app/api/[...objectstack]/route.ts`)
-- [ ] Kernel singleton initializes the correct database driver
-- [ ] `DATABASE_URL` is configured in Vercel environment variables
-- [ ] CORS is configured if frontend and API are on different origins
 
 ---
 

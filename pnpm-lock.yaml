@@ -130,6 +130,9 @@ importers:
       '@objectstack/driver-memory':
         specifier: workspace:*
         version: link:../../packages/plugins/driver-memory
+      '@objectstack/hono':
+        specifier: workspace:*
+        version: link:../../packages/adapters/hono
       '@objectstack/metadata':
         specifier: workspace:*
         version: link:../../packages/metadata
@@ -233,6 +236,9 @@ importers:
       happy-dom:
         specifier: ^20.8.4
         version: 20.8.4
+      hono:
+        specifier: ^4.12.8
+        version: 4.12.8
       msw:
         specifier: ^2.12.13
         version: 2.12.13(@types/node@25.5.0)(typescript@5.9.3)

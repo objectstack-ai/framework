@@ -1,5 +1,17 @@
 # @objectstack/studio
 
+## 3.2.8
+
+### Minor Changes
+
+- Switch Vercel deployment from MSW (browser mock) to real server mode
+  - Add `api/[...path].ts` Vercel serverless catch-all using Hono + `@objectstack/hono`
+  - Add `api/_kernel.ts` server-side kernel singleton with broker shim
+  - Extract broker shim to `src/lib/create-broker-shim.ts` (shared by MSW and server modes)
+  - Update `vercel.json` to set `VITE_RUNTIME_MODE=server` and `VITE_SERVER_URL=""`
+  - Add `hono` and `@objectstack/hono` dependencies
+  - Update deployment documentation
+
 ## 3.2.7
 
 ### Patch Changes
