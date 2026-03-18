@@ -18,6 +18,9 @@ interface AuthService {
 /**
  * Creates a route handler for Next.js App Router
  * Handles /api/[...objectstack] pattern
+ *
+ * Only auth, GraphQL, storage, and discovery need explicit handling.
+ * All other routes delegate to `HttpDispatcher.dispatch()` automatically.
  */
 export function createRouteHandler(options: NextAdapterOptions) {
   const dispatcher = new HttpDispatcher(options.kernel);
@@ -66,7 +69,7 @@ export function createRouteHandler(options: NextAdapterOptions) {
     try {
         const rawRequest = req;
 
-        // --- 1. Auth ---
+        // --- 1. Auth (needs auth service integration) ---
         if (segments[0] === 'auth') {
            // Try AuthPlugin service first (prefer async to support factory-based services)
            let authService: AuthService | null = null;
@@ -97,44 +100,14 @@ export function createRouteHandler(options: NextAdapterOptions) {
            return toResponse(result);
         }
 
-        // --- 2. GraphQL ---
+        // --- 2. GraphQL (returns raw result, not HttpDispatcherResult) ---
         if (segments[0] === 'graphql' && method === 'POST') {
             const body = await req.json();
             const result = await dispatcher.handleGraphQL(body as any, { request: rawRequest } as any);
             return NextResponse.json(result);
         }
 
-        // --- 3. Metadata ---
-        if (segments[0] === 'meta') {
-            const subPath = segments.slice(1).join('/');
-            
-            let body: any = undefined;
-            if (method === 'PUT' || method === 'POST') {
-                body = await req.json().catch(() => ({}));
-            }
-
-            const result = await dispatcher.handleMetadata(subPath, { request: rawRequest }, method, body);
-            return toResponse(result);
-        }
-
-        // --- 4. Data ---
-        if (segments[0] === 'data') {
-            const subPath = segments.slice(1).join('/');
-            let body: any = {};
-            if (method === 'POST' || method === 'PATCH') {
-                body = await req.json().catch(() => ({}));
-            }
-            
-            // Extract query params
-            const url = new URL(req.url);
-            const queryParams: Record<string, any> = {};
-            url.searchParams.forEach((val, key) => queryParams[key] = val);
-
-            const result = await dispatcher.handleData(subPath, method, body, queryParams, { request: rawRequest } as any);
-            return toResponse(result);
-        }
-
-        // --- 5. Storage ---
+        // --- 3. Storage (needs formData parsing) ---
         if (segments[0] === 'storage') {
             const subPath = segments.slice(1).join('/');
             
@@ -147,8 +120,23 @@ export function createRouteHandler(options: NextAdapterOptions) {
             const result = await dispatcher.handleStorage(subPath, method, file, { request: rawRequest });
             return toResponse(result);
         }
-        
-        return error('Not Found', 404);
+
+        // --- 4. Catch-all: delegate to dispatcher.dispatch() ---
+        // Handles meta, data, packages, analytics, automation, i18n, ui,
+        // openapi, custom API endpoints, and any future routes.
+        const path = '/' + segments.join('/');
+
+        let body: any = undefined;
+        if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+            body = await req.json().catch(() => ({}));
+        }
+
+        const url = new URL(req.url);
+        const queryParams: Record<string, any> = {};
+        url.searchParams.forEach((val, key) => queryParams[key] = val);
+
+        const result = await dispatcher.dispatch(method, path, body, queryParams, { request: rawRequest });
+        return toResponse(result);
 
     } catch (err: any) {
         return error(err.message || 'Internal Server Error', err.statusCode || 500);

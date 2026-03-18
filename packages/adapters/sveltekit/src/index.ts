@@ -27,6 +27,9 @@ interface RequestEvent {
  * Creates a SvelteKit request handler for ObjectStack API routes.
  * Use in a catch-all `+server.ts` route like `src/routes/api/[...path]/+server.ts`.
  *
+ * Only auth, GraphQL, storage, and discovery need explicit handling.
+ * All other routes delegate to `HttpDispatcher.dispatch()` automatically.
+ *
  * @example
  * ```ts
  * // src/routes/api/[...path]/+server.ts
@@ -104,7 +107,7 @@ export function createRequestHandler(options: SvelteKitAdapterOptions) {
     }
 
     try {
-      // --- Auth ---
+      // --- Auth (needs auth service integration) ---
       if (segments[0] === 'auth') {
         const subPath = segments.slice(1).join('/');
 
@@ -133,7 +136,7 @@ export function createRequestHandler(options: SvelteKitAdapterOptions) {
         return toResponse(result);
       }
 
-      // --- GraphQL ---
+      // --- GraphQL (returns raw result, not HttpDispatcherResult) ---
       if (segments[0] === 'graphql' && method === 'POST') {
         const body = await request.json() as { query: string; variables?: any };
         const result = await dispatcher.handleGraphQL(body, { request });
@@ -143,43 +146,7 @@ export function createRequestHandler(options: SvelteKitAdapterOptions) {
         });
       }
 
-      // --- Metadata ---
-      if (segments[0] === 'meta') {
-        const subPath = segments.slice(1).join('/');
-        let body: any = undefined;
-        if (method === 'PUT' || method === 'POST') {
-          body = await request.json().catch(() => ({}));
-        }
-        const result = await dispatcher.handleMetadata(
-          subPath ? `/${subPath}` : '',
-          { request },
-          method,
-          body,
-        );
-        return toResponse(result);
-      }
-
-      // --- Data ---
-      if (segments[0] === 'data') {
-        const subPath = segments.slice(1).join('/');
-        let body: any = {};
-        if (method === 'POST' || method === 'PATCH') {
-          body = await request.json().catch(() => ({}));
-        }
-        const queryParams: Record<string, any> = {};
-        url.searchParams.forEach((val, key) => { queryParams[key] = val; });
-
-        const result = await dispatcher.handleData(
-          subPath ? `/${subPath}` : '',
-          method,
-          body,
-          queryParams,
-          { request },
-        );
-        return toResponse(result);
-      }
-
-      // --- Storage ---
+      // --- Storage (needs formData parsing) ---
       if (segments[0] === 'storage') {
         const subPath = segments.slice(1).join('/');
         let file: any = undefined;
@@ -196,7 +163,21 @@ export function createRequestHandler(options: SvelteKitAdapterOptions) {
         return toResponse(result);
       }
 
-      return errorJson('Not Found', 404);
+      // --- Catch-all: delegate to dispatcher.dispatch() ---
+      // Handles meta, data, packages, analytics, automation, i18n, ui,
+      // openapi, custom API endpoints, and any future routes.
+      const subPath = path || '';
+
+      let body: any = undefined;
+      if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+        body = await request.json().catch(() => ({}));
+      }
+
+      const queryParams: Record<string, any> = {};
+      url.searchParams.forEach((val, key) => { queryParams[key] = val; });
+
+      const result = await dispatcher.dispatch(method, subPath, body, queryParams, { request });
+      return toResponse(result);
     } catch (err: any) {
       return errorJson(err.message || 'Internal Server Error', err.statusCode || 500);
     }

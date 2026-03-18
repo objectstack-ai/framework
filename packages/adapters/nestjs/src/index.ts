@@ -167,7 +167,7 @@ export class ObjectStackController {
 
   // Metadata
   @All('meta*')
-  async metadata(@Req() req: any, @Res() res: any, @Body() body?: any) {
+  async metadata(@Req() req: any, @Res() res: any, @Body() body?: any, @Query() query?: any) {
       try {
           // /api/meta/objects -> objects
           let path = req.params[0] || ''; 
@@ -175,10 +175,7 @@ export class ObjectStackController {
              path = req.url.split('/meta')[1].split('?')[0];
           }
           
-          // Use injected body or fallback to req.body
-          const payload = body || req.body;
-          
-          const result = await this.service.dispatcher.handleMetadata(path, { request: req }, req.method, payload);
+          const result = await this.service.dispatcher.dispatch(req.method, '/meta' + path, body || req.body, query, { request: req });
           return this.normalizeResponse(result, res);
       } catch (err) {
           return this.handleError(err, res);
@@ -194,7 +191,7 @@ export class ObjectStackController {
              path = req.url.substring(req.url.indexOf('/data') + 5).split('?')[0];
           }
            
-          const result = await this.service.dispatcher.handleData(path, req.method, body, query, { request: req });
+          const result = await this.service.dispatcher.dispatch(req.method, '/data' + path, body, query, { request: req });
           return this.normalizeResponse(result, res);
       } catch (err) {
           return this.handleError(err, res);
@@ -214,6 +211,23 @@ export class ObjectStackController {
           const file = req.file || req.files?.file;
           
           const result = await this.service.dispatcher.handleStorage(path, req.method, file, { request: req });
+          return this.normalizeResponse(result, res);
+      } catch (err) {
+          return this.handleError(err, res);
+      }
+  }
+
+  // Catch-all: delegate remaining routes to dispatcher.dispatch()
+  // Handles packages, analytics, automation, i18n, ui, openapi,
+  // custom API endpoints, and any future routes.
+  @All('*')
+  async catchAll(@Req() req: any, @Res() res: any, @Body() body: any, @Query() query: any) {
+      try {
+          // Extract the sub-path after /api
+          const path = req.url.split('/api')[1]?.split('?')[0] || '';
+          const method = req.method;
+          const payload = (method === 'POST' || method === 'PUT' || method === 'PATCH') ? body : undefined;
+          const result = await this.service.dispatcher.dispatch(method, path, payload, query, { request: req });
           return this.normalizeResponse(result, res);
       } catch (err) {
           return this.handleError(err, res);

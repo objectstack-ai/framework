@@ -17,7 +17,12 @@ interface AuthService {
 
 /**
  * Registers ObjectStack routes as a Fastify plugin.
- * Provides Auth, GraphQL, Metadata, Data, and Storage routes.
+ *
+ * Only routes that need framework-specific handling (auth service, storage
+ * file upload, GraphQL raw result, discovery wrapper) are registered explicitly.
+ * All other routes are handled by a catch-all that delegates to
+ * `HttpDispatcher.dispatch()`, making the adapter automatically support
+ * new routes added to the dispatcher.
  *
  * @example
  * ```ts
@@ -68,6 +73,8 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
     });
   };
 
+  // ─── Explicit routes (framework-specific handling required) ────────────────
+
   // --- Discovery ---
   fastify.get(`${prefix}`, async (_request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({ data: await dispatcher.getDiscoveryInfo(prefix) });
@@ -78,7 +85,7 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
     return reply.redirect(prefix);
   });
 
-  // --- Auth ---
+  // --- Auth (needs auth service integration) ---
   fastify.all(`${prefix}/auth/*`, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const path = request.url.substring(`${prefix}/auth/`.length).split('?')[0];
@@ -132,7 +139,7 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
     }
   });
 
-  // --- GraphQL ---
+  // --- GraphQL (returns raw result, not HttpDispatcherResult) ---
   fastify.post(`${prefix}/graphql`, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const result = await dispatcher.handleGraphQL(request.body as any, { request: request.raw });
@@ -142,46 +149,7 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
     }
   });
 
-  // --- Metadata ---
-  fastify.all(`${prefix}/meta/*`, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const urlPath = request.url.split('?')[0];
-      const subPath = urlPath.substring(`${prefix}/meta`.length);
-      const method = request.method;
-      const body = (method === 'PUT' || method === 'POST') ? request.body : undefined;
-      const result = await dispatcher.handleMetadata(subPath, { request: request.raw }, method, body);
-      return sendResult(result, reply);
-    } catch (err: any) {
-      return errorResponse(err, reply);
-    }
-  });
-
-  fastify.all(`${prefix}/meta`, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const method = request.method;
-      const body = (method === 'PUT' || method === 'POST') ? request.body : undefined;
-      const result = await dispatcher.handleMetadata('', { request: request.raw }, method, body);
-      return sendResult(result, reply);
-    } catch (err: any) {
-      return errorResponse(err, reply);
-    }
-  });
-
-  // --- Data ---
-  fastify.all(`${prefix}/data/*`, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const urlPath = request.url.split('?')[0];
-      const subPath = urlPath.substring(`${prefix}/data`.length);
-      const method = request.method;
-      const body = (method === 'POST' || method === 'PATCH') ? request.body : {};
-      const result = await dispatcher.handleData(subPath, method, body, request.query, { request: request.raw });
-      return sendResult(result, reply);
-    } catch (err: any) {
-      return errorResponse(err, reply);
-    }
-  });
-
-  // --- Storage ---
+  // --- Storage (needs file upload handling) ---
   fastify.all(`${prefix}/storage/*`, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const urlPath = request.url.split('?')[0];
@@ -189,6 +157,22 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
       const method = request.method;
       const file = (request as any).file || (request.body as any)?.file;
       const result = await dispatcher.handleStorage(subPath, method, file, { request: request.raw });
+      return sendResult(result, reply);
+    } catch (err: any) {
+      return errorResponse(err, reply);
+    }
+  });
+
+  // ─── Catch-all: delegate to dispatcher.dispatch() ─────────────────────────
+  // Handles meta, data, packages, analytics, automation, i18n, ui, openapi,
+  // custom API endpoints, and any future routes added to HttpDispatcher.
+  fastify.all(`${prefix}/*`, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const urlPath = request.url.split('?')[0];
+      const subPath = urlPath.substring(prefix.length);
+      const method = request.method;
+      const body = (method === 'POST' || method === 'PUT' || method === 'PATCH') ? request.body : undefined;
+      const result = await dispatcher.dispatch(method, subPath, body, request.query, { request: request.raw });
       return sendResult(result, reply);
     } catch (err: any) {
       return errorResponse(err, reply);

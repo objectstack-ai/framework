@@ -17,7 +17,12 @@ interface AuthService {
 
 /**
  * Creates an Express Router with all ObjectStack route dispatchers.
- * Provides Auth, GraphQL, Metadata, Data, and Storage routes.
+ *
+ * Only routes that need framework-specific handling (auth service, storage
+ * file upload, GraphQL raw result, discovery wrapper) are registered explicitly.
+ * All other routes are handled by a catch-all that delegates to
+ * `HttpDispatcher.dispatch()`, making the adapter automatically support
+ * new routes added to the dispatcher.
  *
  * @example
  * ```ts
@@ -70,12 +75,14 @@ export function createExpressRouter(options: ExpressAdapterOptions): Router {
     });
   };
 
+  // ─── Explicit routes (framework-specific handling required) ────────────────
+
   // --- Discovery ---
   router.get('/', async (_req: Request, res: Response) => {
     res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
   });
 
-  // --- Auth ---
+  // --- Auth (needs auth service integration) ---
   router.all('/auth/{*path}', async (req: Request, res: Response) => {
     try {
       const path = (req.params as any).path;
@@ -129,7 +136,7 @@ export function createExpressRouter(options: ExpressAdapterOptions): Router {
     }
   });
 
-  // --- GraphQL ---
+  // --- GraphQL (returns raw result, not HttpDispatcherResult) ---
   router.post('/graphql', async (req: Request, res: Response) => {
     try {
       const result = await dispatcher.handleGraphQL(req.body, { request: req });
@@ -139,50 +146,28 @@ export function createExpressRouter(options: ExpressAdapterOptions): Router {
     }
   });
 
-  // --- Metadata ---
-  router.all('/meta/{*path}', async (req: Request, res: Response) => {
-    try {
-      const subPath = '/' + (req.params as any).path;
-      const method = req.method;
-      const body = (method === 'PUT' || method === 'POST') ? req.body : undefined;
-      const result = await dispatcher.handleMetadata(subPath, { request: req }, method, body);
-      return sendResult(result, res);
-    } catch (err: any) {
-      return errorResponse(err, res);
-    }
-  });
-
-  router.all('/meta', async (req: Request, res: Response) => {
-    try {
-      const method = req.method;
-      const body = (method === 'PUT' || method === 'POST') ? req.body : undefined;
-      const result = await dispatcher.handleMetadata('', { request: req }, method, body);
-      return sendResult(result, res);
-    } catch (err: any) {
-      return errorResponse(err, res);
-    }
-  });
-
-  // --- Data ---
-  router.all('/data/{*path}', async (req: Request, res: Response) => {
-    try {
-      const subPath = '/' + (req.params as any).path;
-      const method = req.method;
-      const body = (method === 'POST' || method === 'PATCH') ? req.body : {};
-      const result = await dispatcher.handleData(subPath, method, body, req.query, { request: req });
-      return sendResult(result, res);
-    } catch (err: any) {
-      return errorResponse(err, res);
-    }
-  });
-
-  // --- Storage ---
+  // --- Storage (needs file upload handling) ---
   router.all('/storage/{*path}', async (req: Request, res: Response) => {
     try {
       const subPath = '/' + (req.params as any).path;
       const method = req.method;
       const file = (req as any).file || (req as any).files?.file;
       const result = await dispatcher.handleStorage(subPath, method, file, { request: req });
+      return sendResult(result, res);
+    } catch (err: any) {
+      return errorResponse(err, res);
+    }
+  });
+
+  // ─── Catch-all: delegate to dispatcher.dispatch() ─────────────────────────
+  // Handles meta, data, packages, analytics, automation, i18n, ui, openapi,
+  // custom API endpoints, and any future routes added to HttpDispatcher.
+  router.all('/{*path}', async (req: Request, res: Response) => {
+    try {
+      const subPath = '/' + (req.params as any).path;
+      const method = req.method;
+      const body = (method === 'POST' || method === 'PUT' || method === 'PATCH') ? req.body : undefined;
+      const result = await dispatcher.dispatch(method, subPath, body, req.query, { request: req, response: res });
       return sendResult(result, res);
     } catch (err: any) {
       return errorResponse(err, res);

@@ -29,6 +29,12 @@ interface AuthService {
  * Creates an h3 router with all ObjectStack route dispatchers.
  * Designed for use in Nuxt server routes or standalone h3 apps.
  *
+ * Only routes that need framework-specific handling (auth service, storage
+ * file upload, GraphQL raw result, discovery wrapper) are registered explicitly.
+ * All other routes are handled by a catch-all that delegates to
+ * `HttpDispatcher.dispatch()`, making the adapter automatically support
+ * new routes added to the dispatcher.
+ *
  * @example
  * ```ts
  * // server/api/[...].ts
@@ -79,6 +85,8 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
     return errorJson(event, 'Not Found', 404);
   };
 
+  // ─── Explicit routes (framework-specific handling required) ────────────────
+
   // --- Discovery ---
   router.get(
     `${prefix}`,
@@ -95,7 +103,7 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
     }),
   );
 
-  // --- Auth ---
+  // --- Auth (needs auth service integration) ---
   router.use(
     `${prefix}/auth/**`,
     defineEventHandler(async (event) => {
@@ -157,7 +165,7 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
     }),
   );
 
-  // --- GraphQL ---
+  // --- GraphQL (returns raw result, not HttpDispatcherResult) ---
   router.post(
     `${prefix}/graphql`,
     defineEventHandler(async (event) => {
@@ -171,62 +179,7 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
     }),
   );
 
-  // --- Metadata ---
-  router.use(
-    `${prefix}/meta/**`,
-    defineEventHandler(async (event) => {
-      try {
-        const urlPath = (event.path || event.node.req.url || '').split('?')[0];
-        const subPath = urlPath.substring(`${prefix}/meta`.length);
-        const method = event.method;
-        const body = (method === 'PUT' || method === 'POST')
-          ? await readBody(event)
-          : undefined;
-        const result = await dispatcher.handleMetadata(subPath, { request: event.node.req }, method, body);
-        return toResponse(event, result);
-      } catch (err: any) {
-        return errorJson(event, err.message || 'Internal Server Error', err.statusCode || 500);
-      }
-    }),
-  );
-
-  router.use(
-    `${prefix}/meta`,
-    defineEventHandler(async (event) => {
-      try {
-        const method = event.method;
-        const body = (method === 'PUT' || method === 'POST')
-          ? await readBody(event)
-          : undefined;
-        const result = await dispatcher.handleMetadata('', { request: event.node.req }, method, body);
-        return toResponse(event, result);
-      } catch (err: any) {
-        return errorJson(event, err.message || 'Internal Server Error', err.statusCode || 500);
-      }
-    }),
-  );
-
-  // --- Data ---
-  router.use(
-    `${prefix}/data/**`,
-    defineEventHandler(async (event) => {
-      try {
-        const urlPath = (event.path || event.node.req.url || '').split('?')[0];
-        const subPath = urlPath.substring(`${prefix}/data`.length);
-        const method = event.method;
-        const body = (method === 'POST' || method === 'PATCH')
-          ? await readBody(event)
-          : {};
-        const query = getQuery(event);
-        const result = await dispatcher.handleData(subPath, method, body, query, { request: event.node.req });
-        return toResponse(event, result);
-      } catch (err: any) {
-        return errorJson(event, err.message || 'Internal Server Error', err.statusCode || 500);
-      }
-    }),
-  );
-
-  // --- Storage ---
+  // --- Storage (needs multipart form parsing) ---
   router.use(
     `${prefix}/storage/**`,
     defineEventHandler(async (event) => {
@@ -236,6 +189,28 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
         const method = event.method;
         const file = undefined; // File upload requires multipart parsing (e.g., formidable)
         const result = await dispatcher.handleStorage(subPath, method, file, { request: event.node.req });
+        return toResponse(event, result);
+      } catch (err: any) {
+        return errorJson(event, err.message || 'Internal Server Error', err.statusCode || 500);
+      }
+    }),
+  );
+
+  // ─── Catch-all: delegate to dispatcher.dispatch() ─────────────────────────
+  // Handles meta, data, packages, analytics, automation, i18n, ui, openapi,
+  // custom API endpoints, and any future routes added to HttpDispatcher.
+  router.use(
+    `${prefix}/**`,
+    defineEventHandler(async (event) => {
+      try {
+        const urlPath = (event.path || event.node.req.url || '').split('?')[0];
+        const subPath = urlPath.substring(prefix.length);
+        const method = event.method;
+        const body = (method === 'POST' || method === 'PUT' || method === 'PATCH')
+          ? await readBody(event)
+          : undefined;
+        const query = getQuery(event);
+        const result = await dispatcher.dispatch(method, subPath, body, query, { request: event.node.req });
         return toResponse(event, result);
       } catch (err: any) {
         return errorJson(event, err.message || 'Internal Server Error', err.statusCode || 500);
