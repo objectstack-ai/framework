@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsup --config ../../../tsup.config.ts",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@objectstack/spec": "workspace:*"

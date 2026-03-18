@@ -18,12 +18,28 @@ Used in server-side configuration injection.
 ## TypeScript Usage
 
 ```typescript
-import { AuthConfig, AuthPluginConfig, AuthProviderConfig, MutualTLSConfig } from '@objectstack/spec/system';
-import type { AuthConfig, AuthPluginConfig, AuthProviderConfig, MutualTLSConfig } from '@objectstack/spec/system';
+import { AdvancedAuthConfig, AuthConfig, AuthPluginConfig, AuthProviderConfig, EmailAndPasswordConfig, EmailVerificationConfig, MutualTLSConfig, SocialProviderConfig } from '@objectstack/spec/system';
+import type { AdvancedAuthConfig, AuthConfig, AuthPluginConfig, AuthProviderConfig, EmailAndPasswordConfig, EmailVerificationConfig, MutualTLSConfig, SocialProviderConfig } from '@objectstack/spec/system';
 
 // Validate data
-const result = AuthConfig.parse(data);
+const result = AdvancedAuthConfig.parse(data);
 ```
+
+---
+
+## AdvancedAuthConfig
+
+Advanced / low-level Better-Auth options
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **crossSubDomainCookies** | `Object` | optional | Share auth cookies across subdomains (critical for *.example.com multi-tenant) |
+| **useSecureCookies** | `boolean` | optional | Force Secure flag on cookies |
+| **disableCSRFCheck** | `boolean` | optional | ⚠ Disable CSRF check — security risk, use with caution |
+| **cookiePrefix** | `string` | optional | Prefix for auth cookie names |
+
 
 ---
 
@@ -39,6 +55,11 @@ const result = AuthConfig.parse(data);
 | **providers** | `Object[]` | optional |  |
 | **plugins** | `Object` | optional |  |
 | **session** | `Object` | optional |  |
+| **trustedOrigins** | `string[]` | optional | Trusted origins for CSRF protection. Supports wildcards (e.g. "https://*.example.com"). The baseUrl origin is always trusted implicitly. |
+| **socialProviders** | `Record<string, Record<string, any>>` | optional | Social/OAuth provider map forwarded to better-auth socialProviders. Keys are provider ids (google, github, apple, …). |
+| **emailAndPassword** | `Object` | optional | Email and password authentication options forwarded to better-auth |
+| **emailVerification** | `Object` | optional | Email verification options forwarded to better-auth |
+| **advanced** | `Object` | optional | Advanced / low-level Better-Auth options |
 | **mutualTls** | `Object` | optional | Mutual TLS (mTLS) configuration |
 
 
@@ -72,6 +93,42 @@ const result = AuthConfig.parse(data);
 
 ---
 
+## EmailAndPasswordConfig
+
+Email and password authentication options forwarded to better-auth
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **enabled** | `boolean` | ✅ | Enable email/password auth |
+| **disableSignUp** | `boolean` | optional | Disable new user registration via email/password |
+| **requireEmailVerification** | `boolean` | optional | Require email verification before creating a session |
+| **minPasswordLength** | `number` | optional | Minimum password length (default 8) |
+| **maxPasswordLength** | `number` | optional | Maximum password length (default 128) |
+| **resetPasswordTokenExpiresIn** | `number` | optional | Reset-password token TTL in seconds (default 3600) |
+| **autoSignIn** | `boolean` | optional | Auto sign-in after sign-up (default true) |
+| **revokeSessionsOnPasswordReset** | `boolean` | optional | Revoke all other sessions on password reset |
+
+
+---
+
+## EmailVerificationConfig
+
+Email verification options forwarded to better-auth
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **sendOnSignUp** | `boolean` | optional | Automatically send verification email after sign-up |
+| **sendOnSignIn** | `boolean` | optional | Send verification email on sign-in when not yet verified |
+| **autoSignInAfterVerification** | `boolean` | optional | Auto sign-in the user after email verification |
+| **expiresIn** | `number` | optional | Verification token TTL in seconds (default 3600) |
+
+
+---
+
 ## MutualTLSConfig
 
 ### Properties
@@ -87,6 +144,9 @@ const result = AuthConfig.parse(data);
 | **allowedCNs** | `string[]` | optional | Allowed Common Names (CN) on client certificates |
 | **allowedOUs** | `string[]` | optional | Allowed Organizational Units (OU) on client certificates |
 | **pinning** | `Object` | optional | Certificate pinning configuration |
+
+
+---
 
 
 ---
