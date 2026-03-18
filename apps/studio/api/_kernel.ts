@@ -58,6 +58,8 @@ async function seedData(kernel: ObjectKernel, configs: any[]) {
     const ql = (kernel as any).context?.getService('objectql');
     if (!ql) return;
 
+    // Reserved namespaces ('base', 'system') bypass FQN transformation —
+    // objects in these namespaces keep their short name as-is.
     const RESERVED_NS = new Set(['base', 'system']);
     const toFQN = (name: string, namespace?: string) => {
         if (name.includes('__') || !namespace || RESERVED_NS.has(namespace)) return name;
@@ -80,6 +82,7 @@ async function seedData(kernel: ObjectKernel, configs: any[]) {
 
             const objectFQN = toFQN(dataset.object, namespace);
 
+            // Handle PaginatedResult wrapper — InMemoryDriver may return { value: [...] }
             let existing = await ql.find(objectFQN);
             if (existing && (existing as any).value) existing = (existing as any).value;
 
