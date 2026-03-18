@@ -1,5 +1,12 @@
 # @objectstack/fastify
 
+## 3.2.8
+
+### Patch Changes
+
+- fix: unified catch-all dispatch pattern — `objectStackPlugin()` now delegates all non-framework-specific routes to `HttpDispatcher.dispatch()`, automatically supporting packages, analytics, automation, i18n, ui, openapi, custom endpoints, and any future routes
+- Only auth (service check), storage (file upload), GraphQL (raw result), and discovery (response wrapper) remain as explicit routes
+
 ## 3.2.7
 
 ### Patch Changes
