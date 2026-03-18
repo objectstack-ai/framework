@@ -32,7 +32,7 @@ export default defineStack({
     }),
     new AuthPlugin({
       secret: 'dev-secret-please-change-in-production-min-32-chars',
-      baseUrl: 'http://localhost:3000',
+      // baseUrl is auto-detected from the running server port at runtime.
       // Optional: Enable OAuth providers
       // providers: [
       //   {

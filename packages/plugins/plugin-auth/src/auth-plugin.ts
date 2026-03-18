@@ -114,6 +114,27 @@ export class AuthPlugin implements Plugin {
         }
 
         if (httpServer) {
+          // Auto-detect the actual server URL when no explicit baseUrl was
+          // configured, or when the configured baseUrl uses a different port
+          // than the running server (e.g. port 3000 configured but 3002 bound).
+          // getPort() is optional on IHttpServer; duck-type check for it.
+          const serverWithPort = httpServer as IHttpServer & { getPort?: () => number };
+          if (this.authManager && typeof serverWithPort.getPort === 'function') {
+            const actualPort = serverWithPort.getPort();
+            if (actualPort) {
+              const configuredUrl = this.options.baseUrl || 'http://localhost:3000';
+              const configuredOrigin = new URL(configuredUrl).origin;
+              const actualUrl = `http://localhost:${actualPort}`;
+
+              if (configuredOrigin !== actualUrl) {
+                this.authManager.setRuntimeBaseUrl(actualUrl);
+                ctx.logger.info(
+                  `Auth baseUrl auto-updated to ${actualUrl} (configured: ${configuredUrl})`,
+                );
+              }
+            }
+          }
+
           // Route registration errors should propagate (server misconfiguration)
           this.registerAuthRoutes(httpServer, ctx);
           ctx.logger.info(`Auth routes registered at ${this.options.basePath}`);

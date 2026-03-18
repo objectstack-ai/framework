@@ -135,6 +135,13 @@ export interface IHttpServer {
      * @returns Promise that resolves when server is ready
      */
     listen(port: number): Promise<void>;
+
+    /**
+     * Get the port the server is listening on.
+     * Returns the actual bound port after `listen()` resolves, or the
+     * configured port before that.
+     */
+    getPort?(): number;
     
     /**
      * Stop the HTTP server

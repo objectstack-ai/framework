@@ -472,6 +472,73 @@ describe('AuthManager', () => {
     });
   });
 
+  describe('setRuntimeBaseUrl', () => {
+    it('should update baseURL before auth instance is created', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      manager.setRuntimeBaseUrl('http://localhost:3002');
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.baseURL).toBe('http://localhost:3002');
+    });
+
+    it('should be a no-op and warn when called after auth instance is created', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      // Force auth instance creation
+      manager.getAuthInstance();
+      expect(capturedConfig.baseURL).toBe('http://localhost:3000');
+
+      // Now try to change — should warn and not affect the already-created instance
+      manager.setRuntimeBaseUrl('http://localhost:4000');
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('setRuntimeBaseUrl() called after the auth instance was already created'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should override the default fallback (localhost:3000) when no baseUrl was configured', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+      });
+
+      manager.setRuntimeBaseUrl('http://localhost:3002');
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.baseURL).toBe('http://localhost:3002');
+    });
+  });
+
   describe('socialProviders passthrough', () => {
     it('should forward socialProviders to betterAuth when provided', () => {
       let capturedConfig: any;

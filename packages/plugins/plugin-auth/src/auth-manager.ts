@@ -273,6 +273,27 @@ export class AuthManager {
   }
 
   /**
+   * Update the base URL at runtime.
+   *
+   * This **must** be called before the first request triggers lazy
+   * initialisation of the better-auth instance — typically from a
+   * `kernel:ready` hook where the actual server port is known.
+   *
+   * If the auth instance has already been created this is a no-op and
+   * a warning is emitted.
+   */
+  setRuntimeBaseUrl(url: string): void {
+    if (this.auth) {
+      console.warn(
+        '[AuthManager] setRuntimeBaseUrl() called after the auth instance was already created — ignoring. ' +
+        'Ensure this method is called before the first request.',
+      );
+      return;
+    }
+    this.config = { ...this.config, baseUrl: url };
+  }
+
+  /**
    * Get the underlying better-auth instance
    * Useful for advanced use cases
    */
