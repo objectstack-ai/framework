@@ -80,6 +80,83 @@ export const MutualTLSConfigSchema = z.object({
 
 export type MutualTLSConfig = z.infer<typeof MutualTLSConfigSchema>;
 
+/**
+ * Social / OAuth Provider Configuration
+ *
+ * Maps provider id → { clientId, clientSecret, ... }.
+ * Keys must match Better-Auth built-in provider names (google, github, etc.).
+ */
+export const SocialProviderConfigSchema = z.record(
+  z.string(),
+  z.object({
+    clientId: z.string().describe('OAuth Client ID'),
+    clientSecret: z.string().describe('OAuth Client Secret'),
+    enabled: z.boolean().optional().default(true).describe('Enable this provider'),
+    scope: z.array(z.string()).optional().describe('Additional OAuth scopes'),
+  }).catchall(z.unknown()),
+).optional().describe(
+  'Social/OAuth provider map forwarded to better-auth socialProviders. ' +
+  'Keys are provider ids (google, github, apple, …).'
+);
+
+/**
+ * Email + Password Configuration
+ */
+export const EmailAndPasswordConfigSchema = z.object({
+  enabled: z.boolean().default(true).describe('Enable email/password auth'),
+  disableSignUp: z.boolean().optional().describe('Disable new user registration via email/password'),
+  requireEmailVerification: z.boolean().optional().describe(
+    'Require email verification before creating a session'
+  ),
+  minPasswordLength: z.number().optional().describe('Minimum password length (default 8)'),
+  maxPasswordLength: z.number().optional().describe('Maximum password length (default 128)'),
+  resetPasswordTokenExpiresIn: z.number().optional().describe(
+    'Reset-password token TTL in seconds (default 3600)'
+  ),
+  autoSignIn: z.boolean().optional().describe('Auto sign-in after sign-up (default true)'),
+  revokeSessionsOnPasswordReset: z.boolean().optional().describe(
+    'Revoke all other sessions on password reset'
+  ),
+}).optional().describe('Email and password authentication options forwarded to better-auth');
+
+/**
+ * Email Verification Configuration
+ */
+export const EmailVerificationConfigSchema = z.object({
+  sendOnSignUp: z.boolean().optional().describe(
+    'Automatically send verification email after sign-up'
+  ),
+  sendOnSignIn: z.boolean().optional().describe(
+    'Send verification email on sign-in when not yet verified'
+  ),
+  autoSignInAfterVerification: z.boolean().optional().describe(
+    'Auto sign-in the user after email verification'
+  ),
+  expiresIn: z.number().optional().describe(
+    'Verification token TTL in seconds (default 3600)'
+  ),
+}).optional().describe('Email verification options forwarded to better-auth');
+
+/**
+ * Advanced / Low-level Better-Auth Options
+ */
+export const AdvancedAuthConfigSchema = z.object({
+  crossSubDomainCookies: z.object({
+    enabled: z.boolean().describe('Enable cross-subdomain cookies'),
+    additionalCookies: z.array(z.string()).optional().describe('Extra cookies shared across subdomains'),
+    domain: z.string().optional().describe(
+      'Cookie domain override — defaults to root domain derived from baseUrl'
+    ),
+  }).optional().describe(
+    'Share auth cookies across subdomains (critical for *.example.com multi-tenant)'
+  ),
+  useSecureCookies: z.boolean().optional().describe('Force Secure flag on cookies'),
+  disableCSRFCheck: z.boolean().optional().describe(
+    '⚠ Disable CSRF check — security risk, use with caution'
+  ),
+  cookiePrefix: z.string().optional().describe('Prefix for auth cookie names'),
+}).optional().describe('Advanced / low-level Better-Auth options');
+
 export const AuthConfigSchema = z.object({
   secret: z.string().optional().describe('Encryption secret'),
   baseUrl: z.string().optional().describe('Base URL for auth routes'),
@@ -90,9 +167,21 @@ export const AuthConfigSchema = z.object({
     expiresIn: z.number().default(60 * 60 * 24 * 7).describe('Session duration in seconds'),
     updateAge: z.number().default(60 * 60 * 24).describe('Session update frequency'),
   }).optional(),
+  trustedOrigins: z.array(z.string()).optional().describe(
+    'Trusted origins for CSRF protection. Supports wildcards (e.g. "https://*.example.com"). ' +
+    'The baseUrl origin is always trusted implicitly.'
+  ),
+  socialProviders: SocialProviderConfigSchema,
+  emailAndPassword: EmailAndPasswordConfigSchema,
+  emailVerification: EmailVerificationConfigSchema,
+  advanced: AdvancedAuthConfigSchema,
   mutualTls: MutualTLSConfigSchema.optional().describe('Mutual TLS (mTLS) configuration'),
 }).catchall(z.unknown());
 
 export type AuthProviderConfig = z.infer<typeof AuthProviderConfigSchema>;
 export type AuthPluginConfig = z.infer<typeof AuthPluginConfigSchema>;
+export type SocialProviderConfig = z.infer<typeof SocialProviderConfigSchema>;
+export type EmailAndPasswordConfig = z.infer<typeof EmailAndPasswordConfigSchema>;
+export type EmailVerificationConfig = z.infer<typeof EmailVerificationConfigSchema>;
+export type AdvancedAuthConfig = z.infer<typeof AdvancedAuthConfigSchema>;
 export type AuthConfig = z.infer<typeof AuthConfigSchema>;

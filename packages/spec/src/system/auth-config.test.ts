@@ -4,6 +4,10 @@ import {
   AuthPluginConfigSchema,
   AuthConfigSchema,
   MutualTLSConfigSchema,
+  SocialProviderConfigSchema,
+  EmailAndPasswordConfigSchema,
+  EmailVerificationConfigSchema,
+  AdvancedAuthConfigSchema,
 } from './auth-config.zod';
 
 describe('AuthProviderConfigSchema', () => {
@@ -108,6 +112,28 @@ describe('AuthConfigSchema', () => {
 
     expect(config.customSetting).toBe('value');
   });
+
+  it('should accept trustedOrigins as an array of strings', () => {
+    const config = AuthConfigSchema.parse({
+      trustedOrigins: ['https://*.example.com', 'http://localhost:3000'],
+    });
+
+    expect(config.trustedOrigins).toEqual(['https://*.example.com', 'http://localhost:3000']);
+  });
+
+  it('should accept empty trustedOrigins array', () => {
+    const config = AuthConfigSchema.parse({
+      trustedOrigins: [],
+    });
+
+    expect(config.trustedOrigins).toEqual([]);
+  });
+
+  it('should allow trustedOrigins to be omitted', () => {
+    const config = AuthConfigSchema.parse({});
+
+    expect(config.trustedOrigins).toBeUndefined();
+  });
 });
 
 // ==========================================
@@ -182,5 +208,209 @@ describe('MutualTLSConfigSchema', () => {
 
     expect(config.mutualTls?.enabled).toBe(true);
     expect(config.mutualTls?.clientCertRequired).toBe(true);
+  });
+});
+
+// ==========================================
+// Social Provider Configuration Tests
+// ==========================================
+
+describe('SocialProviderConfigSchema', () => {
+  it('should accept a map of providers', () => {
+    const config = SocialProviderConfigSchema.parse({
+      google: { clientId: 'gid', clientSecret: 'gsecret' },
+      github: { clientId: 'ghid', clientSecret: 'ghsecret', scope: ['repo'] },
+    });
+
+    expect(config?.google.clientId).toBe('gid');
+    expect(config?.github.scope).toEqual(['repo']);
+  });
+
+  it('should default enabled to true', () => {
+    const config = SocialProviderConfigSchema.parse({
+      google: { clientId: 'gid', clientSecret: 'gsecret' },
+    });
+
+    expect(config?.google.enabled).toBe(true);
+  });
+
+  it('should allow extra provider-specific properties via catchall', () => {
+    const config = SocialProviderConfigSchema.parse({
+      google: { clientId: 'gid', clientSecret: 'gsecret', accessType: 'offline' },
+    });
+
+    expect((config?.google as any).accessType).toBe('offline');
+  });
+
+  it('should accept undefined (omitted)', () => {
+    const config = SocialProviderConfigSchema.parse(undefined);
+    expect(config).toBeUndefined();
+  });
+});
+
+// ==========================================
+// Email And Password Configuration Tests
+// ==========================================
+
+describe('EmailAndPasswordConfigSchema', () => {
+  it('should accept full config', () => {
+    const config = EmailAndPasswordConfigSchema.parse({
+      enabled: true,
+      disableSignUp: false,
+      requireEmailVerification: true,
+      minPasswordLength: 10,
+      maxPasswordLength: 64,
+      autoSignIn: false,
+      revokeSessionsOnPasswordReset: true,
+      resetPasswordTokenExpiresIn: 7200,
+    });
+
+    expect(config?.enabled).toBe(true);
+    expect(config?.minPasswordLength).toBe(10);
+    expect(config?.revokeSessionsOnPasswordReset).toBe(true);
+  });
+
+  it('should default enabled to true', () => {
+    const config = EmailAndPasswordConfigSchema.parse({});
+    expect(config?.enabled).toBe(true);
+  });
+
+  it('should accept undefined (omitted)', () => {
+    const config = EmailAndPasswordConfigSchema.parse(undefined);
+    expect(config).toBeUndefined();
+  });
+});
+
+// ==========================================
+// Email Verification Configuration Tests
+// ==========================================
+
+describe('EmailVerificationConfigSchema', () => {
+  it('should accept full config', () => {
+    const config = EmailVerificationConfigSchema.parse({
+      sendOnSignUp: true,
+      sendOnSignIn: false,
+      autoSignInAfterVerification: true,
+      expiresIn: 1800,
+    });
+
+    expect(config?.sendOnSignUp).toBe(true);
+    expect(config?.expiresIn).toBe(1800);
+  });
+
+  it('should accept empty object', () => {
+    const config = EmailVerificationConfigSchema.parse({});
+    expect(config).toBeDefined();
+    expect(config?.sendOnSignUp).toBeUndefined();
+  });
+
+  it('should accept undefined (omitted)', () => {
+    const config = EmailVerificationConfigSchema.parse(undefined);
+    expect(config).toBeUndefined();
+  });
+});
+
+// ==========================================
+// Advanced Auth Configuration Tests
+// ==========================================
+
+describe('AdvancedAuthConfigSchema', () => {
+  it('should accept crossSubDomainCookies', () => {
+    const config = AdvancedAuthConfigSchema.parse({
+      crossSubDomainCookies: {
+        enabled: true,
+        domain: '.objectos.app',
+      },
+    });
+
+    expect(config?.crossSubDomainCookies?.enabled).toBe(true);
+    expect(config?.crossSubDomainCookies?.domain).toBe('.objectos.app');
+  });
+
+  it('should accept all advanced options', () => {
+    const config = AdvancedAuthConfigSchema.parse({
+      crossSubDomainCookies: {
+        enabled: true,
+        additionalCookies: ['my_cookie'],
+      },
+      useSecureCookies: true,
+      disableCSRFCheck: false,
+      cookiePrefix: 'objectos',
+    });
+
+    expect(config?.useSecureCookies).toBe(true);
+    expect(config?.cookiePrefix).toBe('objectos');
+  });
+
+  it('should accept undefined (omitted)', () => {
+    const config = AdvancedAuthConfigSchema.parse(undefined);
+    expect(config).toBeUndefined();
+  });
+});
+
+// ==========================================
+// AuthConfigSchema integration with new fields
+// ==========================================
+
+describe('AuthConfigSchema – new passthrough fields', () => {
+  it('should accept socialProviders in AuthConfig', () => {
+    const config = AuthConfigSchema.parse({
+      socialProviders: {
+        google: { clientId: 'gid', clientSecret: 'gsecret' },
+      },
+    });
+
+    expect(config.socialProviders?.google.clientId).toBe('gid');
+  });
+
+  it('should accept emailAndPassword in AuthConfig', () => {
+    const config = AuthConfigSchema.parse({
+      emailAndPassword: {
+        enabled: true,
+        minPasswordLength: 12,
+      },
+    });
+
+    expect(config.emailAndPassword?.minPasswordLength).toBe(12);
+  });
+
+  it('should accept emailVerification in AuthConfig', () => {
+    const config = AuthConfigSchema.parse({
+      emailVerification: { sendOnSignUp: true, expiresIn: 600 },
+    });
+
+    expect(config.emailVerification?.sendOnSignUp).toBe(true);
+  });
+
+  it('should accept advanced in AuthConfig', () => {
+    const config = AuthConfigSchema.parse({
+      advanced: {
+        crossSubDomainCookies: { enabled: true, domain: '.objectos.app' },
+        useSecureCookies: true,
+      },
+    });
+
+    expect(config.advanced?.crossSubDomainCookies?.enabled).toBe(true);
+    expect(config.advanced?.useSecureCookies).toBe(true);
+  });
+
+  it('should accept all new fields together', () => {
+    const config = AuthConfigSchema.parse({
+      secret: 'my-secret',
+      baseUrl: 'https://app.objectos.app',
+      trustedOrigins: ['https://*.objectos.app'],
+      socialProviders: {
+        google: { clientId: 'g', clientSecret: 's' },
+        github: { clientId: 'g', clientSecret: 's' },
+      },
+      emailAndPassword: { enabled: true, requireEmailVerification: true },
+      emailVerification: { sendOnSignUp: true },
+      advanced: { crossSubDomainCookies: { enabled: true } },
+    });
+
+    expect(config.socialProviders).toBeDefined();
+    expect(config.emailAndPassword?.requireEmailVerification).toBe(true);
+    expect(config.emailVerification?.sendOnSignUp).toBe(true);
+    expect(config.advanced?.crossSubDomainCookies?.enabled).toBe(true);
   });
 });

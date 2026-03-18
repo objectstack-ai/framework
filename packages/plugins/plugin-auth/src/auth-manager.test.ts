@@ -410,4 +410,282 @@ describe('AuthManager', () => {
       );
     });
   });
+
+  describe('trustedOrigins passthrough', () => {
+    it('should forward trustedOrigins to betterAuth when provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        trustedOrigins: ['https://*.objectos.app', 'http://localhost:*'],
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.trustedOrigins).toEqual([
+        'https://*.objectos.app',
+        'http://localhost:*',
+      ]);
+    });
+
+    it('should NOT include trustedOrigins key when not provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig).not.toHaveProperty('trustedOrigins');
+    });
+
+    it('should NOT include trustedOrigins key when array is empty', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        trustedOrigins: [],
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig).not.toHaveProperty('trustedOrigins');
+    });
+  });
+
+  describe('socialProviders passthrough', () => {
+    it('should forward socialProviders to betterAuth when provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        socialProviders: {
+          google: { clientId: 'gid', clientSecret: 'gsecret' },
+          github: { clientId: 'ghid', clientSecret: 'ghsecret' },
+        },
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.socialProviders).toEqual({
+        google: { clientId: 'gid', clientSecret: 'gsecret' },
+        github: { clientId: 'ghid', clientSecret: 'ghsecret' },
+      });
+    });
+
+    it('should NOT include socialProviders when not provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig).not.toHaveProperty('socialProviders');
+    });
+  });
+
+  describe('emailAndPassword passthrough', () => {
+    it('should default emailAndPassword to enabled: true', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.emailAndPassword.enabled).toBe(true);
+    });
+
+    it('should forward extended emailAndPassword options', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        emailAndPassword: {
+          enabled: true,
+          minPasswordLength: 12,
+          maxPasswordLength: 64,
+          requireEmailVerification: true,
+          autoSignIn: false,
+          revokeSessionsOnPasswordReset: true,
+        },
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.emailAndPassword).toEqual({
+        enabled: true,
+        minPasswordLength: 12,
+        maxPasswordLength: 64,
+        requireEmailVerification: true,
+        autoSignIn: false,
+        revokeSessionsOnPasswordReset: true,
+      });
+    });
+  });
+
+  describe('emailVerification passthrough', () => {
+    it('should forward emailVerification when provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        emailVerification: {
+          sendOnSignUp: true,
+          expiresIn: 1800,
+        },
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.emailVerification).toEqual({
+        sendOnSignUp: true,
+        expiresIn: 1800,
+      });
+    });
+
+    it('should NOT include emailVerification when not provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig).not.toHaveProperty('emailVerification');
+    });
+  });
+
+  describe('advanced options passthrough', () => {
+    it('should forward crossSubDomainCookies when provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        advanced: {
+          crossSubDomainCookies: {
+            enabled: true,
+            domain: '.objectos.app',
+          },
+          useSecureCookies: true,
+        },
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.advanced).toEqual({
+        crossSubDomainCookies: {
+          enabled: true,
+          domain: '.objectos.app',
+        },
+        useSecureCookies: true,
+      });
+    });
+
+    it('should forward cookiePrefix and disableCSRFCheck', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        advanced: {
+          disableCSRFCheck: true,
+          cookiePrefix: 'objectos',
+        },
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig.advanced.disableCSRFCheck).toBe(true);
+      expect(capturedConfig.advanced.cookiePrefix).toBe('objectos');
+    });
+
+    it('should NOT include advanced when not provided', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      expect(capturedConfig).not.toHaveProperty('advanced');
+    });
+  });
 });

@@ -106,10 +106,41 @@ export class AuthManager {
         ...AUTH_VERIFICATION_CONFIG,
       },
 
-      // Email configuration
+      // Social / OAuth providers
+      ...(this.config.socialProviders ? { socialProviders: this.config.socialProviders as any } : {}),
+
+      // Email and password configuration
       emailAndPassword: {
-        enabled: true,
+        enabled: this.config.emailAndPassword?.enabled ?? true,
+        ...(this.config.emailAndPassword?.disableSignUp != null
+          ? { disableSignUp: this.config.emailAndPassword.disableSignUp } : {}),
+        ...(this.config.emailAndPassword?.requireEmailVerification != null
+          ? { requireEmailVerification: this.config.emailAndPassword.requireEmailVerification } : {}),
+        ...(this.config.emailAndPassword?.minPasswordLength != null
+          ? { minPasswordLength: this.config.emailAndPassword.minPasswordLength } : {}),
+        ...(this.config.emailAndPassword?.maxPasswordLength != null
+          ? { maxPasswordLength: this.config.emailAndPassword.maxPasswordLength } : {}),
+        ...(this.config.emailAndPassword?.resetPasswordTokenExpiresIn != null
+          ? { resetPasswordTokenExpiresIn: this.config.emailAndPassword.resetPasswordTokenExpiresIn } : {}),
+        ...(this.config.emailAndPassword?.autoSignIn != null
+          ? { autoSignIn: this.config.emailAndPassword.autoSignIn } : {}),
+        ...(this.config.emailAndPassword?.revokeSessionsOnPasswordReset != null
+          ? { revokeSessionsOnPasswordReset: this.config.emailAndPassword.revokeSessionsOnPasswordReset } : {}),
       },
+
+      // Email verification
+      ...(this.config.emailVerification ? {
+        emailVerification: {
+          ...(this.config.emailVerification.sendOnSignUp != null
+            ? { sendOnSignUp: this.config.emailVerification.sendOnSignUp } : {}),
+          ...(this.config.emailVerification.sendOnSignIn != null
+            ? { sendOnSignIn: this.config.emailVerification.sendOnSignIn } : {}),
+          ...(this.config.emailVerification.autoSignInAfterVerification != null
+            ? { autoSignInAfterVerification: this.config.emailVerification.autoSignInAfterVerification } : {}),
+          ...(this.config.emailVerification.expiresIn != null
+            ? { expiresIn: this.config.emailVerification.expiresIn } : {}),
+        },
+      } : {}),
 
       // Session configuration
       session: {
@@ -120,6 +151,23 @@ export class AuthManager {
 
       // better-auth plugins — registered based on AuthPluginConfig flags
       plugins: this.buildPluginList(),
+
+      // Trusted origins for CSRF protection (supports wildcards like "https://*.example.com")
+      ...(this.config.trustedOrigins?.length ? { trustedOrigins: this.config.trustedOrigins } : {}),
+
+      // Advanced options (cross-subdomain cookies, secure cookies, CSRF, etc.)
+      ...(this.config.advanced ? {
+        advanced: {
+          ...(this.config.advanced.crossSubDomainCookies
+            ? { crossSubDomainCookies: this.config.advanced.crossSubDomainCookies } : {}),
+          ...(this.config.advanced.useSecureCookies != null
+            ? { useSecureCookies: this.config.advanced.useSecureCookies } : {}),
+          ...(this.config.advanced.disableCSRFCheck != null
+            ? { disableCSRFCheck: this.config.advanced.disableCSRFCheck } : {}),
+          ...(this.config.advanced.cookiePrefix != null
+            ? { cookiePrefix: this.config.advanced.cookiePrefix } : {}),
+        },
+      } : {}),
     };
 
     return betterAuth(betterAuthConfig);
