@@ -346,8 +346,33 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             else if (options[key] === 'false') options[key] = false;
         }
         
-        // Handle OData style $filter if present, or flat filters
-        // This is a naive implementation, a real OData parser is needed for complex scenarios.
+        // Flat field filters: REST-style query params like ?id=abc&status=open
+        // After extracting all known query parameters, any remaining keys are
+        // treated as implicit field-level equality filters. This is the standard
+        // REST convention used by the client when serializing simple filter maps
+        // (e.g. `{ filters: { id: "..." } }` → `?id=...`).
+        const knownParams = new Set([
+            'top', 'skip', 'limit', 'offset',
+            'sort', 'orderBy',
+            'select', 'fields',
+            'filter', 'filters', '$filter',
+            'populate', 'expand', '$expand',
+            'distinct', 'count',
+            'aggregations', 'groupBy',
+            'search', 'context',
+        ]);
+        if (!options.filter) {
+            const implicitFilters: Record<string, unknown> = {};
+            for (const key of Object.keys(options)) {
+                if (!knownParams.has(key)) {
+                    implicitFilters[key] = options[key];
+                    delete options[key];
+                }
+            }
+            if (Object.keys(implicitFilters).length > 0) {
+                options.filter = implicitFilters;
+            }
+        }
         
         const records = await this.engine.find(request.object, options);
         return {

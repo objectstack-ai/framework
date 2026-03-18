@@ -13,6 +13,7 @@ import type {
   DatasetLoadResult,
   Dataset,
 } from '@objectstack/spec/data';
+import { SeedLoaderConfigSchema } from '@objectstack/spec/data';
 
 interface Logger {
   info(message: string, meta?: Record<string, any>): void;
@@ -152,7 +153,6 @@ export class SeedLoaderService implements ISeedLoaderService {
   }
 
   async validate(datasets: Dataset[], config?: SeedLoaderConfigInput): Promise<SeedLoaderResult> {
-    const { SeedLoaderConfigSchema } = await import('@objectstack/spec/data');
     const parsedConfig = SeedLoaderConfigSchema.parse({ ...config, dryRun: true });
     return this.load({ datasets, config: parsedConfig });
   }
