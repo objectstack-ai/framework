@@ -1,5 +1,21 @@
 # @objectstack/example-host
 
+## 3.0.21
+
+### Patch Changes
+
+- Updated dependencies [35a1ebb]
+  - @objectstack/plugin-auth@3.2.7
+  - @objectstack/spec@3.2.7
+  - @objectstack/metadata@3.2.7
+  - @objectstack/objectql@3.2.7
+  - @objectstack/runtime@3.2.7
+  - @objectstack/driver-memory@3.2.7
+  - @objectstack/plugin-hono-server@3.2.7
+  - @example/app-crm@3.0.21
+  - @example/app-todo@3.0.21
+  - @example/plugin-bi@3.0.21
+
 ## 3.0.20
 
 ### Patch Changes

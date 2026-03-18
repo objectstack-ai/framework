@@ -1,5 +1,21 @@
 # @objectstack/plugin-dev
 
+## 3.2.7
+
+### Patch Changes
+
+- Updated dependencies [35a1ebb]
+  - @objectstack/plugin-auth@3.2.7
+  - @objectstack/spec@3.2.7
+  - @objectstack/core@3.2.7
+  - @objectstack/objectql@3.2.7
+  - @objectstack/runtime@3.2.7
+  - @objectstack/rest@3.2.7
+  - @objectstack/driver-memory@3.2.7
+  - @objectstack/plugin-hono-server@3.2.7
+  - @objectstack/plugin-security@3.2.7
+  - @objectstack/service-i18n@3.2.7
+
 ## 3.2.6
 
 ### Patch Changes
