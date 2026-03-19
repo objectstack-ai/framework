@@ -142,6 +142,9 @@ importers:
       '@objectstack/objectql':
         specifier: workspace:*
         version: link:../../packages/objectql
+      '@objectstack/plugin-auth':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-auth
       '@objectstack/plugin-msw':
         specifier: workspace:*
         version: link:../../packages/plugins/plugin-msw
