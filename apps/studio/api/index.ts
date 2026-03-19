@@ -70,12 +70,30 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new AppPlugin(studioConfig));
 
             // Auth plugin — uses better-auth for real authentication
-            const vercelUrl = process.env.VERCEL_URL
-                ? `https://${process.env.VERCEL_URL}`
-                : 'http://localhost:3000';
+            // Prefer VERCEL_PROJECT_PRODUCTION_URL (stable across deployments)
+            // over VERCEL_URL (unique per deployment, causes origin mismatch).
+            const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+                ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+                : process.env.VERCEL_URL
+                    ? `https://${process.env.VERCEL_URL}`
+                    : 'http://localhost:3000';
+
+            // Collect all Vercel URL variants so better-auth trusts each one
+            const trustedOrigins: string[] = [];
+            if (process.env.VERCEL_URL) {
+                trustedOrigins.push(`https://${process.env.VERCEL_URL}`);
+            }
+            if (process.env.VERCEL_BRANCH_URL) {
+                trustedOrigins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+            }
+            if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+                trustedOrigins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+            }
+
             await kernel.use(new AuthPlugin({
                 secret: process.env.AUTH_SECRET || 'dev-secret-please-change-in-production-min-32-chars',
                 baseUrl: vercelUrl,
+                ...(trustedOrigins.length > 0 ? { trustedOrigins } : {}),
             }));
 
             // Broker shim — bridges HttpDispatcher → ObjectQL engine
