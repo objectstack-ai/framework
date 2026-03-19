@@ -4,6 +4,7 @@ import { Plugin, PluginContext } from '@objectstack/core';
 import { NodeMetadataManager } from './node-metadata-manager.js';
 import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
 import type { MetadataPluginConfig } from '@objectstack/spec/kernel';
+import { SysMetadataObject } from './objects/sys-metadata.object.js';
 
 export interface MetadataPluginOptions {
     rootDir?: string;
@@ -38,14 +39,25 @@ export class MetadataPlugin implements Plugin {
     }
 
     init = async (ctx: PluginContext) => {
-        ctx.logger.info('Initializing Metadata Manager', { 
+        ctx.logger.info('Initializing Metadata Manager', {
             root: this.options.rootDir || process.cwd(),
             watch: this.options.watch
         });
-        
+
         // Register Metadata Manager as primary metadata service provider
         // This takes precedence over ObjectQL's fallback metadata service
         ctx.registerService('metadata', this.manager);
+
+        // Register metadata system objects so ObjectQLPlugin auto-discovers them
+        ctx.registerService('app.com.objectstack.metadata', {
+            id: 'com.objectstack.metadata',
+            name: 'Metadata',
+            version: '1.0.0',
+            type: 'plugin',
+            namespace: 'sys',
+            objects: [SysMetadataObject],
+        });
+
         ctx.logger.info('MetadataPlugin providing metadata service (primary mode)', {
             mode: 'file-system',
             features: ['watch', 'persistence', 'multi-format', 'query', 'overlay', 'type-registry']

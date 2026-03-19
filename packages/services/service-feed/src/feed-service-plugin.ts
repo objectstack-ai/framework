@@ -3,6 +3,7 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { InMemoryFeedAdapter } from './in-memory-feed-adapter.js';
 import type { InMemoryFeedAdapterOptions } from './in-memory-feed-adapter.js';
+import { FeedItem, FeedReaction, RecordSubscription } from './objects/index.js';
 
 /**
  * Configuration options for the FeedServicePlugin.
@@ -53,6 +54,16 @@ export class FeedServicePlugin implements Plugin {
   async init(ctx: PluginContext): Promise<void> {
     const feed = new InMemoryFeedAdapter(this.options.memory);
     ctx.registerService('feed', feed);
+
+    // Register feed system objects so ObjectQLPlugin auto-discovers them
+    ctx.registerService('app.com.objectstack.service.feed', {
+      id: 'com.objectstack.service.feed',
+      name: 'Feed Service',
+      version: '1.0.0',
+      type: 'plugin',
+      objects: [FeedItem, FeedReaction, RecordSubscription],
+    });
+
     ctx.logger.info('FeedServicePlugin: registered in-memory feed adapter');
   }
 }

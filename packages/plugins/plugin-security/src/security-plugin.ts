@@ -5,6 +5,7 @@ import type { PermissionSet, RowLevelSecurityPolicy } from '@objectstack/spec/se
 import { PermissionEvaluator } from './permission-evaluator.js';
 import { RLSCompiler } from './rls-compiler.js';
 import { FieldMasker } from './field-masker.js';
+import { SysRole, SysPermissionSet } from './objects/index.js';
 
 /**
  * SecurityPlugin
@@ -31,12 +32,22 @@ export class SecurityPlugin implements Plugin {
 
   async init(ctx: PluginContext): Promise<void> {
     ctx.logger.info('Initializing Security Plugin...');
-    
+
     // Register security services
     ctx.registerService('security.permissions', this.permissionEvaluator);
     ctx.registerService('security.rls', this.rlsCompiler);
     ctx.registerService('security.fieldMasker', this.fieldMasker);
-    
+
+    // Register security system objects so ObjectQLPlugin auto-discovers them
+    ctx.registerService('app.com.objectstack.security', {
+      id: 'com.objectstack.security',
+      name: 'Security',
+      version: '1.0.0',
+      type: 'plugin',
+      namespace: 'sys',
+      objects: [SysRole, SysPermissionSet],
+    });
+
     ctx.logger.info('Security Plugin initialized');
   }
 

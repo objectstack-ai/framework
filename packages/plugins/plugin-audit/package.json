@@ -17,6 +17,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {

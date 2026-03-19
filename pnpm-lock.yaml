@@ -719,6 +719,9 @@ importers:
 
   packages/plugins/plugin-audit:
     dependencies:
+      '@objectstack/core':
+        specifier: workspace:*
+        version: link:../../core
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../spec
