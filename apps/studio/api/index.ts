@@ -8,13 +8,14 @@
  *
  * IMPORTANT: Vercel's Node.js runtime calls serverless functions with the
  * legacy `(IncomingMessage, ServerResponse)` signature — NOT the Web standard
- * `(Request) → Response` format.  Using `handle()` from `hono/vercel` (Edge
- * adapter) would return a `Response` that nobody reads, while `res.end()` is
- * never called, causing a 300-second timeout.
+ * `(Request) → Response` format.
  *
- * We use `handle()` from `@hono/node-server/vercel` instead, which properly
- * converts `IncomingMessage → Request`, calls `app.fetch()`, then writes the
- * `Response` back to `ServerResponse`.
+ * We use `getRequestListener()` from `@hono/node-server` which properly
+ * converts `IncomingMessage → Request`, calls our fetch callback, then writes
+ * the `Response` back to `ServerResponse`.  The fetch callback is called
+ * directly (no outer Hono app relay) so POST body streams are consumed by
+ * exactly one Hono instance — avoiding the body-lock hang that occurs when
+ * an intermediate Hono app reads `c.req.raw` before forwarding.
  *
  * All kernel/service initialisation is co-located here so there are no
  * extensionless relative module imports — which would break Node's ESM
@@ -25,8 +26,8 @@ import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { createHonoApp } from '@objectstack/hono';
-import { Hono } from 'hono';
-import { handle } from '@hono/node-server/vercel';
+import { getRequestListener } from '@hono/node-server';
+import type { Hono } from 'hono';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
 import studioConfig from '../objectstack.config.js';
 
@@ -158,32 +159,29 @@ async function ensureApp(): Promise<Hono> {
 // Vercel handler
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
-
 /**
- * Delegate every request to the lazily-initialized ObjectStack Hono app.
- * `ensureApp()` boots the kernel on the first invocation (cold start)
- * and returns the cached instance on subsequent warm invocations.
+ * `getRequestListener` from `@hono/node-server` converts
+ * `IncomingMessage → Request`, calls our fetch callback, then writes the
+ * `Response` back to `ServerResponse` (including `res.end()`).
+ *
+ * By calling `ensureApp()` inside the fetch callback we get lazy kernel
+ * boot AND the Request (with its body stream) is handed directly to the
+ * ObjectStack Hono app — no intermediate Hono relay that would lock the
+ * body stream before the real handler can read it.
  */
-app.all('*', async (c) => {
+export default getRequestListener(async (request) => {
     try {
-        const inner = await ensureApp();
-        return await inner.fetch(c.req.raw);
+        const app = await ensureApp();
+        return await app.fetch(request);
     } catch (err: any) {
         console.error('[Vercel] Handler error:', err?.message || err);
-        return c.json(
-            { success: false, error: { message: err?.message || 'Internal Server Error', code: 500 } },
-            500,
+        return new Response(
+            JSON.stringify({
+                success: false,
+                error: { message: err?.message || 'Internal Server Error', code: 500 },
+            }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });
-
-/**
- * `handle()` from `@hono/node-server/vercel` returns an
- * `async (IncomingMessage, ServerResponse) => void` handler that:
- *   1. Converts IncomingMessage → standard Request
- *   2. Calls app.fetch(request)
- *   3. Writes the Response back to ServerResponse (including res.end())
- */
-export default handle(app);
 
