@@ -199,6 +199,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      hono:
+        specifier: ^4.12.8
+        version: 4.12.8
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
@@ -236,9 +239,6 @@ importers:
       happy-dom:
         specifier: ^20.8.4
         version: 20.8.4
-      hono:
-        specifier: ^4.12.8
-        version: 4.12.8
       msw:
         specifier: ^2.12.13
         version: 2.12.13(@types/node@25.5.0)(typescript@5.9.3)
