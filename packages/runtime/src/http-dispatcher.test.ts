@@ -1208,4 +1208,104 @@ describe('HttpDispatcher', () => {
             expect(result.response?.status).toBe(200);
         });
     });
+
+    describe('handleMetadata without broker (serverless degradation)', () => {
+        let brokerlessKernel: any;
+        let brokerlessDispatcher: HttpDispatcher;
+
+        beforeEach(() => {
+            // Kernel with NO broker — simulates a lightweight/serverless setup
+            // where only the protocol service and/or ObjectQL registry are available.
+            brokerlessKernel = {
+                broker: null,
+                context: {
+                    getService: vi.fn().mockReturnValue(null),
+                },
+            };
+            brokerlessDispatcher = new HttpDispatcher(brokerlessKernel);
+        });
+
+        it('GET /meta should return default types when broker is missing', async () => {
+            const context = { request: {} };
+            const result = await brokerlessDispatcher.handleMetadata('', context, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.types).toContain('object');
+        });
+
+        it('GET /meta/types should return default types when broker is missing', async () => {
+            const context = { request: {} };
+            const result = await brokerlessDispatcher.handleMetadata('/types', context, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(result.response?.body?.data?.types).toContain('object');
+        });
+
+        it('GET /meta/objects should use ObjectQL registry when broker is missing', async () => {
+            const mockRegistry = {
+                getAllObjects: vi.fn().mockReturnValue([{ name: 'account' }]),
+                getObject: vi.fn(),
+            };
+            brokerlessKernel.context.getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return { registry: mockRegistry };
+                return null;
+            });
+
+            const context = { request: {} };
+            const result = await brokerlessDispatcher.handleMetadata('/objects', context, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockRegistry.getAllObjects).toHaveBeenCalled();
+        });
+
+        it('GET /meta/objects/:name should use ObjectQL registry when broker is missing', async () => {
+            const mockRegistry = {
+                registry: {
+                    getObject: vi.fn().mockReturnValue({ name: 'account', fields: {} }),
+                },
+            };
+            brokerlessKernel.context.getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'objectql') return mockRegistry;
+                return null;
+            });
+
+            const context = { request: {} };
+            const result = await brokerlessDispatcher.handleMetadata('/objects/account', context, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockRegistry.registry.getObject).toHaveBeenCalledWith('account');
+        });
+
+        it('GET /meta/:type/:name/published should return 404 when broker is missing and metadata service is unavailable', async () => {
+            const context = { request: {} };
+            const result = await brokerlessDispatcher.handleMetadata('/object/my_obj/published', context, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(404);
+        });
+
+        it('PUT /meta/:type/:name should return 501 when broker is missing and protocol is unavailable', async () => {
+            const context = { request: {} };
+            const body = { label: 'Test' };
+            const result = await brokerlessDispatcher.handleMetadata('/objects/my_obj', context, 'PUT', body);
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(501);
+        });
+
+        it('should use protocol service even when broker is missing', async () => {
+            const mockProtocolLocal = {
+                getMetaTypes: vi.fn().mockResolvedValue({ types: ['custom_type'] }),
+            };
+            brokerlessKernel.context.getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'protocol') return mockProtocolLocal;
+                return null;
+            });
+
+            const context = { request: {} };
+            const result = await brokerlessDispatcher.handleMetadata('/types', context, 'GET');
+            expect(result.handled).toBe(true);
+            expect(result.response?.status).toBe(200);
+            expect(mockProtocolLocal.getMetaTypes).toHaveBeenCalled();
+            expect(result.response?.body?.data?.types).toContain('custom_type');
+        });
+    });
 });

@@ -311,7 +311,10 @@ export class HttpDispatcher {
      * Fallback for backward compat: /metadata (all objects), /metadata/:objectName (get object)
      */
     async handleMetadata(path: string, context: HttpProtocolContext, method?: string, body?: any, query?: any): Promise<HttpDispatcherResult> {
-        const broker = this.ensureBroker();
+        // Broker is used as a fallback — not required upfront.
+        // This allows metadata to be served when only the protocol service
+        // or ObjectQL service is available (e.g. lightweight / serverless setups).
+        const broker = this.kernel.broker ?? null;
         const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
         
         // GET /metadata/types
@@ -323,13 +326,16 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(result) };
             }
             // Fallback: ask broker for registered types
-            try {
-                const data = await broker.call('metadata.types', {}, { request: context.request });
-                return { handled: true, response: this.success(data) };
-            } catch {
-                // Last resort: hardcoded defaults
-                return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
+            if (broker) {
+                try {
+                    const data = await broker.call('metadata.types', {}, { request: context.request });
+                    return { handled: true, response: this.success(data) };
+                } catch {
+                    // fall through to hardcoded defaults
+                }
             }
+            // Last resort: hardcoded defaults
+            return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
 
         // GET /metadata/:type/:name/published → get published version
@@ -342,12 +348,15 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(data) };
             }
             // Broker fallback
-            try {
-                const data = await broker.call('metadata.getPublished', { type, name }, { request: context.request });
-                return { handled: true, response: this.success(data) };
-            } catch (e: any) {
-                return { handled: true, response: this.error(e.message, 404) };
+            if (broker) {
+                try {
+                    const data = await broker.call('metadata.getPublished', { type, name }, { request: context.request });
+                    return { handled: true, response: this.success(data) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e.message, 404) };
+                }
             }
+            return { handled: true, response: this.error('Not found', 404) };
         }
 
         // /metadata/:type/:name
@@ -369,20 +378,31 @@ export class HttpDispatcher {
                 }
                 
                 // Fallback to broker if protocol not available (legacy)
-                try {
-                     const data = await broker.call('metadata.saveItem', { type, name, item: body }, { request: context.request });
-                     return { handled: true, response: this.success(data) };
-                } catch (e: any) {
-                     // If broker doesn't support it either
-                     return { handled: true, response: this.error(e.message || 'Save not supported', 501) };
+                if (broker) {
+                    try {
+                         const data = await broker.call('metadata.saveItem', { type, name, item: body }, { request: context.request });
+                         return { handled: true, response: this.success(data) };
+                    } catch (e: any) {
+                         return { handled: true, response: this.error(e.message || 'Save not supported', 501) };
+                    }
                 }
+                return { handled: true, response: this.error('Save not supported', 501) };
             }
 
             try {
                 // Try specific calls based on type
                 if (type === 'objects' || type === 'object') {
-                    const data = await broker.call('metadata.getObject', { objectName: name }, { request: context.request });
-                    return { handled: true, response: this.success(data) };
+                    if (broker) {
+                        const data = await broker.call('metadata.getObject', { objectName: name }, { request: context.request });
+                        return { handled: true, response: this.success(data) };
+                    }
+                    // Try ObjectQL service directly when broker is unavailable
+                    const qlService = await this.getObjectQLService();
+                    if (qlService?.registry) {
+                        const data = qlService.registry.getObject(name);
+                        if (data) return { handled: true, response: this.success(data) };
+                    }
+                    return { handled: true, response: this.error('Not found', 404) };
                 }
 
                 // If type is singular (e.g. 'app'), use it directly
@@ -402,9 +422,12 @@ export class HttpDispatcher {
                 }
 
                 // Generic call for other types if supported via Broker (Legacy)
-                const method = `metadata.get${this.capitalize(singularType)}`;
-                const data = await broker.call(method, { name }, { request: context.request });
-                return { handled: true, response: this.success(data) };
+                if (broker) {
+                    const method = `metadata.get${this.capitalize(singularType)}`;
+                    const data = await broker.call(method, { name }, { request: context.request });
+                    return { handled: true, response: this.success(data) };
+                }
+                return { handled: true, response: this.error('Not found', 404) };
             } catch (e: any) {
                 // Fallback: treat first part as object name if only 1 part (handled below)
                 // But here we are deep in 2 parts. Must be an error.
@@ -433,26 +456,46 @@ export class HttpDispatcher {
             }
 
             // Try broker for the type
-            try {
-                if (typeOrName === 'objects') {
-                    const data = await broker.call('metadata.objects', { packageId }, { request: context.request });
-                    return { handled: true, response: this.success(data) };
+            if (broker) {
+                try {
+                    if (typeOrName === 'objects') {
+                        const data = await broker.call('metadata.objects', { packageId }, { request: context.request });
+                        return { handled: true, response: this.success(data) };
+                    }
+                    const data = await broker.call(`metadata.${typeOrName}`, { packageId }, { request: context.request });
+                    if (data !== null && data !== undefined) {
+                        return { handled: true, response: this.success(data) };
+                    }
+                } catch {
+                    // Broker doesn't support this action, fall through
                 }
-                const data = await broker.call(`metadata.${typeOrName}`, { packageId }, { request: context.request });
-                if (data !== null && data !== undefined) {
+
+                // Legacy: /metadata/:objectName (treat as single object lookup)
+                try {
+                    const data = await broker.call('metadata.getObject', { objectName: typeOrName }, { request: context.request });
                     return { handled: true, response: this.success(data) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e.message, 404) };
                 }
-            } catch {
-                // Broker doesn't support this action, fall through
             }
 
-            // Legacy: /metadata/:objectName (treat as single object lookup)
-            try {
-                const data = await broker.call('metadata.getObject', { objectName: typeOrName }, { request: context.request });
-                return { handled: true, response: this.success(data) };
-            } catch (e: any) {
-                return { handled: true, response: this.error(e.message, 404) };
+            // No broker — try ObjectQL registry directly for object lookups
+            const qlService = await this.getObjectQLService();
+            if (qlService?.registry) {
+                if (typeOrName === 'objects') {
+                    const objs = qlService.registry.getAllObjects(packageId);
+                    return { handled: true, response: this.success({ type: 'object', items: objs }) };
+                }
+                // Try listing items of the given type
+                const items = qlService.registry.listItems?.(typeOrName, packageId);
+                if (items && items.length > 0) {
+                    return { handled: true, response: this.success({ type: typeOrName, items }) };
+                }
+                // Legacy: treat as object name
+                const obj = qlService.registry.getObject(typeOrName);
+                if (obj) return { handled: true, response: this.success(obj) };
             }
+            return { handled: true, response: this.error('Not found', 404) };
         }
 
         // GET /metadata — return available metadata types
@@ -464,12 +507,15 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(result) };
             }
             // Fallback: ask broker for registered types
-            try {
-                const data = await broker.call('metadata.types', {}, { request: context.request });
-                return { handled: true, response: this.success(data) };
-            } catch {
-                return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
+            if (broker) {
+                try {
+                    const data = await broker.call('metadata.types', {}, { request: context.request });
+                    return { handled: true, response: this.success(data) };
+                } catch {
+                    // fall through to hardcoded defaults
+                }
             }
+            return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
         
         return { handled: false };

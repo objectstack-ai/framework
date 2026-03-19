@@ -24,31 +24,61 @@ import studioConfig from '../objectstack.config';
 let _kernel: ObjectKernel | null = null;
 let _app: Hono | null = null;
 
+// Initialisation lock — prevents concurrent cold-start boots from racing.
+let _bootPromise: Promise<ObjectKernel> | null = null;
+
 /**
  * Boot the ObjectStack kernel (one-time cold-start cost).
+ *
+ * Uses a shared promise so that concurrent requests during a cold start
+ * wait for the same boot sequence rather than starting duplicates.
  */
 async function bootKernel(): Promise<ObjectKernel> {
     if (_kernel) return _kernel;
 
-    console.log('[Vercel] Booting ObjectStack Kernel (server mode)...');
+    // Return the in-flight boot if one is already running
+    if (_bootPromise) return _bootPromise;
 
-    const kernel = new ObjectKernel();
+    _bootPromise = (async () => {
+        console.log('[Vercel] Booting ObjectStack Kernel (server mode)...');
 
-    await kernel.use(new ObjectQLPlugin());
-    await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
-    await kernel.use(new AppPlugin(studioConfig));
+        try {
+            const kernel = new ObjectKernel();
 
-    // Broker shim — bridges HttpDispatcher → ObjectQL engine
-    (kernel as any).broker = createBrokerShim(kernel);
+            await kernel.use(new ObjectQLPlugin());
+            await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
+            await kernel.use(new AppPlugin(studioConfig));
 
-    await kernel.bootstrap();
+            // Broker shim — bridges HttpDispatcher → ObjectQL engine
+            (kernel as any).broker = createBrokerShim(kernel);
 
-    // Seed data from config
-    await seedData(kernel, [studioConfig]);
+            await kernel.bootstrap();
 
-    _kernel = kernel;
-    console.log('[Vercel] Kernel ready.');
-    return kernel;
+            // Validate broker attachment
+            if (!(kernel as any).broker) {
+                console.warn('[Vercel] Broker shim lost during bootstrap — reattaching.');
+                (kernel as any).broker = createBrokerShim(kernel);
+            }
+
+            // Seed data from config (non-fatal — the kernel is usable without seed data)
+            try {
+                await seedData(kernel, [studioConfig]);
+            } catch (seedErr: any) {
+                console.warn('[Vercel] Seed data failed (non-fatal):', seedErr?.message || seedErr);
+            }
+
+            _kernel = kernel;
+            console.log('[Vercel] Kernel ready.');
+            return kernel;
+        } catch (err) {
+            // Clear the lock so the next request can retry
+            _bootPromise = null;
+            console.error('[Vercel] Kernel boot failed:', (err as any)?.message || err);
+            throw err;
+        }
+    })();
+
+    return _bootPromise;
 }
 
 /**

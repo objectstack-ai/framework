@@ -544,4 +544,110 @@ describe('createHonoApp', () => {
       expect(json.id).toBe(1);
     });
   });
+
+  describe('Vercel Delegation Pattern (inner.fetch)', () => {
+    it('works when an outer Hono app delegates via inner.fetch(c.req.raw)', async () => {
+      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      // Simulate the Vercel catch-all pattern: outer app wraps inner app
+      const outerApp = new Hono();
+      outerApp.all('/*', async (c) => {
+        return innerApp.fetch(c.req.raw);
+      });
+
+      // Request with the full /api/v1 prefix — should route correctly
+      const res = await outerApp.request('/api/v1/meta');
+      expect(res.status).toBe(200);
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+        'GET',
+        '/meta',
+        undefined,
+        expect.any(Object),
+        expect.objectContaining({ request: expect.anything() }),
+      );
+    });
+
+    it('routes /api/v1/packages through outer→inner delegation', async () => {
+      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const outerApp = new Hono();
+      outerApp.all('/*', async (c) => {
+        return innerApp.fetch(c.req.raw);
+      });
+
+      const res = await outerApp.request('/api/v1/packages');
+      expect(res.status).toBe(200);
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+        'GET',
+        '/packages',
+        undefined,
+        expect.any(Object),
+        expect.objectContaining({ request: expect.anything() }),
+      );
+    });
+
+    it('routes /api/v1 discovery through outer→inner delegation', async () => {
+      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const outerApp = new Hono();
+      outerApp.all('/*', async (c) => {
+        return innerApp.fetch(c.req.raw);
+      });
+
+      const res = await outerApp.request('/api/v1');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.data).toBeDefined();
+      expect(mockDispatcher.getDiscoveryInfo).toHaveBeenCalledWith('/api/v1');
+    });
+
+    it('handles path normalisation (strips prefix correctly) through delegation', async () => {
+      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const outerApp = new Hono();
+      outerApp.all('/*', async (c) => {
+        // Simulate the normalisation logic from [...path].ts
+        const url = new URL(c.req.url);
+        if (!url.pathname.startsWith('/api')) {
+          url.pathname = '/api' + url.pathname;
+          const request = new Request(url.toString(), c.req.raw);
+          return innerApp.fetch(request);
+        }
+        return innerApp.fetch(c.req.raw);
+      });
+
+      // Request with the full path — should work directly
+      const res1 = await outerApp.request('/api/v1/data/account');
+      expect(res1.status).toBe(200);
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+        'GET',
+        '/data/account',
+        undefined,
+        expect.any(Object),
+        expect.objectContaining({ request: expect.anything() }),
+      );
+    });
+
+    it('returns 500 with error details when inner app throws', async () => {
+      const outerApp = new Hono();
+
+      outerApp.all('/*', async (c) => {
+        try {
+          // Simulate a kernel boot failure
+          throw new Error('Kernel boot failed');
+        } catch (err: any) {
+          return c.json(
+            { success: false, error: { message: err.message, code: 500 } },
+            500,
+          );
+        }
+      });
+
+      const res = await outerApp.request('/api/v1/meta');
+      expect(res.status).toBe(500);
+      const json = await res.json();
+      expect(json.success).toBe(false);
+      expect(json.error.message).toBe('Kernel boot failed');
+    });
+  });
 });

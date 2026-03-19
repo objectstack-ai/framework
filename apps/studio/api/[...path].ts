@@ -23,8 +23,27 @@ import { getApp } from './_kernel';
 const app = new Hono();
 
 app.all('/*', async (c) => {
-    const inner = await getApp();
-    return inner.fetch(c.req.raw);
+    try {
+        const inner = await getApp();
+
+        // Normalise the request URL so the inner Hono app always sees the
+        // full /api/… prefix.  Vercel's Node.js runtime preserves it, but
+        // some runtimes or proxies may strip the function directory prefix.
+        const url = new URL(c.req.url);
+        if (!url.pathname.startsWith('/api')) {
+            url.pathname = '/api' + url.pathname;
+            const request = new Request(url.toString(), c.req.raw);
+            return await inner.fetch(request);
+        }
+
+        return await inner.fetch(c.req.raw);
+    } catch (err: any) {
+        console.error('[Vercel] Handler error:', err?.message || err);
+        return c.json(
+            { success: false, error: { message: err?.message || 'Internal Server Error', code: 500 } },
+            500,
+        );
+    }
 });
 
 export default handle(app);
