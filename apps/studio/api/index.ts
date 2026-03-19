@@ -29,6 +29,7 @@ import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { createHonoApp } from '@objectstack/hono';
+import { AuthPlugin } from '@objectstack/plugin-auth';
 import { getRequestListener } from '@hono/node-server';
 import type { Hono } from 'hono';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
@@ -67,6 +68,15 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new ObjectQLPlugin());
             await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
             await kernel.use(new AppPlugin(studioConfig));
+
+            // Auth plugin — uses better-auth for real authentication
+            const vercelUrl = process.env.VERCEL_URL
+                ? `https://${process.env.VERCEL_URL}`
+                : 'http://localhost:3000';
+            await kernel.use(new AuthPlugin({
+                secret: process.env.AUTH_SECRET || 'dev-secret-please-change-in-production-min-32-chars',
+                baseUrl: vercelUrl,
+            }));
 
             // Broker shim — bridges HttpDispatcher → ObjectQL engine
             (kernel as any).broker = createBrokerShim(kernel);
