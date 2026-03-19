@@ -1,5 +1,16 @@
 # @objectstack/studio
 
+## 3.2.9
+
+### Minor Changes
+
+- Migrate Vercel API entrypoint from `api/[...path].ts` to `api/index.ts` (Hono + Vercel Node adapter)
+  - Replace Next.js-style catch-all with a proper Hono app exported via `handle(app)` from `hono/vercel`
+  - Add `/api/*` → `/api` rewrite in `vercel.json` for native Hono routing
+  - Rename `getApp()` → `ensureApp()` and export `ensureKernel()` from `_kernel.ts`
+  - Remove path-normalisation workaround (no longer needed with Vercel rewrites)
+  - Add deployment smoke tests for `/api/v1/meta` and `/api/v1/packages`
+
 ## 3.2.8
 
 ### Minor Changes

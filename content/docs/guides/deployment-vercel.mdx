@@ -282,7 +282,7 @@ import appConfig from '../objectstack.config';
 let _kernel: ObjectKernel | null = null;
 let _app: Hono | null = null;
 
-async function bootKernel(): Promise<ObjectKernel> {
+async function ensureKernel(): Promise<ObjectKernel> {
   if (_kernel) return _kernel;
   _kernel = new ObjectKernel();
   await _kernel.use(new ObjectQLPlugin());
@@ -292,26 +292,26 @@ async function bootKernel(): Promise<ObjectKernel> {
   return _kernel;
 }
 
-export async function getApp(): Promise<Hono> {
+export async function ensureApp(): Promise<Hono> {
   if (_app) return _app;
-  const kernel = await bootKernel();
+  const kernel = await ensureKernel();
   _app = createHonoApp({ kernel, prefix: '/api/v1' });
   return _app;
 }
 ```
 
-**2. Create the catch-all serverless function** (`api/[...path].ts`):
+**2. Create the API entrypoint** (`api/index.ts`):
 
 ```typescript
-// api/[...path].ts
+// api/index.ts
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
-import { getApp } from './_kernel';
+import { ensureApp } from './_kernel';
 
 const app = new Hono();
 
-app.all('/*', async (c) => {
-  const inner = await getApp();
+app.all('*', async (c) => {
+  const inner = await ensureApp();
   return inner.fetch(c.req.raw);
 });
 
@@ -333,13 +333,14 @@ export default handle(app);
     }
   },
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
 ```
 
 <Callout type="info">
-Setting `VITE_SERVER_URL` to empty string tells the client SDK to use same-origin API calls. The `rewrites` rule excludes `/api/` paths so they reach the serverless function, while all other paths serve the SPA.
+Setting `VITE_SERVER_URL` to empty string tells the client SDK to use same-origin API calls. The first rewrite routes all `/api/*` sub-paths to the `api/index.ts` serverless function. The second rewrite excludes `/api/` paths so all other paths serve the SPA.
 </Callout>
 
 ---
@@ -381,10 +382,10 @@ This is controlled by the config module which checks (in priority order):
 
 ### Server Mode (Recommended)
 
-- [ ] `api/[...path].ts` catch-all serverless function exists
+- [ ] `api/index.ts` Hono entrypoint exists with `handle(app)` export
 - [ ] `api/_kernel.ts` boots the kernel with the correct driver and broker shim
 - [ ] `vercel.json` sets `VITE_RUNTIME_MODE=server` and `VITE_SERVER_URL=` (empty)
-- [ ] Rewrite rule excludes `/api/` paths: `/((?!api/).*)`
+- [ ] Rewrite rule routes `/api/*` to `/api` and excludes `/api/` from SPA rewrite
 - [ ] `DATABASE_URL` is configured in Vercel environment variables (for production drivers)
 - [ ] CORS is configured if frontend and API are on different origins
 

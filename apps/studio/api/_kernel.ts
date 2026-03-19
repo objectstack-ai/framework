@@ -33,7 +33,7 @@ let _bootPromise: Promise<ObjectKernel> | null = null;
  * Uses a shared promise so that concurrent requests during a cold start
  * wait for the same boot sequence rather than starting duplicates.
  */
-async function bootKernel(): Promise<ObjectKernel> {
+export async function ensureKernel(): Promise<ObjectKernel> {
     if (_kernel) return _kernel;
 
     // Return the in-flight boot if one is already running
@@ -130,10 +130,10 @@ async function seedData(kernel: ObjectKernel, configs: any[]) {
  * Get (or create) the Hono application backed by the ObjectStack kernel.
  * The prefix `/api/v1` matches the client SDK's default API path.
  */
-export async function getApp(): Promise<Hono> {
+export async function ensureApp(): Promise<Hono> {
     if (_app) return _app;
 
-    const kernel = await bootKernel();
+    const kernel = await ensureKernel();
     _app = createHonoApp({ kernel, prefix: '/api/v1' });
     return _app;
 }

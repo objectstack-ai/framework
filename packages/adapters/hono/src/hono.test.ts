@@ -545,17 +545,24 @@ describe('createHonoApp', () => {
     });
   });
 
-  describe('Vercel Delegation Pattern (inner.fetch)', () => {
-    it('works when an outer Hono app delegates via inner.fetch(c.req.raw)', async () => {
+  describe('Vercel Delegation Pattern (api/index.ts → inner.fetch)', () => {
+    /**
+     * Helper: creates the same outer→inner delegation pattern used by
+     * `apps/studio/api/index.ts`.  The outer Hono app delegates all
+     * requests to the inner ObjectStack Hono app via `inner.fetch()`.
+     */
+    function createVercelApp() {
       const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
-
-      // Simulate the Vercel catch-all pattern: outer app wraps inner app
       const outerApp = new Hono();
-      outerApp.all('/*', async (c) => {
+      outerApp.all('*', async (c) => {
         return innerApp.fetch(c.req.raw);
       });
+      return outerApp;
+    }
 
-      // Request with the full /api/v1 prefix — should route correctly
+    it('works when an outer Hono app delegates via inner.fetch(c.req.raw)', async () => {
+      const outerApp = createVercelApp();
+
       const res = await outerApp.request('/api/v1/meta');
       expect(res.status).toBe(200);
       expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
@@ -568,12 +575,7 @@ describe('createHonoApp', () => {
     });
 
     it('routes /api/v1/packages through outer→inner delegation', async () => {
-      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
-
-      const outerApp = new Hono();
-      outerApp.all('/*', async (c) => {
-        return innerApp.fetch(c.req.raw);
-      });
+      const outerApp = createVercelApp();
 
       const res = await outerApp.request('/api/v1/packages');
       expect(res.status).toBe(200);
@@ -587,12 +589,7 @@ describe('createHonoApp', () => {
     });
 
     it('routes /api/v1 discovery through outer→inner delegation', async () => {
-      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
-
-      const outerApp = new Hono();
-      outerApp.all('/*', async (c) => {
-        return innerApp.fetch(c.req.raw);
-      });
+      const outerApp = createVercelApp();
 
       const res = await outerApp.request('/api/v1');
       expect(res.status).toBe(200);
@@ -601,24 +598,11 @@ describe('createHonoApp', () => {
       expect(mockDispatcher.getDiscoveryInfo).toHaveBeenCalledWith('/api/v1');
     });
 
-    it('handles path normalisation (strips prefix correctly) through delegation', async () => {
-      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+    it('routes /api/v1/data/account through outer→inner delegation', async () => {
+      const outerApp = createVercelApp();
 
-      const outerApp = new Hono();
-      outerApp.all('/*', async (c) => {
-        // Simulate the normalisation logic from [...path].ts
-        const url = new URL(c.req.url);
-        if (!url.pathname.startsWith('/api')) {
-          url.pathname = '/api' + url.pathname;
-          const request = new Request(url.toString(), c.req.raw);
-          return innerApp.fetch(request);
-        }
-        return innerApp.fetch(c.req.raw);
-      });
-
-      // Request with the full path — should work directly
-      const res1 = await outerApp.request('/api/v1/data/account');
-      expect(res1.status).toBe(200);
+      const res = await outerApp.request('/api/v1/data/account');
+      expect(res.status).toBe(200);
       expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'GET',
         '/data/account',
@@ -631,7 +615,7 @@ describe('createHonoApp', () => {
     it('returns 500 with error details when inner app throws', async () => {
       const outerApp = new Hono();
 
-      outerApp.all('/*', async (c) => {
+      outerApp.all('*', async (c) => {
         try {
           // Simulate a kernel boot failure
           throw new Error('Kernel boot failed');
@@ -648,6 +632,50 @@ describe('createHonoApp', () => {
       const json = await res.json();
       expect(json.success).toBe(false);
       expect(json.error.message).toBe('Kernel boot failed');
+    });
+  });
+
+  describe('Vercel deployment endpoint smoke tests', () => {
+    /**
+     * These tests validate that the two key deployment-health endpoints
+     * `/api/v1/meta` and `/api/v1/packages` return 200 OK when routed
+     * through the Vercel adapter pattern (outer Hono → inner ObjectStack Hono).
+     */
+    let outerApp: Hono;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      const innerApp = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+      outerApp = new Hono();
+      outerApp.all('*', async (c) => innerApp.fetch(c.req.raw));
+    });
+
+    it('GET /api/v1/meta returns 200 OK', async () => {
+      const res = await outerApp.request('/api/v1/meta');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+    });
+
+    it('GET /api/v1/meta/object returns 200 OK', async () => {
+      const res = await outerApp.request('/api/v1/meta/object');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+    });
+
+    it('GET /api/v1/packages returns 200 OK', async () => {
+      const res = await outerApp.request('/api/v1/packages');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+    });
+
+    it('GET /api/v1/packages/:id returns 200 OK', async () => {
+      const res = await outerApp.request('/api/v1/packages/com.acme.crm');
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
     });
   });
 });

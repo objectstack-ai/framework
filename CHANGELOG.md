@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Migrate API layer to Hono + Vercel Node adapter** — Replaced the vestigial Next.js-style
+  `api/[...path].ts` catch-all with a proper `api/index.ts` Hono entrypoint using `handle(app)`
+  from `hono/vercel`. Vercel routes now use a rewrite rule (`/api/*` → `/api`) for native Hono
+  routing, eliminating path-normalisation hacks and catch-all bundling pitfalls. Kernel boot
+  remains lazy (cold-start only) via `ensureApp()` / `ensureKernel()` in `_kernel.ts`.
+
 ### Fixed
 - **Vercel serverless 404 fix** — `api/[...path].ts` now normalises request paths and includes
   robust error handling, preventing silent 404s when the Vercel runtime strips or alters the
