@@ -1,5 +1,15 @@
 # @objectstack/studio
 
+## 3.2.10
+
+### Patch Changes
+
+- Fix Vercel deployment crash (`ERR_MODULE_NOT_FOUND` for `api/_kernel`)
+  - Inline `_kernel.ts` content into `api/index.ts` to eliminate the bare extensionless relative import that broke Node's ESM resolver
+  - Move `hono` from `devDependencies` to `dependencies` so it is available in the Vercel serverless runtime
+  - Use explicit `.js` file extensions for relative imports in the API entrypoint (`create-broker-shim.js`, `objectstack.config.js`) per ESM best practice
+  - Delete `api/_kernel.ts` — all kernel/service initialisation is now co-located in `api/index.ts`
+
 ## 3.2.9
 
 ### Minor Changes
