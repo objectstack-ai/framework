@@ -1,24 +1,25 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Vercel Serverless API Entrypoint (Hono + Vercel Node Adapter)
+ * Vercel Serverless API Entrypoint
  *
- * Top-level Hono app that boots the ObjectStack kernel lazily on the first
- * request and delegates all /api/* traffic to the ObjectStack Hono adapter.
+ * Boots the ObjectStack kernel lazily on the first request and delegates
+ * all /api/* traffic to the ObjectStack Hono adapter.
+ *
+ * Uses a direct Web standard API handler (`Request → Response`) rather than
+ * wrapping in a second outer Hono app, which avoids nested `app.fetch()`
+ * delegation issues on Vercel's Node.js runtime.
  *
  * All kernel/service initialisation is co-located here so there are no
  * extensionless relative module imports — which would break Node's ESM
  * resolver when deployed to Vercel (`"type": "module"` package).
- *
- * @see https://hono.dev/docs/getting-started/vercel
  */
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { createHonoApp } from '@objectstack/hono';
-import { Hono } from 'hono';
-import { handle } from 'hono/vercel';
+import type { Hono } from 'hono';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
 import studioConfig from '../objectstack.config.js';
 
@@ -150,25 +151,25 @@ async function ensureApp(): Promise<Hono> {
 // Vercel handler
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
-
 /**
- * Delegate every request to the lazily-initialized ObjectStack Hono app.
- * `ensureApp()` boots the kernel on the first invocation (cold start)
- * and returns the cached instance on subsequent warm invocations.
+ * Vercel serverless handler (Web standard API format).
+ *
+ * Boots the kernel lazily on the first invocation (cold start) and delegates
+ * directly to the ObjectStack Hono app. Previous versions wrapped this in a
+ * second outer Hono app + `handle()`, but the nested `inner.fetch(c.req.raw)`
+ * delegation caused responses to never propagate back, resulting in 300s
+ * timeouts on Vercel.
  */
-app.all('*', async (c) => {
+export default async function handler(request: Request): Promise<Response> {
     try {
-        const inner = await ensureApp();
-        return await inner.fetch(c.req.raw);
+        const app = await ensureApp();
+        return await app.fetch(request);
     } catch (err: any) {
         console.error('[Vercel] Handler error:', err?.message || err);
-        return c.json(
+        return Response.json(
             { success: false, error: { message: err?.message || 'Internal Server Error', code: 500 } },
-            500,
+            { status: 500 },
         );
     }
-});
-
-export default handle(app);
+}
 
