@@ -1,5 +1,24 @@
 # @objectstack/studio
 
+## 3.2.8
+
+### Patch Changes
+
+- Updated dependencies [1fe5612]
+  - @objectstack/plugin-auth@3.2.8
+  - @objectstack/spec@3.2.8
+  - @objectstack/client@3.2.8
+  - @objectstack/client-react@3.2.8
+  - @objectstack/metadata@3.2.8
+  - @objectstack/objectql@3.2.8
+  - @objectstack/runtime@3.2.8
+  - @objectstack/driver-memory@3.2.8
+  - @objectstack/plugin-msw@3.2.8
+  - @objectstack/plugin-security@3.2.8
+  - @objectstack/hono@3.2.8
+  - @objectstack/service-feed@3.2.8
+  - @objectstack/plugin-audit@3.2.8
+
 ## 3.2.10
 
 ### Patch Changes

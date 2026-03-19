@@ -1,6 +1,6 @@
 {
   "name": "@example/app-host",
-  "version": "3.0.21",
+  "version": "3.0.22",
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
