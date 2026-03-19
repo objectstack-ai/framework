@@ -30,6 +30,10 @@ import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { createHonoApp } from '@objectstack/hono';
 import { AuthPlugin } from '@objectstack/plugin-auth';
+import { SecurityPlugin } from '@objectstack/plugin-security';
+import { AuditPlugin } from '@objectstack/plugin-audit';
+import { FeedServicePlugin } from '@objectstack/service-feed';
+import { MetadataPlugin } from '@objectstack/metadata';
 import { getRequestListener } from '@hono/node-server';
 import type { Hono } from 'hono';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
@@ -95,6 +99,11 @@ async function ensureKernel(): Promise<ObjectKernel> {
                 baseUrl: vercelUrl,
                 ...(trustedOrigins.length > 0 ? { trustedOrigins } : {}),
             }));
+
+            await kernel.use(new SecurityPlugin());
+            await kernel.use(new AuditPlugin());
+            await kernel.use(new FeedServicePlugin());
+            await kernel.use(new MetadataPlugin({ watch: false }));
 
             // Broker shim — bridges HttpDispatcher → ObjectQL engine
             (kernel as any).broker = createBrokerShim(kernel);

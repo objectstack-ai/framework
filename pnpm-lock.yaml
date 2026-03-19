@@ -142,15 +142,24 @@ importers:
       '@objectstack/objectql':
         specifier: workspace:*
         version: link:../../packages/objectql
+      '@objectstack/plugin-audit':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-audit
       '@objectstack/plugin-auth':
         specifier: workspace:*
         version: link:../../packages/plugins/plugin-auth
       '@objectstack/plugin-msw':
         specifier: workspace:*
         version: link:../../packages/plugins/plugin-msw
+      '@objectstack/plugin-security':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-security
       '@objectstack/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
+      '@objectstack/service-feed':
+        specifier: workspace:*
+        version: link:../../packages/services/service-feed
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../packages/spec
