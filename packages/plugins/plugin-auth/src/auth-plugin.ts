@@ -3,6 +3,12 @@
 import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
 import { AuthConfig } from '@objectstack/spec/system';
 import { AuthManager } from './auth-manager.js';
+import {
+  SysUser, SysSession, SysAccount, SysVerification,
+  SysOrganization, SysMember, SysInvitation,
+  SysTeam, SysTeamMember,
+  SysApiKey, SysTwoFactor,
+} from './objects/index.js';
 
 /**
  * Auth Plugin Options
@@ -43,6 +49,7 @@ export interface AuthPluginOptions extends Partial<AuthConfig> {
  * 
  * This plugin registers:
  * - `auth` service (auth manager instance) — always
+ * - `app.com.objectstack.system` service (system object definitions) — always
  * - HTTP routes for authentication endpoints — only when HTTP server is available
  * 
  * Integrates with better-auth library to provide comprehensive
@@ -88,7 +95,23 @@ export class AuthPlugin implements Plugin {
 
     // Register auth service
     ctx.registerService('auth', this.authManager);
-    
+
+    // Register system objects as an app service so ObjectQLPlugin
+    // auto-discovers them via the `app.*` convention.
+    ctx.registerService('app.com.objectstack.system', {
+      id: 'com.objectstack.system',
+      name: 'System',
+      version: '1.0.0',
+      type: 'plugin',
+      namespace: 'sys',
+      objects: [
+        SysUser, SysSession, SysAccount, SysVerification,
+        SysOrganization, SysMember, SysInvitation,
+        SysTeam, SysTeamMember,
+        SysApiKey, SysTwoFactor,
+      ],
+    });
+
     ctx.logger.info('Auth Plugin initialized successfully');
   }
 
