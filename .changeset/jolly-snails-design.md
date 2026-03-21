@@ -2,4 +2,4 @@
 "@objectstack/objectql": patch
 ---
 
-fix turso
+fix turso 2
