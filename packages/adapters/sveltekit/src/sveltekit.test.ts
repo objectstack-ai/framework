@@ -7,9 +7,8 @@ const mockDispatcher = {
   getDiscoveryInfo: vi.fn().mockReturnValue({ version: '1.0', endpoints: [] }),
   handleAuth: vi.fn().mockResolvedValue({ handled: true, response: { body: { ok: true }, status: 200 } }),
   handleGraphQL: vi.fn().mockResolvedValue({ data: {} }),
-  handleMetadata: vi.fn().mockResolvedValue({ handled: true, response: { body: { objects: [] }, status: 200 } }),
-  handleData: vi.fn().mockResolvedValue({ handled: true, response: { body: { records: [] }, status: 200 } }),
   handleStorage: vi.fn().mockResolvedValue({ handled: true, response: { body: {}, status: 200 } }),
+  dispatch: vi.fn().mockResolvedValue({ handled: true, response: { body: { success: true }, status: 200 } }),
 };
 
 vi.mock('@objectstack/runtime', () => {
@@ -167,27 +166,29 @@ describe('createRequestHandler', () => {
   });
 
   describe('Metadata', () => {
-    it('GET /api/meta/objects calls handleMetadata', async () => {
+    it('GET /api/meta/objects delegates to dispatch()', async () => {
       const event = makeEvent('http://localhost/api/meta/objects');
       const res = await handler(event);
       expect(res.status).toBe(200);
-      expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
-        '/objects',
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+        'GET',
+        '/meta/objects',
+        undefined,
+        expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
-        'GET', undefined,
       );
     });
   });
 
   describe('Data', () => {
-    it('GET /api/data/account calls handleData', async () => {
+    it('GET /api/data/account delegates to dispatch()', async () => {
       const event = makeEvent('http://localhost/api/data/account');
       const res = await handler(event);
       expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.records).toBeDefined();
-      expect(mockDispatcher.handleData).toHaveBeenCalledWith(
-        '/account', 'GET', {},
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+        'GET',
+        '/data/account',
+        undefined,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
       );
@@ -198,15 +199,17 @@ describe('createRequestHandler', () => {
       const event = makeEvent('http://localhost/api/data/account', 'POST', body);
       const res = await handler(event);
       expect(res.status).toBe(200);
-      expect(mockDispatcher.handleData).toHaveBeenCalledWith(
-        '/account', 'POST', body,
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+        'POST',
+        '/data/account',
+        body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
       );
     });
 
     it('returns 404 when not handled', async () => {
-      mockDispatcher.handleData.mockResolvedValueOnce({ handled: false });
+      mockDispatcher.dispatch.mockResolvedValueOnce({ handled: false });
       const event = makeEvent('http://localhost/api/data/missing');
       const res = await handler(event);
       expect(res.status).toBe(404);
@@ -227,13 +230,14 @@ describe('createRequestHandler', () => {
 
   describe('Error handling', () => {
     it('returns 404 for unknown routes', async () => {
+      mockDispatcher.dispatch.mockResolvedValueOnce({ handled: false });
       const event = makeEvent('http://localhost/api/unknown');
       const res = await handler(event);
       expect(res.status).toBe(404);
     });
 
     it('returns 500 on generic error', async () => {
-      mockDispatcher.handleData.mockRejectedValueOnce(new Error());
+      mockDispatcher.dispatch.mockRejectedValueOnce(new Error());
       const event = makeEvent('http://localhost/api/data/account');
       const res = await handler(event);
       expect(res.status).toBe(500);
@@ -242,7 +246,7 @@ describe('createRequestHandler', () => {
 
   describe('toResponse', () => {
     it('handles redirect result', async () => {
-      mockDispatcher.handleData.mockResolvedValueOnce({
+      mockDispatcher.dispatch.mockResolvedValueOnce({
         handled: true,
         result: { type: 'redirect', url: 'https://example.com' },
       });
@@ -253,7 +257,7 @@ describe('createRequestHandler', () => {
     });
 
     it('handles generic result objects', async () => {
-      mockDispatcher.handleData.mockResolvedValueOnce({
+      mockDispatcher.dispatch.mockResolvedValueOnce({
         handled: true,
         result: { foo: 'bar' },
       });
