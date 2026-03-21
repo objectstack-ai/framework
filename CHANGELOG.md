@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remains lazy (cold-start only) via `ensureApp()` / `ensureKernel()` in `_kernel.ts`.
 
 ### Fixed
+- **SvelteKit adapter test failures** — Updated test mock to include `dispatch()` method and
+  aligned Metadata, Data, Error handling, and toResponse test assertions with the unified
+  catch-all dispatch pattern used by the implementation and all other adapters (e.g. Hono).
+  Removed obsolete `handleMetadata`/`handleData` references from the mock.
 - **Vercel serverless 404 fix** — The previous `api/[...path].ts` path-normalisation fix is now
   superseded by the Hono adapter migration above. The new `api/index.ts` entrypoint combined with
   Vercel rewrites (`/api/*` → `/api`) eliminates the routing ambiguity that caused 404s.

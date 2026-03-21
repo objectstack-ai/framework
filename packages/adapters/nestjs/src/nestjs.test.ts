@@ -294,26 +294,26 @@ describe('ObjectStackController', () => {
   });
 
   describe('metadata()', () => {
-    it('dispatches to handleMetadata with extracted path', async () => {
+    it('dispatches to dispatch with extracted path', async () => {
       const req = { params: { 0: '' }, url: '/api/meta/objects', method: 'GET' };
 
       await controller.metadata(req, res, undefined);
 
-      expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-        '/objects', { request: req }, 'GET', undefined,
+      expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
+        'GET', '/meta/objects', undefined, undefined, { request: req },
       );
     });
   });
 
   describe('data()', () => {
-    it('dispatches to handleData with extracted path', async () => {
+    it('dispatches to dispatch with extracted path', async () => {
       const req = { params: { 0: '' }, url: '/api/data/account', method: 'GET' };
       const query = { limit: '10' };
 
       await controller.data(req, res, {}, query);
 
-      expect(service.dispatcher.handleData).toHaveBeenCalledWith(
-        '/account', 'GET', {}, query, { request: req },
+      expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
+        'GET', '/data/account', {}, query, { request: req },
       );
     });
   });
@@ -342,7 +342,7 @@ describe('ObjectStackController', () => {
     });
 
     it('sets custom headers from response', async () => {
-      (service.dispatcher.handleData as any).mockResolvedValueOnce({
+      (service.dispatcher.dispatch as any).mockResolvedValueOnce({
         handled: true,
         response: { status: 201, body: { id: 1 }, headers: { 'X-Custom': 'yes' } },
       });
@@ -386,7 +386,7 @@ describe('ObjectStackController', () => {
     });
 
     it('handles generic result objects with 200 status', async () => {
-      (service.dispatcher.handleData as any).mockResolvedValueOnce({
+      (service.dispatcher.dispatch as any).mockResolvedValueOnce({
         handled: true,
         result: { foo: 'bar' },
       });
@@ -400,7 +400,7 @@ describe('ObjectStackController', () => {
 
     it('handles Response-like objects', async () => {
       const mockHeaders = new Map([['content-type', 'text/plain']]);
-      (service.dispatcher.handleData as any).mockResolvedValueOnce({
+      (service.dispatcher.dispatch as any).mockResolvedValueOnce({
         handled: true,
         result: {
           status: 203,
