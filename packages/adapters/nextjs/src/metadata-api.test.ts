@@ -19,6 +19,7 @@ const mockDispatcher = {
   handleMetadata: vi.fn().mockResolvedValue({ handled: true, response: { body: { success: true }, status: 200 } }),
   handleData: vi.fn().mockResolvedValue({ handled: true, response: { body: { records: [] }, status: 200 } }),
   handleStorage: vi.fn().mockResolvedValue({ handled: true, response: { body: {}, status: 200 } }),
+  dispatch: vi.fn().mockResolvedValue({ handled: true, response: { body: { success: true }, status: 200 } }),
 };
 
 vi.mock('@objectstack/runtime', () => {
@@ -106,8 +107,8 @@ describe('Next.js Metadata API Integration Tests', () => {
 
   describe('CRUD Operations', () => {
     describe('GET meta/objects — List all objects', () => {
-      it('dispatches to handleMetadata with correct path', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+      it('dispatches to dispatch with correct path', async () => {
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -125,7 +126,7 @@ describe('Next.js Metadata API Integration Tests', () => {
         const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
         expect(res.status).toBe(200);
         expect(res.body.data).toHaveLength(2);
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'objects',
           expect.objectContaining({ request: expect.anything() }),
           'GET',
@@ -135,8 +136,8 @@ describe('Next.js Metadata API Integration Tests', () => {
     });
 
     describe('GET meta/objects/account — Get single object', () => {
-      it('dispatches to handleMetadata with item-level path', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+      it('dispatches to dispatch with item-level path', async () => {
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -151,7 +152,7 @@ describe('Next.js Metadata API Integration Tests', () => {
         const res = await handler(req, { params: { objectstack: ['meta', 'objects', 'account'] } });
         expect(res.status).toBe(200);
         expect(res.body.data.name).toBe('account');
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'objects/account',
           expect.objectContaining({ request: expect.anything() }),
           'GET',
@@ -168,7 +169,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           data: { label: 'Project Task', fields: {} },
         };
 
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: { body: { success: true }, status: 201 },
         });
@@ -176,7 +177,7 @@ describe('Next.js Metadata API Integration Tests', () => {
         const req = makeReq('http://localhost/api/meta/objects', 'POST', body);
         const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
         expect(res.status).toBe(201);
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'objects',
           expect.objectContaining({ request: expect.anything() }),
           'POST',
@@ -189,7 +190,7 @@ describe('Next.js Metadata API Integration Tests', () => {
       it('dispatches PUT with JSON body', async () => {
         const body = { label: 'Updated Account' };
 
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: { body: { success: true }, status: 200 },
         });
@@ -197,7 +198,7 @@ describe('Next.js Metadata API Integration Tests', () => {
         const req = makeReq('http://localhost/api/meta/objects/account', 'PUT', body);
         const res = await handler(req, { params: { objectstack: ['meta', 'objects', 'account'] } });
         expect(res.status).toBe(200);
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'objects/account',
           expect.objectContaining({ request: expect.anything() }),
           'PUT',
@@ -207,8 +208,8 @@ describe('Next.js Metadata API Integration Tests', () => {
     });
 
     describe('DELETE meta/objects/old_entity — Delete metadata', () => {
-      it('dispatches DELETE to handleMetadata', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+      it('dispatches DELETE to dispatch', async () => {
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { type: 'object', name: 'old_entity' } },
@@ -227,7 +228,7 @@ describe('Next.js Metadata API Integration Tests', () => {
       it('dispatches for views', async () => {
         const req = makeReq('http://localhost/api/meta/views');
         await handler(req, { params: { objectstack: ['meta', 'views'] } });
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'views',
           expect.objectContaining({ request: expect.anything() }),
           'GET',
@@ -238,7 +239,7 @@ describe('Next.js Metadata API Integration Tests', () => {
       it('dispatches for flows', async () => {
         const req = makeReq('http://localhost/api/meta/flows');
         await handler(req, { params: { objectstack: ['meta', 'flows'] } });
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'flows',
           expect.objectContaining({ request: expect.anything() }),
           'GET',
@@ -249,7 +250,7 @@ describe('Next.js Metadata API Integration Tests', () => {
       it('dispatches for agents', async () => {
         const req = makeReq('http://localhost/api/meta/agents');
         await handler(req, { params: { objectstack: ['meta', 'agents'] } });
-        expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'agents',
           expect.objectContaining({ request: expect.anything() }),
           'GET',
@@ -273,7 +274,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           pageSize: 25,
         };
 
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -305,7 +306,7 @@ describe('Next.js Metadata API Integration Tests', () => {
   describe('Bulk Operations', () => {
     describe('POST meta/bulk/register — Bulk register', () => {
       it('dispatches bulk register', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 2, succeeded: 2, failed: 0 } },
@@ -328,7 +329,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('POST meta/bulk/unregister — Bulk unregister', () => {
       it('dispatches bulk unregister', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 2, succeeded: 2, failed: 0 } },
@@ -348,7 +349,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('Bulk operation with partial failures', () => {
       it('returns error details', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -387,7 +388,7 @@ describe('Next.js Metadata API Integration Tests', () => {
   describe('Overlay / Customization', () => {
     describe('GET meta/objects/account/overlay — Get overlay', () => {
       it('dispatches overlay retrieval', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -413,7 +414,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('PUT meta/objects/account/overlay — Save overlay', () => {
       it('dispatches overlay save', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: { body: { success: true }, status: 200 },
         });
@@ -431,7 +432,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('GET meta/objects/account/effective — Get effective metadata', () => {
       it('dispatches effective metadata retrieval', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -457,7 +458,7 @@ describe('Next.js Metadata API Integration Tests', () => {
   describe('Import / Export', () => {
     describe('POST meta/export — Export metadata', () => {
       it('dispatches export request', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { version: '1.0', objects: {} } },
@@ -474,7 +475,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('POST meta/import — Import metadata', () => {
       it('dispatches import request', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 3, imported: 3, skipped: 0, failed: 0 } },
@@ -500,7 +501,7 @@ describe('Next.js Metadata API Integration Tests', () => {
   describe('Validation', () => {
     describe('POST meta/validate — Validate metadata', () => {
       it('dispatches validation', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { valid: true } },
@@ -515,7 +516,7 @@ describe('Next.js Metadata API Integration Tests', () => {
       });
 
       it('returns errors for invalid metadata', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -544,7 +545,7 @@ describe('Next.js Metadata API Integration Tests', () => {
   describe('Type Registry', () => {
     describe('GET meta/types — List types', () => {
       it('returns all registered types', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: ['object', 'view', 'flow', 'agent'] },
@@ -561,7 +562,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('GET meta/types/object — Get type info', () => {
       it('returns type metadata', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -593,7 +594,7 @@ describe('Next.js Metadata API Integration Tests', () => {
   describe('Dependency Tracking', () => {
     describe('GET meta/objects/account/dependencies — Get dependencies', () => {
       it('returns dependencies', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -619,7 +620,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
     describe('GET meta/objects/account/dependents — Get dependents', () => {
       it('returns dependents', async () => {
-        mockDispatcher.handleMetadata.mockResolvedValueOnce({
+        mockDispatcher.dispatch.mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -647,7 +648,7 @@ describe('Next.js Metadata API Integration Tests', () => {
 
   describe('Error Handling', () => {
     it('returns 404 when metadata not found', async () => {
-      mockDispatcher.handleMetadata.mockResolvedValueOnce({ handled: false });
+      mockDispatcher.dispatch.mockResolvedValueOnce({ handled: false });
 
       const req = makeReq('http://localhost/api/meta/objects/nonexistent');
       const res = await handler(req, { params: { objectstack: ['meta', 'objects', 'nonexistent'] } });
@@ -655,7 +656,7 @@ describe('Next.js Metadata API Integration Tests', () => {
     });
 
     it('returns 500 on dispatcher exception', async () => {
-      mockDispatcher.handleMetadata.mockRejectedValueOnce(new Error('Internal error'));
+      mockDispatcher.dispatch.mockRejectedValueOnce(new Error('Internal error'));
 
       const req = makeReq('http://localhost/api/meta/objects');
       const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
@@ -664,7 +665,7 @@ describe('Next.js Metadata API Integration Tests', () => {
     });
 
     it('returns custom status code from error', async () => {
-      mockDispatcher.handleMetadata.mockRejectedValueOnce(
+      mockDispatcher.dispatch.mockRejectedValueOnce(
         Object.assign(new Error('Forbidden'), { statusCode: 403 }),
       );
 
@@ -682,7 +683,7 @@ describe('Next.js Metadata API Integration Tests', () => {
     it('correctly joins nested segments', async () => {
       const req = makeReq('http://localhost/api/meta/objects/account/fields/name');
       await handler(req, { params: { objectstack: ['meta', 'objects', 'account', 'fields', 'name'] } });
-      expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'objects/account/fields/name',
         expect.any(Object),
         'GET',
@@ -694,7 +695,7 @@ describe('Next.js Metadata API Integration Tests', () => {
       const req = makeReq('http://localhost/api/meta');
       // With just ['meta'], subPath becomes empty after slice(1)
       await handler(req, { params: { objectstack: ['meta'] } });
-      expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         '',
         expect.any(Object),
         'GET',

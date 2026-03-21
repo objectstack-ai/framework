@@ -7,9 +7,8 @@ const mockDispatcher = {
   getDiscoveryInfo: vi.fn().mockReturnValue({ version: '1.0', endpoints: [] }),
   handleAuth: vi.fn().mockResolvedValue({ handled: true, response: { body: { ok: true }, status: 200 } }),
   handleGraphQL: vi.fn().mockResolvedValue({ data: {} }),
-  handleMetadata: vi.fn().mockResolvedValue({ handled: true, response: { body: { objects: [] }, status: 200 } }),
-  handleData: vi.fn().mockResolvedValue({ handled: true, response: { body: { records: [] }, status: 200 } }),
   handleStorage: vi.fn().mockResolvedValue({ handled: true, response: { body: {}, status: 200 } }),
+  dispatch: vi.fn().mockResolvedValue({ handled: true, response: { body: { success: true }, status: 200 } }),
 };
 
 vi.mock('@objectstack/runtime', () => {
@@ -91,13 +90,12 @@ describe('objectStackPlugin', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/meta/objects' });
     expect(res.statusCode).toBe(200);
-    const json = JSON.parse(res.payload);
-    expect(json.objects).toBeDefined();
-    expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
-      '/objects',
-      expect.objectContaining({ request: expect.anything() }),
+    expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
       'GET',
+      '/meta/objects',
       undefined,
+      expect.any(Object),
+      expect.objectContaining({ request: expect.anything() }),
     );
   });
 
@@ -108,12 +106,10 @@ describe('objectStackPlugin', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/data/account' });
     expect(res.statusCode).toBe(200);
-    const json = JSON.parse(res.payload);
-    expect(json.records).toBeDefined();
-    expect(mockDispatcher.handleData).toHaveBeenCalledWith(
-      '/account',
+    expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
       'GET',
-      {},
+      '/data/account',
+      undefined,
       expect.any(Object),
       expect.objectContaining({ request: expect.anything() }),
     );
@@ -148,7 +144,7 @@ describe('objectStackPlugin', () => {
   });
 
   it('returns error on exception', async () => {
-    mockDispatcher.handleData.mockRejectedValueOnce(
+    mockDispatcher.dispatch.mockRejectedValueOnce(
       Object.assign(new Error('Forbidden'), { statusCode: 403 }),
     );
     const app = Fastify();

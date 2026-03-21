@@ -8,6 +8,7 @@ export class HttpDispatcher {
   handleMetadata = vi.fn().mockResolvedValue({ handled: true, response: { status: 200, body: [] } });
   handleData = vi.fn().mockResolvedValue({ handled: true, response: { status: 200, body: [] } });
   handleStorage = vi.fn().mockResolvedValue({ handled: true, response: { status: 200, body: {} } });
+  dispatch = vi.fn().mockResolvedValue({ handled: true, response: { status: 200, body: { success: true } } });
 
   constructor(_kernel: any) {}
 }

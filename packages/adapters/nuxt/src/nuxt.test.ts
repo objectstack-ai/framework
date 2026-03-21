@@ -7,9 +7,8 @@ const mockDispatcher = {
   getDiscoveryInfo: vi.fn().mockReturnValue({ version: '1.0', endpoints: [] }),
   handleAuth: vi.fn().mockResolvedValue({ handled: true, response: { body: { ok: true }, status: 200 } }),
   handleGraphQL: vi.fn().mockResolvedValue({ data: {} }),
-  handleMetadata: vi.fn().mockResolvedValue({ handled: true, response: { body: { objects: [] }, status: 200 } }),
-  handleData: vi.fn().mockResolvedValue({ handled: true, response: { body: { records: [] }, status: 200 } }),
   handleStorage: vi.fn().mockResolvedValue({ handled: true, response: { body: {}, status: 200 } }),
+  dispatch: vi.fn().mockResolvedValue({ handled: true, response: { body: { success: true }, status: 200 } }),
 };
 
 vi.mock('@objectstack/runtime', () => {
@@ -101,16 +100,26 @@ describe('createH3Router', () => {
     const app = createTestApp();
     const res = await makeRequest(app, '/api/meta/objects');
     expect(res.status).toBe(200);
-    expect(res.body.objects).toBeDefined();
-    expect(mockDispatcher.handleMetadata).toHaveBeenCalled();
+    expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+      'GET',
+      '/meta/objects',
+      undefined,
+      expect.any(Object),
+      expect.objectContaining({ request: expect.anything() }),
+    );
   });
 
   it('handles data route', async () => {
     const app = createTestApp();
     const res = await makeRequest(app, '/api/data/account');
     expect(res.status).toBe(200);
-    expect(res.body.records).toBeDefined();
-    expect(mockDispatcher.handleData).toHaveBeenCalled();
+    expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+      'GET',
+      '/data/account',
+      undefined,
+      expect.any(Object),
+      expect.objectContaining({ request: expect.anything() }),
+    );
   });
 
   it('handles storage route', async () => {
@@ -121,7 +130,7 @@ describe('createH3Router', () => {
   });
 
   it('handles errors', async () => {
-    mockDispatcher.handleData.mockRejectedValueOnce(
+    mockDispatcher.dispatch.mockRejectedValueOnce(
       Object.assign(new Error('Forbidden'), { statusCode: 403 }),
     );
     const app = createTestApp();

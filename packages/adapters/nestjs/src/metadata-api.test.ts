@@ -80,8 +80,8 @@ describe('NestJS Metadata API Integration Tests', () => {
 
   describe('CRUD Operations', () => {
     describe('GET /api/meta/objects — List all objects', () => {
-      it('dispatches to handleMetadata with correct path', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+      it('dispatches to dispatch with correct path', async () => {
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -100,18 +100,19 @@ describe('NestJS Metadata API Integration Tests', () => {
 
         expect(res._status).toBe(200);
         expect(res._body.data).toHaveLength(2);
-        expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-          '/objects',
-          { request: req },
+        expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
           'GET',
+          '/meta/objects',
           undefined,
+          undefined,
+          { request: req },
         );
       });
     });
 
     describe('GET /api/meta/objects/account — Get single object', () => {
       it('dispatches with item-level path', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -126,11 +127,12 @@ describe('NestJS Metadata API Integration Tests', () => {
         await controller.metadata(req, res, undefined);
 
         expect(res._body.data.name).toBe('account');
-        expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-          '/objects/account',
-          { request: req },
+        expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
           'GET',
+          '/meta/objects/account',
           undefined,
+          undefined,
+          { request: req },
         );
       });
     });
@@ -139,7 +141,7 @@ describe('NestJS Metadata API Integration Tests', () => {
       it('dispatches POST with body', async () => {
         const body = { type: 'object', name: 'project_task', data: { label: 'Task' } };
 
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: { body: { success: true }, status: 201 },
         });
@@ -148,11 +150,12 @@ describe('NestJS Metadata API Integration Tests', () => {
         await controller.metadata(req, res, body);
 
         expect(res._status).toBe(201);
-        expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-          '/objects',
-          { request: req },
+        expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
           'POST',
+          '/meta/objects',
           body,
+          undefined,
+          { request: req },
         );
       });
     });
@@ -161,7 +164,7 @@ describe('NestJS Metadata API Integration Tests', () => {
       it('dispatches PUT with body', async () => {
         const body = { label: 'Updated Account' };
 
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: { body: { success: true }, status: 200 },
         });
@@ -175,7 +178,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('DELETE /api/meta/objects/old_entity — Delete metadata', () => {
       it('dispatches DELETE', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { type: 'object', name: 'old_entity' } },
@@ -194,33 +197,36 @@ describe('NestJS Metadata API Integration Tests', () => {
       it('dispatches for views', async () => {
         const req = { params: {}, url: '/api/meta/views', method: 'GET' };
         await controller.metadata(req, res, undefined);
-        expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-          '/views',
-          { request: req },
+        expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
           'GET',
+          '/meta/views',
           undefined,
+          undefined,
+          { request: req },
         );
       });
 
       it('dispatches for flows', async () => {
         const req = { params: {}, url: '/api/meta/flows', method: 'GET' };
         await controller.metadata(req, res, undefined);
-        expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-          '/flows',
-          { request: req },
+        expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
           'GET',
+          '/meta/flows',
           undefined,
+          undefined,
+          { request: req },
         );
       });
 
       it('dispatches for agents', async () => {
         const req = { params: {}, url: '/api/meta/agents', method: 'GET' };
         await controller.metadata(req, res, undefined);
-        expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-          '/agents',
-          { request: req },
+        expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
           'GET',
+          '/meta/agents',
           undefined,
+          undefined,
+          { request: req },
         );
       });
     });
@@ -240,7 +246,7 @@ describe('NestJS Metadata API Integration Tests', () => {
           pageSize: 25,
         };
 
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -279,7 +285,7 @@ describe('NestJS Metadata API Integration Tests', () => {
           ],
         };
 
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 2, succeeded: 2, failed: 0 } },
@@ -300,7 +306,7 @@ describe('NestJS Metadata API Integration Tests', () => {
           items: [{ type: 'object', name: 'old' }],
         };
 
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 1, succeeded: 1, failed: 0 } },
@@ -317,7 +323,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('Bulk with partial failures', () => {
       it('returns error details', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -357,7 +363,7 @@ describe('NestJS Metadata API Integration Tests', () => {
   describe('Overlay / Customization', () => {
     describe('GET /api/meta/objects/account/overlay — Get overlay', () => {
       it('dispatches overlay retrieval', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -389,7 +395,7 @@ describe('NestJS Metadata API Integration Tests', () => {
           patch: { fields: { status: { label: 'Custom' } } },
         };
 
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: { body: { success: true }, status: 200 },
         });
@@ -403,7 +409,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('GET /api/meta/objects/account/effective — Get effective', () => {
       it('dispatches effective metadata retrieval', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -429,7 +435,7 @@ describe('NestJS Metadata API Integration Tests', () => {
   describe('Import / Export', () => {
     describe('POST /api/meta/export — Export metadata', () => {
       it('dispatches export request', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { version: '1.0', objects: {} } },
@@ -447,7 +453,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('POST /api/meta/import — Import metadata', () => {
       it('dispatches import request', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 3, imported: 3, skipped: 0, failed: 0 } },
@@ -465,7 +471,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('POST /api/meta/import — Dry run', () => {
       it('returns preview without saving', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { total: 2, imported: 0, skipped: 0, failed: 0 } },
@@ -489,7 +495,7 @@ describe('NestJS Metadata API Integration Tests', () => {
   describe('Validation', () => {
     describe('POST /api/meta/validate — Validate metadata', () => {
       it('dispatches validation for valid payload', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: { valid: true } },
@@ -505,7 +511,7 @@ describe('NestJS Metadata API Integration Tests', () => {
       });
 
       it('returns errors for invalid metadata', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -536,7 +542,7 @@ describe('NestJS Metadata API Integration Tests', () => {
   describe('Type Registry', () => {
     describe('GET /api/meta/types — List types', () => {
       it('returns all types', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: { success: true, data: ['object', 'view', 'flow', 'agent'] },
@@ -554,7 +560,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('GET /api/meta/types/object — Get type info', () => {
       it('returns type metadata', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -587,7 +593,7 @@ describe('NestJS Metadata API Integration Tests', () => {
   describe('Dependency Tracking', () => {
     describe('GET /api/meta/objects/account/dependencies', () => {
       it('returns dependencies', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -614,7 +620,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
     describe('GET /api/meta/objects/account/dependents', () => {
       it('returns dependents', async () => {
-        (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({
+        (service.dispatcher.dispatch as any).mockResolvedValueOnce({
           handled: true,
           response: {
             body: {
@@ -642,7 +648,7 @@ describe('NestJS Metadata API Integration Tests', () => {
 
   describe('Error Handling', () => {
     it('returns 404 when metadata not found', async () => {
-      (service.dispatcher.handleMetadata as any).mockResolvedValueOnce({ handled: false });
+      (service.dispatcher.dispatch as any).mockResolvedValueOnce({ handled: false });
 
       const req = { params: {}, url: '/api/meta/objects/nonexistent', method: 'GET' };
       await controller.metadata(req, res, undefined);
@@ -652,7 +658,7 @@ describe('NestJS Metadata API Integration Tests', () => {
     });
 
     it('returns 500 on dispatcher exception', async () => {
-      (service.dispatcher.handleMetadata as any).mockRejectedValueOnce(new Error('Internal error'));
+      (service.dispatcher.dispatch as any).mockRejectedValueOnce(new Error('Internal error'));
 
       const req = { params: {}, url: '/api/meta/objects', method: 'GET' };
       await controller.metadata(req, res, undefined);
@@ -662,7 +668,7 @@ describe('NestJS Metadata API Integration Tests', () => {
     });
 
     it('returns custom status code from error', async () => {
-      (service.dispatcher.handleMetadata as any).mockRejectedValueOnce(
+      (service.dispatcher.dispatch as any).mockRejectedValueOnce(
         Object.assign(new Error('Forbidden'), { statusCode: 403 }),
       );
 
@@ -682,11 +688,12 @@ describe('NestJS Metadata API Integration Tests', () => {
       const req = { params: {}, url: '/api/meta/objects/account/fields/name', method: 'GET' };
       await controller.metadata(req, res, undefined);
 
-      expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-        '/objects/account/fields/name',
-        { request: req },
+      expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
         'GET',
+        '/meta/objects/account/fields/name',
         undefined,
+        undefined,
+        { request: req },
       );
     });
 
@@ -694,11 +701,12 @@ describe('NestJS Metadata API Integration Tests', () => {
       const req = { params: {}, url: '/api/meta/objects?scope=platform', method: 'GET' };
       await controller.metadata(req, res, undefined);
 
-      expect(service.dispatcher.handleMetadata).toHaveBeenCalledWith(
-        '/objects',
-        { request: req },
+      expect(service.dispatcher.dispatch).toHaveBeenCalledWith(
         'GET',
+        '/meta/objects',
         undefined,
+        undefined,
+        { request: req },
       );
     });
   });

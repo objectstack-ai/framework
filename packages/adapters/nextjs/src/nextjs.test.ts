@@ -10,6 +10,7 @@ const mockDispatcher = {
   handleMetadata: vi.fn().mockResolvedValue({ handled: true, response: { body: { objects: [] }, status: 200 } }),
   handleData: vi.fn().mockResolvedValue({ handled: true, response: { body: { records: [] }, status: 200 } }),
   handleStorage: vi.fn().mockResolvedValue({ handled: true, response: { body: {}, status: 200 } }),
+  dispatch: vi.fn().mockResolvedValue({ handled: true, response: { body: { success: true }, status: 200 } }),
 };
 
 vi.mock('@objectstack/runtime', () => {
@@ -272,17 +273,17 @@ describe('createRouteHandler', () => {
   });
 
   describe('Metadata Endpoint', () => {
-    it('GET meta/objects calls handleMetadata', async () => {
+    it('GET meta/objects delegates to dispatch()', async () => {
       const handler = createRouteHandler({ kernel: mockKernel });
       const req = makeReq('http://localhost/api/meta/objects', 'GET');
       const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ objects: [] });
-      expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
-        'objects',
-        expect.objectContaining({ request: expect.anything() }),
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'GET',
+        '/meta/objects',
         undefined,
+        expect.any(Object),
+        expect.objectContaining({ request: expect.anything() }),
       );
     });
 
@@ -292,11 +293,12 @@ describe('createRouteHandler', () => {
       const req = makeReq('http://localhost/api/meta/objects', 'PUT', body);
       const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
       expect(res.status).toBe(200);
-      expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
-        'objects',
-        expect.objectContaining({ request: expect.anything() }),
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'PUT',
+        '/meta/objects',
         body,
+        expect.any(Object),
+        expect.objectContaining({ request: expect.anything() }),
       );
     });
 
@@ -306,26 +308,26 @@ describe('createRouteHandler', () => {
       const req = makeReq('http://localhost/api/meta/objects', 'POST', body);
       const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
       expect(res.status).toBe(200);
-      expect(mockDispatcher.handleMetadata).toHaveBeenCalledWith(
-        'objects',
-        expect.objectContaining({ request: expect.anything() }),
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'POST',
+        '/meta/objects',
         body,
+        expect.any(Object),
+        expect.objectContaining({ request: expect.anything() }),
       );
     });
   });
 
   describe('Data Endpoint', () => {
-    it('GET data/account calls handleData', async () => {
+    it('GET data/account delegates to dispatch()', async () => {
       const handler = createRouteHandler({ kernel: mockKernel });
       const req = makeReq('http://localhost/api/data/account', 'GET');
       const res = await handler(req, { params: { objectstack: ['data', 'account'] } });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ records: [] });
-      expect(mockDispatcher.handleData).toHaveBeenCalledWith(
-        'account',
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'GET',
-        {},
+        '/data/account',
+        undefined,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
       );
@@ -337,9 +339,9 @@ describe('createRouteHandler', () => {
       const req = makeReq('http://localhost/api/data/account', 'POST', body);
       const res = await handler(req, { params: { objectstack: ['data', 'account'] } });
       expect(res.status).toBe(200);
-      expect(mockDispatcher.handleData).toHaveBeenCalledWith(
-        'account',
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'POST',
+        '/data/account',
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
@@ -352,9 +354,9 @@ describe('createRouteHandler', () => {
       const req = makeReq('http://localhost/api/data/account', 'PATCH', body);
       const res = await handler(req, { params: { objectstack: ['data', 'account'] } });
       expect(res.status).toBe(200);
-      expect(mockDispatcher.handleData).toHaveBeenCalledWith(
-        'account',
+      expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
         'PATCH',
+        '/data/account',
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
@@ -362,7 +364,7 @@ describe('createRouteHandler', () => {
     });
 
     it('returns 404 when result is not handled', async () => {
-      mockDispatcher.handleData.mockResolvedValueOnce({ handled: false });
+      mockDispatcher.dispatch.mockResolvedValueOnce({ handled: false });
       const handler = createRouteHandler({ kernel: mockKernel });
       const req = makeReq('http://localhost/api/data/missing', 'GET');
       const res = await handler(req, { params: { objectstack: ['data', 'missing'] } });
@@ -401,6 +403,7 @@ describe('createRouteHandler', () => {
 
   describe('Error Handling', () => {
     it('returns 404 for unknown route segments', async () => {
+      mockDispatcher.dispatch.mockResolvedValueOnce({ handled: false });
       const handler = createRouteHandler({ kernel: mockKernel });
       const req = makeReq('http://localhost/api/unknown/path', 'GET');
       const res = await handler(req, { params: { objectstack: ['unknown', 'path'] } });
@@ -410,7 +413,7 @@ describe('createRouteHandler', () => {
     });
 
     it('returns 500 with default message on generic error', async () => {
-      mockDispatcher.handleData.mockRejectedValueOnce(new Error());
+      mockDispatcher.dispatch.mockRejectedValueOnce(new Error());
       const handler = createRouteHandler({ kernel: mockKernel });
       const req = makeReq('http://localhost/api/data/account', 'GET');
       const res = await handler(req, { params: { objectstack: ['data', 'account'] } });
@@ -419,7 +422,7 @@ describe('createRouteHandler', () => {
     });
 
     it('uses custom statusCode from error', async () => {
-      mockDispatcher.handleData.mockRejectedValueOnce(
+      mockDispatcher.dispatch.mockRejectedValueOnce(
         Object.assign(new Error('Forbidden'), { statusCode: 403 }),
       );
       const handler = createRouteHandler({ kernel: mockKernel });
@@ -432,7 +435,7 @@ describe('createRouteHandler', () => {
 
   describe('toResponse', () => {
     it('handles redirect result', async () => {
-      mockDispatcher.handleData.mockResolvedValueOnce({
+      mockDispatcher.dispatch.mockResolvedValueOnce({
         handled: true,
         result: { type: 'redirect', url: 'https://example.com' },
       });
@@ -444,7 +447,7 @@ describe('createRouteHandler', () => {
 
     it('handles stream result', async () => {
       const stream = 'mock-stream';
-      mockDispatcher.handleData.mockResolvedValueOnce({
+      mockDispatcher.dispatch.mockResolvedValueOnce({
         handled: true,
         result: { type: 'stream', stream, headers: { 'Content-Type': 'text/plain' } },
       });
@@ -457,7 +460,7 @@ describe('createRouteHandler', () => {
 
     it('returns raw result when handled but no response/redirect/stream', async () => {
       const rawResult = { type: 'custom', data: 'test' };
-      mockDispatcher.handleData.mockResolvedValueOnce({
+      mockDispatcher.dispatch.mockResolvedValueOnce({
         handled: true,
         result: rawResult,
       });
