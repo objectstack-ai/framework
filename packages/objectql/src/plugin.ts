@@ -277,11 +277,11 @@ export class ObjectQLPlugin implements Plugin {
       try {
         await driver.syncSchema(obj.name, obj);
         synced++;
-      } catch (e: any) {
+      } catch (e: unknown) {
         ctx.logger.warn('Failed to sync schema for object', {
           object: obj.name,
           driver: driver.name,
-          error: e.message,
+          error: e instanceof Error ? e.message : String(e),
         });
       }
     }
