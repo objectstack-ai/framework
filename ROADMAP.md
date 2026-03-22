@@ -532,13 +532,13 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 | `IWorkflowService` | **P2** | `@objectstack/service-workflow` | State machine + approval processes |
 | `IGraphQLService` | **P2** | `@objectstack/service-graphql` | Auto-generated GraphQL from objects |
 | `IAIService` | **P2** | `@objectstack/service-ai` | LLM integration (OpenAI/Anthropic/local) |
-| `IAnalyticsService` | **P3** | `@objectstack/service-analytics` | BI/OLAP queries |
+| `IAnalyticsService` | **P3** | `@objectstack/service-analytics` | ✅ Multi-driver analytics with strategy pattern (NativeSQL/ObjectQL/InMemory), CubeRegistry, generateSql (34 tests) |
 
 - [x] `service-automation` — Implement `IAutomationService` with plugin-based DAG flow engine (CRUD/Logic/HTTP nodes, fault edges, parallel branches, cycle detection, safe eval, timeout, versioning), HTTP API CRUD (9 routes), Client SDK (10 methods), execution history with step-level logging
 - [ ] `service-workflow` — Implement `IWorkflowService` with state machine runtime
 - [ ] `service-graphql` — Implement `IGraphQLService` with auto-schema generation
 - [ ] `service-ai` — Implement `IAIService` with multi-provider LLM routing
-- [ ] `service-analytics` — Implement full `IAnalyticsService` beyond memory reference
+- [x] `service-analytics` — Implement full `IAnalyticsService` with multi-driver strategy pattern (NativeSQLStrategy P1, ObjectQLStrategy P2, InMemoryStrategy P3), CubeRegistry with auto-inference from object schemas, generateSql dry-run, kernel plugin lifecycle
 
 ---
 
@@ -855,7 +855,7 @@ Final polish and advanced features.
 | 5 | HTTP Server | `IHttpServer` | ✅ | `@objectstack/plugin-hono-server` → `@objectstack/service-http` in v4.0 | Hono-based server |
 | 6 | Logger | `Logger` | ✅ | `@objectstack/core` | Pino-based structured logging |
 | 7 | Service Registry | `IServiceRegistry` | ✅ | `@objectstack/core` | Built into ObjectKernel |
-| 8 | Analytics Service | `IAnalyticsService` | 🟡 | `@objectstack/driver-memory` | Memory reference only |
+| 8 | Analytics Service | `IAnalyticsService` | ✅ | `@objectstack/service-analytics` | Multi-driver strategy pattern (NativeSQL/ObjectQL/InMemory), CubeRegistry, generateSql (34 tests) |
 | 9 | Plugin Lifecycle | `IPluginLifecycleEvents` | 🟡 | `@objectstack/core` | Partial in kernel |
 | 10 | Cache Service | `ICacheService` | ✅ | `@objectstack/service-cache` | Memory + Redis skeleton |
 | 11 | Queue Service | `IQueueService` | ✅ | `@objectstack/service-queue` | Memory + BullMQ skeleton |

@@ -32,6 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now return proper metadata responses instead of throwing 500 errors.
 
 ### Added
+- **`@objectstack/service-analytics`** — New multi-driver analytics service implementing `IAnalyticsService`.
+  Uses a **Strategy Pattern** with priority-ordered chain: **P1 NativeSQLStrategy** (pushes queries as
+  native SQL to Postgres/MySQL drivers), **P2 ObjectQLStrategy** (translates to ObjectQL `aggregate()` AST),
+  **P3 InMemoryStrategy** (delegates to existing `MemoryAnalyticsService` for dev/test). Includes
+  `CubeRegistry` for auto-discovery of cubes from manifest definitions and object schema inference,
+  `AnalyticsServicePlugin` for kernel plugin lifecycle, `generateSql()` dry-run capability, and
+  `queryCapabilities()` driver probing for dynamic strategy selection. 34 unit tests covering all
+  strategy branches.
 - **Studio system objects visibility** — Studio now auto-registers all system objects (sys_user,
   sys_role, sys_audit_log, etc.) from plugin-auth, plugin-security, and plugin-audit at kernel
   initialization. The sidebar "System" group dynamically lists all `isSystem=true` objects
