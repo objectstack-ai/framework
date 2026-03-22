@@ -273,6 +273,28 @@ export class AuthManager {
   }
 
   /**
+   * Inject or replace the ObjectQL data engine at runtime.
+   *
+   * This **must** be called before the first request triggers lazy
+   * initialisation of the better-auth instance — typically from the
+   * plugin `start()` phase where async services are guaranteed to be
+   * resolved.
+   *
+   * If the auth instance has already been created this is a no-op and
+   * a warning is emitted.
+   */
+  setDataEngine(engine: IDataEngine): void {
+    if (this.auth) {
+      console.warn(
+        '[AuthManager] setDataEngine() called after the auth instance was already created — ignoring. ' +
+        'Ensure this method is called before the first request.',
+      );
+      return;
+    }
+    this.config = { ...this.config, dataEngine: engine };
+  }
+
+  /**
    * Update the base URL at runtime.
    *
    * This **must** be called before the first request triggers lazy

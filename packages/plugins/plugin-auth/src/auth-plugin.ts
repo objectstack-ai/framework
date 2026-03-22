@@ -81,16 +81,16 @@ export class AuthPlugin implements Plugin {
       throw new Error('AuthPlugin: secret is required');
     }
 
-    // Get data engine service for database operations
-    const dataEngine = ctx.getService<any>('data');
-    if (!dataEngine) {
-      ctx.logger.warn('No data engine service found - auth will use in-memory storage');
-    }
-
-    // Initialize auth manager with data engine
+    // Initialize auth manager WITHOUT data engine.
+    // The 'data' service may be registered as an async factory that is
+    // not yet resolved during the init phase.  Calling the synchronous
+    // ctx.getService('data') here would throw:
+    //   "Service 'data' is async - use await"
+    // Instead we defer data-engine injection to the start() phase where
+    // all init-phase registrations have completed and async factories
+    // can be safely resolved.
     this.authManager = new AuthManager({
       ...this.options,
-      dataEngine,
     });
 
     // Register auth service
@@ -120,6 +120,29 @@ export class AuthPlugin implements Plugin {
 
     if (!this.authManager) {
       throw new Error('Auth manager not initialized');
+    }
+
+    // Inject data engine — deferred from init() to avoid "Service is async"
+    // errors when 'data' is registered via an async factory.
+    let dataEngine: any = null;
+    try {
+      dataEngine = ctx.getService<any>('data');
+    } catch {
+      // Sync access failed (async factory or not found).
+      // Try the kernel's async API as a fallback.
+      try {
+        const kernel = ctx.getKernel() as any;
+        if (kernel?.getServiceAsync) {
+          dataEngine = await kernel.getServiceAsync('data');
+        }
+      } catch {
+        // Service genuinely not available
+      }
+    }
+    if (dataEngine) {
+      this.authManager.setDataEngine(dataEngine);
+    } else {
+      ctx.logger.warn('No data engine service found - auth will use in-memory storage');
     }
 
     // Defer HTTP route registration to kernel:ready hook.

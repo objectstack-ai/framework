@@ -373,13 +373,17 @@ export const authPlugin: Plugin = {
   provides: ['auth'], // CoreServiceName value
   
   async init(ctx) {
-    const engine = ctx.getService<IDataEngine>('data');
-    const authService = new AuthServiceImpl(engine);
+    // Register auth service without data engine — the 'data' service may be
+    // an async factory that is not yet resolved during the init phase.
+    const authService = new AuthServiceImpl();
     ctx.registerService('auth', authService);
   },
   
   async start(ctx) {
+    // Inject data engine in start phase where async services are resolved.
     const auth = ctx.getService<IAuthService>('auth');
+    const engine = ctx.getService<IDataEngine>('data');
+    auth.setDataEngine(engine);
     await auth.onReady();
   },
   

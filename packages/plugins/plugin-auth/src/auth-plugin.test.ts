@@ -108,6 +108,24 @@ describe('AuthPlugin', () => {
 
       expect(mockContext.registerService).toHaveBeenCalled();
     });
+    it('should NOT call ctx.getService(data) during init', async () => {
+      authPlugin = new AuthPlugin({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      // Make getService('data') throw to prove init does not call it
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'data') throw new Error("Service 'data' is async - use await");
+        return undefined;
+      });
+
+      // init should succeed without touching 'data' service
+      await authPlugin.init(mockContext);
+
+      expect(mockContext.getService).not.toHaveBeenCalledWith('data');
+      expect(mockContext.registerService).toHaveBeenCalledWith('auth', expect.anything());
+    });
   });
 
   describe('Start Phase', () => {
@@ -122,6 +140,56 @@ describe('AuthPlugin', () => {
       // Capture hook registrations so we can trigger them in tests
       mockContext.hook = hookCapture.hookFn;
       await authPlugin.init(mockContext);
+    });
+
+    it('should inject data engine via setDataEngine during start', async () => {
+      const mockDataEngine = { insert: vi.fn(), find: vi.fn() };
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'data') return mockDataEngine;
+        return undefined;
+      });
+
+      const registeredAuthManager = (mockContext.registerService as any).mock.calls.find(
+        (c: any[]) => c[0] === 'auth',
+      )[1];
+      const setDataEngineSpy = vi.spyOn(registeredAuthManager, 'setDataEngine');
+
+      await authPlugin.start(mockContext);
+
+      expect(setDataEngineSpy).toHaveBeenCalledWith(mockDataEngine);
+    });
+
+    it('should fallback to kernel.getServiceAsync when sync getService throws', async () => {
+      const mockDataEngine = { insert: vi.fn(), find: vi.fn() };
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'data') throw new Error("Service 'data' is async - use await");
+        return undefined;
+      });
+      mockContext.getKernel = vi.fn(() => ({
+        getServiceAsync: vi.fn().mockResolvedValue(mockDataEngine),
+      }));
+
+      const registeredAuthManager = (mockContext.registerService as any).mock.calls.find(
+        (c: any[]) => c[0] === 'auth',
+      )[1];
+      const setDataEngineSpy = vi.spyOn(registeredAuthManager, 'setDataEngine');
+
+      await authPlugin.start(mockContext);
+
+      expect(setDataEngineSpy).toHaveBeenCalledWith(mockDataEngine);
+    });
+
+    it('should warn when no data engine is available', async () => {
+      mockContext.getService = vi.fn(() => {
+        throw new Error('Service not found');
+      });
+      mockContext.getKernel = vi.fn(() => undefined);
+
+      await authPlugin.start(mockContext);
+
+      expect(mockContext.logger.warn).toHaveBeenCalledWith(
+        'No data engine service found - auth will use in-memory storage'
+      );
     });
 
     it('should register a kernel:ready hook for route registration', async () => {
@@ -314,7 +382,12 @@ describe('AuthPlugin', () => {
         throw new Error(`Service not found: ${name}`);
       });
 
-      const registeredAuthManager = (mockContext.registerService as any).mock.calls.at(-1)[1];
+      // Find the auth manager registered by localPlugin (not the one from beforeEach).
+      // registerService is called twice per init: 'auth' then 'app.com.objectstack.system'.
+      const authCalls = (mockContext.registerService as any).mock.calls.filter(
+        (c: any[]) => c[0] === 'auth',
+      );
+      const registeredAuthManager = authCalls.at(-1)[1];
       const setRuntimeSpy = vi.spyOn(registeredAuthManager, 'setRuntimeBaseUrl');
 
       await localPlugin.start(mockContext);
@@ -345,7 +418,11 @@ describe('AuthPlugin', () => {
         throw new Error(`Service not found: ${name}`);
       });
 
-      const registeredAuthManager = (mockContext.registerService as any).mock.calls.at(-1)[1];
+      // Find the auth manager registered by localPlugin (not the one from beforeEach).
+      const authCalls = (mockContext.registerService as any).mock.calls.filter(
+        (c: any[]) => c[0] === 'auth',
+      );
+      const registeredAuthManager = authCalls.at(-1)[1];
       const setRuntimeSpy = vi.spyOn(registeredAuthManager, 'setRuntimeBaseUrl');
 
       await localPlugin.start(mockContext);

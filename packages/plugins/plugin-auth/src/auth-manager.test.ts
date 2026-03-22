@@ -539,6 +539,55 @@ describe('AuthManager', () => {
     });
   });
 
+  describe('setDataEngine', () => {
+    it('should inject data engine before auth instance is created', () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      const mockDataEngine = { insert: vi.fn(), find: vi.fn() } as any;
+      manager.setDataEngine(mockDataEngine);
+      manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      // database config should be a function (AdapterFactory) when dataEngine is set
+      expect(typeof capturedConfig.database).toBe('function');
+    });
+
+    it('should be a no-op and warn when called after auth instance is created', () => {
+      (betterAuth as any).mockImplementation(() => ({
+        handler: vi.fn(),
+        api: {},
+      }));
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      // Force auth instance creation
+      manager.getAuthInstance();
+
+      // Now try to set data engine — should warn and not affect the already-created instance
+      const mockDataEngine = { insert: vi.fn(), find: vi.fn() } as any;
+      manager.setDataEngine(mockDataEngine);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('setDataEngine() called after the auth instance was already created'),
+      );
+      warnSpy.mockRestore();
+    });
+  });
+
   describe('socialProviders passthrough', () => {
     it('should forward socialProviders to betterAuth when provided', () => {
       let capturedConfig: any;

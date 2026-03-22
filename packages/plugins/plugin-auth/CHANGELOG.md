@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- **plugin-auth**: Defer `data` service acquisition from `init()` to `start()` phase to prevent
+  "Service 'data' is async - use await" errors when the data service is registered as an async factory.
+  `AuthManager.setDataEngine()` is now used to inject the data engine after all init-phase
+  registrations have completed. Falls back to `kernel.getServiceAsync()` when synchronous access
+  is unavailable.
+
+### Added
+
+- `AuthManager.setDataEngine(engine)`: Allows runtime injection of the ObjectQL data engine,
+  following the same pattern as the existing `setRuntimeBaseUrl()` method.
+
 ## 3.2.9
 
 ### Patch Changes
