@@ -178,7 +178,7 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
       for (const m of query.measures) {
         const fieldName = m.includes('.') ? m.split('.')[1] : m;
         const measure = cube.measures[fieldName];
-        fields.push({ name: m, type: measure ? 'number' : 'number' });
+        fields.push({ name: m, type: 'number' });
       }
     }
     return fields;

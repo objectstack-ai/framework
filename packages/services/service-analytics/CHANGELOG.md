@@ -14,6 +14,6 @@ All notable changes to this package will be documented in this file.
   - **P3 — InMemoryStrategy**: Delegates to any registered `IAnalyticsService` (e.g., `MemoryAnalyticsService`)
 - `CubeRegistry` for auto-discovery and registration of cubes from manifest definitions and object schema inference
 - `AnalyticsServicePlugin` for kernel plugin lifecycle integration
-- `queryAggregations()` driver capability probing for strategy selection
+- `queryCapabilities()` driver capability probing for strategy selection
 - `generateSql()` dry-run SQL generation across all strategies
 - Unit tests covering all strategy branches
