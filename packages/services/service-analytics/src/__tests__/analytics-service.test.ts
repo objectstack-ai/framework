@@ -7,7 +7,6 @@ import { AnalyticsService } from '../analytics-service.js';
 import { CubeRegistry } from '../cube-registry.js';
 import { NativeSQLStrategy } from '../strategies/native-sql-strategy.js';
 import { ObjectQLStrategy } from '../strategies/objectql-strategy.js';
-import { InMemoryStrategy } from '../strategies/in-memory-strategy.js';
 import type { DriverCapabilities } from '../strategies/types.js';
 
 // ─────────────────────────────────────────────────────────────────
@@ -262,98 +261,69 @@ describe('ObjectQLStrategy', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// InMemoryStrategy
+// FallbackDelegateStrategy (internal, tested via AnalyticsService)
 // ─────────────────────────────────────────────────────────────────
 
-describe('InMemoryStrategy', () => {
-  const strategy = new InMemoryStrategy();
-
-  it('should have correct name and priority', () => {
-    expect(strategy.name).toBe('InMemoryStrategy');
-    expect(strategy.priority).toBe(30);
-  });
-
-  it('should handle when fallbackService is available', () => {
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: false }),
-      fallbackService: {
-        query: vi.fn(),
-        getMeta: vi.fn(),
-      },
-    };
-    expect(strategy.canHandle(baseQuery, ctx)).toBe(true);
-  });
-
-  it('should handle when inMemory capability is true', () => {
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: true }),
-    };
-    expect(strategy.canHandle(baseQuery, ctx)).toBe(true);
-  });
-
-  it('should not handle without fallback and not inMemory', () => {
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: false }),
-    };
-    expect(strategy.canHandle(baseQuery, ctx)).toBe(false);
-  });
-
-  it('should delegate to fallback service', async () => {
+describe('FallbackDelegateStrategy (via AnalyticsService)', () => {
+  it('should auto-add FallbackDelegateStrategy when fallbackService is configured', async () => {
     const mockResult: AnalyticsResult = { rows: [{ count: 10 }], fields: [{ name: 'count', type: 'number' }] };
-    const fallbackService = {
+    const fallback: IAnalyticsService = {
       query: vi.fn().mockResolvedValue(mockResult),
-      getMeta: vi.fn(),
+      getMeta: vi.fn().mockResolvedValue([]),
     };
 
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: true }),
-      fallbackService,
-    };
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      fallbackService: fallback,
+    });
 
-    const result = await strategy.execute(baseQuery, ctx);
-    expect(fallbackService.query).toHaveBeenCalledWith(baseQuery);
+    const result = await service.query(baseQuery);
+    expect(fallback.query).toHaveBeenCalledWith(baseQuery);
     expect(result).toEqual(mockResult);
   });
 
-  it('should throw when no fallback service', async () => {
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: true }),
-    };
+  it('should NOT add FallbackDelegateStrategy when no fallbackService', async () => {
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: false }),
+    });
 
-    await expect(strategy.execute(baseQuery, ctx)).rejects.toThrow('No fallback analytics service');
+    await expect(service.query(baseQuery)).rejects.toThrow('No strategy can handle');
   });
 
-  it('should delegate generateSql to fallback', async () => {
-    const fallbackService = {
+  it('should delegate generateSql to fallback service', async () => {
+    const fallback: IAnalyticsService = {
       query: vi.fn(),
       getMeta: vi.fn(),
       generateSql: vi.fn().mockResolvedValue({ sql: 'SELECT 1', params: [] }),
     };
 
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: true }),
-      fallbackService,
-    };
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      fallbackService: fallback,
+    });
 
-    const { sql } = await strategy.generateSql(baseQuery, ctx);
+    const { sql } = await service.generateSql(baseQuery);
     expect(sql).toBe('SELECT 1');
   });
 
   it('should return placeholder SQL when fallback has no generateSql', async () => {
-    const ctx = {
-      getCube: () => ordersCube,
-      queryCapabilities: () => ({ nativeSql: false, objectqlAggregate: false, inMemory: true }),
-      fallbackService: { query: vi.fn(), getMeta: vi.fn() },
+    const fallback: IAnalyticsService = {
+      query: vi.fn().mockResolvedValue({ rows: [], fields: [] }),
+      getMeta: vi.fn(),
     };
 
-    const { sql } = await strategy.generateSql(baseQuery, ctx);
-    expect(sql).toContain('InMemoryStrategy');
+    const service = new AnalyticsService({
+      cubes: [ordersCube],
+      logger: silentLogger,
+      fallbackService: fallback,
+    });
+
+    const { sql } = await service.generateSql(baseQuery);
+    expect(sql).toContain('FallbackDelegateStrategy');
   });
 });
 
@@ -389,7 +359,7 @@ describe('AnalyticsService', () => {
     expect(result.rows).toHaveLength(1);
   });
 
-  it('should fall back to InMemoryStrategy with fallback service', async () => {
+  it('should fall back to FallbackDelegateStrategy with fallback service', async () => {
     const mockResult: AnalyticsResult = {
       rows: [{ count: 100 }],
       fields: [{ name: 'count', type: 'number' }],

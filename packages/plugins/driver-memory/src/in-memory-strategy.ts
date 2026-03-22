@@ -1,13 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { AnalyticsQuery, AnalyticsResult } from '@objectstack/spec/contracts';
-import type { AnalyticsStrategy, StrategyContext } from './types.js';
+import type { AnalyticsQuery, AnalyticsResult, AnalyticsStrategy, StrategyContext } from '@objectstack/spec/contracts';
 
 /**
  * InMemoryStrategy — Priority 3
  *
  * Delegates to an existing `IAnalyticsService` instance that was registered
- * as a fallback (typically `MemoryAnalyticsService` from `@objectstack/driver-memory`).
+ * as a fallback (typically `MemoryAnalyticsService` from this package).
  *
  * This is the lowest-priority strategy, used in:
  * - `dev` / `test` environments

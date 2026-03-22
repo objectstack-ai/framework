@@ -13,7 +13,6 @@ import { CubeRegistry } from './cube-registry.js';
 import type { AnalyticsStrategy, DriverCapabilities, StrategyContext } from './strategies/types.js';
 import { NativeSQLStrategy } from './strategies/native-sql-strategy.js';
 import { ObjectQLStrategy } from './strategies/objectql-strategy.js';
-import { InMemoryStrategy } from './strategies/in-memory-strategy.js';
 
 /**
  * Configuration for AnalyticsService.
@@ -73,7 +72,10 @@ const DEFAULT_CAPABILITIES: DriverCapabilities = {
  * |:---:|:---|:---|
  * | P1 (10) | NativeSQLStrategy | Driver supports raw SQL |
  * | P2 (20) | ObjectQLStrategy | Driver supports aggregate AST |
- * | P3 (30) | InMemoryStrategy | Fallback service registered |
+ * | P3 (30) | (custom / InMemoryStrategy from driver-memory) | Injected by user |
+ *
+ * When `fallbackService` is configured, an internal delegate strategy
+ * is automatically appended at priority 30 as a safety net.
  *
  * The service also owns a `CubeRegistry` for metadata discovery and
  * auto-inference from object schemas.
@@ -103,11 +105,19 @@ export class AnalyticsService implements IAnalyticsService {
     };
 
     // Build strategy chain (built-in + custom, sorted by priority)
+    // InMemoryStrategy is NOT built-in — it lives in @objectstack/driver-memory
+    // and should be passed via config.strategies when needed.
+    // When fallbackService is configured, an internal delegate is added at P3.
     const builtIn: AnalyticsStrategy[] = [
       new NativeSQLStrategy(),
       new ObjectQLStrategy(),
-      new InMemoryStrategy(),
     ];
+
+    // Auto-add fallback delegate when fallbackService is provided
+    if (config.fallbackService) {
+      builtIn.push(new FallbackDelegateStrategy());
+    }
+
     const custom = config.strategies || [];
     this.strategies = [...builtIn, ...custom].sort((a, b) => a.priority - b.priority);
 
@@ -186,5 +196,36 @@ export class AnalyticsService implements IAnalyticsService {
       `Checked: ${this.strategies.map(s => s.name).join(', ')}. ` +
       'Ensure a compatible driver is configured or a fallback service is registered.',
     );
+  }
+}
+
+/**
+ * FallbackDelegateStrategy — Internal strategy for fallback service delegation.
+ *
+ * Automatically added to the strategy chain when `fallbackService` is configured.
+ * Not exported — consumers who need explicit in-memory support should use
+ * `InMemoryStrategy` from `@objectstack/driver-memory`.
+ */
+class FallbackDelegateStrategy implements AnalyticsStrategy {
+  readonly name = 'FallbackDelegateStrategy';
+  readonly priority = 30;
+
+  canHandle(query: AnalyticsQuery, ctx: StrategyContext): boolean {
+    if (!query.cube) return false;
+    return !!ctx.fallbackService;
+  }
+
+  async execute(query: AnalyticsQuery, ctx: StrategyContext): Promise<AnalyticsResult> {
+    return ctx.fallbackService!.query(query);
+  }
+
+  async generateSql(query: AnalyticsQuery, ctx: StrategyContext): Promise<{ sql: string; params: unknown[] }> {
+    if (ctx.fallbackService?.generateSql) {
+      return ctx.fallbackService.generateSql(query);
+    }
+    return {
+      sql: `-- FallbackDelegateStrategy: SQL generation not supported for cube "${query.cube}"`,
+      params: [],
+    };
   }
 }

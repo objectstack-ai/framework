@@ -11,6 +11,8 @@ export { LocalStoragePersistenceAdapter } from './persistence/local-storage-adap
 export { MemoryAnalyticsService } from './memory-analytics.js';
 export type { MemoryAnalyticsConfig } from './memory-analytics.js';
 
+export { InMemoryStrategy } from './in-memory-strategy.js';
+
 export default {
   id: 'com.objectstack.driver.memory',
   version: '1.0.0',

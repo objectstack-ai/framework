@@ -14,5 +14,6 @@ export { CubeRegistry } from './cube-registry.js';
 // Strategies
 export { NativeSQLStrategy } from './strategies/native-sql-strategy.js';
 export { ObjectQLStrategy } from './strategies/objectql-strategy.js';
-export { InMemoryStrategy } from './strategies/in-memory-strategy.js';
 export type { AnalyticsStrategy, StrategyContext, DriverCapabilities } from './strategies/types.js';
+
+// Note: InMemoryStrategy is exported from @objectstack/driver-memory
