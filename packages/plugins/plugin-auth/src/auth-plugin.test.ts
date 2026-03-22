@@ -299,6 +299,7 @@ describe('AuthPlugin', () => {
         baseUrl: 'http://localhost:3000',
       });
       mockContext.hook = localHookCapture.hookFn;
+      (mockContext.registerService as any).mockClear();
       await localPlugin.init(mockContext);
 
       const mockRawApp = { all: vi.fn() };
@@ -314,7 +315,7 @@ describe('AuthPlugin', () => {
         throw new Error(`Service not found: ${name}`);
       });
 
-      const registeredAuthManager = (mockContext.registerService as any).mock.calls.at(-1)[1];
+      const registeredAuthManager = (mockContext.registerService as any).mock.calls[0][1];
       const setRuntimeSpy = vi.spyOn(registeredAuthManager, 'setRuntimeBaseUrl');
 
       await localPlugin.start(mockContext);
@@ -330,6 +331,7 @@ describe('AuthPlugin', () => {
         secret: 'test-secret-at-least-32-chars-long',
       });
       mockContext.hook = localHookCapture.hookFn;
+      (mockContext.registerService as any).mockClear();
       await localPlugin.init(mockContext);
 
       const mockRawApp = { all: vi.fn() };
@@ -345,7 +347,7 @@ describe('AuthPlugin', () => {
         throw new Error(`Service not found: ${name}`);
       });
 
-      const registeredAuthManager = (mockContext.registerService as any).mock.calls.at(-1)[1];
+      const registeredAuthManager = (mockContext.registerService as any).mock.calls[0][1];
       const setRuntimeSpy = vi.spyOn(registeredAuthManager, 'setRuntimeBaseUrl');
 
       await localPlugin.start(mockContext);

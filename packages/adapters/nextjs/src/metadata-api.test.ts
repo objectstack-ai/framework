@@ -127,10 +127,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         expect(res.status).toBe(200);
         expect(res.body.data).toHaveLength(2);
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'objects',
-          expect.objectContaining({ request: expect.anything() }),
           'GET',
+          '/meta/objects',
           undefined,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
     });
@@ -153,10 +154,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         expect(res.status).toBe(200);
         expect(res.body.data.name).toBe('account');
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'objects/account',
-          expect.objectContaining({ request: expect.anything() }),
           'GET',
+          '/meta/objects/account',
           undefined,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
     });
@@ -178,10 +180,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         const res = await handler(req, { params: { objectstack: ['meta', 'objects'] } });
         expect(res.status).toBe(201);
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'objects',
-          expect.objectContaining({ request: expect.anything() }),
           'POST',
+          '/meta/objects',
           body,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
     });
@@ -199,10 +202,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         const res = await handler(req, { params: { objectstack: ['meta', 'objects', 'account'] } });
         expect(res.status).toBe(200);
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'objects/account',
-          expect.objectContaining({ request: expect.anything() }),
           'PUT',
+          '/meta/objects/account',
           body,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
     });
@@ -229,10 +233,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         const req = makeReq('http://localhost/api/meta/views');
         await handler(req, { params: { objectstack: ['meta', 'views'] } });
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'views',
-          expect.objectContaining({ request: expect.anything() }),
           'GET',
+          '/meta/views',
           undefined,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
 
@@ -240,10 +245,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         const req = makeReq('http://localhost/api/meta/flows');
         await handler(req, { params: { objectstack: ['meta', 'flows'] } });
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'flows',
-          expect.objectContaining({ request: expect.anything() }),
           'GET',
+          '/meta/flows',
           undefined,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
 
@@ -251,10 +257,11 @@ describe('Next.js Metadata API Integration Tests', () => {
         const req = makeReq('http://localhost/api/meta/agents');
         await handler(req, { params: { objectstack: ['meta', 'agents'] } });
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-          'agents',
-          expect.objectContaining({ request: expect.anything() }),
           'GET',
+          '/meta/agents',
           undefined,
+          {},
+          expect.objectContaining({ request: expect.anything() }),
         );
       });
     });
@@ -684,10 +691,11 @@ describe('Next.js Metadata API Integration Tests', () => {
       const req = makeReq('http://localhost/api/meta/objects/account/fields/name');
       await handler(req, { params: { objectstack: ['meta', 'objects', 'account', 'fields', 'name'] } });
       expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-        'objects/account/fields/name',
-        expect.any(Object),
         'GET',
+        '/meta/objects/account/fields/name',
         undefined,
+        {},
+        expect.objectContaining({ request: expect.anything() }),
       );
     });
 
@@ -696,10 +704,11 @@ describe('Next.js Metadata API Integration Tests', () => {
       // With just ['meta'], subPath becomes empty after slice(1)
       await handler(req, { params: { objectstack: ['meta'] } });
       expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
-        '',
-        expect.any(Object),
         'GET',
+        '/meta',
         undefined,
+        {},
+        expect.objectContaining({ request: expect.anything() }),
       );
     });
   });

@@ -23,6 +23,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remains lazy (cold-start only) via `ensureApp()` / `ensureKernel()` in `_kernel.ts`.
 
 ### Fixed
+- **Service-analytics build error (TS6133)** — Removed unused `measure` variable in
+  `native-sql-strategy.ts` that caused the DTS build to fail with `noUnusedLocals` enabled,
+  blocking the entire CI build pipeline.
+- **Next.js adapter test failures** — Updated 9 metadata API test assertions to match the
+  current `dispatch(method, path, body, queryParams, context)` call signature used by the
+  implementation. Tests were still expecting the old `dispatch(subPath, context, method, body)`
+  signature.
+- **Auth plugin test failures** — Fixed 2 tests in `auth-plugin.test.ts` that referenced the
+  wrong `AuthManager` instance via `registerService.mock.calls`. Added `mockClear()` before
+  local plugin init to ensure `mock.calls[0]` points to the correct AuthManager for the test's
+  plugin instance.
 - **SvelteKit adapter test failures** — Updated test mock to include `dispatch()` method and
   aligned Metadata, Data, Error handling, and toResponse test assertions with the unified
   catch-all dispatch pattern used by the implementation and all other adapters (e.g. Hono).
