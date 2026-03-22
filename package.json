@@ -52,6 +52,14 @@
   "pnpm": {
     "overrides": {
       "minimatch@<10.2.1": "10.2.1"
-    }
+    },
+    "ignoredBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/engines",
+      "@vscode/vsce-sign",
+      "keytar",
+      "prisma",
+      "yarn"
+    ]
   }
 }

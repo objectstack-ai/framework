@@ -1,0 +1,32 @@
+{
+  "name": "@objectstack/driver-sql",
+  "version": "3.2.9",
+  "license": "Apache-2.0",
+  "description": "SQL Driver for ObjectStack - Supports PostgreSQL, MySQL, SQLite via Knex",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "dev": "tsc -w",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/spec": "workspace:*",
+    "knex": "^3.1.0",
+    "nanoid": "^3.3.11"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "better-sqlite3": "^11.9.1",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.0"
+  }
+}

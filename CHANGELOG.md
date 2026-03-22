@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`@objectstack/driver-sql` plugin** — Migrated the Knex-based SQL driver from `@objectql/driver-sql`
+  into `packages/plugins/driver-sql/`. The driver implements the standard `DriverInterface` from
+  `@objectstack/core` and imports types from `@objectstack/spec/data`. Supports PostgreSQL, MySQL,
+  and SQLite (via `better-sqlite3`). Includes schema sync, introspection, aggregation, window
+  functions, transactions, and full CRUD with both QueryAST and legacy filter format support.
+  All 72 unit tests pass against in-memory SQLite.
+
 ### Changed
 - **Migrate API layer to Hono + Vercel Node adapter** — Replaced the vestigial Next.js-style
   `api/[...path].ts` catch-all with a proper `api/index.ts` Hono entrypoint using `handle(app)`
