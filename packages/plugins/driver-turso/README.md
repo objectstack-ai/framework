@@ -69,6 +69,10 @@ await driver.connect();
 await driver.sync();
 ```
 
+> **Note:** Remote-only URLs (`url: 'libsql://...'`) without `syncUrl` are
+> not supported and will throw. Always use a local `file:` or `:memory:` URL
+> as the primary store. For remote persistence, use embedded replica mode with `syncUrl`.
+
 ## Multi-Tenant Routing
 
 Database-per-tenant architecture with automatic driver caching:
@@ -92,7 +96,9 @@ const users = await driver.find('users', { where: { active: true } });
 await router.destroyAll();
 ```
 
-### Multi-Tenant with Turso Cloud
+### Multi-Tenant with Embedded Replicas
+
+Both `urlTemplate` and `driverConfigOverrides.syncUrl` support `{tenant}` placeholder interpolation:
 
 ```typescript
 const router = createMultiTenantRouter({
@@ -105,32 +111,46 @@ const router = createMultiTenantRouter({
 });
 ```
 
+### Concurrency Safety
+
+Concurrent `getDriverForTenant()` calls for the same tenant are deduplicated — only one driver is created, and all callers share the same instance.
+
 ## Configuration
 
 ```typescript
 interface TursoDriverConfig {
-  /** Database URL (file:, :memory:, libsql://, https://) */
+  /** Database URL for the local store (file: or :memory:) */
   url: string;
 
-  /** JWT auth token for remote Turso database */
+  /** JWT auth token for the remote Turso database (used with syncUrl) */
   authToken?: string;
 
-  /** AES-256 encryption key for local files */
+  /**
+   * AES-256 encryption key for local database file.
+   * Only effective in embedded replica mode (requires syncUrl).
+   */
   encryptionKey?: string;
 
-  /** Maximum concurrent requests. Default: 20 */
+  /**
+   * Maximum concurrent requests to the remote database.
+   * Only effective in embedded replica mode (requires syncUrl).
+   * Default: 20
+   */
   concurrency?: number;
 
-  /** Remote sync URL for embedded replica mode */
+  /** Remote sync URL for embedded replica mode (libsql:// or https://) */
   syncUrl?: string;
 
-  /** Sync configuration */
+  /** Sync configuration (requires syncUrl) */
   sync?: {
     intervalSeconds?: number; // Default: 60
     onConnect?: boolean;      // Default: true
   };
 
-  /** Operation timeout in milliseconds */
+  /**
+   * Operation timeout in milliseconds for remote operations.
+   * Only effective in embedded replica mode (requires syncUrl).
+   */
   timeout?: number;
 }
 ```
@@ -164,7 +184,7 @@ await kernel.enablePlugin(tursoPlugin, {
 ## Testing
 
 ```bash
-pnpm test        # Run all 53 tests
+pnpm test        # Run all tests
 ```
 
 Tests run against in-memory SQLite (`:memory:`) — no external services required.

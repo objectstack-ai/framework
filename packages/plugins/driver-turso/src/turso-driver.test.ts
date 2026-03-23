@@ -330,13 +330,12 @@ describe('TursoDriver Sync Configuration', () => {
   });
 });
 
-// ── File URL Parsing ─────────────────────────────────────────────────────────
+// ── URL Parsing & Validation ─────────────────────────────────────────────────
 
 describe('TursoDriver URL Parsing', () => {
   it('should parse file: URL correctly', () => {
     const driver = new TursoDriver({ url: 'file:./data/test.db' });
     expect(driver.getTursoConfig().url).toBe('file:./data/test.db');
-    // The internal Knex config should extract the filename
   });
 
   it('should handle :memory: URL', () => {
@@ -344,13 +343,21 @@ describe('TursoDriver URL Parsing', () => {
     expect(driver.getTursoConfig().url).toBe(':memory:');
   });
 
-  it('should handle remote URL (falls back to :memory: Knex backend)', () => {
-    const driver = new TursoDriver({
+  it('should throw for remote-only URL without syncUrl', () => {
+    expect(() => new TursoDriver({
       url: 'libsql://test-db.turso.io',
       authToken: 'test-token',
+    })).toThrow('not supported without "syncUrl"');
+  });
+
+  it('should accept remote URL when syncUrl is provided', () => {
+    // Should not throw — embedded replica mode
+    const driver = new TursoDriver({
+      url: 'libsql://test-db.turso.io',
+      syncUrl: 'libsql://test-db.turso.io',
+      authToken: 'test-token',
     });
-    expect(driver.getTursoConfig().url).toBe('libsql://test-db.turso.io');
-    expect(driver.getTursoConfig().authToken).toBe('test-token');
+    expect(driver.getTursoConfig().syncUrl).toBe('libsql://test-db.turso.io');
   });
 });
 

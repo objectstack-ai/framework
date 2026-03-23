@@ -4,9 +4,9 @@
  * Turso/libSQL Driver for ObjectStack
  *
  * Extends SqlDriver to provide Turso-specific capabilities:
- * - libSQL connection modes (local, remote, embedded replica)
- * - Embedded replica sync mechanism
- * - Turso-specific capability flags (FTS5, JSON1, CTE, vector search)
+ * - libSQL connection modes (local file, in-memory, embedded replica)
+ * - Embedded replica sync mechanism via @libsql/client
+ * - Turso-specific capability flags (FTS5, JSON1, CTE, savepoints)
  *
  * All CRUD, schema, query, filter, and introspection logic is inherited
  * from SqlDriver. TursoDriver only overrides connection lifecycle and
@@ -21,32 +21,44 @@ import type { Client } from '@libsql/client';
 /**
  * Turso driver configuration.
  *
- * Supports three connection modes:
- * 1. **Local (Embedded):** `url: 'file:./data/local.db'` or `url: ':memory:'`
- * 2. **Remote (Cloud):** `url: 'libsql://my-db-orgname.turso.io'`
- * 3. **Embedded Replica (Hybrid):** `url` (local file) + `syncUrl` (remote)
+ * Supports the following connection modes:
+ * 1. **Local (Embedded):** `url: 'file:./data/local.db'`
+ * 2. **In-memory (Ephemeral):** `url: ':memory:'`
+ * 3. **Embedded Replica (Hybrid):** `url` (local file or `:memory:`) +
+ *    `syncUrl` (remote `libsql://` / `https://` Turso endpoint)
  *
- * For local and in-memory modes, the driver uses better-sqlite3 via Knex
- * (inherited from SqlDriver). For embedded replica mode, sync operations
- * are handled via `@libsql/client`.
+ * In all modes, the primary query engine runs against a local SQLite
+ * database (via SqlDriver / Knex + better-sqlite3). In embedded replica
+ * mode, `syncUrl` and `authToken` configure synchronization with a remote
+ * Turso database via `@libsql/client`.
+ *
+ * **Note:** A bare remote-only URL (`url: 'libsql://...'`) without
+ * `syncUrl` is NOT supported and will throw during `connect()`.
  */
 export interface TursoDriverConfig {
-  /** Database URL (`file:`, `:memory:`, `libsql://`, `https://`) */
+  /** Database URL for the local store (`file:` path or `:memory:`) */
   url: string;
 
-  /** JWT auth token for remote Turso database */
+  /** JWT auth token for the remote Turso database (used with `syncUrl`) */
   authToken?: string;
 
-  /** AES-256 encryption key for local files */
+  /**
+   * AES-256 encryption key for the local database file.
+   * Only effective in embedded replica mode (requires `syncUrl`).
+   */
   encryptionKey?: string;
 
-  /** Maximum concurrent requests. Default: 20 */
+  /**
+   * Maximum concurrent requests to the remote database.
+   * Only effective in embedded replica mode (requires `syncUrl`).
+   * Default: 20
+   */
   concurrency?: number;
 
-  /** Remote sync URL for embedded replica mode */
+  /** Remote sync URL for embedded replica mode (`libsql://` or `https://`) */
   syncUrl?: string;
 
-  /** Sync configuration for embedded replica mode */
+  /** Sync configuration for embedded replica mode (requires `syncUrl`) */
   sync?: {
     /** Periodic sync interval in seconds (0 = manual only). Default: 60 */
     intervalSeconds?: number;
@@ -54,7 +66,10 @@ export interface TursoDriverConfig {
     onConnect?: boolean;
   };
 
-  /** Operation timeout in milliseconds */
+  /**
+   * Operation timeout in milliseconds for remote operations.
+   * Only effective in embedded replica mode (requires `syncUrl`).
+   */
   timeout?: number;
 }
 
@@ -92,8 +107,8 @@ export interface TursoDriverConfig {
  */
 export class TursoDriver extends SqlDriver {
   // IDataDriver metadata
-  public override readonly name = 'com.objectstack.driver.turso';
-  public override readonly version = '1.0.0';
+  public override readonly name: string = 'com.objectstack.driver.turso';
+  public override readonly version: string = '1.0.0';
 
   public override readonly supports = {
     // Basic CRUD Operations
@@ -154,22 +169,40 @@ export class TursoDriver extends SqlDriver {
   /**
    * Convert TursoDriverConfig to a Knex-compatible SqlDriverConfig.
    * Extracts the file path from the URL for local/embedded modes.
-   * Remote-only URLs fall back to in-memory SQLite.
+   *
+   * @throws Error if the URL is a remote-only URL without syncUrl
    */
   private static toKnexConfig(config: TursoDriverConfig): SqlDriverConfig {
-    let filename = ':memory:';
-
     if (config.url === ':memory:') {
-      filename = ':memory:';
-    } else if (config.url.startsWith('file:')) {
-      filename = config.url.replace(/^file:/, '');
+      return {
+        client: 'better-sqlite3',
+        connection: { filename: ':memory:' },
+        useNullAsDefault: true,
+      };
     }
-    // For remote-only URLs (libsql://, https://), use :memory: as the local backend.
-    // Writes will be local; use embedded replica mode (syncUrl) for remote persistence.
 
+    if (config.url.startsWith('file:')) {
+      return {
+        client: 'better-sqlite3',
+        connection: { filename: config.url.replace(/^file:/, '') },
+        useNullAsDefault: true,
+      };
+    }
+
+    // Remote-only URL (libsql://, https://) — not supported as standalone
+    if (!config.syncUrl) {
+      throw new Error(
+        `TursoDriver: Remote-only URL "${config.url}" is not supported without "syncUrl". ` +
+        'Use a local URL (file: or :memory:) with "syncUrl" for embedded replica mode, ' +
+        'or use a local/in-memory URL for standalone mode.',
+      );
+    }
+
+    // Remote URL with syncUrl — use :memory: as the local Knex backend
+    // The actual remote sync is handled by @libsql/client
     return {
       client: 'better-sqlite3',
-      connection: { filename },
+      connection: { filename: ':memory:' },
       useNullAsDefault: true,
     };
   }

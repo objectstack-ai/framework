@@ -4,6 +4,14 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { createMultiTenantRouter, type MultiTenantRouter } from '../src/multi-tenant.js';
 import { TursoDriver } from '../src/turso-driver.js';
 import { SqlDriver } from '@objectstack/driver-sql';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/** Build a unique temp path template for test isolation. */
+function tmpTemplate(label: string): string {
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `file:${join(tmpdir(), `test-turso-${label}-${rand}-{tenant}.db`)}`;
+}
 
 describe('Multi-Tenant Router', () => {
   let router: MultiTenantRouter | null = null;
@@ -29,7 +37,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should create a TursoDriver for a tenant', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-mt-{tenant}.db',
+      urlTemplate: tmpTemplate('mt'),
     });
 
     const driver = await router.getDriverForTenant('acme');
@@ -40,7 +48,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should cache drivers and return same instance', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-cache-{tenant}.db',
+      urlTemplate: tmpTemplate('cache'),
     });
 
     const driver1 = await router.getDriverForTenant('acme');
@@ -50,7 +58,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should create separate drivers per tenant', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-sep-{tenant}.db',
+      urlTemplate: tmpTemplate('sep'),
     });
 
     const driver1 = await router.getDriverForTenant('tenant-a');
@@ -63,7 +71,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should reject empty tenantId', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-val-{tenant}.db',
+      urlTemplate: tmpTemplate('val'),
     });
 
     await expect(router.getDriverForTenant('')).rejects.toThrow();
@@ -71,7 +79,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should reject invalid tenantId with special characters', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-val2-{tenant}.db',
+      urlTemplate: tmpTemplate('val2'),
     });
 
     await expect(router.getDriverForTenant('a')).rejects.toThrow();
@@ -80,7 +88,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should accept valid tenantId', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-accept-{tenant}.db',
+      urlTemplate: tmpTemplate('accept'),
     });
 
     const driver = await router.getDriverForTenant('valid-tenant');
@@ -91,7 +99,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should report cache size', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-size-{tenant}.db',
+      urlTemplate: tmpTemplate('size'),
     });
 
     expect(router.getCacheSize()).toBe(0);
@@ -103,7 +111,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should invalidate cache for a tenant', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-inv-{tenant}.db',
+      urlTemplate: tmpTemplate('inv'),
     });
 
     await router.getDriverForTenant('to-invalidate');
@@ -115,7 +123,7 @@ describe('Multi-Tenant Router', () => {
 
   it('should destroy all cached drivers', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-destroy-{tenant}.db',
+      urlTemplate: tmpTemplate('destroy'),
     });
 
     await router.getDriverForTenant('destroy-a');
@@ -132,7 +140,7 @@ describe('Multi-Tenant Router', () => {
     const created: string[] = [];
 
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-cb-{tenant}.db',
+      urlTemplate: tmpTemplate('cb'),
       onTenantCreate: async (tenantId) => {
         created.push(tenantId);
       },
@@ -150,7 +158,7 @@ describe('Multi-Tenant Router', () => {
     const evicted: string[] = [];
 
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-evict-{tenant}.db',
+      urlTemplate: tmpTemplate('evict'),
       onTenantEvict: async (tenantId) => {
         evicted.push(tenantId);
       },
@@ -163,11 +171,39 @@ describe('Multi-Tenant Router', () => {
     expect(evicted).toEqual(['evict-test']);
   });
 
+  // ── Concurrent Access Guard ────────────────────────────────────────────
+
+  it('should deduplicate concurrent getDriverForTenant calls', async () => {
+    let createCount = 0;
+
+    router = createMultiTenantRouter({
+      urlTemplate: tmpTemplate('conc'),
+      onTenantCreate: async () => {
+        createCount++;
+      },
+    });
+
+    // Fire multiple concurrent calls for the same tenant
+    const [d1, d2, d3] = await Promise.all([
+      router.getDriverForTenant('same-tenant'),
+      router.getDriverForTenant('same-tenant'),
+      router.getDriverForTenant('same-tenant'),
+    ]);
+
+    // All calls should return the same driver instance
+    expect(d1).toBe(d2);
+    expect(d2).toBe(d3);
+
+    // onTenantCreate should only be called once
+    expect(createCount).toBe(1);
+    expect(router.getCacheSize()).toBe(1);
+  });
+
   // ── CRUD through Multi-Tenant Driver ───────────────────────────────────
 
   it('should perform CRUD operations through a tenant driver', async () => {
     router = createMultiTenantRouter({
-      urlTemplate: 'file:/tmp/test-turso-crud-{tenant}.db',
+      urlTemplate: tmpTemplate('crud'),
     });
 
     const driver = await router.getDriverForTenant('crud-test');

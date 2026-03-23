@@ -31,7 +31,7 @@ import { TursoDriver, type TursoDriverConfig } from './turso-driver.js';
 export interface MultiTenantConfig {
   /**
    * URL template with `{tenant}` placeholder.
-   * Example: `'file:./data/{tenant}.db'` or `'libsql://{tenant}-org.turso.io'`
+   * Example: `'file:./data/{tenant}.db'`
    */
   urlTemplate: string;
 
@@ -60,7 +60,8 @@ export interface MultiTenantConfig {
 
   /**
    * Additional TursoDriverConfig fields merged into every tenant driver config.
-   * `url` is overridden by the template.
+   * `url` is overridden by the template. String fields like `syncUrl` support
+   * `{tenant}` placeholders which are interpolated automatically.
    */
   driverConfigOverrides?: Omit<Partial<TursoDriverConfig>, 'url'>;
 }
@@ -104,6 +105,7 @@ interface CacheEntry {
  * - `urlTemplate` must contain `{tenant}` which is replaced with the tenantId.
  * - Drivers are lazily created and cached in a process-level Map.
  * - Expired entries are evicted on next access (lazy expiration).
+ * - Concurrent calls for the same tenant share a single in-flight creation.
  * - Serverless-safe: no global intervals, no leaked state.
  *
  * @example
@@ -126,6 +128,7 @@ export function createMultiTenantRouter(config: MultiTenantConfig): MultiTenantR
 
   const ttl = config.clientCacheTTL ?? DEFAULT_CACHE_TTL;
   const cache = new Map<string, CacheEntry>();
+  const inflight = new Map<string, Promise<TursoDriver>>();
 
   function validateTenantId(tenantId: string): void {
     if (!tenantId || typeof tenantId !== 'string') {
@@ -138,8 +141,11 @@ export function createMultiTenantRouter(config: MultiTenantConfig): MultiTenantR
     }
   }
 
-  function buildUrl(tenantId: string): string {
-    return config.urlTemplate.replace(/\{tenant\}/g, tenantId);
+  /**
+   * Replace `{tenant}` placeholders in a string value.
+   */
+  function interpolate(template: string, tenantId: string): string {
+    return template.replace(/\{tenant\}/g, tenantId);
   }
 
   async function evictEntry(tenantId: string, entry: CacheEntry): Promise<void> {
@@ -158,24 +164,25 @@ export function createMultiTenantRouter(config: MultiTenantConfig): MultiTenantR
     }
   }
 
-  async function getDriverForTenant(tenantId: string): Promise<TursoDriver> {
-    validateTenantId(tenantId);
-
+  /**
+   * Internal driver creation — called once per tenant, guarded by inflight map.
+   */
+  async function createDriverForTenant(tenantId: string): Promise<TursoDriver> {
+    // Evict expired entry if present
     const existing = cache.get(tenantId);
     if (existing) {
-      if (Date.now() < existing.expiresAt) {
-        return existing.driver;
-      }
-      // Expired — evict and recreate
       await evictEntry(tenantId, existing);
     }
 
-    // Create new driver
-    const url = buildUrl(tenantId);
+    // Build config with {tenant} interpolated in all string fields
+    const url = interpolate(config.urlTemplate, tenantId);
+    const overrides = config.driverConfigOverrides ?? {};
     const driverConfig: TursoDriverConfig = {
-      ...config.driverConfigOverrides,
+      ...overrides,
       url,
-      authToken: config.groupAuthToken ?? config.driverConfigOverrides?.authToken,
+      authToken: config.groupAuthToken ?? overrides.authToken,
+      // Interpolate {tenant} in syncUrl if present
+      syncUrl: overrides.syncUrl ? interpolate(overrides.syncUrl, tenantId) : undefined,
     };
 
     const driver = new TursoDriver(driverConfig);
@@ -192,6 +199,30 @@ export function createMultiTenantRouter(config: MultiTenantConfig): MultiTenantR
     });
 
     return driver;
+  }
+
+  async function getDriverForTenant(tenantId: string): Promise<TursoDriver> {
+    validateTenantId(tenantId);
+
+    // Return cached driver if still valid
+    const existing = cache.get(tenantId);
+    if (existing && Date.now() < existing.expiresAt) {
+      return existing.driver;
+    }
+
+    // Return in-flight creation if one exists (prevents concurrent duplicates)
+    const pending = inflight.get(tenantId);
+    if (pending) {
+      return pending;
+    }
+
+    // Create new driver with in-flight guard
+    const promise = createDriverForTenant(tenantId).finally(() => {
+      inflight.delete(tenantId);
+    });
+    inflight.set(tenantId, promise);
+
+    return promise;
   }
 
   function invalidateCache(tenantId: string): void {

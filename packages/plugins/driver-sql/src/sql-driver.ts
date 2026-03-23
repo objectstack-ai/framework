@@ -65,8 +65,8 @@ export type SqlDriverConfig = Knex.Config;
  */
 export class SqlDriver implements IDataDriver {
   // IDataDriver metadata
-  public readonly name = 'com.objectstack.driver.sql';
-  public readonly version = '1.0.0';
+  public readonly name: string = 'com.objectstack.driver.sql';
+  public readonly version: string = '1.0.0';
   public readonly supports = {
     // Basic CRUD Operations
     create: true,
@@ -185,10 +185,8 @@ export class SqlDriver implements IDataDriver {
     // ORDER BY
     if (query.orderBy && Array.isArray(query.orderBy)) {
       for (const item of query.orderBy) {
-        const field = item.field || item[0];
-        const dir = item.order || item[1] || 'asc';
-        if (field) {
-          builder.orderBy(this.mapSortField(field), dir);
+        if (item.field) {
+          builder.orderBy(this.mapSortField(item.field), item.order || 'asc');
         }
       }
     }
