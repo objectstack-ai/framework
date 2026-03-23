@@ -177,16 +177,14 @@ export class SqlDriver implements IDataDriver {
       builder.select('*');
     }
 
-    // WHERE — support both `where` (standard) and `filters` (legacy)
-    const filterCondition = query.where || (query as any).filters;
-    if (filterCondition) {
-      this.applyFilters(builder, filterCondition);
+    // WHERE
+    if (query.where) {
+      this.applyFilters(builder, query.where);
     }
 
-    // ORDER BY — support both `orderBy` (standard) and `sort` (legacy)
-    const sortArray = query.orderBy || (query as any).sort;
-    if (sortArray && Array.isArray(sortArray)) {
-      for (const item of sortArray) {
+    // ORDER BY
+    if (query.orderBy && Array.isArray(query.orderBy)) {
+      for (const item of query.orderBy) {
         const field = item.field || item[0];
         const dir = item.order || item[1] || 'asc';
         if (field) {
@@ -195,12 +193,9 @@ export class SqlDriver implements IDataDriver {
       }
     }
 
-    // PAGINATION — support both offset/limit (standard) and skip/top (legacy)
-    const offsetValue = query.offset ?? (query as any).skip;
-    const limitValue = query.limit ?? (query as any).top;
-
-    if (offsetValue !== undefined) builder.offset(offsetValue);
-    if (limitValue !== undefined) builder.limit(limitValue);
+    // PAGINATION
+    if (query.offset !== undefined) builder.offset(query.offset);
+    if (query.limit !== undefined) builder.limit(query.limit);
 
     let results: any[];
     try {
@@ -347,16 +342,14 @@ export class SqlDriver implements IDataDriver {
 
   async updateMany(object: string, query: QueryAST, data: any, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
-    const filters = query.where || (query as any).filters || query;
-    if (filters) this.applyFilters(builder, filters);
+    if (query.where) this.applyFilters(builder, query.where);
     const count = await builder.update(data);
     return count || 0;
   }
 
   async deleteMany(object: string, query: QueryAST, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
-    const filters = query.where || (query as any).filters || query;
-    if (filters) this.applyFilters(builder, filters);
+    if (query.where) this.applyFilters(builder, query.where);
     const count = await builder.delete();
     return count || 0;
   }
@@ -364,13 +357,8 @@ export class SqlDriver implements IDataDriver {
   async count(object: string, query?: QueryAST, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
 
-    let actualFilters = query as any;
-    if (query && (query.where || (query as any).filters)) {
-      actualFilters = query.where || (query as any).filters;
-    }
-
-    if (actualFilters) {
-      this.applyFilters(builder, actualFilters);
+    if (query?.where) {
+      this.applyFilters(builder, query.where);
     }
 
     const result = await builder.count<{ count: number }[]>('* as count');
@@ -742,7 +730,7 @@ export class SqlDriver implements IDataDriver {
       }
 
       for (const [key, value] of Object.entries(filters)) {
-        if (['filters', 'sort', 'limit', 'skip', 'offset', 'fields', 'orderBy'].includes(key)) continue;
+        if (['limit', 'offset', 'fields', 'orderBy'].includes(key)) continue;
         builder.where(key, value as any);
       }
       return;

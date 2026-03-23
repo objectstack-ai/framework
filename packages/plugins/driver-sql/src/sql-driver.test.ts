@@ -93,7 +93,7 @@ describe('SqlDriver (SQLite Integration)', () => {
   });
 
   it('should count objects', async () => {
-    const count = await driver.count('users', { age: 17 } as any);
+    const count = await driver.count('users', { where: { age: 17 } } as any);
     expect(count).toBe(2);
   });
 

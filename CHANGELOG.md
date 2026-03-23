@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema (added `create`, `read`, `update`, `delete`, `bulkCreate`, `bulkUpdate`, `bulkDelete`,
   `savepoints`, `queryCTE`, `jsonQuery`, `geospatialQuery`, `streaming`, `schemaSync`, etc.).
 
+### Removed
+- **`@objectstack/driver-sql` — Legacy query key fallbacks** — Removed support for deprecated
+  query keys `filters` (use `where`), `sort` (use `orderBy`), `skip` (use `offset`), and `top`
+  (use `limit`) from `find`, `updateMany`, `deleteMany`, and `count` methods. The SQL driver now
+  strictly follows the `IDataDriver` / `QueryAST` protocol. All `as any` casts for legacy key
+  access have been eliminated. Tests updated to use only standard `QueryAST` keys.
+
 ### Deprecated
 - **`DriverInterface`** — Use `IDataDriver` from `@objectstack/spec/contracts` instead.
   `DriverInterface` remains as a type alias in both `@objectstack/spec/contracts` and

@@ -72,11 +72,11 @@ describe('SqlDriver (QueryAST Format)', () => {
   });
 
   describe('QueryAST Format Support', () => {
-    it('should support QueryAST with "top" instead of "limit"', async () => {
+    it('should support QueryAST with limit and orderBy', async () => {
       const results = await driver.find('products', {
         fields: ['name', 'price'],
-        top: 2,
-        sort: [{ field: 'price', order: 'asc' as const }],
+        limit: 2,
+        orderBy: [{ field: 'price', order: 'asc' as const }],
       } as any);
 
       expect(results.length).toBe(2);
@@ -84,10 +84,10 @@ describe('SqlDriver (QueryAST Format)', () => {
       expect(results[1].name).toBe('Chair');
     });
 
-    it('should support QueryAST sort format with object notation', async () => {
+    it('should support QueryAST orderBy with object notation', async () => {
       const results = await driver.find('products', {
         fields: ['name'],
-        sort: [
+        orderBy: [
           { field: 'category', order: 'asc' as const },
           { field: 'price', order: 'desc' as const },
         ],
@@ -98,12 +98,12 @@ describe('SqlDriver (QueryAST Format)', () => {
       expect(results[3].name).toBe('Desk');
     });
 
-    it('should support QueryAST with filters and pagination', async () => {
+    it('should support QueryAST with where, offset, limit, and orderBy', async () => {
       const results = await driver.find('products', {
-        filters: [['category', '=', 'Electronics']],
-        skip: 1,
-        top: 1,
-        sort: [{ field: 'price', order: 'asc' as const }],
+        where: [['category', '=', 'Electronics']],
+        offset: 1,
+        limit: 1,
+        orderBy: [{ field: 'price', order: 'asc' as const }],
       } as any);
 
       expect(results.length).toBe(1);
@@ -131,20 +131,20 @@ describe('SqlDriver (QueryAST Format)', () => {
       expect(furniture.total_price).toBe(550);
     });
 
-    it('should support count with QueryAST format', async () => {
+    it('should support count with QueryAST where clause', async () => {
       const count = await driver.count('products', {
-        filters: [['price', '>', 300]],
+        where: [['price', '>', 300]],
       } as any);
       expect(count).toBe(3);
     });
   });
 
-  describe('Backward Compatibility', () => {
-    it('should still support legacy UnifiedQuery format with "limit"', async () => {
+  describe('Standard QueryAST Pagination', () => {
+    it('should support limit with orderBy using standard keys', async () => {
       const results = await driver.find('products', {
         fields: ['name'],
         limit: 2,
-        sort: [['price', 'asc']],
+        orderBy: [['price', 'asc']],
       } as any);
 
       expect(results.length).toBe(2);
@@ -161,20 +161,71 @@ describe('SqlDriver (QueryAST Format)', () => {
       const electronics = results.find((r: any) => r.category === 'Electronics');
       expect(electronics.avg_price).toBeCloseTo(541.67, 1);
     });
-  });
 
-  describe('Mixed Format Support', () => {
-    it('should handle query with both top and skip', async () => {
+    it('should support offset and limit with orderBy', async () => {
       const results = await driver.find('products', {
-        top: 3,
-        skip: 2,
-        sort: [{ field: 'name', order: 'asc' as const }],
+        limit: 3,
+        offset: 2,
+        orderBy: [{ field: 'name', order: 'asc' as const }],
       } as any);
 
       expect(results.length).toBe(3);
       expect(results[0].name).toBe('Laptop');
       expect(results[1].name).toBe('Monitor');
       expect(results[2].name).toBe('Mouse');
+    });
+  });
+
+  describe('Legacy Keys Are Ignored', () => {
+    it('should ignore legacy "filters" key — only "where" is recognized', async () => {
+      const results = await driver.find('products', {
+        filters: [['category', '=', 'Furniture']],
+      } as any);
+
+      // "filters" is not recognized, so no WHERE clause is applied — returns all rows
+      expect(results.length).toBe(5);
+    });
+
+    it('should ignore legacy "sort" key — only "orderBy" is recognized', async () => {
+      const results = await driver.find('products', {
+        fields: ['name'],
+        limit: 2,
+        sort: [{ field: 'price', order: 'asc' as const }],
+      } as any);
+
+      // "sort" is not recognized — no ORDER BY applied, so order is insertion order
+      expect(results.length).toBe(2);
+      // Without ORDER BY, results come in insertion order (Laptop, Mouse)
+      expect(results[0].name).toBe('Laptop');
+    });
+
+    it('should ignore legacy "skip" key — only "offset" is recognized', async () => {
+      const results = await driver.find('products', {
+        skip: 3,
+        orderBy: [{ field: 'name', order: 'asc' as const }],
+      } as any);
+
+      // "skip" is not recognized — no offset applied, returns all 5 rows
+      expect(results.length).toBe(5);
+    });
+
+    it('should ignore legacy "top" key — only "limit" is recognized', async () => {
+      const results = await driver.find('products', {
+        top: 2,
+        orderBy: [{ field: 'name', order: 'asc' as const }],
+      } as any);
+
+      // "top" is not recognized — no limit applied, returns all 5 rows
+      expect(results.length).toBe(5);
+    });
+
+    it('should ignore legacy "filters" in count — only "where" is recognized', async () => {
+      const count = await driver.count('products', {
+        filters: [['price', '>', 300]],
+      } as any);
+
+      // "filters" is not recognized — counts all rows
+      expect(count).toBe(5);
     });
   });
 });
