@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Vercel deployment — `ERR_MODULE_NOT_FOUND` for `@objectstack/service-feed`** — Fixed incorrect
+  `exports` paths in `package.json` for all service packages that declare `"type": "module"`. When
+  `tsup` builds an ESM package (`"type": "module"`), it outputs `.js` for ESM and `.cjs` for CJS.
+  However, the exports maps incorrectly referenced `.mjs` (ESM) and `.js` (CJS) — the convention
+  for packages *without* `"type": "module"`. This caused Node's ESM resolver to fail with
+  `ERR_MODULE_NOT_FOUND` when Vercel tried to import `dist/index.mjs` (which doesn't exist).
+  Affected packages: `service-feed`, `service-automation`, `service-cache`, `service-realtime`,
+  `service-job`, `service-queue`, `service-storage`, `service-analytics`.
 - **`@objectstack/driver-sql` DTS build failure — knex type resolution** — Fixed a TypeScript
   declaration build failure caused by knex v3.2.3 declaring a non-existent `.d.mts` types file
   in its package.json `exports` field. With `moduleResolution: "bundler"`, TypeScript could not
