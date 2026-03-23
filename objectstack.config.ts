@@ -7,7 +7,7 @@
 import { defineStack } from '@objectstack/spec';
 import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
-import { InMemoryDriver } from '@objectstack/driver-memory';
+import { SqlDriver } from '@objectstack/driver-sql';
 import CrmApp from './examples/app-crm/objectstack.config';
 import TodoApp from './examples/app-todo/objectstack.config';
 import BiPlugin from './examples/plugin-bi/objectstack.config';
@@ -24,7 +24,11 @@ export default defineStack({
   },
   plugins: [
     new ObjectQLPlugin(),
-    new DriverPlugin(new InMemoryDriver()),
+    new DriverPlugin(new SqlDriver({
+      client: 'better-sqlite3',
+      connection: { filename: '.objectstack/data/dev.db' },
+      useNullAsDefault: true,
+    })),
     new I18nServicePlugin({       
       defaultLocale: 'en',
       fallbackLocale: 'en',

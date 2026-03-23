@@ -14,6 +14,9 @@ importers:
       '@objectstack/driver-memory':
         specifier: workspace:*
         version: link:packages/plugins/driver-memory
+      '@objectstack/driver-sql':
+        specifier: workspace:*
+        version: link:packages/plugins/driver-sql
       '@objectstack/objectql':
         specifier: workspace:*
         version: link:packages/objectql
@@ -32,6 +35,9 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:packages/spec
+      better-sqlite3:
+        specifier: ^11.10.0
+        version: 11.10.0
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
