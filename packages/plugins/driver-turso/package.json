@@ -1,0 +1,44 @@
+{
+  "name": "@objectstack/driver-turso",
+  "version": "3.2.9",
+  "license": "Apache-2.0",
+  "description": "Turso/libSQL Driver for ObjectStack — Edge-first SQLite with embedded replicas and multi-tenancy",
+  "keywords": [
+    "objectstack",
+    "driver",
+    "turso",
+    "libsql",
+    "sqlite",
+    "edge",
+    "serverless",
+    "embedded-replica",
+    "multi-tenant"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "dev": "tsc -w",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/driver-sql": "workspace:*",
+    "@objectstack/spec": "workspace:*",
+    "@libsql/client": "^0.17.2",
+    "better-sqlite3": "^11.9.1",
+    "nanoid": "^3.3.11"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.0"
+  }
+}

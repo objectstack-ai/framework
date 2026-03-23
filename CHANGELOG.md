@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`@objectstack/driver-turso` plugin** — Migrated and standardized the Turso/libSQL driver from
+  `@objectql/driver-turso` into `packages/plugins/driver-turso/`. The driver **extends** `SqlDriver`
+  from `@objectstack/driver-sql` — all CRUD, schema, filter, aggregation, and introspection logic
+  is inherited with zero code duplication. Turso-specific features include: three connection modes
+  (local file, in-memory, embedded replica), `@libsql/client` sync mechanism for embedded replicas,
+  multi-tenant router with TTL-based driver caching, and enhanced capability flags (FTS5, JSON1,
+  CTE, savepoints, indexes). Includes 53 unit tests. Factory function `createTursoDriver()` and
+  plugin manifest for kernel integration.
+- **Multi-tenant routing** (`createMultiTenantRouter`) — Database-per-tenant architecture with
+  automatic driver lifecycle management, tenant ID validation, configurable TTL cache, and
+  `onTenantCreate`/`onTenantEvict` lifecycle callbacks. Serverless-safe (no global intervals).
+
+### Changed
+- **`@objectstack/driver-sql` — Protected extensibility** — Changed `private` to `protected` for
+  all internal properties and methods (`knex`, `config`, `jsonFields`, `booleanFields`,
+  `tablesWithTimestamps`, `isSqlite`, `isPostgres`, `isMysql`, `getBuilder`, `applyFilters`,
+  `applyFilterCondition`, `mapSortField`, `mapAggregateFunc`, `buildWindowFunction`,
+  `createColumn`, `ensureDatabaseExists`, `createDatabase`, `isJsonField`, `formatInput`,
+  `formatOutput`, `introspectColumns`, `introspectForeignKeys`, `introspectPrimaryKeys`,
+  `introspectUniqueConstraints`). Enables clean subclassing for driver variants (Turso, D1, etc.)
+  without code duplication.
+
+### Fixed
+- **`@objectstack/driver-sql` — `count()` returns NaN for zero results** — Fixed `count()` method
+  using `||` (logical OR) instead of `??` (nullish coalescing) to read the count value. When the
+  actual count was `0`, `row.count || row['count(*)']` evaluated to `Number(undefined)` = `NaN`
+  because `0` is falsy. Now uses `row.count ?? row['count(*)'] ?? 0` for correct zero handling.
+
 ### Changed
 - **Unified Data Driver Contract (`IDataDriver`)** — Resolved the split between `DriverInterface`
   (core, minimal ~13 methods) and `IDataDriver` (spec, comprehensive 28 methods). `IDataDriver`
