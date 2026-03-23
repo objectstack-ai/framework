@@ -1,5 +1,11 @@
 # @objectstack/hono
 
+## 3.3.0
+
+### Patch Changes
+
+- @objectstack/runtime@3.3.0
+
 ## 3.2.9
 
 ### Patch Changes

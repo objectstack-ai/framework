@@ -1,5 +1,11 @@
 # @objectstack/example-crm
 
+## 3.0.24
+
+### Patch Changes
+
+- @objectstack/spec@3.3.0
+
 ## 3.0.23
 
 ### Patch Changes

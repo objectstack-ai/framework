@@ -1,5 +1,15 @@
 # @objectstack/plugin-msw
 
+## 3.3.0
+
+### Patch Changes
+
+- @objectstack/spec@3.3.0
+- @objectstack/core@3.3.0
+- @objectstack/types@3.3.0
+- @objectstack/objectql@3.3.0
+- @objectstack/runtime@3.3.0
+
 ## 3.2.9
 
 ### Patch Changes

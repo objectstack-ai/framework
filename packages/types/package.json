@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/types",
-  "version": "3.2.9",
+  "version": "3.3.0",
   "license": "Apache-2.0",
   "description": "Shared interfaces describing the ObjectStack Runtime environment",
   "main": "dist/index.js",
