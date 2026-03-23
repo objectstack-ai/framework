@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`@objectstack/driver-sql` DTS build failure — knex type resolution** — Fixed a TypeScript
+  declaration build failure caused by knex v3.2.3 declaring a non-existent `.d.mts` types file
+  in its package.json `exports` field. With `moduleResolution: "bundler"`, TypeScript could not
+  resolve knex's type declarations, resulting in TS7016 and TS7006 errors during DTS generation.
+  Added a `paths` mapping in the driver-sql `tsconfig.json` to direct TypeScript to the correct
+  `knex/types/index.d.ts` file. This also fixes cascade build failures in all downstream
+  packages that depend on driver-sql.
 - **`SqlDriver.syncSchema()` — physical table name mismatch** — Fixed the root cause of the
   `no such table: sys_user` error: `syncSchema()` was ignoring the `object` parameter (physical
   table name like `sys_user`) and using `schema.name` (FQN like `sys__user`) for DDL operations.
