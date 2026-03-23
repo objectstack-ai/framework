@@ -16,11 +16,6 @@
 import { SqlDriver, type SqlDriverConfig } from '@objectstack/driver-sql';
 import type { Client } from '@libsql/client';
 
-/**
- * Default ID length for auto-generated IDs.
- */
-const DEFAULT_ID_LENGTH = 16;
-
 // ── Configuration Types ──────────────────────────────────────────────────────
 
 /**
