@@ -186,17 +186,29 @@ describe('SqlDriver (QueryAST Format)', () => {
       expect(results.length).toBe(5);
     });
 
+    it('should use "where" and ignore "filters" when both are present', async () => {
+      const results = await driver.find('products', {
+        where: [['category', '=', 'Electronics']],
+        filters: [['category', '=', 'Furniture']],
+      } as any);
+
+      // Only "where" is applied — returns Electronics, not Furniture
+      expect(results.every((r: any) => r.category === 'Electronics')).toBe(true);
+      expect(results.length).toBe(3);
+    });
+
     it('should ignore legacy "sort" key — only "orderBy" is recognized', async () => {
       const results = await driver.find('products', {
         fields: ['name'],
-        limit: 2,
+        limit: 5,
+        orderBy: [{ field: 'price', order: 'desc' as const }],
         sort: [{ field: 'price', order: 'asc' as const }],
       } as any);
 
-      // "sort" is not recognized — no ORDER BY applied, so order is insertion order
-      expect(results.length).toBe(2);
-      // Without ORDER BY, results come in insertion order (Laptop, Mouse)
+      // "sort" is ignored; "orderBy" (desc) is applied — most expensive first
+      expect(results.length).toBe(5);
       expect(results[0].name).toBe('Laptop');
+      expect(results[4].name).toBe('Mouse');
     });
 
     it('should ignore legacy "skip" key — only "offset" is recognized', async () => {
