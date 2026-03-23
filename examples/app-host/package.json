@@ -13,7 +13,7 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/driver-turso": "workspace:*",
     "@example/app-crm": "workspace:*",
     "@example/app-todo": "workspace:*",
     "@objectstack/metadata": "workspace:*",

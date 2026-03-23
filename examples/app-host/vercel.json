@@ -5,6 +5,8 @@
   "outputDirectory": "dist",
   "env": {
     "AUTH_SECRET": "@auth_secret",
-    "VERCEL_URL": "@vercel_url"
+    "VERCEL_URL": "@vercel_url",
+    "TURSO_DATABASE_URL": "@turso_database_url",
+    "TURSO_AUTH_TOKEN": "@turso_auth_token"
   }
 }

@@ -3,7 +3,7 @@
 import { defineStack } from '@objectstack/spec';
 import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
-import { InMemoryDriver } from '@objectstack/driver-memory';
+import { TursoDriver } from '@objectstack/driver-turso';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import CrmApp from '../app-crm/objectstack.config';
 import TodoApp from '../app-todo/objectstack.config';
@@ -35,8 +35,11 @@ export default defineStack({
   // The Runtime CLI will iterate this list and call kernel.use()
   plugins: [
     new ObjectQLPlugin(),
-    // Register Default Driver (Memory)
-    new DriverPlugin(new InMemoryDriver()),
+    // Register Default Driver (Turso — remote mode on Vercel, in-memory for local dev)
+    new DriverPlugin(new TursoDriver({
+      url: process.env.TURSO_DATABASE_URL ?? ':memory:',
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })),
     // Authentication — required for production (Vercel) deployments
     authPlugin,
     // Wrap Manifests/Stacks in AppPlugin adapter
@@ -101,7 +104,10 @@ export const PreviewHostExample = defineStack({
   // Same plugins as the standard host
   plugins: [
     new ObjectQLPlugin(),
-    new DriverPlugin(new InMemoryDriver()),
+    new DriverPlugin(new TursoDriver({
+      url: process.env.TURSO_DATABASE_URL ?? ':memory:',
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })),
     authPlugin,
     new AppPlugin(CrmApp),
     new AppPlugin(TodoApp),

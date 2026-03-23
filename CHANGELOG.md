@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Vercel deployment — switched from InMemoryDriver to TursoDriver** — The `app-host` example now
+  uses `@objectstack/driver-turso` (TursoDriver) instead of `@objectstack/driver-memory`
+  (InMemoryDriver) for Vercel deployments. In production, the driver connects to a Turso cloud
+  database via `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` environment variables (remote mode).
+  For local development without those variables, it falls back to `:memory:` (ephemeral SQLite).
+  This ensures data persistence across serverless function invocations on Vercel.
+
 ### Added
 - **`@objectstack/driver-turso` — dual transport architecture** — TursoDriver now supports three
   transport modes: `local`, `replica`, and `remote`. Remote mode (`url: 'libsql://...'`) enables
