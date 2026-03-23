@@ -38,7 +38,7 @@ export default defineStack({
     // Register Default Driver (Turso — remote mode on Vercel, in-memory for local dev)
     new DriverPlugin(new TursoDriver({
       url: process.env.TURSO_DATABASE_URL ?? ':memory:',
-      authToken: process.env.TURSO_AUTH_TOKEN,
+      ...(process.env.TURSO_AUTH_TOKEN && { authToken: process.env.TURSO_AUTH_TOKEN }),
     })),
     // Authentication — required for production (Vercel) deployments
     authPlugin,
@@ -106,7 +106,7 @@ export const PreviewHostExample = defineStack({
     new ObjectQLPlugin(),
     new DriverPlugin(new TursoDriver({
       url: process.env.TURSO_DATABASE_URL ?? ':memory:',
-      authToken: process.env.TURSO_AUTH_TOKEN,
+      ...(process.env.TURSO_AUTH_TOKEN && { authToken: process.env.TURSO_AUTH_TOKEN }),
     })),
     authPlugin,
     new AppPlugin(CrmApp),
