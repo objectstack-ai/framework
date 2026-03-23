@@ -57,8 +57,8 @@
     "@objectstack/core": "workspace:^"
   },
   "devDependencies": {
-    "@oclif/plugin-help": "^6.2.38",
-    "@oclif/plugin-plugins": "^5.4.58",
+    "@oclif/plugin-help": "^6.2.40",
+    "@oclif/plugin-plugins": "^5.4.59",
     "@types/node": "^25.5.0",
     "tsup": "^8.0.2",
     "typescript": "^5.3.3",

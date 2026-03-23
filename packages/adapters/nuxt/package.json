@@ -18,11 +18,11 @@
   },
   "peerDependencies": {
     "@objectstack/runtime": "workspace:^",
-    "h3": "^1.15.8"
+    "h3": "^1.15.10"
   },
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
-    "h3": "^1.15.8",
+    "h3": "^1.15.10",
     "typescript": "^5.0.0",
     "vitest": "^4.1.0"
   }
