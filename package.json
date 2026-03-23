@@ -44,7 +44,7 @@
     "@objectstack/runtime": "workspace:*",
     "@objectstack/service-i18n": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^12.8.0",
     "lucide-react": "^0.577.0"
   },
   "engines": {

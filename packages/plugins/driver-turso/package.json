@@ -33,7 +33,7 @@
     "@objectstack/driver-sql": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@libsql/client": "^0.17.2",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^12.8.0",
     "nanoid": "^5.1.7"
   },
   "devDependencies": {
