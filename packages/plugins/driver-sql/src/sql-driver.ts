@@ -185,8 +185,8 @@ export class SqlDriver implements IDataDriver {
     // ORDER BY
     if (query.orderBy && Array.isArray(query.orderBy)) {
       for (const item of query.orderBy) {
-        const field = item.field || item[0];
-        const dir = item.order || item[1] || 'asc';
+        const field = item.field;
+        const dir = item.order || 'asc';
         if (field) {
           builder.orderBy(this.mapSortField(field), dir);
         }

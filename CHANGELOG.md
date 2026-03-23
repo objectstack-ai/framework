@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`@objectstack/driver-sql`** — Removed legacy tuple-style indexing (`item[0]`, `item[1]`) from
+  `orderBy` processing in `SqlDriver.find()`. The `SortNodeSchema` defines `orderBy` items as
+  `{ field: string; order: "asc" | "desc" }` objects, not tuples. The legacy fallbacks caused
+  TypeScript DTS build errors (`TS7053`) that cascaded to all downstream packages. Updated the
+  corresponding test to use proper object notation.
+
 ### Changed
 - **Unified Data Driver Contract (`IDataDriver`)** — Resolved the split between `DriverInterface`
   (core, minimal ~13 methods) and `IDataDriver` (spec, comprehensive 28 methods). `IDataDriver`

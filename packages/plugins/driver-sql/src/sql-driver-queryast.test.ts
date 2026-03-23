@@ -144,7 +144,7 @@ describe('SqlDriver (QueryAST Format)', () => {
       const results = await driver.find('products', {
         fields: ['name'],
         limit: 2,
-        orderBy: [['price', 'asc']],
+        orderBy: [{ field: 'price', order: 'asc' as const }],
       } as any);
 
       expect(results.length).toBe(2);
