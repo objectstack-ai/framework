@@ -272,5 +272,46 @@ describe('Data Engine Contract', () => {
       expect(await driver.count('users')).toBe(42);
       expect(driver.explain).toBeDefined();
     });
+
+    it('should support findStream with yielded values', async () => {
+      const records = [{ id: '1', name: 'Alice' }, { id: '2', name: 'Bob' }];
+      const driver: DriverInterface = {
+        name: 'streamer',
+        version: '1.0.0',
+        supports: { ...minimalCapabilities, streaming: true },
+        connect: async () => {},
+        disconnect: async () => {},
+        checkHealth: async () => true,
+        execute: async () => ({}),
+        find: async () => records,
+        findStream: () => (async function* () {
+          for (const r of records) yield r;
+        })(),
+        findOne: async () => null,
+        create: async (_obj, data) => ({ id: '1', ...data }),
+        update: async (_obj, _id, data) => ({ id: '1', ...data }),
+        upsert: async (_obj, data) => ({ id: '1', ...data }),
+        delete: async () => true,
+        count: async () => records.length,
+        bulkCreate: async () => [],
+        bulkUpdate: async () => [],
+        bulkDelete: async () => {},
+        beginTransaction: async () => ({}),
+        commit: async () => {},
+        rollback: async () => {},
+        syncSchema: async () => {},
+        dropTable: async () => {},
+      };
+
+      const stream = driver.findStream('users', {} as any);
+      const collected: any[] = [];
+      for await (const row of stream as AsyncIterable<any>) {
+        collected.push(row);
+      }
+
+      expect(collected).toHaveLength(2);
+      expect(collected[0].name).toBe('Alice');
+      expect(collected[1].name).toBe('Bob');
+    });
   });
 });

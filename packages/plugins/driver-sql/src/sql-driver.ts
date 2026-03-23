@@ -243,6 +243,11 @@ export class SqlDriver implements IDataDriver {
     return null;
   }
 
+  /**
+   * Stream records matching a structured query.
+   * NOTE: Current implementation fetches all results then yields them.
+   * TODO: Use Knex .stream() for true cursor-based streaming on large datasets.
+   */
   async *findStream(object: string, query: QueryInput, options?: DriverOptions): AsyncGenerator<Record<string, any>> {
     const results = await this.find(object, query, options);
     for (const row of results) {
@@ -321,6 +326,11 @@ export class SqlDriver implements IDataDriver {
     return await builder.insert(data).returning('*');
   }
 
+  /**
+   * Batch-update multiple records by ID.
+   * NOTE: Current implementation performs sequential updates for correctness.
+   * TODO: Optimize with SQL CASE statements or batched transactions for performance.
+   */
   async bulkUpdate(object: string, updates: Array<{ id: string | number; data: Record<string, any> }>, options?: DriverOptions): Promise<Record<string, any>[]> {
     const results: Record<string, any>[] = [];
     for (const { id, data } of updates) {
