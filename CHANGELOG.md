@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   injecting a pre-configured `@libsql/client` instance via `config.client`.
 
 ### Fixed
+- **Vercel deployment — `ERR_MODULE_NOT_FOUND` for `@objectstack/metadata`** — Fixed incorrect
+  `exports` paths in `@objectstack/metadata` `package.json` that pointed directly to TypeScript
+  source files (`src/index.ts`, `src/node.ts`) instead of compiled dist output. Node.js cannot
+  import `.ts` files at runtime, causing `ERR_MODULE_NOT_FOUND` on Vercel. Updated `main`, `types`,
+  and `exports` to reference dist files (`dist/index.js`, `dist/index.mjs`, `dist/node.mjs`, etc.).
+  Added a local `tsup.config.ts` with both entry points (`src/index.ts`, `src/node.ts`) and a
+  `files` field to the package.json. Follows the same pattern as `@objectstack/spec`.
 - **Vercel deployment — `ERR_MODULE_NOT_FOUND` for `@objectstack/service-feed`** — Fixed incorrect
   `exports` paths in `package.json` for all service packages that declare `"type": "module"`. When
   `tsup` builds an ESM package (`"type": "module"`), it outputs `.js` for ESM and `.cjs` for CJS.
