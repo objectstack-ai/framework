@@ -7,9 +7,7 @@ import {
   DataEngineDeleteOptions,
   DataEngineAggregateOptions, 
   DataEngineCountOptions,
-  DataEngineRequest, // Added Request type for batch
-  QueryAST,
-  DriverOptions
+  DataEngineRequest,
 } from '@objectstack/spec/data';
 
 /**
@@ -47,30 +45,9 @@ export interface IDataEngine {
   execute?(command: any, options?: Record<string, any>): Promise<any>;
 }
 
-export interface DriverInterface {
-  name: string;
-  version: string;
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  
-  find(object: string, query: QueryAST, options?: DriverOptions): Promise<any[]>;
-  findOne(object: string, query: QueryAST, options?: DriverOptions): Promise<any>;
-  create(object: string, data: any, options?: DriverOptions): Promise<any>;
-  update(object: string, id: any, data: any, options?: DriverOptions): Promise<any>;
-  delete(object: string, id: any, options?: DriverOptions): Promise<any>;
-  
-  /**
-   * Bulk & Batch Operations
-   */
-  bulkCreate?(object: string, data: any[], options?: DriverOptions): Promise<any>;
-  updateMany?(object: string, query: QueryAST, data: any, options?: DriverOptions): Promise<any>;
-  deleteMany?(object: string, query: QueryAST, options?: DriverOptions): Promise<any>;
-
-  count?(object: string, query: QueryAST, options?: DriverOptions): Promise<number>;
-  
-  /**
-   * Raw Execution
-   */
-  execute?(command: any, params?: any, options?: DriverOptions): Promise<any>;
-}
+/**
+ * @deprecated Use `IDataDriver` from `@objectstack/spec/contracts` instead.
+ * This type is re-exported from `@objectstack/spec/contracts` for backward compatibility only.
+ */
+export type { DriverInterface } from '@objectstack/spec/contracts';
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { QueryAST, QueryInput, DriverOptions } from '@objectstack/spec/data';
-import type { DriverInterface } from '@objectstack/core';
+import type { IDataDriver } from '@objectstack/spec/contracts';
 import { Logger, createLogger } from '@objectstack/core';
 import { Query, Aggregator } from 'mingo';
 import { getValueByPath } from './memory-matcher.js';
@@ -79,10 +79,10 @@ interface MemoryTransaction {
  * 
  * Reference: objectql/packages/drivers/memory
  */
-export class InMemoryDriver implements DriverInterface {
-  name = 'com.objectstack.driver.memory';
+export class InMemoryDriver implements IDataDriver {
+  readonly name = 'com.objectstack.driver.memory';
   type = 'driver';
-  version = '1.0.0';
+  readonly version = '1.0.0';
   private config: InMemoryDriverConfig;
   private logger: Logger;
   private idCounters: Map<string, number> = new Map();
@@ -106,9 +106,21 @@ export class InMemoryDriver implements DriverInterface {
     }
   }
   
-  supports = {
+  readonly supports = {
+    // Basic CRUD Operations
+    create: true,
+    read: true,
+    update: true,
+    delete: true,
+
+    // Bulk Operations
+    bulkCreate: true,
+    bulkUpdate: true,
+    bulkDelete: true,
+
     // Transaction & Connection Management
     transactions: true,          // Snapshot-based transactions
+    savepoints: false,
     
     // Query Operations
     queryFilters: true,          // Implemented via memory-matcher
@@ -117,14 +129,27 @@ export class InMemoryDriver implements DriverInterface {
     queryPagination: true,       // Implemented
     queryWindowFunctions: false, // @planned: Window functions (ROW_NUMBER, RANK, etc.)
     querySubqueries: false,      // @planned: Subquery execution
+    queryCTE: false,
     joins: false,                // @planned: In-memory join operations
     
     // Advanced Features
     fullTextSearch: false,       // @planned: Text tokenization + matching
-    vectorSearch: false,         // @planned: Cosine similarity search
-    geoSpatial: false,           // @planned: Distance/within calculations
+    jsonQuery: false,
+    geospatialQuery: false,
+    streaming: true,             // Implemented via findStream()
     jsonFields: true,            // Native JS object support
     arrayFields: true,           // Native JS array support
+    vectorSearch: false,         // @planned: Cosine similarity search
+
+    // Schema Management
+    schemaSync: true,            // Implemented via syncSchema()
+    migrations: false,
+    indexes: false,
+
+    // Performance & Optimization
+    connectionPooling: false,
+    preparedStatements: false,
+    queryCache: false,
   };
 
   /**

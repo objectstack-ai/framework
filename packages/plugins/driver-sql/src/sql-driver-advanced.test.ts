@@ -146,7 +146,7 @@ describe('SqlDriver Advanced Operations (SQLite)', () => {
     it('should update many records', async () => {
       const result = await driver.updateMany('orders', { status: 'pending' } as any, { status: 'processing' });
 
-      expect(result.modifiedCount).toBeGreaterThan(0);
+      expect(result).toBeGreaterThan(0);
 
       const results = await driver.find('orders', { where: { status: 'processing' } });
       expect(results.length).toBe(1);
@@ -155,7 +155,7 @@ describe('SqlDriver Advanced Operations (SQLite)', () => {
     it('should delete many records', async () => {
       const result = await driver.deleteMany('orders', { status: 'cancelled' } as any);
 
-      expect(result.deletedCount).toBe(1);
+      expect(result).toBe(1);
 
       const remaining = await driver.count('orders', {});
       expect(remaining).toBe(4);
@@ -163,10 +163,10 @@ describe('SqlDriver Advanced Operations (SQLite)', () => {
 
     it('should handle empty bulk update and delete', async () => {
       const result = await driver.updateMany('orders', { status: 'nonexistent' } as any, { status: 'updated' });
-      expect(result.modifiedCount).toBe(0);
+      expect(result).toBe(0);
 
       const deleteResult = await driver.deleteMany('orders', { id: 'nonexistent' } as any);
-      expect(deleteResult.deletedCount).toBe(0);
+      expect(deleteResult).toBe(0);
     });
   });
 
