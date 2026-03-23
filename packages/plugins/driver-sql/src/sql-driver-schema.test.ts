@@ -262,4 +262,52 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
     const exists = await knexInstance.schema.hasTable('db_check_test');
     expect(exists).toBe(true);
   });
+
+  it('should use object parameter (physical table name) in syncSchema, not schema.name (FQN)', async () => {
+    // Simulates the real-world scenario: syncRegisteredSchemas passes the
+    // physical table name 'sys_user' while the schema object has name 'sys__user' (FQN).
+    const physicalTableName = 'sys_user';
+    const fqnName = 'sys__user';
+
+    await driver.syncSchema(physicalTableName, {
+      name: fqnName,
+      fields: {
+        email: { type: 'string' },
+        display_name: { type: 'string' },
+      },
+    });
+
+    // The table should be created with the physical name, not the FQN
+    const existsPhysical = await knexInstance.schema.hasTable(physicalTableName);
+    expect(existsPhysical).toBe(true);
+
+    const existsFqn = await knexInstance.schema.hasTable(fqnName);
+    expect(existsFqn).toBe(false);
+
+    // Verify the table has the correct columns
+    const columns = await knexInstance(physicalTableName).columnInfo();
+    expect(columns).toHaveProperty('id');
+    expect(columns).toHaveProperty('email');
+    expect(columns).toHaveProperty('display_name');
+  });
+
+  it('should prefer tableName over name in initObjects for defense-in-depth', async () => {
+    const objects = [
+      {
+        name: 'crm__deal',
+        tableName: 'crm_deal',
+        fields: {
+          amount: { type: 'number' },
+        },
+      },
+    ];
+
+    await driver.initObjects(objects);
+
+    const existsPhysical = await knexInstance.schema.hasTable('crm_deal');
+    expect(existsPhysical).toBe(true);
+
+    const existsFqn = await knexInstance.schema.hasTable('crm__deal');
+    expect(existsFqn).toBe(false);
+  });
 });
