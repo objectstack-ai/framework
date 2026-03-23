@@ -255,7 +255,7 @@ export class InMemoryDriver implements IDataDriver {
   // CRUD
   // ===================================
 
-  async find(object: string, query: QueryInput, options?: DriverOptions) {
+  async find(object: string, query: QueryAST, options?: DriverOptions) {
     this.logger.debug('Find operation', { object, query });
     
     const table = this.getTable(object);
@@ -300,7 +300,7 @@ export class InMemoryDriver implements IDataDriver {
     return results;
   }
 
-  async *findStream(object: string, query: QueryInput, options?: DriverOptions) {
+  async *findStream(object: string, query: QueryAST, options?: DriverOptions) {
     this.logger.debug('FindStream operation', { object });
     
     const results = await this.find(object, query, options);
@@ -309,7 +309,7 @@ export class InMemoryDriver implements IDataDriver {
     }
   }
 
-  async findOne(object: string, query: QueryInput, options?: DriverOptions) {
+  async findOne(object: string, query: QueryAST, options?: DriverOptions) {
     this.logger.debug('FindOne operation', { object, query });
     
     const results = await this.find(object, { ...query, limit: 1 }, options);
@@ -406,7 +406,7 @@ export class InMemoryDriver implements IDataDriver {
     return true;
   }
 
-  async count(object: string, query?: QueryInput, options?: DriverOptions) {
+  async count(object: string, query?: QueryAST, options?: DriverOptions) {
     let records = this.getTable(object);
     if (query?.where) {
         const mongoQuery = this.convertToMongoQuery(query.where);
@@ -431,7 +431,7 @@ export class InMemoryDriver implements IDataDriver {
     return results;
   }
   
-  async updateMany(object: string, query: QueryInput, data: Record<string, any>, options?: DriverOptions) {
+  async updateMany(object: string, query: QueryAST, data: Record<string, any>, options?: DriverOptions): Promise<number> {
       this.logger.debug('UpdateMany operation', { object, query });
       
       const table = this.getTable(object);
@@ -461,10 +461,10 @@ export class InMemoryDriver implements IDataDriver {
       
       if (count > 0) this.markDirty();
       this.logger.debug('UpdateMany completed', { object, count });
-      return { count };
+      return count;
   }
 
-  async deleteMany(object: string, query: QueryInput, options?: DriverOptions) {
+  async deleteMany(object: string, query: QueryAST, options?: DriverOptions): Promise<number> {
       this.logger.debug('DeleteMany operation', { object, query });
       
       const table = this.getTable(object);
@@ -489,7 +489,7 @@ export class InMemoryDriver implements IDataDriver {
       const count = initialLength - this.db[object].length;
       if (count > 0) this.markDirty();
       this.logger.debug('DeleteMany completed', { object, count });
-      return { count };
+      return count;
   }
 
   // Compatibility aliases

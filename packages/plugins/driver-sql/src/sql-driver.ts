@@ -7,7 +7,7 @@
  * Supports PostgreSQL, MySQL, SQLite, and other SQL databases.
  */
 
-import type { QueryInput, DriverOptions } from '@objectstack/spec/data';
+import type { QueryAST, DriverOptions } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import knex, { Knex } from 'knex';
 import { nanoid } from 'nanoid';
@@ -167,7 +167,7 @@ export class SqlDriver implements IDataDriver {
   // CRUD — DriverInterface core
   // ===================================
 
-  async find(object: string, query: QueryInput, options?: DriverOptions): Promise<any[]> {
+  async find(object: string, query: QueryAST, options?: DriverOptions): Promise<any[]> {
     const builder = this.getBuilder(object, options);
 
     // SELECT
@@ -228,7 +228,7 @@ export class SqlDriver implements IDataDriver {
     return results;
   }
 
-  async findOne(object: string, query: QueryInput, options?: DriverOptions): Promise<any> {
+  async findOne(object: string, query: QueryAST, options?: DriverOptions): Promise<any> {
     // When called with a string/number id fall back gracefully
     if (typeof query === 'string' || typeof query === 'number') {
       const res = await this.getBuilder(object, options).where('id', query).first();
@@ -248,7 +248,7 @@ export class SqlDriver implements IDataDriver {
    * NOTE: Current implementation fetches all results then yields them.
    * TODO: Use Knex .stream() for true cursor-based streaming on large datasets.
    */
-  async *findStream(object: string, query: QueryInput, options?: DriverOptions): AsyncGenerator<Record<string, any>> {
+  async *findStream(object: string, query: QueryAST, options?: DriverOptions): AsyncGenerator<Record<string, any>> {
     const results = await this.find(object, query, options);
     for (const row of results) {
       yield row;
@@ -345,7 +345,7 @@ export class SqlDriver implements IDataDriver {
     await builder.whereIn('id', ids).delete();
   }
 
-  async updateMany(object: string, query: QueryInput, data: any, options?: DriverOptions): Promise<number> {
+  async updateMany(object: string, query: QueryAST, data: any, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
     const filters = query.where || (query as any).filters || query;
     if (filters) this.applyFilters(builder, filters);
@@ -353,7 +353,7 @@ export class SqlDriver implements IDataDriver {
     return count || 0;
   }
 
-  async deleteMany(object: string, query: QueryInput, options?: DriverOptions): Promise<number> {
+  async deleteMany(object: string, query: QueryAST, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
     const filters = query.where || (query as any).filters || query;
     if (filters) this.applyFilters(builder, filters);
@@ -361,7 +361,7 @@ export class SqlDriver implements IDataDriver {
     return count || 0;
   }
 
-  async count(object: string, query: QueryInput, options?: DriverOptions): Promise<number> {
+  async count(object: string, query?: QueryAST, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
 
     let actualFilters = query as any;
