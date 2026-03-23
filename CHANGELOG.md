@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`SqlDriver.syncSchema()` — physical table name mismatch** — Fixed the root cause of the
+  `no such table: sys_user` error: `syncSchema()` was ignoring the `object` parameter (physical
+  table name like `sys_user`) and using `schema.name` (FQN like `sys__user`) for DDL operations.
+  The method now correctly passes the physical table name to `initObjects()`. Additionally,
+  `initObjects()` now supports a `tableName` property as defense-in-depth, preferring it over
+  `name` when both are present.
 - **Login API error — database tables not created** — Fixed a critical naming mismatch between
   the FQN (Fully Qualified Name) used by SchemaRegistry (e.g., `sys__user` with double underscore)
   and the physical table name derived by `ObjectSchema.create()` (e.g., `sys_user` with single

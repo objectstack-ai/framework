@@ -563,7 +563,10 @@ export class SqlDriver implements IDataDriver {
 
   async syncSchema(object: string, schema: unknown, _options?: DriverOptions): Promise<void> {
     const objectDef = schema as { name: string; fields?: Record<string, any> };
-    await this.initObjects([objectDef]);
+    // Use the physical table name (`object`) for DDL operations. The caller
+    // (e.g. syncRegisteredSchemas) passes the resolved tableName (e.g. 'sys_user')
+    // while objectDef.name may contain the FQN (e.g. 'sys__user').
+    await this.initObjects([{ ...objectDef, name: object }]);
   }
 
   async dropTable(object: string, _options?: DriverOptions): Promise<void> {
@@ -573,11 +576,12 @@ export class SqlDriver implements IDataDriver {
   /**
    * Batch-initialise tables from an array of object definitions.
    */
-  async initObjects(objects: Array<{ name: string; fields?: Record<string, any> }>): Promise<void> {
+  async initObjects(objects: Array<{ name: string; tableName?: string; fields?: Record<string, any> }>): Promise<void> {
     await this.ensureDatabaseExists();
 
     for (const obj of objects) {
-      const tableName = obj.name;
+      // Prefer explicit tableName (physical name) over obj.name (which may be a FQN).
+      const tableName = obj.tableName || obj.name;
 
       const jsonCols: string[] = [];
       const booleanCols: string[] = [];
