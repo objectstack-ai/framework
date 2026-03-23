@@ -27,7 +27,7 @@
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
-import { InMemoryDriver } from '@objectstack/driver-memory';
+import { TursoDriver } from '@objectstack/driver-turso';
 import { createHonoApp } from '@objectstack/hono';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { SecurityPlugin } from '@objectstack/plugin-security';
@@ -70,7 +70,10 @@ async function ensureKernel(): Promise<ObjectKernel> {
             const kernel = new ObjectKernel();
 
             await kernel.use(new ObjectQLPlugin());
-            await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
+            await kernel.use(new DriverPlugin(new TursoDriver({
+                url: process.env.TURSO_DATABASE_URL ?? ':memory:',
+                ...(process.env.TURSO_AUTH_TOKEN && { authToken: process.env.TURSO_AUTH_TOKEN }),
+            }), 'turso'));
             await kernel.use(new AppPlugin(studioConfig));
 
             // Auth plugin — uses better-auth for real authentication

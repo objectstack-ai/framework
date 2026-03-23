@@ -20,6 +20,7 @@
     "@objectstack/client": "workspace:*",
     "@objectstack/client-react": "workspace:*",
     "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/driver-turso": "workspace:*",
     "@objectstack/hono": "workspace:*",
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:*",

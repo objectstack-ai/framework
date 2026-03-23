@@ -139,6 +139,9 @@ importers:
       '@objectstack/driver-memory':
         specifier: workspace:*
         version: link:../../packages/plugins/driver-memory
+      '@objectstack/driver-turso':
+        specifier: workspace:*
+        version: link:../../packages/plugins/driver-turso
       '@objectstack/hono':
         specifier: workspace:*
         version: link:../../packages/adapters/hono

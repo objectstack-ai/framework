@@ -7,7 +7,9 @@
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
-      "VITE_SERVER_URL": ""
+      "VITE_SERVER_URL": "",
+      "TURSO_DATABASE_URL": "@turso_database_url",
+      "TURSO_AUTH_TOKEN": "@turso_auth_token"
     }
   },
   "rewrites": [
