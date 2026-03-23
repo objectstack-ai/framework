@@ -113,26 +113,26 @@ export class SqlDriver implements IDataDriver {
     queryCache: false,
   };
 
-  private knex: Knex;
-  private config: Knex.Config;
-  private jsonFields: Record<string, string[]> = {};
-  private booleanFields: Record<string, string[]> = {};
-  private tablesWithTimestamps: Set<string> = new Set();
+  protected knex: Knex;
+  protected config: Knex.Config;
+  protected jsonFields: Record<string, string[]> = {};
+  protected booleanFields: Record<string, string[]> = {};
+  protected tablesWithTimestamps: Set<string> = new Set();
 
   /** Whether the underlying database is a SQLite variant (sqlite3 or better-sqlite3). */
-  private get isSqlite(): boolean {
+  protected get isSqlite(): boolean {
     const c = (this.config as any).client;
     return c === 'sqlite3' || c === 'better-sqlite3';
   }
 
   /** Whether the underlying database is PostgreSQL. */
-  private get isPostgres(): boolean {
+  protected get isPostgres(): boolean {
     const c = (this.config as any).client;
     return c === 'pg' || c === 'postgresql';
   }
 
   /** Whether the underlying database is MySQL. */
-  private get isMysql(): boolean {
+  protected get isMysql(): boolean {
     const c = (this.config as any).client;
     return c === 'mysql' || c === 'mysql2';
   }
@@ -364,7 +364,7 @@ export class SqlDriver implements IDataDriver {
     const result = await builder.count<{ count: number }[]>('* as count');
     if (result && result.length > 0) {
       const row: any = result[0];
-      return Number(row.count || row['count(*)']);
+      return Number(row.count ?? row['count(*)'] ?? 0);
     }
     return 0;
   }
@@ -702,7 +702,7 @@ export class SqlDriver implements IDataDriver {
     return this.knex;
   }
 
-  private getBuilder(object: string, options?: DriverOptions) {
+  protected getBuilder(object: string, options?: DriverOptions) {
     let builder = this.knex(object);
     if (options?.transaction) {
       builder = builder.transacting(options.transaction as Knex.Transaction);
@@ -712,7 +712,7 @@ export class SqlDriver implements IDataDriver {
 
   // ── Filter helpers ──────────────────────────────────────────────────────────
 
-  private applyFilters(builder: Knex.QueryBuilder, filters: any) {
+  protected applyFilters(builder: Knex.QueryBuilder, filters: any) {
     if (!filters) return;
 
     if (!Array.isArray(filters) && typeof filters === 'object') {
@@ -793,7 +793,7 @@ export class SqlDriver implements IDataDriver {
     }
   }
 
-  private applyFilterCondition(builder: Knex.QueryBuilder, condition: any, logicalOp: 'and' | 'or' = 'and') {
+  protected applyFilterCondition(builder: Knex.QueryBuilder, condition: any, logicalOp: 'and' | 'or' = 'and') {
     if (!condition || typeof condition !== 'object') return;
 
     for (const [key, value] of Object.entries(condition)) {
@@ -864,13 +864,13 @@ export class SqlDriver implements IDataDriver {
 
   // ── Field mapping ───────────────────────────────────────────────────────────
 
-  private mapSortField(field: string): string {
+  protected mapSortField(field: string): string {
     if (field === 'createdAt') return 'created_at';
     if (field === 'updatedAt') return 'updated_at';
     return field;
   }
 
-  private mapAggregateFunc(func: string): string {
+  protected mapAggregateFunc(func: string): string {
     switch (func) {
       case 'count':
         return 'count';
@@ -889,7 +889,7 @@ export class SqlDriver implements IDataDriver {
 
   // ── Window function builder ─────────────────────────────────────────────────
 
-  private buildWindowFunction(spec: any): string {
+  protected buildWindowFunction(spec: any): string {
     const func = spec.function.toUpperCase();
     let sql = `${func}()`;
 
@@ -917,7 +917,7 @@ export class SqlDriver implements IDataDriver {
 
   // ── Column creation helper ──────────────────────────────────────────────────
 
-  private createColumn(table: Knex.CreateTableBuilder, name: string, field: any) {
+  protected createColumn(table: Knex.CreateTableBuilder, name: string, field: any) {
     if (field.multiple) {
       table.json(name);
       return;
@@ -996,7 +996,7 @@ export class SqlDriver implements IDataDriver {
 
   // ── Database helpers ────────────────────────────────────────────────────────
 
-  private async ensureDatabaseExists() {
+  protected async ensureDatabaseExists() {
     if (!this.isPostgres) return;
 
     try {
@@ -1010,7 +1010,7 @@ export class SqlDriver implements IDataDriver {
     }
   }
 
-  private async createDatabase() {
+  protected async createDatabase() {
     const config = this.config as any;
     const connection = config.connection;
     let dbName = '';
@@ -1034,13 +1034,13 @@ export class SqlDriver implements IDataDriver {
     }
   }
 
-  private isJsonField(type: string, field: any): boolean {
+  protected isJsonField(type: string, field: any): boolean {
     return ['json', 'object', 'array', 'image', 'file', 'avatar', 'location'].includes(type) || field.multiple;
   }
 
   // ── SQLite serialisation ────────────────────────────────────────────────────
 
-  private formatInput(object: string, data: any): any {
+  protected formatInput(object: string, data: any): any {
     if (!this.isSqlite) return data;
 
     const fields = this.jsonFields[object];
@@ -1055,7 +1055,7 @@ export class SqlDriver implements IDataDriver {
     return copy;
   }
 
-  private formatOutput(object: string, data: any): any {
+  protected formatOutput(object: string, data: any): any {
     if (!data) return data;
 
     if (this.isSqlite) {
@@ -1087,7 +1087,7 @@ export class SqlDriver implements IDataDriver {
 
   // ── Introspection internals ─────────────────────────────────────────────────
 
-  private async introspectColumns(tableName: string): Promise<IntrospectedColumn[]> {
+  protected async introspectColumns(tableName: string): Promise<IntrospectedColumn[]> {
     const columnInfo = await this.knex(tableName).columnInfo();
     const columns: IntrospectedColumn[] = [];
 
@@ -1119,7 +1119,7 @@ export class SqlDriver implements IDataDriver {
     return columns;
   }
 
-  private async introspectForeignKeys(tableName: string): Promise<IntrospectedForeignKey[]> {
+  protected async introspectForeignKeys(tableName: string): Promise<IntrospectedForeignKey[]> {
     const foreignKeys: IntrospectedForeignKey[] = [];
 
     try {
@@ -1205,7 +1205,7 @@ export class SqlDriver implements IDataDriver {
     return foreignKeys;
   }
 
-  private async introspectPrimaryKeys(tableName: string): Promise<string[]> {
+  protected async introspectPrimaryKeys(tableName: string): Promise<string[]> {
     const primaryKeys: string[] = [];
 
     try {
@@ -1265,7 +1265,7 @@ export class SqlDriver implements IDataDriver {
     return primaryKeys;
   }
 
-  private async introspectUniqueConstraints(tableName: string): Promise<string[]> {
+  protected async introspectUniqueConstraints(tableName: string): Promise<string[]> {
     const uniqueColumns: string[] = [];
 
     try {
