@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Fix ERR_MODULE_NOT_FOUND on Vercel: add `"type": "module"` and update exports to use `.js`/`.cjs` pattern (consistent with @objectstack/core, @objectstack/runtime)
 - @objectstack/spec@3.3.0
 - @objectstack/core@3.3.0
 - @objectstack/types@3.3.0
