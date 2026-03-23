@@ -52,7 +52,7 @@
     "lucide-react": "^0.577.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-resizable-panels": "^4.7.3",
+    "react-resizable-panels": "^4.7.5",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
@@ -63,7 +63,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
     "happy-dom": "^20.8.4",
-    "msw": "^2.12.13",
+    "msw": "^2.12.14",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.0.0",
