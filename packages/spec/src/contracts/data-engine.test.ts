@@ -1,5 +1,42 @@
 import { describe, it, expect } from 'vitest';
 import type { IDataEngine, DriverInterface } from './data-engine';
+import type { IDataDriver } from './data-driver';
+
+/**
+ * Minimal DriverCapabilities object for tests.
+ */
+const minimalCapabilities = {
+  create: true,
+  read: true,
+  update: true,
+  delete: true,
+  bulkCreate: false,
+  bulkUpdate: false,
+  bulkDelete: false,
+  transactions: false,
+  savepoints: false,
+  queryFilters: true,
+  queryAggregations: false,
+  querySorting: true,
+  queryPagination: true,
+  queryWindowFunctions: false,
+  querySubqueries: false,
+  queryCTE: false,
+  joins: false,
+  fullTextSearch: false,
+  jsonQuery: false,
+  geospatialQuery: false,
+  streaming: false,
+  jsonFields: false,
+  arrayFields: false,
+  vectorSearch: false,
+  schemaSync: false,
+  migrations: false,
+  indexes: false,
+  connectionPooling: false,
+  preparedStatements: false,
+  queryCache: false,
+};
 
 describe('Data Engine Contract', () => {
   describe('IDataEngine interface', () => {
@@ -120,39 +157,72 @@ describe('Data Engine Contract', () => {
     });
   });
 
-  describe('DriverInterface', () => {
-    it('should allow a minimal implementation with required methods', () => {
-      const driver: DriverInterface = {
+  describe('DriverInterface (deprecated alias for IDataDriver)', () => {
+    it('should be assignable from IDataDriver (type alias check)', () => {
+      const driver: IDataDriver = {
         name: 'postgres',
         version: '1.0.0',
+        supports: minimalCapabilities,
         connect: async () => {},
         disconnect: async () => {},
-        find: async (_object, _query, _options?) => [],
-        findOne: async (_object, _query, _options?) => null,
-        create: async (_object, data, _options?) => data,
-        update: async (_object, _id, data, _options?) => data,
-        delete: async (_object, _id, _options?) => ({ deleted: true }),
+        checkHealth: async () => true,
+        execute: async () => ({}),
+        find: async () => [],
+        findStream: () => (async function* () {})(),
+        findOne: async () => null,
+        create: async (_obj, data) => ({ id: '1', ...data }),
+        update: async (_obj, _id, data) => ({ id: '1', ...data }),
+        upsert: async (_obj, data) => ({ id: '1', ...data }),
+        delete: async () => true,
+        count: async () => 0,
+        bulkCreate: async () => [],
+        bulkUpdate: async () => [],
+        bulkDelete: async () => {},
+        beginTransaction: async () => ({}),
+        commit: async () => {},
+        rollback: async () => {},
+        syncSchema: async () => {},
+        dropTable: async () => {},
       };
 
-      expect(driver.name).toBe('postgres');
-      expect(driver.version).toBe('1.0.0');
-      expect(typeof driver.connect).toBe('function');
-      expect(typeof driver.disconnect).toBe('function');
+      // DriverInterface is now a type alias for IDataDriver
+      const driverAsInterface: DriverInterface = driver;
+
+      expect(driverAsInterface.name).toBe('postgres');
+      expect(driverAsInterface.version).toBe('1.0.0');
+      expect(typeof driverAsInterface.connect).toBe('function');
+      expect(typeof driverAsInterface.disconnect).toBe('function');
+      expect(typeof driverAsInterface.checkHealth).toBe('function');
+      expect(driverAsInterface.supports.queryFilters).toBe(true);
     });
 
-    it('should connect and disconnect', async () => {
+    it('should support full IDataDriver lifecycle and CRUD', async () => {
       let connected = false;
 
       const driver: DriverInterface = {
         name: 'mongo',
         version: '2.0.0',
+        supports: minimalCapabilities,
         connect: async () => { connected = true; },
         disconnect: async () => { connected = false; },
+        checkHealth: async () => connected,
+        execute: async () => ({}),
         find: async () => [],
+        findStream: () => (async function* () {})(),
         findOne: async () => null,
-        create: async (_obj, data) => data,
-        update: async (_obj, _id, data) => data,
-        delete: async () => ({}),
+        create: async (_obj, data) => ({ id: '1', ...data }),
+        update: async (_obj, _id, data) => ({ id: '1', ...data }),
+        upsert: async (_obj, data) => ({ id: '1', ...data }),
+        delete: async () => true,
+        count: async () => 0,
+        bulkCreate: async () => [],
+        bulkUpdate: async () => [],
+        bulkDelete: async () => {},
+        beginTransaction: async () => ({}),
+        commit: async () => {},
+        rollback: async () => {},
+        syncSchema: async () => {},
+        dropTable: async () => {},
       };
 
       await driver.connect();
@@ -162,48 +232,86 @@ describe('Data Engine Contract', () => {
       expect(connected).toBe(false);
     });
 
-    it('should support optional bulk operations', async () => {
+    it('should support bulk, transaction, and schema operations', async () => {
       const driver: DriverInterface = {
         name: 'postgres',
         version: '1.0.0',
+        supports: { ...minimalCapabilities, transactions: true, bulkCreate: true },
         connect: async () => {},
         disconnect: async () => {},
+        checkHealth: async () => true,
+        execute: async () => ({}),
         find: async () => [],
+        findStream: () => (async function* () {})(),
         findOne: async () => null,
-        create: async (_obj, data) => data,
-        update: async (_obj, _id, data) => data,
-        delete: async () => ({}),
-        bulkCreate: async (_obj, data) => data,
-        updateMany: async (_obj, _query, _data) => ({ modified: 5 }),
-        deleteMany: async (_obj, _query) => ({ deleted: 3 }),
+        create: async (_obj, data) => ({ id: '1', ...data }),
+        update: async (_obj, _id, data) => ({ id: '1', ...data }),
+        upsert: async (_obj, data) => ({ id: '1', ...data }),
+        delete: async () => true,
+        count: async () => 42,
+        bulkCreate: async (_obj, data) => data.map((d, i) => ({ id: String(i + 1), ...d })),
+        bulkUpdate: async () => [],
+        bulkDelete: async () => {},
+        updateMany: async () => 5,
+        deleteMany: async () => 3,
+        beginTransaction: async () => ({ txId: 'tx_1' }),
+        commit: async () => {},
+        rollback: async () => {},
+        syncSchema: async () => {},
+        dropTable: async () => {},
+        explain: async () => ({ plan: 'sequential scan' }),
       };
 
       expect(driver.bulkCreate).toBeDefined();
       expect(driver.updateMany).toBeDefined();
       expect(driver.deleteMany).toBeDefined();
 
-      const bulk = await driver.bulkCreate!('users', [{ name: 'A' }, { name: 'B' }]);
+      const bulk = await driver.bulkCreate('users', [{ name: 'A' }, { name: 'B' }]);
       expect(bulk).toHaveLength(2);
+
+      expect(await driver.count('users')).toBe(42);
+      expect(driver.explain).toBeDefined();
     });
 
-    it('should support optional count and execute', async () => {
+    it('should support findStream with yielded values', async () => {
+      const records = [{ id: '1', name: 'Alice' }, { id: '2', name: 'Bob' }];
       const driver: DriverInterface = {
-        name: 'sqlite',
-        version: '3.0.0',
+        name: 'streamer',
+        version: '1.0.0',
+        supports: { ...minimalCapabilities, streaming: true },
         connect: async () => {},
         disconnect: async () => {},
-        find: async () => [],
+        checkHealth: async () => true,
+        execute: async () => ({}),
+        find: async () => records,
+        findStream: () => (async function* () {
+          for (const r of records) yield r;
+        })(),
         findOne: async () => null,
-        create: async (_obj, data) => data,
-        update: async (_obj, _id, data) => data,
-        delete: async () => ({}),
-        count: async (_obj, _query) => 42,
-        execute: async (command, _params?) => ({ rows: [], command }),
+        create: async (_obj, data) => ({ id: '1', ...data }),
+        update: async (_obj, _id, data) => ({ id: '1', ...data }),
+        upsert: async (_obj, data) => ({ id: '1', ...data }),
+        delete: async () => true,
+        count: async () => records.length,
+        bulkCreate: async () => [],
+        bulkUpdate: async () => [],
+        bulkDelete: async () => {},
+        beginTransaction: async () => ({}),
+        commit: async () => {},
+        rollback: async () => {},
+        syncSchema: async () => {},
+        dropTable: async () => {},
       };
 
-      expect(await driver.count!('users', {} as any)).toBe(42);
-      const result = await driver.execute!('PRAGMA table_info(users)');
-      expect(result.command).toBe('PRAGMA table_info(users)');
+      const stream = driver.findStream('users', {} as any);
+      const collected: any[] = [];
+      for await (const row of stream as AsyncIterable<any>) {
+        collected.push(row);
+      }
+
+      expect(collected).toHaveLength(2);
+      expect(collected[0].name).toBe('Alice');
+      expect(collected[1].name).toBe('Bob');
     });
   });
 });

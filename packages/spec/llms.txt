@@ -15,7 +15,7 @@ It is divided into three layers, reflected in the import paths:
 - **`ObjectSchema`**: Defines database tables (postgres/mongo agnostic).
 - **`FieldSchema`**: Defines columns with 46+ types (`text`, `number`, `lookup`, `formula`, `vector`, etc.).
 - **`QuerySchema`**: A JSON-based AST for querying data (replaces SQL).
-- **`DriverInterface`**: The contract for database adapters (SQL, NoSQL, Memory).
+- **`IDataDriver`**: The authoritative contract for database adapters (SQL, NoSQL, Memory).
 - **`AnalyticsSchema`**: OLAP cubes, measures, and dimensions.
 
 ### Layer 2: ObjectOS (`@objectstack/spec/system` & `@objectstack/spec/api`)
@@ -104,7 +104,7 @@ const query = {
 ### `import * as Data from '@objectstack/spec/data'`
 - `ObjectSchema`, `FieldSchema`: Logic & Storage definition.
 - `QuerySchema`, `FilterSchema`: Data retrieval AST.
-- `DriverInterface`, `DatasourceSchema`: Database connectivity.
+- `IDataDriver`, `DatasourceSchema`: Database connectivity.
 - `AnalyticsSchema`: OLAP cubes and metrics.
 
 ### `import * as UI from '@objectstack/spec/ui'`
@@ -136,9 +136,10 @@ const query = {
 Use `z.infer` to derive types directly from the protocol. Do not manually re-declare interfaces.
 
 ```typescript
-import { DriverInterfaceSchema, type DriverInterface } from '@objectstack/spec/data';
+import { DriverInterfaceSchema } from '@objectstack/spec/data';
+import type { IDataDriver } from '@objectstack/spec/contracts';
 
-export class PostgresDriver implements DriverInterface {
+export class PostgresDriver implements IDataDriver {
   name = 'postgres';
   async find(object: string, query: z.infer<typeof QuerySchema>) { ... }
 }

@@ -3,12 +3,12 @@
 /**
  * SQL Driver for ObjectStack
  *
- * Implements the standard DriverInterface from @objectstack/spec via Knex.js.
+ * Implements the standard IDataDriver from @objectstack/spec via Knex.js.
  * Supports PostgreSQL, MySQL, SQLite, and other SQL databases.
  */
 
-import type { QueryInput, DriverOptions } from '@objectstack/spec/data';
-import type { DriverInterface } from '@objectstack/core';
+import type { QueryAST, DriverOptions } from '@objectstack/spec/data';
+import type { IDataDriver } from '@objectstack/spec/contracts';
 import knex, { Knex } from 'knex';
 import { nanoid } from 'nanoid';
 
@@ -60,25 +60,57 @@ export type SqlDriverConfig = Knex.Config;
 /**
  * SQL Driver for ObjectStack.
  *
- * Implements the DriverInterface contract via Knex.js for optimal SQL
+ * Implements the IDataDriver contract via Knex.js for optimal SQL
  * generation against PostgreSQL, MySQL, SQLite and other SQL databases.
  */
-export class SqlDriver implements DriverInterface {
-  // DriverInterface metadata
+export class SqlDriver implements IDataDriver {
+  // IDataDriver metadata
   public readonly name = 'com.objectstack.driver.sql';
   public readonly version = '1.0.0';
   public readonly supports = {
+    // Basic CRUD Operations
+    create: true,
+    read: true,
+    update: true,
+    delete: true,
+
+    // Bulk Operations
+    bulkCreate: true,
+    bulkUpdate: true,
+    bulkDelete: true,
+
+    // Transaction & Connection Management
     transactions: true,
-    joins: true,
-    fullTextSearch: false,
-    jsonFields: true,
-    arrayFields: true,
+    savepoints: false,
+
+    // Query Operations
     queryFilters: true,
     queryAggregations: true,
     querySorting: true,
     queryPagination: true,
     queryWindowFunctions: true,
     querySubqueries: true,
+    queryCTE: false,
+    joins: true,
+
+    // Advanced Features
+    fullTextSearch: false,
+    jsonQuery: false,
+    geospatialQuery: false,
+    streaming: false,
+    jsonFields: true,
+    arrayFields: true,
+    vectorSearch: false,
+
+    // Schema Management
+    schemaSync: true,
+    migrations: false,
+    indexes: false,
+
+    // Performance & Optimization
+    connectionPooling: true,
+    preparedStatements: true,
+    queryCache: false,
   };
 
   private knex: Knex;
@@ -135,7 +167,7 @@ export class SqlDriver implements DriverInterface {
   // CRUD — DriverInterface core
   // ===================================
 
-  async find(object: string, query: QueryInput, options?: DriverOptions): Promise<any[]> {
+  async find(object: string, query: QueryAST, options?: DriverOptions): Promise<any[]> {
     const builder = this.getBuilder(object, options);
 
     // SELECT
@@ -196,7 +228,7 @@ export class SqlDriver implements DriverInterface {
     return results;
   }
 
-  async findOne(object: string, query: QueryInput, options?: DriverOptions): Promise<any> {
+  async findOne(object: string, query: QueryAST, options?: DriverOptions): Promise<any> {
     // When called with a string/number id fall back gracefully
     if (typeof query === 'string' || typeof query === 'number') {
       const res = await this.getBuilder(object, options).where('id', query).first();
@@ -209,6 +241,18 @@ export class SqlDriver implements DriverInterface {
     }
 
     return null;
+  }
+
+  /**
+   * Stream records matching a structured query.
+   * NOTE: Current implementation fetches all results then yields them.
+   * TODO: Use Knex .stream() for true cursor-based streaming on large datasets.
+   */
+  async *findStream(object: string, query: QueryAST, options?: DriverOptions): AsyncGenerator<Record<string, any>> {
+    const results = await this.find(object, query, options);
+    for (const row of results) {
+      yield row;
+    }
   }
 
   async create(object: string, data: Record<string, any>, options?: DriverOptions): Promise<any> {
@@ -247,13 +291,34 @@ export class SqlDriver implements DriverInterface {
     return this.formatOutput(object, updated) || null;
   }
 
-  async delete(object: string, id: string | number, options?: DriverOptions): Promise<any> {
+  async upsert(object: string, data: Record<string, any>, conflictKeys?: string[], options?: DriverOptions): Promise<Record<string, any>> {
+    const { _id, ...rest } = data;
+    const toUpsert = { ...rest };
+
+    if (_id !== undefined && toUpsert.id === undefined) {
+      toUpsert.id = _id;
+    } else if (toUpsert.id === undefined) {
+      toUpsert.id = nanoid(DEFAULT_ID_LENGTH);
+    }
+
+    const formatted = this.formatInput(object, toUpsert);
+    const mergeKeys = conflictKeys && conflictKeys.length > 0 ? conflictKeys : ['id'];
+
     const builder = this.getBuilder(object, options);
-    return await builder.where('id', id).delete();
+    await builder.insert(formatted).onConflict(mergeKeys).merge();
+
+    const result = await this.getBuilder(object, options).where('id', toUpsert.id).first();
+    return this.formatOutput(object, result) || toUpsert;
+  }
+
+  async delete(object: string, id: string | number, options?: DriverOptions): Promise<boolean> {
+    const builder = this.getBuilder(object, options);
+    const count = await builder.where('id', id).delete();
+    return count > 0;
   }
 
   // ===================================
-  // Optional — bulk & batch
+  // Bulk & Batch Operations
   // ===================================
 
   async bulkCreate(object: string, data: any[], options?: DriverOptions): Promise<any> {
@@ -261,23 +326,42 @@ export class SqlDriver implements DriverInterface {
     return await builder.insert(data).returning('*');
   }
 
-  async updateMany(object: string, query: QueryInput, data: any, options?: DriverOptions): Promise<any> {
+  /**
+   * Batch-update multiple records by ID.
+   * NOTE: Current implementation performs sequential updates for correctness.
+   * TODO: Optimize with SQL CASE statements or batched transactions for performance.
+   */
+  async bulkUpdate(object: string, updates: Array<{ id: string | number; data: Record<string, any> }>, options?: DriverOptions): Promise<Record<string, any>[]> {
+    const results: Record<string, any>[] = [];
+    for (const { id, data } of updates) {
+      const updated = await this.update(object, id, data, options);
+      if (updated) results.push(updated);
+    }
+    return results;
+  }
+
+  async bulkDelete(object: string, ids: Array<string | number>, options?: DriverOptions): Promise<void> {
+    const builder = this.getBuilder(object, options);
+    await builder.whereIn('id', ids).delete();
+  }
+
+  async updateMany(object: string, query: QueryAST, data: any, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
     const filters = query.where || (query as any).filters || query;
     if (filters) this.applyFilters(builder, filters);
     const count = await builder.update(data);
-    return { modifiedCount: count || 0 };
+    return count || 0;
   }
 
-  async deleteMany(object: string, query: QueryInput, options?: DriverOptions): Promise<any> {
+  async deleteMany(object: string, query: QueryAST, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
     const filters = query.where || (query as any).filters || query;
     if (filters) this.applyFilters(builder, filters);
     const count = await builder.delete();
-    return { deletedCount: count || 0 };
+    return count || 0;
   }
 
-  async count(object: string, query: QueryInput, options?: DriverOptions): Promise<number> {
+  async count(object: string, query?: QueryAST, options?: DriverOptions): Promise<number> {
     const builder = this.getBuilder(object, options);
 
     let actualFilters = query as any;
@@ -322,12 +406,24 @@ export class SqlDriver implements DriverInterface {
     return await this.knex.transaction();
   }
 
-  async commitTransaction(trx: Knex.Transaction): Promise<void> {
-    await trx.commit();
+  /** IDataDriver standard */
+  async commit(transaction: unknown): Promise<void> {
+    await (transaction as Knex.Transaction).commit();
   }
 
+  /** IDataDriver standard */
+  async rollback(transaction: unknown): Promise<void> {
+    await (transaction as Knex.Transaction).rollback();
+  }
+
+  /** @deprecated Use commit() instead */
+  async commitTransaction(trx: Knex.Transaction): Promise<void> {
+    await this.commit(trx);
+  }
+
+  /** @deprecated Use rollback() instead */
   async rollbackTransaction(trx: Knex.Transaction): Promise<void> {
-    await trx.rollback();
+    await this.rollback(trx);
   }
 
   // ===================================
@@ -416,6 +512,11 @@ export class SqlDriver implements DriverInterface {
   // Query Plan Analysis
   // ===================================
 
+  /** IDataDriver standard: analyze query performance */
+  async explain(object: string, query: any, options?: DriverOptions): Promise<any> {
+    return this.analyzeQuery(object, query, options);
+  }
+
   async analyzeQuery(object: string, query: any, options?: DriverOptions): Promise<any> {
     const builder = this.getBuilder(object, options);
 
@@ -477,6 +578,10 @@ export class SqlDriver implements DriverInterface {
   async syncSchema(object: string, schema: unknown, _options?: DriverOptions): Promise<void> {
     const objectDef = schema as { name: string; fields?: Record<string, any> };
     await this.initObjects([objectDef]);
+  }
+
+  async dropTable(object: string, _options?: DriverOptions): Promise<void> {
+    await this.knex.schema.dropTableIfExists(object);
   }
 
   /**

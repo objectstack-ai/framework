@@ -898,7 +898,7 @@ export class ObjectQL implements IDataEngine {
                result = await Promise.all((hookContext.input.data as any[]).map((item: any) => driver.create(object, item, hookContext.input.options as any)));
           }
         } else {
-          result = await driver.create(object, hookContext.input.data, hookContext.input.options as any);
+          result = await driver.create(object, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
         }
 
         hookContext.event = 'afterInsert';
@@ -949,10 +949,10 @@ export class ObjectQL implements IDataEngine {
        try {
            let result;
            if (hookContext.input.id) {
-               result = await driver.update(object, hookContext.input.id as string, hookContext.input.data, hookContext.input.options as any);
+               result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {
                const ast = this.toQueryAST(object, { filter: options.filter });
-               result = await driver.updateMany(object, ast, hookContext.input.data, hookContext.input.options as any);
+               result = await driver.updateMany(object, ast, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else {
                throw new Error('Update requires an ID or options.multi=true');
            }

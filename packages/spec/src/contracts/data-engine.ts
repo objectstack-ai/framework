@@ -8,9 +8,9 @@ import {
   DataEngineAggregateOptions, 
   DataEngineCountOptions,
   DataEngineRequest,
-  QueryAST,
-  DriverOptions
 } from '../data/index.js';
+
+import type { IDataDriver } from './data-driver.js';
 
 /**
  * IDataEngine - Standard Data Engine Interface
@@ -47,37 +47,11 @@ export interface IDataEngine {
   execute?(command: any, options?: Record<string, any>): Promise<any>;
 }
 
-export interface DriverInterface {
-  name: string;
-  version: string;
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  
-  find(object: string, query: QueryAST, options?: DriverOptions): Promise<any[]>;
-  findOne(object: string, query: QueryAST, options?: DriverOptions): Promise<any>;
-  create(object: string, data: any, options?: DriverOptions): Promise<any>;
-  update(object: string, id: any, data: any, options?: DriverOptions): Promise<any>;
-  delete(object: string, id: any, options?: DriverOptions): Promise<any>;
-  
-  /**
-   * Bulk & Batch Operations
-   */
-  bulkCreate?(object: string, data: any[], options?: DriverOptions): Promise<any>;
-  updateMany?(object: string, query: QueryAST, data: any, options?: DriverOptions): Promise<any>;
-  deleteMany?(object: string, query: QueryAST, options?: DriverOptions): Promise<any>;
-
-  count?(object: string, query: QueryAST, options?: DriverOptions): Promise<number>;
-  
-  /**
-   * Raw Execution
-   */
-  execute?(command: any, params?: any, options?: DriverOptions): Promise<any>;
-
-  /**
-   * Synchronize the database schema with the Object definition.
-   * Idempotent: creates tables if missing, adds columns, updates indexes.
-   *
-   * @see IDataDriver.syncSchema in data-driver.ts for the full contract.
-   */
-  syncSchema?(object: string, schema: unknown, options?: DriverOptions): Promise<void>;
-}
+/**
+ * @deprecated Use `IDataDriver` from `@objectstack/spec/contracts` instead.
+ * `DriverInterface` is now a type alias for `IDataDriver` — the single authoritative
+ * driver contract. All new driver implementations should use `IDataDriver` directly.
+ *
+ * @see IDataDriver in data-driver.ts for the full contract specification.
+ */
+export type DriverInterface = IDataDriver;
