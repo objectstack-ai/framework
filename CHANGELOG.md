@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Unified Data Driver Contract (`IDataDriver`)** — Resolved the split between `DriverInterface`
+  (core, minimal ~13 methods) and `IDataDriver` (spec, comprehensive 28 methods). `IDataDriver`
+  from `@objectstack/spec/contracts` is now the **single authoritative** contract for all database
+  driver implementations. `DriverInterface` is retained as a deprecated type alias for backward
+  compatibility. Both `@objectstack/driver-sql` and `@objectstack/driver-memory` now implement
+  `IDataDriver` directly with full `DriverCapabilities` support.
+- **`@objectstack/driver-sql`** — Added missing `IDataDriver` methods: `findStream`, `upsert`,
+  `bulkUpdate`, `bulkDelete`, `commit`, `rollback`, `dropTable`, `explain`. Aligned `supports`
+  with full `DriverCapabilities` schema. `updateMany`/`deleteMany` now return `number` (count)
+  instead of `{ modifiedCount }` / `{ deletedCount }` objects. `delete` returns `boolean`.
+- **`@objectstack/driver-memory`** — Aligned `supports` property with full `DriverCapabilities`
+  schema (added `create`, `read`, `update`, `delete`, `bulkCreate`, `bulkUpdate`, `bulkDelete`,
+  `savepoints`, `queryCTE`, `jsonQuery`, `geospatialQuery`, `streaming`, `schemaSync`, etc.).
+
+### Deprecated
+- **`DriverInterface`** — Use `IDataDriver` from `@objectstack/spec/contracts` instead.
+  `DriverInterface` remains as a type alias in both `@objectstack/spec/contracts` and
+  `@objectstack/core` for backward compatibility.
+
 ### Added
 - **`@objectstack/driver-sql` plugin** — Migrated the Knex-based SQL driver from `@objectql/driver-sql`
   into `packages/plugins/driver-sql/`. The driver implements the standard `DriverInterface` from

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ObjectQL } from './engine';
 import { SchemaRegistry } from './registry';
-import { DriverInterface } from '@objectstack/spec/data';
+import type { IDataDriver } from '@objectstack/spec/contracts';
 
 // Mock the SchemaRegistry to avoid side effects between tests
 vi.mock('./registry', () => {
@@ -35,8 +35,8 @@ vi.mock('./registry', () => {
 
 describe('ObjectQL Engine', () => {
     let engine: ObjectQL;
-    let mockDriver: DriverInterface;
-    let mockDriver2: DriverInterface;
+    let mockDriver: IDataDriver;
+    let mockDriver2: IDataDriver;
 
     beforeEach(() => {
         // Clear Registry Mocks
@@ -54,7 +54,7 @@ describe('ObjectQL Engine', () => {
             delete: vi.fn(),
             count: vi.fn(),
             capabilities: {} as any // Simplified
-        } as unknown as DriverInterface;
+        } as unknown as IDataDriver;
 
         mockDriver2 = {
             name: 'mongo',
@@ -67,7 +67,7 @@ describe('ObjectQL Engine', () => {
             delete: vi.fn(),
             count: vi.fn(),
             capabilities: {} as any
-        } as unknown as DriverInterface;
+        } as unknown as IDataDriver;
 
         engine = new ObjectQL();
     });
