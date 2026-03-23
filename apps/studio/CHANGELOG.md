@@ -1,5 +1,24 @@
 # @objectstack/studio
 
+## 3.3.0
+
+### Patch Changes
+
+- Updated dependencies [814a6c4]
+  - @objectstack/plugin-auth@3.3.0
+  - @objectstack/spec@3.3.0
+  - @objectstack/client@3.3.0
+  - @objectstack/client-react@3.3.0
+  - @objectstack/metadata@3.3.0
+  - @objectstack/objectql@3.3.0
+  - @objectstack/runtime@3.3.0
+  - @objectstack/driver-memory@3.3.0
+  - @objectstack/plugin-msw@3.3.0
+  - @objectstack/plugin-security@3.3.0
+  - @objectstack/hono@3.3.0
+  - @objectstack/service-feed@3.3.0
+  - @objectstack/plugin-audit@3.2.10
+
 ## 3.2.9
 
 ### Patch Changes

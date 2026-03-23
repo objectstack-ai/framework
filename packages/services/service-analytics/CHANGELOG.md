@@ -1,5 +1,12 @@
 # Changelog — @objectstack/service-analytics
 
+## 3.2.10
+
+### Patch Changes
+
+- @objectstack/spec@3.3.0
+- @objectstack/core@3.3.0
+
 All notable changes to this package will be documented in this file.
 
 ## [3.2.9] — 2026-03-22
