@@ -44,6 +44,8 @@ the ecosystem for enterprise workloads.
 | Microkernel (ObjectKernel / LiteKernel) | ✅ | `@objectstack/core` |
 | Data Engine (ObjectQL) | ✅ | `@objectstack/objectql` |
 | In-Memory Driver | ✅ | `@objectstack/driver-memory` |
+| SQL Driver (PostgreSQL, MySQL, SQLite) | ✅ | `@objectstack/driver-sql` |
+| Turso/libSQL Driver (Edge SQLite) | ✅ | `@objectstack/driver-turso` |
 | Metadata Service | ✅ | `@objectstack/metadata` |
 | REST API Server | ✅ | `@objectstack/rest` |
 | Client SDK (TypeScript) | ✅ | `@objectstack/client` |
