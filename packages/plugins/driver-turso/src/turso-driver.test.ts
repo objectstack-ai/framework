@@ -227,6 +227,37 @@ describe('TursoDriver (SQLite Integration)', () => {
     expect(created.price).toBe(9.99);
   });
 
+  it('should batch-sync multiple schemas in local mode (sequential fallback)', async () => {
+    await driver.syncSchemasBatch([
+      {
+        object: 'local_orders',
+        schema: {
+          name: 'local_orders',
+          fields: {
+            product: { type: 'string' },
+            quantity: { type: 'integer' },
+          },
+        },
+      },
+      {
+        object: 'local_invoices',
+        schema: {
+          name: 'local_invoices',
+          fields: {
+            amount: { type: 'float' },
+          },
+        },
+      },
+    ]);
+
+    // Verify tables were created
+    const order = await driver.create('local_orders', { product: 'Gadget', quantity: 3 });
+    expect(order.product).toBe('Gadget');
+
+    const invoice = await driver.create('local_invoices', { amount: 42.0 });
+    expect(invoice.amount).toBe(42.0);
+  });
+
   // ── Raw Execution ────────────────────────────────────────────────────────
 
   it('should execute raw SQL', async () => {

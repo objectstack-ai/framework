@@ -283,10 +283,12 @@ export class ObjectQLPlugin implements Plugin {
 
       const tableName = obj.tableName || obj.name;
 
-      if (!driverGroups.has(driver)) {
-        driverGroups.set(driver, []);
+      let group = driverGroups.get(driver);
+      if (!group) {
+        group = [];
+        driverGroups.set(driver, group);
       }
-      driverGroups.get(driver)!.push({ obj, tableName });
+      group.push({ obj, tableName });
     }
 
     // Process each driver group

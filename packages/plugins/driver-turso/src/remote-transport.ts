@@ -26,6 +26,13 @@ const DEFAULT_ID_LENGTH = 16;
 const BUILTIN_COLUMNS = new Set(['id', 'created_at', 'updated_at']);
 
 /**
+ * Pattern for valid SQL identifiers (table and column names).
+ * Prevents SQL injection in DDL statements where parameterized queries
+ * are not supported (e.g. PRAGMA, CREATE TABLE, ALTER TABLE).
+ */
+const SAFE_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
  * Remote transport that executes all queries via @libsql/client.
  *
  * Handles SQL generation, filter compilation, and result mapping for
@@ -338,6 +345,7 @@ export class RemoteTransport {
 
     const objectDef = schema as { name: string; fields?: Record<string, any> };
     const tableName = object;
+    this.assertSafeIdentifier(tableName);
 
     // Check if table exists
     const checkResult = await this.client!.execute({
@@ -347,21 +355,7 @@ export class RemoteTransport {
     const exists = checkResult.rows.length > 0;
 
     if (!exists) {
-      // Build CREATE TABLE
-      let sql = `CREATE TABLE "${tableName}" ("id" TEXT PRIMARY KEY, "created_at" TEXT DEFAULT (datetime('now')), "updated_at" TEXT DEFAULT (datetime('now'))`;
-
-      if (objectDef.fields) {
-        for (const [name, field] of Object.entries(objectDef.fields)) {
-          if (BUILTIN_COLUMNS.has(name)) continue;
-          const type = (field as any).type || 'string';
-          if (type === 'formula') continue; // Virtual — no column
-          const colType = this.mapFieldTypeToSQL(field);
-          sql += `, "${name}" ${colType}`;
-        }
-      }
-
-      sql += ')';
-      await this.client!.execute(sql);
+      await this.client!.execute(this.buildCreateTableSQL(tableName, objectDef));
     } else {
       // ALTER TABLE — add missing columns
       if (objectDef.fields) {
@@ -372,12 +366,12 @@ export class RemoteTransport {
         const existingColumns = new Set(columnsResult.rows.map((r: any) => r.name));
 
         for (const [name, field] of Object.entries(objectDef.fields)) {
-          if (!existingColumns.has(name)) {
-            const type = (field as any).type || 'string';
-            if (type === 'formula') continue; // Virtual — no column
-            const colType = this.mapFieldTypeToSQL(field);
-            await this.client!.execute(`ALTER TABLE "${tableName}" ADD COLUMN "${name}" ${colType}`);
-          }
+          if (existingColumns.has(name)) continue;
+          const type = (field as any).type || 'string';
+          if (type === 'formula') continue; // Virtual — no column
+          this.assertSafeIdentifier(name);
+          const colType = this.mapFieldTypeToSQL(field);
+          await this.client!.execute(`ALTER TABLE "${tableName}" ADD COLUMN "${name}" ${colType}`);
         }
       }
     }
@@ -397,6 +391,11 @@ export class RemoteTransport {
   async syncSchemasBatch(schemas: Array<{ object: string; schema: any }>): Promise<void> {
     this.ensureClient();
     if (schemas.length === 0) return;
+
+    // Validate all identifiers up-front
+    for (const s of schemas) {
+      this.assertSafeIdentifier(s.object);
+    }
 
     // Phase 1: introspect all tables in one batch
     const introspectStmts: InStatement[] = schemas.map((s) => ({
@@ -422,19 +421,7 @@ export class RemoteTransport {
 
     for (const { object, schema } of newSchemas) {
       const objectDef = schema as { name: string; fields?: Record<string, any> };
-      let sql = `CREATE TABLE "${object}" ("id" TEXT PRIMARY KEY, "created_at" TEXT DEFAULT (datetime('now')), "updated_at" TEXT DEFAULT (datetime('now'))`;
-
-      if (objectDef.fields) {
-        for (const [name, field] of Object.entries(objectDef.fields)) {
-          if (BUILTIN_COLUMNS.has(name)) continue;
-          const type = (field as any).type || 'string';
-          if (type === 'formula') continue;
-          const colType = this.mapFieldTypeToSQL(field);
-          sql += `, "${name}" ${colType}`;
-        }
-      }
-      sql += ')';
-      ddlStatements.push(sql);
+      ddlStatements.push(this.buildCreateTableSQL(object, objectDef));
     }
 
     // Phase 2b: for existing tables, introspect columns in one batch
@@ -456,6 +443,7 @@ export class RemoteTransport {
           if (existingColumns.has(name)) continue;
           const type = (field as any).type || 'string';
           if (type === 'formula') continue;
+          this.assertSafeIdentifier(name);
           const colType = this.mapFieldTypeToSQL(field);
           ddlStatements.push(`ALTER TABLE "${object}" ADD COLUMN "${name}" ${colType}`);
         }
@@ -482,6 +470,38 @@ export class RemoteTransport {
       throw new Error('RemoteTransport: @libsql/client is not initialized. Call connect() first.');
     }
     return this.client;
+  }
+
+  /**
+   * Validate that a string is a safe SQL identifier.
+   * Prevents injection in DDL where parameterized queries are unsupported.
+   */
+  private assertSafeIdentifier(name: string): void {
+    if (!SAFE_IDENTIFIER.test(name)) {
+      throw new Error(`RemoteTransport: unsafe identifier rejected: "${name}"`);
+    }
+  }
+
+  /**
+   * Build a CREATE TABLE SQL string for the given object definition.
+   * Shared by syncSchema() and syncSchemasBatch() to avoid duplication.
+   */
+  private buildCreateTableSQL(tableName: string, objectDef: { fields?: Record<string, any> }): string {
+    let sql = `CREATE TABLE "${tableName}" ("id" TEXT PRIMARY KEY, "created_at" TEXT DEFAULT (datetime('now')), "updated_at" TEXT DEFAULT (datetime('now'))`;
+
+    if (objectDef.fields) {
+      for (const [name, field] of Object.entries(objectDef.fields)) {
+        if (BUILTIN_COLUMNS.has(name)) continue;
+        const type = (field as any).type || 'string';
+        if (type === 'formula') continue; // Virtual — no column
+        this.assertSafeIdentifier(name);
+        const colType = this.mapFieldTypeToSQL(field);
+        sql += `, "${name}" ${colType}`;
+      }
+    }
+
+    sql += ')';
+    return sql;
   }
 
   /**
