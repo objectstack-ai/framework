@@ -1,5 +1,13 @@
 # @objectstack/studio
 
+## 3.3.1
+
+### Patch Changes
+
+- Fix Vercel deployment crash (`ERR_MODULE_NOT_FOUND` for `@objectstack/metadata/src/index.ts`)
+  - Change `bundle-api.mjs` output from `api/index.mjs` to `api/index.js` so Vercel's @vercel/node runtime uses the pre-bundled self-contained bundle directly instead of compiling from TypeScript source (which resolves workspace symlinks to `.ts` source files)
+  - Since `package.json` has `"type": "module"`, `.js` files are treated as ESM — matching the esbuild `format: 'esm'` output
+
 ## 3.3.0
 
 ### Patch Changes

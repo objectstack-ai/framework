@@ -38,14 +38,16 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'es2020',
-  outfile: 'api/index.mjs',
+  outfile: 'api/index.js',
   sourcemap: true,
   external: EXTERNAL,
   // Silence warnings about optional/unused require() calls in knex drivers
   logOverride: { 'require-resolve-not-external': 'silent' },
 });
 
-// Remove the TypeScript source so Vercel only sees the compiled .mjs
+// Remove the TypeScript source so Vercel only sees the compiled .js bundle.
+// Since package.json has "type": "module", .js files are treated as ESM —
+// matching the esbuild `format: 'esm'` output.
 unlinkSync('api/index.ts');
 
-console.log('[bundle-api] Bundled api/index.ts → api/index.mjs');
+console.log('[bundle-api] Bundled api/index.ts → api/index.js');
