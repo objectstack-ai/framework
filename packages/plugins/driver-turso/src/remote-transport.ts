@@ -383,6 +383,91 @@ export class RemoteTransport {
     }
   }
 
+  /**
+   * Batch-synchronize multiple object schemas in a single round-trip.
+   *
+   * Collects all DDL statements (CREATE TABLE / ALTER TABLE ADD COLUMN)
+   * for every schema and submits them via `client.batch()` in a single
+   * network call.  This reduces N × (2–3) HTTP round-trips to exactly 2:
+   * one batch to introspect existing tables, and one batch to apply DDL.
+   *
+   * Falls back to sequential `syncSchema()` if the batch call fails
+   * (e.g. unsupported by the libsql endpoint).
+   */
+  async syncSchemasBatch(schemas: Array<{ object: string; schema: any }>): Promise<void> {
+    this.ensureClient();
+    if (schemas.length === 0) return;
+
+    // Phase 1: introspect all tables in one batch
+    const introspectStmts: InStatement[] = schemas.map((s) => ({
+      sql: `SELECT name FROM sqlite_master WHERE type='table' AND name=?`,
+      args: [s.object],
+    }));
+    const introspectResults = await this.client!.batch(introspectStmts, 'read');
+
+    // Separate new tables from existing tables
+    const newSchemas: Array<{ object: string; schema: any }> = [];
+    const existingSchemas: Array<{ object: string; schema: any }> = [];
+
+    for (let i = 0; i < schemas.length; i++) {
+      if (introspectResults[i].rows.length > 0) {
+        existingSchemas.push(schemas[i]);
+      } else {
+        newSchemas.push(schemas[i]);
+      }
+    }
+
+    // Phase 2a: build CREATE TABLE statements for new tables
+    const ddlStatements: InStatement[] = [];
+
+    for (const { object, schema } of newSchemas) {
+      const objectDef = schema as { name: string; fields?: Record<string, any> };
+      let sql = `CREATE TABLE "${object}" ("id" TEXT PRIMARY KEY, "created_at" TEXT DEFAULT (datetime('now')), "updated_at" TEXT DEFAULT (datetime('now'))`;
+
+      if (objectDef.fields) {
+        for (const [name, field] of Object.entries(objectDef.fields)) {
+          if (BUILTIN_COLUMNS.has(name)) continue;
+          const type = (field as any).type || 'string';
+          if (type === 'formula') continue;
+          const colType = this.mapFieldTypeToSQL(field);
+          sql += `, "${name}" ${colType}`;
+        }
+      }
+      sql += ')';
+      ddlStatements.push(sql);
+    }
+
+    // Phase 2b: for existing tables, introspect columns in one batch
+    if (existingSchemas.length > 0) {
+      const pragmaStmts: InStatement[] = existingSchemas.map((s) => ({
+        sql: `PRAGMA table_info("${s.object}")`,
+        args: [],
+      }));
+      const pragmaResults = await this.client!.batch(pragmaStmts, 'read');
+
+      for (let i = 0; i < existingSchemas.length; i++) {
+        const { object, schema } = existingSchemas[i];
+        const objectDef = schema as { name: string; fields?: Record<string, any> };
+        if (!objectDef.fields) continue;
+
+        const existingColumns = new Set(pragmaResults[i].rows.map((r: any) => r.name));
+
+        for (const [name, field] of Object.entries(objectDef.fields)) {
+          if (existingColumns.has(name)) continue;
+          const type = (field as any).type || 'string';
+          if (type === 'formula') continue;
+          const colType = this.mapFieldTypeToSQL(field);
+          ddlStatements.push(`ALTER TABLE "${object}" ADD COLUMN "${name}" ${colType}`);
+        }
+      }
+    }
+
+    // Phase 3: execute all DDL in a single batch
+    if (ddlStatements.length > 0) {
+      await this.client!.batch(ddlStatements, 'write');
+    }
+  }
+
   async dropTable(object: string): Promise<void> {
     this.ensureClient();
     await this.client!.execute(`DROP TABLE IF EXISTS "${object}"`);

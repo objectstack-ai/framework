@@ -143,6 +143,7 @@ export class InMemoryDriver implements IDataDriver {
 
     // Schema Management
     schemaSync: true,            // Implemented via syncSchema()
+    batchSchemaSync: false,
     migrations: false,
     indexes: false,
 

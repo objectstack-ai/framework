@@ -239,9 +239,13 @@ export class ObjectQLPlugin implements Plugin {
   /**
    * Synchronize all registered object schemas to the database.
    *
-   * Iterates every object in the SchemaRegistry and calls the
-   * responsible driver's `syncSchema()` for each one.  This is
-   * idempotent — drivers must tolerate repeated calls without
+   * Groups objects by their responsible driver, then:
+   * - If the driver advertises `supports.batchSchemaSync` and implements
+   *   `syncSchemasBatch()`, submits all schemas in a single call (reducing
+   *   network round-trips for remote drivers like Turso).
+   * - Otherwise falls back to sequential `syncSchema()` per object.
+   *
+   * This is idempotent — drivers must tolerate repeated calls without
    * duplicating tables or erroring out.
    *
    * Drivers that do not implement `syncSchema` are silently skipped.
@@ -254,6 +258,9 @@ export class ObjectQLPlugin implements Plugin {
 
     let synced = 0;
     let skipped = 0;
+
+    // Group objects by driver for potential batch optimization
+    const driverGroups = new Map<any, Array<{ obj: any; tableName: string }>>();
 
     for (const obj of allObjects) {
       const driver = this.ql.getDriverForObject(obj.name);
@@ -274,21 +281,67 @@ export class ObjectQLPlugin implements Plugin {
         continue;
       }
 
-      // Use the physical table name (e.g., 'sys_user') for DDL operations
-      // instead of the FQN (e.g., 'sys__user'). ObjectSchema.create()
-      // auto-derives tableName as {namespace}_{name}.
       const tableName = obj.tableName || obj.name;
 
-      try {
-        await driver.syncSchema(tableName, obj);
-        synced++;
-      } catch (e: unknown) {
-        ctx.logger.warn('Failed to sync schema for object', {
-          object: obj.name,
-          tableName,
-          driver: driver.name,
-          error: e instanceof Error ? e.message : String(e),
-        });
+      if (!driverGroups.has(driver)) {
+        driverGroups.set(driver, []);
+      }
+      driverGroups.get(driver)!.push({ obj, tableName });
+    }
+
+    // Process each driver group
+    for (const [driver, entries] of driverGroups) {
+      // Batch path: driver supports batch schema sync
+      if (
+        driver.supports?.batchSchemaSync &&
+        typeof driver.syncSchemasBatch === 'function'
+      ) {
+        const batchPayload = entries.map((e) => ({
+          object: e.tableName,
+          schema: e.obj,
+        }));
+        try {
+          await driver.syncSchemasBatch(batchPayload);
+          synced += entries.length;
+          ctx.logger.debug('Batch schema sync succeeded', {
+            driver: driver.name,
+            count: entries.length,
+          });
+        } catch (e: unknown) {
+          ctx.logger.warn('Batch schema sync failed, falling back to sequential', {
+            driver: driver.name,
+            error: e instanceof Error ? e.message : String(e),
+          });
+          // Fallback: sequential sync for this driver's objects
+          for (const { obj, tableName } of entries) {
+            try {
+              await driver.syncSchema(tableName, obj);
+              synced++;
+            } catch (seqErr: unknown) {
+              ctx.logger.warn('Failed to sync schema for object', {
+                object: obj.name,
+                tableName,
+                driver: driver.name,
+                error: seqErr instanceof Error ? seqErr.message : String(seqErr),
+              });
+            }
+          }
+        }
+      } else {
+        // Sequential path: no batch support
+        for (const { obj, tableName } of entries) {
+          try {
+            await driver.syncSchema(tableName, obj);
+            synced++;
+          } catch (e: unknown) {
+            ctx.logger.warn('Failed to sync schema for object', {
+              object: obj.name,
+              tableName,
+              driver: driver.name,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
       }
     }
 

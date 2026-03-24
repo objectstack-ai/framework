@@ -153,6 +153,16 @@ export interface IDataDriver {
    */
   syncSchema(object: string, schema: unknown, options?: DriverOptions): Promise<void>;
 
+  /**
+   * Batch-synchronize multiple object schemas in a single round-trip.
+   *
+   * Drivers that set `supports.batchSchemaSync = true` MUST implement this.
+   * The engine calls it once with all `{ object, schema }` pairs instead
+   * of calling `syncSchema()` N times, reducing network overhead for
+   * remote drivers.
+   */
+  syncSchemasBatch?(schemas: Array<{ object: string; schema: unknown }>, options?: DriverOptions): Promise<void>;
+
   /** Drop the underlying table or collection (destructive) */
   dropTable(object: string, options?: DriverOptions): Promise<void>;
 

@@ -547,5 +547,217 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(syncedNames).not.toContain('sys__user');
       expect(syncedNames).not.toContain('sys__session');
     });
+
+    it('should use syncSchemasBatch when driver supports batchSchemaSync', async () => {
+      // Arrange - driver that supports batch schema sync
+      const batchCalls: Array<{ object: string; schema: any }[]> = [];
+      const singleCalls: Array<{ object: string; schema: any }> = [];
+      const mockDriver = {
+        name: 'batch-driver',
+        version: '1.0.0',
+        supports: { batchSchemaSync: true },
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async () => [],
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async (object: string, schema: any) => {
+          singleCalls.push({ object, schema });
+        },
+        syncSchemasBatch: async (schemas: Array<{ object: string; schema: any }>) => {
+          batchCalls.push(schemas);
+        },
+      };
+
+      await kernel.use({
+        name: 'mock-batch-driver-plugin',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('driver.batch', mockDriver);
+        },
+      });
+
+      const appManifest = {
+        id: 'com.test.batchapp',
+        name: 'batchapp',
+        namespace: 'bat',
+        version: '1.0.0',
+        objects: [
+          {
+            name: 'alpha',
+            label: 'Alpha',
+            fields: { a: { name: 'a', label: 'A', type: 'text' } },
+          },
+          {
+            name: 'beta',
+            label: 'Beta',
+            fields: { b: { name: 'b', label: 'B', type: 'text' } },
+          },
+          {
+            name: 'gamma',
+            label: 'Gamma',
+            fields: { c: { name: 'c', label: 'C', type: 'text' } },
+          },
+        ],
+      };
+
+      await kernel.use({
+        name: 'mock-batch-app-plugin',
+        type: 'app',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('app.batchapp', appManifest);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+
+      // Act
+      await kernel.bootstrap();
+
+      // Assert - syncSchemasBatch should have been called once with all objects
+      expect(batchCalls.length).toBe(1);
+      const batchedObjects = batchCalls[0].map((s) => s.object).sort();
+      expect(batchedObjects).toContain('bat__alpha');
+      expect(batchedObjects).toContain('bat__beta');
+      expect(batchedObjects).toContain('bat__gamma');
+      // syncSchema should NOT have been called individually
+      expect(singleCalls.length).toBe(0);
+    });
+
+    it('should fall back to sequential syncSchema when batch fails', async () => {
+      // Arrange - driver where batch fails
+      const singleCalls: Array<{ object: string; schema: any }> = [];
+      const mockDriver = {
+        name: 'fallback-driver',
+        version: '1.0.0',
+        supports: { batchSchemaSync: true },
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async () => [],
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async (object: string, schema: any) => {
+          singleCalls.push({ object, schema });
+        },
+        syncSchemasBatch: async () => {
+          throw new Error('batch not supported at runtime');
+        },
+      };
+
+      await kernel.use({
+        name: 'mock-fallback-driver-plugin',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('driver.fallback', mockDriver);
+        },
+      });
+
+      const appManifest = {
+        id: 'com.test.fallback',
+        name: 'fallback',
+        namespace: 'fb',
+        version: '1.0.0',
+        objects: [
+          {
+            name: 'one',
+            label: 'One',
+            fields: { x: { name: 'x', label: 'X', type: 'text' } },
+          },
+          {
+            name: 'two',
+            label: 'Two',
+            fields: { y: { name: 'y', label: 'Y', type: 'text' } },
+          },
+        ],
+      };
+
+      await kernel.use({
+        name: 'mock-fallback-app-plugin',
+        type: 'app',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('app.fallback', appManifest);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+
+      // Act - should not throw
+      await expect(kernel.bootstrap()).resolves.not.toThrow();
+
+      // Assert - sequential fallback should have been used
+      const syncedObjects = singleCalls.map((s) => s.object).sort();
+      expect(syncedObjects).toContain('fb__one');
+      expect(syncedObjects).toContain('fb__two');
+    });
+
+    it('should not use batch when driver does not support batchSchemaSync', async () => {
+      // Arrange - driver without batch support (but with syncSchema)
+      const singleCalls: string[] = [];
+      const mockDriver = {
+        name: 'nobatch-driver',
+        version: '1.0.0',
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async () => [],
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async (object: string) => {
+          singleCalls.push(object);
+        },
+      };
+
+      await kernel.use({
+        name: 'mock-nobatch-driver-plugin',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('driver.nobatch', mockDriver);
+        },
+      });
+
+      const appManifest = {
+        id: 'com.test.nobatch',
+        name: 'nobatch',
+        namespace: 'nb',
+        version: '1.0.0',
+        objects: [
+          {
+            name: 'item',
+            label: 'Item',
+            fields: { z: { name: 'z', label: 'Z', type: 'text' } },
+          },
+        ],
+      };
+
+      await kernel.use({
+        name: 'mock-nobatch-app-plugin',
+        type: 'app',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('app.nobatch', appManifest);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+
+      // Act
+      await kernel.bootstrap();
+
+      // Assert - sequential syncSchema should have been used
+      expect(singleCalls).toContain('nb__item');
+    });
   });
 });

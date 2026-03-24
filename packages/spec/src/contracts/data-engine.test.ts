@@ -31,6 +31,7 @@ const minimalCapabilities = {
   arrayFields: false,
   vectorSearch: false,
   schemaSync: false,
+  batchSchemaSync: false,
   migrations: false,
   indexes: false,
   connectionPooling: false,

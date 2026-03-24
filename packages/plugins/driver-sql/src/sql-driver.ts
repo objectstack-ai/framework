@@ -104,6 +104,7 @@ export class SqlDriver implements IDataDriver {
 
     // Schema Management
     schemaSync: true,
+    batchSchemaSync: false,
     migrations: false,
     indexes: false,
 

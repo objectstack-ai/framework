@@ -204,6 +204,7 @@ export class TursoDriver extends SqlDriver {
 
     // Schema Management
     schemaSync: true,
+    batchSchemaSync: true,
     migrations: false,
     indexes: true,
 
@@ -537,6 +538,24 @@ export class TursoDriver extends SqlDriver {
   override async syncSchema(object: string, schema: unknown, options?: any): Promise<void> {
     if (this.isRemote) return this.remoteTransport!.syncSchema(object, schema);
     return super.syncSchema(object, schema, options);
+  }
+
+  /**
+   * Batch-synchronize multiple schemas in a single round-trip.
+   *
+   * In remote mode, delegates to `RemoteTransport.syncSchemasBatch()` which
+   * uses `client.batch()` to submit all DDL as one network call.
+   * In local/replica mode, falls back to sequential `syncSchema()` calls
+   * (Knex + better-sqlite3 is already local, so batching has no benefit).
+   */
+  async syncSchemasBatch(schemas: Array<{ object: string; schema: unknown }>, options?: any): Promise<void> {
+    if (this.isRemote) {
+      return this.remoteTransport!.syncSchemasBatch(schemas);
+    }
+    // Local/replica fallback: sequential sync (already fast with local SQLite)
+    for (const { object, schema } of schemas) {
+      await super.syncSchema(object, schema, options);
+    }
   }
 
   override async dropTable(object: string, options?: any): Promise<void> {
