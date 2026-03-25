@@ -5,7 +5,7 @@
  * which can cause esbuild to resolve to TypeScript source files rather than
  * compiled dist output — producing ERR_MODULE_NOT_FOUND at runtime.
  *
- * This script bundles api/index.ts with ALL dependencies inlined (including
+ * This script bundles server/index.ts with ALL dependencies inlined (including
  * npm packages), so the deployed function is self-contained. Only packages
  * with native bindings and optional database drivers are kept external.
  *
@@ -13,7 +13,6 @@
  */
 
 import { build } from 'esbuild';
-import { unlinkSync } from 'node:fs';
 
 // Packages that cannot be bundled (native bindings / optional drivers)
 const EXTERNAL = [
@@ -33,7 +32,7 @@ const EXTERNAL = [
 ];
 
 await build({
-  entryPoints: ['api/index.ts'],
+  entryPoints: ['server/index.ts'],
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -45,9 +44,4 @@ await build({
   logOverride: { 'require-resolve-not-external': 'silent' },
 });
 
-// Remove the TypeScript source so Vercel only sees the compiled .js bundle.
-// Since package.json has "type": "module", .js files are treated as ESM —
-// matching the esbuild `format: 'esm'` output.
-unlinkSync('api/index.ts');
-
-console.log('[bundle-api] Bundled api/index.ts → api/index.js');
+console.log('[bundle-api] Bundled server/index.ts → api/index.js');
