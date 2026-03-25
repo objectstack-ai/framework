@@ -52,14 +52,14 @@ describe('ObjectStackClient (with Hono Server)', () => {
                         if (protocol) {
                             return await protocol.findData({ object: params.object, query: params.query || params.filters });
                         }
-                        const records = await ql.find(params.object, { filter: params.filters });
+                        const records = await ql.find(params.object, { where: params.filters });
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
                         if (protocol) {
                             return await protocol.findData({ object: params.object, query: params.query || params.filters });
                         }
-                        const records = await ql.find(params.object, { filter: params.filters });
+                        const records = await ql.find(params.object, { where: params.filters });
                         return { object: params.object, records, total: records.length };
                     }
                 }

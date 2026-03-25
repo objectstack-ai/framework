@@ -279,17 +279,26 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     async findData(request: { object: string, query?: any }) {
         const options: any = { ...request.query };
 
+        // ====================================================================
+        // Normalize legacy params → QueryAST standard (where/fields/orderBy/offset/expand)
+        // ====================================================================
+
         // Numeric fields
         if (options.top != null) options.top = Number(options.top);
-        if (options.skip != null) options.skip = Number(options.skip);
+        if (options.skip != null) options.offset = Number(options.skip);
+        delete options.skip;
         if (options.limit != null) options.limit = Number(options.limit);
+        if (options.offset != null) options.offset = Number(options.offset);
 
-        // Select: comma-separated string → array
+        // Select → fields: comma-separated string → array
         if (typeof options.select === 'string') {
-            options.select = options.select.split(',').map((s: string) => s.trim()).filter(Boolean);
+            options.fields = options.select.split(',').map((s: string) => s.trim()).filter(Boolean);
+        } else if (Array.isArray(options.select)) {
+            options.fields = options.select;
         }
+        if (options.select !== undefined) delete options.select;
 
-        // Sort/orderBy: string → sort array (e.g. "name asc,created_at desc" or "name,-created_at")
+        // Sort/orderBy → orderBy: string → SortNode[] array
         const sortValue = options.orderBy ?? options.sort;
         if (typeof sortValue === 'string') {
             const parsed = sortValue.split(',').map((part: string) => {
@@ -300,45 +309,58 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 const [field, order] = trimmed.split(/\s+/);
                 return { field, order: (order?.toLowerCase() === 'desc' ? 'desc' : 'asc') as 'asc' | 'desc' };
             }).filter((s: any) => s.field);
-            options.sort = parsed;
-            delete options.orderBy;
+            options.orderBy = parsed;
+        } else if (Array.isArray(sortValue)) {
+            options.orderBy = sortValue;
         }
+        delete options.sort;
 
-        // Filter: normalize `filter`/`filters` (plural) → `filter` (singular, canonical)
-        // Accept both `filter` and `filters` for backward compatibility.
-        if (options.filters !== undefined && options.filter === undefined) {
-            options.filter = options.filters;
-        }
+        // Filter/filters/$filter → where: normalize all filter aliases
+        const filterValue = options.filter ?? options.filters ?? options.$filter ?? options.where;
+        delete options.filter;
         delete options.filters;
+        delete options.$filter;
 
-        // Filter: JSON string → object
-        if (typeof options.filter === 'string') {
-            try { options.filter = JSON.parse(options.filter); } catch { /* keep as-is */ }
+        if (filterValue !== undefined) {
+            let parsedFilter = filterValue;
+            // JSON string → object
+            if (typeof parsedFilter === 'string') {
+                try { parsedFilter = JSON.parse(parsedFilter); } catch { /* keep as-is */ }
+            }
+            // Filter AST array → FilterCondition object
+            if (isFilterAST(parsedFilter)) {
+                parsedFilter = parseFilterAST(parsedFilter);
+            }
+            options.where = parsedFilter;
         }
 
-        // Filter AST array → FilterCondition object
-        // Converts ["and", ["field", "=", "val"], ...] to { $and: [{ field: "val" }, ...] }
-        if (isFilterAST(options.filter)) {
-            options.filter = parseFilterAST(options.filter);
-        }
-
-        // Populate: comma-separated string → array
-        if (typeof options.populate === 'string') {
-            options.populate = options.populate.split(',').map((s: string) => s.trim()).filter(Boolean);
-        }
-
-        // Expand → Populate: normalize $expand/expand to populate array
-        // Supports OData $expand, REST expand, and JSON-RPC expand parameters
+        // Populate/expand/$expand → expand (Record<string, QueryAST>)
+        const populateValue = options.populate;
         const expandValue = options.$expand ?? options.expand;
-        if (expandValue && !options.populate) {
+        const expandNames: string[] = [];
+        if (typeof populateValue === 'string') {
+            expandNames.push(...populateValue.split(',').map((s: string) => s.trim()).filter(Boolean));
+        } else if (Array.isArray(populateValue)) {
+            expandNames.push(...populateValue);
+        }
+        if (!expandNames.length && expandValue) {
             if (typeof expandValue === 'string') {
-                options.populate = expandValue.split(',').map((s: string) => s.trim()).filter(Boolean);
+                expandNames.push(...expandValue.split(',').map((s: string) => s.trim()).filter(Boolean));
             } else if (Array.isArray(expandValue)) {
-                options.populate = expandValue;
+                expandNames.push(...expandValue);
             }
         }
+        delete options.populate;
         delete options.$expand;
-        delete options.expand;
+        // Only set expand if not already an object (advanced usage)
+        if (expandNames.length > 0 && !options.expand) {
+            options.expand = {} as Record<string, any>;
+            for (const rel of expandNames) {
+                options.expand[rel] = { object: rel };
+            }
+        } else if (typeof options.expand !== 'object' || options.expand === null) {
+            delete options.expand;
+        }
 
         // Boolean fields
         for (const key of ['distinct', 'count']) {
@@ -348,20 +370,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         
         // Flat field filters: REST-style query params like ?id=abc&status=open
         // After extracting all known query parameters, any remaining keys are
-        // treated as implicit field-level equality filters. This is the standard
-        // REST convention used by the client when serializing simple filter maps
-        // (e.g. `{ filters: { id: "..." } }` → `?id=...`).
+        // treated as implicit field-level equality filters merged into `where`.
         const knownParams = new Set([
-            'top', 'skip', 'limit', 'offset',
-            'sort', 'orderBy',
-            'select', 'fields',
-            'filter', 'filters', '$filter',
-            'populate', 'expand', '$expand',
+            'top', 'limit', 'offset',
+            'orderBy',
+            'fields',
+            'where',
+            'expand',
             'distinct', 'count',
             'aggregations', 'groupBy',
-            'search', 'context',
+            'search', 'context', 'cursor',
         ]);
-        if (!options.filter) {
+        if (!options.where) {
             const implicitFilters: Record<string, unknown> = {};
             for (const key of Object.keys(options)) {
                 if (!knownParams.has(key)) {
@@ -370,14 +390,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 }
             }
             if (Object.keys(implicitFilters).length > 0) {
-                options.filter = implicitFilters;
+                options.where = implicitFilters;
             }
         }
         
         const records = await this.engine.find(request.object, options);
         return {
             object: request.object,
-            value: records, // OData compaibility
+            value: records, // OData compatibility
             records, // Legacy
             total: records.length,
             hasMore: false
@@ -386,21 +406,25 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async getData(request: { object: string, id: string, expand?: string | string[], select?: string | string[] }) {
         const queryOptions: any = {
-            filter: { id: request.id }
+            where: { id: request.id }
         };
 
-        // Support select for single-record retrieval
+        // Support fields for single-record retrieval
         if (request.select) {
-            queryOptions.select = typeof request.select === 'string'
+            queryOptions.fields = typeof request.select === 'string'
                 ? request.select.split(',').map((s: string) => s.trim()).filter(Boolean)
                 : request.select;
         }
 
         // Support expand for single-record retrieval
         if (request.expand) {
-            queryOptions.populate = typeof request.expand === 'string'
+            const expandNames = typeof request.expand === 'string'
                 ? request.expand.split(',').map((s: string) => s.trim()).filter(Boolean)
                 : request.expand;
+            queryOptions.expand = {} as Record<string, any>;
+            for (const rel of expandNames) {
+                queryOptions.expand[rel] = { object: rel };
+            }
         }
 
         const result = await this.engine.findOne(request.object, queryOptions);
@@ -425,7 +449,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async updateData(request: { object: string, id: string, data: any }) {
         // Adapt: update(obj, id, data) -> update(obj, data, options)
-        const result = await this.engine.update(request.object, request.data, { filter: { id: request.id } });
+        const result = await this.engine.update(request.object, request.data, { where: { id: request.id } });
         return {
             object: request.object,
             id: request.id,
@@ -435,7 +459,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async deleteData(request: { object: string, id: string }) {
         // Adapt: delete(obj, id) -> delete(obj, options)
-        await this.engine.delete(request.object, { filter: { id: request.id } });
+        await this.engine.delete(request.object, { where: { id: request.id } });
         return {
             object: request.object,
             id: request.id,
@@ -509,7 +533,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                     case 'update': {
                         if (!record.id) throw new Error('Record id is required for update');
-                        const updated = await this.engine.update(object, record.data || {}, { filter: { id: record.id } });
+                        const updated = await this.engine.update(object, record.data || {}, { where: { id: record.id } });
                         results.push({ id: record.id, success: true, record: updated });
                         succeeded++;
                         break;
@@ -518,9 +542,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         // Try update first, then create if not found
                         if (record.id) {
                             try {
-                                const existing = await this.engine.findOne(object, { filter: { id: record.id } });
+                                const existing = await this.engine.findOne(object, { where: { id: record.id } });
                                 if (existing) {
-                                    const updated = await this.engine.update(object, record.data || {}, { filter: { id: record.id } });
+                                    const updated = await this.engine.update(object, record.data || {}, { where: { id: record.id } });
                                     results.push({ id: record.id, success: true, record: updated });
                                 } else {
                                     const created = await this.engine.insert(object, { id: record.id, ...(record.data || {}) });
@@ -539,7 +563,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                     case 'delete': {
                         if (!record.id) throw new Error('Record id is required for delete');
-                        await this.engine.delete(object, { filter: { id: record.id } });
+                        await this.engine.delete(object, { where: { id: record.id } });
                         results.push({ id: record.id, success: true });
                         succeeded++;
                         break;
@@ -588,7 +612,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         for (const record of records) {
             try {
-                const updated = await this.engine.update(object, record.data, { filter: { id: record.id } });
+                const updated = await this.engine.update(object, record.data, { where: { id: record.id } });
                 results.push({ id: record.id, success: true, record: updated });
                 succeeded++;
             } catch (err: any) {
@@ -655,11 +679,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         // Execute via engine.aggregate (which delegates to driver.find with groupBy/aggregations)
         const rows = await this.engine.aggregate(object, {
-            filter,
+            where: filter,
             groupBy: groupBy.length > 0 ? groupBy : undefined,
             aggregations: aggregations.length > 0
-                ? aggregations.map(a => ({ field: a.field, method: a.method as any, alias: a.alias }))
-                : [{ field: '*', method: 'count' as any, alias: 'count' }],
+                ? aggregations.map(a => ({ function: a.method as any, field: a.field, alias: a.alias }))
+                : [{ function: 'count' as any, alias: 'count' }],
         });
 
         // Build field metadata
@@ -790,7 +814,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     async deleteManyData(request: DeleteManyDataRequest): Promise<any> {
         // This expects deleting by IDs.
         return this.engine.delete(request.object, {
-            filter: { id: { $in: request.ids } },
+            where: { id: { $in: request.ids } },
             ...request.options
         });
     }

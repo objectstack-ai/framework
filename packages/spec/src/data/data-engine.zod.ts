@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { FilterConditionSchema } from './filter.zod';
-import { SortNodeSchema } from './query.zod';
+import { SortNodeSchema, QuerySchema, FullTextSearchSchema, FieldNodeSchema, AggregationNodeSchema } from './query.zod';
 import { ExecutionContextSchema } from '../kernel/execution-context.zod';
 
 /**
@@ -58,42 +58,88 @@ export const BaseEngineOptionsSchema = z.object({
 });
 
 // ==========================================================================
-// 2. method: FIND
+// 2. method: FIND (QueryAST-aligned)
 // ==========================================================================
 
-export const DataEngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
-  /** Filter conditions (WHERE) */
-  filter: DataEngineFilterSchema.optional(),
-  
-  /** Fields to select (SELECT) */
-  select: z.array(z.string()).optional(),
-  
-  /** Sort order (ORDER BY) */
-  sort: DataEngineSortSchema.optional(),
-  
-  /** Limit number of results (LIMIT) */
-  limit: z.number().int().min(1).optional(),
-  
-  /** Skip number of results (OFFSET) */
-  skip: z.number().int().min(0).optional(),
-  
-  /** 
-   * Maximum number of results (OData style)
-   * Takes precedence over limit if both specified
-   */
-  top: z.number().int().min(1).optional(),
+/**
+ * Engine Query Options — QueryAST-aligned parameters for IDataEngine.find/findOne.
+ * 
+ * Uses standard QueryAST field names (where/fields/orderBy/limit/offset/expand)
+ * so that no mechanical translation is needed between the Engine and Driver layers.
+ * 
+ * @example
+ * ```ts
+ * engine.find('account', {
+ *   where: { status: 'active' },
+ *   fields: ['id', 'name', 'email'],
+ *   orderBy: [{ field: 'name', order: 'asc' }],
+ *   limit: 10,
+ *   offset: 20,
+ *   expand: { owner: { object: 'user', fields: ['name'] } },
+ * });
+ * ```
+ */
+export const EngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** Filter conditions (WHERE) — standard QueryAST `where` */
+  where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
+
+  /** Fields to retrieve (SELECT) — standard QueryAST `fields` */
+  fields: z.array(FieldNodeSchema).optional(),
+
+  /** Sorting instructions (ORDER BY) — standard QueryAST `orderBy` */
+  orderBy: z.array(SortNodeSchema).optional(),
+
+  /** Max records to return (LIMIT) */
+  limit: z.number().optional(),
+
+  /** Records to skip (OFFSET) — standard QueryAST `offset` */
+  offset: z.number().optional(),
+
+  /** Alias for limit (OData compatibility) */
+  top: z.number().optional(),
+
+  /** Cursor for keyset pagination */
+  cursor: z.record(z.string(), z.unknown()).optional(),
+
+  /** Full-text search configuration */
+  search: FullTextSearchSchema.optional(),
 
   /**
-   * Include related records ($expand / Populate)
+   * Recursive relation loading map (expand).
    * 
-   * List of relationship field names (lookup or master_detail) to expand.
-   * The engine resolves these by batch-loading referenced records using $in
-   * queries and replacing foreign key IDs with full objects in the result.
-   * 
-   * This is driver-agnostic — expand is handled at the engine layer via
-   * secondary queries, not via SQL JOINs or driver-specific features.
-   * Fields without a valid `reference` in the schema are silently skipped.
+   * Keys are lookup/master_detail field names; values are nested QueryAST
+   * objects that control select, filter, sort, and further expansion on
+   * the related object. The engine resolves expand via batch $in queries
+   * (driver-agnostic) with a default max depth of 3.
    */
+  expand: z.lazy(() => z.record(z.string(), QuerySchema)).optional(),
+
+  /** SELECT DISTINCT flag */
+  distinct: z.boolean().optional(),
+}).describe('QueryAST-aligned query options for IDataEngine.find() operations');
+
+// --------------------------------------------------------------------------
+// Legacy: DataEngineQueryOptionsSchema (DEPRECATED)
+// --------------------------------------------------------------------------
+
+/**
+ * @deprecated Use `EngineQueryOptionsSchema` instead.
+ * This schema uses legacy parameter names (filter/select/sort/skip/populate)
+ * that require mechanical translation to QueryAST. Migrate to the
+ * QueryAST-aligned `EngineQueryOptionsSchema` (where/fields/orderBy/offset/expand).
+ */
+export const DataEngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** @deprecated Use `where` (EngineQueryOptionsSchema) */
+  filter: DataEngineFilterSchema.optional(),
+  /** @deprecated Use `fields` (EngineQueryOptionsSchema) */
+  select: z.array(z.string()).optional(),
+  /** @deprecated Use `orderBy` (EngineQueryOptionsSchema) */
+  sort: DataEngineSortSchema.optional(),
+  limit: z.number().int().min(1).optional(),
+  /** @deprecated Use `offset` (EngineQueryOptionsSchema) */
+  skip: z.number().int().min(0).optional(),
+  top: z.number().int().min(1).optional(),
+  /** @deprecated Use `expand` (EngineQueryOptionsSchema) */
   populate: z.array(z.string()).optional(),
 }).describe('Query options for IDataEngine.find() operations');
 
@@ -111,63 +157,91 @@ export const DataEngineInsertOptionsSchema = BaseEngineOptionsSchema.extend({
 }).describe('Options for DataEngine.insert operations');
 
 // ==========================================================================
-// 4. method: UPDATE
+// 4. method: UPDATE (QueryAST-aligned)
 // ==========================================================================
 
-export const DataEngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
-  /** Filter conditions to identify records to update */
-  filter: DataEngineFilterSchema.optional(),
-  
-  /** 
-   * Perform an upsert? 
-   * If true, insert if not found.
-   */
+export const EngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** Filter conditions to identify records to update — standard QueryAST `where` */
+  where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
+  /** Perform an upsert? If true, insert if not found. */
   upsert: z.boolean().default(false).optional(),
-  
-  /**
-   * Update multiple records?
-   * If false, only the first match is updated.
-   * Default: false
-   */
+  /** Update multiple records? If false, only the first match is updated. Default: false */
   multi: z.boolean().default(false).optional(),
-  
-  /** 
-   * Return the updated record(s)? 
-   * Default: false (returns update count/status)
-   */
+  /** Return the updated record(s)? Default: false (returns update count/status) */
+  returning: z.boolean().default(false).optional(),
+}).describe('QueryAST-aligned options for DataEngine.update operations');
+
+// --------------------------------------------------------------------------
+// Legacy: DataEngineUpdateOptionsSchema (DEPRECATED)
+// --------------------------------------------------------------------------
+
+/**
+ * @deprecated Use `EngineUpdateOptionsSchema` instead.
+ * Migrate `filter` → `where`.
+ */
+export const DataEngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** @deprecated Use `where` (EngineUpdateOptionsSchema) */
+  filter: DataEngineFilterSchema.optional(),
+  upsert: z.boolean().default(false).optional(),
+  multi: z.boolean().default(false).optional(),
   returning: z.boolean().default(false).optional(),
 }).describe('Options for DataEngine.update operations');
 
 // ==========================================================================
-// 5. method: DELETE
+// 5. method: DELETE (QueryAST-aligned)
 // ==========================================================================
 
+export const EngineDeleteOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** Filter conditions to identify records to delete — standard QueryAST `where` */
+  where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
+  /** Delete multiple records? If false, only the first match is deleted. Default: false */
+  multi: z.boolean().default(false).optional(),
+}).describe('QueryAST-aligned options for DataEngine.delete operations');
+
+// --------------------------------------------------------------------------
+// Legacy: DataEngineDeleteOptionsSchema (DEPRECATED)
+// --------------------------------------------------------------------------
+
+/**
+ * @deprecated Use `EngineDeleteOptionsSchema` instead.
+ * Migrate `filter` → `where`.
+ */
 export const DataEngineDeleteOptionsSchema = BaseEngineOptionsSchema.extend({
-  /** Filter conditions to identify records to delete */
+  /** @deprecated Use `where` (EngineDeleteOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
-  
-  /**
-   * Delete multiple records?
-   * If false, only the first match is deleted.
-   * Default: false
-   */
   multi: z.boolean().default(false).optional(),
 }).describe('Options for DataEngine.delete operations');
 
 // ==========================================================================
-// 6. method: AGGREGATE
+// 6. method: AGGREGATE (QueryAST-aligned)
 // ==========================================================================
 
-export const DataEngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
-  /** Filter conditions (WHERE) */
-  filter: DataEngineFilterSchema.optional(),
-  
+export const EngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** Filter conditions (WHERE) — standard QueryAST `where` */
+  where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
   /** Group By fields */
   groupBy: z.array(z.string()).optional(),
-  
   /** 
-   * Aggregation definitions 
-   * e.g. [{ field: 'amount', method: 'sum', alias: 'total' }]
+   * Aggregation definitions — uses standard AggregationNodeSchema (`function` key).
+   * e.g. [{ function: 'sum', field: 'amount', alias: 'total' }]
+   */
+  aggregations: z.array(AggregationNodeSchema).optional(),
+}).describe('QueryAST-aligned options for DataEngine.aggregate operations');
+
+// --------------------------------------------------------------------------
+// Legacy: DataEngineAggregateOptionsSchema (DEPRECATED)
+// --------------------------------------------------------------------------
+
+/**
+ * @deprecated Use `EngineAggregateOptionsSchema` instead.
+ * Migrate `filter` → `where`, aggregation `method` → `function`.
+ */
+export const DataEngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** @deprecated Use `where` (EngineAggregateOptionsSchema) */
+  filter: DataEngineFilterSchema.optional(),
+  groupBy: z.array(z.string()).optional(),
+  /** 
+   * @deprecated Use `EngineAggregateOptionsSchema` with standard AggregationNodeSchema (`function` key).
    */
   aggregations: z.array(z.object({
     field: z.string(),
@@ -177,11 +251,24 @@ export const DataEngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
 }).describe('Options for DataEngine.aggregate operations');
 
 // ==========================================================================
-// 7. method: COUNT
+// 7. method: COUNT (QueryAST-aligned)
 // ==========================================================================
 
+export const EngineCountOptionsSchema = BaseEngineOptionsSchema.extend({
+  /** Filter conditions — standard QueryAST `where` */
+  where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
+}).describe('QueryAST-aligned options for DataEngine.count operations');
+
+// --------------------------------------------------------------------------
+// Legacy: DataEngineCountOptionsSchema (DEPRECATED)
+// --------------------------------------------------------------------------
+
+/**
+ * @deprecated Use `EngineCountOptionsSchema` instead.
+ * Migrate `filter` → `where`.
+ */
 export const DataEngineCountOptionsSchema = BaseEngineOptionsSchema.extend({
-  /** Filter conditions */
+  /** @deprecated Use `where` (EngineCountOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
 }).describe('Options for DataEngine.count operations');
 
@@ -191,11 +278,11 @@ export const DataEngineCountOptionsSchema = BaseEngineOptionsSchema.extend({
 
 export const DataEngineContractSchema = z.object({
   find: z.function()
-    .input(z.tuple([z.string(), DataEngineQueryOptionsSchema.optional()]))
+    .input(z.tuple([z.string(), EngineQueryOptionsSchema.optional()]))
     .output(z.promise(z.array(z.unknown()))),
     
   findOne: z.function()
-    .input(z.tuple([z.string(), DataEngineQueryOptionsSchema.optional()]))
+    .input(z.tuple([z.string(), EngineQueryOptionsSchema.optional()]))
     .output(z.promise(z.unknown())),
     
   insert: z.function()
@@ -203,19 +290,19 @@ export const DataEngineContractSchema = z.object({
     .output(z.promise(z.unknown())),
     
   update: z.function()
-    .input(z.tuple([z.string(), z.record(z.string(), z.unknown()), DataEngineUpdateOptionsSchema.optional()]))
+    .input(z.tuple([z.string(), z.record(z.string(), z.unknown()), EngineUpdateOptionsSchema.optional()]))
     .output(z.promise(z.unknown())),
     
   delete: z.function()
-    .input(z.tuple([z.string(), DataEngineDeleteOptionsSchema.optional()]))
+    .input(z.tuple([z.string(), EngineDeleteOptionsSchema.optional()]))
     .output(z.promise(z.unknown())),
     
   count: z.function()
-    .input(z.tuple([z.string(), DataEngineCountOptionsSchema.optional()]))
+    .input(z.tuple([z.string(), EngineCountOptionsSchema.optional()]))
     .output(z.promise(z.number())),
     
   aggregate: z.function()
-    .input(z.tuple([z.string(), DataEngineAggregateOptionsSchema]))
+    .input(z.tuple([z.string(), EngineAggregateOptionsSchema]))
     .output(z.promise(z.array(z.unknown())))
 }).describe('Standard Data Engine Contract');
 
@@ -236,13 +323,13 @@ export const DataEngineContractSchema = z.object({
 export const DataEngineFindRequestSchema = z.object({
   method: z.literal('find'),
   object: z.string(),
-  query: DataEngineQueryOptionsSchema.optional()
+  query: EngineQueryOptionsSchema.optional()
 });
 
 export const DataEngineFindOneRequestSchema = z.object({
   method: z.literal('findOne'),
   object: z.string(),
-  query: DataEngineQueryOptionsSchema.optional()
+  query: EngineQueryOptionsSchema.optional()
 });
 
 export const DataEngineInsertRequestSchema = z.object({
@@ -256,27 +343,27 @@ export const DataEngineUpdateRequestSchema = z.object({
   method: z.literal('update'),
   object: z.string(),
   data: z.record(z.string(), z.unknown()),
-  id: z.union([z.string(), z.number()]).optional().describe('ID for single update, or use filter in options'),
-  options: DataEngineUpdateOptionsSchema.optional()
+  id: z.union([z.string(), z.number()]).optional().describe('ID for single update, or use where in options'),
+  options: EngineUpdateOptionsSchema.optional()
 });
 
 export const DataEngineDeleteRequestSchema = z.object({
   method: z.literal('delete'),
   object: z.string(),
-  id: z.union([z.string(), z.number()]).optional().describe('ID for single delete, or use filter in options'),
-  options: DataEngineDeleteOptionsSchema.optional()
+  id: z.union([z.string(), z.number()]).optional().describe('ID for single delete, or use where in options'),
+  options: EngineDeleteOptionsSchema.optional()
 });
 
 export const DataEngineCountRequestSchema = z.object({
   method: z.literal('count'),
   object: z.string(),
-  query: DataEngineCountOptionsSchema.optional()
+  query: EngineCountOptionsSchema.optional()
 });
 
 export const DataEngineAggregateRequestSchema = z.object({
   method: z.literal('aggregate'),
   object: z.string(),
-  query: DataEngineAggregateOptionsSchema
+  query: EngineAggregateOptionsSchema
 });
 
 /**
@@ -300,10 +387,10 @@ export const DataEngineVectorFindRequestSchema = z.object({
   object: z.string(),
   /** The vector embedding to search for */
   vector: z.array(z.number()),
-  /** Optional pre-filter (Metadata filtering) */
-  filter: DataEngineFilterSchema.optional(),
-  /** Fields to select */
-  select: z.array(z.string()).optional(),
+  /** Optional pre-filter (Metadata filtering) — standard QueryAST `where` */
+  where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
+  /** Fields to retrieve — standard QueryAST `fields` */
+  fields: z.array(z.string()).optional(),
   /** Number of results */
   limit: z.number().int().default(5).optional(),
   /** Minimum similarity score (0-1) or distance threshold */
@@ -356,13 +443,27 @@ export const DataEngineRequestSchema = z.discriminatedUnion('method', [
 // 10. Type Exports
 // ==========================================================================
 
+// --- New: QueryAST-aligned types (preferred) ---
+export type EngineQueryOptions = z.infer<typeof EngineQueryOptionsSchema>;
+export type EngineUpdateOptions = z.infer<typeof EngineUpdateOptionsSchema>;
+export type EngineDeleteOptions = z.infer<typeof EngineDeleteOptionsSchema>;
+export type EngineAggregateOptions = z.infer<typeof EngineAggregateOptionsSchema>;
+export type EngineCountOptions = z.infer<typeof EngineCountOptionsSchema>;
+
+// --- Legacy: deprecated types (kept for backward compatibility) ---
 export type DataEngineFilter = z.infer<typeof DataEngineFilterSchema>;
+/** @deprecated Use standard `SortNode[]` from QueryAST instead. */
 export type DataEngineSort = z.infer<typeof DataEngineSortSchema>;
 export type BaseEngineOptions = z.infer<typeof BaseEngineOptionsSchema>;
+/** @deprecated Use `EngineQueryOptions` instead. */
 export type DataEngineQueryOptions = z.infer<typeof DataEngineQueryOptionsSchema>;
 export type DataEngineInsertOptions = z.infer<typeof DataEngineInsertOptionsSchema>;
+/** @deprecated Use `EngineUpdateOptions` instead. */
 export type DataEngineUpdateOptions = z.infer<typeof DataEngineUpdateOptionsSchema>;
+/** @deprecated Use `EngineDeleteOptions` instead. */
 export type DataEngineDeleteOptions = z.infer<typeof DataEngineDeleteOptionsSchema>;
+/** @deprecated Use `EngineAggregateOptions` instead. */
 export type DataEngineAggregateOptions = z.infer<typeof DataEngineAggregateOptionsSchema>;
+/** @deprecated Use `EngineCountOptions` instead. */
 export type DataEngineCountOptions = z.infer<typeof DataEngineCountOptionsSchema>;
 export type DataEngineRequest = z.infer<typeof DataEngineRequestSchema>;

@@ -234,7 +234,7 @@ describe('createObjectQLAdapter – legacy model name mapping', () => {
       where: [{ field: 'token', value: 'abc', operator: 'eq', connector: 'AND' }],
     });
     expect(mockEngine.findOne).toHaveBeenCalledWith('sys_session', expect.objectContaining({
-      filter: { token: 'abc' },
+      where: { token: 'abc' },
     }));
   });
 

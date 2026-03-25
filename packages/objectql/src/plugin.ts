@@ -175,7 +175,7 @@ export class ObjectQLPlugin implements Plugin {
       if (hookCtx.input?.id && !hookCtx.previous) {
         try {
           const existing = await this.ql!.findOne(hookCtx.object, {
-            filter: { id: hookCtx.input.id }
+            where: { id: hookCtx.input.id }
           });
           if (existing) {
             hookCtx.previous = existing;
@@ -191,7 +191,7 @@ export class ObjectQLPlugin implements Plugin {
       if (hookCtx.input?.id && !hookCtx.previous) {
         try {
           const existing = await this.ql!.findOne(hookCtx.object, {
-            filter: { id: hookCtx.input.id }
+            where: { id: hookCtx.input.id }
           });
           if (existing) {
             hookCtx.previous = existing;

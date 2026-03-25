@@ -113,6 +113,16 @@ export interface ClientConfig {
  */
 export type DiscoveryResult = GetDiscoveryResponse;
 
+/**
+ * @deprecated Use `data.query()` with standard QueryAST parameters instead.
+ * This interface uses legacy parameter names (filter/sort/top/skip) that
+ * require translation to QueryAST. Prefer QueryAST fields directly:
+ *   - filter → where
+ *   - select → fields
+ *   - sort → orderBy
+ *   - skip → offset
+ *   - top → limit
+ */
 export interface QueryOptions {
   select?: string[]; // Simplified Selection
   /** @canonical Preferred filter parameter (singular). */
@@ -1423,6 +1433,10 @@ export class ObjectStackClient {
       return this.unwrapResponse<PaginatedResult<T>>(res);
     },
 
+    /**
+     * @deprecated Use `data.query()` with standard QueryAST parameters instead.
+     * This method uses legacy parameter names. Internally adapts to HTTP GET params.
+     */
     find: async <T = any>(object: string, options: QueryOptions = {}): Promise<PaginatedResult<T>> => {
         const route = this.getRoute('data');
         const queryParams = new URLSearchParams();

@@ -75,7 +75,7 @@ export function createBrokerShim(kernel: any): BrokerShim {
                         }
 
                         try {
-                            await ql.update(params.object, params.data, { filter: params.id });
+                            await ql.update(params.object, params.data, { where: { id: params.id } });
                         } catch (err: any) {
                             console.warn(`[BrokerShim] update failed: ${err.message}`);
                             throw err;
@@ -87,7 +87,7 @@ export function createBrokerShim(kernel: any): BrokerShim {
                 }
                 if (method === 'delete') {
                     try {
-                        await ql.delete(params.object, { filter: params.id });
+                        await ql.delete(params.object, { where: { id: params.id } });
                         return { object: params.object, id: params.id, deleted: true };
                     } catch (err: any) {
                         console.warn(`[BrokerShim] delete failed: ${err.message}`);

@@ -324,8 +324,8 @@ export class SeedLoaderService implements ISeedLoaderService {
   ): Promise<string | null> {
     try {
       const records = await this.engine.find(targetObject, {
-        filter: { [targetField]: value },
-        select: ['id'],
+        where: { [targetField]: value },
+        fields: ['id'],
         limit: 1,
       });
       if (records && records.length > 0) {
@@ -612,7 +612,7 @@ export class SeedLoaderService implements ISeedLoaderService {
     const map = new Map<string, any>();
     try {
       const records = await this.engine.find(objectName, {
-        select: ['id', externalId],
+        fields: ['id', externalId],
       });
       for (const record of records || []) {
         const key = String(record[externalId] ?? '');

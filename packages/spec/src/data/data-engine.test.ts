@@ -8,6 +8,11 @@ import {
   DataEngineDeleteOptionsSchema,
   DataEngineAggregateOptionsSchema,
   DataEngineCountOptionsSchema,
+  EngineQueryOptionsSchema,
+  EngineUpdateOptionsSchema,
+  EngineDeleteOptionsSchema,
+  EngineAggregateOptionsSchema,
+  EngineCountOptionsSchema,
   DataEngineFindRequestSchema,
   DataEngineFindOneRequestSchema,
   DataEngineInsertRequestSchema,
@@ -306,6 +311,129 @@ describe('DataEngineCountOptionsSchema', () => {
   });
 });
 
+// ==========================================================================
+// NEW: QueryAST-aligned Engine Options Schemas
+// ==========================================================================
+
+describe('EngineQueryOptionsSchema', () => {
+  it('should accept minimal options', () => {
+    const options = EngineQueryOptionsSchema.parse({});
+    expect(options).toBeDefined();
+  });
+
+  it('should accept where (standard QueryAST filter)', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      where: { status: 'active' },
+    });
+    expect(options.where).toBeDefined();
+  });
+
+  it('should accept fields (standard QueryAST select)', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      fields: ['id', 'name', 'email'],
+    });
+    expect(options.fields).toHaveLength(3);
+  });
+
+  it('should accept orderBy (standard QueryAST sort)', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      orderBy: [{ field: 'name', order: 'asc' }],
+    });
+    expect(options.orderBy).toHaveLength(1);
+  });
+
+  it('should accept pagination with limit/offset', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      limit: 10,
+      offset: 20,
+    });
+    expect(options.limit).toBe(10);
+    expect(options.offset).toBe(20);
+  });
+
+  it('should accept expand (standard QueryAST relation loading)', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      expand: {
+        owner: { object: 'user', fields: ['name', 'email'] },
+      },
+    });
+    expect(options.expand).toBeDefined();
+    expect(options.expand!.owner.object).toBe('user');
+  });
+
+  it('should accept complete QueryAST-style options', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      where: { status: 'active' },
+      fields: ['id', 'name', 'email'],
+      orderBy: [{ field: 'name', order: 'asc' }],
+      limit: 50,
+      offset: 0,
+      expand: { owner: { object: 'user' } },
+      distinct: true,
+    });
+    expect(options.where).toBeDefined();
+    expect(options.fields).toHaveLength(3);
+    expect(options.limit).toBe(50);
+    expect(options.expand!.owner.object).toBe('user');
+    expect(options.distinct).toBe(true);
+  });
+
+  it('should accept context', () => {
+    const options = EngineQueryOptionsSchema.parse({
+      where: { status: 'active' },
+      context: { userId: 'user_123', tenantId: 'org_456' },
+    });
+    expect(options.context?.userId).toBe('user_123');
+  });
+});
+
+describe('EngineUpdateOptionsSchema', () => {
+  it('should accept where instead of filter', () => {
+    const options = EngineUpdateOptionsSchema.parse({
+      where: { status: 'inactive' },
+      multi: true,
+    });
+    expect(options.where).toBeDefined();
+    expect(options.multi).toBe(true);
+  });
+});
+
+describe('EngineDeleteOptionsSchema', () => {
+  it('should accept where instead of filter', () => {
+    const options = EngineDeleteOptionsSchema.parse({
+      where: { status: 'archived' },
+      multi: true,
+    });
+    expect(options.where).toBeDefined();
+    expect(options.multi).toBe(true);
+  });
+});
+
+describe('EngineAggregateOptionsSchema', () => {
+  it('should accept where and standard AggregationNodeSchema', () => {
+    const options = EngineAggregateOptionsSchema.parse({
+      where: { status: 'active' },
+      groupBy: ['category'],
+      aggregations: [
+        { function: 'sum', field: 'revenue', alias: 'total_revenue' },
+        { function: 'avg', field: 'revenue', alias: 'avg_revenue' },
+      ],
+    });
+    expect(options.where).toBeDefined();
+    expect(options.groupBy).toHaveLength(1);
+    expect(options.aggregations).toHaveLength(2);
+  });
+});
+
+describe('EngineCountOptionsSchema', () => {
+  it('should accept where instead of filter', () => {
+    const options = EngineCountOptionsSchema.parse({
+      where: { status: 'active' },
+    });
+    expect(options.where).toBeDefined();
+  });
+});
+
 describe('DataEngineFindRequestSchema', () => {
   it('should accept minimal find request', () => {
     const request = DataEngineFindRequestSchema.parse({
@@ -322,12 +450,12 @@ describe('DataEngineFindRequestSchema', () => {
       method: 'find',
       object: 'account',
       query: {
-        filter: { status: 'active' },
+        where: { status: 'active' },
         limit: 10,
       },
     });
 
-    expect(request.query?.filter).toBeDefined();
+    expect(request.query?.where).toBeDefined();
   });
 });
 
@@ -337,7 +465,7 @@ describe('DataEngineFindOneRequestSchema', () => {
       method: 'findOne',
       object: 'account',
       query: {
-        filter: { id: '123' },
+        where: { id: '123' },
       },
     });
 
@@ -451,11 +579,11 @@ describe('DataEngineCountRequestSchema', () => {
       method: 'count',
       object: 'account',
       query: {
-        filter: { status: 'active' },
+        where: { status: 'active' },
       },
     });
 
-    expect(request.query?.filter).toBeDefined();
+    expect(request.query?.where).toBeDefined();
   });
 });
 
@@ -467,7 +595,7 @@ describe('DataEngineAggregateRequestSchema', () => {
       query: {
         groupBy: ['status'],
         aggregations: [
-          { field: 'revenue', method: 'sum' },
+          { function: 'sum', field: 'revenue', alias: 'total_revenue' },
         ],
       },
     });
@@ -539,25 +667,25 @@ describe('DataEngineVectorFindRequestSchema', () => {
       method: 'vectorFind',
       object: 'documents',
       vector: [0.1, 0.2, 0.3],
-      filter: { category: 'tech' },
+      where: { category: 'tech' },
       limit: 10,
       threshold: 0.8,
     });
 
-    expect(request.filter).toBeDefined();
+    expect(request.where).toBeDefined();
     expect(request.limit).toBe(10);
     expect(request.threshold).toBe(0.8);
   });
 
-  it('should accept vector find with select', () => {
+  it('should accept vector find with fields', () => {
     const request = DataEngineVectorFindRequestSchema.parse({
       method: 'vectorFind',
       object: 'documents',
       vector: [0.1, 0.2],
-      select: ['id', 'title', 'content'],
+      fields: ['id', 'title', 'content'],
     });
 
-    expect(request.select).toHaveLength(3);
+    expect(request.fields).toHaveLength(3);
   });
 });
 
@@ -734,9 +862,9 @@ describe('Integration Tests', () => {
       method: 'find',
       object: 'account',
       query: {
-        filter: { status: 'active' },
-        select: ['id', 'name', 'status'],
-        sort: { name: 'asc' },
+        where: { status: 'active' },
+        fields: ['id', 'name', 'status'],
+        orderBy: [{ field: 'name', order: 'asc' }],
         limit: 10,
       },
     });
@@ -769,7 +897,7 @@ describe('Integration Tests', () => {
       method: 'count',
       object: 'opportunity',
       query: {
-        filter: { stage: 'closed_won' },
+        where: { stage: 'closed_won' },
       },
     });
 
@@ -778,12 +906,12 @@ describe('Integration Tests', () => {
       method: 'aggregate',
       object: 'opportunity',
       query: {
-        filter: { status: 'closed' },
+        where: { status: 'closed' },
         groupBy: ['stage', 'owner_id'],
         aggregations: [
-          { field: 'amount', method: 'sum', alias: 'total_amount' },
-          { field: 'amount', method: 'avg', alias: 'avg_amount' },
-          { field: 'id', method: 'count', alias: 'deal_count' },
+          { function: 'sum', field: 'amount', alias: 'total_amount' },
+          { function: 'avg', field: 'amount', alias: 'avg_amount' },
+          { function: 'count', field: 'id', alias: 'deal_count' },
         ],
       },
     });
@@ -812,7 +940,7 @@ describe('Integration Tests', () => {
           method: 'count',
           object: 'opportunity',
           query: {
-            filter: { account_id: 'account_new' },
+            where: { account_id: 'account_new' },
           },
         },
       ],

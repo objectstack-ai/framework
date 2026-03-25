@@ -57,7 +57,7 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                             return await protocol.findData({ object: params.object, query: params.query });
                         }
                         const queryOpts = params.query || {};
-                        const records = await ql.find(params.object, { filter: queryOpts.filters || queryOpts.filter });
+                        const records = await ql.find(params.object, { where: queryOpts.filters || queryOpts.filter || queryOpts.where });
                         return { object: params.object, records, total: records.length };
                     }
                     if (method === 'find') {
@@ -65,7 +65,7 @@ describe('ObjectStackClient (with MSW Plugin)', () => {
                             return await protocol.findData({ object: params.object, query: params.query });
                         }
                         const queryOpts = params.query || {};
-                        const records = await ql.find(params.object, { filter: queryOpts.filters || queryOpts.filter });
+                        const records = await ql.find(params.object, { where: queryOpts.filters || queryOpts.filter || queryOpts.where });
                         return { object: params.object, records, total: records.length };
                     }
                 }

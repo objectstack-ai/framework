@@ -2,12 +2,12 @@
 
 import { QueryAST, HookContext, ServiceObject } from '@objectstack/spec/data';
 import { 
-  DataEngineQueryOptions, 
+  EngineQueryOptions,
   DataEngineInsertOptions, 
-  DataEngineUpdateOptions, 
-  DataEngineDeleteOptions,
-  DataEngineAggregateOptions,
-  DataEngineCountOptions 
+  EngineUpdateOptions, 
+  EngineDeleteOptions,
+  EngineAggregateOptions,
+  EngineCountOptions 
 } from '@objectstack/spec/data';
 import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kernel';
 import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack/core';
@@ -742,58 +742,16 @@ export class ObjectQL implements IDataEngine {
   }
 
   // ============================================
-  // Helper: Query Conversion
-  // ============================================
-
-  private toQueryAST(object: string, options?: DataEngineQueryOptions): QueryAST {
-    const ast: QueryAST = { object };
-    if (!options) return ast;
-
-    if (options.filter) {
-      ast.where = options.filter;
-    }
-    if (options.select) {
-      ast.fields = options.select;
-    }
-    if (options.sort) {
-       // Support DataEngineSortSchema variant
-       if (Array.isArray(options.sort)) {
-           // [{ field: 'a', order: 'asc' }]
-           ast.orderBy = options.sort; 
-       } else {
-           // Record<string, 'asc' | 'desc' | 1 | -1>
-           ast.orderBy = Object.entries(options.sort).map(([field, order]) => ({
-             field,
-             order: (order === -1 || order === 'desc') ? 'desc' : 'asc'
-           }));
-       }
-    }
-    
-    if (options.top !== undefined) ast.limit = options.top;
-    else if (options.limit !== undefined) ast.limit = options.limit;
-    
-    if (options.skip !== undefined) ast.offset = options.skip;
-
-    // Map populate (relationship field names) to QueryAST expand entries
-    if (options.populate && options.populate.length > 0) {
-      ast.expand = {};
-      for (const rel of options.populate) {
-        ast.expand[rel] = { object: rel };
-      }
-    }
-
-    return ast;
-  }
-
-  // ============================================
   // Data Access Methods (IDataEngine Interface)
   // ============================================
 
-  async find(object: string, query?: DataEngineQueryOptions): Promise<any[]> {
+  async find(object: string, query?: EngineQueryOptions): Promise<any[]> {
     object = this.resolveObjectName(object);
     this.logger.debug('Find operation starting', { object, query });
     const driver = this.getDriver(object);
-    const ast = this.toQueryAST(object, query);
+    const ast: QueryAST = { object, ...query };
+    // Remove context from the AST — it's not a driver concern
+    delete (ast as any).context;
 
     const opCtx: OperationContext = {
       object,
@@ -836,12 +794,13 @@ export class ObjectQL implements IDataEngine {
     return opCtx.result as any[];
   }
 
-  async findOne(objectName: string, query?: DataEngineQueryOptions): Promise<any> {
+  async findOne(objectName: string, query?: EngineQueryOptions): Promise<any> {
     objectName = this.resolveObjectName(objectName);
     this.logger.debug('FindOne operation', { objectName });
     const driver = this.getDriver(objectName);
-    const ast = this.toQueryAST(objectName, query);
-    ast.limit = 1;
+    const ast: QueryAST = { object: objectName, ...query, limit: 1 };
+    // Remove context from the AST — it's not a driver concern
+    delete (ast as any).context;
 
     const opCtx: OperationContext = {
       object: objectName,
@@ -918,16 +877,16 @@ export class ObjectQL implements IDataEngine {
     return opCtx.result;
   }
 
-  async update(object: string, data: any, options?: DataEngineUpdateOptions): Promise<any> {
+  async update(object: string, data: any, options?: EngineUpdateOptions): Promise<any> {
      object = this.resolveObjectName(object);
      this.logger.debug('Update operation starting', { object });
      const driver = this.getDriver(object);
      
-     // 1. Extract ID from data or filter if it's a single update by ID
+     // 1. Extract ID from data or where if it's a single update by ID
      let id = data.id;
-     if (!id && options?.filter) {
-         if (typeof options.filter === 'string') id = options.filter;
-         else if (options.filter.id) id = options.filter.id;
+     if (!id && options?.where) {
+         if (typeof options.where === 'string') id = options.where;
+         else if (options.where.id) id = options.where.id;
      }
 
      const opCtx: OperationContext = {
@@ -954,7 +913,7 @@ export class ObjectQL implements IDataEngine {
            if (hookContext.input.id) {
                result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {
-               const ast = this.toQueryAST(object, { filter: options.filter });
+               const ast: QueryAST = { object, where: options.where };
                result = await driver.updateMany(object, ast, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else {
                throw new Error('Update requires an ID or options.multi=true');
@@ -973,16 +932,16 @@ export class ObjectQL implements IDataEngine {
      return opCtx.result;
   }
 
-  async delete(object: string, options?: DataEngineDeleteOptions): Promise<any> {
+  async delete(object: string, options?: EngineDeleteOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Delete operation starting', { object });
     const driver = this.getDriver(object);
 
     // Extract ID logic similar to update
     let id: any = undefined;
-    if (options?.filter) {
-         if (typeof options.filter === 'string') id = options.filter;
-         else if (options.filter.id) id = options.filter.id;
+    if (options?.where) {
+         if (typeof options.where === 'string') id = options.where;
+         else if (options.where.id) id = options.where.id;
     }
 
     const opCtx: OperationContext = {
@@ -1008,7 +967,7 @@ export class ObjectQL implements IDataEngine {
           if (hookContext.input.id) {
               result = await driver.delete(object, hookContext.input.id as string, hookContext.input.options as any);
           } else if (options?.multi && driver.deleteMany) {
-               const ast = this.toQueryAST(object, { filter: options.filter });
+               const ast: QueryAST = { object, where: options.where };
                result = await driver.deleteMany(object, ast, hookContext.input.options as any);
           } else {
                throw new Error('Delete requires an ID or options.multi=true');
@@ -1027,7 +986,7 @@ export class ObjectQL implements IDataEngine {
     return opCtx.result;
   }
 
-  async count(object: string, query?: DataEngineCountOptions): Promise<number> {
+  async count(object: string, query?: EngineCountOptions): Promise<number> {
      object = this.resolveObjectName(object);
      const driver = this.getDriver(object);
 
@@ -1040,18 +999,18 @@ export class ObjectQL implements IDataEngine {
 
      await this.executeWithMiddleware(opCtx, async () => {
        if (driver.count) {
-           const ast = this.toQueryAST(object, { filter: query?.filter });
+           const ast: QueryAST = { object, where: query?.where };
            return driver.count(object, ast);
        }
        // Fallback to find().length
-       const res = await this.find(object, { filter: query?.filter, select: ['id'] });
+       const res = await this.find(object, { where: query?.where, fields: ['id'] });
        return res.length;
      });
 
      return opCtx.result as number;
   }
 
-  async aggregate(object: string, query: DataEngineAggregateOptions): Promise<any[]> {
+  async aggregate(object: string, query: EngineAggregateOptions): Promise<any[]> {
       object = this.resolveObjectName(object);
       const driver = this.getDriver(object);
       this.logger.debug(`Aggregate on ${object} using ${driver.name}`, query);
@@ -1066,13 +1025,9 @@ export class ObjectQL implements IDataEngine {
       await this.executeWithMiddleware(opCtx, async () => {
         const ast: QueryAST = {
             object,
-            where: query.filter,
+            where: query.where,
             groupBy: query.groupBy,
-            aggregations: query.aggregations?.map(agg => ({
-                function: agg.method,
-                field: agg.field,
-                alias: agg.alias || `${agg.method}_${agg.field || 'all'}`,
-            })),
+            aggregations: query.aggregations,
         };
 
         return driver.find(object, ast);
@@ -1355,7 +1310,7 @@ export class ObjectRepository {
   /** Update a single record by ID */
   async updateById(id: string | number, data: any): Promise<any> {
     return this.engine.update(this.objectName, { ...data, id: id }, {
-      filter: { id: id },
+      where: { id: id },
       context: this.context,
     });
   }
@@ -1370,7 +1325,7 @@ export class ObjectRepository {
   /** Delete a single record by ID */
   async deleteById(id: string | number): Promise<any> {
     return this.engine.delete(this.objectName, {
-      filter: { id: id },
+      where: { id: id },
       context: this.context,
     });
   }
