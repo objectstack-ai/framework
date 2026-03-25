@@ -24,8 +24,8 @@ The Data Engine acts as the "Driver" layer in the Hexagonal Architecture.
 ## TypeScript Usage
 
 ```typescript
-import { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest } from '@objectstack/spec/data';
-import type { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest } from '@objectstack/spec/data';
+import { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest, EngineAggregateOptions, EngineCountOptions, EngineDeleteOptions, EngineQueryOptions, EngineUpdateOptions } from '@objectstack/spec/data';
+import type { BaseEngineOptions, DataEngineAggregateOptions, DataEngineAggregateRequest, DataEngineBatchRequest, DataEngineCountOptions, DataEngineCountRequest, DataEngineDeleteOptions, DataEngineDeleteRequest, DataEngineExecuteRequest, DataEngineFilter, DataEngineFindOneRequest, DataEngineFindRequest, DataEngineInsertOptions, DataEngineInsertRequest, DataEngineQueryOptions, DataEngineRequest, DataEngineSort, DataEngineUpdateOptions, DataEngineUpdateRequest, DataEngineVectorFindRequest, EngineAggregateOptions, EngineCountOptions, EngineDeleteOptions, EngineQueryOptions, EngineUpdateOptions } from '@objectstack/spec/data';
 
 // Validate data
 const result = BaseEngineOptions.parse(data);
@@ -68,7 +68,7 @@ Options for DataEngine.aggregate operations
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | ✅ | Options for DataEngine.aggregate operations |
+| **query** | `Object` | ✅ | QueryAST-aligned options for DataEngine.aggregate operations |
 
 
 ---
@@ -108,7 +108,7 @@ Options for DataEngine.count operations
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | optional | Options for DataEngine.count operations |
+| **query** | `Object` | optional | QueryAST-aligned options for DataEngine.count operations |
 
 
 ---
@@ -136,8 +136,8 @@ Options for DataEngine.delete operations
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **id** | `string \| number` | optional | ID for single delete, or use filter in options |
-| **options** | `Object` | optional | Options for DataEngine.delete operations |
+| **id** | `string \| number` | optional | ID for single delete, or use where in options |
+| **options** | `Object` | optional | QueryAST-aligned options for DataEngine.delete operations |
 
 
 ---
@@ -186,7 +186,7 @@ Reference: [__schema0](./__schema0)
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | optional | Query options for IDataEngine.find() operations |
+| **query** | `Object` | optional | QueryAST-aligned query options for IDataEngine.find() operations |
 
 
 ---
@@ -199,7 +199,7 @@ Reference: [__schema0](./__schema0)
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | optional | Query options for IDataEngine.find() operations |
+| **query** | `Object` | optional | QueryAST-aligned query options for IDataEngine.find() operations |
 
 
 ---
@@ -268,7 +268,7 @@ This schema accepts one of the following structures:
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | optional | Query options for IDataEngine.find() operations |
+| **query** | `Object` | optional | QueryAST-aligned query options for IDataEngine.find() operations |
 
 ---
 
@@ -280,7 +280,7 @@ This schema accepts one of the following structures:
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | optional | Query options for IDataEngine.find() operations |
+| **query** | `Object` | optional | QueryAST-aligned query options for IDataEngine.find() operations |
 
 ---
 
@@ -306,8 +306,8 @@ This schema accepts one of the following structures:
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
 | **data** | `Record<string, any>` | ✅ |  |
-| **id** | `string \| number` | optional | ID for single update, or use filter in options |
-| **options** | `Object` | optional | Options for DataEngine.update operations |
+| **id** | `string \| number` | optional | ID for single update, or use where in options |
+| **options** | `Object` | optional | QueryAST-aligned options for DataEngine.update operations |
 
 ---
 
@@ -319,8 +319,8 @@ This schema accepts one of the following structures:
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **id** | `string \| number` | optional | ID for single delete, or use filter in options |
-| **options** | `Object` | optional | Options for DataEngine.delete operations |
+| **id** | `string \| number` | optional | ID for single delete, or use where in options |
+| **options** | `Object` | optional | QueryAST-aligned options for DataEngine.delete operations |
 
 ---
 
@@ -332,7 +332,7 @@ This schema accepts one of the following structures:
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | optional | Options for DataEngine.count operations |
+| **query** | `Object` | optional | QueryAST-aligned options for DataEngine.count operations |
 
 ---
 
@@ -344,7 +344,7 @@ This schema accepts one of the following structures:
 | :--- | :--- | :--- | :--- |
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
-| **query** | `Object` | ✅ | Options for DataEngine.aggregate operations |
+| **query** | `Object` | ✅ | QueryAST-aligned options for DataEngine.aggregate operations |
 
 ---
 
@@ -381,8 +381,8 @@ This schema accepts one of the following structures:
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
 | **vector** | `number[]` | ✅ |  |
-| **filter** | `Record<string, any> \| [__schema0](./__schema0)` | optional | Data Engine query filter conditions |
-| **select** | `string[]` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+| **fields** | `string[]` | optional |  |
 | **limit** | `integer` | optional |  |
 | **threshold** | `number` | optional |  |
 
@@ -446,8 +446,8 @@ Options for DataEngine.update operations
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
 | **data** | `Record<string, any>` | ✅ |  |
-| **id** | `string \| number` | optional | ID for single update, or use filter in options |
-| **options** | `Object` | optional | Options for DataEngine.update operations |
+| **id** | `string \| number` | optional | ID for single update, or use where in options |
+| **options** | `Object` | optional | QueryAST-aligned options for DataEngine.update operations |
 
 
 ---
@@ -461,10 +461,95 @@ Options for DataEngine.update operations
 | **method** | `string` | ✅ |  |
 | **object** | `string` | ✅ |  |
 | **vector** | `number[]` | ✅ |  |
-| **filter** | `Record<string, any> \| [__schema0](./__schema0)` | optional | Data Engine query filter conditions |
-| **select** | `string[]` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+| **fields** | `string[]` | optional |  |
 | **limit** | `integer` | optional |  |
 | **threshold** | `number` | optional |  |
+
+
+---
+
+## EngineAggregateOptions
+
+QueryAST-aligned options for DataEngine.aggregate operations
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **context** | `Object` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+| **groupBy** | `string[]` | optional |  |
+| **aggregations** | `Object[]` | optional |  |
+
+
+---
+
+## EngineCountOptions
+
+QueryAST-aligned options for DataEngine.count operations
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **context** | `Object` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+
+
+---
+
+## EngineDeleteOptions
+
+QueryAST-aligned options for DataEngine.delete operations
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **context** | `Object` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+| **multi** | `boolean` | optional |  |
+
+
+---
+
+## EngineQueryOptions
+
+QueryAST-aligned query options for IDataEngine.find() operations
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **context** | `Object` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+| **fields** | `[__schema1](./__schema1)[]` | optional |  |
+| **orderBy** | `Object[]` | optional |  |
+| **limit** | `number` | optional |  |
+| **offset** | `number` | optional |  |
+| **top** | `number` | optional |  |
+| **cursor** | `Record<string, any>` | optional |  |
+| **search** | `Object` | optional |  |
+| **expand** | `Record<string, [__schema2](./__schema2)>` | optional |  |
+| **distinct** | `boolean` | optional |  |
+
+
+---
+
+## EngineUpdateOptions
+
+QueryAST-aligned options for DataEngine.update operations
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **context** | `Object` | optional |  |
+| **where** | `Record<string, any> \| [__schema0](./__schema0)` | optional |  |
+| **upsert** | `boolean` | optional |  |
+| **multi** | `boolean` | optional |  |
+| **returning** | `boolean` | optional |  |
 
 
 ---
