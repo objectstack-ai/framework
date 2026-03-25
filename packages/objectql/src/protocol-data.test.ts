@@ -78,13 +78,12 @@ describe('ObjectStackProtocolImplementation - Data Operations', () => {
                 query: { populate: ['assignee'], expand: 'project' },
             });
 
-            // populate names take precedence, but the pre-existing expand string
-            // prevents the Record from being created (edge case)
+            // populate names take precedence; the non-object expand string is
+            // cleaned up first, then populate-derived names create the Record.
             const callArgs = mockEngine.find.mock.calls[0][1];
             expect(callArgs.populate).toBeUndefined();
             expect(callArgs.$expand).toBeUndefined();
-            // The expand string blocks Record creation then gets cleaned up as non-object
-            expect(callArgs.expand).toBeUndefined();
+            expect(callArgs.expand).toEqual({ assignee: { object: 'assignee' } });
         });
 
         it('should pass expand Record object through as-is', async () => {

@@ -457,6 +457,25 @@ describe('DataEngineFindRequestSchema', () => {
 
     expect(request.query?.where).toBeDefined();
   });
+
+  it('should accept find with legacy params (backward compat)', () => {
+    const request = DataEngineFindRequestSchema.parse({
+      method: 'find',
+      object: 'account',
+      query: {
+        filter: { status: 'active' },
+        select: ['id', 'name'],
+        sort: [{ field: 'name', order: 'asc' }],
+        skip: 10,
+        populate: ['owner'],
+      },
+    });
+
+    expect(request.query?.filter).toEqual({ status: 'active' });
+    expect(request.query?.select).toEqual(['id', 'name']);
+    expect(request.query?.skip).toBe(10);
+    expect(request.query?.populate).toEqual(['owner']);
+  });
 });
 
 describe('DataEngineFindOneRequestSchema', () => {
@@ -470,6 +489,19 @@ describe('DataEngineFindOneRequestSchema', () => {
     });
 
     expect(request.method).toBe('findOne');
+  });
+
+  it('should accept find one with legacy params (backward compat)', () => {
+    const request = DataEngineFindOneRequestSchema.parse({
+      method: 'findOne',
+      object: 'account',
+      query: {
+        filter: { id: '123' },
+        select: ['id', 'name'],
+      },
+    });
+
+    expect(request.query?.filter).toEqual({ id: '123' });
   });
 });
 
@@ -524,7 +556,7 @@ describe('DataEngineUpdateRequestSchema', () => {
     expect(request.id).toBe('123');
   });
 
-  it('should accept update with filter', () => {
+  it('should accept update with legacy filter (backward compat)', () => {
     const request = DataEngineUpdateRequestSchema.parse({
       method: 'update',
       object: 'account',
@@ -535,6 +567,22 @@ describe('DataEngineUpdateRequestSchema', () => {
       },
     });
 
+    expect(request.options?.filter).toEqual({ category: 'premium' });
+    expect(request.options?.multi).toBe(true);
+  });
+
+  it('should accept update with new where (preferred)', () => {
+    const request = DataEngineUpdateRequestSchema.parse({
+      method: 'update',
+      object: 'account',
+      data: { status: 'active' },
+      options: {
+        where: { category: 'premium' },
+        multi: true,
+      },
+    });
+
+    expect(request.options?.where).toEqual({ category: 'premium' });
     expect(request.options?.multi).toBe(true);
   });
 });
@@ -550,7 +598,7 @@ describe('DataEngineDeleteRequestSchema', () => {
     expect(request.id).toBe('123');
   });
 
-  it('should accept delete with filter', () => {
+  it('should accept delete with legacy filter (backward compat)', () => {
     const request = DataEngineDeleteRequestSchema.parse({
       method: 'delete',
       object: 'account',
@@ -560,6 +608,21 @@ describe('DataEngineDeleteRequestSchema', () => {
       },
     });
 
+    expect(request.options?.filter).toEqual({ status: 'archived' });
+    expect(request.options?.multi).toBe(true);
+  });
+
+  it('should accept delete with new where (preferred)', () => {
+    const request = DataEngineDeleteRequestSchema.parse({
+      method: 'delete',
+      object: 'account',
+      options: {
+        where: { status: 'archived' },
+        multi: true,
+      },
+    });
+
+    expect(request.options?.where).toEqual({ status: 'archived' });
     expect(request.options?.multi).toBe(true);
   });
 });
@@ -574,7 +637,7 @@ describe('DataEngineCountRequestSchema', () => {
     expect(request.method).toBe('count');
   });
 
-  it('should accept count with filter', () => {
+  it('should accept count with where (preferred)', () => {
     const request = DataEngineCountRequestSchema.parse({
       method: 'count',
       object: 'account',
@@ -584,6 +647,18 @@ describe('DataEngineCountRequestSchema', () => {
     });
 
     expect(request.query?.where).toBeDefined();
+  });
+
+  it('should accept count with legacy filter (backward compat)', () => {
+    const request = DataEngineCountRequestSchema.parse({
+      method: 'count',
+      object: 'account',
+      query: {
+        filter: { status: 'active' },
+      },
+    });
+
+    expect(request.query?.filter).toEqual({ status: 'active' });
   });
 });
 

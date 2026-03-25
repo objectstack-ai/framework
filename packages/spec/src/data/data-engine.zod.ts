@@ -320,16 +320,47 @@ export const DataEngineContractSchema = z.object({
  * separate microservice or plugin.
  */
 
+/**
+ * RPC backward-compatibility mixin — shared `@deprecated filter` field.
+ * When both `filter` and `where` are present, the protocol/engine ignores
+ * `filter` in favor of `where`; only one should be provided.
+ */
+const RpcLegacyFilterMixin = {
+  /** @deprecated Use `where` */
+  filter: DataEngineFilterSchema.optional(),
+};
+
+/**
+ * RPC query options that accept BOTH new (where/fields/orderBy) and
+ * legacy (filter/select/sort/skip/populate) parameter names.
+ * 
+ * **Precedence:** When both legacy and new keys are present for the same
+ * concern, the protocol normalizer uses the new key (`where` > `filter`,
+ * `fields` > `select`, `orderBy` > `sort`, `offset` > `skip`,
+ * `expand` > `populate`). Callers should not mix vocabularies.
+ */
+const RpcQueryOptionsSchema = EngineQueryOptionsSchema.extend({
+  ...RpcLegacyFilterMixin,
+  /** @deprecated Use `fields` */
+  select: z.array(z.string()).optional(),
+  /** @deprecated Use `orderBy` */
+  sort: DataEngineSortSchema.optional(),
+  /** @deprecated Use `offset` */
+  skip: z.number().int().min(0).optional(),
+  /** @deprecated Use `expand` */
+  populate: z.array(z.string()).optional(),
+});
+
 export const DataEngineFindRequestSchema = z.object({
   method: z.literal('find'),
   object: z.string(),
-  query: EngineQueryOptionsSchema.optional()
+  query: RpcQueryOptionsSchema.optional()
 });
 
 export const DataEngineFindOneRequestSchema = z.object({
   method: z.literal('findOne'),
   object: z.string(),
-  query: EngineQueryOptionsSchema.optional()
+  query: RpcQueryOptionsSchema.optional()
 });
 
 export const DataEngineInsertRequestSchema = z.object({
@@ -344,26 +375,26 @@ export const DataEngineUpdateRequestSchema = z.object({
   object: z.string(),
   data: z.record(z.string(), z.unknown()),
   id: z.union([z.string(), z.number()]).optional().describe('ID for single update, or use where in options'),
-  options: EngineUpdateOptionsSchema.optional()
+  options: EngineUpdateOptionsSchema.extend(RpcLegacyFilterMixin).optional()
 });
 
 export const DataEngineDeleteRequestSchema = z.object({
   method: z.literal('delete'),
   object: z.string(),
   id: z.union([z.string(), z.number()]).optional().describe('ID for single delete, or use where in options'),
-  options: EngineDeleteOptionsSchema.optional()
+  options: EngineDeleteOptionsSchema.extend(RpcLegacyFilterMixin).optional()
 });
 
 export const DataEngineCountRequestSchema = z.object({
   method: z.literal('count'),
   object: z.string(),
-  query: EngineCountOptionsSchema.optional()
+  query: EngineCountOptionsSchema.extend(RpcLegacyFilterMixin).optional()
 });
 
 export const DataEngineAggregateRequestSchema = z.object({
   method: z.literal('aggregate'),
   object: z.string(),
-  query: EngineAggregateOptionsSchema
+  query: EngineAggregateOptionsSchema.extend(RpcLegacyFilterMixin)
 });
 
 /**

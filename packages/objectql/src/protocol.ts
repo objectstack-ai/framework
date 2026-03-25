@@ -357,14 +357,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
         delete options.populate;
         delete options.$expand;
+        // Clean up non-object expand (e.g. string) BEFORE the Record conversion
+        // below, so that populate-derived names can create the expand Record even
+        // when a legacy string expand was also present.
+        if (typeof options.expand !== 'object' || options.expand === null) {
+            delete options.expand;
+        }
         // Only set expand if not already an object (advanced usage)
         if (expandNames.length > 0 && !options.expand) {
             options.expand = {} as Record<string, any>;
             for (const rel of expandNames) {
                 options.expand[rel] = { object: rel };
             }
-        } else if (typeof options.expand !== 'object' || options.expand === null) {
-            delete options.expand;
         }
 
         // Boolean fields

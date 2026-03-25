@@ -890,9 +890,8 @@ export class ObjectQL implements IDataEngine {
      
      // 1. Extract ID from data or where if it's a single update by ID
      let id = data.id;
-     if (!id && options?.where) {
-         if (typeof options.where === 'string') id = options.where;
-         else if (options.where.id) id = options.where.id;
+     if (!id && options?.where && typeof options.where === 'object' && 'id' in options.where) {
+         id = (options.where as Record<string, unknown>).id;
      }
 
      const opCtx: OperationContext = {
@@ -945,9 +944,8 @@ export class ObjectQL implements IDataEngine {
 
     // Extract ID logic similar to update
     let id: any = undefined;
-    if (options?.where) {
-         if (typeof options.where === 'string') id = options.where;
-         else if (options.where.id) id = options.where.id;
+    if (options?.where && typeof options.where === 'object' && 'id' in options.where) {
+        id = (options.where as Record<string, unknown>).id;
     }
 
     const opCtx: OperationContext = {
