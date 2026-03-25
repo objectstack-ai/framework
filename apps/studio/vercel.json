@@ -7,7 +7,7 @@
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
-      "VITE_SERVER_URL": "https://play.objectstack.ai",
+      "VITE_SERVER_URL": "https://play.objectstack.ai"
     }
   },
   "rewrites": [
