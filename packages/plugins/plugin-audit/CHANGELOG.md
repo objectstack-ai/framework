@@ -1,5 +1,12 @@
 # @objectstack/plugin-audit
 
+## 3.3.1
+
+### Patch Changes
+
+- @objectstack/spec@3.3.1
+- @objectstack/core@3.3.1
+
 ## 3.2.10
 
 ### Patch Changes

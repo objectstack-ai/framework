@@ -1,5 +1,13 @@
 # @objectstack/service-i18n
 
+## 3.3.1
+
+### Patch Changes
+
+- 772dc3f: fix i18n
+  - @objectstack/spec@3.3.1
+  - @objectstack/core@3.3.1
+
 ## 3.3.0
 
 ### Patch Changes

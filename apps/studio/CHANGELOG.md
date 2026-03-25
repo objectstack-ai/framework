@@ -4,6 +4,25 @@
 
 ### Patch Changes
 
+- @objectstack/spec@3.3.1
+- @objectstack/client@3.3.1
+- @objectstack/client-react@3.3.1
+- @objectstack/metadata@3.3.1
+- @objectstack/objectql@3.3.1
+- @objectstack/runtime@3.3.1
+- @objectstack/driver-memory@3.3.1
+- @objectstack/plugin-audit@3.3.1
+- @objectstack/plugin-auth@3.3.1
+- @objectstack/plugin-msw@3.3.1
+- @objectstack/plugin-security@3.3.1
+- @objectstack/hono@3.3.1
+- @objectstack/service-feed@3.3.1
+- @objectstack/driver-turso@3.3.1
+
+## 3.3.1
+
+### Patch Changes
+
 - Fix Vercel deployment crash (`ERR_MODULE_NOT_FOUND` for `@objectstack/metadata/src/index.ts`)
   - Change `bundle-api.mjs` output from `api/index.mjs` to `api/index.js` so Vercel's @vercel/node runtime uses the pre-bundled self-contained bundle directly instead of compiling from TypeScript source (which resolves workspace symlinks to `.ts` source files)
   - Since `package.json` has `"type": "module"`, `.js` files are treated as ESM — matching the esbuild `format: 'esm'` output
