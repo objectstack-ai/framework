@@ -94,7 +94,7 @@ export class ObjectStackController {
   }
 
   // --- Discovery Endpoint ---
-  @Get()
+  @Get('discovery')
   async discovery() {
     return { data: await this.service.dispatcher.getDiscoveryInfo('/api') };
   }
@@ -241,7 +241,7 @@ export class ObjectStackController {
 export class DiscoveryController {
   @Get('objectstack')
   discover(@Res() res: any) {
-    return res.redirect('/api');
+    return res.redirect('/api/discovery');
   }
 }
 

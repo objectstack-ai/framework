@@ -62,7 +62,7 @@ export function createRouteHandler(options: NextAdapterOptions) {
     const method = req.method;
     
     // --- 0. Discovery Endpoint ---
-    if (segments.length === 0 && method === 'GET') {
+    if (segments.length === 1 && segments[0] === 'discovery' && method === 'GET') {
       return NextResponse.json({ data: await dispatcher.getDiscoveryInfo(options.prefix || '/api') });
     }
 
@@ -152,7 +152,7 @@ export function createDiscoveryHandler(options: NextAdapterOptions) {
   return async function discoveryHandler(req: NextRequest) {
       const apiPath = options.prefix || '/api';
       const url = new URL(req.url);
-      const targetUrl = new URL(apiPath, url.origin);
+      const targetUrl = new URL(`${apiPath}/discovery`, url.origin);
       return NextResponse.redirect(targetUrl);
   }
 }

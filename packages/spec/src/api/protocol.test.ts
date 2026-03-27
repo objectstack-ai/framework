@@ -327,24 +327,21 @@ describe('ObjectStack Protocol', () => {
 import { GetDiscoveryResponseSchema } from './protocol.zod';
 
 describe('GetDiscoveryResponseSchema (capabilities)', () => {
-  it('should accept response with well-known capabilities', () => {
+  it('should accept response with hierarchical capabilities', () => {
     const result = GetDiscoveryResponseSchema.safeParse({
       version: 'v1',
-      apiName: 'ObjectStack API',
+      name: 'ObjectStack API',
       capabilities: {
-        feed: true,
-        comments: true,
-        automation: false,
-        cron: false,
-        search: true,
-        export: false,
-        chunkedUpload: true,
+        feed: { enabled: true },
+        comments: { enabled: true, features: { threaded: true } },
+        automation: { enabled: false },
+        search: { enabled: true, description: 'Full-text search' },
       },
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.capabilities?.feed).toBe(true);
-      expect(result.data.capabilities?.automation).toBe(false);
+      expect(result.data.capabilities?.feed?.enabled).toBe(true);
+      expect(result.data.capabilities?.automation?.enabled).toBe(false);
     }
   });
 
@@ -359,13 +356,33 @@ describe('GetDiscoveryResponseSchema (capabilities)', () => {
     }
   });
 
-  it('should reject capabilities with missing fields', () => {
+  it('should accept response with apiName for backward compatibility', () => {
     const result = GetDiscoveryResponseSchema.safeParse({
       version: 'v1',
       apiName: 'ObjectStack API',
-      capabilities: { feed: true },
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.apiName).toBe('ObjectStack API');
+    }
+  });
+
+  it('should accept full DiscoverySchema-compatible response', () => {
+    const result = GetDiscoveryResponseSchema.safeParse({
+      name: 'ObjectOS',
+      version: '1.0.0',
+      environment: 'development',
+      routes: { data: '/api/v1/data', metadata: '/api/v1/meta' },
+      locale: { default: 'en', supported: ['en'], timezone: 'UTC' },
+      services: {
+        data: { enabled: true, status: 'available', route: '/api/v1/data', provider: 'kernel' },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.name).toBe('ObjectOS');
+      expect(result.data.environment).toBe('development');
+    }
   });
 });
 

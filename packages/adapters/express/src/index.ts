@@ -78,7 +78,7 @@ export function createExpressRouter(options: ExpressAdapterOptions): Router {
   // ─── Explicit routes (framework-specific handling required) ────────────────
 
   // --- Discovery ---
-  router.get('/', async (_req: Request, res: Response) => {
+  router.get('/discovery', async (_req: Request, res: Response) => {
     res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
   });
 

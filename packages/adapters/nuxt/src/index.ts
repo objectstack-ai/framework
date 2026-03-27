@@ -89,7 +89,7 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
 
   // --- Discovery ---
   router.get(
-    `${prefix}`,
+    `${prefix}/discovery`,
     defineEventHandler(async () => {
       return { data: await dispatcher.getDiscoveryInfo(prefix) };
     }),
@@ -99,7 +99,7 @@ export function createH3Router(options: NuxtAdapterOptions): Router {
   router.get(
     '/.well-known/objectstack',
     defineEventHandler((event) => {
-      return sendRedirect(event, prefix);
+      return sendRedirect(event, `${prefix}/discovery`);
     }),
   );
 

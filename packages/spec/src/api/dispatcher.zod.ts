@@ -153,6 +153,8 @@ export const DEFAULT_DISPATCHER_ROUTES: DispatcherRouteInput[] = [
   { prefix: '/api/v1/workflow',      service: 'workflow' },
   { prefix: '/api/v1/analytics',     service: 'analytics' },
   { prefix: '/api/v1/automation',    service: 'automation' },
+  { prefix: '/api/v1/storage',       service: 'file-storage' },
+  { prefix: '/api/v1/feed',          service: 'data' },
   { prefix: '/api/v1/i18n',          service: 'i18n' },
   { prefix: '/api/v1/notifications', service: 'notification' },
   { prefix: '/api/v1/realtime',      service: 'realtime' },

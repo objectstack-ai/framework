@@ -46,6 +46,21 @@ describe('HttpDispatcher Root Handling', () => {
         expect(data.routes.metadata).toBe('/meta');
     });
 
+    it('should handle GET /discovery (protocol-standard route)', async () => {
+        const context = { request: {} };
+        const result = await dispatcher.dispatch('GET', '/discovery', undefined, {}, context);
+
+        expect(result.handled).toBe(true);
+        expect(result.response).toBeDefined();
+        expect(result.response?.status).toBe(200);
+        
+        const data = result.response?.body?.data;
+        expect(data).toBeDefined();
+        expect(data.name).toBe('ObjectOS');
+        expect(data.version).toBe('1.0.0');
+        expect(data.routes).toBeDefined();
+    });
+
     it('should NOT handle POST request to root path ("")', async () => {
         const context = { request: {} };
         const method = 'POST';

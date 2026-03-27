@@ -76,13 +76,13 @@ export async function objectStackPlugin(fastify: FastifyInstance, options: Fasti
   // ─── Explicit routes (framework-specific handling required) ────────────────
 
   // --- Discovery ---
-  fastify.get(`${prefix}`, async (_request: FastifyRequest, reply: FastifyReply) => {
+  fastify.get(`${prefix}/discovery`, async (_request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({ data: await dispatcher.getDiscoveryInfo(prefix) });
   });
 
   // --- .well-known ---
   fastify.get('/.well-known/objectstack', async (_request: FastifyRequest, reply: FastifyReply) => {
-    return reply.redirect(prefix);
+    return reply.redirect(`${prefix}/discovery`);
   });
 
   // --- Auth (needs auth service integration) ---

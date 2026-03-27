@@ -442,12 +442,12 @@ describe('ObjectStackController', () => {
 });
 
 describe('DiscoveryController', () => {
-  it('redirects to /api', () => {
+  it('redirects to /api/discovery', () => {
     const controller = new DiscoveryController();
     const res = createMockRes();
 
     controller.discover(res);
 
-    expect(res._redirectUrl).toBe('/api');
+    expect(res._redirectUrl).toBe('/api/discovery');
   });
 });

@@ -42,6 +42,9 @@ export const ApiRoutesSchema = z.object({
   /** Base URL for Schema Definitions (Metadata Protocol) */
   metadata: z.string().describe('e.g. /api/v1/meta'),
 
+  /** Base URL for API Discovery endpoint */
+  discovery: z.string().optional().describe('e.g. /api/v1/discovery'),
+
   /** Base URL for UI Configurations (Views, Menus) */
   ui: z.string().optional().describe('e.g. /api/v1/ui'),
   
@@ -77,6 +80,9 @@ export const ApiRoutesSchema = z.object({
 
   /** Base URL for Internationalization */
   i18n: z.string().optional().describe('e.g. /api/v1/i18n'),
+
+  /** Base URL for Feed / Chatter API */
+  feed: z.string().optional().describe('e.g. /api/v1/feed'),
 });
 
 /**

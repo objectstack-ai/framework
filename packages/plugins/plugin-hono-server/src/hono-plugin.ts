@@ -276,8 +276,8 @@ export class HonoServerPlugin implements Plugin {
         };
 
         // Discovery endpoints
-        rawApp.get('/.well-known/objectstack', (c: any) => c.json({ data: discovery }));
-        rawApp.get(prefix, (c: any) => c.json({ data: discovery }));
+        rawApp.get('/.well-known/objectstack', (c: any) => c.redirect(`${prefix}/discovery`));
+        rawApp.get(`${prefix}/discovery`, (c: any) => c.json({ data: discovery }));
 
         ctx.logger.info('Registered discovery endpoints', { prefix });
 

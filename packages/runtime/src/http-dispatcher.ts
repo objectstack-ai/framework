@@ -1154,9 +1154,10 @@ export class HttpDispatcher {
     async dispatch(method: string, path: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const cleanPath = path.replace(/\/$/, ''); // Remove trailing slash if present, but strict on clean paths
 
-        // 0. Root Discovery Endpoint (GET /)
-        // Handles request to base URL (e.g. /api/v1) which MSW strips to empty string
-        if (cleanPath === '' && method === 'GET') {
+        // 0. Discovery Endpoint (GET /discovery or GET /)
+        // Standard route: /discovery (protocol-compliant)
+        // Legacy route: / (empty path, for backward compatibility — MSW strips base URL)
+        if ((cleanPath === '/discovery' || cleanPath === '') && method === 'GET') {
              // We use '' as prefix since we are internal dispatcher
              const info = await this.getDiscoveryInfo('');
              return { 

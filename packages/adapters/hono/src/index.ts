@@ -81,13 +81,13 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
   // ─── Explicit routes (framework-specific handling required) ────────────────
 
   // --- Discovery ---
-  app.get(`${prefix}`, async (c) => {
+  app.get(`${prefix}/discovery`, async (c) => {
     return c.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
   });
 
   // --- .well-known ---
   app.get('/.well-known/objectstack', (c) => {
-    return c.redirect(prefix);
+    return c.redirect(`${prefix}/discovery`);
   });
 
   // --- Auth (needs auth service integration) ---

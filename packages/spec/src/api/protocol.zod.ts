@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import { ViewSchema } from '../ui/view.zod';
-import { ApiRoutesSchema, ServiceInfoSchema, WellKnownCapabilitiesSchema } from './discovery.zod';
+import { DiscoverySchema } from './discovery.zod';
 import { BatchUpdateRequestSchema, BatchUpdateResponseSchema, BatchOptionsSchema } from './batch.zod';
 import { MetadataCacheRequestSchema, MetadataCacheResponseSchema } from './http-cache.zod';
 import { QuerySchema } from '../data/query.zod';
@@ -118,19 +118,24 @@ export const GetDiscoveryRequestSchema = z.object({});
 
 /**
  * Get API Discovery Response
- * Returns API version information and service availability.
+ * Derived from DiscoverySchema (single source of truth) for protocol-level use.
+ * 
+ * All fields from DiscoverySchema are available but made optional (except `version`)
+ * to support progressive disclosure and backward compatibility with existing clients.
  * 
  * - `routes` provides a flat endpoint map for client routing.
  * - `services` is the single source of truth for service availability.
- * - `capabilities` was removed — derive from `services[x].enabled`.
+ * - `apiName` is kept as an optional alias for `name` for backward compatibility.
+ * 
+ * @see DiscoverySchema in ./discovery.zod.ts — the canonical definition.
  */
-export const GetDiscoveryResponseSchema = z.object({
-  version: z.string().describe('API version (e.g., "v1", "2024-01")'),
-  apiName: z.string().describe('API name'),
-  routes: ApiRoutesSchema.optional().describe('Available endpoint paths'),
-  services: z.record(z.string(), ServiceInfoSchema).optional().describe('Per-service availability map'),
-  capabilities: WellKnownCapabilitiesSchema.optional().describe('Well-known capability flags for frontend adaptation'),
-});
+export const GetDiscoveryResponseSchema = DiscoverySchema
+  .partial()
+  .required({ version: true })
+  .extend({
+    /** @deprecated Use `name` instead. Kept for backward compatibility. */
+    apiName: z.string().optional().describe('API name (deprecated — use name)'),
+  });
 
 /**
  * Get Metadata Types Request

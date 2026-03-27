@@ -99,7 +99,7 @@ export function createRequestHandler(options: SvelteKitAdapterOptions) {
     const segments = path.split('/').filter(Boolean);
 
     // --- Discovery ---
-    if (segments.length === 0 && method === 'GET') {
+    if (segments.length === 1 && segments[0] === 'discovery' && method === 'GET') {
       return new Response(JSON.stringify({ data: await dispatcher.getDiscoveryInfo(prefix) }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

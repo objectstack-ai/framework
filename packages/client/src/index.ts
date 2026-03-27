@@ -238,10 +238,10 @@ export class ObjectStackClient {
         this.logger.debug('Standard discovery probe failed', { error: (e as Error).message });
       }
 
-      // 2. Fallback to Legacy/Direct Path /api/v1
+      // 2. Fallback to Protocol-standard Discovery Path /api/v1/discovery
       if (!data) {
-        const fallbackUrl = `${this.baseUrl}/api/v1`;
-        this.logger.debug('Falling back to legacy discovery', { url: fallbackUrl });
+        const fallbackUrl = `${this.baseUrl}/api/v1/discovery`;
+        this.logger.debug('Falling back to standard discovery endpoint', { url: fallbackUrl });
         const res = await this.fetchImpl(fallbackUrl);
         if (!res.ok) {
            throw new Error(`Failed to connect to ${fallbackUrl}: ${res.statusText}`);
@@ -1700,7 +1700,7 @@ export class ObjectStackClient {
       notifications: '/api/v1/notifications',
       ai: '/api/v1/ai',
       i18n: '/api/v1/i18n',
-      feed: '/api/v1/data',
+      feed: '/api/v1/feed',
     };
     
     return routeMap[type] || `/api/v1/${type}`;

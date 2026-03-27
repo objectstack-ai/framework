@@ -29,10 +29,14 @@ describe('ApiRoutesSchema', () => {
       actions: '/api/v1/p',
       storage: '/api/v1/storage',
       graphql: '/api/v1/graphql',
+      feed: '/api/v1/feed',
+      discovery: '/api/v1/discovery',
     });
 
     expect(routes.data).toBe('/api/v1/data');
     expect(routes.graphql).toBe('/api/v1/graphql');
+    expect(routes.feed).toBe('/api/v1/feed');
+    expect(routes.discovery).toBe('/api/v1/discovery');
   });
 
   it('should accept custom route paths', () => {
