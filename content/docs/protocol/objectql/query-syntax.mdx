@@ -1,12 +1,14 @@
 ---
 title: Query Syntax
-description: Database-agnostic query language with filters, joins, aggregations, and sorting
+description: Database-agnostic query language with filtering, joins, aggregations, and sorting — aligned with the canonical @objectstack/spec QuerySchema
 ---
 
 import { Search, Filter, GitMerge, BarChart } from 'lucide-react';
 
 
 ObjectQL queries are expressed as **Abstract Syntax Trees (AST)** in JSON format. This enables database-agnostic querying—write once, compile to PostgreSQL, MongoDB, Redis, or any supported driver.
+
+All query syntax in this document follows the canonical **`QuerySchema`** defined in `@objectstack/spec` (`packages/spec/src/data/query.zod.ts`). Filtering uses the **`where` + MongoDB-style `$op` object syntax** from `FilterConditionSchema` (`packages/spec/src/data/filter.zod.ts`).
 
 ## Query Philosophy
 
@@ -21,18 +23,19 @@ ORDER BY c.created_at DESC
 LIMIT 10;
 ```
 
-**ObjectQL:**
+**ObjectQL (Canonical Spec Format):**
 ```typescript
-// Database-agnostic AST
-const query: Query = {
+import type { QueryAST } from '@objectstack/spec';
+
+const query: QueryAST = {
   object: 'contact',
-  fields: ['name', 'email', 'account.company_name'],
-  filters: [
-    ['is_active', '=', true],
-    ['account.industry', '=', 'tech']
-  ],
-  sort: [{ field: 'created_at', order: 'desc' }],
-  limit: 10
+  fields: ['name', 'email', { field: 'account', fields: ['company_name'] }],
+  where: {
+    is_active: true,
+    'account.industry': 'tech',
+  },
+  orderBy: [{ field: 'created_at', order: 'desc' }],
+  limit: 10,
 };
 ```
 
@@ -46,20 +49,59 @@ const query: Query = {
 
 ## Query Structure
 
-### The Query AST
+### The QueryAST (Canonical)
+
+The canonical query structure is defined by `QuerySchema` in `@objectstack/spec`:
 
 ```typescript
-interface Query {
-  object: string;              // Target object (required)
-  fields?: string[];           // Projection (SELECT)
-  filters?: FilterNode[];      // Predicates (WHERE)
-  sort?: SortNode[];           // Ordering (ORDER BY)
-  limit?: number;              // Max records (LIMIT)
-  offset?: number;             // Skip records (OFFSET)
-  expand?: string[];           // Relationships (JOIN)
-  group_by?: string[];         // Grouping (GROUP BY)
-  having?: FilterNode[];       // Group filters (HAVING)
+import type { QueryAST } from '@objectstack/spec';
+
+// QueryAST — full structure
+interface QueryAST {
+  object: string;                          // Target object (required)
+  fields?: FieldNode[];                    // Projection (SELECT)
+  where?: FilterCondition;                 // Filtering (WHERE) — MongoDB-style $op
+  search?: FullTextSearch;                 // Full-text search ($search)
+  orderBy?: SortNode[];                    // Ordering (ORDER BY)
+  limit?: number;                          // Max records (LIMIT)
+  offset?: number;                         // Skip records (OFFSET)
+  top?: number;                            // Alias for limit (OData compat)
+  cursor?: Record<string, unknown>;        // Keyset pagination cursor
+  joins?: JoinNode[];                      // Explicit JOINs
+  aggregations?: AggregationNode[];        // Aggregation functions
+  groupBy?: string[];                      // GROUP BY fields
+  having?: FilterCondition;                // HAVING clause
+  windowFunctions?: WindowFunctionNode[];  // Window functions (OVER)
+  distinct?: boolean;                      // SELECT DISTINCT
+  expand?: Record<string, QueryAST>;       // Recursive relation loading
 }
+```
+
+### Key Types
+
+```typescript
+// SortNode — ORDER BY element
+interface SortNode {
+  field: string;
+  order: 'asc' | 'desc';   // default: 'asc'
+}
+
+// AggregationNode — aggregation definition
+interface AggregationNode {
+  function: 'count' | 'sum' | 'avg' | 'min' | 'max'
+          | 'count_distinct' | 'array_agg' | 'string_agg';
+  field?: string;        // optional for COUNT(*)
+  alias: string;         // result column alias
+  distinct?: boolean;    // DISTINCT before aggregation
+  filter?: FilterCondition; // FILTER WHERE clause
+}
+
+// FieldNode — field selection
+type FieldNode = string | {
+  field: string;
+  fields?: FieldNode[];  // nested select
+  alias?: string;
+};
 ```
 
 ---
@@ -69,9 +111,7 @@ interface Query {
 ### Select All Records
 
 ```typescript
-const customers = await ObjectQL.query({
-  object: 'customer'
-});
+const customers = await engine.find('customer');
 
 // SQL: SELECT * FROM customer;
 // MongoDB: db.customer.find({})
@@ -80,9 +120,8 @@ const customers = await ObjectQL.query({
 ### Select Specific Fields
 
 ```typescript
-const customers = await ObjectQL.query({
-  object: 'customer',
-  fields: ['company_name', 'industry', 'annual_revenue']
+const customers = await engine.find('customer', {
+  fields: ['company_name', 'industry', 'annual_revenue'],
 });
 
 // SQL: SELECT company_name, industry, annual_revenue FROM customer;
@@ -92,10 +131,9 @@ const customers = await ObjectQL.query({
 ### Limit and Offset
 
 ```typescript
-const customers = await ObjectQL.query({
-  object: 'customer',
+const customers = await engine.find('customer', {
   limit: 10,
-  offset: 20  // Skip first 20, get next 10
+  offset: 20,  // Skip first 20, get next 10
 });
 
 // SQL: SELECT * FROM customer LIMIT 10 OFFSET 20;
@@ -106,225 +144,207 @@ const customers = await ObjectQL.query({
 
 ## 2. Filtering
 
-Filters use a **tuple syntax**: `[field, operator, value]`
+Filters use the **`where` clause** with **MongoDB-style `$op` operators** (object syntax).
 
-### Simple Filters
+### Implicit Equality
+
+The simplest filter — a field-value pair implies `$eq`:
 
 ```typescript
-// Equality
-const query = {
+const query: QueryAST = {
   object: 'customer',
-  filters: [
-    ['industry', '=', 'tech']
-  ]
+  where: {
+    industry: 'tech',       // Implicit: { $eq: 'tech' }
+  },
 };
 
-// Not equal
-const query = {
-  object: 'customer',
-  filters: [
-    ['status', '!=', 'inactive']
-  ]
-};
-
-// Comparison
-const query = {
-  object: 'customer',
-  filters: [
-    ['annual_revenue', '>', 1000000]
-  ]
-};
+// SQL: WHERE industry = 'tech'
 ```
 
-**SQL compilation:**
-```sql
-WHERE industry = 'tech'
-WHERE status != 'inactive'
-WHERE annual_revenue > 1000000
+### Explicit Operators
+
+Use `$op` keys for non-equality comparisons:
+
+```typescript
+// Not equal
+const query: QueryAST = {
+  object: 'customer',
+  where: {
+    status: { $ne: 'inactive' },
+  },
+};
+// SQL: WHERE status != 'inactive'
+
+// Greater than
+const query: QueryAST = {
+  object: 'customer',
+  where: {
+    annual_revenue: { $gt: 1000000 },
+  },
+};
+// SQL: WHERE annual_revenue > 1000000
 ```
 
 ### Supported Operators
 
 | Operator | Description | Example |
-|----------|-------------|---------|
-| `=` | Equal | `['status', '=', 'active']` |
-| `!=` | Not equal | `['status', '!=', 'closed']` |
-| `>` | Greater than | `['revenue', '>', 10000]` |
-| `>=` | Greater or equal | `['score', '>=', 80]` |
-| `<` | Less than | `['age', '<', 65]` |
-| `<=` | Less or equal | `['discount', '<=', 20]` |
-| `in` | In list | `['stage', 'in', ['proposal', 'negotiation']]` |
-| `not_in` | Not in list | `['status', 'not_in', ['deleted', 'archived']]` |
-| `contains` | String contains | `['name', 'contains', 'Inc']` |
-| `starts_with` | String starts with | `['email', 'starts_with', 'admin']` |
-| `ends_with` | String ends with | `['domain', 'ends_with', '.com']` |
-| `is_null` | Field is null | `['manager_id', 'is_null']` |
-| `is_not_null` | Field is not null | `['phone', 'is_not_null']` |
-| `between` | Range | `['created_at', 'between', ['2024-01-01', '2024-12-31']]` |
+|:---------|:------------|:--------|
+| `$eq` | Equal (implicit default) | `{ status: 'active' }` or `{ status: { $eq: 'active' } }` |
+| `$ne` | Not equal | `{ status: { $ne: 'closed' } }` |
+| `$gt` | Greater than | `{ revenue: { $gt: 10000 } }` |
+| `$gte` | Greater or equal | `{ score: { $gte: 80 } }` |
+| `$lt` | Less than | `{ age: { $lt: 65 } }` |
+| `$lte` | Less or equal | `{ discount: { $lte: 20 } }` |
+| `$in` | In list | `{ stage: { $in: ['proposal', 'negotiation'] } }` |
+| `$nin` | Not in list | `{ status: { $nin: ['deleted', 'archived'] } }` |
+| `$contains` | String contains | `{ name: { $contains: 'Inc' } }` |
+| `$notContains` | String does not contain | `{ name: { $notContains: 'test' } }` |
+| `$startsWith` | String starts with | `{ email: { $startsWith: 'admin' } }` |
+| `$endsWith` | String ends with | `{ domain: { $endsWith: '.com' } }` |
+| `$between` | Range (inclusive) | `{ created_at: { $between: ['2024-01-01', '2024-12-31'] } }` |
+| `$null` | Null check | `{ manager_id: { $null: true } }` / `{ phone: { $null: false } }` |
+| `$exists` | Field exists (NoSQL) | `{ metadata: { $exists: true } }` |
 
-### Multiple Filters (AND Logic)
+### Multiple Conditions (Implicit AND)
+
+Multiple keys in `where` are combined with **AND** logic:
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  filters: [
-    ['stage', '=', 'Closed Won'],
-    ['amount', '>', 50000],
-    ['close_date', '>=', '2024-01-01']
-  ]
+  where: {
+    stage: 'Closed Won',
+    amount: { $gt: 50000 },
+    close_date: { $gte: '2024-01-01' },
+  },
 };
 
 // SQL: WHERE stage = 'Closed Won' AND amount > 50000 AND close_date >= '2024-01-01'
 ```
 
-**Default:** Multiple filters are combined with **AND** logic.
-
-### OR Logic
-
-Use nested arrays with `'or'` operator:
+### Logical OR (`$or`)
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'contact',
-  filters: [
-    ['or', 
-      ['title', 'contains', 'CEO'],
-      ['title', 'contains', 'President'],
-      ['title', 'contains', 'Founder']
-    ]
-  ]
+  where: {
+    $or: [
+      { title: { $contains: 'CEO' } },
+      { title: { $contains: 'President' } },
+      { title: { $contains: 'Founder' } },
+    ],
+  },
 };
 
 // SQL: WHERE (title LIKE '%CEO%' OR title LIKE '%President%' OR title LIKE '%Founder%')
 ```
 
-### Complex Logic (AND + OR)
+### Logical AND (`$and`)
+
+Explicit `$and` is useful when you need multiple conditions on the same field:
 
 ```typescript
-const query = {
-  object: 'opportunity',
-  filters: [
-    ['account.industry', '=', 'tech'],  // AND (industry = tech)
-    ['or',                               // AND (
-      ['amount', '>', 100000],           //   amount > 100000
-      ['is_strategic', '=', true]        //   OR is_strategic = true
-    ]                                    // )
-  ]
+const query: QueryAST = {
+  object: 'product',
+  where: {
+    $and: [
+      { price: { $gte: 10 } },
+      { price: { $lte: 100 } },
+    ],
+  },
 };
 
-// SQL: WHERE account.industry = 'tech' 
-//      AND (amount > 100000 OR is_strategic = true)
+// SQL: WHERE price >= 10 AND price <= 100
 ```
 
-### NOT Logic
+### Logical NOT (`$not`)
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'customer',
-  filters: [
-    ['not',
-      ['status', 'in', ['deleted', 'suspended']]
-    ]
-  ]
+  where: {
+    $not: {
+      status: { $in: ['deleted', 'suspended'] },
+    },
+  },
 };
 
 // SQL: WHERE NOT (status IN ('deleted', 'suspended'))
+```
+
+### Complex Logic (AND + OR)
+
+```typescript
+const query: QueryAST = {
+  object: 'opportunity',
+  where: {
+    'account.industry': 'tech',           // AND (industry = tech)
+    $or: [                                 // AND (
+      { amount: { $gt: 100000 } },         //   amount > 100000
+      { is_strategic: true },              //   OR is_strategic = true
+    ],                                     // )
+  },
+};
+
+// SQL: WHERE account.industry = 'tech'
+//      AND (amount > 100000 OR is_strategic = true)
 ```
 
 ### Date Filters
 
 ```typescript
 // Specific date
-filters: [
-  ['created_at', '=', '2024-01-15']
-]
+where: { created_at: '2024-01-15' }
 
-// Date range
-filters: [
-  ['created_at', 'between', ['2024-01-01', '2024-12-31']]
-]
+// Date range with $between
+where: { created_at: { $between: ['2024-01-01', '2024-12-31'] } }
 
-// Relative dates (using formulas)
-filters: [
-  ['due_date', '<', '{{TODAY()}}']  // Past due
-]
-
-filters: [
-  ['created_at', '>', '{{TODAY() - 30}}']  // Last 30 days
-]
+// Comparison operators on dates
+where: { due_date: { $lt: '2024-06-01' } }
+where: { created_at: { $gte: '2024-01-01' } }
 ```
 
 ### Null Checks
 
 ```typescript
-// Is null
-filters: [
-  ['manager_id', 'is_null']
-]
+// Field IS NULL
+where: { manager_id: { $null: true } }
 
-// Is not null
-filters: [
-  ['phone', 'is_not_null']
-]
+// Field IS NOT NULL
+where: { phone: { $null: false } }
 
-// Has value (not null and not empty string)
-filters: [
-  ['email', '!=', null],
-  ['email', '!=', '']
-]
+// Field exists (NoSQL)
+where: { metadata: { $exists: true } }
 ```
 
-### Array Filters
+### Nested Relation Filters
+
+Filter through relationships without explicit joins:
 
 ```typescript
-// Array contains value
-filters: [
-  ['tags', 'contains', 'important']
-]
-
-// Array contains any of values
-filters: [
-  ['tags', 'contains_any', ['urgent', 'high-priority']]
-]
-
-// Array contains all of values
-filters: [
-  ['tags', 'contains_all', ['customer', 'enterprise']]
-]
-
-// Array length
-filters: [
-  ['tags.length', '>', 3]
-]
-```
-
-### JSON Field Filters
-
-```typescript
-// Query nested JSON properties
-filters: [
-  ['metadata.color', '=', 'red'],
-  ['metadata.size', 'in', ['M', 'L', 'XL']]
-]
-
-// JSON path syntax (PostgreSQL JSONB)
-filters: [
-  ['attributes.dimensions.width', '>', 100]
-]
+const query: QueryAST = {
+  object: 'opportunity',
+  where: {
+    account: {
+      industry: 'tech',
+      annual_revenue: { $gt: 1000000 },
+    },
+  },
+};
 ```
 
 ---
 
 ## 3. Sorting
 
+Sorting uses the **`orderBy`** array of `SortNode` objects.
+
 ### Single Field Sort
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'customer',
-  sort: [
-    { field: 'company_name', order: 'asc' }
-  ]
+  orderBy: [{ field: 'company_name', order: 'asc' }],
 };
 
 // SQL: ORDER BY company_name ASC
@@ -333,12 +353,12 @@ const query = {
 ### Multiple Fields
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  sort: [
+  orderBy: [
     { field: 'priority', order: 'desc' },
-    { field: 'created_at', order: 'asc' }
-  ]
+    { field: 'created_at', order: 'asc' },
+  ],
 };
 
 // SQL: ORDER BY priority DESC, created_at ASC
@@ -347,45 +367,32 @@ const query = {
 ### Sort on Related Fields
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'contact',
-  sort: [
-    { field: 'account.company_name', order: 'asc' }
-  ]
+  orderBy: [{ field: 'account.company_name', order: 'asc' }],
 };
 
 // SQL: ORDER BY account.company_name ASC
-// (Requires JOIN with account table)
 ```
-
-### Null Handling
-
-```typescript
-const query = {
-  object: 'task',
-  sort: [
-    { field: 'due_date', order: 'asc', nulls: 'last' }
-  ]
-};
-
-// SQL: ORDER BY due_date ASC NULLS LAST
-```
-
-**Null options:**
-- `first`: Null values appear first
-- `last`: Null values appear last
 
 ---
 
-## 4. Relationships (Joins)
+## 4. Relationships (Expand)
 
-### Basic Lookup
+The `expand` property enables **recursive loading of related records** through lookup and master_detail fields. Each key is a relationship field name; the value is a nested `QueryAST`.
+
+### Basic Expand
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  fields: ['name', 'amount', 'account.company_name'],
-  expand: ['account']
+  fields: ['name', 'amount'],
+  expand: {
+    account: {
+      object: 'account',
+      fields: ['company_name'],
+    },
+  },
 };
 
 // Result:
@@ -393,107 +400,93 @@ const query = {
 //   {
 //     name: 'Big Deal',
 //     amount: 100000,
-//     account: {
-//       company_name: 'Acme Corp'
-//     }
+//     account: { company_name: 'Acme Corp' }
 //   }
 // ]
-```
-
-**SQL compilation:**
-```sql
-SELECT 
-  o.name, 
-  o.amount, 
-  a.company_name AS "account.company_name"
-FROM opportunity o
-LEFT JOIN account a ON o.account_id = a.id
 ```
 
 ### Multiple Relationships
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  fields: ['name', 'account.company_name', 'owner.name'],
-  expand: ['account', 'owner']
+  fields: ['name'],
+  expand: {
+    account: { object: 'account', fields: ['company_name'] },
+    owner: { object: 'user', fields: ['name', 'email'] },
+  },
 };
 ```
 
-### Deep Relationships
+### Nested Expand (Deep Loading)
 
 ```typescript
-const query = {
-  object: 'contact',
-  fields: ['name', 'account.owner.name'],
-  expand: ['account.owner']  // Nested lookup
-};
-
-// SQL: JOIN account, then JOIN user
-// MongoDB: Nested $lookup
-```
-
-### Filtering on Related Fields
-
-```typescript
-const query = {
-  object: 'opportunity',
-  filters: [
-    ['account.industry', '=', 'tech'],
-    ['account.annual_revenue', '>', 1000000]
-  ],
-  expand: ['account']
+const query: QueryAST = {
+  object: 'task',
+  fields: ['title', 'assignee'],
+  expand: {
+    assignee: { object: 'user', fields: ['name', 'email'] },
+    project: {
+      object: 'project',
+      expand: {
+        org: { object: 'org', fields: ['name'] },
+      },
+    },
+  },
 };
 ```
 
-### Child Records (Reverse Lookup)
+<Callout type="info">
+The engine resolves `expand` via batch `$in` queries (driver-agnostic) with a default max depth of 3.
+</Callout>
+
+### Filtered Expand
+
+You can filter, sort, and limit expanded relations:
 
 ```typescript
-// Get account with all opportunities
-const query = {
+const query: QueryAST = {
   object: 'account',
-  fields: ['company_name', 'opportunities'],
-  expand: ['opportunities']  // One-to-many
+  fields: ['company_name'],
+  expand: {
+    opportunities: {
+      object: 'opportunity',
+      where: { stage: { $ne: 'Closed Lost' } },
+      orderBy: [{ field: 'amount', order: 'desc' }],
+      limit: 5,
+    },
+  },
 };
-
-// Result:
-// {
-//   company_name: 'Acme Corp',
-//   opportunities: [
-//     { name: 'Deal 1', amount: 50000 },
-//     { name: 'Deal 2', amount: 75000 }
-//   ]
-// }
 ```
 
 ---
 
 ## 5. Aggregations
 
+Aggregations use the **`aggregations`** array with `AggregationNode` objects, combined with **`groupBy`** for grouping.
+
 ### Count
 
 ```typescript
-const count = await ObjectQL.count({
-  object: 'customer',
-  filters: [
-    ['industry', '=', 'tech']
-  ]
+const count = await engine.count('customer', {
+  where: { industry: 'tech' },
 });
 
 // SQL: SELECT COUNT(*) FROM customer WHERE industry = 'tech'
 // Result: 42
 ```
 
-### Group By
+### Group By with Aggregations
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  group_by: ['stage'],
-  aggregate: {
-    count: { function: 'count' },
-    total_amount: { function: 'sum', field: 'amount' }
-  }
+  fields: ['stage'],
+  groupBy: ['stage'],
+  aggregations: [
+    { function: 'count', alias: 'count' },
+    { function: 'sum', field: 'amount', alias: 'total_amount' },
+  ],
 };
 
 // Result:
@@ -505,65 +498,62 @@ const query = {
 
 **SQL compilation:**
 ```sql
-SELECT 
+SELECT
   stage,
-  COUNT(*) as count,
-  SUM(amount) as total_amount
+  COUNT(*) AS count,
+  SUM(amount) AS total_amount
 FROM opportunity
 GROUP BY stage
 ```
 
-### Aggregate Functions
+### Aggregation Functions
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  aggregate: {
-    count: { function: 'count' },
-    total: { function: 'sum', field: 'amount' },
-    average: { function: 'avg', field: 'amount' },
-    min: { function: 'min', field: 'amount' },
-    max: { function: 'max', field: 'amount' }
-  }
+  aggregations: [
+    { function: 'count', alias: 'count' },
+    { function: 'sum', field: 'amount', alias: 'total' },
+    { function: 'avg', field: 'amount', alias: 'average' },
+    { function: 'min', field: 'amount', alias: 'min_amount' },
+    { function: 'max', field: 'amount', alias: 'max_amount' },
+  ],
 };
 
 // Result:
-// {
-//   count: 100,
-//   total: 5000000,
-//   average: 50000,
-//   min: 10000,
-//   max: 500000
-// }
+// { count: 100, total: 5000000, average: 50000, min_amount: 10000, max_amount: 500000 }
 ```
+
+**Supported functions:** `count`, `sum`, `avg`, `min`, `max`, `count_distinct`, `array_agg`, `string_agg`
 
 ### Group By Multiple Fields
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  group_by: ['stage', 'owner.name'],
-  aggregate: {
-    count: { function: 'count' },
-    total: { function: 'sum', field: 'amount' }
-  }
+  fields: ['stage', 'owner_name'],
+  groupBy: ['stage', 'owner_name'],
+  aggregations: [
+    { function: 'count', alias: 'count' },
+    { function: 'sum', field: 'amount', alias: 'total' },
+  ],
 };
 ```
 
 ### HAVING Clause
 
-Filter groups after aggregation:
+Filter groups after aggregation using the `having` property:
 
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'opportunity',
-  group_by: ['account_id'],
-  aggregate: {
-    total: { function: 'sum', field: 'amount' }
+  groupBy: ['account_id'],
+  aggregations: [
+    { function: 'sum', field: 'amount', alias: 'total' },
+  ],
+  having: {
+    total: { $gt: 1000000 },  // Only accounts with > $1M pipeline
   },
-  having: [
-    ['total', '>', 1000000]  // Only accounts with >$1M pipeline
-  ]
 };
 
 // SQL: HAVING SUM(amount) > 1000000
@@ -573,199 +563,101 @@ const query = {
 
 ## 6. Advanced Queries
 
-### Distinct Values
+### Distinct
 
 ```typescript
-const industries = await ObjectQL.distinct({
+const query: QueryAST = {
   object: 'account',
-  field: 'industry'
-});
+  fields: ['industry'],
+  distinct: true,
+};
 
 // SQL: SELECT DISTINCT industry FROM account
-// Result: ['tech', 'finance', 'healthcare']
-```
-
-### Exists (Subquery)
-
-```typescript
-const query = {
-  object: 'account',
-  filters: [
-    ['exists', {
-      object: 'opportunity',
-      filters: [
-        ['account_id', '=', '{{parent.id}}'],
-        ['stage', '=', 'Closed Won']
-      ]
-    }]
-  ]
-};
-
-// SQL: WHERE EXISTS (
-//   SELECT 1 FROM opportunity 
-//   WHERE opportunity.account_id = account.id 
-//   AND opportunity.stage = 'Closed Won'
-// )
-```
-
-### Not Exists
-
-```typescript
-const query = {
-  object: 'account',
-  filters: [
-    ['not_exists', {
-      object: 'opportunity',
-      filters: [
-        ['account_id', '=', '{{parent.id}}']
-      ]
-    }]
-  ]
-};
-
-// Find accounts with no opportunities
 ```
 
 ### Full-Text Search
 
+The `search` parameter configures full-text search:
+
 ```typescript
-const query = {
+const query: QueryAST = {
   object: 'article',
-  search: 'ObjectStack tutorial',
-  search_fields: ['title', 'content', 'tags']
+  search: {
+    query: 'ObjectStack tutorial',
+    fields: ['title', 'content', 'tags'],
+    fuzzy: true,
+    boost: { title: 2.0 },
+  },
+  limit: 10,
 };
 
 // PostgreSQL: Uses tsvector/tsquery
 // MongoDB: Uses $text index
-// Elasticsearch: Uses match query
 ```
 
-### Geospatial Queries
+### Joins
+
+For cross-object queries beyond `expand`, use explicit joins:
 
 ```typescript
-// Find stores within 10 miles
-const query = {
-  object: 'store',
-  filters: [
-    ['location', 'near', {
-      latitude: 37.7749,
-      longitude: -122.4194,
-      distance: 10,
-      unit: 'miles'
-    }]
-  ]
-};
-
-// PostgreSQL: Uses ST_Distance
-// MongoDB: Uses $near
-```
-
-### Case-Insensitive Search
-
-```typescript
-const query = {
-  object: 'customer',
-  filters: [
-    ['company_name', 'icontains', 'acme']  // Case-insensitive
-  ]
-};
-
-// SQL: WHERE LOWER(company_name) LIKE LOWER('%acme%')
-```
-
-### Regular Expression
-
-```typescript
-const query = {
-  object: 'user',
-  filters: [
-    ['email', 'regex', '^admin@.*\\.com$']
-  ]
-};
-
-// PostgreSQL: WHERE email ~ '^admin@.*\.com$'
-// MongoDB: { email: { $regex: /^admin@.*\.com$/ } }
-```
-
----
-
-## 7. Query Optimization
-
-### Index Hints
-
-```typescript
-const query = {
-  object: 'customer',
-  filters: [
-    ['email', '=', 'john@example.com']
+const query: QueryAST = {
+  object: 'order',
+  fields: ['id', 'amount'],
+  joins: [
+    {
+      type: 'inner',
+      object: 'customer',
+      alias: 'c',
+      on: { 'order.customer_id': { $eq: { $field: 'c.id' } } },
+    },
   ],
-  use_index: 'idx_email'  // Force specific index
-};
-```
-
-### Projection Pushdown
-
-ObjectQL automatically optimizes field selection:
-
-```typescript
-// You write:
-const query = {
-  object: 'customer',
-  fields: ['company_name', 'email']
 };
 
-// ObjectQL compiles to:
-// SELECT company_name, email FROM customer
-// NOT: SELECT * FROM customer (wasteful)
+// SQL: SELECT o.id, o.amount FROM orders o
+//      INNER JOIN customers c ON o.customer_id = c.id
 ```
 
-### Filter Pushdown
+**Join types:** `inner`, `left`, `right`, `full`
 
-Filters applied at database level, not in application:
+### Window Functions
 
 ```typescript
-const query = {
-  object: 'opportunity',
-  filters: [['amount', '>', 50000]],
-  expand: ['account']
+const query: QueryAST = {
+  object: 'order',
+  fields: ['id', 'customer_id', 'amount'],
+  windowFunctions: [
+    {
+      function: 'row_number',
+      alias: 'rank',
+      over: {
+        partitionBy: ['customer_id'],
+        orderBy: [{ field: 'amount', order: 'desc' }],
+      },
+    },
+  ],
 };
 
-// SQL: WHERE amount > 50000
-// Filter runs BEFORE join (better performance)
-```
-
-### Query Plan Analysis
-
-```typescript
-const plan = await ObjectQL.explain({
-  object: 'customer',
-  filters: [['industry', '=', 'tech']]
-});
-
-// Returns database-specific execution plan
-// PostgreSQL: EXPLAIN output
-// MongoDB: explain() results
+// SQL: SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY amount DESC) AS rank
+//      FROM orders
 ```
 
 ---
 
-## 8. Pagination
+## 7. Pagination
 
 ### Offset-Based Pagination
 
 ```typescript
 // Page 1 (records 0-9)
-const page1 = await ObjectQL.query({
-  object: 'customer',
+const page1 = await engine.find('customer', {
   limit: 10,
-  offset: 0
+  offset: 0,
 });
 
 // Page 2 (records 10-19)
-const page2 = await ObjectQL.query({
-  object: 'customer',
+const page2 = await engine.find('customer', {
   limit: 10,
-  offset: 10
+  offset: 10,
 });
 ```
 
@@ -775,20 +667,16 @@ const page2 = await ObjectQL.query({
 
 ```typescript
 // First page
-const result = await ObjectQL.query({
-  object: 'customer',
+const result = await engine.find('customer', {
   limit: 10,
-  sort: [{ field: 'id', order: 'asc' }]
+  orderBy: [{ field: 'id', order: 'asc' }],
 });
 
-// Next page (use last id as cursor)
-const nextResult = await ObjectQL.query({
-  object: 'customer',
-  filters: [
-    ['id', '>', result[result.length - 1].id]
-  ],
+// Next page (use cursor)
+const nextResult = await engine.find('customer', {
+  cursor: { id: result[result.length - 1].id },
   limit: 10,
-  sort: [{ field: 'id', order: 'asc' }]
+  orderBy: [{ field: 'id', order: 'asc' }],
 });
 ```
 
@@ -796,58 +684,73 @@ const nextResult = await ObjectQL.query({
 
 ---
 
-## 9. Query Shortcuts
+## 8. Real-World Examples
 
-ObjectQL provides convenience methods for common patterns:
-
-### Find by ID
+### CRM: Open Opportunities
 
 ```typescript
-const customer = await ObjectQL.findOne('customer', '123');
-
-// Equivalent to:
-await ObjectQL.query({
-  object: 'customer',
-  filters: [['id', '=', '123']],
-  limit: 1
+const openOpportunities = await engine.find('opportunity', {
+  where: {
+    stage: { $nin: ['Closed Won', 'Closed Lost'] },
+    owner_id: currentUser.id,
+  },
+  orderBy: [{ field: 'amount', order: 'desc' }],
+  fields: ['name', 'amount', 'close_date'],
+  expand: {
+    account: { object: 'account', fields: ['company_name'] },
+  },
 });
 ```
 
-### Find by Unique Field
+### E-Commerce: Product Search
 
 ```typescript
-const customer = await ObjectQL.findBy('customer', { email: 'john@example.com' });
-
-// Equivalent to:
-await ObjectQL.query({
-  object: 'customer',
-  filters: [['email', '=', 'john@example.com']],
-  limit: 1
+const products = await engine.find('product', {
+  where: {
+    is_active: true,
+    inventory_qty: { $gt: 0 },
+    category_id: { $in: selectedCategories },
+    price: { $between: [minPrice, maxPrice] },
+  },
+  search: {
+    query: searchTerm,
+    fields: ['name', 'description'],
+    fuzzy: true,
+  },
+  orderBy: [{ field: 'popularity_score', order: 'desc' }],
+  limit: 20,
 });
 ```
 
-### Find or Create
+### Analytics: Revenue by Month
 
 ```typescript
-const customer = await ObjectQL.findOrCreate('customer', 
-  { email: 'john@example.com' },  // Search criteria
-  { company_name: 'Acme Corp' }   // Default values if creating
-);
+const monthlyRevenue: QueryAST = {
+  object: 'order',
+  where: {
+    status: 'completed',
+    created_at: { $gte: '2024-01-01' },
+  },
+  groupBy: ['month'],
+  aggregations: [
+    { function: 'sum', field: 'total_amount', alias: 'revenue' },
+    { function: 'count', alias: 'order_count' },
+    { function: 'avg', field: 'total_amount', alias: 'avg_order' },
+  ],
+  orderBy: [{ field: 'month', order: 'asc' }],
+};
 ```
 
 ---
 
-## 10. Error Handling
+## 9. Error Handling
 
 ### Invalid Query
 
 ```typescript
 try {
-  await ObjectQL.query({
-    object: 'customer',
-    filters: [
-      ['invalid_field', '=', 'value']  // Field doesn't exist
-    ]
+  await engine.find('customer', {
+    where: { invalid_field: 'value' },  // Field doesn't exist
   });
 } catch (error) {
   // QueryValidationError: Field 'invalid_field' does not exist on object 'customer'
@@ -858,9 +761,8 @@ try {
 
 ```typescript
 try {
-  await ObjectQL.query({
-    object: 'account',
-    filters: [['owner_id', '!=', currentUser.id]]
+  await engine.find('account', {
+    where: { owner_id: { $ne: currentUser.id } },
   });
 } catch (error) {
   // PermissionError: Access denied to object 'account'
@@ -869,64 +771,39 @@ try {
 
 ---
 
-## Real-World Examples
+## Legacy Compatibility
 
-### CRM: Open Opportunities
+<Callout type="warn">
+**Tuple / Array / 三元组 Syntax — UI Builder Input Only**
 
-```typescript
-const openOpportunities = await ObjectQL.query({
-  object: 'opportunity',
-  filters: [
-    ['stage', 'not_in', ['Closed Won', 'Closed Lost']],
-    ['owner_id', '=', currentUser.id]
-  ],
-  sort: [
-    { field: 'amount', order: 'desc' }
-  ],
-  fields: ['name', 'amount', 'close_date', 'account.company_name'],
-  expand: ['account']
-});
-```
+The tuple/array format (e.g. `['status', '=', 'active']`) and the `filters` key are **legacy input formats** used by some UI-layer filter builders (FilterBuilder, ObjectUI). They are **not** the canonical protocol format.
 
-### E-Commerce: Product Search
+Before entering the ObjectQL protocol or `IDataEngine`, tuple filters **must** be converted to the canonical `where` + `$op` object format using the `parseFilterAST()` utility from `@objectstack/spec`:
 
 ```typescript
-const products = await ObjectQL.query({
-  object: 'product',
-  search: searchTerm,
-  filters: [
-    ['is_active', '=', true],
-    ['inventory_qty', '>', 0],
-    ['category_id', 'in', selectedCategories],
-    ['price', 'between', [minPrice, maxPrice]]
-  ],
-  sort: [
-    { field: 'popularity_score', order: 'desc' }
-  ],
-  limit: 20
-});
+import { parseFilterAST } from '@objectstack/spec';
+
+// UI Builder output (tuple format)
+const uiFilter = ['and', ['status', '=', 'active'], ['priority', '>', 3]];
+
+// Convert to canonical format
+const where = parseFilterAST(uiFilter);
+// → { $and: [{ status: 'active' }, { priority: { $gt: 3 } }] }
 ```
 
-### Analytics: Revenue by Month
+Similarly, the following legacy field names should not be used in new code:
 
-```typescript
-const monthlyRevenue = await ObjectQL.query({
-  object: 'order',
-  group_by: ['DATE_TRUNC(created_at, month)'],
-  aggregate: {
-    revenue: { function: 'sum', field: 'total_amount' },
-    order_count: { function: 'count' },
-    avg_order: { function: 'avg', field: 'total_amount' }
-  },
-  filters: [
-    ['status', '=', 'completed'],
-    ['created_at', '>=', '2024-01-01']
-  ],
-  sort: [
-    { field: 'created_at', order: 'asc' }
-  ]
-});
-```
+| Legacy | Canonical | Notes |
+|:-------|:----------|:------|
+| `filters` (array of tuples) | `where` (FilterCondition object) | Use `parseFilterAST()` to convert |
+| `sort` | `orderBy` | Array of `{ field, order }` objects |
+| `group_by` | `groupBy` | Array of field name strings |
+| `aggregate` (object map) | `aggregations` (array) | Array of `AggregationNode` objects |
+| `expand` (string array) | `expand` (Record) | Map of field name → nested QueryAST |
+| `skip` | `offset` | Number |
+| `select` | `fields` | Array of FieldNode |
+| `populate` | `expand` | Map of field name → nested QueryAST |
+</Callout>
 
 ---
 

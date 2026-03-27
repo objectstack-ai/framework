@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **Unified API query syntax documentation with Spec canonical format** — Rewrote
+  `content/docs/protocol/objectql/query-syntax.mdx` and
+  `content/docs/guides/contracts/data-engine.mdx` to align all examples, interface
+  definitions, and field names with the canonical `QuerySchema`, `FilterConditionSchema`,
+  and `EngineQueryOptionsSchema` from `@objectstack/spec`. All query examples now use
+  `where` + MongoDB-style `$op` object syntax (replacing legacy tuple/`filters`/三元组
+  format), `orderBy` (replacing `sort`), `groupBy` (replacing `group_by`), and
+  `aggregations` array (replacing `aggregate` object map). `IDataEngine` contract
+  documentation updated to reflect the real interface (`find`/`findOne`/`insert`/
+  `update`/`delete`/`count`/`aggregate`). Added legacy compatibility sections clearly
+  marking tuple/array syntax as UI-builder input only, with migration guidance.
+
 ### Changed
 - **Studio Vercel deployment — switched from InMemoryDriver to TursoDriver** — The Studio serverless
   API entrypoint (`apps/studio/api/index.ts`) now uses `@objectstack/driver-turso` (TursoDriver)
