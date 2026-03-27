@@ -151,8 +151,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             ...optionalRoutes,
         };
 
-        // Build well-known capabilities from registered services
-        const capabilities: WellKnownCapabilities = {
+        // Build well-known capabilities from registered services.
+        // DiscoverySchema defines capabilities as Record<string, { enabled, features?, description? }>
+        // (hierarchical format). We also keep a flat WellKnownCapabilities for backward compat.
+        const wellKnown: WellKnownCapabilities = {
             feed: registeredServices.has('feed'),
             comments: registeredServices.has('feed'),
             automation: registeredServices.has('automation'),
@@ -161,6 +163,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             export: registeredServices.has('automation') || registeredServices.has('queue'),
             chunkedUpload: registeredServices.has('file-storage'),
         };
+
+        // Convert flat booleans → hierarchical capability objects
+        const capabilities: Record<string, { enabled: boolean; description?: string }> = {};
+        for (const [key, enabled] of Object.entries(wellKnown)) {
+            capabilities[key] = { enabled };
+        }
 
         return {
             version: '1.0',

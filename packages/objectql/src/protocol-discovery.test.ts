@@ -148,14 +148,14 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     expect(discovery.capabilities).toBeDefined();
     // workflow is registered but doesn't map to a well-known capability directly
     expect(discovery.services.workflow.enabled).toBe(true);
-    // All well-known capabilities should be false since workflow doesn't map to any
-    expect(discovery.capabilities!.feed).toBe(false);
-    expect(discovery.capabilities!.comments).toBe(false);
-    expect(discovery.capabilities!.automation).toBe(false);
-    expect(discovery.capabilities!.cron).toBe(false);
-    expect(discovery.capabilities!.search).toBe(false);
-    expect(discovery.capabilities!.export).toBe(false);
-    expect(discovery.capabilities!.chunkedUpload).toBe(false);
+    // All well-known capabilities should be disabled since workflow doesn't map to any
+    expect(discovery.capabilities!.feed).toEqual({ enabled: false });
+    expect(discovery.capabilities!.comments).toEqual({ enabled: false });
+    expect(discovery.capabilities!.automation).toEqual({ enabled: false });
+    expect(discovery.capabilities!.cron).toEqual({ enabled: false });
+    expect(discovery.capabilities!.search).toEqual({ enabled: false });
+    expect(discovery.capabilities!.export).toEqual({ enabled: false });
+    expect(discovery.capabilities!.chunkedUpload).toEqual({ enabled: false });
   });
 
   it('should set all capabilities to false when no services are registered', async () => {
@@ -163,13 +163,13 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     const discovery = await protocol.getDiscovery();
 
     expect(discovery.capabilities).toBeDefined();
-    expect(discovery.capabilities!.feed).toBe(false);
-    expect(discovery.capabilities!.comments).toBe(false);
-    expect(discovery.capabilities!.automation).toBe(false);
-    expect(discovery.capabilities!.cron).toBe(false);
-    expect(discovery.capabilities!.search).toBe(false);
-    expect(discovery.capabilities!.export).toBe(false);
-    expect(discovery.capabilities!.chunkedUpload).toBe(false);
+    expect(discovery.capabilities!.feed).toEqual({ enabled: false });
+    expect(discovery.capabilities!.comments).toEqual({ enabled: false });
+    expect(discovery.capabilities!.automation).toEqual({ enabled: false });
+    expect(discovery.capabilities!.cron).toEqual({ enabled: false });
+    expect(discovery.capabilities!.search).toEqual({ enabled: false });
+    expect(discovery.capabilities!.export).toEqual({ enabled: false });
+    expect(discovery.capabilities!.chunkedUpload).toEqual({ enabled: false });
   });
 
   it('should dynamically set capabilities based on registered services', async () => {
@@ -182,13 +182,13 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
     const discovery = await protocol.getDiscovery();
 
-    expect(discovery.capabilities!.feed).toBe(true);
-    expect(discovery.capabilities!.comments).toBe(true);
-    expect(discovery.capabilities!.automation).toBe(true);
-    expect(discovery.capabilities!.cron).toBe(false);
-    expect(discovery.capabilities!.search).toBe(true);
-    expect(discovery.capabilities!.export).toBe(true);
-    expect(discovery.capabilities!.chunkedUpload).toBe(true);
+    expect(discovery.capabilities!.feed).toEqual({ enabled: true });
+    expect(discovery.capabilities!.comments).toEqual({ enabled: true });
+    expect(discovery.capabilities!.automation).toEqual({ enabled: true });
+    expect(discovery.capabilities!.cron).toEqual({ enabled: false });
+    expect(discovery.capabilities!.search).toEqual({ enabled: true });
+    expect(discovery.capabilities!.export).toEqual({ enabled: true });
+    expect(discovery.capabilities!.chunkedUpload).toEqual({ enabled: true });
   });
 
   it('should enable cron capability when job service is registered', async () => {
@@ -198,7 +198,7 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
     const discovery = await protocol.getDiscovery();
 
-    expect(discovery.capabilities!.cron).toBe(true);
+    expect(discovery.capabilities!.cron).toEqual({ enabled: true });
   });
 
   it('should enable export capability when queue service is registered', async () => {
@@ -208,6 +208,6 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     protocol = new ObjectStackProtocolImplementation(engine, () => mockServices);
     const discovery = await protocol.getDiscovery();
 
-    expect(discovery.capabilities!.export).toBe(true);
+    expect(discovery.capabilities!.export).toEqual({ enabled: true });
   });
 });

@@ -312,9 +312,20 @@ export class ObjectStackClient {
    * Well-known capability flags discovered from the server.
    * Returns undefined if the client has not yet connected or the server
    * did not include capabilities in its discovery response.
+   *
+   * The server may return capabilities in hierarchical format
+   * `{ key: { enabled: boolean } }` or flat boolean format `{ key: boolean }`.
+   * This getter normalizes both to flat `WellKnownCapabilities`.
    */
   get capabilities(): WellKnownCapabilities | undefined {
-    return this.discoveryInfo?.capabilities;
+    const raw = this.discoveryInfo?.capabilities;
+    if (!raw) return undefined;
+    // Normalize: hierarchical { enabled: boolean } → flat boolean
+    const result: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      result[key] = typeof value === 'object' && value !== null ? !!(value as any).enabled : !!value;
+    }
+    return result as unknown as WellKnownCapabilities;
   }
 
   /**
