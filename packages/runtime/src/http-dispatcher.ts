@@ -595,7 +595,11 @@ export class HttpDispatcher {
                 // Spec-canonical keys.
                 const normalized: Record<string, unknown> = { ...query };
 
-                // filter/filters → where  (@deprecated filter is still the canonical HTTP param)
+                // filter/filters → where
+                // Note: `filter` is the canonical HTTP *transport* parameter name
+                // (see HttpFindQueryParamsSchema). It is normalized here to the
+                // canonical *QueryAST* field name `where` before broker dispatch.
+                // `filters` (plural) is a deprecated alias for `filter`.
                 if (normalized.filter != null || normalized.filters != null) {
                     normalized.where = normalized.where ?? normalized.filter ?? normalized.filters;
                     delete normalized.filter;
