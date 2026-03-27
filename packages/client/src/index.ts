@@ -87,8 +87,16 @@ import {
   SubscribeResponse,
   UnsubscribeResponse,
   WellKnownCapabilities,
+  ApiRoutes,
 } from '@objectstack/spec/api';
 import { Logger, createLogger } from '@objectstack/core';
+
+/**
+ * Route types that the client can resolve.
+ * Covers all keys from `ApiRoutes` (the discovery schema) plus
+ * client-specific virtual routes (`views`, `permissions`).
+ */
+export type ApiRouteType = keyof ApiRoutes | 'views' | 'permissions';
 
 export interface ClientConfig {
   baseUrl: string;
@@ -1677,16 +1685,18 @@ export class ObjectStackClient {
    * Get the conventional route path for a given API endpoint type
    * ObjectStack uses standard conventions: /api/v1/data, /api/v1/meta, /api/v1/ui
    */
-  private getRoute(type: 'data' | 'metadata' | 'ui' | 'auth' | 'analytics' | 'storage' | 'automation' | 'packages' | 'permissions' | 'realtime' | 'workflow' | 'views' | 'notifications' | 'ai' | 'i18n' | 'feed'): string {
+  private getRoute(type: ApiRouteType): string {
     // 1. Use discovered routes if available
-    if (this.discoveryInfo?.routes && (this.discoveryInfo.routes as any)[type]) {
-        return (this.discoveryInfo.routes as any)[type];
+    const routes = this.discoveryInfo?.routes;
+    if (routes && type in routes) {
+        return routes[type as keyof ApiRoutes] as string;
     }
 
     // 2. Fallback to conventions
-    const routeMap: Record<string, string> = {
+    const routeMap: Record<ApiRouteType, string> = {
       data: '/api/v1/data',
       metadata: '/api/v1/meta',
+      discovery: '/api/v1/discovery',
       ui: '/api/v1/ui',
       auth: '/api/v1/auth',
       analytics: '/api/v1/analytics',
@@ -1701,6 +1711,7 @@ export class ObjectStackClient {
       ai: '/api/v1/ai',
       i18n: '/api/v1/i18n',
       feed: '/api/v1/feed',
+      graphql: '/graphql',
     };
     
     return routeMap[type] || `/api/v1/${type}`;
