@@ -12,11 +12,21 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "knex": ["./node_modules/knex/types/index.d.ts"]
-    }
+      "knex": [
+        "./node_modules/knex/types/index.d.ts"
+      ]
+    },
+    "rootDir": "./src"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

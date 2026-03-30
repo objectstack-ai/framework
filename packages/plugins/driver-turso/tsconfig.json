@@ -14,7 +14,8 @@
     "forceConsistentCasingInFileNames": true,
     "types": [
       "node"
-    ]
+    ],
+    "rootDir": "./src"
   },
   "include": [
     "src/**/*"

@@ -237,7 +237,7 @@ export function createStudioProxyPlugin(vitePort: number) {
             headers,
             body: isBodyAllowed ? c.req.raw.body : undefined,
             duplex: isBodyAllowed ? 'half' : undefined,
-          });
+          } as RequestInit);
 
           // Forward the full response (status, headers, body)
           return new Response(resp.body, {
