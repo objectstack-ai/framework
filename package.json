@@ -45,7 +45,7 @@
     "@objectstack/service-i18n": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "better-sqlite3": "^12.8.0",
-    "lucide-react": "^0.577.0"
+    "lucide-react": "^1.7.0"
   },
   "engines": {
     "node": ">=18.0.0"
