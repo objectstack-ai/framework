@@ -429,11 +429,16 @@ const result = AiChatRequest.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **version** | `string` | ✅ | API version (e.g., "v1", "2024-01") |
-| **apiName** | `string` | ✅ | API name |
-| **routes** | `Object` | optional | Available endpoint paths |
-| **services** | `Record<string, Object>` | optional | Per-service availability map |
-| **capabilities** | `Object` | optional | Well-known capability flags for frontend adaptation |
+| **name** | `string` | optional |  |
+| **version** | `string` | ✅ |  |
+| **environment** | `Enum<'production' \| 'sandbox' \| 'development'>` | optional |  |
+| **routes** | `Object` | optional |  |
+| **locale** | `Object` | optional |  |
+| **services** | `Record<string, Object>` | optional | Per-service availability map keyed by CoreServiceName |
+| **capabilities** | `Record<string, Object>` | optional | Hierarchical capability descriptors for frontend intelligent adaptation |
+| **schemaDiscovery** | `Object` | optional | Schema discovery endpoints for API toolchain integration |
+| **metadata** | `Record<string, any>` | optional | Custom metadata key-value pairs for extensibility |
+| **apiName** | `string` | optional | API name (deprecated — use name) |
 
 
 ---
