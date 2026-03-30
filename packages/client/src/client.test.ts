@@ -827,3 +827,73 @@ describe('ObjectStackClient.automation', () => {
         expect(client.capabilities!.search).toBe(true);
     });
 });
+
+// ==========================================
+// QueryOptionsV2 (Canonical Query Syntax) Tests
+// ==========================================
+
+describe('QueryOptionsV2 — canonical find()', () => {
+    it('should accept canonical field names (where, fields, orderBy, limit, offset)', async () => {
+        const { client, fetchMock } = createMockClient({
+            success: true,
+            data: { object: 'account', records: [], total: 0 }
+        });
+
+        await client.data.find('account', {
+            where: { status: 'active' },
+            fields: ['name', 'email'],
+            orderBy: ['-created_at'],
+            limit: 10,
+            offset: 5,
+        });
+
+        const url = fetchMock.mock.calls[0][0] as string;
+        // V2 canonical options are normalized to HTTP transport params
+        expect(url).toContain('top=10');
+        expect(url).toContain('skip=5');
+        expect(url).toContain('select=name%2Cemail');
+        expect(url).toContain('sort=-created_at');
+        // where → filter as JSON
+        expect(url).toContain('status=active');
+    });
+
+    it('should still accept legacy field names (filter, select, sort, top, skip)', async () => {
+        const { client, fetchMock } = createMockClient({
+            success: true,
+            data: { object: 'account', records: [], total: 0 }
+        });
+
+        await client.data.find('account', {
+            filter: { industry: 'Tech' },
+            select: ['name'],
+            sort: ['-revenue'],
+            top: 20,
+            skip: 0,
+        });
+
+        const url = fetchMock.mock.calls[0][0] as string;
+        expect(url).toContain('top=20');
+        expect(url).toContain('select=name');
+        expect(url).toContain('sort=-revenue');
+        expect(url).toContain('industry=Tech');
+    });
+});
+
+describe('QueryBuilder — offset() alias', () => {
+    it('should set offset via .offset() method', () => {
+        const q = createQuery('task')
+            .limit(10)
+            .offset(20)
+            .build();
+        expect(q.limit).toBe(10);
+        expect(q.offset).toBe(20);
+    });
+
+    it('should set offset via deprecated .skip() method', () => {
+        const q = createQuery('task')
+            .limit(10)
+            .skip(30)
+            .build();
+        expect(q.offset).toBe(30);
+    });
+});

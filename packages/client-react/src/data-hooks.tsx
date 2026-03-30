@@ -13,20 +13,47 @@ import { useClient } from './context';
 
 /**
  * Query options for useQuery hook
+ *
+ * Supports both **canonical** (Spec protocol) and **legacy** field names.
+ * Canonical names are preferred; legacy names are accepted for backward
+ * compatibility and will be removed in a future major release.
+ *
+ * | Canonical | Legacy (deprecated) |
+ * |-----------|---------------------|
+ * | `where`   | `filters`           |
+ * | `fields`  | `select`            |
+ * | `orderBy` | `sort`              |
+ * | `limit`   | `top`               |
+ * | `offset`  | `skip`              |
  */
 export interface UseQueryOptions<T = any> {
   /** Query AST or simplified query options */
   query?: Partial<QueryAST>;
-  /** Simple field selection */
+
+  // ── Canonical (Spec protocol) field names ──────────────────────────
+  /** Filter conditions (WHERE clause). */
+  where?: FilterCondition;
+  /** Fields to retrieve (SELECT clause). */
+  fields?: string[];
+  /** Sort definition (ORDER BY clause). */
+  orderBy?: string | string[];
+  /** Maximum number of records to return (LIMIT). */
+  limit?: number;
+  /** Number of records to skip (OFFSET). */
+  offset?: number;
+
+  // ── Legacy field names (deprecated) ────────────────────────────────
+  /** @deprecated Use `fields` instead. */
   select?: string[];
-  /** Simple filters */
+  /** @deprecated Use `where` instead. */
   filters?: FilterCondition;
-  /** Sort configuration */
+  /** @deprecated Use `orderBy` instead. */
   sort?: string | string[];
-  /** Limit results */
+  /** @deprecated Use `limit` instead. */
   top?: number;
-  /** Skip results (for pagination) */
+  /** @deprecated Use `offset` instead. */
   skip?: number;
+
   /** Enable/disable automatic query execution */
   enabled?: boolean;
   /** Refetch interval in milliseconds */
@@ -60,9 +87,9 @@ export interface UseQueryResult<T = any> {
  * ```tsx
  * function TaskList() {
  *   const { data, isLoading, error, refetch } = useQuery('todo_task', {
- *     select: ['id', 'subject', 'priority'],
- *     sort: ['-created_at'],
- *     top: 20
+ *     fields: ['id', 'subject', 'priority'],
+ *     orderBy: ['-created_at'],
+ *     limit: 20
  *   });
  * 
  *   if (isLoading) return <div>Loading...</div>;
@@ -91,16 +118,22 @@ export function useQuery<T = any>(
   
   const {
     query,
-    select,
-    filters,
-    sort,
-    top,
-    skip,
+    // Canonical names take precedence over legacy names
+    where, fields, orderBy, limit, offset,
+    // Legacy names (deprecated fallbacks)
+    select, filters, sort, top, skip,
     enabled = true,
     refetchInterval,
     onSuccess,
     onError
   } = options;
+
+  // Resolve canonical vs legacy: canonical wins when both are provided
+  const resolvedFields = fields ?? select;
+  const resolvedWhere = where ?? filters;
+  const resolvedSort = orderBy ?? sort;
+  const resolvedLimit = limit ?? top;
+  const resolvedOffset = offset ?? skip;
 
   const fetchData = useCallback(async (isRefetch = false) => {
     if (!enabled) return;
@@ -119,13 +152,13 @@ export function useQuery<T = any>(
         // Use advanced query API
         result = await client.data.query<T>(object, query);
       } else {
-        // Use simplified find API
+        // Use canonical QueryOptionsV2 for the find call
         result = await client.data.find<T>(object, {
-          select,
-          filters: filters as any,
-          sort,
-          top,
-          skip
+          where: resolvedWhere as any,
+          fields: resolvedFields,
+          orderBy: resolvedSort,
+          limit: resolvedLimit,
+          offset: resolvedOffset,
         });
       }
 
@@ -139,7 +172,7 @@ export function useQuery<T = any>(
       setIsLoading(false);
       setIsRefetching(false);
     }
-  }, [client, object, query, select, filters, sort, top, skip, enabled, onSuccess, onError]);
+  }, [client, object, query, resolvedFields, resolvedWhere, resolvedSort, resolvedLimit, resolvedOffset, enabled, onSuccess, onError]);
 
   // Initial fetch and dependency-based refetch
   useEffect(() => {
@@ -319,7 +352,7 @@ export function useMutation<TData = any, TVariables = any>(
 /**
  * Pagination options for usePagination hook
  */
-export interface UsePaginationOptions<T = any> extends Omit<UseQueryOptions<T>, 'top' | 'skip'> {
+export interface UsePaginationOptions<T = any> extends Omit<UseQueryOptions<T>, 'top' | 'skip' | 'limit' | 'offset'> {
   /** Page size */
   pageSize?: number;
   /** Initial page (1-based) */
@@ -365,7 +398,7 @@ export interface UsePaginationResult<T = any> extends UseQueryResult<T> {
  *     hasPreviousPage
  *   } = usePagination('todo_task', {
  *     pageSize: 10,
- *     sort: ['-created_at']
+ *     orderBy: ['-created_at']
  *   });
  * 
  *   return (
@@ -388,8 +421,8 @@ export function usePagination<T = any>(
 
   const queryResult = useQuery<T>(object, {
     ...queryOptions,
-    top: pageSize,
-    skip: (page - 1) * pageSize
+    limit: pageSize,
+    offset: (page - 1) * pageSize
   });
 
   const totalCount = queryResult.data?.total || 0;
@@ -430,7 +463,7 @@ export function usePagination<T = any>(
 /**
  * Infinite query options for useInfiniteQuery hook
  */
-export interface UseInfiniteQueryOptions<T = any> extends Omit<UseQueryOptions<T>, 'skip'> {
+export interface UseInfiniteQueryOptions<T = any> extends Omit<UseQueryOptions<T>, 'skip' | 'offset'> {
   /** Page size for each fetch */
   pageSize?: number;
   /** Get next page parameter */
@@ -473,7 +506,7 @@ export interface UseInfiniteQueryResult<T = any> {
  *     isFetchingNextPage
  *   } = useInfiniteQuery('todo_task', {
  *     pageSize: 20,
- *     sort: ['-created_at']
+ *     orderBy: ['-created_at']
  *   });
  * 
  *   return (
@@ -498,13 +531,19 @@ export function useInfiniteQuery<T = any>(
     pageSize = 20,
     // getNextPageParam is reserved for future use
     query,
-    select,
-    filters,
-    sort,
+    // Canonical names take precedence over legacy names
+    where, fields, orderBy,
+    // Legacy names (deprecated fallbacks)
+    select, filters, sort,
     enabled = true,
     onSuccess,
     onError
   } = options;
+
+  // Resolve canonical vs legacy: canonical wins
+  const resolvedFields = fields ?? select;
+  const resolvedWhere = where ?? filters;
+  const resolvedSort = orderBy ?? sort;
 
   const [pages, setPages] = useState<PaginatedResult<T>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -531,11 +570,11 @@ export function useInfiniteQuery<T = any>(
         });
       } else {
         result = await client.data.find<T>(object, {
-          select,
-          filters: filters as any,
-          sort,
-          top: pageSize,
-          skip
+          where: resolvedWhere as any,
+          fields: resolvedFields,
+          orderBy: resolvedSort,
+          limit: pageSize,
+          offset: skip,
         });
       }
 
@@ -559,7 +598,7 @@ export function useInfiniteQuery<T = any>(
       setIsLoading(false);
       setIsFetchingNextPage(false);
     }
-  }, [client, object, query, select, filters, sort, pageSize, onSuccess, onError]);
+  }, [client, object, query, resolvedFields, resolvedWhere, resolvedSort, pageSize, onSuccess, onError]);
 
   // Initial fetch
   useEffect(() => {

@@ -145,6 +145,37 @@ export interface QueryOptions {
   groupBy?: string[];
 }
 
+/**
+ * Canonical query options using Spec protocol field names.
+ * This is the recommended interface for `data.find()` queries.
+ *
+ *  Canonical field mapping (QueryAST-aligned):
+ *   - `where`   — filter conditions (replaces legacy `filter`/`filters`)
+ *   - `fields`  — field selection  (replaces legacy `select`)
+ *   - `orderBy` — sort definition  (replaces legacy `sort`)
+ *   - `limit`   — max records      (replaces legacy `top`)
+ *   - `offset`  — skip records     (replaces legacy `skip`)
+ *   - `expand`  — relation loading (replaces legacy `populate`)
+ */
+export interface QueryOptionsV2 {
+  /** Filter conditions (WHERE clause). Accepts MongoDB-style $op object or FilterCondition AST. */
+  where?: Record<string, any> | unknown[];
+  /** Fields to retrieve (SELECT clause). */
+  fields?: string[];
+  /** Sort definition (ORDER BY clause). */
+  orderBy?: string | string[] | SortNode[];
+  /** Maximum number of records to return (LIMIT). */
+  limit?: number;
+  /** Number of records to skip (OFFSET). */
+  offset?: number;
+  /** Relations to expand (JOIN / eager-load). */
+  expand?: Record<string, any> | string[];
+  /** Aggregation functions. */
+  aggregations?: AggregationNode[];
+  /** Group by fields. */
+  groupBy?: string[];
+}
+
 export interface PaginatedResult<T = any> {
   /** Spec-compliant: array of matching records */
   records: T[];
@@ -281,9 +312,20 @@ export class ObjectStackClient {
    * Well-known capability flags discovered from the server.
    * Returns undefined if the client has not yet connected or the server
    * did not include capabilities in its discovery response.
+   *
+   * The server may return capabilities in hierarchical format
+   * `{ key: { enabled: boolean } }` or flat boolean format `{ key: boolean }`.
+   * This getter normalizes both to flat `WellKnownCapabilities`.
    */
   get capabilities(): WellKnownCapabilities | undefined {
-    return this.discoveryInfo?.capabilities;
+    const raw = this.discoveryInfo?.capabilities;
+    if (!raw) return undefined;
+    // Normalize: hierarchical { enabled: boolean } → flat boolean
+    const result: Record<string, boolean> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      result[key] = typeof value === 'object' && value !== null ? !!(value as any).enabled : !!value;
+    }
+    return result as unknown as WellKnownCapabilities;
   }
 
   /**
@@ -1445,34 +1487,52 @@ export class ObjectStackClient {
      * @deprecated Use `data.query()` with standard QueryAST parameters instead.
      * This method uses legacy parameter names. Internally adapts to HTTP GET params.
      */
-    find: async <T = any>(object: string, options: QueryOptions = {}): Promise<PaginatedResult<T>> => {
+    find: async <T = any>(object: string, options: QueryOptions | QueryOptionsV2 = {}): Promise<PaginatedResult<T>> => {
         const route = this.getRoute('data');
         const queryParams = new URLSearchParams();
-        
+
+        // ── Normalize V2 canonical options → HTTP transport params ───
+        // Detect V2 options by presence of canonical-only keys.
+        const v2 = options as QueryOptionsV2;
+        const normalizedOptions: QueryOptions = {} as QueryOptions;
+        if ('where' in options || 'fields' in options || 'orderBy' in options || 'offset' in options) {
+            // V2 canonical options detected — map to legacy HTTP transport keys
+            if (v2.where) normalizedOptions.filter = v2.where as any;
+            if (v2.fields) normalizedOptions.select = v2.fields;
+            if (v2.orderBy) normalizedOptions.sort = v2.orderBy as any;
+            if (v2.limit != null) normalizedOptions.top = v2.limit;
+            if (v2.offset != null) normalizedOptions.skip = v2.offset;
+            if (v2.aggregations) normalizedOptions.aggregations = v2.aggregations;
+            if (v2.groupBy) normalizedOptions.groupBy = v2.groupBy;
+        } else {
+            // Legacy QueryOptions — pass through as-is
+            Object.assign(normalizedOptions, options);
+        }
+
         // 1. Handle Pagination
-        if (options.top) queryParams.set('top', options.top.toString());
-        if (options.skip) queryParams.set('skip', options.skip.toString());
+        if (normalizedOptions.top) queryParams.set('top', normalizedOptions.top.toString());
+        if (normalizedOptions.skip) queryParams.set('skip', normalizedOptions.skip.toString());
 
         // 2. Handle Sort
-        if (options.sort) {
+        if (normalizedOptions.sort) {
             // Check if it's AST 
-            if (Array.isArray(options.sort) && typeof options.sort[0] === 'object') {
-                 queryParams.set('sort', JSON.stringify(options.sort));
+            if (Array.isArray(normalizedOptions.sort) && typeof normalizedOptions.sort[0] === 'object') {
+                 queryParams.set('sort', JSON.stringify(normalizedOptions.sort));
             } else {
-                 const sortVal = Array.isArray(options.sort) ? options.sort.join(',') : options.sort;
+                 const sortVal = Array.isArray(normalizedOptions.sort) ? normalizedOptions.sort.join(',') : normalizedOptions.sort;
                  queryParams.set('sort', sortVal as string);
             }
         }
         
         // 3. Handle Select
-        if (options.select) {
-            queryParams.set('select', options.select.join(','));
+        if (normalizedOptions.select) {
+            queryParams.set('select', normalizedOptions.select.join(','));
         }
 
         // 4. Handle Filters (Simple vs AST)
         // Canonical HTTP param name: `filter` (singular). `filters` (plural) is accepted
         // for backward compatibility but `filter` is the standard going forward.
-        const filterValue = options.filter ?? options.filters;
+        const filterValue = normalizedOptions.filter ?? normalizedOptions.filters;
         if (filterValue) {
              // Detect AST filter format vs simple key-value map. AST filters use an array structure
              // with [field, operator, value] or [logicOp, ...nodes] shape (see isFilterAST from spec).
@@ -1491,11 +1551,11 @@ export class ObjectStackClient {
         }
         
         // 5. Handle Aggregations & GroupBy (Pass through as JSON if present)
-        if (options.aggregations) {
-            queryParams.set('aggregations', JSON.stringify(options.aggregations));
+        if (normalizedOptions.aggregations) {
+            queryParams.set('aggregations', JSON.stringify(normalizedOptions.aggregations));
         }
-        if (options.groupBy) {
-             queryParams.set('groupBy', options.groupBy.join(','));
+        if (normalizedOptions.groupBy) {
+             queryParams.set('groupBy', normalizedOptions.groupBy.join(','));
         }
 
         const res = await this.fetch(`${this.baseUrl}${route}/${object}?${queryParams.toString()}`);

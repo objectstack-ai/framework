@@ -1,6 +1,6 @@
 # ObjectStack Protocol — Road Map
 
-> **Last Updated:** 2026-02-28  
+> **Last Updated:** 2026-03-27  
 > **Current Version:** v3.0.11  
 > **Status:** Protocol Specification Complete · Runtime Implementation In Progress
 
@@ -129,6 +129,7 @@ This strategy ensures rapid iteration while maintaining a clear path to producti
 | Dispatcher async `getService` bug fix | ✅ | All `getService`/`getObjectQLService` calls in `http-dispatcher.ts` now properly `await` async service factories. Covers `handleAnalytics`, `handleAuth`, `handleStorage`, `handleAutomation`, `handleMetadata`, `handleUi`, `handlePackages`. All 7 framework adapters (Express, Fastify, Hono, Next.js, SvelteKit, NestJS, Nuxt) updated to use `getServiceAsync()` for auth service resolution. |
 | Analytics `getMetadata` → `getMeta` naming fix | ✅ | `handleAnalytics` in `http-dispatcher.ts` called `getMetadata({ request })` which didn't match the `IAnalyticsService` contract (`getMeta(cubeName?: string)`). Renamed to `getMeta()` and aligned call signature. Updated test mocks accordingly. |
 | Unified ID/audit/tenant field naming | ✅ | Eliminated `_id`/`modified_at`/`modified_by`/`space_id` from protocol layer. All protocol code uses `id`, `updated_at`, `updated_by`, `tenant_id` per `SystemFieldName`. Storage-layer (NoSQL driver internals) retains `_id` for MongoDB/Mingo compat. |
+| **Query syntax canonical unification** | ✅ | All layers (Client SDK, React Hooks, Studio QueryBuilder, HTTP Dispatcher, docs) unified to Spec canonical field names (`where`/`fields`/`orderBy`/`limit`/`offset`/`expand`). `QueryOptionsV2` interface added. Legacy names (`filter`/`select`/`sort`/`top`/`skip`) accepted with `@deprecated` markers. HTTP Dispatcher normalizes transport params to canonical QueryAST before broker dispatch. |
 
 ---
 

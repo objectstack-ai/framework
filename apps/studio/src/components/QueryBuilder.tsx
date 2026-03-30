@@ -83,11 +83,11 @@ function buildQueryJson(objectName: string, state: QueryState): Record<string, u
   const query: Record<string, unknown> = { object: objectName };
 
   if (state.selectedFields.length > 0) {
-    query.select = state.selectedFields;
+    query.fields = state.selectedFields;
   }
 
   if (state.filters.length > 0) {
-    query.filters = state.filters.map((f) => ({
+    query.where = state.filters.map((f) => ({
       field: f.field,
       operator: f.operator,
       value: f.value,
@@ -95,14 +95,14 @@ function buildQueryJson(objectName: string, state: QueryState): Record<string, u
   }
 
   if (state.sorts.length > 0) {
-    query.sort = state.sorts.map((s) => ({
+    query.orderBy = state.sorts.map((s) => ({
       field: s.field,
-      direction: s.direction,
+      order: s.direction,
     }));
   }
 
-  if (state.limit > 0) query.top = state.limit;
-  if (state.offset > 0) query.skip = state.offset;
+  if (state.limit > 0) query.limit = state.limit;
+  if (state.offset > 0) query.offset = state.offset;
 
   return query;
 }

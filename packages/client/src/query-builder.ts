@@ -236,9 +236,18 @@ export class QueryBuilder<T = any> {
   }
 
   /**
-   * Skip records (for pagination)
+   * Skip records (for pagination).
+   * @deprecated Prefer `.offset()` for alignment with Spec canonical field names.
    */
   skip(count: number): this {
+    this.query.offset = count;
+    return this;
+  }
+
+  /**
+   * Offset records (for pagination) — canonical alias for `.skip()`
+   */
+  offset(count: number): this {
     this.query.offset = count;
     return this;
   }

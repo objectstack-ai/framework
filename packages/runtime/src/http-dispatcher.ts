@@ -585,8 +585,49 @@ export class HttpDispatcher {
         } else {
             // GET /data/:object (List)
             if (m === 'GET') {
+                // ── Normalize HTTP transport params → Spec canonical (QueryAST) ──
+                // HTTP GET query params use transport-level names (filter, sort, top,
+                // skip, select, expand) which are normalized here to canonical
+                // QueryAST field names (where, orderBy, limit, offset, fields,
+                // expand) before forwarding to the broker layer.
+                // The protocol.ts findData() method performs a deeper normalization
+                // pass, but pre-normalizing here ensures the broker always receives
+                // Spec-canonical keys.
+                const normalized: Record<string, unknown> = { ...query };
+
+                // filter/filters → where
+                // Note: `filter` is the canonical HTTP *transport* parameter name
+                // (see HttpFindQueryParamsSchema). It is normalized here to the
+                // canonical *QueryAST* field name `where` before broker dispatch.
+                // `filters` (plural) is a deprecated alias for `filter`.
+                if (normalized.filter != null || normalized.filters != null) {
+                    normalized.where = normalized.where ?? normalized.filter ?? normalized.filters;
+                    delete normalized.filter;
+                    delete normalized.filters;
+                }
+                // select → fields
+                if (normalized.select != null && normalized.fields == null) {
+                    normalized.fields = normalized.select;
+                    delete normalized.select;
+                }
+                // sort → orderBy
+                if (normalized.sort != null && normalized.orderBy == null) {
+                    normalized.orderBy = normalized.sort;
+                    delete normalized.sort;
+                }
+                // top → limit
+                if (normalized.top != null && normalized.limit == null) {
+                    normalized.limit = normalized.top;
+                    delete normalized.top;
+                }
+                // skip → offset
+                if (normalized.skip != null && normalized.offset == null) {
+                    normalized.offset = normalized.skip;
+                    delete normalized.skip;
+                }
+
                 // Spec: broker returns FindDataResponse = { object, records, total?, hasMore? }
-                const result = await broker.call('data.query', { object: objectName, query }, { request: context.request });
+                const result = await broker.call('data.query', { object: objectName, query: normalized }, { request: context.request });
                 return { handled: true, response: this.success(result) };
             }
 

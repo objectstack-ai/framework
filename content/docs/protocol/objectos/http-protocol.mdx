@@ -127,14 +127,22 @@ GET /{base_path}/{object_name}
 
 **Query Parameters:**
 
-| Parameter | Type | Description | Example |
-|-----------|------|-------------|---------|
-| `select` | string | Comma-separated field list | `id,name,status` |
-| `filter` | JSON | Filter criteria (see Filtering section) | `{"status":"active"}` |
-| `sort` | string | Sort fields (prefix `-` for desc) | `-created_at,name` |
-| `page` | number | Page number (1-indexed) | `2` |
-| `per_page` | number | Items per page (max from limits) | `50` |
-| `include` | string | Related objects to embed | `assignee,comments` |
+| Parameter | Type | Description | Canonical Equivalent | Example |
+|-----------|------|-------------|---------------------|---------|
+| `select` | string | Comma-separated field list | `fields` | `id,name,status` |
+| `filter` | JSON | Filter criteria (see Filtering section) | `where` | `{"status":"active"}` |
+| `sort` | string | Sort fields (prefix `-` for desc) | `orderBy` | `-created_at,name` |
+| `top` | number | Max records to return | `limit` | `25` |
+| `skip` | number | Records to skip (offset) | `offset` | `50` |
+| `expand` | string | Related objects to embed | `expand` | `assignee,comments` |
+| `page` | number | Page number (1-indexed) | — | `2` |
+| `per_page` | number | Items per page (max from limits) | — | `50` |
+
+> **Transport → Protocol normalization:** The HTTP dispatcher normalizes transport-level
+> parameter names to Spec canonical (QueryAST) field names before forwarding to the
+> broker layer: `filter`→`where`, `select`→`fields`, `sort`→`orderBy`, `top`→`limit`,
+> `skip`→`offset`. The deprecated `filters` (plural) parameter is also accepted and
+> normalized to `where`.
 
 **Example Request:**
 ```http

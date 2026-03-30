@@ -147,12 +147,15 @@ Initializes the client by fetching the system discovery manifest from `/api/v1`.
 - `setDefault(id, object)`: Set a view as default for an object.
 
 ### Query Options
-The `find` method accepts an options object:
-- `select`: Array of field names to retrieve.
-- `filters`: Simple key-value map OR Filter AST `['field', 'op', 'value']`.
-- `sort`: Sort string (`'name'`) or array `['-created_at', 'name']`.
-- `top`: Limit number of records.
-- `skip`: Offset for pagination.
+The `find` method accepts an options object with canonical field names:
+- `where`: Filter conditions (WHERE clause). Accepts object or FilterCondition AST.
+- `fields`: Array of field names to retrieve (SELECT clause).
+- `orderBy`: Sort definition — `'name'`, `['-created_at', 'name']`, or `SortNode[]`.
+- `limit`: Maximum number of records to return (LIMIT).
+- `offset`: Number of records to skip (OFFSET).
+- `expand`: Relations to expand (JOIN / eager-load).
+
+> **Deprecated aliases** (accepted for backward compatibility): `select` → `fields`, `filter`/`filters` → `where`, `sort` → `orderBy`, `top` → `limit`, `skip` → `offset`.
 
 ### Batch Options
 Batch operations support the following options:

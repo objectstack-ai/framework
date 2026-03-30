@@ -44,10 +44,10 @@ async function main() {
 
   // 3. Query data
   const tasks = await client.data.find('todo_task', {
-    select: ['subject', 'priority'],
-    filters: ['priority', '>=', 2],
-    sort: ['-priority'],
-    top: 10
+    fields: ['subject', 'priority'],
+    where: { priority: { $gte: 2 } },
+    orderBy: ['-priority'],
+    limit: 10
   });
 
   // 4. Create a record
@@ -161,11 +161,11 @@ const listView = await client.meta.getView('account', 'list');
 ```typescript
 // Find with query options
 const accounts = await client.data.find('account', {
-  select: ['name', 'industry', 'revenue'],
-  filters: ['industry', '=', 'Technology'],
-  sort: ['-revenue'],
-  top: 20,
-  skip: 0,
+  fields: ['name', 'industry', 'revenue'],
+  where: { industry: 'Technology' },
+  orderBy: ['-revenue'],
+  limit: 20,
+  offset: 0,
 });
 
 // Get by ID
@@ -359,15 +359,20 @@ const filter = createFilter()
 
 ## Query Options
 
-The `find` method accepts an options object:
+The `find` method accepts an options object with **canonical** (recommended) field names:
 
 | Property | Type | Description | Example |
 |:---------|:-----|:------------|:--------|
-| `select` | `string[]` | Fields to retrieve | `['name', 'email']` |
-| `filters` | `Map` or `AST` | Filter criteria | `['status', '=', 'active']` |
-| `sort` | `string` or `string[]` | Sort order | `['-created_at']` |
-| `top` | `number` | Limit records | `20` |
-| `skip` | `number` | Offset for pagination | `0` |
+| `where` | `Object` or `FilterCondition` | Filter conditions (WHERE clause) | `{ status: 'active' }` |
+| `fields` | `string[]` | Fields to retrieve (SELECT) | `['name', 'email']` |
+| `orderBy` | `string` or `string[]` or `SortNode[]` | Sort order (ORDER BY) | `['-created_at']` |
+| `limit` | `number` | Max records to return (LIMIT) | `20` |
+| `offset` | `number` | Records to skip (OFFSET) | `0` |
+| `expand` | `Record<string, any>` or `string[]` | Relation loading (JOIN) | `{ owner: {} }` |
+
+<Callout type="warn">
+**Deprecated aliases:** The following legacy field names are still accepted for backward compatibility but will be removed in a future major version: `select` → `fields`, `filter`/`filters` → `where`, `sort` → `orderBy`, `top` → `limit`, `skip` → `offset`.
+</Callout>
 
 ### Batch Options
 
@@ -457,9 +462,9 @@ function App() {
 // 2. Use hooks in child components
 function AccountList() {
   const { data, isLoading, error, refetch } = useQuery('account', {
-    filters: ['status', '=', 'active'],
-    sort: ['-created_at'],
-    top: 20,
+    where: { status: 'active' },
+    orderBy: ['-created_at'],
+    limit: 20,
   });
 
   if (isLoading) return <div>Loading...</div>;
