@@ -75,7 +75,7 @@ export interface AIToolDefinition {
 export interface AIToolCall {
     /** Unique ID for this tool call */
     id: string;
-    /** Tool name */
+    /** Tool name (must match an AIToolDefinition name, snake_case) */
     name: string;
     /** JSON-stringified arguments */
     arguments: string;
