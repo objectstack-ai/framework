@@ -232,7 +232,12 @@ export function buildAIRoutes(
       permissions: ['ai:conversations'],
       handler: async (req) => {
         try {
-          const options = (req.body ?? {}) as Record<string, unknown>;
+          // Ensure the request body is a non-null object before mutating it
+          if (req.body !== undefined && req.body !== null && (typeof req.body !== 'object' || Array.isArray(req.body))) {
+            return { status: 400, body: { error: 'Invalid request payload' } };
+          }
+
+          const options: Record<string, unknown> = { ...((req.body ?? {}) as Record<string, unknown>) };
           // Bind the conversation to the authenticated user
           if (req.user?.userId) {
             options.userId = req.user.userId;

@@ -129,6 +129,23 @@ describe('Conversation Ownership Enforcement', () => {
     expect((response.body as any).userId).toBe('user_1');
   });
 
+  it('should return 400 for invalid request payload on create', async () => {
+    const createRoute = getRoute('POST', '/api/v1/ai/conversations');
+
+    // String body
+    const r1 = await createRoute.handler({ body: 'not an object' });
+    expect(r1.status).toBe(400);
+    expect((r1.body as any).error).toContain('Invalid request payload');
+
+    // Array body
+    const r2 = await createRoute.handler({ body: [1, 2, 3] });
+    expect(r2.status).toBe(400);
+
+    // Number body
+    const r3 = await createRoute.handler({ body: 42 });
+    expect(r3.status).toBe(400);
+  });
+
   it('should scope conversation listing to authenticated user', async () => {
     const createRoute = getRoute('POST', '/api/v1/ai/conversations');
     const listRoute = getRoute('GET', '/api/v1/ai/conversations');
@@ -335,6 +352,12 @@ describe('chatWithTools — Enhanced Error Handling', () => {
     // Should have called chat twice: once for the tool call, once for forced final
     expect(adapter.chat).toHaveBeenCalledTimes(2);
     expect(result.content).toBe('Aborted cleanly');
+
+    // Should log the abort-specific message, NOT the max-iterations message
+    expect(silentLogger.warn).toHaveBeenCalledWith(
+      '[AI] chatWithTools aborted by onToolError callback',
+      expect.objectContaining({ toolErrors: expect.any(Array) }),
+    );
   });
 
   it('should not pass onToolError to adapter options', async () => {
@@ -452,10 +475,6 @@ describe('streamChatWithTools', () => {
       name: 'mock-stream',
       chat: vi.fn(async () => ({ content: 'Hello!' })),
       complete: vi.fn(async () => ({ content: '' })),
-      async *streamChat() {
-        yield { type: 'text-delta' as const, textDelta: 'Hello!' };
-        yield { type: 'finish' as const, result: { content: 'Hello!' } };
-      },
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
@@ -464,8 +483,12 @@ describe('streamChatWithTools', () => {
       events.push(event);
     }
 
-    expect(events.length).toBeGreaterThanOrEqual(1);
-    expect(events[events.length - 1].type).toBe('finish');
+    // Should emit the probed result as text-delta + finish (no double model call)
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('text-delta');
+    expect(events[0].textDelta).toBe('Hello!');
+    expect(events[1].type).toBe('finish');
+    expect(adapter.chat).toHaveBeenCalledTimes(1);
   });
 
   it('should emit tool-call events during tool resolution', async () => {
@@ -486,10 +509,6 @@ describe('streamChatWithTools', () => {
         return { content: 'Tokyo is 22°C' };
       }),
       complete: vi.fn(async () => ({ content: '' })),
-      async *streamChat() {
-        yield { type: 'text-delta' as const, textDelta: 'Tokyo is 22°C' };
-        yield { type: 'finish' as const, result: { content: 'Tokyo is 22°C' } };
-      },
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
@@ -500,13 +519,14 @@ describe('streamChatWithTools', () => {
       events.push(event);
     }
 
-    // Should have tool-call event followed by streaming events
+    // Should have tool-call event followed by text-delta + finish (no double call)
     const toolCallEvents = events.filter(e => e.type === 'tool-call');
     expect(toolCallEvents).toHaveLength(1);
     expect(toolCallEvents[0].toolCall?.name).toBe('get_weather');
 
     const finishEvent = events.find(e => e.type === 'finish');
     expect(finishEvent).toBeDefined();
+    expect(adapter.chat).toHaveBeenCalledTimes(2);
   });
 
   it('should fall back to non-streaming when adapter has no streamChat', async () => {
@@ -562,8 +582,8 @@ describe('streamChatWithTools', () => {
       events.push(event);
     }
 
-    // 2 iterations of tool calls via adapter.chat, then forced streaming via adapter.streamChat
-    expect(adapter.chat).toHaveBeenCalledTimes(2);
+    // 2 iterations of tool calls + 1 forced final call (all via adapter.chat)
+    expect(adapter.chat).toHaveBeenCalledTimes(3);
     expect(events.some(e => e.type === 'finish')).toBe(true);
   });
 
@@ -587,10 +607,6 @@ describe('streamChatWithTools', () => {
         return { content: 'Aborted' };
       }),
       complete: vi.fn(async () => ({ content: '' })),
-      async *streamChat() {
-        yield { type: 'text-delta' as const, textDelta: 'Aborted' };
-        yield { type: 'finish' as const, result: { content: 'Aborted' } };
-      },
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
@@ -602,7 +618,8 @@ describe('streamChatWithTools', () => {
       events.push(event);
     }
 
-    // Should have the tool-call event + forced streaming final
+    // Should have the tool-call event + forced final via adapter.chat
     expect(events.some(e => e.type === 'finish')).toBe(true);
+    expect(adapter.chat).toHaveBeenCalledTimes(2);
   });
 });

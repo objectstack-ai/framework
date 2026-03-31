@@ -161,6 +161,8 @@ export class AIService implements IAIService {
       maxIterations,
     });
 
+    let abortedByCallback = false;
+
     for (let iteration = 0; iteration < maxIterations; iteration++) {
       const result = await this.adapter.chat(conversation, chatOptions);
 
@@ -186,7 +188,6 @@ export class AIService implements IAIService {
       const toolResults = await this.toolRegistry.executeAll(result.toolCalls);
 
       // Process results: track errors and honour onToolError callback
-      let aborted = false;
       for (const tr of toolResults) {
         if (tr.isError) {
           // Match tool call by toolCallId for robust attribution
@@ -199,7 +200,7 @@ export class AIService implements IAIService {
           if (onToolError && matchedCall) {
             const action = onToolError(matchedCall, tr.content);
             if (action === 'abort') {
-              aborted = true;
+              abortedByCallback = true;
             }
           }
         }
@@ -212,18 +213,21 @@ export class AIService implements IAIService {
         });
       }
 
-      if (aborted) {
-        this.logger.warn('[AI] chatWithTools aborted by onToolError callback', { toolErrors });
-        // Force a final response without tools
+      if (abortedByCallback) {
         break;
       }
     }
 
-    // If we exhausted the loop without a final response, make one last
-    // call *without* tools so the model is forced to produce text.
-    this.logger.warn('[AI] chatWithTools max iterations reached, forcing final response', {
-      toolErrors: toolErrors.length > 0 ? toolErrors : undefined,
-    });
+    // Distinguish user-driven abort from max-iterations exhaustion in logs
+    if (abortedByCallback) {
+      this.logger.warn('[AI] chatWithTools aborted by onToolError callback', { toolErrors });
+    } else {
+      this.logger.warn('[AI] chatWithTools max iterations reached, forcing final response', {
+        toolErrors: toolErrors.length > 0 ? toolErrors : undefined,
+      });
+    }
+
+    // Make one last call *without* tools so the model is forced to produce text.
     const finalResult = await this.adapter.chat(conversation, {
       ...chatOptions,
       tools: undefined,
@@ -259,19 +263,16 @@ export class AIService implements IAIService {
     };
 
     const conversation = [...messages];
+    let abortedByCallback = false;
 
     for (let iteration = 0; iteration < maxIterations; iteration++) {
       // Use non-streaming chat for intermediate tool-call rounds
       const result = await this.adapter.chat(conversation, chatOptions);
 
       if (!result.toolCalls || result.toolCalls.length === 0) {
-        // Final round — stream the response
-        if (this.adapter.streamChat) {
-          yield* this.adapter.streamChat(conversation, chatOptions);
-        } else {
-          yield { type: 'text-delta', textDelta: result.content };
-          yield { type: 'finish', result };
-        }
+        // Final round — return the probed result without an extra model call
+        yield { type: 'text-delta', textDelta: result.content };
+        yield { type: 'finish', result };
         return;
       }
 
@@ -288,14 +289,13 @@ export class AIService implements IAIService {
 
       const toolResults = await this.toolRegistry.executeAll(result.toolCalls);
 
-      let aborted = false;
       for (const tr of toolResults) {
         if (tr.isError && onToolError) {
           const matchedCall = result.toolCalls!.find(tc => tc.id === tr.toolCallId);
           if (matchedCall) {
             const action = onToolError(matchedCall, tr.content);
             if (action === 'abort') {
-              aborted = true;
+              abortedByCallback = true;
             }
           }
         }
@@ -306,20 +306,20 @@ export class AIService implements IAIService {
         });
       }
 
-      if (aborted) {
+      if (abortedByCallback) {
         break;
       }
     }
 
-    // Forced final streaming response (no tools)
-    this.logger.warn('[AI] streamChatWithTools max iterations reached');
-    const finalOptions = { ...chatOptions, tools: undefined, toolChoice: undefined };
-    if (this.adapter.streamChat) {
-      yield* this.adapter.streamChat(conversation, finalOptions);
+    // Forced final response (no tools) — either aborted or max iterations
+    if (abortedByCallback) {
+      this.logger.warn('[AI] streamChatWithTools aborted by onToolError callback');
     } else {
-      const result = await this.adapter.chat(conversation, finalOptions);
-      yield { type: 'text-delta', textDelta: result.content };
-      yield { type: 'finish', result };
+      this.logger.warn('[AI] streamChatWithTools max iterations reached');
     }
+    const finalOptions = { ...chatOptions, tools: undefined, toolChoice: undefined };
+    const result = await this.adapter.chat(conversation, finalOptions);
+    yield { type: 'text-delta', textDelta: result.content };
+    yield { type: 'finish', result };
   }
 }
