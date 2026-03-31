@@ -23,7 +23,7 @@ describe('MetadataPluginProtocol', () => {
         'flow', 'workflow', 'approval',
         'datasource', 'translation', 'router', 'function', 'service',
         'permission', 'profile', 'role',
-        'agent',
+        'agent', 'tool', 'skill',
       ];
 
       types.forEach(type => {
@@ -559,6 +559,8 @@ describe('MetadataPluginProtocol', () => {
       expect(types).toContain('datasource');
       expect(types).toContain('permission');
       expect(types).toContain('agent');
+      expect(types).toContain('tool');
+      expect(types).toContain('skill');
     });
 
     it('should have valid entries for all registry items', () => {
@@ -598,6 +600,8 @@ describe('MetadataPluginProtocol', () => {
       expect(byDomain('system')).toContain('translation');
       expect(byDomain('security')).toContain('permission');
       expect(byDomain('ai')).toContain('agent');
+      expect(byDomain('ai')).toContain('tool');
+      expect(byDomain('ai')).toContain('skill');
     });
   });
 });

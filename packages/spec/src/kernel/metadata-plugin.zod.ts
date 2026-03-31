@@ -88,6 +88,8 @@ export const MetadataTypeSchema = z.enum([
 
   // AI Protocol
   'agent',       // AI agent definitions (AgentSchema)
+  'tool',        // AI tool definitions (ToolSchema)
+  'skill',       // AI skill definitions (SkillSchema)
 ]);
 
 export type MetadataType = z.infer<typeof MetadataTypeSchema>;
@@ -477,6 +479,8 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
 
   // AI Protocol
   { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 90, domain: 'ai' },
+  { type: 'tool', label: 'AI Tool', filePatterns: ['**/*.tool.ts', '**/*.tool.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 85, domain: 'ai' },
+  { type: 'skill', label: 'AI Skill', filePatterns: ['**/*.skill.ts', '**/*.skill.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 88, domain: 'ai' },
 ];
 
 // ==========================================

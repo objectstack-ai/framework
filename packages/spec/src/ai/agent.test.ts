@@ -240,6 +240,77 @@ describe('AgentSchema', () => {
 
       expect(() => AgentSchema.parse(agent)).not.toThrow();
     });
+
+    it('should accept agent with skills (Agent→Skill→Tool architecture)', () => {
+      const agent: Agent = {
+        name: 'skill_agent',
+        label: 'Skill-based Agent',
+        role: 'Support Specialist',
+        instructions: 'Use skills to help customers.',
+        skills: ['case_management', 'knowledge_search', 'order_management'],
+      };
+
+      const result = AgentSchema.parse(agent);
+      expect(result.skills).toHaveLength(3);
+      expect(result.skills).toContain('case_management');
+    });
+
+    it('should accept agent with both skills and tools fallback', () => {
+      const agent: Agent = {
+        name: 'hybrid_agent',
+        label: 'Hybrid Agent',
+        role: 'Versatile Assistant',
+        instructions: 'Use skills primarily, tools as fallback.',
+        skills: ['case_management'],
+        tools: [
+          { type: 'action', name: 'send_email' },
+        ],
+      };
+
+      const result = AgentSchema.parse(agent);
+      expect(result.skills).toHaveLength(1);
+      expect(result.tools).toHaveLength(1);
+    });
+
+    it('should accept agent with permissions', () => {
+      const agent: Agent = {
+        name: 'restricted_agent',
+        label: 'Restricted Agent',
+        role: 'Limited Assistant',
+        instructions: 'Operate with limited permissions.',
+        skills: ['read_only_search'],
+        permissions: ['agent.basic', 'data.read'],
+      };
+
+      const result = AgentSchema.parse(agent);
+      expect(result.permissions).toEqual(['agent.basic', 'data.read']);
+    });
+
+    it('should enforce snake_case for skill name references', () => {
+      expect(() => AgentSchema.parse({
+        name: 'test_agent',
+        label: 'Test',
+        role: 'Test',
+        instructions: 'Test',
+        skills: ['valid_skill', 'another_skill'],
+      })).not.toThrow();
+
+      expect(() => AgentSchema.parse({
+        name: 'test_agent',
+        label: 'Test',
+        role: 'Test',
+        instructions: 'Test',
+        skills: ['InvalidSkill'],
+      })).toThrow();
+
+      expect(() => AgentSchema.parse({
+        name: 'test_agent',
+        label: 'Test',
+        role: 'Test',
+        instructions: 'Test',
+        skills: ['valid_skill', 'Invalid-Skill'],
+      })).toThrow();
+    });
   });
 
   describe('Access Control', () => {
