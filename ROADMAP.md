@@ -535,13 +535,13 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 | `IAutomationService` | **P2** | `@objectstack/service-automation` | ✅ Plugin-based DAG flow engine + HTTP API + Client SDK (67 tests) |
 | `IWorkflowService` | **P2** | `@objectstack/service-workflow` | State machine + approval processes |
 | `IGraphQLService` | **P2** | `@objectstack/service-graphql` | Auto-generated GraphQL from objects |
-| `IAIService` | **P2** | `@objectstack/service-ai` | LLM integration (OpenAI/Anthropic/local) |
+| `IAIService` | **P2** | `@objectstack/service-ai` | ✅ LLM adapter layer, ToolRegistry, conversation management, REST/SSE routes, streaming (52 tests) |
 | `IAnalyticsService` | **P3** | `@objectstack/service-analytics` | ✅ Multi-driver analytics with strategy pattern (NativeSQL/ObjectQL/InMemory), CubeRegistry, generateSql (34 tests) |
 
 - [x] `service-automation` — Implement `IAutomationService` with plugin-based DAG flow engine (CRUD/Logic/HTTP nodes, fault edges, parallel branches, cycle detection, safe eval, timeout, versioning), HTTP API CRUD (9 routes), Client SDK (10 methods), execution history with step-level logging
 - [ ] `service-workflow` — Implement `IWorkflowService` with state machine runtime
 - [ ] `service-graphql` — Implement `IGraphQLService` with auto-schema generation
-- [ ] `service-ai` — Implement `IAIService` with multi-provider LLM routing
+- [x] `service-ai` — Implement `IAIService` with LLM adapter layer, ToolRegistry, InMemoryConversationService, REST/SSE routes (/api/v1/ai/*), streaming support (streamChat), kernel plugin (52 tests)
 - [x] `service-analytics` — Implement full `IAnalyticsService` with multi-driver strategy pattern (NativeSQLStrategy P1, ObjectQLStrategy P2, InMemoryStrategy P3), CubeRegistry with auto-inference from object schemas, generateSql dry-run, kernel plugin lifecycle
 
 ---
@@ -584,7 +584,7 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
   - [x] **Phase A+: Dual Transport** (v3.2) — Remote-only mode via `@libsql/client` (libsql://, https://), auto-detection of transport mode, pre-configured client injection, full CRUD/schema/bulk/transaction support in remote mode
   - [ ] **Phase B: Edge & Sync** (v3.2) — Embedded replica sync, WASM build for Cloudflare/Deno, offline write queue
   - [x] **Phase C: Multi-Tenancy** (v3.3) — Database-per-tenant router with TTL cache, concurrency dedup, lifecycle callbacks
-  - [ ] **Phase D: Advanced** (v4.0) — Vector search + `IAIService`, FTS5 + `ISearchService`, ~~better-auth adapter~~ (✅ done in plugin-auth)
+  - [ ] **Phase D: Advanced** (v4.0) — Vector search + `IAIService` (✅ `service-ai` base implemented), FTS5 + `ISearchService`, ~~better-auth adapter~~ (✅ done in plugin-auth)
 - [ ] Driver benchmark suite comparing performance across all drivers
 
 ### 6.2 Multi-Tenancy
@@ -644,15 +644,15 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 
 ### 7.1 Core AI Services
 
-- [ ] `service-ai` — Multi-provider LLM service (OpenAI, Anthropic, Gemini, local models)
+- [x] `service-ai` — Multi-provider LLM service with adapter pattern, streaming, tool registry, conversation management, REST/SSE routes
 - [ ] NLQ (Natural Language Query) runtime — translate natural language to ObjectQL
 - [ ] Embedding service for vector search and RAG
 
 ### 7.2 Agent Framework
 
 - [ ] Agent runtime — execute AI agents defined in spec schemas
-- [ ] Tool registry — connect agents to ObjectQL operations, APIs, and workflows
-- [ ] Conversation management — persistent chat with context windows
+- [x] Tool registry — connect agents to ObjectQL operations, APIs, and workflows (initial implementation in `service-ai`)
+- [x] Conversation management — persistent chat with context windows (initial implementation in `service-ai`)
 
 ### 7.3 RAG Pipeline
 
@@ -870,7 +870,7 @@ Final polish and advanced features.
 | 15 | Feed Service | `IFeedService` | ✅ | `@objectstack/service-feed` | In-memory feed/chatter (comments, reactions, subscriptions) |
 | 16 | Search Service | `ISearchService` | ❌ | `@objectstack/service-search` (planned) | Spec only |
 | 17 | Notification Service | `INotificationService` | ❌ | `@objectstack/service-notification` (planned) | Spec only |
-| 18 | AI Service | `IAIService` | ❌ | `@objectstack/service-ai` (planned) | Spec only |
+| 18 | AI Service | `IAIService` | ✅ | `@objectstack/service-ai` | LLM adapter layer, ToolRegistry, conversation management, REST/SSE routes (52 tests) |
 | 19 | Automation Service | `IAutomationService` | ✅ | `@objectstack/service-automation` | DAG engine + HTTP API CRUD + Client SDK + typed returns (67 tests) |
 | 20 | Workflow Service | `IWorkflowService` | ❌ | `@objectstack/service-workflow` (planned) | Spec only |
 | 21 | GraphQL Service | `IGraphQLService` | ❌ | `@objectstack/service-graphql` (planned) | Spec only |

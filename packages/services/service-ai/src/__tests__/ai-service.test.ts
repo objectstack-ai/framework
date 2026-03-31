@@ -1,0 +1,731 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { AIMessage, IAIService, AIStreamEvent } from '@objectstack/spec/contracts';
+import { AIService } from '../ai-service.js';
+import { MemoryLLMAdapter } from '../adapters/memory-adapter.js';
+import { ToolRegistry } from '../tools/tool-registry.js';
+import { InMemoryConversationService } from '../conversation/in-memory-conversation-service.js';
+import { buildAIRoutes } from '../routes/ai-routes.js';
+import { AIServicePlugin } from '../plugin.js';
+import type { LLMAdapter } from '../adapters/types.js';
+
+// Suppress logger output in tests
+const silentLogger = {
+  info: vi.fn(),
+  debug: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  child: vi.fn().mockReturnThis(),
+} as any;
+
+// ─────────────────────────────────────────────────────────────────
+// MemoryLLMAdapter
+// ─────────────────────────────────────────────────────────────────
+
+describe('MemoryLLMAdapter', () => {
+  let adapter: MemoryLLMAdapter;
+
+  beforeEach(() => {
+    adapter = new MemoryLLMAdapter();
+  });
+
+  it('should have name "memory"', () => {
+    expect(adapter.name).toBe('memory');
+  });
+
+  it('should echo the last user message in chat()', async () => {
+    const messages: AIMessage[] = [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Hello AI' },
+    ];
+    const result = await adapter.chat(messages);
+    expect(result.content).toBe('[memory] Hello AI');
+    expect(result.model).toBe('memory');
+    expect(result.usage).toBeDefined();
+  });
+
+  it('should handle no user message in chat()', async () => {
+    const messages: AIMessage[] = [{ role: 'system', content: 'System only' }];
+    const result = await adapter.chat(messages);
+    expect(result.content).toBe('[memory] (no user message)');
+  });
+
+  it('should echo prompt in complete()', async () => {
+    const result = await adapter.complete('test prompt');
+    expect(result.content).toBe('[memory] test prompt');
+  });
+
+  it('should stream word-by-word in streamChat()', async () => {
+    const messages: AIMessage[] = [{ role: 'user', content: 'Hi there' }];
+    const events: AIStreamEvent[] = [];
+    for await (const event of adapter.streamChat(messages)) {
+      events.push(event);
+    }
+    // "[memory]" + " Hi" + " there" = 3 text-delta events + 1 finish
+    expect(events.filter(e => e.type === 'text-delta').length).toBeGreaterThan(0);
+    expect(events[events.length - 1].type).toBe('finish');
+  });
+
+  it('should return zero vectors for embed()', async () => {
+    const result = await adapter.embed(['hello', 'world']);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual([0, 0, 0]);
+  });
+
+  it('should list memory model', async () => {
+    const models = await adapter.listModels();
+    expect(models).toEqual(['memory']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ToolRegistry
+// ─────────────────────────────────────────────────────────────────
+
+describe('ToolRegistry', () => {
+  let registry: ToolRegistry;
+
+  beforeEach(() => {
+    registry = new ToolRegistry();
+  });
+
+  it('should register and retrieve a tool', () => {
+    const def = { name: 'test_tool', description: 'A test', parameters: {} };
+    registry.register(def, async () => 'result');
+    expect(registry.has('test_tool')).toBe(true);
+    expect(registry.getDefinition('test_tool')).toEqual(def);
+    expect(registry.size).toBe(1);
+    expect(registry.names()).toEqual(['test_tool']);
+  });
+
+  it('should unregister a tool', () => {
+    registry.register({ name: 'tool_a', description: 'A', parameters: {} }, async () => '');
+    registry.unregister('tool_a');
+    expect(registry.has('tool_a')).toBe(false);
+    expect(registry.size).toBe(0);
+  });
+
+  it('should execute a tool call', async () => {
+    registry.register(
+      { name: 'add', description: 'Add numbers', parameters: {} },
+      async (args) => String((args.a as number) + (args.b as number)),
+    );
+
+    const result = await registry.execute({
+      id: 'call_1',
+      name: 'add',
+      arguments: JSON.stringify({ a: 3, b: 4 }),
+    });
+
+    expect(result.toolCallId).toBe('call_1');
+    expect(result.content).toBe('7');
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('should return error for unknown tool', async () => {
+    const result = await registry.execute({
+      id: 'call_x',
+      name: 'unknown',
+      arguments: '{}',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('not registered');
+  });
+
+  it('should return error on handler failure', async () => {
+    registry.register(
+      { name: 'fail_tool', description: 'Fails', parameters: {} },
+      async () => { throw new Error('boom'); },
+    );
+
+    const result = await registry.execute({
+      id: 'call_f',
+      name: 'fail_tool',
+      arguments: '{}',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content).toBe('boom');
+  });
+
+  it('should execute multiple tool calls in parallel', async () => {
+    registry.register(
+      { name: 'echo', description: 'Echo', parameters: {} },
+      async (args) => args.msg as string,
+    );
+
+    const results = await registry.executeAll([
+      { id: 'c1', name: 'echo', arguments: '{"msg":"a"}' },
+      { id: 'c2', name: 'echo', arguments: '{"msg":"b"}' },
+    ]);
+
+    expect(results).toHaveLength(2);
+    expect(results[0].content).toBe('a');
+    expect(results[1].content).toBe('b');
+  });
+
+  it('should return all definitions', () => {
+    registry.register({ name: 't1', description: 'T1', parameters: {} }, async () => '');
+    registry.register({ name: 't2', description: 'T2', parameters: {} }, async () => '');
+    expect(registry.getAll()).toHaveLength(2);
+  });
+
+  it('should clear all tools', () => {
+    registry.register({ name: 'x', description: 'X', parameters: {} }, async () => '');
+    registry.clear();
+    expect(registry.size).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// InMemoryConversationService
+// ─────────────────────────────────────────────────────────────────
+
+describe('InMemoryConversationService', () => {
+  let svc: InMemoryConversationService;
+
+  beforeEach(() => {
+    svc = new InMemoryConversationService();
+  });
+
+  it('should create a conversation', async () => {
+    const conv = await svc.create({ title: 'Test', userId: 'u1' });
+    expect(conv.id).toBeDefined();
+    expect(conv.title).toBe('Test');
+    expect(conv.userId).toBe('u1');
+    expect(conv.messages).toHaveLength(0);
+    expect(conv.createdAt).toBeDefined();
+  });
+
+  it('should get a conversation by ID', async () => {
+    const created = await svc.create({ title: 'Lookup' });
+    const found = await svc.get(created.id);
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe(created.id);
+
+    const missing = await svc.get('nonexistent');
+    expect(missing).toBeNull();
+  });
+
+  it('should list conversations with filters', async () => {
+    await svc.create({ userId: 'a', agentId: 'ag1' });
+    await svc.create({ userId: 'b', agentId: 'ag1' });
+    await svc.create({ userId: 'a', agentId: 'ag2' });
+
+    expect((await svc.list()).length).toBe(3);
+    expect((await svc.list({ userId: 'a' })).length).toBe(2);
+    expect((await svc.list({ agentId: 'ag1' })).length).toBe(2);
+    expect((await svc.list({ limit: 1 })).length).toBe(1);
+  });
+
+  it('should add messages to a conversation', async () => {
+    const conv = await svc.create({});
+    await svc.addMessage(conv.id, { role: 'user', content: 'Hi' });
+    const updated = await svc.addMessage(conv.id, { role: 'assistant', content: 'Hello!' });
+    expect(updated.messages).toHaveLength(2);
+  });
+
+  it('should throw when adding message to non-existent conversation', async () => {
+    await expect(
+      svc.addMessage('nope', { role: 'user', content: 'Hi' }),
+    ).rejects.toThrow('not found');
+  });
+
+  it('should delete a conversation', async () => {
+    const conv = await svc.create({});
+    await svc.delete(conv.id);
+    expect(await svc.get(conv.id)).toBeNull();
+  });
+
+  it('should track size', async () => {
+    expect(svc.size).toBe(0);
+    await svc.create({});
+    expect(svc.size).toBe(1);
+  });
+
+  it('should clear all conversations', async () => {
+    await svc.create({});
+    await svc.create({});
+    svc.clear();
+    expect(svc.size).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// AIService (Orchestrator)
+// ─────────────────────────────────────────────────────────────────
+
+describe('AIService', () => {
+  it('should use MemoryLLMAdapter by default', async () => {
+    const service = new AIService({ logger: silentLogger });
+    expect(service.adapterName).toBe('memory');
+
+    const result = await service.chat([{ role: 'user', content: 'Hi' }]);
+    expect(result.content).toBe('[memory] Hi');
+  });
+
+  it('should delegate complete() to adapter', async () => {
+    const service = new AIService({ logger: silentLogger });
+    const result = await service.complete('test');
+    expect(result.content).toBe('[memory] test');
+  });
+
+  it('should stream via adapter.streamChat()', async () => {
+    const service = new AIService({ logger: silentLogger });
+    const events: AIStreamEvent[] = [];
+    for await (const event of service.streamChat([{ role: 'user', content: 'Hi' }])) {
+      events.push(event);
+    }
+    expect(events.length).toBeGreaterThan(1);
+    expect(events[events.length - 1].type).toBe('finish');
+  });
+
+  it('should fall back to non-streaming when adapter has no streamChat', async () => {
+    const adapter: LLMAdapter = {
+      name: 'no-stream',
+      chat: async () => ({ content: 'response', model: 'test' }),
+      complete: async () => ({ content: '' }),
+      // no streamChat
+    };
+    const service = new AIService({ adapter, logger: silentLogger });
+
+    const events: AIStreamEvent[] = [];
+    for await (const event of service.streamChat([{ role: 'user', content: 'Hi' }])) {
+      events.push(event);
+    }
+
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('text-delta');
+    expect(events[0].textDelta).toBe('response');
+    expect(events[1].type).toBe('finish');
+  });
+
+  it('should delegate embed() to adapter', async () => {
+    const service = new AIService({ logger: silentLogger });
+    const embeddings = await service.embed('hello');
+    expect(embeddings).toHaveLength(1);
+  });
+
+  it('should throw when adapter does not support embed()', async () => {
+    const adapter: LLMAdapter = {
+      name: 'no-embed',
+      chat: async () => ({ content: '' }),
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, logger: silentLogger });
+    await expect(service.embed('hello')).rejects.toThrow('does not support embeddings');
+  });
+
+  it('should delegate listModels() to adapter', async () => {
+    const service = new AIService({ logger: silentLogger });
+    const models = await service.listModels();
+    expect(models).toEqual(['memory']);
+  });
+
+  it('should return empty array when adapter has no listModels()', async () => {
+    const adapter: LLMAdapter = {
+      name: 'no-models',
+      chat: async () => ({ content: '' }),
+      complete: async () => ({ content: '' }),
+    };
+    const service = new AIService({ adapter, logger: silentLogger });
+    const models = await service.listModels();
+    expect(models).toEqual([]);
+  });
+
+  it('should expose toolRegistry and conversationService', () => {
+    const service = new AIService({ logger: silentLogger });
+    expect(service.toolRegistry).toBeInstanceOf(ToolRegistry);
+    expect(service.conversationService).toBeInstanceOf(InMemoryConversationService);
+  });
+
+  it('should accept custom adapter', async () => {
+    const customAdapter: LLMAdapter = {
+      name: 'custom',
+      chat: async () => ({ content: 'custom response' }),
+      complete: async (p) => ({ content: `custom: ${p}` }),
+    };
+    const service = new AIService({ adapter: customAdapter, logger: silentLogger });
+    expect(service.adapterName).toBe('custom');
+
+    const result = await service.chat([{ role: 'user', content: 'test' }]);
+    expect(result.content).toBe('custom response');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Routes
+// ─────────────────────────────────────────────────────────────────
+
+describe('AI Routes', () => {
+  let service: AIService;
+
+  beforeEach(() => {
+    service = new AIService({ logger: silentLogger });
+  });
+
+  it('should build all expected routes', () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    expect(routes.length).toBe(8);
+
+    const paths = routes.map(r => `${r.method} ${r.path}`);
+    expect(paths).toContain('POST /api/v1/ai/chat');
+    expect(paths).toContain('POST /api/v1/ai/chat/stream');
+    expect(paths).toContain('POST /api/v1/ai/complete');
+    expect(paths).toContain('GET /api/v1/ai/models');
+    expect(paths).toContain('POST /api/v1/ai/conversations');
+    expect(paths).toContain('GET /api/v1/ai/conversations');
+    expect(paths).toContain('POST /api/v1/ai/conversations/:id/messages');
+    expect(paths).toContain('DELETE /api/v1/ai/conversations/:id');
+  });
+
+  it('POST /api/v1/ai/chat should return chat result', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: { messages: [{ role: 'user', content: 'Hi' }] },
+    });
+
+    expect(response.status).toBe(200);
+    expect((response.body as any).content).toBe('[memory] Hi');
+  });
+
+  it('POST /api/v1/ai/chat should return 400 without messages', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({ body: {} });
+    expect(response.status).toBe(400);
+  });
+
+  it('POST /api/v1/ai/chat/stream should return streaming response', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const streamRoute = routes.find(r => r.path === '/api/v1/ai/chat/stream')!;
+
+    const response = await streamRoute.handler({
+      body: { messages: [{ role: 'user', content: 'Hello' }] },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.stream).toBe(true);
+    expect(response.events).toBeDefined();
+
+    // Consume the stream
+    const events: unknown[] = [];
+    for await (const event of response.events!) {
+      events.push(event);
+    }
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('POST /api/v1/ai/complete should return completion result', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const completeRoute = routes.find(r => r.path === '/api/v1/ai/complete')!;
+
+    const response = await completeRoute.handler({
+      body: { prompt: 'test prompt' },
+    });
+
+    expect(response.status).toBe(200);
+    expect((response.body as any).content).toBe('[memory] test prompt');
+  });
+
+  it('POST /api/v1/ai/complete should return 400 without prompt', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const completeRoute = routes.find(r => r.path === '/api/v1/ai/complete')!;
+
+    const response = await completeRoute.handler({ body: {} });
+    expect(response.status).toBe(400);
+  });
+
+  it('GET /api/v1/ai/models should return model list', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const modelsRoute = routes.find(r => r.path === '/api/v1/ai/models')!;
+
+    const response = await modelsRoute.handler({});
+    expect(response.status).toBe(200);
+    expect((response.body as any).models).toContain('memory');
+  });
+
+  it('POST /api/v1/ai/conversations should create conversation', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+
+    const response = await createRoute.handler({
+      body: { title: 'Test Conv', userId: 'u1' },
+    });
+
+    expect(response.status).toBe(201);
+    expect((response.body as any).title).toBe('Test Conv');
+  });
+
+  it('GET /api/v1/ai/conversations should list conversations', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    await createRoute.handler({ body: { title: 'C1' } });
+    await createRoute.handler({ body: { title: 'C2' } });
+
+    const response = await listRoute.handler({});
+    expect(response.status).toBe(200);
+    expect((response.body as any).conversations).toHaveLength(2);
+  });
+
+  it('POST /api/v1/ai/conversations/:id/messages should add message', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
+
+    const created = await createRoute.handler({ body: {} });
+    const convId = (created.body as any).id;
+
+    const response = await addMsgRoute.handler({
+      params: { id: convId },
+      body: { role: 'user', content: 'Hi there' },
+    });
+
+    expect(response.status).toBe(200);
+    expect((response.body as any).messages).toHaveLength(1);
+  });
+
+  it('POST /api/v1/ai/conversations/:id/messages should return 404 for unknown conversation', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
+
+    const response = await addMsgRoute.handler({
+      params: { id: 'unknown' },
+      body: { role: 'user', content: 'Hi' },
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('DELETE /api/v1/ai/conversations/:id should delete conversation', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const deleteRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id')!;
+
+    const created = await createRoute.handler({ body: {} });
+    const convId = (created.body as any).id;
+
+    const response = await deleteRoute.handler({ params: { id: convId } });
+    expect(response.status).toBe(204);
+  });
+
+  // ── Message validation ───────────────────────────────────────
+
+  it('POST /api/v1/ai/chat should return 400 for messages with invalid role', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: { messages: [{ role: 'invalid', content: 'Hi' }] },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('message.role');
+  });
+
+  it('POST /api/v1/ai/chat should return 400 for messages with non-string content', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: { messages: [{ role: 'user', content: 123 }] },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('content');
+  });
+
+  it('POST /api/v1/ai/conversations/:id/messages should return 400 for invalid role', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
+
+    const created = await createRoute.handler({ body: {} });
+    const convId = (created.body as any).id;
+
+    const response = await addMsgRoute.handler({
+      params: { id: convId },
+      body: { role: 'invalid_role', content: 'Hi' },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('message.role');
+  });
+
+  it('POST /api/v1/ai/conversations/:id/messages should return 400 for missing content', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
+
+    const response = await addMsgRoute.handler({
+      params: { id: 'conv_1' },
+      body: { role: 'user' },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('content');
+  });
+
+  // ── Limit parsing ───────────────────────────────────────────
+
+  it('GET /api/v1/ai/conversations should parse limit from query string', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    await createRoute.handler({ body: { title: 'C1' } });
+    await createRoute.handler({ body: { title: 'C2' } });
+    await createRoute.handler({ body: { title: 'C3' } });
+
+    const response = await listRoute.handler({ query: { limit: '2' } });
+    expect(response.status).toBe(200);
+    expect((response.body as any).conversations).toHaveLength(2);
+  });
+
+  it('GET /api/v1/ai/conversations should return 400 for invalid limit', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    const response = await listRoute.handler({ query: { limit: 'abc' } });
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('limit');
+  });
+
+  it('GET /api/v1/ai/conversations should return 400 for negative limit', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    const response = await listRoute.handler({ query: { limit: '-1' } });
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('limit');
+  });
+
+  // ── Tool message in chat ────────────────────────────────────
+
+  it('POST /api/v1/ai/chat should accept tool role messages', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: {
+        messages: [
+          { role: 'user', content: 'What is the weather?' },
+          { role: 'assistant', content: '' },
+          { role: 'tool', content: '{"temp": 22}', toolCallId: 'call_1' },
+        ],
+      },
+    });
+
+    expect(response.status).toBe(200);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// AIServicePlugin (Integration)
+// ─────────────────────────────────────────────────────────────────
+
+describe('AIServicePlugin', () => {
+  function createMockContext() {
+    const services = new Map<string, unknown>();
+    const hooks = new Map<string, Function[]>();
+
+    return {
+      registerService: vi.fn((name: string, service: unknown) => services.set(name, service)),
+      replaceService: vi.fn((name: string, service: unknown) => services.set(name, service)),
+      getService: vi.fn(<T>(name: string): T => {
+        if (!services.has(name)) throw new Error(`Service "${name}" not found`);
+        return services.get(name) as T;
+      }),
+      getServices: vi.fn(() => services),
+      hook: vi.fn((name: string, handler: Function) => {
+        if (!hooks.has(name)) hooks.set(name, []);
+        hooks.get(name)!.push(handler);
+      }),
+      trigger: vi.fn(async () => {}),
+      logger: silentLogger,
+      getKernel: vi.fn(),
+    } as any;
+  }
+
+  it('should register as "ai" service on init', async () => {
+    const plugin = new AIServicePlugin();
+    const ctx = createMockContext();
+
+    await plugin.init(ctx);
+
+    expect(ctx.registerService).toHaveBeenCalledWith('ai', expect.any(Object));
+    const service = ctx.getService<IAIService>('ai');
+    expect(service).toBeDefined();
+    expect(typeof service.chat).toBe('function');
+  });
+
+  it('should have correct plugin metadata', () => {
+    const plugin = new AIServicePlugin();
+    expect(plugin.name).toBe('com.objectstack.service-ai');
+    expect(plugin.version).toBe('1.0.0');
+    expect(plugin.type).toBe('standard');
+  });
+
+  it('should trigger ai:ready on start', async () => {
+    const plugin = new AIServicePlugin();
+    const ctx = createMockContext();
+
+    await plugin.init(ctx);
+    await plugin.start!(ctx);
+
+    expect(ctx.trigger).toHaveBeenCalledWith('ai:ready', expect.any(Object));
+    expect(ctx.trigger).toHaveBeenCalledWith('ai:routes', expect.any(Array));
+  });
+
+  it('should use custom adapter when provided', async () => {
+    const customAdapter: LLMAdapter = {
+      name: 'custom-test',
+      chat: async () => ({ content: 'custom' }),
+      complete: async () => ({ content: '' }),
+    };
+
+    const plugin = new AIServicePlugin({ adapter: customAdapter });
+    const ctx = createMockContext();
+
+    await plugin.init(ctx);
+
+    const service = ctx.getService<AIService>('ai');
+    expect(service.adapterName).toBe('custom-test');
+  });
+
+  it('should replace existing AI service', async () => {
+    const plugin = new AIServicePlugin();
+    const ctx = createMockContext();
+
+    // Pre-register a mock AI service
+    ctx.registerService('ai', { chat: vi.fn(), complete: vi.fn() });
+
+    await plugin.init(ctx);
+
+    expect(ctx.replaceService).toHaveBeenCalledWith('ai', expect.any(Object));
+  });
+
+  it('should clean up on destroy', async () => {
+    const plugin = new AIServicePlugin();
+    const ctx = createMockContext();
+
+    await plugin.init(ctx);
+    await plugin.destroy!();
+
+    // After destroy, the plugin should not throw
+    // (internal service reference cleared)
+  });
+
+  it('should register debug hook when debug=true', async () => {
+    const plugin = new AIServicePlugin({ debug: true });
+    const ctx = createMockContext();
+
+    await plugin.init(ctx);
+
+    expect(ctx.hook).toHaveBeenCalledWith('ai:beforeChat', expect.any(Function));
+  });
+});

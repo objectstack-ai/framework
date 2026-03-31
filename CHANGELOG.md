@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`@objectstack/service-ai` — Unified AI capability service plugin** — New kernel plugin
+  providing standardized AI service integration:
+  - Registers as kernel `'ai'` service conforming to `IAIService` contract
+  - LLM adapter layer with provider abstraction (`LLMAdapter` interface) and built-in
+    `MemoryLLMAdapter` for testing/development
+  - `ToolRegistry` for metadata/business tool registration and execution
+  - `InMemoryConversationService` implementing `IAIConversationService` for multi-turn
+    conversation management with message persistence
+  - REST/SSE route self-registration (`/api/v1/ai/chat`, `/api/v1/ai/chat/stream`,
+    `/api/v1/ai/complete`, `/api/v1/ai/models`, `/api/v1/ai/conversations`)
+  - Plugin lifecycle hooks (`ai:ready`, `ai:routes`) for extensibility
+- **Expanded `IAIService` contract** — Added streaming (`streamChat`), tool calling protocol
+  (`AIToolDefinition`, `AIToolCall`, `AIToolResult`, `AIMessageWithTools`,
+  `AIRequestOptionsWithTools`, `AIStreamEvent`), and conversation management
+  (`IAIConversationService`, `AIConversation`) to `packages/spec/src/contracts/ai-service.ts`
 - **`@objectstack/plugin-setup` — Platform Setup App plugin** — New internal plugin
   (`packages/plugins/plugin-setup`) that owns and finalizes the platform Setup App.
   Ships four built-in Setup Areas (Administration, Platform, System, AI) as empty
