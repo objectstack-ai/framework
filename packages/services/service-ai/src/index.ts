@@ -20,9 +20,21 @@ export { ObjectQLConversationService } from './conversation/objectql-conversatio
 export { ToolRegistry } from './tools/tool-registry.js';
 export type { ToolHandler } from './tools/tool-registry.js';
 
+// Data tools
+export { registerDataTools, DATA_TOOL_DEFINITIONS } from './tools/data-tools.js';
+export type { DataToolContext } from './tools/data-tools.js';
+
+// Agent runtime
+export { AgentRuntime } from './agent-runtime.js';
+export type { AgentChatContext } from './agent-runtime.js';
+
+// Built-in agents
+export { DATA_CHAT_AGENT } from './agents/index.js';
+
 // Object definitions
 export { AiConversationObject, AiMessageObject } from './objects/index.js';
 
 // Routes
 export { buildAIRoutes } from './routes/ai-routes.js';
+export { buildAgentRoutes } from './routes/agent-routes.js';
 export type { RouteDefinition, RouteRequest, RouteResponse } from './routes/ai-routes.js';

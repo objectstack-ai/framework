@@ -7,6 +7,7 @@ import type {
   AIStreamEvent,
   IAIService,
   IAIConversationService,
+  ChatWithToolsOptions,
   LLMAdapter,
 } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
@@ -108,5 +109,97 @@ export class AIService implements IAIService {
       return [];
     }
     return this.adapter.listModels();
+  }
+
+  // ── Tool Call Loop ────────────────────────────────────────────
+
+  /** Default maximum iterations for the tool call loop. */
+  static readonly DEFAULT_MAX_ITERATIONS = 10;
+
+  /**
+   * Chat with automatic tool call resolution.
+   *
+   * 1. Merges registered tool definitions into `options.tools`.
+   * 2. Calls the LLM adapter.
+   * 3. If the response contains `toolCalls`, executes them via the
+   *    {@link ToolRegistry}, appends tool results as `role: 'tool'`
+   *    messages, and loops back to step 2.
+   * 4. Repeats until the model produces a final text response or the
+   *    maximum number of iterations (`maxIterations`) is reached.
+   */
+  async chatWithTools(
+    messages: AIMessage[],
+    options?: ChatWithToolsOptions,
+  ): Promise<AIResult> {
+    // Destructure maxIterations out so it is never forwarded to the adapter
+    const { maxIterations: maxIter, ...restOptions } = options ?? {};
+    const maxIterations = maxIter ?? AIService.DEFAULT_MAX_ITERATIONS;
+    const registeredTools = this.toolRegistry.getAll();
+
+    // Merge registered tools with any explicitly provided tools
+    const mergedTools = [
+      ...registeredTools,
+      ...(restOptions.tools ?? []),
+    ];
+
+    // Build the options that will be sent to every LLM call in the loop
+    const chatOptions: AIRequestOptions = {
+      ...restOptions,
+      tools: mergedTools.length > 0 ? mergedTools : undefined,
+      toolChoice: mergedTools.length > 0 ? (restOptions.toolChoice ?? 'auto') : undefined,
+    };
+
+    // Working copy of the conversation
+    const conversation = [...messages];
+
+    this.logger.debug('[AI] chatWithTools start', {
+      messageCount: conversation.length,
+      toolCount: mergedTools.length,
+      maxIterations,
+    });
+
+    for (let iteration = 0; iteration < maxIterations; iteration++) {
+      const result = await this.adapter.chat(conversation, chatOptions);
+
+      // If the model did not request any tool calls we're done
+      if (!result.toolCalls || result.toolCalls.length === 0) {
+        this.logger.debug('[AI] chatWithTools finished', { iteration, content: result.content.slice(0, 80) });
+        return result;
+      }
+
+      this.logger.debug('[AI] chatWithTools tool calls', {
+        iteration,
+        calls: result.toolCalls.map(tc => tc.name),
+      });
+
+      // Append the assistant's response (with tool call metadata) to the conversation
+      conversation.push({
+        role: 'assistant',
+        content: result.content ?? '',
+        toolCalls: result.toolCalls,
+      });
+
+      // Execute all tool calls in parallel
+      const toolResults = await this.toolRegistry.executeAll(result.toolCalls);
+
+      // Append each tool result as a `role: 'tool'` message
+      for (const tr of toolResults) {
+        conversation.push({
+          role: 'tool',
+          content: tr.content,
+          toolCallId: tr.toolCallId,
+        });
+      }
+    }
+
+    // If we exhausted the loop without a final response, make one last
+    // call *without* tools so the model is forced to produce text.
+    this.logger.warn('[AI] chatWithTools max iterations reached, forcing final response');
+    const finalResult = await this.adapter.chat(conversation, {
+      ...chatOptions,
+      tools: undefined,
+      toolChoice: undefined,
+    });
+    return finalResult;
   }
 }

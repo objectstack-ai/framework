@@ -62,6 +62,8 @@ export interface AIResult {
     content: string;
     /** Model used for generation */
     model?: string;
+    /** Tool calls requested by the model (present when the model invokes tools) */
+    toolCalls?: AIToolCall[];
     /** Token usage statistics */
     usage?: {
         promptTokens: number;
@@ -186,6 +188,28 @@ export interface IAIService {
      * @returns Async iterable of stream events
      */
     streamChat?(messages: AIMessage[], options?: AIRequestOptions): AsyncIterable<AIStreamEvent>;
+
+    /**
+     * Chat with automatic tool call resolution.
+     *
+     * Sends messages to the LLM with tool definitions, automatically
+     * executes any returned tool calls, feeds the results back, and
+     * repeats until the model returns a final text response or the
+     * maximum number of iterations is reached.
+     *
+     * @param messages - Conversation messages
+     * @param options  - Request options (tools are auto-injected from the registry)
+     * @returns Final AI result after all tool calls have been resolved
+     */
+    chatWithTools?(messages: AIMessage[], options?: ChatWithToolsOptions): Promise<AIResult>;
+}
+
+/**
+ * Options for the `chatWithTools()` tool call loop.
+ */
+export interface ChatWithToolsOptions extends AIRequestOptions {
+    /** Maximum number of tool call loop iterations (default: 10) */
+    maxIterations?: number;
 }
 
 // ---------------------------------------------------------------------------
