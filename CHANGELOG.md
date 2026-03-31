@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] — 2026-03-31
+
+### Fixed
+- **Version Alignment Patch** — Unified all package versions to `4.0.1`. Previously,
+  `@objectstack/driver-sql` and `@objectstack/driver-turso` were at `3.3.2`, example
+  packages were at `3.0.26`, and the root monorepo was at `3.0.8` while all other
+  `@objectstack/*` packages were at `4.0.0`. All packages now share a single, consistent
+  version number aligned with the changeset `fixed` group configuration.
+
 ### Added
 - **`@objectstack/service-realtime` — `sys_presence` System Object** — Registers the
   `sys_presence` system object in the `service-realtime` package as the canonical Presence

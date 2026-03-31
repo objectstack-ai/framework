@@ -1,7 +1,7 @@
 # ObjectStack Protocol — Road Map
 
-> **Last Updated:** 2026-03-27  
-> **Current Version:** v3.0.11  
+> **Last Updated:** 2026-03-31  
+> **Current Version:** v4.0.1  
 > **Status:** Protocol Specification Complete · Runtime Implementation In Progress
 
 ---
