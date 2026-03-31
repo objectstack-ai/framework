@@ -1,0 +1,123 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { z } from 'zod';
+
+// ==========================================
+// Trigger Condition
+// ==========================================
+
+/**
+ * Skill Trigger Condition Schema
+ *
+ * Defines programmatic conditions under which a skill becomes active.
+ * Allows context-aware activation based on object type, user role, etc.
+ */
+export const SkillTriggerConditionSchema = z.object({
+  /** Condition field (e.g. 'objectName', 'userRole', 'channel') */
+  field: z.string().describe('Context field to evaluate'),
+
+  /** Comparison operator */
+  operator: z.enum(['eq', 'neq', 'in', 'not_in', 'contains']).describe('Comparison operator'),
+
+  /** Expected value(s) */
+  value: z.union([z.string(), z.array(z.string())]).describe('Expected value or values'),
+});
+
+export type SkillTriggerCondition = z.infer<typeof SkillTriggerConditionSchema>;
+
+// ==========================================
+// Skill Schema
+// ==========================================
+
+/**
+ * Skill Schema
+ *
+ * An ability group that aggregates related tools by domain.
+ * Skills are the middle tier of the Agent → Skill → Tool architecture,
+ * providing reusable capability bundles that can be shared across agents.
+ *
+ * Aligned with Salesforce Agentforce Topics, Microsoft Copilot Studio Topics,
+ * and ServiceNow Skill metadata patterns.
+ *
+ * @example
+ * ```ts
+ * const skill = defineSkill({
+ *   name: 'case_management',
+ *   label: 'Case Management',
+ *   description: 'Handles support case lifecycle',
+ *   instructions: 'Use these tools to create, update, and resolve support cases.',
+ *   tools: ['create_case', 'update_case', 'resolve_case', 'query_cases'],
+ *   triggerPhrases: ['create a case', 'open a ticket', 'resolve issue'],
+ * });
+ * ```
+ */
+export const SkillSchema = z.object({
+  /** Machine name (snake_case, globally unique) */
+  name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Skill unique identifier (snake_case)'),
+
+  /** Human-readable display name */
+  label: z.string().describe('Skill display name'),
+
+  /** Detailed description of the skill's purpose */
+  description: z.string().optional().describe('Skill description'),
+
+  /**
+   * Instructions injected into the system prompt when this skill is active.
+   * Guides the LLM on how and when to use the skill's tools.
+   */
+  instructions: z.string().optional().describe('LLM instructions when skill is active'),
+
+  /**
+   * References to tool names that belong to this skill.
+   * Tools must be registered as first-class metadata (type: 'tool').
+   */
+  tools: z.array(z.string()).describe('Tool names belonging to this skill'),
+
+  /**
+   * Natural language phrases that trigger skill activation.
+   * Used for intent matching and skill routing.
+   */
+  triggerPhrases: z.array(z.string()).optional().describe('Phrases that activate this skill'),
+
+  /**
+   * Programmatic conditions for skill activation.
+   * Evaluated against the runtime context (object name, user role, etc.).
+   */
+  triggerConditions: z.array(SkillTriggerConditionSchema).optional().describe('Programmatic activation conditions'),
+
+  /** Permission profiles/roles required to use this skill */
+  permissions: z.array(z.string()).optional().describe('Required permissions or roles'),
+
+  /** Whether the skill is enabled */
+  active: z.boolean().default(true).describe('Whether the skill is enabled'),
+});
+
+export type Skill = z.infer<typeof SkillSchema>;
+
+// ==========================================
+// Factory
+// ==========================================
+
+/**
+ * Type-safe factory for creating AI skill definitions.
+ *
+ * Validates the config at creation time using Zod `.parse()`.
+ *
+ * @example
+ * ```ts
+ * const skill = defineSkill({
+ *   name: 'order_management',
+ *   label: 'Order Management',
+ *   description: 'Handles order lifecycle operations',
+ *   instructions: 'Use these tools to manage customer orders.',
+ *   tools: ['create_order', 'update_order', 'cancel_order'],
+ *   triggerPhrases: ['place an order', 'cancel my order'],
+ *   triggerConditions: [
+ *     { field: 'objectName', operator: 'eq', value: 'order' },
+ *   ],
+ * });
+ * ```
+ */
+export function defineSkill(config: z.input<typeof SkillSchema>): Skill {
+  return SkillSchema.parse(config);
+}

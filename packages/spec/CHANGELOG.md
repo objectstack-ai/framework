@@ -2,6 +2,15 @@
 
 ## 3.3.1
 
+### Minor Changes
+
+- AI Agent/Skill/Tool metadata protocol refactoring (aligned with Salesforce Agentforce, Microsoft Copilot Studio, ServiceNow Now Assist)
+  - **Tool as first-class metadata** (`src/ai/tool.zod.ts`): `ToolSchema`, `ToolCategorySchema`, `defineTool()` factory. Fields: name, label, description, category, parameters (JSON Schema), outputSchema, objectName, requiresConfirmation, permissions, active, builtIn.
+  - **Skill as ability group** (`src/ai/skill.zod.ts`): `SkillSchema`, `SkillTriggerConditionSchema`, `defineSkill()` factory. Fields: name, label, description, instructions, tools (tool name references), triggerPhrases, triggerConditions, permissions, active.
+  - **Agent protocol updated**: Added `skills: string[]` for Agent→Skill→Tool architecture; existing `tools` retained as backward-compatible fallback. Added `permissions: string[]` for access control.
+  - **Metadata registry**: `tool` and `skill` registered as first-class metadata types in `MetadataTypeSchema` and `DEFAULT_METADATA_TYPE_REGISTRY` (domain: `ai`, filePatterns: `**/*.tool.ts`, `**/*.skill.ts`, etc.)
+  - **Exports**: `defineTool`, `defineSkill`, `Tool`, `Skill` exported from `@objectstack/spec` root and `@objectstack/spec/ai` subpath.
+
 ## 3.3.0
 
 ## 3.2.9

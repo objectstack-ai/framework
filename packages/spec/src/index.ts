@@ -83,7 +83,11 @@ export { defineView } from './ui/view.zod';
 export { defineApp } from './ui/app.zod';
 export { defineFlow } from './automation/flow.zod';
 export { defineAgent } from './ai/agent.zod';
+export { defineTool } from './ai/tool.zod';
+export { defineSkill } from './ai/skill.zod';
 export type { Agent } from './ai/agent.zod';
+export type { Tool } from './ai/tool.zod';
+export type { Skill } from './ai/skill.zod';
 
 // DX Validation Utilities (re-exported for convenience)
 export { objectStackErrorMap, formatZodError, formatZodIssue, safeParsePretty } from './shared/error-map.zod';

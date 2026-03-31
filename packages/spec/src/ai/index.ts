@@ -4,7 +4,9 @@
  * AI Protocol Exports
  * 
  * AI/ML Capabilities
- * - Agent Configuration
+ * - Agent Configuration (Agent → Skill → Tool architecture)
+ * - Tool Metadata (first-class AI tool definitions)
+ * - Skill Metadata (ability groups / capability bundles)
  * - DevOps Agent (Self-iterating Development)
  * - Model Registry & Selection
  * - Model Context Protocol (MCP)
@@ -19,6 +21,8 @@
  */
 
 export * from './agent.zod';
+export * from './tool.zod';
+export * from './skill.zod';
 export * from './agent-action.zod';
 export * from './devops-agent.zod';
 export * from './plugin-development.zod';

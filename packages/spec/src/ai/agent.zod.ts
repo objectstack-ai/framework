@@ -90,27 +90,39 @@ export type StructuredOutputConfig = z.infer<typeof StructuredOutputConfigSchema
 /**
  * AI Agent Schema
  * Definition of an autonomous agent specialized for a domain.
- * 
- * @example Customer Support Agent
- * {
- *   name: "support_tier_1",
- *   label: "First Line Support",
- *   role: "Help Desk Assistant",
- *   instructions: "You are a helpful assistant. Always verify user identity first.",
- *   model: {
- *     provider: "openai",
- *     model: "gpt-4-turbo",
- *     temperature: 0.3
- *   },
+ *
+ * The Agent → Skill → Tool three-tier architecture aligns with
+ * Salesforce Agentforce, Microsoft Copilot Studio, and ServiceNow
+ * Now Assist metadata patterns.
+ *
+ * - **skills**: Primary capability model — references skill names.
+ * - **tools**: Fallback / direct tool references (legacy inline format).
+ *
+ * @example Agent-Skill Architecture
+ * ```ts
+ * defineAgent({
+ *   name: 'support_tier_1',
+ *   label: 'First Line Support',
+ *   role: 'Help Desk Assistant',
+ *   instructions: 'You are a helpful assistant. Always verify user identity first.',
+ *   skills: ['case_management', 'knowledge_search'],
+ *   knowledge: { topics: ['faq', 'policies'], indexes: ['support_docs'] },
+ * });
+ * ```
+ *
+ * @example Legacy Tool References (backward-compatible)
+ * ```ts
+ * defineAgent({
+ *   name: 'support_tier_1',
+ *   label: 'First Line Support',
+ *   role: 'Help Desk Assistant',
+ *   instructions: 'You are a helpful assistant.',
  *   tools: [
- *     { type: "flow", name: "reset_password", description: "Trigger password reset email" },
- *     { type: "query", name: "get_order_status", description: "Check order shipping status" }
+ *     { type: 'flow', name: 'reset_password', description: 'Trigger password reset email' },
+ *     { type: 'query', name: 'get_order_status', description: 'Check order shipping status' },
  *   ],
- *   knowledge: {
- *     topics: ["faq", "policies"],
- *     indexes: ["support_docs"]
- *   }
- * }
+ * });
+ * ```
  */
 export const AgentSchema = z.object({
   /** Identity */
@@ -118,19 +130,27 @@ export const AgentSchema = z.object({
   label: z.string().describe('Agent display name'),
   avatar: z.string().optional(),
   role: z.string().describe('The persona/role (e.g. "Senior Support Engineer")'),
-  
+
   /** Cognition */
   instructions: z.string().describe('System Prompt / Prime Directives'),
   model: AIModelConfigSchema.optional(),
   lifecycle: StateMachineSchema.optional().describe('State machine defining the agent conversation follow and constraints'),
-  
-  /** Capabilities */
-  tools: z.array(AIToolSchema).optional().describe('Available tools'),
+
+  /** Capabilities — Skill-based (primary) */
+  skills: z.array(z.string()).optional().describe('Skill names to attach (Agent→Skill→Tool architecture)'),
+
+  /** Capabilities — Direct tool references (fallback / legacy) */
+  tools: z.array(AIToolSchema).optional().describe('Direct tool references (legacy fallback)'),
+
+  /** Knowledge */
   knowledge: AIKnowledgeSchema.optional().describe('RAG access'),
-  
+
   /** Interface */
   active: z.boolean().default(true),
   access: z.array(z.string()).optional().describe('Who can chat with this agent'),
+
+  /** Permission profiles/roles required to use this agent */
+  permissions: z.array(z.string()).optional().describe('Required permissions or roles'),
 
   /** Multi-tenancy & Visibility */
   tenantId: z.string().optional().describe('Tenant/Organization ID'),
@@ -196,7 +216,18 @@ export const AgentSchema = z.object({
  *
  * Validates the config at creation time using Zod `.parse()`.
  *
- * @example
+ * @example Agent-Skill Architecture (recommended)
+ * ```ts
+ * const supportAgent = defineAgent({
+ *   name: 'support_agent',
+ *   label: 'Support Agent',
+ *   role: 'Senior Support Engineer',
+ *   instructions: 'You help customers resolve technical issues.',
+ *   skills: ['case_management', 'knowledge_search'],
+ * });
+ * ```
+ *
+ * @example Legacy Tool References (backward-compatible)
  * ```ts
  * const supportAgent = defineAgent({
  *   name: 'support_agent',
