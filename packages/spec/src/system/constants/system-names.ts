@@ -50,6 +50,8 @@ export const SystemObjectName = {
   AUDIT_LOG: 'sys_audit_log',
   /** System metadata storage */
   METADATA: 'sys_metadata',
+  /** Realtime: user presence state */
+  PRESENCE: 'sys_presence',
 } as const;
 
 /** Union type of all system object names */

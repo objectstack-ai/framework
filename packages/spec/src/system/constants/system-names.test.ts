@@ -26,6 +26,7 @@ describe('SystemObjectName', () => {
     expect(SystemObjectName.PERMISSION_SET).toBe('sys_permission_set');
     expect(SystemObjectName.AUDIT_LOG).toBe('sys_audit_log');
     expect(SystemObjectName.METADATA).toBe('sys_metadata');
+    expect(SystemObjectName.PRESENCE).toBe('sys_presence');
   });
 
   it('should be readonly (const assertion)', () => {
@@ -37,6 +38,7 @@ describe('SystemObjectName', () => {
     expect(names).toContain('sys_team_member');
     expect(names).toContain('sys_role');
     expect(names).toContain('sys_audit_log');
+    expect(names).toContain('sys_presence');
   });
 
   it('should have all expected keys', () => {
@@ -56,6 +58,7 @@ describe('SystemObjectName', () => {
     expect(keys).toContain('PERMISSION_SET');
     expect(keys).toContain('AUDIT_LOG');
     expect(keys).toContain('METADATA');
+    expect(keys).toContain('PRESENCE');
   });
 });
 

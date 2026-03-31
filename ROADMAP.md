@@ -337,6 +337,7 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 | `SystemObjectName.PERMISSION_SET` | `sys_permission_set` | plugin-security | Security: permission set grouping |
 | `SystemObjectName.AUDIT_LOG` | `sys_audit_log` | plugin-audit | Audit: immutable audit trail |
 | `SystemObjectName.METADATA` | `sys_metadata` | metadata | System metadata storage |
+| `SystemObjectName.PRESENCE` | `sys_presence` | service-realtime | Realtime: user presence state |
 
 **Object Definition Convention:**
 - File naming: `sys-{name}.object.ts` (e.g., `sys-user.object.ts`, `sys-role.object.ts`)

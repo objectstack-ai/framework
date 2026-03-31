@@ -3,6 +3,7 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { InMemoryRealtimeAdapter } from './in-memory-realtime-adapter.js';
 import type { InMemoryRealtimeAdapterOptions } from './in-memory-realtime-adapter.js';
+import { SysPresence } from './objects/index.js';
 
 /**
  * Configuration options for the RealtimeServicePlugin.
@@ -49,6 +50,17 @@ export class RealtimeServicePlugin implements Plugin {
   async init(ctx: PluginContext): Promise<void> {
     const realtime = new InMemoryRealtimeAdapter(this.options.memory);
     ctx.registerService('realtime', realtime);
+
+    // Register realtime system objects so ObjectQLPlugin auto-discovers them
+    ctx.registerService('app.com.objectstack.service.realtime', {
+      id: 'com.objectstack.service.realtime',
+      name: 'Realtime Service',
+      version: '1.0.0',
+      type: 'plugin',
+      namespace: 'sys',
+      objects: [SysPresence],
+    });
+
     ctx.logger.info('RealtimeServicePlugin: registered in-memory realtime adapter');
   }
 }
