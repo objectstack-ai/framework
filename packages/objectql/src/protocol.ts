@@ -205,7 +205,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             ? JSON.parse(record.metadata)
                             : record.metadata;
                         // Hydrate back into registry
-                        SchemaRegistry.registerItem(request.type, data, 'name');
+                        SchemaRegistry.registerItem(request.type, data, 'name' as any);
                         return data;
                     });
                 } else {
@@ -219,7 +219,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             const data = typeof record.metadata === 'string'
                                 ? JSON.parse(record.metadata)
                                 : record.metadata;
-                            SchemaRegistry.registerItem(request.type, data, 'name');
+                            SchemaRegistry.registerItem(request.type, data, 'name' as any);
                             return data;
                         });
                     }
@@ -254,7 +254,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         ? JSON.parse(record.metadata)
                         : record.metadata;
                     // Hydrate back into registry for next time
-                    SchemaRegistry.registerItem(request.type, item, 'name');
+                    SchemaRegistry.registerItem(request.type, item, 'name' as any);
                 } else {
                     // Try alternate type name
                     const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
@@ -266,7 +266,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             ? JSON.parse(altRecord.metadata)
                             : altRecord.metadata;
                         // Hydrate back into registry for next time
-                        SchemaRegistry.registerItem(request.type, item, 'name');
+                        SchemaRegistry.registerItem(request.type, item, 'name' as any);
                     }
                 }
             } catch {
@@ -980,7 +980,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     const data = typeof record.metadata === 'string'
                         ? JSON.parse(record.metadata)
                         : record.metadata;
-                    SchemaRegistry.registerItem(record.type, data, 'name');
+                    if (record.type === 'object') {
+                        SchemaRegistry.registerObject(data as any, record.packageId || 'sys_metadata');
+                    } else {
+                        SchemaRegistry.registerItem(record.type, data, 'name' as any);
+                    }
                     loaded++;
                 } catch (e) {
                     errors++;

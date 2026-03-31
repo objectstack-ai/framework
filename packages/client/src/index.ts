@@ -1294,7 +1294,7 @@ export class ObjectStackClient {
      * List feed items for a record
      */
     list: async (object: string, recordId: string, options?: { type?: string; limit?: number; cursor?: string }): Promise<GetFeedResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const params = new URLSearchParams();
       if (options?.type) params.set('type', options.type);
       if (options?.limit) params.set('limit', String(options.limit));
@@ -1308,7 +1308,7 @@ export class ObjectStackClient {
      * Create a new feed item (comment, note, task, etc.)
      */
     create: async (object: string, recordId: string, data: { type: string; body?: string; mentions?: any[]; parentId?: string; visibility?: string }): Promise<CreateFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed`, {
         method: 'POST',
         body: JSON.stringify(data)
@@ -1320,7 +1320,7 @@ export class ObjectStackClient {
      * Update an existing feed item
      */
     update: async (object: string, recordId: string, feedId: string, data: { body?: string; mentions?: any[]; visibility?: string }): Promise<UpdateFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}`, {
         method: 'PUT',
         body: JSON.stringify(data)
@@ -1332,7 +1332,7 @@ export class ObjectStackClient {
      * Delete a feed item
      */
     delete: async (object: string, recordId: string, feedId: string): Promise<DeleteFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}`, {
         method: 'DELETE'
       });
@@ -1343,7 +1343,7 @@ export class ObjectStackClient {
      * Add an emoji reaction to a feed item
      */
     addReaction: async (object: string, recordId: string, feedId: string, emoji: string): Promise<AddReactionResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/reactions`, {
         method: 'POST',
         body: JSON.stringify({ emoji })
@@ -1355,7 +1355,7 @@ export class ObjectStackClient {
      * Remove an emoji reaction from a feed item
      */
     removeReaction: async (object: string, recordId: string, feedId: string, emoji: string): Promise<RemoveReactionResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/reactions/${encodeURIComponent(emoji)}`, {
         method: 'DELETE'
       });
@@ -1366,7 +1366,7 @@ export class ObjectStackClient {
      * Pin a feed item to the top of the timeline
      */
     pin: async (object: string, recordId: string, feedId: string): Promise<PinFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/pin`, {
         method: 'POST'
       });
@@ -1377,7 +1377,7 @@ export class ObjectStackClient {
      * Unpin a feed item
      */
     unpin: async (object: string, recordId: string, feedId: string): Promise<UnpinFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/pin`, {
         method: 'DELETE'
       });
@@ -1388,7 +1388,7 @@ export class ObjectStackClient {
      * Star (bookmark) a feed item
      */
     star: async (object: string, recordId: string, feedId: string): Promise<StarFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/star`, {
         method: 'POST'
       });
@@ -1399,7 +1399,7 @@ export class ObjectStackClient {
      * Unstar a feed item
      */
     unstar: async (object: string, recordId: string, feedId: string): Promise<UnstarFeedItemResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/feed/${encodeURIComponent(feedId)}/star`, {
         method: 'DELETE'
       });
@@ -1410,7 +1410,7 @@ export class ObjectStackClient {
      * Search feed items
      */
     search: async (object: string, recordId: string, query: string, options?: { type?: string; actorId?: string; dateFrom?: string; dateTo?: string; limit?: number; cursor?: string }): Promise<SearchFeedResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const params = new URLSearchParams();
       params.set('query', query);
       if (options?.type) params.set('type', options.type);
@@ -1427,7 +1427,7 @@ export class ObjectStackClient {
      * Get field-level changelog for a record
      */
     getChangelog: async (object: string, recordId: string, options?: { field?: string; actorId?: string; dateFrom?: string; dateTo?: string; limit?: number; cursor?: string }): Promise<GetChangelogResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const params = new URLSearchParams();
       if (options?.field) params.set('field', options.field);
       if (options?.actorId) params.set('actorId', options.actorId);
@@ -1444,7 +1444,7 @@ export class ObjectStackClient {
      * Subscribe to record notifications
      */
     subscribe: async (object: string, recordId: string, options?: { events?: string[]; channels?: string[] }): Promise<SubscribeResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/subscribe`, {
         method: 'POST',
         body: JSON.stringify(options || {})
@@ -1456,7 +1456,7 @@ export class ObjectStackClient {
      * Unsubscribe from record notifications
      */
     unsubscribe: async (object: string, recordId: string): Promise<UnsubscribeResponse> => {
-      const route = this.getRoute('feed');
+      const route = this.getRoute('data');
       const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(object)}/${encodeURIComponent(recordId)}/subscribe`, {
         method: 'DELETE'
       });
