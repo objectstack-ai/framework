@@ -21,6 +21,15 @@ export interface EndpointGroup {
   endpoints: EndpointDef[];
 }
 
+/** Shape of a single entry in the service endpoint catalog. */
+interface ServiceEndpointEntry {
+  method: HttpMethod;
+  /** Relative path appended to the service route prefix (e.g. '/chat'). */
+  path: string;
+  desc: string;
+  bodyTemplate?: Record<string, unknown>;
+}
+
 // ─── Static system endpoints ────────────────────────────────────────
 
 /** Metadata types that should be excluded from the endpoint tree */
@@ -43,6 +52,146 @@ function buildAuthEndpoints(authBase: string): EndpointDef[] {
   ];
 }
 
+// ─── Service endpoint catalog ───────────────────────────────────────
+
+/**
+ * Well-known endpoints for each service, keyed by the service name
+ * as it appears in the discovery response's `services` map.
+ *
+ * The `group` label used in the UI is derived from the map key.
+ * Paths are relative to the service route prefix returned by discovery.
+ *
+ * This catalog is aligned with:
+ *   - packages/spec/src/api/plugin-rest-api.zod.ts (DEFAULT_*_ROUTES)
+ *   - packages/services/service-ai/src/routes/ai-routes.ts (buildAIRoutes)
+ */
+export const SERVICE_ENDPOINT_CATALOG: Record<string, { group: string; defaultRoute: string; endpoints: ServiceEndpointEntry[] }> = {
+  ai: {
+    group: 'AI',
+    defaultRoute: '/api/v1/ai',
+    endpoints: [
+      { method: 'POST', path: '/chat', desc: 'Chat completion', bodyTemplate: { messages: [{ role: 'user', content: '' }] } },
+      { method: 'POST', path: '/chat/stream', desc: 'Streaming chat (SSE)', bodyTemplate: { messages: [{ role: 'user', content: '' }] } },
+      { method: 'POST', path: '/complete', desc: 'Text completion', bodyTemplate: { prompt: '' } },
+      { method: 'GET', path: '/models', desc: 'List available models' },
+      { method: 'POST', path: '/nlq', desc: 'Natural language query', bodyTemplate: { query: '' } },
+      { method: 'POST', path: '/suggest', desc: 'AI-powered suggestions', bodyTemplate: { object: '', field: '', context: {} } },
+      { method: 'POST', path: '/insights', desc: 'AI-generated insights', bodyTemplate: { object: '', recordIds: [] } },
+      { method: 'POST', path: '/conversations', desc: 'Create conversation', bodyTemplate: {} },
+      { method: 'GET', path: '/conversations', desc: 'List conversations' },
+      { method: 'POST', path: '/conversations/:id/messages', desc: 'Add message to conversation', bodyTemplate: { role: 'user', content: '' } },
+      { method: 'DELETE', path: '/conversations/:id', desc: 'Delete conversation' },
+    ],
+  },
+  workflow: {
+    group: 'Workflow',
+    defaultRoute: '/api/v1/workflow',
+    endpoints: [
+      { method: 'GET', path: '/:object/config', desc: 'Get workflow configuration' },
+      { method: 'GET', path: '/:object/:recordId/state', desc: 'Get workflow state' },
+      { method: 'POST', path: '/:object/:recordId/transition', desc: 'Execute workflow transition', bodyTemplate: { targetState: '' } },
+      { method: 'POST', path: '/:object/:recordId/approve', desc: 'Approve workflow step', bodyTemplate: { comment: '' } },
+      { method: 'POST', path: '/:object/:recordId/reject', desc: 'Reject workflow step', bodyTemplate: { comment: '' } },
+    ],
+  },
+  realtime: {
+    group: 'Realtime',
+    defaultRoute: '/api/v1/realtime',
+    endpoints: [
+      { method: 'POST', path: '/connect', desc: 'Establish realtime connection', bodyTemplate: { transport: 'websocket' } },
+      { method: 'POST', path: '/disconnect', desc: 'Close realtime connection', bodyTemplate: { connectionId: '' } },
+      { method: 'POST', path: '/subscribe', desc: 'Subscribe to channel', bodyTemplate: { channel: '' } },
+      { method: 'POST', path: '/unsubscribe', desc: 'Unsubscribe from channel', bodyTemplate: { channel: '' } },
+      { method: 'PUT', path: '/presence/:channel', desc: 'Set presence state', bodyTemplate: { status: 'online' } },
+      { method: 'GET', path: '/presence/:channel', desc: 'Get channel presence' },
+    ],
+  },
+  notification: {
+    group: 'Notifications',
+    defaultRoute: '/api/v1/notifications',
+    endpoints: [
+      { method: 'GET', path: '', desc: 'List notifications' }, // empty path → hits the base route prefix
+      { method: 'POST', path: '/devices', desc: 'Register device for push', bodyTemplate: { token: '', platform: 'web' } },
+      { method: 'DELETE', path: '/devices/:deviceId', desc: 'Unregister device' },
+      { method: 'GET', path: '/preferences', desc: 'Get notification preferences' },
+      { method: 'PATCH', path: '/preferences', desc: 'Update notification preferences', bodyTemplate: { email: true, push: true } },
+      { method: 'POST', path: '/read', desc: 'Mark notifications as read', bodyTemplate: { ids: [] } },
+      { method: 'POST', path: '/read/all', desc: 'Mark all as read' },
+    ],
+  },
+  analytics: {
+    group: 'Analytics',
+    defaultRoute: '/api/v1/analytics',
+    endpoints: [
+      { method: 'POST', path: '/query', desc: 'Execute analytics query', bodyTemplate: { measures: [], dimensions: [] } },
+      { method: 'GET', path: '/meta', desc: 'Get analytics metadata' },
+    ],
+  },
+  automation: {
+    group: 'Automation',
+    defaultRoute: '/api/v1/automation',
+    endpoints: [
+      { method: 'POST', path: '/trigger', desc: 'Trigger automation', bodyTemplate: { name: '', params: {} } },
+    ],
+  },
+  i18n: {
+    group: 'i18n',
+    defaultRoute: '/api/v1/i18n',
+    endpoints: [
+      { method: 'GET', path: '/locales', desc: 'Get available locales' },
+      { method: 'GET', path: '/translations/:locale', desc: 'Get translations for locale' },
+      { method: 'GET', path: '/labels/:object/:locale', desc: 'Get translated field labels' },
+    ],
+  },
+  ui: {
+    group: 'UI',
+    defaultRoute: '/api/v1/ui',
+    endpoints: [
+      { method: 'GET', path: '/views', desc: 'List views' },
+      { method: 'GET', path: '/views/:id', desc: 'Get view by ID' },
+      { method: 'POST', path: '/views', desc: 'Create view', bodyTemplate: { name: '', object: '', type: 'list' } },
+      { method: 'PATCH', path: '/views/:id', desc: 'Update view', bodyTemplate: { name: '' } },
+      { method: 'DELETE', path: '/views/:id', desc: 'Delete view' },
+    ],
+  },
+  feed: {
+    group: 'Feed',
+    defaultRoute: '/api/v1/feed',
+    endpoints: [
+      { method: 'GET', path: '/:object/:recordId', desc: 'Get feed items' },
+      { method: 'POST', path: '/:object/:recordId', desc: 'Post feed item', bodyTemplate: { body: '' } },
+    ],
+  },
+  storage: {
+    group: 'Storage',
+    defaultRoute: '/api/v1/storage',
+    endpoints: [
+      { method: 'POST', path: '/upload', desc: 'Upload file (multipart/form-data)' },
+      { method: 'GET', path: '/:fileId', desc: 'Download file' },
+      { method: 'DELETE', path: '/:fileId', desc: 'Delete file' },
+    ],
+  },
+};
+
+/**
+ * Build endpoint definitions for a discovered service.
+ *
+ * @param serviceName  Key in the discovery `services` map (e.g. 'ai')
+ * @param routePrefix  Base route path (e.g. '/api/v1/ai')
+ */
+export function buildServiceEndpoints(serviceName: string, routePrefix: string): EndpointDef[] {
+  const catalog = SERVICE_ENDPOINT_CATALOG[serviceName];
+  if (!catalog) return [];
+
+  return catalog.endpoints.map(ep => ({
+    method: ep.method,
+    path: `${routePrefix}${ep.path}`,
+    desc: ep.desc,
+    group: catalog.group,
+    ...(ep.bodyTemplate ? { bodyTemplate: ep.bodyTemplate } : {}),
+  }));
+}
+
 // ─── Hook ───────────────────────────────────────────────────────────
 
 export function useApiDiscovery() {
@@ -57,20 +206,41 @@ export function useApiDiscovery() {
     setError(null);
 
     try {
-      // 1. Resolve auth base path from discovery
+      // 1. Fetch discovery response — the source of truth for available services
       let authBase = '/api/v1/auth';
+      let discoveredServices: Record<string, { enabled: boolean; route?: string }> = {};
+      let discoveredRoutes: Record<string, string> = {};
+
       try {
         const discRes = await fetch('/api/v1/discovery');
         if (discRes.ok) {
           const discData = await discRes.json();
-          const routes = discData?.data?.routes ?? discData?.routes;
-          if (routes?.auth) authBase = routes.auth;
+          const data = discData?.data ?? discData;
+          discoveredRoutes = data?.routes ?? {};
+          discoveredServices = data?.services ?? {};
+          if (discoveredRoutes.auth) authBase = discoveredRoutes.auth;
         }
       } catch {
-        // Keep default /api/v1/auth
+        // Keep defaults — discovery may not be available
       }
 
-      // 2. Fetch metadata types
+      // 2. Build service endpoints from discovery
+      const serviceEndpoints: EndpointDef[] = [];
+      for (const [serviceName, catalog] of Object.entries(SERVICE_ENDPOINT_CATALOG)) {
+        const serviceInfo = discoveredServices[serviceName];
+        const isEnabled = serviceInfo?.enabled ?? false;
+
+        // Use route from discovery services, discovery routes map, or catalog default
+        const routePrefix = serviceInfo?.route
+          ?? discoveredRoutes[serviceName]
+          ?? catalog.defaultRoute;
+
+        if (isEnabled) {
+          serviceEndpoints.push(...buildServiceEndpoints(serviceName, routePrefix));
+        }
+      }
+
+      // 3. Fetch metadata types
       let metaTypes: string[] = [];
       try {
         const typesResult = await client.meta.getTypes();
@@ -83,7 +253,7 @@ export function useApiDiscovery() {
         // Meta types may not be available
       }
 
-      // 3. Fetch object names from metadata
+      // 4. Fetch object names from metadata
       let objectNames: string[] = [];
       try {
         const objectType = metaTypes.includes('objects') ? 'objects' : metaTypes.includes('object') ? 'object' : null;
@@ -99,7 +269,7 @@ export function useApiDiscovery() {
         // Objects may not be available
       }
 
-      // 4. Build dynamic data endpoints for each object
+      // 5. Build dynamic data endpoints for each object
       const dataEndpoints: EndpointDef[] = objectNames.flatMap(name => [
         { method: 'GET' as HttpMethod, path: `/api/v1/data/${name}`, desc: `List ${name}`, group: `Data: ${name}` },
         { method: 'POST' as HttpMethod, path: `/api/v1/data/${name}`, desc: `Create ${name}`, group: `Data: ${name}`, bodyTemplate: { name: 'example' } },
@@ -108,7 +278,7 @@ export function useApiDiscovery() {
         { method: 'DELETE' as HttpMethod, path: `/api/v1/data/${name}/:id`, desc: `Delete ${name}`, group: `Data: ${name}` },
       ]);
 
-      // 5. Build metadata endpoints for each type
+      // 6. Build metadata endpoints for each type
       const metaEndpoints: EndpointDef[] = metaTypes
         .filter(t => !EXCLUDED_META_TYPES.includes(t))
         .map(type => ({
@@ -118,7 +288,7 @@ export function useApiDiscovery() {
           group: 'Metadata',
         }));
 
-      // 6. Build per-object schema endpoints
+      // 7. Build per-object schema endpoints
       const schemaEndpoints: EndpointDef[] = objectNames.map(name => ({
         method: 'GET' as HttpMethod,
         path: `/api/v1/meta/object/${name}`,
@@ -126,16 +296,17 @@ export function useApiDiscovery() {
         group: 'Metadata',
       }));
 
-      // 7. Combine all endpoints
+      // 8. Combine all endpoints
       const all = [
         ...SYSTEM_ENDPOINTS,
         ...buildAuthEndpoints(authBase),
+        ...serviceEndpoints,
         ...metaEndpoints,
         ...schemaEndpoints,
         ...dataEndpoints,
       ];
 
-      // 8. Group endpoints
+      // 9. Group endpoints
       const groupMap = new Map<string, EndpointDef[]>();
       for (const ep of all) {
         const existing = groupMap.get(ep.group) || [];
@@ -143,8 +314,8 @@ export function useApiDiscovery() {
         groupMap.set(ep.group, existing);
       }
 
-      // Sort groups: System, Auth, Metadata first, then Data groups alphabetically
-      const GROUP_SORT_ORDER = ['System', 'Auth', 'Metadata'];
+      // Sort groups: System, Auth, service groups, Metadata, then Data groups alphabetically
+      const GROUP_SORT_ORDER = ['System', 'Auth', 'AI', 'Workflow', 'Realtime', 'Notifications', 'Analytics', 'Automation', 'i18n', 'UI', 'Feed', 'Storage', 'Metadata'];
       const grouped = Array.from(groupMap.entries())
         .sort(([a], [b]) => {
           const aIdx = GROUP_SORT_ORDER.indexOf(a);

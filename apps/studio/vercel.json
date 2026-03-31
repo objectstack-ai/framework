@@ -4,11 +4,6 @@
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@objectstack/studio && cd apps/studio && node scripts/bundle-api.mjs",
   "outputDirectory": "dist",
-  "functions": {
-    "api/index.js": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
