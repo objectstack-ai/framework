@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`@objectstack/service-realtime` — `sys_presence` System Object** — Registers the
   `sys_presence` system object in the `service-realtime` package as the canonical Presence
   domain object. Fields align with the `PresenceStateSchema` protocol definition
-  (`userId`, `sessionId`, `status`, `lastSeen`, `currentLocation`, `device`,
-  `customStatus`, `metadata`). `RealtimeServicePlugin` now auto-registers the object
+  (`user_id`, `session_id`, `status`, `last_seen`, `current_location`, `device`,
+  `custom_status`, `metadata`). `RealtimeServicePlugin` now auto-registers the object
   via the `app.com.objectstack.service.realtime` service convention. Added
   `SystemObjectName.PRESENCE` constant (`'sys_presence'`) to `@objectstack/spec/system`.
 - **`@objectstack/service-ai` — Data Chatbot: Tool Call Loop & Agent Runtime** — Implements
