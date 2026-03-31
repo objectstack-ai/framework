@@ -7,10 +7,10 @@ import type {
   AIStreamEvent,
   IAIService,
   IAIConversationService,
+  LLMAdapter,
 } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 import { createLogger } from '@objectstack/core';
-import type { LLMAdapter } from './adapters/types.js';
 import { MemoryLLMAdapter } from './adapters/memory-adapter.js';
 import { ToolRegistry } from './tools/tool-registry.js';
 import { InMemoryConversationService } from './conversation/in-memory-conversation-service.js';

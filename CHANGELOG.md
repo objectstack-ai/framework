@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AIServicePluginOptions.conversationService` allows explicit override
   - Plugin registers AI system objects via `app.com.objectstack.service-ai` service
   - 16 new test cases covering all five interface methods plus edge cases
+- **Promoted `LLMAdapter` interface to `@objectstack/spec/contracts`** — Moved the `LLMAdapter`
+  adapter contract from `@objectstack/service-ai` internal types to the canonical protocol layer
+  (`packages/spec/src/contracts/llm-adapter.ts`). Third-party adapter implementations (OpenAI,
+  Anthropic, Ollama, etc.) can now depend solely on `@objectstack/spec` for type alignment.
+  `service-ai` re-exports the interface for backward compatibility.
 
 ### Fixed
 - **ObjectQL build failure** — Fixed TypeScript TS2345 errors in `packages/objectql/src/protocol.ts`

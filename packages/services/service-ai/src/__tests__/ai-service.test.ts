@@ -8,7 +8,7 @@ import { ToolRegistry } from '../tools/tool-registry.js';
 import { InMemoryConversationService } from '../conversation/in-memory-conversation-service.js';
 import { buildAIRoutes } from '../routes/ai-routes.js';
 import { AIServicePlugin } from '../plugin.js';
-import type { LLMAdapter } from '../adapters/types.js';
+import type { LLMAdapter } from '@objectstack/spec/contracts';
 
 // Suppress logger output in tests
 const silentLogger = {

@@ -10,7 +10,7 @@ export type { AIServicePluginOptions } from './plugin.js';
 
 // Adapters
 export { MemoryLLMAdapter } from './adapters/memory-adapter.js';
-export type { LLMAdapter } from './adapters/types.js';
+export type { LLMAdapter } from '@objectstack/spec/contracts';
 
 // Conversation
 export { InMemoryConversationService } from './conversation/in-memory-conversation-service.js';

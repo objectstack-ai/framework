@@ -1,10 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import type { IAIService, IAIConversationService, IDataEngine } from '@objectstack/spec/contracts';
+import type { IAIService, IAIConversationService, IDataEngine, LLMAdapter } from '@objectstack/spec/contracts';
 import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
-import type { LLMAdapter } from './adapters/types.js';
 import { buildAIRoutes } from './routes/ai-routes.js';
 import { ObjectQLConversationService } from './conversation/objectql-conversation-service.js';
 import { AiConversationObject, AiMessageObject } from './objects/index.js';
