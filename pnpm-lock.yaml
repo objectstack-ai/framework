@@ -868,6 +868,9 @@ importers:
       '@objectstack/plugin-security':
         specifier: workspace:*
         version: link:../plugin-security
+      '@objectstack/plugin-setup':
+        specifier: workspace:*
+        version: link:../plugin-setup
       '@objectstack/rest':
         specifier: workspace:*
         version: link:../../rest

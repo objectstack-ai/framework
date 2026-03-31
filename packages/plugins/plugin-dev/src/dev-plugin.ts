@@ -339,7 +339,7 @@ export interface DevPluginOptions {
    * Override which services to enable. By default all core services are enabled.
    * Set a service name to `false` to skip it.
    *
-   * Available services: 'objectql', 'driver', 'auth', 'server', 'rest',
+   * Available services: 'objectql', 'driver', 'auth', 'setup', 'server', 'rest',
    * 'dispatcher', 'security', plus any of the 17 CoreServiceName values
    * (e.g. 'cache', 'queue', 'job', 'ui', 'automation', 'workflow', …).
    */
@@ -405,6 +405,7 @@ export interface DevPluginOptions {
  * | ObjectQL     | `@objectstack/objectql`           | Data engine (query, CRUD, hooks)          |
  * | Driver       | `@objectstack/driver-memory`      | In-memory database (no DB install)        |
  * | Auth         | `@objectstack/plugin-auth`        | Authentication with dev credentials       |
+ * | Setup        | `@objectstack/plugin-setup`       | Platform Setup App (admin UI navigation)  |
  * | Security     | `@objectstack/plugin-security`    | RBAC, RLS, field-level masking            |
  * | HTTP Server  | `@objectstack/plugin-hono-server` | HTTP server on configured port            |
  * | REST API     | `@objectstack/rest`               | Auto-generated CRUD + metadata endpoints  |
@@ -527,6 +528,18 @@ export class DevPlugin implements Plugin {
             '  ℹ @objectstack/service-i18n not installed — using core in-memory i18n fallback with locale resolution'
           );
         }
+      }
+    }
+
+    // 3c. Setup Plugin — platform Setup App with area-based navigation
+    if (enabled('setup')) {
+      try {
+        const { SetupPlugin } = await import('@objectstack/plugin-setup') as any;
+        const setupPlugin = new SetupPlugin();
+        this.childPlugins.push(setupPlugin);
+        ctx.logger.info('  ✔ Setup plugin enabled (platform Setup App)');
+      } catch {
+        ctx.logger.debug('  ℹ @objectstack/plugin-setup not installed — skipping Setup App');
       }
     }
 
