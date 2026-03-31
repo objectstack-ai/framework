@@ -149,7 +149,7 @@ describe('Conversation Ownership Enforcement', () => {
     expect((responseB.body as any).conversations).toHaveLength(1);
   });
 
-  it('should reject adding a message to another user\'s conversation', async () => {
+  it('should reject adding a message to another user conversation', async () => {
     const createRoute = getRoute('POST', '/api/v1/ai/conversations');
     const addMsgRoute = getRoute('POST', '/api/v1/ai/conversations/:id/messages');
 
@@ -170,7 +170,7 @@ describe('Conversation Ownership Enforcement', () => {
     expect((response.body as any).error).toContain('do not have access');
   });
 
-  it('should reject deleting another user\'s conversation', async () => {
+  it('should reject deleting another user conversation', async () => {
     const createRoute = getRoute('POST', '/api/v1/ai/conversations');
     const deleteRoute = getRoute('DELETE', '/api/v1/ai/conversations/:id');
 

@@ -187,16 +187,17 @@ export class AIService implements IAIService {
 
       // Process results: track errors and honour onToolError callback
       let aborted = false;
-      for (let i = 0; i < toolResults.length; i++) {
-        const tr = toolResults[i];
-
+      for (const tr of toolResults) {
         if (tr.isError) {
-          const errorEntry = { iteration, toolName: result.toolCalls[i].name, error: tr.content };
+          // Match tool call by toolCallId for robust attribution
+          const matchedCall = result.toolCalls!.find(tc => tc.id === tr.toolCallId);
+          const toolName = matchedCall?.name ?? 'unknown';
+          const errorEntry = { iteration, toolName, error: tr.content };
           toolErrors.push(errorEntry);
           this.logger.warn('[AI] chatWithTools tool error', errorEntry);
 
-          if (onToolError) {
-            const action = onToolError(result.toolCalls[i], tr.content);
+          if (onToolError && matchedCall) {
+            const action = onToolError(matchedCall, tr.content);
             if (action === 'abort') {
               aborted = true;
             }
@@ -288,12 +289,14 @@ export class AIService implements IAIService {
       const toolResults = await this.toolRegistry.executeAll(result.toolCalls);
 
       let aborted = false;
-      for (let i = 0; i < toolResults.length; i++) {
-        const tr = toolResults[i];
+      for (const tr of toolResults) {
         if (tr.isError && onToolError) {
-          const action = onToolError(result.toolCalls[i], tr.content);
-          if (action === 'abort') {
-            aborted = true;
+          const matchedCall = result.toolCalls!.find(tc => tc.id === tr.toolCallId);
+          if (matchedCall) {
+            const action = onToolError(matchedCall, tr.content);
+            if (action === 'abort') {
+              aborted = true;
+            }
           }
         }
         conversation.push({
