@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **ObjectQL build failure** — Fixed TypeScript TS2345 errors in `packages/objectql/src/protocol.ts`
+  where `SchemaRegistry.registerItem()` calls failed type checking for the `keyField` parameter.
+  Applied `'name' as any` cast consistent with the established codebase pattern.
+- **ObjectQL `loadMetaFromDb`** — Fixed metadata hydration for `object` type records to use
+  `SchemaRegistry.registerObject()` instead of `registerItem()`, resolving a mismatch where
+  objects registered via `registerItem` could not be retrieved via `getItem('object', ...)`.
+- **Adapter discovery endpoints** — Fixed discovery route in Hono, SvelteKit, Nuxt, Next.js,
+  and Fastify adapters to serve discovery info at the API prefix root (e.g., `GET /api`)
+  instead of a `/discovery` subpath. Updated `.well-known/objectstack` redirects accordingly.
+- **Client feed namespace routing** — Fixed `ObjectStackClient.feed` methods to use the `data`
+  route (`/api/v1/data/{object}/{recordId}/feed`) instead of a separate `/api/v1/feed` route,
+  matching the actual server-side routing where feed is a sub-resource of data.
+
 ### Added
 - **`@objectstack/service-ai` — Unified AI capability service plugin** — New kernel plugin
   providing standardized AI service integration:
