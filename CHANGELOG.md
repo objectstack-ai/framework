@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`@objectstack/plugin-setup` — Platform Setup App plugin** — New internal plugin
+  (`packages/plugins/plugin-setup`) that owns and finalizes the platform Setup App.
+  Ships four built-in Setup Areas (Administration, Platform, System, AI) as empty
+  skeletons. Other plugins contribute navigation items via the `setupNav` service
+  during their `init` phase. At `start`, SetupPlugin merges all contributions,
+  filters out empty areas, and registers the finalized Setup App as an internal
+  platform app. This establishes clear architectural separation: **spec** = protocol
+  only, **objectql** = data/query only, **plugins** = system feature and UI composition.
+
 ### Documentation
 - **Unified API query syntax documentation with Spec canonical format** — Rewrote
   `content/docs/protocol/objectql/query-syntax.mdx` and
