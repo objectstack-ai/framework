@@ -76,7 +76,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // Build dynamic service info with proper typing
         const services: Record<string, ServiceInfo> = {
             // --- Kernel-provided (objectql is an example kernel implementation) ---
-            metadata:  { enabled: true, status: 'degraded' as const, route: '/api/v1/meta', provider: 'objectql', message: 'In-memory registry only; DB persistence not yet implemented' },
+            metadata:  { enabled: true, status: 'available' as const, route: '/api/v1/meta', provider: 'objectql' },
             data:      { enabled: true, status: 'available' as const, route: '/api/v1/data', provider: 'objectql' },
             analytics: { enabled: true, status: 'available' as const, route: '/api/v1/analytics', provider: 'objectql' },
         };
@@ -192,6 +192,43 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
             items = SchemaRegistry.listItems(alt);
         }
+
+        // Fallback to database if registry is empty for this type
+        if (items.length === 0) {
+            try {
+                const allRecords = await this.engine.find('sys_metadata', {
+                    where: { type: request.type, state: 'active' }
+                });
+                if (allRecords && allRecords.length > 0) {
+                    items = allRecords.map((record: any) => {
+                        const data = typeof record.metadata === 'string'
+                            ? JSON.parse(record.metadata)
+                            : record.metadata;
+                        // Hydrate back into registry
+                        SchemaRegistry.registerItem(request.type, data, 'name');
+                        return data;
+                    });
+                } else {
+                    // Try alternate type name in DB
+                    const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
+                    const altRecords = await this.engine.find('sys_metadata', {
+                        where: { type: alt, state: 'active' }
+                    });
+                    if (altRecords && altRecords.length > 0) {
+                        items = altRecords.map((record: any) => {
+                            const data = typeof record.metadata === 'string'
+                                ? JSON.parse(record.metadata)
+                                : record.metadata;
+                            SchemaRegistry.registerItem(request.type, data, 'name');
+                            return data;
+                        });
+                    }
+                }
+            } catch {
+                // DB not available, return registry results (empty)
+            }
+        }
+
         return {
             type: request.type,
             items
@@ -205,6 +242,38 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
             item = SchemaRegistry.getItem(alt, request.name);
         }
+
+        // Fallback to database if not in registry
+        if (item === undefined) {
+            try {
+                const record = await this.engine.findOne('sys_metadata', {
+                    where: { type: request.type, name: request.name, state: 'active' }
+                });
+                if (record) {
+                    item = typeof record.metadata === 'string'
+                        ? JSON.parse(record.metadata)
+                        : record.metadata;
+                    // Hydrate back into registry for next time
+                    SchemaRegistry.registerItem(request.type, item, 'name');
+                } else {
+                    // Try alternate type name
+                    const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
+                    const altRecord = await this.engine.findOne('sys_metadata', {
+                        where: { type: alt, name: request.name, state: 'active' }
+                    });
+                    if (altRecord) {
+                        item = typeof altRecord.metadata === 'string'
+                            ? JSON.parse(altRecord.metadata)
+                            : altRecord.metadata;
+                        // Hydrate back into registry for next time
+                        SchemaRegistry.registerItem(request.type, item, 'name');
+                    }
+                }
+            } catch {
+                // DB not available, return undefined
+            }
+        }
+
         return {
             type: request.type,
             name: request.name,
@@ -840,12 +909,88 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         if (!request.item) {
             throw new Error('Item data is required');
         }
-        // Default implementation saves to Memory Registry
+
+        // 1. Always update the in-memory registry (runtime cache)
         SchemaRegistry.registerItem(request.type, request.item, 'name');
-        return {
-            success: true,
-            message: 'Saved to memory registry'
-        };
+
+        // 2. Persist to database via data engine
+        try {
+            const now = new Date().toISOString();
+            // Check if record exists
+            const existing = await this.engine.findOne('sys_metadata', {
+                where: { type: request.type, name: request.name }
+            });
+
+            if (existing) {
+                await this.engine.update('sys_metadata', {
+                    metadata: JSON.stringify(request.item),
+                    updated_at: now,
+                    version: (existing.version || 0) + 1,
+                }, {
+                    where: { id: existing.id }
+                });
+            } else {
+                // Use crypto.randomUUID() when available (modern browsers and Node ≥ 14.17);
+                // fall back to a time+random ID for older or restricted environments.
+                const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                    ? crypto.randomUUID()
+                    : `meta_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                await this.engine.insert('sys_metadata', {
+                    id,
+                    name: request.name,
+                    type: request.type,
+                    scope: 'platform',
+                    metadata: JSON.stringify(request.item),
+                    state: 'active',
+                    version: 1,
+                    created_at: now,
+                    updated_at: now,
+                });
+            }
+
+            return {
+                success: true,
+                message: 'Saved to database and registry'
+            };
+        } catch (dbError: any) {
+            // DB write failed but in-memory registry was updated — degrade gracefully
+            console.warn(`[Protocol] DB persistence failed for ${request.type}/${request.name}: ${dbError.message}`);
+            return {
+                success: true,
+                message: 'Saved to memory registry (DB persistence unavailable)',
+                warning: dbError.message
+            };
+        }
+    }
+
+    /**
+     * Hydrate SchemaRegistry from the database on startup.
+     * Loads all active metadata records and registers them in the in-memory registry.
+     * Safe to call repeatedly — idempotent (latest DB record wins).
+     */
+    async loadMetaFromDb(): Promise<{ loaded: number; errors: number }> {
+        let loaded = 0;
+        let errors = 0;
+        try {
+            const records = await this.engine.find('sys_metadata', {
+                where: { state: 'active' }
+            });
+            for (const record of records) {
+                try {
+                    const data = typeof record.metadata === 'string'
+                        ? JSON.parse(record.metadata)
+                        : record.metadata;
+                    SchemaRegistry.registerItem(record.type, data, 'name');
+                    loaded++;
+                } catch (e) {
+                    errors++;
+                    console.warn(`[Protocol] Failed to hydrate ${record.type}/${record.name}: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+        } catch (e: any) {
+            console.warn(`[Protocol] DB hydration skipped: ${e.message}`);
+        }
+        return { loaded, errors };
     }
 
     // ==========================================

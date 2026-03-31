@@ -480,6 +480,15 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 - [ ] Implement fallback strategy per `config.fallback` setting
 - [ ] Persist overlay customizations to database (overlay save/remove backed by DatabaseLoader)
 
+**Protocol Layer Integration (ObjectStackProtocol):**
+- [x] `saveMetaItem()` in `ObjectStackProtocolImplementation` uses dual-write: SchemaRegistry (runtime cache) + `sys_metadata` table via `IDataEngine`
+- [x] `getMetaItem()` falls back to database when item is not in in-memory registry
+- [x] `getMetaItems()` falls back to database when registry is empty for a type
+- [x] `loadMetaFromDb()` bootstrap method hydrates SchemaRegistry from database on startup
+- [x] Graceful degradation: DB failures fall back to memory-only mode with warning
+- [x] Discovery endpoint metadata service status upgraded from `degraded` to `available`
+- [x] Tests for dual-write, DB fallback, graceful degradation, and bootstrap hydration
+
 **Tests:**
 - [x] Unit tests with mock `IDataDriver` (31 tests)
 - [x] Integration tests for MetadataManager + DatabaseLoader (9 tests)

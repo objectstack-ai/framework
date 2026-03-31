@@ -55,6 +55,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   invocations on Vercel. The browser MSW mock kernel remains unchanged (InMemoryDriver).
 
 ### Fixed
+- **Metadata DB persistence — `saveMetaItem()` now writes to database** — The protocol
+  implementation (`ObjectStackProtocolImplementation.saveMetaItem()`) now persists metadata
+  to the `sys_metadata` table via `IDataEngine` in addition to the in-memory `SchemaRegistry`.
+  Previously, metadata saved via `PUT /api/v1/meta/:type/:name` was lost on server restart.
+  Added `loadMetaFromDb()` bootstrap method to hydrate the registry from the database on
+  startup. `getMetaItem()` and `getMetaItems()` now fall back to database queries when items
+  are not found in the in-memory registry. Discovery endpoint metadata status upgraded from
+  `degraded` to `available`. Graceful degradation: if the database is unavailable, operations
+  fall back to memory-only mode with a warning.
 - **Vercel API always returns HTML — serverless function entrypoint not found** — The `bundle-api.mjs`
   script was emitting `api/index.js` at the project root, but `vercel.json` sets `outputDirectory: "dist"`,
   so Vercel could not discover the serverless function and fell back to the SPA HTML route for all

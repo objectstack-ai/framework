@@ -92,7 +92,7 @@ describe('ObjectStackProtocolImplementation - Dynamic Service Discovery', () => 
     
     // Core services should always be available
     expect(discovery.services.metadata.enabled).toBe(true);
-    expect(discovery.services.metadata.status).toBe('degraded');
+    expect(discovery.services.metadata.status).toBe('available');
     expect(discovery.services.data.enabled).toBe(true);
     expect(discovery.services.data.status).toBe('available');
     expect(discovery.services.analytics.enabled).toBe(true);
