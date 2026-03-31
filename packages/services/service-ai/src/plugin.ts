@@ -1,12 +1,16 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import type { IAIService, IAIConversationService, IDataEngine, LLMAdapter } from '@objectstack/spec/contracts';
+import type { IAIService, IAIConversationService, IDataEngine, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
 import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
 import { buildAIRoutes } from './routes/ai-routes.js';
+import { buildAgentRoutes } from './routes/agent-routes.js';
 import { ObjectQLConversationService } from './conversation/objectql-conversation-service.js';
 import { AiConversationObject, AiMessageObject } from './objects/index.js';
+import { registerDataTools } from './tools/data-tools.js';
+import { AgentRuntime } from './agent-runtime.js';
+import { DATA_CHAT_AGENT } from './agents/index.js';
 
 /**
  * Configuration options for the AIServicePlugin.
@@ -120,11 +124,40 @@ export class AIServicePlugin implements Plugin {
   async start(ctx: PluginContext): Promise<void> {
     if (!this.service) return;
 
+    // ── Auto-register built-in data tools if data engine + metadata are available ──
+    try {
+      const dataEngine = ctx.getService<IDataEngine>('data');
+      const metadataService = ctx.getService<IMetadataService>('metadata');
+      if (dataEngine && metadataService) {
+        registerDataTools(this.service.toolRegistry, { dataEngine, metadataService });
+        ctx.logger.info('[AI] Built-in data tools registered');
+
+        // Register the built-in data_chat agent
+        await metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT);
+        ctx.logger.info('[AI] data_chat agent registered');
+      }
+    } catch {
+      // Data engine or metadata service not available — skip data tools
+      ctx.logger.debug('[AI] Data engine or metadata service not available, skipping data tools');
+    }
+
     // Trigger hook to notify AI service is ready — other plugins can register tools
     await ctx.trigger('ai:ready', this.service);
 
     // Build and expose route definitions
     const routes = buildAIRoutes(this.service, this.service.conversationService, ctx.logger);
+
+    // Build agent routes if metadata service is available
+    try {
+      const metadataService = ctx.getService<IMetadataService>('metadata');
+      if (metadataService) {
+        const agentRuntime = new AgentRuntime(metadataService);
+        const agentRoutes = buildAgentRoutes(this.service, agentRuntime, ctx.logger);
+        routes.push(...agentRoutes);
+      }
+    } catch {
+      ctx.logger.debug('[AI] Metadata service not available, skipping agent routes');
+    }
 
     // Trigger hook so HTTP server plugins can mount these routes
     await ctx.trigger('ai:routes', routes);
