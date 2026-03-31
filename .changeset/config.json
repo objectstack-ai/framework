@@ -37,6 +37,7 @@
       "@objectstack/service-job",
       "@objectstack/service-queue",
       "@objectstack/service-realtime",
+      "@objectstack/service-ai",
       "@objectstack/service-storage",
       "@objectstack/docs",
       "create-objectstack",

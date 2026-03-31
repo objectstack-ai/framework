@@ -99,11 +99,13 @@ export interface AIToolResult {
 
 /**
  * A chat message that may carry tool-related metadata.
- * Extends {@link AIMessage} with the `tool` role and tool call fields.
+ * Widens the `role` union to include `tool` for tool result messages.
  */
-export interface AIMessageWithTools extends AIMessage {
+export interface AIMessageWithTools {
     /** Message role – adds `tool` for tool result messages */
     role: 'system' | 'user' | 'assistant' | 'tool';
+    /** Message content */
+    content: string;
     /** Tool calls requested by the assistant */
     toolCalls?: AIToolCall[];
     /** ID of the tool call this message responds to (for role='tool') */
