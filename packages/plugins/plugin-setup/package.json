@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/plugin-setup",
-  "version": "3.3.1",
+  "version": "3.4.0",
   "license": "Apache-2.0",
   "description": "Setup Plugin for ObjectStack — Platform Setup App with area-based navigation composition",
   "main": "dist/index.js",

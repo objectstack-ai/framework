@@ -1,5 +1,40 @@
 # @objectstack/studio
 
+## 3.4.0
+
+### Patch Changes
+
+- 1624851: Fix Vercel deployment API endpoints returning HTML instead of JSON.
+
+  The `bundle-api.mjs` script was emitting the serverless function to `api/index.js`
+  at the project root, but `vercel.json` sets `outputDirectory: "dist"` — causing
+  Vercel to never find the function entrypoint and fall back to the SPA HTML route
+  for all `/api/*` requests.
+
+  - Change esbuild `outfile` from `api/index.js` to `dist/api/index.js` so the
+    bundled serverless function lands inside the Vercel output directory.
+  - Add explicit `functions` config in `vercel.json` pointing to `api/index.js`
+    (relative to `outputDirectory`) with `@vercel/node@3` runtime.
+  - Remove obsolete `.gitignore` entries for `api/index.js` and `api/index.js.map`
+    (now emitted under `dist/` which is already git-ignored).
+
+- Updated dependencies [f08ffc3]
+- Updated dependencies [e0b0a78]
+  - @objectstack/spec@3.4.0
+  - @objectstack/client@3.4.0
+  - @objectstack/runtime@3.4.0
+  - @objectstack/hono@3.4.0
+  - @objectstack/objectql@3.4.0
+  - @objectstack/plugin-auth@3.4.0
+  - @objectstack/client-react@3.4.0
+  - @objectstack/metadata@3.4.0
+  - @objectstack/driver-memory@3.4.0
+  - @objectstack/driver-turso@3.3.2
+  - @objectstack/plugin-audit@3.4.0
+  - @objectstack/plugin-msw@3.4.0
+  - @objectstack/plugin-security@3.4.0
+  - @objectstack/service-feed@3.4.0
+
 ## 3.3.1
 
 ### Patch Changes
