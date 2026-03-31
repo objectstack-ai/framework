@@ -26,6 +26,7 @@
     "@objectstack/plugin-auth": "workspace:^",
     "@objectstack/plugin-hono-server": "workspace:^",
     "@objectstack/plugin-security": "workspace:^",
+    "@objectstack/plugin-setup": "workspace:^",
     "@objectstack/rest": "workspace:^",
     "@objectstack/runtime": "workspace:^",
     "@objectstack/service-i18n": "workspace:^"
@@ -49,6 +50,9 @@
     "@objectstack/plugin-security": {
       "optional": true
     },
+    "@objectstack/plugin-setup": {
+      "optional": true
+    },
     "@objectstack/rest": {
       "optional": true
     },
@@ -62,6 +66,7 @@
     "@objectstack/plugin-auth": "workspace:*",
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
+    "@objectstack/plugin-setup": "workspace:*",
     "@objectstack/rest": "workspace:*",
     "@objectstack/runtime": "workspace:*",
     "@objectstack/service-i18n": "workspace:*",
