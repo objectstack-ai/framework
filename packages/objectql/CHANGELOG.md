@@ -1,5 +1,30 @@
 # @objectstack/objectql
 
+## 4.0.0
+
+### Minor Changes
+
+- e0b0a78: Deprecate DataEngineQueryOptions in favor of QueryAST-aligned EngineQueryOptions.
+
+  Engine, Protocol, and Client now use standard QueryAST parameter names:
+
+  - `filter` → `where`
+  - `select` → `fields`
+  - `sort` → `orderBy`
+  - `skip` → `offset`
+  - `populate` → `expand`
+  - `top` → `limit`
+
+  The old DataEngine\* schemas and types are preserved with `@deprecated` markers for backward compatibility.
+
+### Patch Changes
+
+- Updated dependencies [f08ffc3]
+- Updated dependencies [e0b0a78]
+  - @objectstack/spec@4.0.0
+  - @objectstack/core@4.0.0
+  - @objectstack/types@4.0.0
+
 ## 3.3.1
 
 ### Patch Changes

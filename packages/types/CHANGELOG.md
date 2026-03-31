@@ -1,5 +1,13 @@
 # @objectstack/types
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [f08ffc3]
+- Updated dependencies [e0b0a78]
+  - @objectstack/spec@4.0.0
+
 ## 3.3.1
 
 ### Patch Changes
