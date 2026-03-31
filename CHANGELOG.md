@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Promoted `LLMAdapter` interface to `@objectstack/spec/contracts`** — Moved the `LLMAdapter`
+  adapter contract from `@objectstack/service-ai` internal types to the canonical protocol layer
+  (`packages/spec/src/contracts/llm-adapter.ts`). Third-party adapter implementations (OpenAI,
+  Anthropic, Ollama, etc.) can now depend solely on `@objectstack/spec` for type alignment.
+  `service-ai` re-exports the interface for backward compatibility.
+
 ### Fixed
 - **ObjectQL build failure** — Fixed TypeScript TS2345 errors in `packages/objectql/src/protocol.ts`
   where `SchemaRegistry.registerItem()` calls failed type checking for the `keyField` parameter.

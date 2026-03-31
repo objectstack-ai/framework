@@ -29,6 +29,7 @@ export * from './analytics-service.js';
 export * from './realtime-service.js';
 export * from './job-service.js';
 export * from './ai-service.js';
+export * from './llm-adapter.js';
 export * from './i18n-service.js';
 export * from './ui-service.js';
 export * from './workflow-service.js';

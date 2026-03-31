@@ -879,7 +879,7 @@ Final polish and advanced features.
 | 15 | Feed Service | `IFeedService` | ✅ | `@objectstack/service-feed` | In-memory feed/chatter (comments, reactions, subscriptions) |
 | 16 | Search Service | `ISearchService` | ❌ | `@objectstack/service-search` (planned) | Spec only |
 | 17 | Notification Service | `INotificationService` | ❌ | `@objectstack/service-notification` (planned) | Spec only |
-| 18 | AI Service | `IAIService` | ✅ | `@objectstack/service-ai` | LLM adapter layer, ToolRegistry, conversation management, REST/SSE routes (52 tests) |
+| 18 | AI Service | `IAIService` | ✅ | `@objectstack/service-ai` | LLM adapter layer (`LLMAdapter` contract in spec), ToolRegistry, conversation management, REST/SSE routes (52 tests) |
 | 19 | Automation Service | `IAutomationService` | ✅ | `@objectstack/service-automation` | DAG engine + HTTP API CRUD + Client SDK + typed returns (67 tests) |
 | 20 | Workflow Service | `IWorkflowService` | ❌ | `@objectstack/service-workflow` (planned) | Spec only |
 | 21 | GraphQL Service | `IGraphQLService` | ❌ | `@objectstack/service-graphql` (planned) | Spec only |

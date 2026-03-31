@@ -6,7 +6,7 @@ import type {
   AIResult,
   AIStreamEvent,
 } from '@objectstack/spec/contracts';
-import type { LLMAdapter } from './types.js';
+import type { LLMAdapter } from '@objectstack/spec/contracts';
 
 /**
  * MemoryLLMAdapter — deterministic in-memory adapter for testing & development.

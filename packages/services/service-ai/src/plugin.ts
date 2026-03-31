@@ -1,10 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import type { IAIService } from '@objectstack/spec/contracts';
+import type { IAIService, LLMAdapter } from '@objectstack/spec/contracts';
 import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
-import type { LLMAdapter } from './adapters/types.js';
 import { buildAIRoutes } from './routes/ai-routes.js';
 
 /**
