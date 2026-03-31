@@ -22,6 +22,7 @@
       "@objectstack/plugin-msw",
       "@objectstack/plugin-dev",
       "@objectstack/plugin-security",
+      "@objectstack/plugin-setup",
       "@objectstack/express",
       "@objectstack/fastify",
       "@objectstack/hono",

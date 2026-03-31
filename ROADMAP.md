@@ -53,6 +53,7 @@ the ecosystem for enterprise workloads.
 | Authentication (better-auth) | ✅ | `@objectstack/plugin-auth` |
 | Auth in MSW/Mock Mode | ✅ | `@objectstack/plugin-auth` + `@objectstack/runtime` |
 | RBAC / RLS / FLS Security | ✅ | `@objectstack/plugin-security` |
+| Platform Setup App | ✅ | `@objectstack/plugin-setup` |
 | CLI (16 commands) | ✅ | `@objectstack/cli` |
 | Dev Mode Plugin | ✅ | `@objectstack/plugin-dev` |
 | Next.js Adapter | ✅ | `@objectstack/nextjs` |
@@ -900,6 +901,7 @@ Final polish and advanced features.
 | `@objectstack/driver-memory` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
 | `@objectstack/plugin-auth` | 3.0.8 | ✅ | ✅ Stable | 9/10 |
 | `@objectstack/plugin-security` | 3.0.8 | — | ✅ Stable | 9/10 |
+| `@objectstack/plugin-setup` | 3.3.1 | ✅ | ✅ Stable | 8/10 |
 | `@objectstack/plugin-dev` | 3.0.8 | — | ✅ Stable | 10/10 |
 | `@objectstack/plugin-hono-server` | 3.0.8 | — | ✅ Stable | 9/10 |
 | `@objectstack/plugin-msw` | 3.0.8 | — | ✅ Stable | 9/10 |
