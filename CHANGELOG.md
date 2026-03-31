@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`@objectstack/service-ai` — Data Chatbot: Tool Call Loop & Agent Runtime** — Implements
+  an Airtable Copilot-style data conversation Chatbot with full-stack support:
+  - `AIService.chatWithTools()` — automatic multi-round LLM ↔ tool call loop with
+    `maxIterations` safety limit, parallel tool execution, and forced final response
+  - `AIResult.toolCalls` — new field on the AI result contract so adapters can return
+    tool call requests from the LLM
+  - `ChatWithToolsOptions` — new contract interface extending `AIRequestOptions`
+  - 5 built-in data tools: `list_objects`, `describe_object`, `query_records`,
+    `get_record`, `aggregate_data` — with parameter schemas, limit capping (max 200),
+    and error handling
+  - `registerDataTools(registry, context)` — factory to register all data tools
+    against `IDataEngine` + `IMetadataService`
+  - `AgentRuntime` — loads agent metadata, builds system prompts from instructions +
+    UI context (`objectName`, `recordId`, `viewName`), resolves agent tool references
+    against the `ToolRegistry`
+  - `buildAgentRoutes()` — new `POST /api/v1/ai/agents/:agentName/chat` route with
+    agent lookup, active-check, context injection, and `chatWithTools` integration
+  - `DATA_CHAT_AGENT` — built-in `data_chat` agent spec with role, instructions,
+    guardrails, planning config, and tool declarations
+  - `AIServicePlugin` auto-registers data tools and `data_chat` agent when
+    `IDataEngine` + `IMetadataService` are available in the kernel
+  - 42 new test cases covering tool call loop, data tools, agent runtime, agent
+    routes, and agent spec validation
 - **`@objectstack/service-ai` — ObjectQL-backed persistent ConversationService** — New
   `ObjectQLConversationService` implements `IAIConversationService` using `IDataEngine`
   for durable conversation and message storage across service restarts:
