@@ -96,7 +96,7 @@ export class AIServicePlugin implements Plugin {
     await ctx.trigger('ai:ready', this.service);
 
     // Build and expose route definitions
-    const routes = buildAIRoutes(this.service, ctx.logger);
+    const routes = buildAIRoutes(this.service, this.service.conversationService, ctx.logger);
 
     // Trigger hook so HTTP server plugins can mount these routes
     await ctx.trigger('ai:routes', routes);

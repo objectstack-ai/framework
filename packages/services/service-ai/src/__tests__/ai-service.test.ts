@@ -365,7 +365,7 @@ describe('AI Routes', () => {
   });
 
   it('should build all expected routes', () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     expect(routes.length).toBe(8);
 
     const paths = routes.map(r => `${r.method} ${r.path}`);
@@ -380,7 +380,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/chat should return chat result', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
 
     const response = await chatRoute.handler({
@@ -392,7 +392,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/chat should return 400 without messages', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
 
     const response = await chatRoute.handler({ body: {} });
@@ -400,7 +400,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/chat/stream should return streaming response', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const streamRoute = routes.find(r => r.path === '/api/v1/ai/chat/stream')!;
 
     const response = await streamRoute.handler({
@@ -420,7 +420,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/complete should return completion result', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const completeRoute = routes.find(r => r.path === '/api/v1/ai/complete')!;
 
     const response = await completeRoute.handler({
@@ -432,7 +432,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/complete should return 400 without prompt', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const completeRoute = routes.find(r => r.path === '/api/v1/ai/complete')!;
 
     const response = await completeRoute.handler({ body: {} });
@@ -440,7 +440,7 @@ describe('AI Routes', () => {
   });
 
   it('GET /api/v1/ai/models should return model list', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const modelsRoute = routes.find(r => r.path === '/api/v1/ai/models')!;
 
     const response = await modelsRoute.handler({});
@@ -449,7 +449,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/conversations should create conversation', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
 
     const response = await createRoute.handler({
@@ -461,7 +461,7 @@ describe('AI Routes', () => {
   });
 
   it('GET /api/v1/ai/conversations should list conversations', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
     const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
 
@@ -474,7 +474,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/conversations/:id/messages should add message', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
     const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
 
@@ -491,7 +491,7 @@ describe('AI Routes', () => {
   });
 
   it('POST /api/v1/ai/conversations/:id/messages should return 404 for unknown conversation', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
 
     const response = await addMsgRoute.handler({
@@ -503,7 +503,7 @@ describe('AI Routes', () => {
   });
 
   it('DELETE /api/v1/ai/conversations/:id should delete conversation', async () => {
-    const routes = buildAIRoutes(service, silentLogger);
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
     const deleteRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id')!;
 
@@ -512,6 +512,115 @@ describe('AI Routes', () => {
 
     const response = await deleteRoute.handler({ params: { id: convId } });
     expect(response.status).toBe(204);
+  });
+
+  // ── Message validation ───────────────────────────────────────
+
+  it('POST /api/v1/ai/chat should return 400 for messages with invalid role', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: { messages: [{ role: 'invalid', content: 'Hi' }] },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('message.role');
+  });
+
+  it('POST /api/v1/ai/chat should return 400 for messages with non-string content', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: { messages: [{ role: 'user', content: 123 }] },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('content');
+  });
+
+  it('POST /api/v1/ai/conversations/:id/messages should return 400 for invalid role', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
+
+    const created = await createRoute.handler({ body: {} });
+    const convId = (created.body as any).id;
+
+    const response = await addMsgRoute.handler({
+      params: { id: convId },
+      body: { role: 'invalid_role', content: 'Hi' },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('message.role');
+  });
+
+  it('POST /api/v1/ai/conversations/:id/messages should return 400 for missing content', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const addMsgRoute = routes.find(r => r.path === '/api/v1/ai/conversations/:id/messages')!;
+
+    const response = await addMsgRoute.handler({
+      params: { id: 'conv_1' },
+      body: { role: 'user' },
+    });
+
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('content');
+  });
+
+  // ── Limit parsing ───────────────────────────────────────────
+
+  it('GET /api/v1/ai/conversations should parse limit from query string', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const createRoute = routes.find(r => r.method === 'POST' && r.path === '/api/v1/ai/conversations')!;
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    await createRoute.handler({ body: { title: 'C1' } });
+    await createRoute.handler({ body: { title: 'C2' } });
+    await createRoute.handler({ body: { title: 'C3' } });
+
+    const response = await listRoute.handler({ query: { limit: '2' } });
+    expect(response.status).toBe(200);
+    expect((response.body as any).conversations).toHaveLength(2);
+  });
+
+  it('GET /api/v1/ai/conversations should return 400 for invalid limit', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    const response = await listRoute.handler({ query: { limit: 'abc' } });
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('limit');
+  });
+
+  it('GET /api/v1/ai/conversations should return 400 for negative limit', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const listRoute = routes.find(r => r.method === 'GET' && r.path === '/api/v1/ai/conversations')!;
+
+    const response = await listRoute.handler({ query: { limit: '-1' } });
+    expect(response.status).toBe(400);
+    expect((response.body as any).error).toContain('limit');
+  });
+
+  // ── Tool message in chat ────────────────────────────────────
+
+  it('POST /api/v1/ai/chat should accept tool role messages', async () => {
+    const routes = buildAIRoutes(service, service.conversationService, silentLogger);
+    const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
+
+    const response = await chatRoute.handler({
+      body: {
+        messages: [
+          { role: 'user', content: 'What is the weather?' },
+          { role: 'assistant', content: '' },
+          { role: 'tool', content: '{"temp": 22}', toolCallId: 'call_1' },
+        ],
+      },
+    });
+
+    expect(response.status).toBe(200);
   });
 });
 

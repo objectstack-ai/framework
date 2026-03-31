@@ -3,10 +3,10 @@
 import type {
   AIMessage,
   AIRequestOptions,
-  AIRequestOptionsWithTools,
   AIResult,
   AIStreamEvent,
   IAIService,
+  IAIConversationService,
 } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 import { createLogger } from '@objectstack/core';
@@ -26,7 +26,7 @@ export interface AIServiceConfig {
   /** Pre-registered tools. */
   toolRegistry?: ToolRegistry;
   /** Conversation service (defaults to InMemoryConversationService). */
-  conversationService?: InMemoryConversationService;
+  conversationService?: IAIConversationService;
 }
 
 /**
@@ -39,7 +39,7 @@ export interface AIServiceConfig {
  * |:---|:---|
  * | {@link LLMAdapter} | LLM provider abstraction (chat, complete, stream, embed) |
  * | {@link ToolRegistry} | Tool definition storage & execution |
- * | {@link InMemoryConversationService} | Conversation CRUD & message persistence |
+ * | {@link IAIConversationService} | Conversation CRUD & message persistence |
  *
  * The service is registered as `'ai'` in the kernel service registry by
  * the {@link AIServicePlugin}.
@@ -48,7 +48,7 @@ export class AIService implements IAIService {
   private readonly adapter: LLMAdapter;
   private readonly logger: Logger;
   readonly toolRegistry: ToolRegistry;
-  readonly conversationService: InMemoryConversationService;
+  readonly conversationService: IAIConversationService;
 
   constructor(config: AIServiceConfig = {}) {
     this.adapter = config.adapter ?? new MemoryLLMAdapter();
@@ -81,7 +81,7 @@ export class AIService implements IAIService {
 
   async *streamChat(
     messages: AIMessage[],
-    options?: AIRequestOptionsWithTools,
+    options?: AIRequestOptions,
   ): AsyncIterable<AIStreamEvent> {
     this.logger.debug('[AI] streamChat', { messageCount: messages.length, model: options?.model });
 

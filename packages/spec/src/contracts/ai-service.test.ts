@@ -6,8 +6,7 @@ import type {
   AIToolDefinition,
   AIToolCall,
   AIToolResult,
-  AIMessageWithTools,
-  AIRequestOptionsWithTools,
+  AIRequestOptions,
   AIStreamEvent,
   AIConversation,
   IAIConversationService,
@@ -155,7 +154,7 @@ describe('AI Service Contract', () => {
     });
 
     it('should support AIMessageWithTools for tool conversations', () => {
-      const assistantMsg: AIMessageWithTools = {
+      const assistantMsg: AIMessage = {
         role: 'assistant',
         content: '',
         toolCalls: [
@@ -166,7 +165,7 @@ describe('AI Service Contract', () => {
       expect(assistantMsg.toolCalls).toHaveLength(1);
       expect(assistantMsg.toolCalls![0].name).toBe('get_weather');
 
-      const toolMsg: AIMessageWithTools = {
+      const toolMsg: AIMessage = {
         role: 'tool',
         content: '{"temp": 22}',
         toolCallId: 'call_1',
@@ -176,8 +175,8 @@ describe('AI Service Contract', () => {
       expect(toolMsg.toolCallId).toBe('call_1');
     });
 
-    it('should support AIRequestOptionsWithTools', () => {
-      const options: AIRequestOptionsWithTools = {
+    it('should support tool options on AIRequestOptions', () => {
+      const options: AIRequestOptions = {
         model: 'gpt-4',
         temperature: 0.7,
         tools: [
@@ -192,6 +191,30 @@ describe('AI Service Contract', () => {
 
       expect(options.tools).toHaveLength(1);
       expect(options.toolChoice).toBe('auto');
+    });
+
+    it('should support non-streaming tool calling via chat()', async () => {
+      const service: IAIService = {
+        chat: async (messages, options?) => {
+          // Simulate tool call detection
+          if (options?.tools && options.tools.length > 0) {
+            return { content: 'Using tools', model: 'gpt-4' };
+          }
+          return { content: 'No tools' };
+        },
+        complete: async () => ({ content: '' }),
+      };
+
+      const result = await service.chat(
+        [{ role: 'user', content: 'What is the weather?' }],
+        {
+          model: 'gpt-4',
+          tools: [{ name: 'get_weather', description: 'Get weather', parameters: {} }],
+          toolChoice: 'auto',
+        },
+      );
+
+      expect(result.content).toBe('Using tools');
     });
   });
 

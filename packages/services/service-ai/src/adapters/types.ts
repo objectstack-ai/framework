@@ -3,7 +3,6 @@
 import type {
   AIMessage,
   AIRequestOptions,
-  AIRequestOptionsWithTools,
   AIResult,
   AIStreamEvent,
 } from '@objectstack/spec/contracts';
@@ -24,7 +23,7 @@ export interface LLMAdapter {
   /**
    * Generate a chat completion.
    * @param messages - Conversation messages
-   * @param options  - Request configuration
+   * @param options  - Request configuration (includes tool definitions)
    */
   chat(messages: AIMessage[], options?: AIRequestOptions): Promise<AIResult>;
 
@@ -39,7 +38,7 @@ export interface LLMAdapter {
    * Stream a chat completion as an async iterable of events.
    * Implementations that do not support streaming may omit this method.
    */
-  streamChat?(messages: AIMessage[], options?: AIRequestOptionsWithTools): AsyncIterable<AIStreamEvent>;
+  streamChat?(messages: AIMessage[], options?: AIRequestOptions): AsyncIterable<AIStreamEvent>;
 
   /**
    * Generate embedding vectors.

@@ -14,17 +14,30 @@
  */
 
 /**
- * A chat message in a conversation
+ * A chat message in a conversation.
+ *
+ * Supports the standard `system`, `user`, and `assistant` roles as well as
+ * the `tool` role used to return tool execution results to the model.
+ * Tool-call metadata (`toolCalls`, `toolCallId`) is optional so that plain
+ * messages remain simple while tool-using conversations can carry the
+ * necessary context.
  */
 export interface AIMessage {
     /** Message role */
-    role: 'system' | 'user' | 'assistant';
+    role: 'system' | 'user' | 'assistant' | 'tool';
     /** Message content */
     content: string;
+    /** Tool calls requested by the assistant (present when role='assistant') */
+    toolCalls?: AIToolCall[];
+    /** ID of the tool call this message responds to (present when role='tool') */
+    toolCallId?: string;
 }
 
 /**
- * Options for AI completion/chat requests
+ * Options for AI completion/chat requests.
+ *
+ * Includes tool-related configuration so that tool calling works in both
+ * streaming (`streamChat`) and non-streaming (`chat`) modes.
  */
 export interface AIRequestOptions {
     /** Model identifier to use */
@@ -35,6 +48,10 @@ export interface AIRequestOptions {
     maxTokens?: number;
     /** Stop sequences */
     stop?: string[];
+    /** Tool definitions available to the model */
+    tools?: AIToolDefinition[];
+    /** How the model should use tools: 'auto', 'none', or a specific tool name */
+    toolChoice?: 'auto' | 'none' | string;
 }
 
 /**
@@ -94,34 +111,18 @@ export interface AIToolResult {
 }
 
 // ---------------------------------------------------------------------------
-// Extended message & request types (with tool support)
+// Extended message & request types (backward-compatible aliases)
 // ---------------------------------------------------------------------------
 
 /**
- * A chat message that may carry tool-related metadata.
- * Widens the `role` union to include `tool` for tool result messages.
+ * @deprecated Use {@link AIMessage} directly — tool fields are now on the base type.
  */
-export interface AIMessageWithTools {
-    /** Message role – adds `tool` for tool result messages */
-    role: 'system' | 'user' | 'assistant' | 'tool';
-    /** Message content */
-    content: string;
-    /** Tool calls requested by the assistant */
-    toolCalls?: AIToolCall[];
-    /** ID of the tool call this message responds to (for role='tool') */
-    toolCallId?: string;
-}
+export type AIMessageWithTools = AIMessage;
 
 /**
- * Request options extended with tool definitions.
- * Extends {@link AIRequestOptions} with tool-related configuration.
+ * @deprecated Use {@link AIRequestOptions} directly — tool fields are now on the base type.
  */
-export interface AIRequestOptionsWithTools extends AIRequestOptions {
-    /** Tool definitions available to the model */
-    tools?: AIToolDefinition[];
-    /** How the model should use tools: 'auto', 'none', or a specific tool name */
-    toolChoice?: 'auto' | 'none' | string;
-}
+export type AIRequestOptionsWithTools = AIRequestOptions;
 
 // ---------------------------------------------------------------------------
 // Streaming Protocol
@@ -184,7 +185,7 @@ export interface IAIService {
      * @param options - Optional request configuration (supports tool definitions)
      * @returns Async iterable of stream events
      */
-    streamChat?(messages: AIMessage[], options?: AIRequestOptionsWithTools): AsyncIterable<AIStreamEvent>;
+    streamChat?(messages: AIMessage[], options?: AIRequestOptions): AsyncIterable<AIStreamEvent>;
 }
 
 // ---------------------------------------------------------------------------

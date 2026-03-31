@@ -3,7 +3,6 @@
 import type {
   AIMessage,
   AIRequestOptions,
-  AIRequestOptionsWithTools,
   AIResult,
   AIStreamEvent,
 } from '@objectstack/spec/contracts';
@@ -41,7 +40,7 @@ export class MemoryLLMAdapter implements LLMAdapter {
 
   async *streamChat(
     messages: AIMessage[],
-    _options?: AIRequestOptionsWithTools,
+    _options?: AIRequestOptions,
   ): AsyncIterable<AIStreamEvent> {
     const result = await this.chat(messages);
     // Emit word-by-word deltas for realistic streaming simulation

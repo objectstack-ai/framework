@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { AIService } from '../ai-service.js';
+import type { IAIService, IAIConversationService, AIMessage } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 
 /**
@@ -43,11 +43,33 @@ export interface RouteResponse {
   events?: AsyncIterable<unknown>;
 }
 
+/** Valid message roles accepted by the AI routes. */
+const VALID_ROLES = new Set<string>(['system', 'user', 'assistant', 'tool']);
+
+/**
+ * Validate that `raw` is a well-formed AIMessage.
+ * Returns null on success, or an error string on failure.
+ */
+function validateMessage(raw: unknown): string | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return 'each message must be an object';
+  }
+  const msg = raw as Record<string, unknown>;
+  if (typeof msg.role !== 'string' || !VALID_ROLES.has(msg.role)) {
+    return `message.role must be one of ${[...VALID_ROLES].map(r => `"${r}"`).join(', ')}`;
+  }
+  if (typeof msg.content !== 'string') {
+    return 'message.content must be a string';
+  }
+  return null;
+}
+
 /**
  * Build the standard AI REST/SSE routes.
  *
- * Returns an array of {@link RouteDefinition}s that can be self-registered
- * with the kernel's HTTP server during the plugin `start` phase.
+ * Depends on contracts ({@link IAIService} + {@link IAIConversationService})
+ * rather than concrete implementations, so any compliant service pair can
+ * be wired in.
  *
  * Routes:
  * | Method | Path | Description |
@@ -61,7 +83,11 @@ export interface RouteResponse {
  * | POST | /api/v1/ai/conversations/:id/messages | Add message to conversation |
  * | DELETE | /api/v1/ai/conversations/:id | Delete conversation |
  */
-export function buildAIRoutes(service: AIService, logger: Logger): RouteDefinition[] {
+export function buildAIRoutes(
+  aiService: IAIService,
+  conversationService: IAIConversationService,
+  logger: Logger,
+): RouteDefinition[] {
   return [
     // ── Chat ────────────────────────────────────────────────────
     {
@@ -78,8 +104,13 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
           return { status: 400, body: { error: 'messages array is required' } };
         }
 
+        for (const msg of messages) {
+          const err = validateMessage(msg);
+          if (err) return { status: 400, body: { error: err } };
+        }
+
         try {
-          const result = await service.chat(messages as any, options as any);
+          const result = await aiService.chat(messages as AIMessage[], options as any);
           return { status: 200, body: result };
         } catch (err) {
           logger.error('[AI Route] /chat error', err instanceof Error ? err : undefined);
@@ -103,8 +134,16 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
           return { status: 400, body: { error: 'messages array is required' } };
         }
 
+        for (const msg of messages) {
+          const err = validateMessage(msg);
+          if (err) return { status: 400, body: { error: err } };
+        }
+
         try {
-          const events = service.streamChat(messages as any, options as any);
+          if (!aiService.streamChat) {
+            return { status: 501, body: { error: 'Streaming is not supported by the configured AI service' } };
+          }
+          const events = aiService.streamChat(messages as AIMessage[], options as any);
           return { status: 200, stream: true, events };
         } catch (err) {
           logger.error('[AI Route] /chat/stream error', err instanceof Error ? err : undefined);
@@ -129,7 +168,7 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
         }
 
         try {
-          const result = await service.complete(prompt, options as any);
+          const result = await aiService.complete(prompt, options as any);
           return { status: 200, body: result };
         } catch (err) {
           logger.error('[AI Route] /complete error', err instanceof Error ? err : undefined);
@@ -145,7 +184,7 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
       description: 'List available models',
       handler: async () => {
         try {
-          const models = await service.listModels();
+          const models = aiService.listModels ? await aiService.listModels() : [];
           return { status: 200, body: { models } };
         } catch (err) {
           logger.error('[AI Route] /models error', err instanceof Error ? err : undefined);
@@ -162,7 +201,7 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
       handler: async (req) => {
         try {
           const options = (req.body ?? {}) as Record<string, unknown>;
-          const conversation = await service.conversationService.create(options as any);
+          const conversation = await conversationService.create(options as any);
           return { status: 201, body: conversation };
         } catch (err) {
           logger.error('[AI Route] POST /conversations error', err instanceof Error ? err : undefined);
@@ -176,7 +215,18 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
       description: 'List conversations',
       handler: async (req) => {
         try {
-          const conversations = await service.conversationService.list(req.query as any);
+          const rawQuery = req.query ?? {};
+          const options: Record<string, unknown> = { ...rawQuery };
+
+          if (typeof rawQuery.limit === 'string') {
+            const parsedLimit = Number(rawQuery.limit);
+            if (!Number.isFinite(parsedLimit) || parsedLimit <= 0 || !Number.isInteger(parsedLimit)) {
+              return { status: 400, body: { error: 'Invalid limit parameter' } };
+            }
+            options.limit = parsedLimit;
+          }
+
+          const conversations = await conversationService.list(options as any);
           return { status: 200, body: { conversations } };
         } catch (err) {
           logger.error('[AI Route] GET /conversations error', err instanceof Error ? err : undefined);
@@ -194,13 +244,14 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
           return { status: 400, body: { error: 'conversation id is required' } };
         }
 
-        const message = req.body as Record<string, unknown> | undefined;
-        if (!message || typeof message.content !== 'string') {
-          return { status: 400, body: { error: 'message with content string is required' } };
+        const message = req.body;
+        const validationError = validateMessage(message);
+        if (validationError) {
+          return { status: 400, body: { error: validationError } };
         }
 
         try {
-          const conversation = await service.conversationService.addMessage(id, message as any);
+          const conversation = await conversationService.addMessage(id, message as AIMessage);
           return { status: 200, body: conversation };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -223,7 +274,7 @@ export function buildAIRoutes(service: AIService, logger: Logger): RouteDefiniti
         }
 
         try {
-          await service.conversationService.delete(id);
+          await conversationService.delete(id);
           return { status: 204 };
         } catch (err) {
           logger.error('[AI Route] DELETE /conversations/:id error', err instanceof Error ? err : undefined);
