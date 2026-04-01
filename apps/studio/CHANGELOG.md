@@ -48,6 +48,15 @@
 
 ### Fixes
 
+- **Vercel deployment: Fix `functions` pattern validation error**
+  - The `functions` key in `vercel.json` referenced `api/index.js` — a build artifact created by
+    `bundle-api.mjs` — which does not exist in the source tree. Vercel CLI validates patterns against
+    source files before the build runs, producing the error:
+    `The pattern "api/index.js" defined in "functions" doesn't match any Serverless Functions`.
+  - Removed `functions` from `vercel.json` and moved the memory/maxDuration settings to an inline
+    `export const config` in `server/index.ts`. This is the standard Vercel per-function configuration
+    mechanism and is bundled into `api/index.js` by esbuild.
+
 - **Vercel deployment: Fix `@vercel/node@3` runtime error**
   - Removed the `functions.runtime` config from `vercel.json` — the `runtime` field is only for custom/community runtimes, not Node.js. Vercel auto-detects the pre-bundled `api/index.js` as a Node.js serverless function.
 

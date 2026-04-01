@@ -10,12 +10,6 @@
       "VITE_SERVER_URL": "https://play.objectstack.ai"
     }
   },
-  "functions": {
-    "api/index.js": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

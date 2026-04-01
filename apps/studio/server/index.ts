@@ -235,3 +235,15 @@ app.all('*', async (c) => {
 });
 
 export default handle(app);
+
+/**
+ * Vercel per-function configuration.
+ *
+ * Picked up by the @vercel/node runtime from the deployed api/index.js bundle.
+ * Replaces the top-level "functions" key in vercel.json so there is no
+ * pre-build file-pattern validation against a not-yet-bundled artifact.
+ */
+export const config = {
+    memory: 1024,
+    maxDuration: 60,
+};
