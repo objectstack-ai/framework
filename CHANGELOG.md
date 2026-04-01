@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **AI Chat Protocol Aligned with Vercel AI SDK** — Removed custom AI chat protocol
+  types and Zod schemas (`AIMessage`, `AIToolCall`, `AIStreamEvent`,
+  `AiChatRequestSchema`, `AiChatResponseSchema`) from `@objectstack/spec`. The
+  canonical message, tool-call, and streaming types are now re-exported from the
+  Vercel AI SDK (`ai` v6):
+  - `ModelMessage` replaces `AIMessage`
+  - `ToolCallPart` replaces `AIToolCall`
+  - `ToolResultPart` replaces `AIToolResult`
+  - `TextStreamPart<ToolSet>` replaces `AIStreamEvent`
+  - `IAIService` and `LLMAdapter` method signatures now accept `ModelMessage[]`
+    and return `TextStreamPart<ToolSet>` for streaming
+  - Deprecated type aliases preserved for migration convenience
+  - NLQ, Suggest, and Insights protocols (ObjectStack-specific) are retained
+
+### Removed
+- `AiChatRequestSchema` / `AiChatResponseSchema` Zod schemas from
+  `@objectstack/spec/api` — the AI chat wire protocol now uses Vercel AI SDK's
+  data stream format (`toDataStreamResponse()`)
+- `aiChat` method from `IObjectStackAPI` and client SDK — consumers should use
+  `@ai-sdk/react/useChat` directly
+- AI `/chat` endpoint from `DEFAULT_AI_ROUTES` plugin REST API definition
+
+### Added
+- `ai` v6 as a dependency of `@objectstack/spec` for type re-exports
+
 ## [4.0.1] — 2026-03-31
 
 ### Fixed

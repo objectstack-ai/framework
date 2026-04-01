@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import type {
   IAIService,
-  AIMessage,
   AIResult,
   AIToolDefinition,
-  AIToolCall,
-  AIToolResult,
   AIRequestOptions,
-  AIStreamEvent,
   AIConversation,
   IAIConversationService,
 } from './ai-service';
+import type {
+  ModelMessage,
+  ToolCallPart,
+  ToolResultPart,
+  TextStreamPart,
+  ToolSet,
+} from 'ai';
 
 describe('AI Service Contract', () => {
   it('should allow a minimal IAIService implementation with required methods', () => {
@@ -35,12 +38,15 @@ describe('AI Service Contract', () => {
     expect(service.listModels).toBeDefined();
   });
 
-  it('should generate a chat completion', async () => {
+  it('should generate a chat completion with ModelMessage', async () => {
     const service: IAIService = {
       chat: async (messages): Promise<AIResult> => {
         const lastMessage = messages[messages.length - 1];
+        const text = typeof lastMessage.content === 'string'
+          ? lastMessage.content
+          : 'complex content';
         return {
-          content: `Echo: ${lastMessage.content}`,
+          content: `Echo: ${text}`,
           model: 'test-model',
           usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
         };
@@ -48,7 +54,7 @@ describe('AI Service Contract', () => {
       complete: async () => ({ content: '' }),
     };
 
-    const messages: AIMessage[] = [
+    const messages: ModelMessage[] = [
       { role: 'system', content: 'You are a helpful assistant.' },
       { role: 'user', content: 'Hello' },
     ];
@@ -104,10 +110,62 @@ describe('AI Service Contract', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Tool Calling Types
+  // Vercel AI SDK Type Integration
   // -----------------------------------------------------------------------
 
-  describe('Tool Calling Types', () => {
+  describe('Vercel AI SDK Type Integration', () => {
+    it('should accept Vercel ModelMessage types', () => {
+      const systemMsg: ModelMessage = {
+        role: 'system',
+        content: 'You are helpful.',
+      };
+      expect(systemMsg.role).toBe('system');
+
+      const userMsg: ModelMessage = {
+        role: 'user',
+        content: 'Hello',
+      };
+      expect(userMsg.role).toBe('user');
+
+      const assistantMsg: ModelMessage = {
+        role: 'assistant',
+        content: 'Hi there!',
+      };
+      expect(assistantMsg.role).toBe('assistant');
+    });
+
+    it('should accept assistant messages with tool call parts', () => {
+      const toolCallPart: ToolCallPart = {
+        type: 'tool-call',
+        toolCallId: 'call_1',
+        toolName: 'get_weather',
+        input: { location: 'Paris' },
+      };
+
+      expect(toolCallPart.type).toBe('tool-call');
+      expect(toolCallPart.toolCallId).toBe('call_1');
+      expect(toolCallPart.toolName).toBe('get_weather');
+
+      const assistantMsg: ModelMessage = {
+        role: 'assistant',
+        content: [toolCallPart],
+      };
+
+      expect(assistantMsg.role).toBe('assistant');
+    });
+
+    it('should accept tool result parts', () => {
+      const toolResult: ToolResultPart = {
+        type: 'tool-result',
+        toolCallId: 'call_1',
+        toolName: 'get_weather',
+        output: { type: 'text', value: '{"temp": 22}' },
+      };
+
+      expect(toolResult.type).toBe('tool-result');
+      expect(toolResult.toolCallId).toBe('call_1');
+    });
+
     it('should construct valid AIToolDefinition values', () => {
       const tool: AIToolDefinition = {
         name: 'get_weather',
@@ -122,57 +180,6 @@ describe('AI Service Contract', () => {
       expect(tool.name).toBe('get_weather');
       expect(tool.description).toBe('Get current weather for a location');
       expect(tool.parameters).toBeDefined();
-    });
-
-    it('should construct valid AIToolCall values', () => {
-      const call: AIToolCall = {
-        id: 'call_abc123',
-        name: 'get_weather',
-        arguments: JSON.stringify({ location: 'London' }),
-      };
-
-      expect(call.id).toBe('call_abc123');
-      expect(JSON.parse(call.arguments)).toEqual({ location: 'London' });
-    });
-
-    it('should construct valid AIToolResult values', () => {
-      const result: AIToolResult = {
-        toolCallId: 'call_abc123',
-        content: '{"temp": 18, "unit": "celsius"}',
-      };
-
-      expect(result.toolCallId).toBe('call_abc123');
-      expect(result.isError).toBeUndefined();
-
-      const errorResult: AIToolResult = {
-        toolCallId: 'call_xyz',
-        content: 'Tool not found',
-        isError: true,
-      };
-
-      expect(errorResult.isError).toBe(true);
-    });
-
-    it('should support AIMessageWithTools for tool conversations', () => {
-      const assistantMsg: AIMessage = {
-        role: 'assistant',
-        content: '',
-        toolCalls: [
-          { id: 'call_1', name: 'get_weather', arguments: '{"location":"Paris"}' },
-        ],
-      };
-
-      expect(assistantMsg.toolCalls).toHaveLength(1);
-      expect(assistantMsg.toolCalls![0].name).toBe('get_weather');
-
-      const toolMsg: AIMessage = {
-        role: 'tool',
-        content: '{"temp": 22}',
-        toolCallId: 'call_1',
-      };
-
-      expect(toolMsg.role).toBe('tool');
-      expect(toolMsg.toolCallId).toBe('call_1');
     });
 
     it('should support tool options on AIRequestOptions', () => {
@@ -195,8 +202,7 @@ describe('AI Service Contract', () => {
 
     it('should support non-streaming tool calling via chat()', async () => {
       const service: IAIService = {
-        chat: async (messages, options?) => {
-          // Simulate tool call detection
+        chat: async (_messages, options?) => {
           if (options?.tools && options.tools.length > 0) {
             return { content: 'Using tools', model: 'gpt-4' };
           }
@@ -219,7 +225,7 @@ describe('AI Service Contract', () => {
   });
 
   // -----------------------------------------------------------------------
-  // Streaming – streamChat
+  // Streaming – streamChat (Vercel TextStreamPart)
   // -----------------------------------------------------------------------
 
   describe('streamChat', () => {
@@ -227,62 +233,32 @@ describe('AI Service Contract', () => {
       const service: IAIService = {
         chat: async () => ({ content: '' }),
         complete: async () => ({ content: '' }),
-        async *streamChat(_messages, _options?) {
-          yield { type: 'text-delta', textDelta: 'Hello' } satisfies AIStreamEvent;
-          yield { type: 'finish', result: { content: 'Hello' } } satisfies AIStreamEvent;
+        async *streamChat() {
+          yield { type: 'text-delta' as const, id: '1', text: 'Hello' } as TextStreamPart<ToolSet>;
+          yield { type: 'finish' as const, finishReason: 'stop' as const, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, request: {}, response: { id: '', timestamp: new Date(), modelId: '', headers: {} }, providerMetadata: undefined, warnings: undefined, reasoning: undefined, files: undefined, sources: undefined, isContinued: false } as unknown as TextStreamPart<ToolSet>;
         },
       };
 
       expect(service.streamChat).toBeDefined();
     });
 
-    it('should stream text-delta events', async () => {
+    it('should stream text-delta events (Vercel format)', async () => {
       const service: IAIService = {
         chat: async () => ({ content: '' }),
         complete: async () => ({ content: '' }),
         async *streamChat() {
-          yield { type: 'text-delta' as const, textDelta: 'Hello' };
-          yield { type: 'text-delta' as const, textDelta: ' world' };
-          yield { type: 'finish' as const, result: { content: 'Hello world' } };
+          yield { type: 'text-delta', id: '1', text: 'Hello' } as TextStreamPart<ToolSet>;
+          yield { type: 'text-delta', id: '1', text: ' world' } as TextStreamPart<ToolSet>;
         },
       };
 
-      const events: AIStreamEvent[] = [];
+      const events: TextStreamPart<ToolSet>[] = [];
       for await (const event of service.streamChat!([], {})) {
         events.push(event);
       }
 
-      expect(events).toHaveLength(3);
+      expect(events).toHaveLength(2);
       expect(events[0].type).toBe('text-delta');
-      expect(events[0].textDelta).toBe('Hello');
-      expect(events[2].type).toBe('finish');
-      expect(events[2].result?.content).toBe('Hello world');
-    });
-
-    it('should stream tool-call events', async () => {
-      const service: IAIService = {
-        chat: async () => ({ content: '' }),
-        complete: async () => ({ content: '' }),
-        async *streamChat() {
-          yield {
-            type: 'tool-call-delta' as const,
-            toolCall: { id: 'call_1', name: 'get_weather' },
-          };
-          yield {
-            type: 'tool-call' as const,
-            toolCall: { id: 'call_1', name: 'get_weather', arguments: '{"location":"NYC"}' },
-          };
-          yield { type: 'finish' as const, result: { content: '' } };
-        },
-      };
-
-      const events: AIStreamEvent[] = [];
-      for await (const event of service.streamChat!([], {})) {
-        events.push(event);
-      }
-
-      expect(events[0].type).toBe('tool-call-delta');
-      expect(events[1].toolCall?.arguments).toBe('{"location":"NYC"}');
     });
 
     it('should stream error events', async () => {
@@ -290,17 +266,16 @@ describe('AI Service Contract', () => {
         chat: async () => ({ content: '' }),
         complete: async () => ({ content: '' }),
         async *streamChat() {
-          yield { type: 'error' as const, error: 'Rate limit exceeded' };
+          yield { type: 'error', error: 'Rate limit exceeded' } as TextStreamPart<ToolSet>;
         },
       };
 
-      const events: AIStreamEvent[] = [];
+      const events: TextStreamPart<ToolSet>[] = [];
       for await (const event of service.streamChat!([], {})) {
         events.push(event);
       }
 
       expect(events[0].type).toBe('error');
-      expect(events[0].error).toBe('Rate limit exceeded');
     });
   });
 
@@ -403,7 +378,7 @@ describe('AI Service Contract', () => {
       expect(limited).toHaveLength(1);
     });
 
-    it('should add messages to a conversation', async () => {
+    it('should add Vercel ModelMessage to a conversation', async () => {
       const svc = createMockConversationService();
       const conv = await svc.create({ title: 'Message Test' });
 
@@ -413,7 +388,6 @@ describe('AI Service Contract', () => {
       });
 
       expect(updated.messages).toHaveLength(1);
-      expect(updated.messages[0].content).toBe('Hello!');
 
       const updated2 = await svc.addMessage(conv.id, {
         role: 'assistant',

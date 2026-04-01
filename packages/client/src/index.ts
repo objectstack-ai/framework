@@ -62,8 +62,6 @@ import {
   MarkAllNotificationsReadResponse,
   AiNlqRequest,
   AiNlqResponse,
-  AiChatRequest,
-  AiChatResponse,
   AiSuggestRequest,
   AiSuggestResponse,
   AiInsightsRequest,
@@ -1209,17 +1207,7 @@ export class ObjectStackClient {
       return this.unwrapResponse<AiNlqResponse>(res);
     },
 
-    /**
-     * Multi-turn AI chat
-     */
-    chat: async (request: AiChatRequest): Promise<AiChatResponse> => {
-      const route = this.getRoute('ai');
-      const res = await this.fetch(`${this.baseUrl}${route}/chat`, {
-        method: 'POST',
-        body: JSON.stringify(request)
-      });
-      return this.unwrapResponse<AiChatResponse>(res);
-    },
+    // AI chat method removed — use Vercel AI SDK `useChat()` / `@ai-sdk/react` directly.
 
     /**
      * AI-powered field value suggestions
@@ -1826,8 +1814,6 @@ export type {
   ListNotificationsResponse,
   AiNlqRequest,
   AiNlqResponse,
-  AiChatRequest,
-  AiChatResponse,
   AiSuggestRequest,
   AiSuggestResponse,
   AiInsightsRequest,

@@ -54,8 +54,6 @@ import {
   // AI
   AiNlqRequestSchema,
   AiNlqResponseSchema,
-  AiChatRequestSchema,
-  AiChatResponseSchema,
   AiSuggestRequestSchema,
   AiSuggestResponseSchema,
   AiInsightsRequestSchema,
@@ -285,11 +283,7 @@ describe('ObjectStack Protocol', () => {
       query: { object: 'task', where: { status: 'open' } },
       explanation: 'Find all tasks with open status', confidence: 0.92,
     }).success).toBe(true);
-    expect(AiChatRequestSchema.safeParse({ message: 'How many tasks are overdue?', conversationId: 'c1' }).success).toBe(true);
-    expect(AiChatResponseSchema.safeParse({
-      message: 'There are 5 overdue tasks.', conversationId: 'c1',
-      actions: [{ type: 'navigate', label: 'View overdue tasks' }],
-    }).success).toBe(true);
+    // AiChatRequestSchema/AiChatResponseSchema removed — chat protocol aligned with Vercel AI SDK
     expect(AiSuggestRequestSchema.safeParse({ object: 'task', field: 'priority', partial: 'hi' }).success).toBe(true);
     expect(AiSuggestResponseSchema.safeParse({
       suggestions: [{ value: 'high', label: 'High', confidence: 0.95, reason: 'Matches partial input' }],

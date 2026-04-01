@@ -16,10 +16,14 @@
  */
 
 import type {
-  AIMessage,
+  ModelMessage,
+  TextStreamPart,
+  ToolSet,
+} from 'ai';
+
+import type {
   AIRequestOptions,
   AIResult,
-  AIStreamEvent,
 } from './ai-service.js';
 
 export interface LLMAdapter {
@@ -28,10 +32,10 @@ export interface LLMAdapter {
 
   /**
    * Generate a chat completion.
-   * @param messages - Conversation messages
+   * @param messages - Conversation messages (Vercel `ModelMessage`)
    * @param options  - Request configuration (includes tool definitions)
    */
-  chat(messages: AIMessage[], options?: AIRequestOptions): Promise<AIResult>;
+  chat(messages: ModelMessage[], options?: AIRequestOptions): Promise<AIResult>;
 
   /**
    * Generate a text completion from a single prompt.
@@ -41,10 +45,10 @@ export interface LLMAdapter {
   complete(prompt: string, options?: AIRequestOptions): Promise<AIResult>;
 
   /**
-   * Stream a chat completion as an async iterable of events.
+   * Stream a chat completion as an async iterable of Vercel AI SDK stream parts.
    * Implementations that do not support streaming may omit this method.
    */
-  streamChat?(messages: AIMessage[], options?: AIRequestOptions): AsyncIterable<AIStreamEvent>;
+  streamChat?(messages: ModelMessage[], options?: AIRequestOptions): AsyncIterable<TextStreamPart<ToolSet>>;
 
   /**
    * Generate embedding vectors.

@@ -571,13 +571,10 @@ describe('plugin-rest-api.zod', () => {
       expect(DEFAULT_AI_ROUTES.service).toBe('ai');
       expect(DEFAULT_AI_ROUTES.category).toBe('ai');
       expect(DEFAULT_AI_ROUTES.methods).toContain('aiNlq');
-      expect(DEFAULT_AI_ROUTES.methods).toContain('aiChat');
+      // aiChat removed — wire protocol aligned with Vercel AI SDK
       expect(DEFAULT_AI_ROUTES.methods).toContain('aiSuggest');
       expect(DEFAULT_AI_ROUTES.methods).toContain('aiInsights');
-      expect(DEFAULT_AI_ROUTES.endpoints).toHaveLength(4);
-      // AI endpoints should have extended timeouts
-      const chatEndpoint = DEFAULT_AI_ROUTES.endpoints?.find(e => e.handler === 'aiChat');
-      expect(chatEndpoint?.timeout).toBe(60000);
+      expect(DEFAULT_AI_ROUTES.endpoints).toHaveLength(3);
     });
 
     it('should validate DEFAULT_I18N_ROUTES', () => {
