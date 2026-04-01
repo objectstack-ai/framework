@@ -60,48 +60,6 @@ export class HttpDispatcher {
     }
 
     /**
-     * 501 Not Implemented – route is declared but handler is a stub or missing.
-     */
-    private notImplemented(route: string, service?: string) {
-        return {
-            status: 501,
-            body: {
-                success: false,
-                error: {
-                    code: 501,
-                    message: `Not Implemented: ${route}`,
-                    type: 'NOT_IMPLEMENTED' as const,
-                    route,
-                    service,
-                    hint: service
-                        ? `The "${service}" service route is declared but has no handler. Install or implement the handler.`
-                        : 'This endpoint is declared but not yet implemented.',
-                },
-            },
-        };
-    }
-
-    /**
-     * 503 Service Unavailable – service exists in the route table but is currently down.
-     */
-    private serviceUnavailable(route: string, service: string) {
-        return {
-            status: 503,
-            body: {
-                success: false,
-                error: {
-                    code: 503,
-                    message: `Service Unavailable: ${service}`,
-                    type: 'SERVICE_UNAVAILABLE' as const,
-                    route,
-                    service,
-                    hint: `The "${service}" service is registered but currently unavailable. It may need to be started or a plugin installed.`,
-                },
-            },
-        };
-    }
-
-    /**
      * 404 Route Not Found — no route is registered for this path.
      */
     private routeNotFound(route: string) {
