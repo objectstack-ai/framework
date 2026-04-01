@@ -1,5 +1,20 @@
 # @objectstack/studio
 
+## Unreleased
+
+### Minor Changes
+
+- Add collapsible right-side AI Chat floating panel (VS Code Copilot Chat style).
+
+  - New `AiChatPanel` component: fixed right-side panel with 48px collapsed edge
+    button and 380px expanded view. Supports stream chat via Vercel AI SDK
+    `useChat` hook connected to `/api/v1/ai/chat`.
+  - New `use-ai-chat-panel` hook: manages panel visibility toggle, keyboard
+    shortcut (`Ctrl+Shift+I` / `Cmd+Shift+I`), and message history persistence
+    to localStorage.
+  - Added `ai` and `@ai-sdk/react` dependencies for Vercel Data Stream Protocol
+    integration.
+
 ## 4.0.0
 
 ### Patch Changes

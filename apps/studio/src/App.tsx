@@ -11,6 +11,7 @@ import { DeveloperOverview } from './components/DeveloperOverview';
 import { PackageManager } from './components/PackageManager';
 import { ApiConsolePage } from './components/ApiConsolePage';
 import { Toaster } from "@/components/ui/toaster"
+import { AiChatPanel } from "@/components/AiChatPanel"
 import { getApiBaseUrl, config } from './lib/config';
 import { PluginRegistryProvider, PluginHost } from './plugins';
 import { builtInPlugins } from './plugins/built-in';
@@ -142,6 +143,7 @@ export default function App() {
           </div>
         </main>
         <Toaster />
+        <AiChatPanel />
       </SidebarProvider>
       </ErrorBoundary>
       </PluginRegistryProvider>
