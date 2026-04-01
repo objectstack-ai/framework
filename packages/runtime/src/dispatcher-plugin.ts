@@ -12,7 +12,8 @@ export interface DispatcherPluginConfig {
 }
 
 /**
- * Send an HttpDispatcherResult through IHttpResponse
+ * Send an HttpDispatcherResult through IHttpResponse.
+ * Differentiates between handled, unhandled (404), and special results.
  */
 function sendResult(result: HttpDispatcherResult, res: any): void {
     if (result.handled) {
@@ -32,7 +33,16 @@ function sendResult(result: HttpDispatcherResult, res: any): void {
             return;
         }
     }
-    res.status(404).json({ success: false, error: { message: 'Not Found', code: 404 } });
+    // Semantic 404: no route matched — include diagnostic info
+    res.status(404).json({
+        success: false,
+        error: {
+            message: 'Not Found',
+            code: 404,
+            type: 'ROUTE_NOT_FOUND',
+            hint: 'No handler matched this request. Check GET /api/v1/discovery for available routes.',
+        },
+    });
 }
 
 function errorResponse(err: any, res: any): void {
@@ -94,6 +104,16 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // ── Discovery (versioned API path) ──────────────────────────
             server.get(`${prefix}/discovery`, async (_req: any, res: any) => {
                 res.json({ data: await dispatcher.getDiscoveryInfo(prefix) });
+            });
+
+            // ── Health ──────────────────────────────────────────────────
+            server.get(`${prefix}/health`, async (_req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('GET', '/health', undefined, {}, { request: _req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
             });
 
             // ── Auth ────────────────────────────────────────────────────

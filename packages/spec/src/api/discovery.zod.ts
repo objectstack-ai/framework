@@ -3,6 +3,30 @@
 import { z } from 'zod';
 
 /**
+ * Service Status Enum
+ * Describes the operational state of a service in the discovery response.
+ *
+ * - `available`   – Fully operational: service is registered AND HTTP handler is verified.
+ * - `registered`  – Route is declared in the dispatcher table but the HTTP handler has
+ *                   not been verified (may 501 at runtime).
+ * - `unavailable` – Service is not installed / not registered in the kernel.
+ * - `degraded`    – Partially working (e.g., in-memory fallback, missing persistence).
+ * - `stub`        – Placeholder handler that always returns 501 Not Implemented.
+ */
+export const ServiceStatus = z.enum([
+  'available',
+  'registered',
+  'unavailable',
+  'degraded',
+  'stub',
+]).describe(
+  'available = fully operational, registered = route declared but handler unverified, '
+  + 'unavailable = not installed, degraded = partial, stub = placeholder that returns 501'
+);
+
+export type ServiceStatus = z.infer<typeof ServiceStatus>;
+
+/**
  * Service Status in Discovery Response
  * Reports per-service availability so clients can adapt their UI accordingly.
  */
@@ -10,8 +34,19 @@ export const ServiceInfoSchema = z.object({
   /** Whether the service is enabled and available */
   enabled: z.boolean(),
   /** Current operational status */
-  status: z.enum(['available', 'unavailable', 'degraded', 'stub']).describe(
-    'available = fully operational, unavailable = not installed, degraded = partial, stub = placeholder that throws'
+  status: ServiceStatus,
+  /**
+   * Whether the HTTP handler for this service is confirmed to be mounted.
+   * `true`  = handler is registered in the adapter / dispatcher (safe to call).
+   * `false` = route is declared (e.g., in Discovery metadata) but no handler exists
+   *           — requests will receive 501 Not Implemented.
+   *
+   * Clients SHOULD check this flag before displaying a service endpoint in the UI.
+   * @default false
+   */
+  handlerReady: z.boolean().default(false).describe(
+    'Whether the HTTP handler is confirmed to be mounted. '
+    + 'false means the route is declared but may return 501.'
   ),
   /** Route path (only present if enabled) */
   route: z.string().optional().describe('e.g. /api/v1/analytics'),
@@ -179,3 +214,61 @@ export type WellKnownCapabilities = z.infer<typeof WellKnownCapabilitiesSchema>;
 export type DiscoveryResponse = z.infer<typeof DiscoverySchema>;
 export type ApiRoutes = z.infer<typeof ApiRoutesSchema>;
 export type ServiceInfo = z.infer<typeof ServiceInfoSchema>;
+
+// ============================================================================
+// Route Health Report
+// ============================================================================
+
+/**
+ * Single route health entry for the coverage report.
+ */
+export const RouteHealthEntrySchema = z.object({
+  /** Route path (e.g. /api/v1/analytics) */
+  route: z.string().describe('Route path pattern'),
+  /** HTTP method */
+  method: z.string().describe('HTTP method (GET, POST, etc.)'),
+  /** Target service name */
+  service: z.string().describe('Target service name'),
+  /** Whether the route is declared in discovery */
+  declared: z.boolean().describe('Whether the route is declared in discovery/metadata'),
+  /** Whether the handler is actually registered in the adapter/dispatcher */
+  handlerRegistered: z.boolean().describe('Whether the HTTP handler is registered'),
+  /**
+   * Health check result:
+   * - `pass`    – Handler exists and responds (2xx/4xx — i.e., not 404/501/503)
+   * - `fail`    – Handler returned 501 or 503
+   * - `missing` – No handler registered (404)
+   * - `skip`    – Health check was not performed
+   */
+  healthStatus: z.enum(['pass', 'fail', 'missing', 'skip']).describe(
+    'pass = handler responds, fail = 501/503, missing = no handler (404), skip = not checked'
+  ),
+  /** Optional diagnostic message */
+  message: z.string().optional().describe('Diagnostic message'),
+});
+
+export type RouteHealthEntry = z.infer<typeof RouteHealthEntrySchema>;
+
+/**
+ * Route Health Report Schema
+ * Aggregated route coverage report produced at startup or on demand.
+ *
+ * This report enables automated detection of routes that are declared
+ * in discovery metadata but have no corresponding HTTP handler.
+ */
+export const RouteHealthReportSchema = z.object({
+  /** ISO 8601 timestamp of when the report was generated */
+  timestamp: z.string().describe('ISO 8601 timestamp of report generation'),
+  /** Adapter name that generated the report (e.g. "hono", "express", "nextjs") */
+  adapter: z.string().describe('Adapter or runtime that produced this report'),
+  /** Total routes declared in discovery / dispatcher table */
+  totalDeclared: z.number().int().describe('Total routes declared in discovery'),
+  /** Routes with a confirmed handler registration */
+  totalRegistered: z.number().int().describe('Routes with confirmed handler'),
+  /** Routes missing a handler */
+  totalMissing: z.number().int().describe('Routes missing a handler'),
+  /** Per-route health entries */
+  routes: z.array(RouteHealthEntrySchema).describe('Per-route health entries'),
+});
+
+export type RouteHealthReport = z.infer<typeof RouteHealthReportSchema>;

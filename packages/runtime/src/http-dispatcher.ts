@@ -59,6 +59,67 @@ export class HttpDispatcher {
         };
     }
 
+    /**
+     * 501 Not Implemented – route is declared but handler is a stub or missing.
+     */
+    private notImplemented(route: string, service?: string) {
+        return {
+            status: 501,
+            body: {
+                success: false,
+                error: {
+                    code: 501,
+                    message: `Not Implemented: ${route}`,
+                    type: 'NOT_IMPLEMENTED' as const,
+                    route,
+                    service,
+                    hint: service
+                        ? `The "${service}" service route is declared but has no handler. Install or implement the handler.`
+                        : 'This endpoint is declared but not yet implemented.',
+                },
+            },
+        };
+    }
+
+    /**
+     * 503 Service Unavailable – service exists in the route table but is currently down.
+     */
+    private serviceUnavailable(route: string, service: string) {
+        return {
+            status: 503,
+            body: {
+                success: false,
+                error: {
+                    code: 503,
+                    message: `Service Unavailable: ${service}`,
+                    type: 'SERVICE_UNAVAILABLE' as const,
+                    route,
+                    service,
+                    hint: `The "${service}" service is registered but currently unavailable. It may need to be started or a plugin installed.`,
+                },
+            },
+        };
+    }
+
+    /**
+     * 404 Route Not Found — no route is registered for this path.
+     */
+    private routeNotFound(route: string) {
+        return {
+            status: 404,
+            body: {
+                success: false,
+                error: {
+                    code: 404,
+                    message: `Route Not Found: ${route}`,
+                    type: 'ROUTE_NOT_FOUND' as const,
+                    route,
+                    hint: 'No route is registered for this path. Check the API discovery endpoint for available routes.',
+                },
+            },
+        };
+    }
+
     private ensureBroker() {
         if (!this.kernel.broker) {
             throw { statusCode: 500, message: 'Kernel Broker not available' };
@@ -133,11 +194,14 @@ export class HttpDispatcher {
         };
 
         // Build per-service status map
+        // handlerReady: true means the dispatcher has a real handler for this route.
+        // handlerReady: false with status 'registered' means the route is in the table
+        // but the handler may not exist or be a stub.
         const svcAvailable = (route?: string, provider?: string) => ({
-            enabled: true, status: 'available' as const, route, provider,
+            enabled: true, status: 'available' as const, handlerReady: true, route, provider,
         });
         const svcUnavailable = (name: string) => ({
-            enabled: false, status: 'unavailable' as const,
+            enabled: false, status: 'unavailable' as const, handlerReady: false,
             message: `Install a ${name} plugin to enable`,
         });
 
@@ -174,7 +238,7 @@ export class HttpDispatcher {
             },
             services: {
                 // Kernel-provided (always available via protocol implementation)
-                metadata:       { enabled: true, status: 'degraded' as const, route: routes.metadata, provider: 'kernel', message: 'In-memory registry; DB persistence pending' },
+                metadata:       { enabled: true, status: 'degraded' as const, handlerReady: true, route: routes.metadata, provider: 'kernel', message: 'In-memory registry; DB persistence pending' },
                 data:           svcAvailable(routes.data, 'kernel'),
                 // Plugin-provided — only available when a plugin registers the service
                 auth:           hasAuth ? svcAvailable(routes.auth) : svcUnavailable('auth'),
@@ -1207,6 +1271,19 @@ export class HttpDispatcher {
              };
         }
 
+        // 0b. Health Endpoint (GET /health)
+        if (cleanPath === '/health' && method === 'GET') {
+            return {
+                handled: true,
+                response: this.success({
+                    status: 'ok',
+                    timestamp: new Date().toISOString(),
+                    version: '1.0.0',
+                    uptime: typeof process !== 'undefined' ? process.uptime() : undefined,
+                }),
+            };
+        }
+
         // 1. System Protocols (Prefix-based)
         if (cleanPath.startsWith('/auth')) {
             return this.handleAuth(cleanPath.substring(5), method, body, context);
@@ -1265,8 +1342,11 @@ export class HttpDispatcher {
         const result = await this.handleApiEndpoint(cleanPath, method, body, query, context);
         if (result.handled) return result;
 
-        // 3. Fallback (404)
-        return { handled: false };
+        // 3. Fallback — return semantic 404 with diagnostic info
+        return {
+            handled: true,
+            response: this.routeNotFound(cleanPath),
+        };
     }
 
     /**

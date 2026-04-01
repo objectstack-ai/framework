@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   DispatcherRouteSchema,
   DispatcherConfigSchema,
+  DispatcherErrorCode,
+  DispatcherErrorResponseSchema,
   DEFAULT_DISPATCHER_ROUTES,
   type DispatcherRoute,
   type DispatcherConfig,
@@ -174,6 +176,68 @@ describe('DEFAULT_DISPATCHER_ROUTES', () => {
   it('should be parseable by DispatcherConfigSchema', () => {
     expect(() => DispatcherConfigSchema.parse({
       routes: DEFAULT_DISPATCHER_ROUTES,
+    })).not.toThrow();
+  });
+
+  it('should include health route', () => {
+    const health = DEFAULT_DISPATCHER_ROUTES.find(r => r.prefix.includes('health'));
+    expect(health).toBeDefined();
+    expect(health!.authRequired).toBe(false);
+    expect(health!.criticality).toBe('required');
+  });
+});
+
+// ============================================================================
+// Dispatcher Error Schemas
+// ============================================================================
+
+describe('DispatcherErrorCode', () => {
+  it('should accept all valid error codes', () => {
+    ['404', '405', '501', '503'].forEach(code => {
+      expect(() => DispatcherErrorCode.parse(code)).not.toThrow();
+    });
+  });
+
+  it('should reject invalid codes', () => {
+    expect(() => DispatcherErrorCode.parse('200')).toThrow();
+  });
+});
+
+describe('DispatcherErrorResponseSchema', () => {
+  it('should accept a 404 error response', () => {
+    expect(() => DispatcherErrorResponseSchema.parse({
+      success: false,
+      error: {
+        code: 404,
+        message: 'Route Not Found: /api/v1/unknown',
+        type: 'ROUTE_NOT_FOUND',
+        route: '/api/v1/unknown',
+      },
+    })).not.toThrow();
+  });
+
+  it('should accept a 501 error response', () => {
+    expect(() => DispatcherErrorResponseSchema.parse({
+      success: false,
+      error: {
+        code: 501,
+        message: 'Not Implemented',
+        type: 'NOT_IMPLEMENTED',
+        service: 'workflow',
+        hint: 'Install plugin-workflow',
+      },
+    })).not.toThrow();
+  });
+
+  it('should accept a 503 error response', () => {
+    expect(() => DispatcherErrorResponseSchema.parse({
+      success: false,
+      error: {
+        code: 503,
+        message: 'Service Unavailable: ai',
+        type: 'SERVICE_UNAVAILABLE',
+        service: 'ai',
+      },
     })).not.toThrow();
   });
 });

@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Discovery Schema — `ServiceStatus` enum & `handlerReady` field** — Added `'registered'`
+  status to `ServiceInfoSchema` to distinguish routes that are declared in the dispatcher
+  table but whose HTTP handler has not been verified. Added `handlerReady` boolean field
+  (default `false`) so clients can filter handler-ready services before displaying endpoints.
+- **Discovery Schema — `RouteHealthReportSchema`** — New schema for automated route/handler
+  coverage reporting at startup. Includes per-route health entries (`pass`, `fail`, `missing`,
+  `skip`) and summary counters.
+- **Dispatcher Schema — `DispatcherErrorCode` & `DispatcherErrorResponseSchema`** — Semantic
+  error codes (`404`/`405`/`501`/`503`) with machine-readable `type` field
+  (`ROUTE_NOT_FOUND`, `METHOD_NOT_ALLOWED`, `NOT_IMPLEMENTED`, `SERVICE_UNAVAILABLE`) and
+  developer-facing `hint` strings.
+- **Dispatcher Schema — `/health` route** — Added health endpoint to `DEFAULT_DISPATCHER_ROUTES`.
+- **REST API Plugin — `handlerStatus` field** — Added `handlerStatus` (`implemented`, `stub`,
+  `planned`) to `RestApiEndpointSchema` to track handler implementation readiness.
+- **REST API Plugin — `RouteCoverageReportSchema`** — Schema for adapter-generated coverage
+  reports listing every declared endpoint and its implementation status.
+
+### Fixed
+- **Runtime Dispatcher — semantic error differentiation** — `HttpDispatcher.dispatch()` now
+  returns typed 404 (`ROUTE_NOT_FOUND`) with diagnostic info instead of bare `{ handled: false }`.
+  Added `notImplemented()` (501), `serviceUnavailable()` (503), and `routeNotFound()` (404)
+  helper methods.
+- **Runtime Dispatcher — `/health` handler** — Added health endpoint returning `status`,
+  `timestamp`, `version`, and `uptime`.
+- **Runtime Dispatcher — `handlerReady` in discovery** — `getDiscoveryInfo()` now emits
+  `handlerReady: true` for services with confirmed handlers and `handlerReady: false` for
+  unavailable services.
+- **Dispatcher Plugin — semantic 404** — `sendResult()` now returns `ROUTE_NOT_FOUND` error
+  type with a hint pointing to the discovery endpoint. Added `/health` handler registration.
+- **Studio — handler-ready filtering** — `useApiDiscovery()` now checks both `enabled` and
+  `handlerReady` (or `status === 'available' | 'degraded'` for backward compatibility) before
+  displaying service endpoints in the UI.
+
 ## [4.0.1] — 2026-03-31
 
 ### Fixed

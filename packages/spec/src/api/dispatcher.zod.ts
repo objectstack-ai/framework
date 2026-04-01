@@ -142,6 +142,9 @@ export const DEFAULT_DISPATCHER_ROUTES: DispatcherRouteInput[] = [
   // Discovery (public)
   { prefix: '/api/v1/discovery', service: 'metadata', authRequired: false, criticality: 'required' },
   
+  // Health (public)
+  { prefix: '/api/v1/health', service: 'metadata', authRequired: false, criticality: 'required' },
+  
   // Required Services
   { prefix: '/api/v1/meta',     service: 'metadata',  criticality: 'required' },
   { prefix: '/api/v1/data',     service: 'data',      criticality: 'required' },
@@ -160,3 +163,59 @@ export const DEFAULT_DISPATCHER_ROUTES: DispatcherRouteInput[] = [
   { prefix: '/api/v1/realtime',      service: 'realtime' },
   { prefix: '/api/v1/ai',            service: 'ai' },
 ];
+
+// ============================================================================
+// Dispatcher Error Codes
+// ============================================================================
+
+/**
+ * Semantic HTTP error codes used by the Dispatcher.
+ *
+ * The dispatcher MUST distinguish between these three failure modes so that
+ * clients (and developers) can understand *why* an API call failed:
+ *
+ * - `404` – Route Not Found: no route is registered for this path.
+ * - `405` – Method Not Allowed: route exists but the HTTP method is not supported.
+ * - `501` – Not Implemented: route is declared but the handler is a stub / not yet coded.
+ * - `503` – Service Unavailable: service exists but is temporarily down or not loaded.
+ */
+export const DispatcherErrorCode = z.enum(['404', '405', '501', '503']).describe(
+  '404 = route not found, 405 = method not allowed, 501 = not implemented (stub), 503 = service unavailable'
+);
+
+export type DispatcherErrorCode = z.infer<typeof DispatcherErrorCode>;
+
+/**
+ * Dispatcher Error Response Schema
+ *
+ * Standardised error envelope returned by the dispatcher when a request cannot
+ * be fulfilled.  Adapters MUST use this shape (or a superset) for all non-2xx
+ * responses so that clients can programmatically distinguish failure modes.
+ */
+export const DispatcherErrorResponseSchema = z.object({
+  /** Always `false` for error responses */
+  success: z.literal(false),
+  error: z.object({
+    /** HTTP status code */
+    code: z.number().int().describe('HTTP status code (404, 405, 501, 503, …)'),
+    /** Human-readable error message */
+    message: z.string().describe('Human-readable error message'),
+    /**
+     * Machine-readable error type for programmatic branching.
+     */
+    type: z.enum([
+      'ROUTE_NOT_FOUND',
+      'METHOD_NOT_ALLOWED',
+      'NOT_IMPLEMENTED',
+      'SERVICE_UNAVAILABLE',
+    ]).optional().describe('Machine-readable error type'),
+    /** Route that was requested */
+    route: z.string().optional().describe('Requested route path'),
+    /** Service that the route maps to (if known) */
+    service: z.string().optional().describe('Target service name, if resolvable'),
+    /** Guidance for the developer */
+    hint: z.string().optional().describe('Actionable hint for the developer (e.g., "Install plugin-workflow")'),
+  }),
+});
+
+export type DispatcherErrorResponse = z.infer<typeof DispatcherErrorResponseSchema>;
