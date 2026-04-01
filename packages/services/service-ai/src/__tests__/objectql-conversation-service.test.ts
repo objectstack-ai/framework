@@ -265,8 +265,12 @@ describe('ObjectQLConversationService', () => {
 
     const updated = await service.addMessage(conv.id, msg);
     expect(updated.messages).toHaveLength(1);
-    const toolContent = updated.messages[0].content as any[];
-    expect(toolContent[0].toolCallId).toBe('call_abc');
+    const firstMsg = updated.messages[0];
+    if (firstMsg.role === 'tool' && Array.isArray(firstMsg.content)) {
+      expect(firstMsg.content[0].toolCallId).toBe('call_abc');
+    } else {
+      throw new Error('Expected tool message with array content');
+    }
   });
 
   it('should add an assistant message with toolCalls', async () => {
@@ -280,10 +284,14 @@ describe('ObjectQLConversationService', () => {
 
     const updated = await service.addMessage(conv.id, msg);
     expect(updated.messages).toHaveLength(1);
-    const assistantContent = updated.messages[0].content as any[];
-    const toolCallParts = assistantContent.filter((p: any) => p.type === 'tool-call');
-    expect(toolCallParts).toHaveLength(1);
-    expect(toolCallParts[0].toolName).toBe('get_weather');
+    const firstMsg = updated.messages[0];
+    if (firstMsg.role === 'assistant' && Array.isArray(firstMsg.content)) {
+      const toolCallParts = firstMsg.content.filter((p) => p.type === 'tool-call');
+      expect(toolCallParts).toHaveLength(1);
+      expect(toolCallParts[0].toolName).toBe('get_weather');
+    } else {
+      throw new Error('Expected assistant message with array content');
+    }
   });
 
   it('should throw when adding message to non-existent conversation', async () => {

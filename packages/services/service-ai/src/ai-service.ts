@@ -19,6 +19,25 @@ import { ToolRegistry } from './tools/tool-registry.js';
 import type { ToolExecutionResult } from './tools/tool-registry.js';
 import { InMemoryConversationService } from './conversation/in-memory-conversation-service.js';
 
+// ── Stream event helpers ──────────────────────────────────────────
+// These helpers construct properly-typed Vercel AI SDK stream parts
+// to avoid repeated `as unknown as TextStreamPart<ToolSet>` casts.
+
+/** Create a text-delta stream part. */
+function textDeltaPart(id: string, text: string): TextStreamPart<ToolSet> {
+  return { type: 'text-delta', id, text } as TextStreamPart<ToolSet>;
+}
+
+/** Create a finish stream part from an AIResult. */
+function finishPart(result?: AIResult): TextStreamPart<ToolSet> {
+  return {
+    type: 'finish',
+    finishReason: 'stop',
+    totalUsage: result?.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    rawFinishReason: 'stop',
+  } as unknown as TextStreamPart<ToolSet>;
+}
+
 /**
  * Configuration for AIService.
  */
@@ -92,13 +111,8 @@ export class AIService implements IAIService {
     if (!this.adapter.streamChat) {
       // Fallback: emit the entire response as a single text-delta + finish
       const result = await this.adapter.chat(messages, options);
-      yield { type: 'text-delta', id: 'fallback', text: result.content } as TextStreamPart<ToolSet>;
-      yield {
-        type: 'finish',
-        finishReason: 'stop' as const,
-        totalUsage: result.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        rawFinishReason: 'stop',
-      } as unknown as TextStreamPart<ToolSet>;
+      yield textDeltaPart('fallback', result.content);
+      yield finishPart(result);
       return;
     }
 
@@ -287,13 +301,8 @@ export class AIService implements IAIService {
 
       if (!result.toolCalls || result.toolCalls.length === 0) {
         // Final round — return the probed result without an extra model call
-        yield { type: 'text-delta', id: 'stream', text: result.content } as TextStreamPart<ToolSet>;
-        yield {
-          type: 'finish',
-          finishReason: 'stop' as const,
-          totalUsage: result.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          rawFinishReason: 'stop',
-        } as unknown as TextStreamPart<ToolSet>;
+        yield textDeltaPart('stream', result.content);
+        yield finishPart(result);
         return;
       }
 
@@ -342,12 +351,7 @@ export class AIService implements IAIService {
     }
     const finalOptions = { ...chatOptions, tools: undefined, toolChoice: undefined };
     const result = await this.adapter.chat(conversation, finalOptions);
-    yield { type: 'text-delta', id: 'stream', text: result.content } as TextStreamPart<ToolSet>;
-    yield {
-      type: 'finish',
-      finishReason: 'stop' as const,
-      totalUsage: result.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      rawFinishReason: 'stop',
-    } as unknown as TextStreamPart<ToolSet>;
+    yield textDeltaPart('stream', result.content);
+    yield finishPart(result);
   }
 }

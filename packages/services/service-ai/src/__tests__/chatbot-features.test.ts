@@ -259,7 +259,13 @@ describe('AIService.chatWithTools', () => {
     // The error message should be in the tool result
     const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as ModelMessage[];
     const toolMsg = secondCallMessages.find(m => m.role === 'tool');
-    const toolContent = Array.isArray(toolMsg?.content) ? (toolMsg.content[0] as any)?.output?.value : toolMsg?.content;
+    let toolContent: string | undefined;
+    if (toolMsg?.role === 'tool' && Array.isArray(toolMsg.content)) {
+      const firstResult = toolMsg.content[0];
+      if ('output' in firstResult && firstResult.output && typeof firstResult.output === 'object' && 'value' in firstResult.output) {
+        toolContent = String(firstResult.output.value);
+      }
+    }
     expect(toolContent).toContain('Tool crashed');
   });
 

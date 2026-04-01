@@ -183,7 +183,7 @@ export class ObjectQLConversationService implements IAIConversationService {
         contentStr = message.content;
       } else {
         const parts = message.content;
-        const textParts = parts.filter(p => p.type === 'text').map(p => 'text' in p ? p.text : '');
+        const textParts = parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text').map(p => p.text);
         const toolCalls = parts.filter(p => p.type === 'tool-call');
         contentStr = textParts.join('');
         if (toolCalls.length > 0) toolCallsJson = JSON.stringify(toolCalls);
@@ -280,7 +280,7 @@ export class ObjectQLConversationService implements IAIConversationService {
       }
       case 'tool': {
         const toolResults = this.safeParse<ToolResultPart[]>(row.content);
-        if (toolResults && Array.isArray(toolResults) && toolResults.length > 0 && toolResults[0]?.type === 'tool-result') {
+        if (toolResults && toolResults.length > 0 && toolResults[0]?.type === 'tool-result') {
           return { role: 'tool', content: toolResults };
         }
         // Backward compat: old format was a plain string
