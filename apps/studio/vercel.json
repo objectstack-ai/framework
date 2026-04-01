@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
+  "framework": null,
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@objectstack/studio && cd apps/studio && node scripts/bundle-api.mjs",
   "outputDirectory": "dist",
@@ -8,6 +8,12 @@
     "env": {
       "VITE_RUNTIME_MODE": "server",
       "VITE_SERVER_URL": "https://play.objectstack.ai"
+    }
+  },
+  "functions": {
+    "api/index.js": {
+      "memory": 1024,
+      "maxDuration": 60
     }
   },
   "rewrites": [
