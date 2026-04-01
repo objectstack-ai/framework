@@ -2,6 +2,7 @@
 
 import type { IAIService, IAIConversationService, ModelMessage } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
+import { encodeVercelDataStream } from '../stream/vercel-stream-encoder.js';
 
 /**
  * Minimal HTTP handler abstraction so routes stay framework-agnostic.
@@ -255,7 +256,7 @@ export function buildAIRoutes(
               return { status: 501, body: { error: 'Streaming is not supported by the configured AI service' } };
             }
             const events = aiService.streamChat(finalMessages, resolvedOptions as any);
-            return { status: 200, stream: true, vercelDataStream: true, events };
+            return { status: 200, stream: true, vercelDataStream: true, events: encodeVercelDataStream(events) };
           } catch (err) {
             logger.error('[AI Route] /chat stream error', err instanceof Error ? err : undefined);
             return { status: 500, body: { error: 'Internal AI service error' } };

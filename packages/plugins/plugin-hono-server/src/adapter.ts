@@ -31,24 +31,24 @@ export class HonoHttpServer implements IHttpServer {
     private wrap(handler: RouteHandler) {
         return async (c: any) => {
             let body: any = {};
-            
+
             // Try to parse JSON body first if content-type is JSON
             if (c.req.header('content-type')?.includes('application/json')) {
-                try { 
-                    body = await c.req.json(); 
+                try {
+                    body = await c.req.json();
                 } catch(e) {
                     // If JSON parsing fails, try parseBody
-                    try { 
-                        body = await c.req.parseBody(); 
+                    try {
+                        body = await c.req.parseBody();
                     } catch(e2) {}
                 }
             } else {
                 // For non-JSON content types, use parseBody
-                try { 
-                    body = await c.req.parseBody(); 
+                try {
+                    body = await c.req.parseBody();
                 } catch(e) {}
             }
-            
+
             const req = {
                 params: c.req.param(),
                 query: c.req.query(),
@@ -59,16 +59,66 @@ export class HonoHttpServer implements IHttpServer {
             };
 
             let capturedResponse: any;
+            let streamController: ReadableStreamDefaultController | null = null;
+            let streamEncoder: TextEncoder | null = null;
+            let streamHeaders: Record<string, string> = {};
+            let isStreaming = false;
 
             const res = {
                 json: (data: any) => { capturedResponse = c.json(data); },
                 send: (data: string) => { capturedResponse = c.html(data); },
                 status: (code: number) => { c.status(code); return res; },
-                header: (name: string, value: string) => { c.header(name, value); return res; }
+                header: (name: string, value: string) => {
+                    c.header(name, value);
+                    streamHeaders[name] = value;
+                    return res;
+                },
+                write: (chunk: string | Uint8Array) => {
+                    isStreaming = true;
+                    if (streamController && streamEncoder) {
+                        const data = typeof chunk === 'string' ? streamEncoder.encode(chunk) : chunk;
+                        streamController.enqueue(data);
+                    }
+                },
+                end: () => {
+                    if (streamController) {
+                        streamController.close();
+                    }
+                },
             };
 
-            await handler(req as any, res as any);
-            return capturedResponse;
+            // Create a streaming response wrapper — if handler calls res.write(),
+            // we return a ReadableStream; otherwise fall back to capturedResponse.
+            const streamPromise = new Promise<Response | null>((resolve) => {
+                const stream = new ReadableStream({
+                    start(controller) {
+                        streamController = controller;
+                        streamEncoder = new TextEncoder();
+                    },
+                });
+
+                // Run the handler; once it's done, check if streaming was used
+                const result = handler(req as any, res as any);
+                const done = result instanceof Promise ? result : Promise.resolve(result);
+                done.then(() => {
+                    if (isStreaming) {
+                        resolve(new Response(stream, {
+                            status: 200,
+                            headers: streamHeaders,
+                        }));
+                    } else {
+                        // Not streaming — close the unused stream and return null
+                        streamController?.close();
+                        resolve(null);
+                    }
+                }).catch(() => {
+                    streamController?.close();
+                    resolve(null);
+                });
+            });
+
+            const streamResponse = await streamPromise;
+            return streamResponse ?? capturedResponse;
         };
     }
 
