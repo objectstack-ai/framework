@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { IAIService, IAIConversationService, AIMessage } from '@objectstack/spec/contracts';
+import type { IAIService, IAIConversationService, ModelMessage } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 
 /**
@@ -134,7 +134,7 @@ export function buildAIRoutes(
         }
 
         try {
-          const result = await aiService.chat(messages as AIMessage[], options as any);
+          const result = await aiService.chat(messages as ModelMessage[], options as any);
           return { status: 200, body: result };
         } catch (err) {
           logger.error('[AI Route] /chat error', err instanceof Error ? err : undefined);
@@ -169,7 +169,7 @@ export function buildAIRoutes(
           if (!aiService.streamChat) {
             return { status: 501, body: { error: 'Streaming is not supported by the configured AI service' } };
           }
-          const events = aiService.streamChat(messages as AIMessage[], options as any);
+          const events = aiService.streamChat(messages as ModelMessage[], options as any);
           return { status: 200, stream: true, events };
         } catch (err) {
           logger.error('[AI Route] /chat/stream error', err instanceof Error ? err : undefined);
@@ -312,7 +312,7 @@ export function buildAIRoutes(
             }
           }
 
-          const conversation = await conversationService.addMessage(id, message as AIMessage);
+          const conversation = await conversationService.addMessage(id, message as ModelMessage);
           return { status: 200, body: conversation };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

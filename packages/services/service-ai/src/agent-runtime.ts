@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type {
-  AIMessage,
+  ModelMessage,
   AIRequestOptions,
   AIToolDefinition,
   IMetadataService,
@@ -63,7 +63,7 @@ export class AgentRuntime {
    * Build the system message(s) that should be prepended to the
    * conversation when chatting with the given agent.
    */
-  buildSystemMessages(agent: Agent, context?: AgentChatContext): AIMessage[] {
+  buildSystemMessages(agent: Agent, context?: AgentChatContext): ModelMessage[] {
     const parts: string[] = [];
 
     // Base instructions
@@ -80,7 +80,7 @@ export class AgentRuntime {
       }
     }
 
-    return [{ role: 'system', content: parts.join('\n') }];
+    return [{ role: 'system' as const, content: parts.join('\n') }];
   }
 
   /**

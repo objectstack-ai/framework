@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { AIMessage } from '@objectstack/spec/contracts';
+import type { ModelMessage } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 import type { AIService } from '../ai-service.js';
 import type { AgentRuntime, AgentChatContext } from '../agent-runtime.js';
@@ -109,9 +109,9 @@ export function buildAgentRoutes(
           const mergedOptions = { ...agentOptions, ...safeOverrides };
 
           // Prepend system messages then user conversation
-          const fullMessages: AIMessage[] = [
+          const fullMessages: ModelMessage[] = [
             ...systemMessages,
-            ...(rawMessages as AIMessage[]),
+            ...(rawMessages as ModelMessage[]),
           ];
 
           // Use chatWithTools for automatic tool resolution

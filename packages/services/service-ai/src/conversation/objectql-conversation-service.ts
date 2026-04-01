@@ -3,7 +3,9 @@
 import { randomUUID } from 'node:crypto';
 import type {
   AIConversation,
-  AIMessage,
+  ModelMessage,
+  ToolCallPart,
+  ToolResultPart,
   IAIConversationService,
   IDataEngine,
 } from '@objectstack/spec/contracts';
@@ -157,7 +159,7 @@ export class ObjectQLConversationService implements IAIConversationService {
     return conversations;
   }
 
-  async addMessage(conversationId: string, message: AIMessage): Promise<AIConversation> {
+  async addMessage(conversationId: string, message: ModelMessage): Promise<AIConversation> {
     // Verify conversation exists
     const row: DbConversationRow | null = await this.engine.findOne(CONVERSATIONS_OBJECT, {
       where: { id: conversationId },
@@ -169,14 +171,38 @@ export class ObjectQLConversationService implements IAIConversationService {
     const now = new Date().toISOString();
     const msgId = `msg_${randomUUID()}`;
 
+    // Extract flat fields from the discriminated union
+    let contentStr: string;
+    let toolCallsJson: string | null = null;
+    let toolCallId: string | null = null;
+
+    if (message.role === 'system' || message.role === 'user') {
+      contentStr = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+    } else if (message.role === 'assistant') {
+      if (typeof message.content === 'string') {
+        contentStr = message.content;
+      } else {
+        const textParts = message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text);
+        const toolCalls = message.content.filter((p: any) => p.type === 'tool-call');
+        contentStr = textParts.join('');
+        if (toolCalls.length > 0) toolCallsJson = JSON.stringify(toolCalls);
+      }
+    } else if (message.role === 'tool') {
+      contentStr = JSON.stringify(message.content);
+      const firstResult = Array.isArray(message.content) ? message.content[0] : undefined;
+      if (firstResult && 'toolCallId' in firstResult) toolCallId = firstResult.toolCallId;
+    } else {
+      contentStr = '';
+    }
+
     // Insert the message
     await this.engine.insert(MESSAGES_OBJECT, {
       id: msgId,
       conversation_id: conversationId,
       role: message.role,
-      content: message.content,
-      tool_calls: message.toolCalls ? JSON.stringify(message.toolCalls) : null,
-      tool_call_id: message.toolCallId ?? null,
+      content: contentStr,
+      tool_calls: toolCallsJson,
+      tool_call_id: toolCallId,
       created_at: now,
     });
 
@@ -233,20 +259,42 @@ export class ObjectQLConversationService implements IAIConversationService {
   }
 
   /**
-   * Map a database row to an AIMessage.
+   * Map a database row to a ModelMessage.
    */
-  private toMessage(row: DbMessageRow): AIMessage {
-    const msg: AIMessage = {
-      role: row.role,
-      content: row.content,
-    };
-    const toolCalls = this.safeParse<any[]>(row.tool_calls);
-    if (toolCalls) {
-      msg.toolCalls = toolCalls;
+  private toMessage(row: DbMessageRow): ModelMessage {
+    switch (row.role) {
+      case 'system':
+        return { role: 'system', content: row.content };
+      case 'user':
+        return { role: 'user', content: row.content };
+      case 'assistant': {
+        const toolCalls = this.safeParse<ToolCallPart[]>(row.tool_calls);
+        if (toolCalls && toolCalls.length > 0) {
+          const content: Array<{ type: 'text'; text: string } | ToolCallPart> = [];
+          if (row.content) content.push({ type: 'text', text: row.content });
+          content.push(...toolCalls);
+          return { role: 'assistant', content };
+        }
+        return { role: 'assistant', content: row.content };
+      }
+      case 'tool': {
+        const toolResults = this.safeParse<ToolResultPart[]>(row.content);
+        if (toolResults && Array.isArray(toolResults) && toolResults.length > 0 && toolResults[0]?.type === 'tool-result') {
+          return { role: 'tool', content: toolResults };
+        }
+        // Backward compat: old format was a plain string
+        return {
+          role: 'tool',
+          content: [{
+            type: 'tool-result' as const,
+            toolCallId: row.tool_call_id ?? '',
+            toolName: 'unknown',
+            output: { type: 'text' as const, value: row.content },
+          }],
+        };
+      }
+      default:
+        return { role: 'user', content: row.content };
     }
-    if (row.tool_call_id) {
-      msg.toolCallId = row.tool_call_id;
-    }
-    return msg;
   }
 }
