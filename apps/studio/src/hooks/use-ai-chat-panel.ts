@@ -62,20 +62,28 @@ export function useAiChatPanel() {
   }, []);
 
   const toggle = useCallback(() => {
-    setOpen(!isOpen);
-  }, [isOpen, setOpen]);
+    setIsOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(PANEL_STATE_KEY, String(next));
+      } catch {
+        // silently ignore
+      }
+      return next;
+    });
+  }, []);
 
   // Global keyboard shortcut: Ctrl+Shift+I / Cmd+Shift+I
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.shiftKey && (e.ctrlKey || e.metaKey) && e.key === 'I') {
         e.preventDefault();
-        setOpen(!isOpen);
+        toggle();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, setOpen]);
+  }, [toggle]);
 
   return { isOpen, setOpen, toggle };
 }

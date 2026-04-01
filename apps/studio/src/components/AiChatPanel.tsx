@@ -32,6 +32,8 @@ export function AiChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const baseUrl = getApiBaseUrl();
 
+  const initialMessages = useMemo(() => loadMessages() as UIMessage[], []);
+
   const transport = useMemo(
     () => new DefaultChatTransport({ api: `${baseUrl}/api/v1/ai/chat` }),
     [baseUrl],
@@ -39,7 +41,7 @@ export function AiChatPanel() {
 
   const { messages, sendMessage, setMessages, status, error } = useChat({
     transport,
-    messages: loadMessages() as UIMessage[],
+    messages: initialMessages,
   });
 
   const isStreaming = status === 'streaming' || status === 'submitted';

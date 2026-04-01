@@ -2,12 +2,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { UIMessage } from 'ai';
 import {
   loadMessages,
   saveMessages,
 } from '../src/hooks/use-ai-chat-panel';
 
-function makeMsg(overrides: { id: string; role: 'user' | 'assistant'; content: string }) {
+function makeMsg(overrides: { id: string; role: 'user' | 'assistant'; content: string }): UIMessage {
   return {
     id: overrides.id,
     role: overrides.role,
@@ -48,15 +49,15 @@ describe('use-ai-chat-panel', () => {
   describe('saveMessages', () => {
     it('persists messages to localStorage', () => {
       const msgs = [makeMsg({ id: '1', role: 'user', content: 'Hello' })];
-      saveMessages(msgs as any);
+      saveMessages(msgs);
       const stored = JSON.parse(localStorage.getItem('objectstack:ai-chat-messages') || '[]');
       expect(stored).toHaveLength(1);
       expect(stored[0].parts[0].text).toBe('Hello');
     });
 
     it('overwrites previous messages', () => {
-      saveMessages([makeMsg({ id: '1', role: 'user', content: 'A' })] as any);
-      saveMessages([makeMsg({ id: '2', role: 'user', content: 'B' })] as any);
+      saveMessages([makeMsg({ id: '1', role: 'user', content: 'A' })]);
+      saveMessages([makeMsg({ id: '2', role: 'user', content: 'B' })]);
       const stored = JSON.parse(localStorage.getItem('objectstack:ai-chat-messages') || '[]');
       expect(stored).toHaveLength(1);
       expect(stored[0].parts[0].text).toBe('B');
@@ -65,7 +66,7 @@ describe('use-ai-chat-panel', () => {
     it('does not throw when localStorage is unavailable', () => {
       const originalSetItem = Storage.prototype.setItem;
       Storage.prototype.setItem = () => { throw new Error('QuotaExceeded'); };
-      expect(() => saveMessages([makeMsg({ id: '1', role: 'user', content: 'A' })] as any)).not.toThrow();
+      expect(() => saveMessages([makeMsg({ id: '1', role: 'user', content: 'A' })])).not.toThrow();
       Storage.prototype.setItem = originalSetItem;
     });
   });
@@ -89,7 +90,7 @@ describe('AiChatPanel constants', () => {
   it('uses correct localStorage keys', () => {
     // Validate the keys used by the module match expectations
     const msgs = [makeMsg({ id: '1', role: 'user', content: 'test' })];
-    saveMessages(msgs as any);
+    saveMessages(msgs);
     expect(localStorage.getItem('objectstack:ai-chat-messages')).toBeTruthy();
   });
 });
