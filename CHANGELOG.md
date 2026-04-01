@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Removed `value` field from data API responses** — The `findData` protocol
+  implementation no longer returns the deprecated `value` field alongside `records`.
+  Only `records` is returned, matching the `FindDataResponseSchema` spec. All
+  downstream consumers (Studio, app-host example, tests) updated to use `records`
+  exclusively. OData-specific responses (`ODataResponseSchema`) retain `value` per
+  the OData v4 standard — protocol adaptation should be handled in the HTTP
+  dispatch layer.
+
 ### Changed
 - **AI Chat Protocol Aligned with Vercel AI SDK** — Removed custom AI chat protocol
   types and Zod schemas (`AIMessage`, `AIToolCall`, `AIStreamEvent`,

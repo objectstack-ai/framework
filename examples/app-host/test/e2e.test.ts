@@ -104,12 +104,12 @@ async function run() {
         // 5. Test Data
         console.log('Testing Data Fetch...');
         const result = await client.data.find('todo_task', { top: 10 });
-        console.log(`Received ${result.value?.length || 0} records`);
+        console.log(`Received ${result.records?.length || 0} records`);
         
-        expect(result.value).toBeDefined();
-        expect(result.value.length).toBeGreaterThan(0);
+        expect(result.records).toBeDefined();
+        expect(result.records.length).toBeGreaterThan(0);
         
-        const subjects = result.value.map((r: any) => r.subject);
+        const subjects = result.records.map((r: any) => r.subject);
         console.log('Task Subjects:', subjects);
         expect(subjects).toContain('Learn ObjectStack');
         expect(subjects).toContain('Build a cool app');

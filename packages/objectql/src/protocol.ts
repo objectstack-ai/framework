@@ -483,8 +483,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const records = await this.engine.find(request.object, options);
         return {
             object: request.object,
-            value: records, // OData compatibility
-            records, // Legacy
+            records,
             total: records.length,
             hasMore: false
         };

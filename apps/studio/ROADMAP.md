@@ -58,7 +58,7 @@
 | # | Task | Details |
 |---|------|---------|
 | 0.1 | **Add URL Router** | Integrate TanStack Router or React Router. Map views to URL paths: `/:package/objects/:name`, `/:package/metadata/:type/:name`, `/packages`, `/settings`. Enable browser back/forward and deep linking. |
-| 0.2 | **Centralize response normalization** | Create `src/lib/api-utils.ts` with `normalizeRecords()`, `normalizeMetadata()`. Remove inline `.records || .value || .data` from all components. |
+| 0.2 | **~~Centralize response normalization~~** | ✅ Done — `value` field removed from protocol implementation. All components now use `records` directly (spec-compliant). |
 | 0.3 | **Wire plugin sidebar groups** | Replace hardcoded `PROTOCOL_GROUPS` in `app-sidebar.tsx` with plugin-contributed `useSidebarGroups()`. |
 | 0.4 | **Clean dead code** | Remove stale `types.ts`, empty `app/dashboard/` directory. |
 | 0.5 | **Add React Testing Library** | Set up component test infrastructure. Write baseline tests for `ObjectDataTable`, `ObjectDataForm`, `AppSidebar`, Plugin system. Target: 50% component coverage. |

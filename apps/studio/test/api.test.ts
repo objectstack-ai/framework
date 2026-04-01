@@ -4,11 +4,11 @@ import { simulateBrowser } from '../src/mocks/simulateBrowser';
 /**
  * Helper: extract records array from the API response.
  * The client strips the HTTP envelope ({ success, data }) and returns the protocol response.
- * Protocol responses use `records` (spec-compliant) or `value` (deprecated alias).
+ * Protocol responses use `records` (spec-compliant).
  */
 function extractRecords(response: any): any[] {
     if (Array.isArray(response)) return response;
-    return response?.records || response?.value || response?.data || [];
+    return response?.records || response?.data || [];
 }
 
 describe('App React CRUD Integration Tests (Virtual Browser)', () => {
