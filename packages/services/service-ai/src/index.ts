@@ -18,7 +18,7 @@ export { ObjectQLConversationService } from './conversation/objectql-conversatio
 
 // Tool registry
 export { ToolRegistry } from './tools/tool-registry.js';
-export type { ToolHandler } from './tools/tool-registry.js';
+export type { ToolHandler, ToolExecutionResult } from './tools/tool-registry.js';
 
 // Data tools
 export { registerDataTools, DATA_TOOL_DEFINITIONS } from './tools/data-tools.js';

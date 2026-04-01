@@ -1,10 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type {
-  AIMessage,
+  ModelMessage,
+  ToolCallPart,
+  TextStreamPart,
+  ToolSet,
   AIRequestOptions,
   AIResult,
-  AIStreamEvent,
   IAIService,
   IAIConversationService,
   ChatWithToolsOptions,
@@ -14,7 +16,27 @@ import type { Logger } from '@objectstack/spec/contracts';
 import { createLogger } from '@objectstack/core';
 import { MemoryLLMAdapter } from './adapters/memory-adapter.js';
 import { ToolRegistry } from './tools/tool-registry.js';
+import type { ToolExecutionResult } from './tools/tool-registry.js';
 import { InMemoryConversationService } from './conversation/in-memory-conversation-service.js';
+
+// ── Stream event helpers ──────────────────────────────────────────
+// These helpers construct properly-typed Vercel AI SDK stream parts
+// to avoid repeated `as unknown as TextStreamPart<ToolSet>` casts.
+
+/** Create a text-delta stream part. */
+function textDeltaPart(id: string, text: string): TextStreamPart<ToolSet> {
+  return { type: 'text-delta', id, text } as TextStreamPart<ToolSet>;
+}
+
+/** Create a finish stream part from an AIResult. */
+function finishPart(result?: AIResult): TextStreamPart<ToolSet> {
+  return {
+    type: 'finish',
+    finishReason: 'stop',
+    totalUsage: result?.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    rawFinishReason: 'stop',
+  } as unknown as TextStreamPart<ToolSet>;
+}
 
 /**
  * Configuration for AIService.
@@ -70,7 +92,7 @@ export class AIService implements IAIService {
 
   // ── IAIService implementation ──────────────────────────────────
 
-  async chat(messages: AIMessage[], options?: AIRequestOptions): Promise<AIResult> {
+  async chat(messages: ModelMessage[], options?: AIRequestOptions): Promise<AIResult> {
     this.logger.debug('[AI] chat', { messageCount: messages.length, model: options?.model });
     return this.adapter.chat(messages, options);
   }
@@ -81,16 +103,16 @@ export class AIService implements IAIService {
   }
 
   async *streamChat(
-    messages: AIMessage[],
+    messages: ModelMessage[],
     options?: AIRequestOptions,
-  ): AsyncIterable<AIStreamEvent> {
+  ): AsyncIterable<TextStreamPart<ToolSet>> {
     this.logger.debug('[AI] streamChat', { messageCount: messages.length, model: options?.model });
 
     if (!this.adapter.streamChat) {
       // Fallback: emit the entire response as a single text-delta + finish
       const result = await this.adapter.chat(messages, options);
-      yield { type: 'text-delta', textDelta: result.content };
-      yield { type: 'finish', result };
+      yield textDeltaPart('fallback', result.content);
+      yield finishPart(result);
       return;
     }
 
@@ -116,6 +138,12 @@ export class AIService implements IAIService {
   /** Default maximum iterations for the tool call loop. */
   static readonly DEFAULT_MAX_ITERATIONS = 10;
 
+  /** Extract the text value from a ToolExecutionResult's output. */
+  private static extractOutputText(tr: ToolExecutionResult): string {
+    return tr.output && typeof tr.output === 'object' && 'value' in tr.output
+      ? String(tr.output.value) : 'unknown error';
+  }
+
   /**
    * Chat with automatic tool call resolution.
    *
@@ -128,7 +156,7 @@ export class AIService implements IAIService {
    *    maximum number of iterations (`maxIterations`) is reached.
    */
   async chatWithTools(
-    messages: AIMessage[],
+    messages: ModelMessage[],
     options?: ChatWithToolsOptions,
   ): Promise<AIResult> {
     // Destructure loop-specific options so they are never forwarded to the adapter
@@ -174,31 +202,34 @@ export class AIService implements IAIService {
 
       this.logger.debug('[AI] chatWithTools tool calls', {
         iteration,
-        calls: result.toolCalls.map(tc => tc.name),
+        calls: result.toolCalls.map(tc => tc.toolName),
       });
 
       // Append the assistant's response (with tool call metadata) to the conversation
+      const assistantContent: Array<{ type: 'text'; text: string } | ToolCallPart> = [];
+      if (result.content) assistantContent.push({ type: 'text', text: result.content });
+      assistantContent.push(...result.toolCalls);
       conversation.push({
         role: 'assistant',
-        content: result.content ?? '',
-        toolCalls: result.toolCalls,
-      });
+        content: assistantContent,
+      } as ModelMessage);
 
       // Execute all tool calls in parallel
-      const toolResults = await this.toolRegistry.executeAll(result.toolCalls);
+      const toolResults: ToolExecutionResult[] = await this.toolRegistry.executeAll(result.toolCalls);
 
       // Process results: track errors and honour onToolError callback
       for (const tr of toolResults) {
         if (tr.isError) {
           // Match tool call by toolCallId for robust attribution
-          const matchedCall = result.toolCalls!.find(tc => tc.id === tr.toolCallId);
-          const toolName = matchedCall?.name ?? 'unknown';
-          const errorEntry = { iteration, toolName, error: tr.content };
+          const matchedCall = result.toolCalls!.find(tc => tc.toolCallId === tr.toolCallId);
+          const toolName = matchedCall?.toolName ?? 'unknown';
+          const errorText = AIService.extractOutputText(tr);
+          const errorEntry = { iteration, toolName, error: errorText };
           toolErrors.push(errorEntry);
           this.logger.warn('[AI] chatWithTools tool error', errorEntry);
 
           if (onToolError && matchedCall) {
-            const action = onToolError(matchedCall, tr.content);
+            const action = onToolError(matchedCall, errorText);
             if (action === 'abort') {
               abortedByCallback = true;
             }
@@ -208,9 +239,8 @@ export class AIService implements IAIService {
         // Append each tool result as a `role: 'tool'` message
         conversation.push({
           role: 'tool',
-          content: tr.content,
-          toolCallId: tr.toolCallId,
-        });
+          content: [tr],
+        } as ModelMessage);
       }
 
       if (abortedByCallback) {
@@ -244,9 +274,9 @@ export class AIService implements IAIService {
    * fed back until a final text stream is produced.
    */
   async *streamChatWithTools(
-    messages: AIMessage[],
+    messages: ModelMessage[],
     options?: ChatWithToolsOptions,
-  ): AsyncIterable<AIStreamEvent> {
+  ): AsyncIterable<TextStreamPart<ToolSet>> {
     const { maxIterations: maxIter, onToolError, ...restOptions } = options ?? {};
     const maxIterations = maxIter ?? AIService.DEFAULT_MAX_ITERATIONS;
     const registeredTools = this.toolRegistry.getAll();
@@ -271,29 +301,32 @@ export class AIService implements IAIService {
 
       if (!result.toolCalls || result.toolCalls.length === 0) {
         // Final round — return the probed result without an extra model call
-        yield { type: 'text-delta', textDelta: result.content };
-        yield { type: 'finish', result };
+        yield textDeltaPart('stream', result.content);
+        yield finishPart(result);
         return;
       }
 
       // Emit tool-call events so the client can see tool execution progress
       for (const tc of result.toolCalls) {
-        yield { type: 'tool-call', toolCall: tc };
+        yield { type: 'tool-call', toolCallId: tc.toolCallId, toolName: tc.toolName, input: tc.input } as TextStreamPart<ToolSet>;
       }
 
+      const assistantContent: Array<{ type: 'text'; text: string } | ToolCallPart> = [];
+      if (result.content) assistantContent.push({ type: 'text', text: result.content });
+      assistantContent.push(...result.toolCalls);
       conversation.push({
         role: 'assistant',
-        content: result.content ?? '',
-        toolCalls: result.toolCalls,
-      });
+        content: assistantContent,
+      } as ModelMessage);
 
-      const toolResults = await this.toolRegistry.executeAll(result.toolCalls);
+      const toolResults: ToolExecutionResult[] = await this.toolRegistry.executeAll(result.toolCalls);
 
       for (const tr of toolResults) {
         if (tr.isError && onToolError) {
-          const matchedCall = result.toolCalls!.find(tc => tc.id === tr.toolCallId);
+          const matchedCall = result.toolCalls!.find(tc => tc.toolCallId === tr.toolCallId);
           if (matchedCall) {
-            const action = onToolError(matchedCall, tr.content);
+            const errorText = AIService.extractOutputText(tr);
+            const action = onToolError(matchedCall, errorText);
             if (action === 'abort') {
               abortedByCallback = true;
             }
@@ -301,9 +334,8 @@ export class AIService implements IAIService {
         }
         conversation.push({
           role: 'tool',
-          content: tr.content,
-          toolCallId: tr.toolCallId,
-        });
+          content: [tr],
+        } as ModelMessage);
       }
 
       if (abortedByCallback) {
@@ -319,7 +351,7 @@ export class AIService implements IAIService {
     }
     const finalOptions = { ...chatOptions, tools: undefined, toolChoice: undefined };
     const result = await this.adapter.chat(conversation, finalOptions);
-    yield { type: 'text-delta', textDelta: result.content };
-    yield { type: 'finish', result };
+    yield textDeltaPart('stream', result.content);
+    yield finishPart(result);
   }
 }

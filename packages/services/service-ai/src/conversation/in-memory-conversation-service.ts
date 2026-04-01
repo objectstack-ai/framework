@@ -2,7 +2,7 @@
 
 import type {
   AIConversation,
-  AIMessage,
+  ModelMessage,
   IAIConversationService,
 } from '@objectstack/spec/contracts';
 
@@ -75,7 +75,7 @@ export class InMemoryConversationService implements IAIConversationService {
     return results;
   }
 
-  async addMessage(conversationId: string, message: AIMessage): Promise<AIConversation> {
+  async addMessage(conversationId: string, message: ModelMessage): Promise<AIConversation> {
     const conversation = this.store.get(conversationId);
     if (!conversation) {
       throw new Error(`Conversation "${conversationId}" not found`);

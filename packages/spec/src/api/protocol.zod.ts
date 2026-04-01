@@ -851,21 +851,10 @@ export const AiNlqResponseSchema = z.object({
   suggestions: z.array(z.string()).optional().describe('Suggested follow-up queries'),
 });
 
-export const AiChatRequestSchema = z.object({
-  message: z.string().describe('User message'),
-  conversationId: z.string().optional().describe('Conversation ID for context'),
-  context: z.record(z.string(), z.unknown()).optional().describe('Additional context data'),
-});
-
-export const AiChatResponseSchema = z.object({
-  message: z.string().describe('Assistant response message'),
-  conversationId: z.string().describe('Conversation ID'),
-  actions: z.array(z.object({
-    type: z.string().describe('Action type'),
-    label: z.string().describe('Action display label'),
-    data: z.record(z.string(), z.unknown()).optional().describe('Action data'),
-  })).optional().describe('Suggested actions'),
-});
+// AiChatRequestSchema and AiChatResponseSchema have been removed.
+// The AI chat wire protocol is now fully aligned with the Vercel AI SDK (`ai`).
+// Frontend consumers should use `@ai-sdk/react/useChat` directly.
+// See: https://ai-sdk.dev/docs
 
 export const AiSuggestRequestSchema = z.object({
   object: z.string().describe('Object name for context'),
@@ -1264,8 +1253,6 @@ export type MarkAllNotificationsReadResponse = z.infer<typeof MarkAllNotificatio
 // AI Types
 export type AiNlqRequest = z.input<typeof AiNlqRequestSchema>;
 export type AiNlqResponse = z.infer<typeof AiNlqResponseSchema>;
-export type AiChatRequest = z.input<typeof AiChatRequestSchema>;
-export type AiChatResponse = z.infer<typeof AiChatResponseSchema>;
 export type AiSuggestRequest = z.input<typeof AiSuggestRequestSchema>;
 export type AiSuggestResponse = z.infer<typeof AiSuggestResponseSchema>;
 export type AiInsightsRequest = z.input<typeof AiInsightsRequestSchema>;
@@ -1416,9 +1403,8 @@ export interface ObjectStackProtocol {
   markNotificationsRead?(request: MarkNotificationsReadRequest): Promise<MarkNotificationsReadResponse>;
   markAllNotificationsRead?(request: MarkAllNotificationsReadRequest): Promise<MarkAllNotificationsReadResponse>;
 
-  // AI (optional)
+  // AI (optional — chat is now handled by Vercel AI SDK wire protocol)
   aiNlq?(request: AiNlqRequest): Promise<AiNlqResponse>;
-  aiChat?(request: AiChatRequest): Promise<AiChatResponse>;
   aiSuggest?(request: AiSuggestRequest): Promise<AiSuggestResponse>;
   aiInsights?(request: AiInsightsRequest): Promise<AiInsightsResponse>;
 

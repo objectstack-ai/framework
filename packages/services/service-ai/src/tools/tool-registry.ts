@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { AIToolDefinition, AIToolCall, AIToolResult } from '@objectstack/spec/contracts';
+import type { AIToolDefinition, ToolCallPart, ToolResultPart } from '@objectstack/spec/contracts';
 
 /**
  * Handler function for a registered tool.
@@ -8,6 +8,14 @@ import type { AIToolDefinition, AIToolCall, AIToolResult } from '@objectstack/sp
  * Receives parsed arguments and returns the tool output as a string.
  */
 export type ToolHandler = (args: Record<string, unknown>) => Promise<string> | string;
+
+/**
+ * Extended ToolResultPart that carries an `isError` flag for internal
+ * error-tracking in the tool-call loop.
+ */
+export interface ToolExecutionResult extends ToolResultPart {
+  isError?: boolean;
+}
 
 /**
  * ToolRegistry — Central registry for AI-callable tools.
@@ -72,30 +80,45 @@ export class ToolRegistry {
   /**
    * Execute a tool call and return the result.
    */
-  async execute(toolCall: AIToolCall): Promise<AIToolResult> {
-    const handler = this.handlers.get(toolCall.name);
+  async execute(toolCall: ToolCallPart): Promise<ToolExecutionResult> {
+    const handler = this.handlers.get(toolCall.toolName);
     if (!handler) {
       return {
-        toolCallId: toolCall.id,
-        content: `Tool "${toolCall.name}" is not registered`,
+        type: 'tool-result',
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        output: { type: 'text', value: `Tool "${toolCall.toolName}" is not registered` },
         isError: true,
       };
     }
 
     try {
-      const args: Record<string, unknown> = JSON.parse(toolCall.arguments);
+      const args = typeof toolCall.input === 'string'
+        ? JSON.parse(toolCall.input)
+        : (toolCall.input as Record<string, unknown>) ?? {};
       const content = await handler(args);
-      return { toolCallId: toolCall.id, content };
+      return {
+        type: 'tool-result',
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        output: { type: 'text', value: content },
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return { toolCallId: toolCall.id, content: message, isError: true };
+      return {
+        type: 'tool-result',
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        output: { type: 'text', value: message },
+        isError: true,
+      };
     }
   }
 
   /**
    * Execute multiple tool calls in parallel.
    */
-  async executeAll(toolCalls: AIToolCall[]): Promise<AIToolResult[]> {
+  async executeAll(toolCalls: ToolCallPart[]): Promise<ToolExecutionResult[]> {
     return Promise.all(toolCalls.map(tc => this.execute(tc)));
   }
 

@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { AIMessage, IAIService, AIStreamEvent } from '@objectstack/spec/contracts';
+import type { ModelMessage, IAIService, TextStreamPart, ToolSet } from '@objectstack/spec/contracts';
 import { AIService } from '../ai-service.js';
 import { MemoryLLMAdapter } from '../adapters/memory-adapter.js';
 import { ToolRegistry } from '../tools/tool-registry.js';
@@ -35,7 +35,7 @@ describe('MemoryLLMAdapter', () => {
   });
 
   it('should echo the last user message in chat()', async () => {
-    const messages: AIMessage[] = [
+    const messages: ModelMessage[] = [
       { role: 'system', content: 'You are helpful.' },
       { role: 'user', content: 'Hello AI' },
     ];
@@ -46,7 +46,7 @@ describe('MemoryLLMAdapter', () => {
   });
 
   it('should handle no user message in chat()', async () => {
-    const messages: AIMessage[] = [{ role: 'system', content: 'System only' }];
+    const messages: ModelMessage[] = [{ role: 'system', content: 'System only' }];
     const result = await adapter.chat(messages);
     expect(result.content).toBe('[memory] (no user message)');
   });
@@ -57,8 +57,8 @@ describe('MemoryLLMAdapter', () => {
   });
 
   it('should stream word-by-word in streamChat()', async () => {
-    const messages: AIMessage[] = [{ role: 'user', content: 'Hi there' }];
-    const events: AIStreamEvent[] = [];
+    const messages: ModelMessage[] = [{ role: 'user', content: 'Hi there' }];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of adapter.streamChat(messages)) {
       events.push(event);
     }
@@ -113,24 +113,26 @@ describe('ToolRegistry', () => {
     );
 
     const result = await registry.execute({
-      id: 'call_1',
-      name: 'add',
-      arguments: JSON.stringify({ a: 3, b: 4 }),
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'add',
+      input: { a: 3, b: 4 },
     });
 
     expect(result.toolCallId).toBe('call_1');
-    expect(result.content).toBe('7');
+    expect(result.output).toEqual({ type: 'text', value: '7' });
     expect(result.isError).toBeUndefined();
   });
 
   it('should return error for unknown tool', async () => {
     const result = await registry.execute({
-      id: 'call_x',
-      name: 'unknown',
-      arguments: '{}',
+      type: 'tool-call',
+      toolCallId: 'call_x',
+      toolName: 'unknown',
+      input: {},
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toContain('not registered');
+    expect(result.output).toEqual(expect.objectContaining({ type: 'text', value: expect.stringContaining('not registered') }));
   });
 
   it('should return error on handler failure', async () => {
@@ -140,12 +142,13 @@ describe('ToolRegistry', () => {
     );
 
     const result = await registry.execute({
-      id: 'call_f',
-      name: 'fail_tool',
-      arguments: '{}',
+      type: 'tool-call',
+      toolCallId: 'call_f',
+      toolName: 'fail_tool',
+      input: {},
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toBe('boom');
+    expect(result.output).toEqual({ type: 'text', value: 'boom' });
   });
 
   it('should execute multiple tool calls in parallel', async () => {
@@ -155,13 +158,13 @@ describe('ToolRegistry', () => {
     );
 
     const results = await registry.executeAll([
-      { id: 'c1', name: 'echo', arguments: '{"msg":"a"}' },
-      { id: 'c2', name: 'echo', arguments: '{"msg":"b"}' },
+      { type: 'tool-call', toolCallId: 'c1', toolName: 'echo', input: { msg: 'a' } },
+      { type: 'tool-call', toolCallId: 'c2', toolName: 'echo', input: { msg: 'b' } },
     ]);
 
     expect(results).toHaveLength(2);
-    expect(results[0].content).toBe('a');
-    expect(results[1].content).toBe('b');
+    expect(results[0].output).toEqual({ type: 'text', value: 'a' });
+    expect(results[1].output).toEqual({ type: 'text', value: 'b' });
   });
 
   it('should return all definitions', () => {
@@ -272,7 +275,7 @@ describe('AIService', () => {
 
   it('should stream via adapter.streamChat()', async () => {
     const service = new AIService({ logger: silentLogger });
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChat([{ role: 'user', content: 'Hi' }])) {
       events.push(event);
     }
@@ -289,14 +292,14 @@ describe('AIService', () => {
     };
     const service = new AIService({ adapter, logger: silentLogger });
 
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChat([{ role: 'user', content: 'Hi' }])) {
       events.push(event);
     }
 
     expect(events).toHaveLength(2);
     expect(events[0].type).toBe('text-delta');
-    expect(events[0].textDelta).toBe('response');
+    expect(events[0].type === 'text-delta' && events[0].text).toBe('response');
     expect(events[1].type).toBe('finish');
   });
 

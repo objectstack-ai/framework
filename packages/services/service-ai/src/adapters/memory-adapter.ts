@@ -1,10 +1,11 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type {
-  AIMessage,
+  ModelMessage,
   AIRequestOptions,
   AIResult,
-  AIStreamEvent,
+  TextStreamPart,
+  ToolSet,
 } from '@objectstack/spec/contracts';
 import type { LLMAdapter } from '@objectstack/spec/contracts';
 
@@ -17,10 +18,12 @@ import type { LLMAdapter } from '@objectstack/spec/contracts';
 export class MemoryLLMAdapter implements LLMAdapter {
   readonly name = 'memory';
 
-  async chat(messages: AIMessage[], options?: AIRequestOptions): Promise<AIResult> {
+  async chat(messages: ModelMessage[], options?: AIRequestOptions): Promise<AIResult> {
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+    const userContent = lastUserMessage?.content;
+    const text = typeof userContent === 'string' ? userContent : '(complex content)';
     const content = lastUserMessage
-      ? `[memory] ${lastUserMessage.content}`
+      ? `[memory] ${text}`
       : '[memory] (no user message)';
 
     return {
@@ -39,17 +42,22 @@ export class MemoryLLMAdapter implements LLMAdapter {
   }
 
   async *streamChat(
-    messages: AIMessage[],
+    messages: ModelMessage[],
     _options?: AIRequestOptions,
-  ): AsyncIterable<AIStreamEvent> {
+  ): AsyncIterable<TextStreamPart<ToolSet>> {
     const result = await this.chat(messages);
     // Emit word-by-word deltas for realistic streaming simulation
     const words = result.content.split(' ');
     for (let i = 0; i < words.length; i++) {
-      const textDelta = i === 0 ? words[i] : ` ${words[i]}`;
-      yield { type: 'text-delta', textDelta };
+      const wordText = i === 0 ? words[i] : ` ${words[i]}`;
+      yield { type: 'text-delta', id: `delta_${i}`, text: wordText } as TextStreamPart<ToolSet>;
     }
-    yield { type: 'finish', result };
+    yield {
+      type: 'finish',
+      finishReason: 'stop' as const,
+      totalUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      rawFinishReason: 'stop',
+    } as unknown as TextStreamPart<ToolSet>;
   }
 
   async embed(input: string | string[]): Promise<number[][]> {

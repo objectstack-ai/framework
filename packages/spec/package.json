@@ -123,6 +123,7 @@
     "vitest": "^4.1.2"
   },
   "dependencies": {
+    "ai": "^6.0.142",
     "zod": "^4.3.6"
   },
   "engines": {

@@ -2,10 +2,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type {
-  AIMessage,
+  ModelMessage,
   AIResult,
   AIRequestOptions,
-  AIToolCall,
+  ToolCallPart,
   AIToolDefinition,
   IDataEngine,
   IMetadataService,
@@ -108,10 +108,11 @@ describe('AIService.chatWithTools', () => {
   });
 
   it('should execute tool calls and loop until final text response', async () => {
-    const toolCall: AIToolCall = {
-      id: 'call_1',
-      name: 'get_weather',
-      arguments: JSON.stringify({ city: 'Tokyo' }),
+    const toolCall: ToolCallPart = {
+      type: 'tool-call' as const,
+      toolCallId: 'call_1',
+      toolName: 'get_weather',
+      input: { city: 'Tokyo' },
     };
 
     const adapter = createMockAdapter([
@@ -131,13 +132,16 @@ describe('AIService.chatWithTools', () => {
     expect(adapter.chat).toHaveBeenCalledTimes(2);
 
     // Verify the second call includes the tool result message
-    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as AIMessage[];
+    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as ModelMessage[];
     expect(secondCallMessages).toHaveLength(3); // user + assistant(tool_call) + tool(result)
     expect(secondCallMessages[1].role).toBe('assistant');
-    expect(secondCallMessages[1].toolCalls).toEqual([toolCall]);
+    const assistantContent = secondCallMessages[1].content as any[];
+    const toolCallParts = assistantContent.filter((p: any) => p.type === 'tool-call');
+    expect(toolCallParts).toEqual([toolCall]);
     expect(secondCallMessages[2].role).toBe('tool');
-    expect(secondCallMessages[2].toolCallId).toBe('call_1');
-    expect(secondCallMessages[2].content).toContain('"temp":22');
+    const toolResultContent = secondCallMessages[2].content as any[];
+    expect(toolResultContent[0].toolCallId).toBe('call_1');
+    expect(toolResultContent[0].output.value).toContain('"temp":22');
   });
 
   it('should handle multiple sequential tool calls', async () => {
@@ -148,9 +152,9 @@ describe('AIService.chatWithTools', () => {
 
     const adapter = createMockAdapter([
       // Round 1: call get_weather
-      { content: '', toolCalls: [{ id: 'c1', name: 'get_weather', arguments: '{"city":"NYC"}' }] },
+      { content: '', toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c1', toolName: 'get_weather', input: { city: 'NYC' } }] },
       // Round 2: call get_time
-      { content: '', toolCalls: [{ id: 'c2', name: 'get_time', arguments: '{}' }] },
+      { content: '', toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c2', toolName: 'get_time', input: {} }] },
       // Round 3: final response
       { content: 'NYC: 22°C at 14:30' },
     ]);
@@ -173,8 +177,8 @@ describe('AIService.chatWithTools', () => {
       {
         content: '',
         toolCalls: [
-          { id: 'c1', name: 'get_weather', arguments: '{"city":"London"}' },
-          { id: 'c2', name: 'get_population', arguments: '{"city":"London"}' },
+          { type: 'tool-call' as const, toolCallId: 'c1', toolName: 'get_weather', input: { city: 'London' } },
+          { type: 'tool-call' as const, toolCallId: 'c2', toolName: 'get_population', input: { city: 'London' } },
         ],
       },
       // Final response with both results
@@ -187,7 +191,7 @@ describe('AIService.chatWithTools', () => {
     expect(result.content).toBe('London: 22°C, pop 1M');
 
     // Both tool results should be in the conversation
-    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as AIMessage[];
+    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as ModelMessage[];
     const toolMessages = secondCallMessages.filter(m => m.role === 'tool');
     expect(toolMessages).toHaveLength(2);
   });
@@ -196,7 +200,7 @@ describe('AIService.chatWithTools', () => {
     // Adapter always returns tool calls — would loop forever
     const infiniteToolCall: AIResult = {
       content: '',
-      toolCalls: [{ id: 'c', name: 'get_weather', arguments: '{"city":"X"}' }],
+      toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c', toolName: 'get_weather', input: { city: 'X' } }],
     };
     const adapter = createMockAdapter(
       Array(5).fill(infiniteToolCall).concat([{ content: 'Forced stop' }]),
@@ -243,7 +247,7 @@ describe('AIService.chatWithTools', () => {
     );
 
     const adapter = createMockAdapter([
-      { content: '', toolCalls: [{ id: 'c1', name: 'bad_tool', arguments: '{}' }] },
+      { content: '', toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c1', toolName: 'bad_tool', input: {} }] },
       { content: 'I see the tool failed' },
     ]);
 
@@ -253,9 +257,16 @@ describe('AIService.chatWithTools', () => {
     expect(result.content).toBe('I see the tool failed');
 
     // The error message should be in the tool result
-    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as AIMessage[];
+    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as ModelMessage[];
     const toolMsg = secondCallMessages.find(m => m.role === 'tool');
-    expect(toolMsg?.content).toContain('Tool crashed');
+    let toolContent: string | undefined;
+    if (toolMsg?.role === 'tool' && Array.isArray(toolMsg.content)) {
+      const firstResult = toolMsg.content[0];
+      if ('output' in firstResult && firstResult.output && typeof firstResult.output === 'object' && 'value' in firstResult.output) {
+        toolContent = String(firstResult.output.value);
+      }
+    }
+    expect(toolContent).toContain('Tool crashed');
   });
 
   it('should work with no registered tools', async () => {
@@ -343,12 +354,13 @@ describe('Data Tools', () => {
       ]);
 
       const result = await registry.execute({
-        id: 'c1',
-        name: 'list_objects',
-        arguments: '{}',
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'list_objects',
+        input: {},
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed).toHaveLength(2);
       expect(parsed[0]).toEqual({ name: 'account', label: 'Account' });
     });
@@ -364,12 +376,13 @@ describe('Data Tools', () => {
       });
 
       const result = await registry.execute({
-        id: 'c1',
-        name: 'describe_object',
-        arguments: JSON.stringify({ objectName: 'account' }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'describe_object',
+        input: { objectName: 'account' },
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed.name).toBe('account');
       expect(parsed.fields.name.type).toBe('text');
       expect(parsed.fields.name.required).toBe(true);
@@ -378,12 +391,13 @@ describe('Data Tools', () => {
 
     it('describe_object should return error for unknown object', async () => {
       const result = await registry.execute({
-        id: 'c1',
-        name: 'describe_object',
-        arguments: JSON.stringify({ objectName: 'nonexistent' }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'describe_object',
+        input: { objectName: 'nonexistent' },
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed.error).toContain('not found');
     });
 
@@ -392,14 +406,15 @@ describe('Data Tools', () => {
       (dataEngine.find as any).mockResolvedValue(records);
 
       const result = await registry.execute({
-        id: 'c1',
-        name: 'query_records',
-        arguments: JSON.stringify({
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'query_records',
+        input: {
           objectName: 'account',
           where: { status: 'active' },
           fields: ['name', 'status'],
           limit: 10,
-        }),
+        },
       });
 
       expect(dataEngine.find).toHaveBeenCalledWith('account', {
@@ -410,7 +425,7 @@ describe('Data Tools', () => {
         offset: undefined,
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed.count).toBe(2);
       expect(parsed.records).toEqual(records);
     });
@@ -419,9 +434,10 @@ describe('Data Tools', () => {
       (dataEngine.find as any).mockResolvedValue([]);
 
       await registry.execute({
-        id: 'c1',
-        name: 'query_records',
-        arguments: JSON.stringify({ objectName: 'account', limit: 999 }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'query_records',
+        input: { objectName: 'account', limit: 999 },
       });
 
       expect(dataEngine.find).toHaveBeenCalledWith('account', expect.objectContaining({
@@ -433,9 +449,10 @@ describe('Data Tools', () => {
       (dataEngine.find as any).mockResolvedValue([]);
 
       await registry.execute({
-        id: 'c1',
-        name: 'query_records',
-        arguments: JSON.stringify({ objectName: 'account' }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'query_records',
+        input: { objectName: 'account' },
       });
 
       expect(dataEngine.find).toHaveBeenCalledWith('account', expect.objectContaining({
@@ -448,9 +465,10 @@ describe('Data Tools', () => {
       (dataEngine.findOne as any).mockResolvedValue(record);
 
       const result = await registry.execute({
-        id: 'c1',
-        name: 'get_record',
-        arguments: JSON.stringify({ objectName: 'account', recordId: 'rec_123' }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'get_record',
+        input: { objectName: 'account', recordId: 'rec_123' },
       });
 
       expect(dataEngine.findOne).toHaveBeenCalledWith('account', {
@@ -458,18 +476,19 @@ describe('Data Tools', () => {
         fields: undefined,
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed.name).toBe('Acme Corp');
     });
 
     it('get_record should return error for missing record', async () => {
       const result = await registry.execute({
-        id: 'c1',
-        name: 'get_record',
-        arguments: JSON.stringify({ objectName: 'account', recordId: 'not_found' }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'get_record',
+        input: { objectName: 'account', recordId: 'not_found' },
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed.error).toContain('not found');
     });
 
@@ -478,13 +497,14 @@ describe('Data Tools', () => {
       (dataEngine.aggregate as any).mockResolvedValue(aggResult);
 
       const result = await registry.execute({
-        id: 'c1',
-        name: 'aggregate_data',
-        arguments: JSON.stringify({
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'aggregate_data',
+        input: {
           objectName: 'account',
           aggregations: [{ function: 'sum', field: 'revenue', alias: 'total_revenue' }],
           where: { status: 'active' },
-        }),
+        },
       });
 
       expect(dataEngine.aggregate).toHaveBeenCalledWith('account', {
@@ -493,21 +513,22 @@ describe('Data Tools', () => {
         aggregations: [{ function: 'sum', field: 'revenue', alias: 'total_revenue' }],
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed).toEqual(aggResult);
     });
 
     it('aggregate_data should reject invalid aggregation functions', async () => {
       const result = await registry.execute({
-        id: 'c1',
-        name: 'aggregate_data',
-        arguments: JSON.stringify({
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'aggregate_data',
+        input: {
           objectName: 'account',
           aggregations: [{ function: 'drop_table', field: 'id', alias: 'x' }],
-        }),
+        },
       });
 
-      const parsed = JSON.parse(result.content);
+      const parsed = JSON.parse((result.output as any).value);
       expect(parsed.error).toContain('Invalid aggregation function');
       expect(parsed.error).toContain('drop_table');
       expect(dataEngine.aggregate).not.toHaveBeenCalled();
@@ -517,9 +538,10 @@ describe('Data Tools', () => {
       (dataEngine.find as any).mockResolvedValue([]);
 
       await registry.execute({
-        id: 'c1',
-        name: 'query_records',
-        arguments: JSON.stringify({ objectName: 'account', limit: -5 }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'query_records',
+        input: { objectName: 'account', limit: -5 },
       });
 
       expect(dataEngine.find).toHaveBeenCalledWith('account', expect.objectContaining({
@@ -531,9 +553,10 @@ describe('Data Tools', () => {
       (dataEngine.find as any).mockResolvedValue([]);
 
       await registry.execute({
-        id: 'c1',
-        name: 'query_records',
-        arguments: JSON.stringify({ objectName: 'account', limit: 'not_a_number' }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'query_records',
+        input: { objectName: 'account', limit: 'not_a_number' },
       });
 
       expect(dataEngine.find).toHaveBeenCalledWith('account', expect.objectContaining({
@@ -545,9 +568,10 @@ describe('Data Tools', () => {
       (dataEngine.find as any).mockResolvedValue([]);
 
       await registry.execute({
-        id: 'c1',
-        name: 'query_records',
-        arguments: JSON.stringify({ objectName: 'account', offset: -10 }),
+        type: 'tool-call' as const,
+        toolCallId: 'c1',
+        toolName: 'query_records',
+        input: { objectName: 'account', offset: -10 },
       });
 
       expect(dataEngine.find).toHaveBeenCalledWith('account', expect.objectContaining({

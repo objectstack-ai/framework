@@ -5,17 +5,20 @@ import type {
   LLMAdapter,
 } from './llm-adapter';
 import type {
-  AIMessage,
   AIRequestOptions,
   AIResult,
-  AIStreamEvent,
 } from './ai-service';
+import type {
+  ModelMessage,
+  TextStreamPart,
+  ToolSet,
+} from 'ai';
 
 describe('LLM Adapter Contract', () => {
   it('should allow a minimal LLMAdapter implementation with required methods', () => {
     const adapter: LLMAdapter = {
       name: 'test',
-      chat: async (_messages: AIMessage[], _options?: AIRequestOptions): Promise<AIResult> => ({
+      chat: async (_messages: ModelMessage[], _options?: AIRequestOptions): Promise<AIResult> => ({
         content: 'hello',
       }),
       complete: async (_prompt: string, _options?: AIRequestOptions): Promise<AIResult> => ({
@@ -33,9 +36,8 @@ describe('LLM Adapter Contract', () => {
       name: 'full',
       chat: async () => ({ content: '' }),
       complete: async () => ({ content: '' }),
-      async *streamChat(_messages: AIMessage[], _options?: AIRequestOptions): AsyncIterable<AIStreamEvent> {
-        yield { type: 'text-delta', textDelta: 'hi' };
-        yield { type: 'finish', result: { content: 'hi' } };
+      async *streamChat(_messages: ModelMessage[], _options?: AIRequestOptions): AsyncIterable<TextStreamPart<ToolSet>> {
+        yield { type: 'text-delta', id: '1', text: 'hi' } as TextStreamPart<ToolSet>;
       },
       embed: async (input: string | string[]) => {
         const texts = Array.isArray(input) ? input : [input];
@@ -50,12 +52,13 @@ describe('LLM Adapter Contract', () => {
     expect(adapter.listModels).toBeDefined();
   });
 
-  it('should generate a chat completion', async () => {
+  it('should generate a chat completion with ModelMessage', async () => {
     const adapter: LLMAdapter = {
       name: 'echo',
       chat: async (messages) => {
         const last = messages[messages.length - 1];
-        return { content: `Echo: ${last.content}`, model: 'echo' };
+        const text = typeof last.content === 'string' ? last.content : 'complex';
+        return { content: `Echo: ${text}`, model: 'echo' };
       },
       complete: async () => ({ content: '' }),
     };
@@ -79,26 +82,24 @@ describe('LLM Adapter Contract', () => {
     expect(result.content).toBe('Done: Tell me');
   });
 
-  it('should stream chat events', async () => {
+  it('should stream chat events (Vercel TextStreamPart)', async () => {
     const adapter: LLMAdapter = {
       name: 'streamer',
       chat: async () => ({ content: '' }),
       complete: async () => ({ content: '' }),
       async *streamChat() {
-        yield { type: 'text-delta' as const, textDelta: 'Hello' };
-        yield { type: 'text-delta' as const, textDelta: ' world' };
-        yield { type: 'finish' as const, result: { content: 'Hello world' } };
+        yield { type: 'text-delta' as const, id: '1', text: 'Hello' } as TextStreamPart<ToolSet>;
+        yield { type: 'text-delta' as const, id: '1', text: ' world' } as TextStreamPart<ToolSet>;
       },
     };
 
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of adapter.streamChat!([], {})) {
       events.push(event);
     }
 
-    expect(events).toHaveLength(3);
-    expect(events[0].textDelta).toBe('Hello');
-    expect(events[2].type).toBe('finish');
+    expect(events).toHaveLength(2);
+    expect(events[0].type).toBe('text-delta');
   });
 
   it('should generate embeddings', async () => {

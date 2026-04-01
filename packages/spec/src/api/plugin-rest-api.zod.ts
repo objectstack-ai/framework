@@ -1398,7 +1398,7 @@ export const DEFAULT_AI_ROUTES: RestApiRouteRegistration = {
   prefix: '/api/v1/ai',
   service: 'ai',
   category: 'ai',
-  methods: ['aiNlq', 'aiChat', 'aiSuggest', 'aiInsights'],
+  methods: ['aiNlq', 'aiSuggest', 'aiInsights'],
   authRequired: true,
   endpoints: [
     {
@@ -1415,20 +1415,8 @@ export const DEFAULT_AI_ROUTES: RestApiRouteRegistration = {
       timeout: 30000,
       cacheable: false,
     },
-    {
-      method: 'POST',
-      path: '/chat',
-      handler: 'aiChat',
-      category: 'ai',
-      public: false,
-      summary: 'AI chat interaction',
-      description: 'Sends a message to the AI assistant and receives a response',
-      tags: ['AI'],
-      requestSchema: 'AiChatRequestSchema',
-      responseSchema: 'AiChatResponseSchema',
-      timeout: 60000,
-      cacheable: false,
-    },
+    // AI chat route removed — wire protocol aligned with Vercel AI SDK.
+    // The chat endpoint should use Vercel's `toDataStreamResponse()` directly.
     {
       method: 'POST',
       path: '/suggest',

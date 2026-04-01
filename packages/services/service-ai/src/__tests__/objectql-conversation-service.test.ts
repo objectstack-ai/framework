@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { IDataEngine } from '@objectstack/spec/contracts';
-import type { AIMessage } from '@objectstack/spec/contracts';
+import type { ModelMessage } from '@objectstack/spec/contracts';
 import { ObjectQLConversationService } from '../conversation/objectql-conversation-service.js';
 
 // ─────────────────────────────────────────────────────────────────
@@ -242,7 +242,7 @@ describe('ObjectQLConversationService', () => {
   it('should add a user message to a conversation', async () => {
     const conv = await service.create({ title: 'Chat' });
 
-    const msg: AIMessage = { role: 'user', content: 'Hello AI!' };
+    const msg: ModelMessage = { role: 'user', content: 'Hello AI!' };
     const updated = await service.addMessage(conv.id, msg);
 
     expect(updated.messages).toHaveLength(1);
@@ -253,33 +253,49 @@ describe('ObjectQLConversationService', () => {
 
   it('should add a tool message with toolCallId', async () => {
     const conv = await service.create();
-    const msg: AIMessage = {
-      role: 'tool',
-      content: '{"temp": 22}',
-      toolCallId: 'call_abc',
+    const msg: ModelMessage = {
+      role: 'tool' as const,
+      content: [{
+        type: 'tool-result' as const,
+        toolCallId: 'call_abc',
+        toolName: 'get_weather',
+        output: { type: 'text' as const, value: '{"temp": 22}' },
+      }],
     };
 
     const updated = await service.addMessage(conv.id, msg);
     expect(updated.messages).toHaveLength(1);
-    expect(updated.messages[0].toolCallId).toBe('call_abc');
+    const firstMsg = updated.messages[0];
+    if (firstMsg.role === 'tool' && Array.isArray(firstMsg.content)) {
+      expect(firstMsg.content[0].toolCallId).toBe('call_abc');
+    } else {
+      throw new Error('Expected tool message with array content');
+    }
   });
 
   it('should add an assistant message with toolCalls', async () => {
     const conv = await service.create();
-    const msg: AIMessage = {
-      role: 'assistant',
-      content: '',
-      toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: '{}' }],
+    const msg: ModelMessage = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'tool-call' as const, toolCallId: 'call_1', toolName: 'get_weather', input: {} },
+      ],
     };
 
     const updated = await service.addMessage(conv.id, msg);
     expect(updated.messages).toHaveLength(1);
-    expect(updated.messages[0].toolCalls).toHaveLength(1);
-    expect(updated.messages[0].toolCalls![0].name).toBe('get_weather');
+    const firstMsg = updated.messages[0];
+    if (firstMsg.role === 'assistant' && Array.isArray(firstMsg.content)) {
+      const toolCallParts = firstMsg.content.filter((p) => p.type === 'tool-call');
+      expect(toolCallParts).toHaveLength(1);
+      expect(toolCallParts[0].toolName).toBe('get_weather');
+    } else {
+      throw new Error('Expected assistant message with array content');
+    }
   });
 
   it('should throw when adding message to non-existent conversation', async () => {
-    const msg: AIMessage = { role: 'user', content: 'Hello' };
+    const msg: ModelMessage = { role: 'user', content: 'Hello' };
     await expect(service.addMessage('conv_ghost', msg)).rejects.toThrow(
       'Conversation "conv_ghost" not found',
     );
@@ -352,13 +368,15 @@ describe('ObjectQLConversationService', () => {
 
   it('should handle invalid JSON in tool_calls gracefully', async () => {
     const conv = await service.create();
-    await service.addMessage(conv.id, { role: 'user', content: 'hi' });
+    await service.addMessage(conv.id, { role: 'assistant', content: 'checking tools' });
 
     // Manually corrupt tool_calls in the engine
     const msgs = await engine.find('ai_messages', { where: { conversation_id: conv.id } });
     msgs[0].tool_calls = 'broken{json';
 
     const fetched = await service.get(conv.id);
-    expect(fetched!.messages[0].toolCalls).toBeUndefined();
+    // With broken tool_calls, the assistant message should still load with string content
+    expect(fetched!.messages[0].role).toBe('assistant');
+    expect(fetched!.messages[0].content).toBe('checking tools');
   });
 });

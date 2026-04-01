@@ -11,27 +11,90 @@
  * not on concrete AI/LLM provider implementations.
  *
  * Aligned with CoreServiceName 'ai' in core-services.zod.ts.
+ *
+ * ## Vercel AI SDK Alignment
+ *
+ * Message, tool-call, and streaming types are re-exported directly from the
+ * Vercel AI SDK (`ai`) so that ObjectStack's wire protocol is fully aligned
+ * with the ecosystem used by `@ai-sdk/react/useChat` on the frontend.
+ *
+ * - `ModelMessage` replaces the former custom `AIMessage`
+ * - `ToolCallPart` replaces `AIToolCall`
+ * - `ToolResultPart` replaces `AIToolResult`
+ * - `TextStreamPart` replaces `AIStreamEvent`
  */
 
+// ---------------------------------------------------------------------------
+// Re-exports from Vercel AI SDK (canonical types)
+// ---------------------------------------------------------------------------
+
+export type {
+    ModelMessage,
+    SystemModelMessage,
+    UserModelMessage,
+    AssistantModelMessage,
+    ToolModelMessage,
+    ToolCallPart,
+    ToolResultPart,
+    TextStreamPart,
+    ToolSet,
+    FinishReason,
+} from 'ai';
+
+// ---------------------------------------------------------------------------
+// Deprecated aliases — kept for backward compatibility
+// ---------------------------------------------------------------------------
+
+import type {
+    ModelMessage,
+    ToolCallPart,
+    ToolResultPart,
+    TextStreamPart,
+    ToolSet,
+} from 'ai';
+
 /**
- * A chat message in a conversation.
+ * @deprecated Use `ModelMessage` from `ai` instead.
  *
- * Supports the standard `system`, `user`, and `assistant` roles as well as
- * the `tool` role used to return tool execution results to the model.
- * Tool-call metadata (`toolCalls`, `toolCallId`) is optional so that plain
- * messages remain simple while tool-using conversations can carry the
- * necessary context.
+ * Previously a flat interface with `role`, `content: string`, `toolCalls?`,
+ * and `toolCallId?`. The Vercel AI SDK uses a discriminated union where each
+ * role has its own content type.
  */
-export interface AIMessage {
-    /** Message role */
-    role: 'system' | 'user' | 'assistant' | 'tool';
-    /** Message content */
-    content: string;
-    /** Tool calls requested by the assistant (present when role='assistant') */
-    toolCalls?: AIToolCall[];
-    /** ID of the tool call this message responds to (present when role='tool') */
-    toolCallId?: string;
-}
+export type AIMessage = ModelMessage;
+
+/**
+ * @deprecated Use `ToolCallPart` from `ai` instead.
+ *
+ * The Vercel type uses `toolCallId` / `toolName` / `input` rather than
+ * `id` / `name` / `arguments`.
+ */
+export type AIToolCall = ToolCallPart;
+
+/**
+ * @deprecated Use `ToolResultPart` from `ai` instead.
+ */
+export type AIToolResult = ToolResultPart;
+
+/**
+ * @deprecated Use `AIMessage` directly — tool fields are now on the base type.
+ */
+export type AIMessageWithTools = ModelMessage;
+
+/**
+ * @deprecated Use `AIRequestOptions` directly — tool fields are now on the base type.
+ */
+export type AIRequestOptionsWithTools = AIRequestOptions;
+
+/**
+ * @deprecated Use `TextStreamPart<ToolSet>` from `ai` instead.
+ *
+ * The Vercel AI SDK uses a rich discriminated union for stream parts.
+ */
+export type AIStreamEvent = TextStreamPart<ToolSet>;
+
+// ---------------------------------------------------------------------------
+// ObjectStack-specific types (no Vercel equivalent)
+// ---------------------------------------------------------------------------
 
 /**
  * Options for AI completion/chat requests.
@@ -63,7 +126,7 @@ export interface AIResult {
     /** Model used for generation */
     model?: string;
     /** Tool calls requested by the model (present when the model invokes tools) */
-    toolCalls?: AIToolCall[];
+    toolCalls?: ToolCallPart[];
     /** Token usage statistics */
     usage?: {
         promptTokens: number;
@@ -77,7 +140,11 @@ export interface AIResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Definition of a tool that can be invoked by the AI model
+ * Definition of a tool that can be invoked by the AI model.
+ *
+ * This is an ObjectStack-specific simplified definition used by the
+ * `IAIService` contract. For the full Vercel AI SDK tool definition,
+ * use `Tool` from `ai`.
  */
 export interface AIToolDefinition {
     /** Tool name (snake_case identifier) */
@@ -88,76 +155,21 @@ export interface AIToolDefinition {
     parameters: Record<string, unknown>;
 }
 
-/**
- * A tool call requested by the AI model
- */
-export interface AIToolCall {
-    /** Unique ID for this tool call */
-    id: string;
-    /** Tool name (must match an AIToolDefinition name, snake_case) */
-    name: string;
-    /** JSON-stringified arguments */
-    arguments: string;
-}
-
-/**
- * Result returned after executing a tool call
- */
-export interface AIToolResult {
-    /** Tool call ID this result corresponds to */
-    toolCallId: string;
-    /** Tool output content */
-    content: string;
-    /** Whether the tool execution errored */
-    isError?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Extended message & request types (backward-compatible aliases)
-// ---------------------------------------------------------------------------
-
-/**
- * @deprecated Use {@link AIMessage} directly — tool fields are now on the base type.
- */
-export type AIMessageWithTools = AIMessage;
-
-/**
- * @deprecated Use {@link AIRequestOptions} directly — tool fields are now on the base type.
- */
-export type AIRequestOptionsWithTools = AIRequestOptions;
-
-// ---------------------------------------------------------------------------
-// Streaming Protocol
-// ---------------------------------------------------------------------------
-
-/**
- * A single event emitted during a streaming AI response
- */
-export interface AIStreamEvent {
-    /** Event type */
-    type: 'text-delta' | 'tool-call-delta' | 'tool-call' | 'finish' | 'error';
-    /** Text content delta (for type='text-delta') */
-    textDelta?: string;
-    /** Tool call info (for type='tool-call-delta' or 'tool-call') */
-    toolCall?: Partial<AIToolCall>;
-    /** Final result (for type='finish') */
-    result?: AIResult;
-    /** Error message (for type='error') */
-    error?: string;
-}
-
 // ---------------------------------------------------------------------------
 // IAIService
 // ---------------------------------------------------------------------------
 
 export interface IAIService {
     /**
-     * Generate a chat completion from a conversation
-     * @param messages - Array of conversation messages
+     * Generate a chat completion from a conversation.
+     *
+     * Accepts Vercel AI SDK `ModelMessage[]` for full ecosystem alignment.
+     *
+     * @param messages - Array of conversation messages (Vercel `ModelMessage`)
      * @param options - Optional request configuration
      * @returns AI-generated response
      */
-    chat(messages: AIMessage[], options?: AIRequestOptions): Promise<AIResult>;
+    chat(messages: ModelMessage[], options?: AIRequestOptions): Promise<AIResult>;
 
     /**
      * Generate a text completion from a prompt
@@ -182,12 +194,13 @@ export interface IAIService {
     listModels?(): Promise<string[]>;
 
     /**
-     * Stream a chat completion as an async iterable of events
-     * @param messages - Array of conversation messages
+     * Stream a chat completion as an async iterable of Vercel AI SDK stream parts.
+     *
+     * @param messages - Array of conversation messages (Vercel `ModelMessage`)
      * @param options - Optional request configuration (supports tool definitions)
-     * @returns Async iterable of stream events
+     * @returns Async iterable of `TextStreamPart` events
      */
-    streamChat?(messages: AIMessage[], options?: AIRequestOptions): AsyncIterable<AIStreamEvent>;
+    streamChat?(messages: ModelMessage[], options?: AIRequestOptions): AsyncIterable<TextStreamPart<ToolSet>>;
 
     /**
      * Chat with automatic tool call resolution.
@@ -197,11 +210,11 @@ export interface IAIService {
      * repeats until the model returns a final text response or the
      * maximum number of iterations is reached.
      *
-     * @param messages - Conversation messages
+     * @param messages - Conversation messages (Vercel `ModelMessage`)
      * @param options  - Request options (tools are auto-injected from the registry)
      * @returns Final AI result after all tool calls have been resolved
      */
-    chatWithTools?(messages: AIMessage[], options?: ChatWithToolsOptions): Promise<AIResult>;
+    chatWithTools?(messages: ModelMessage[], options?: ChatWithToolsOptions): Promise<AIResult>;
 }
 
 /**
@@ -217,7 +230,7 @@ export interface ChatWithToolsOptions extends AIRequestOptions {
      * Return `'continue'` (default) to feed the error back to the model,
      * or `'abort'` to immediately stop the tool call loop.
      */
-    onToolError?: (toolCall: AIToolCall, error: string) => 'continue' | 'abort';
+    onToolError?: (toolCall: ToolCallPart, error: string) => 'continue' | 'abort';
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +250,7 @@ export interface AIConversation {
     /** User who owns the conversation */
     userId?: string;
     /** Messages in the conversation */
-    messages: AIMessage[];
+    messages: ModelMessage[];
     /** Creation timestamp (ISO 8601) */
     createdAt: string;
     /** Last update timestamp (ISO 8601) */
@@ -286,10 +299,10 @@ export interface IAIConversationService {
     /**
      * Add a message to a conversation
      * @param conversationId - Target conversation ID
-     * @param message - Message to append
+     * @param message - Message to append (Vercel `ModelMessage`)
      * @returns The updated conversation
      */
-    addMessage(conversationId: string, message: AIMessage): Promise<AIConversation>;
+    addMessage(conversationId: string, message: ModelMessage): Promise<AIConversation>;
 
     /**
      * Delete a conversation

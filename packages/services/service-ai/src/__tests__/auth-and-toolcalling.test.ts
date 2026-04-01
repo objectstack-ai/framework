@@ -2,11 +2,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type {
-  AIMessage,
+  ModelMessage,
   AIResult,
   AIRequestOptions,
-  AIStreamEvent,
-  AIToolCall,
+  TextStreamPart,
+  ToolSet,
+  ToolCallPart,
   LLMAdapter,
 } from '@objectstack/spec/contracts';
 import { AIService } from '../ai-service.js';
@@ -313,7 +314,7 @@ describe('chatWithTools — Enhanced Error Handling', () => {
 
     const onToolError = vi.fn().mockReturnValue('continue');
     const adapter = createMockAdapter([
-      { content: '', toolCalls: [{ id: 'c1', name: 'bad_tool', arguments: '{}' }] },
+      { content: '', toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c1', toolName: 'bad_tool', input: {} }] },
       { content: 'Recovered' },
     ]);
 
@@ -325,7 +326,7 @@ describe('chatWithTools — Enhanced Error Handling', () => {
 
     expect(onToolError).toHaveBeenCalledTimes(1);
     expect(onToolError).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'bad_tool' }),
+      expect.objectContaining({ toolName: 'bad_tool' }),
       'boom',
     );
     expect(result.content).toBe('Recovered');
@@ -338,7 +339,7 @@ describe('chatWithTools — Enhanced Error Handling', () => {
     );
 
     const adapter = createMockAdapter([
-      { content: '', toolCalls: [{ id: 'c1', name: 'abort_tool', arguments: '{}' }] },
+      { content: '', toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c1', toolName: 'abort_tool', input: {} }] },
       // This would be the forced-final call
       { content: 'Aborted cleanly' },
     ]);
@@ -381,7 +382,7 @@ describe('chatWithTools — Enhanced Error Handling', () => {
     );
 
     const adapter = createMockAdapter([
-      { content: '', toolCalls: [{ id: 'c1', name: 'fail_tool', arguments: '{}' }] },
+      { content: '', toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c1', toolName: 'fail_tool', input: {} }] },
       { content: 'Error was fed back to model' },
     ]);
 
@@ -400,7 +401,7 @@ describe('chatWithTools — Enhanced Error Handling', () => {
 
     const infiniteToolCall: AIResult = {
       content: '',
-      toolCalls: [{ id: 'c', name: 'flaky_tool', arguments: '{}' }],
+      toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c', toolName: 'flaky_tool', input: {} }],
     };
     const adapter = createMockAdapter(
       Array(2).fill(infiniteToolCall).concat([{ content: 'Forced' }]),
@@ -430,8 +431,8 @@ describe('chatWithTools — Enhanced Error Handling', () => {
       {
         content: '',
         toolCalls: [
-          { id: 'c1', name: 'get_weather', arguments: '{"city":"NYC"}' },
-          { id: 'c2', name: 'bad_tool', arguments: '{}' },
+          { type: 'tool-call' as const, toolCallId: 'c1', toolName: 'get_weather', input: { city: 'NYC' } },
+          { type: 'tool-call' as const, toolCallId: 'c2', toolName: 'bad_tool', input: {} },
         ],
       },
       { content: 'Weather ok, tool failed' },
@@ -447,12 +448,12 @@ describe('chatWithTools — Enhanced Error Handling', () => {
     // Only called for the failing tool
     expect(onToolError).toHaveBeenCalledTimes(1);
     expect(onToolError).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'bad_tool' }),
+      expect.objectContaining({ toolName: 'bad_tool' }),
       'fail',
     );
 
     // Both tool results fed back
-    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as AIMessage[];
+    const secondCallMessages = (adapter.chat as any).mock.calls[1][0] as ModelMessage[];
     const toolMessages = secondCallMessages.filter(m => m.role === 'tool');
     expect(toolMessages).toHaveLength(2);
     expect(result.content).toBe('Weather ok, tool failed');
@@ -478,7 +479,7 @@ describe('streamChatWithTools', () => {
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChatWithTools([{ role: 'user', content: 'Hi' }])) {
       events.push(event);
     }
@@ -486,16 +487,17 @@ describe('streamChatWithTools', () => {
     // Should emit the probed result as text-delta + finish (no double model call)
     expect(events).toHaveLength(2);
     expect(events[0].type).toBe('text-delta');
-    expect(events[0].textDelta).toBe('Hello!');
+    expect((events[0] as any).text).toBe('Hello!');
     expect(events[1].type).toBe('finish');
     expect(adapter.chat).toHaveBeenCalledTimes(1);
   });
 
   it('should emit tool-call events during tool resolution', async () => {
-    const toolCall: AIToolCall = {
-      id: 'call_1',
-      name: 'get_weather',
-      arguments: JSON.stringify({ city: 'Tokyo' }),
+    const toolCall: ToolCallPart = {
+      type: 'tool-call',
+      toolCallId: 'call_1',
+      toolName: 'get_weather',
+      input: { city: 'Tokyo' },
     };
 
     let chatCallIndex = 0;
@@ -512,7 +514,7 @@ describe('streamChatWithTools', () => {
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChatWithTools(
       [{ role: 'user', content: 'Weather in Tokyo?' }],
     )) {
@@ -522,7 +524,7 @@ describe('streamChatWithTools', () => {
     // Should have tool-call event followed by text-delta + finish (no double call)
     const toolCallEvents = events.filter(e => e.type === 'tool-call');
     expect(toolCallEvents).toHaveLength(1);
-    expect(toolCallEvents[0].toolCall?.name).toBe('get_weather');
+    expect((toolCallEvents[0] as any).toolName).toBe('get_weather');
 
     const finishEvent = events.find(e => e.type === 'finish');
     expect(finishEvent).toBeDefined();
@@ -539,7 +541,7 @@ describe('streamChatWithTools', () => {
 
     const emptyRegistry = new ToolRegistry();
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: emptyRegistry });
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChatWithTools(
       [{ role: 'user', content: 'Hi' }],
     )) {
@@ -548,14 +550,14 @@ describe('streamChatWithTools', () => {
 
     expect(events).toHaveLength(2);
     expect(events[0].type).toBe('text-delta');
-    expect(events[0].textDelta).toBe('Fallback response');
+    expect((events[0] as any).text).toBe('Fallback response');
     expect(events[1].type).toBe('finish');
   });
 
   it('should respect maxIterations in streaming tool loop', async () => {
     const infiniteToolCall: AIResult = {
       content: '',
-      toolCalls: [{ id: 'c', name: 'get_weather', arguments: '{"city":"X"}' }],
+      toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c', toolName: 'get_weather', input: { city: 'X' } }],
     };
 
     let callIndex = 0;
@@ -568,13 +570,13 @@ describe('streamChatWithTools', () => {
       }),
       complete: vi.fn(async () => ({ content: '' })),
       async *streamChat() {
-        yield { type: 'text-delta' as const, textDelta: 'Forced stop' };
-        yield { type: 'finish' as const, result: { content: 'Forced stop' } };
+        yield { type: 'text-delta' as const, id: '1', text: 'Forced stop' } as TextStreamPart<ToolSet>;
+        yield { type: 'finish' as const, finishReason: 'stop' as const, totalUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, rawFinishReason: 'stop' } as unknown as TextStreamPart<ToolSet>;
       },
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChatWithTools(
       [{ role: 'user', content: 'Loop' }],
       { maxIterations: 2 },
@@ -601,7 +603,7 @@ describe('streamChatWithTools', () => {
         if (chatCallIndex === 1) {
           return {
             content: '',
-            toolCalls: [{ id: 'c1', name: 'critical_fail', arguments: '{}' }],
+            toolCalls: [{ type: 'tool-call' as const, toolCallId: 'c1', toolName: 'critical_fail', input: {} }],
           };
         }
         return { content: 'Aborted' };
@@ -610,7 +612,7 @@ describe('streamChatWithTools', () => {
     };
 
     const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
-    const events: AIStreamEvent[] = [];
+    const events: TextStreamPart<ToolSet>[] = [];
     for await (const event of service.streamChatWithTools(
       [{ role: 'user', content: 'Critical' }],
       { onToolError: () => 'abort' },
