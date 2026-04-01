@@ -63,6 +63,14 @@ export interface RouteResponse {
   stream?: boolean;
   /** Async iterable of SSE events (when stream=true) */
   events?: AsyncIterable<unknown>;
+  /**
+   * When `true`, the HTTP server layer should encode the `events` iterable
+   * using the Vercel AI Data Stream Protocol frame format (`0:`, `9:`, `d:`, …)
+   * instead of generic SSE `data:` lines.
+   *
+   * @see https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+   */
+  vercelDataStream?: boolean;
 }
 
 /** Valid message roles accepted by the AI routes. */
@@ -71,6 +79,9 @@ const VALID_ROLES = new Set<string>(['system', 'user', 'assistant', 'tool']);
 /**
  * Validate that `raw` is a well-formed message.
  * Returns null on success, or an error string on failure.
+ *
+ * Accepts both simple string content (legacy) and Vercel AI SDK array content
+ * (e.g. `[{ type: 'text', text: '...' }]`).
  */
 function validateMessage(raw: unknown): string | null {
   if (typeof raw !== 'object' || raw === null) {
@@ -80,8 +91,9 @@ function validateMessage(raw: unknown): string | null {
   if (typeof msg.role !== 'string' || !VALID_ROLES.has(msg.role)) {
     return `message.role must be one of ${[...VALID_ROLES].map(r => `"${r}"`).join(', ')}`;
   }
-  if (typeof msg.content !== 'string') {
-    return 'message.content must be a string';
+  // Accept string content (legacy) or array content (Vercel multi-part)
+  if (typeof msg.content !== 'string' && !Array.isArray(msg.content)) {
+    return 'message.content must be a string or an array';
   }
   return null;
 }
@@ -112,18 +124,26 @@ export function buildAIRoutes(
 ): RouteDefinition[] {
   return [
     // ── Chat ────────────────────────────────────────────────────
+    //
+    // Dual-mode endpoint compatible with both the legacy ObjectStack
+    // format (`{ messages, options }`) and the Vercel AI SDK useChat
+    // flat format (`{ messages, system, model, stream, … }`).
+    //
+    // Behaviour:
+    //   • `stream !== false` → Vercel Data Stream Protocol (SSE)
+    //   • `stream === false`  → JSON response (legacy)
+    //
     {
       method: 'POST',
       path: '/api/v1/ai/chat',
-      description: 'Synchronous chat completion',
+      description: 'Chat completion (supports Vercel AI Data Stream Protocol)',
       auth: true,
       permissions: ['ai:chat'],
       handler: async (req) => {
-        const { messages, options } = (req.body ?? {}) as {
-          messages?: unknown[];
-          options?: Record<string, unknown>;
-        };
+        const body = (req.body ?? {}) as Record<string, unknown>;
 
+        // ── Parse messages ───────────────────────────────────
+        const messages = body.messages as unknown[] | undefined;
         if (!Array.isArray(messages) || messages.length === 0) {
           return { status: 400, body: { error: 'messages array is required' } };
         }
@@ -133,8 +153,48 @@ export function buildAIRoutes(
           if (err) return { status: 400, body: { error: err } };
         }
 
+        // ── Resolve options ──────────────────────────────────
+        // Accept legacy nested `options` object **or** Vercel-style
+        // flat fields (`model`, `temperature`, `maxTokens`).
+        const nested = (body.options ?? {}) as Record<string, unknown>;
+        const resolvedOptions: Record<string, unknown> = {
+          ...nested,
+          ...(body.model != null && { model: body.model }),
+          ...(body.temperature != null && { temperature: body.temperature }),
+          ...(body.maxTokens != null && { maxTokens: body.maxTokens }),
+        };
+
+        // ── Prepend system prompt ────────────────────────────
+        // Vercel useChat sends `system` (or the deprecated `systemPrompt`)
+        // as a top-level field.  We prepend it as a system message.
+        const systemPrompt = (body.system ?? body.systemPrompt) as string | undefined;
+        const finalMessages: ModelMessage[] = [
+          ...(systemPrompt
+            ? [{ role: 'system' as const, content: systemPrompt }]
+            : []),
+          ...(messages as ModelMessage[]),
+        ];
+
+        // ── Choose response mode ─────────────────────────────
+        const wantStream = body.stream !== false;
+
+        if (wantStream) {
+          // Vercel Data Stream Protocol (SSE)
+          try {
+            if (!aiService.streamChat) {
+              return { status: 501, body: { error: 'Streaming is not supported by the configured AI service' } };
+            }
+            const events = aiService.streamChat(finalMessages, resolvedOptions as any);
+            return { status: 200, stream: true, vercelDataStream: true, events };
+          } catch (err) {
+            logger.error('[AI Route] /chat stream error', err instanceof Error ? err : undefined);
+            return { status: 500, body: { error: 'Internal AI service error' } };
+          }
+        }
+
+        // JSON response (non-streaming)
         try {
-          const result = await aiService.chat(messages as ModelMessage[], options as any);
+          const result = await aiService.chat(finalMessages, resolvedOptions as any);
           return { status: 200, body: result };
         } catch (err) {
           logger.error('[AI Route] /chat error', err instanceof Error ? err : undefined);

@@ -10,7 +10,12 @@ export type { AIServicePluginOptions } from './plugin.js';
 
 // Adapters
 export { MemoryLLMAdapter } from './adapters/memory-adapter.js';
+export { VercelLLMAdapter } from './adapters/vercel-adapter.js';
+export type { VercelLLMAdapterConfig } from './adapters/vercel-adapter.js';
 export type { LLMAdapter } from '@objectstack/spec/contracts';
+
+// Vercel Data Stream encoder
+export { encodeStreamPart, encodeVercelDataStream } from './stream/vercel-stream-encoder.js';
 
 // Conversation
 export { InMemoryConversationService } from './conversation/in-memory-conversation-service.js';

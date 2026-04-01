@@ -2,3 +2,5 @@
 
 export type { LLMAdapter } from '@objectstack/spec/contracts';
 export { MemoryLLMAdapter } from './memory-adapter.js';
+export { VercelLLMAdapter } from './vercel-adapter.js';
+export type { VercelLLMAdapterConfig } from './vercel-adapter.js';
