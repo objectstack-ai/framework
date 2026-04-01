@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absent, fixing the CI `@objectstack/client#test` failure.
 
 ### Added
+- **Agent Skills — `skills/` directory (agentskills.io)** — Created `skills/` folder at
+  repository root following the [agentskills.io specification](https://agentskills.io/specification).
+  Five expert-knowledge skills with hand-written `SKILL.md` files and `references/` quick-lookup
+  tables:
+  - `skills/schema-design/` — Data schema design (Object, Field, Validation, Index)
+  - `skills/ui-design/` — UI protocol (View, App, Dashboard, Report, Action)
+  - `skills/automation-design/` — Automation (Flow, Workflow, Trigger, Approval)
+  - `skills/ai-agent-design/` — AI Agent protocol (Agent, Skill, RAG, Tool)
+  - `skills/api-design/` — API protocol (REST endpoints, Discovery, Datasource)
+  Each `SKILL.md` includes YAML frontmatter (`name`, `description`, `license`, `metadata`),
+  domain rules, usage guidance, best practices, common pitfalls, and code examples.
+  Zod schema files remain the single source of truth; skills reference them for validation.
 - **Discovery Schema — `ServiceStatus` enum & `handlerReady` field** — Added `'registered'`
   status to `ServiceInfoSchema` to distinguish routes that are declared in the dispatcher
   table but whose HTTP handler has not been verified. Added optional `handlerReady` boolean

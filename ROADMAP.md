@@ -968,6 +968,27 @@ Final polish and advanced features.
 
 ---
 
+## Agent Skills Ecosystem (agentskills.io)
+
+The `skills/` directory at repository root follows the [agentskills.io specification](https://agentskills.io/specification)
+to expose ObjectStack protocol expertise as discoverable Agent Skills. Each skill contains a
+hand-written `SKILL.md` with YAML frontmatter and an optional `references/` directory for
+quick-lookup tables derived from Zod schemas.
+
+| Skill | Directory | Domain |
+|:---|:---|:---|
+| Schema Design | [`skills/schema-design/`](skills/schema-design/SKILL.md) | Object, Field, Validation, Index |
+| UI Design | [`skills/ui-design/`](skills/ui-design/SKILL.md) | View, App, Dashboard, Report, Action |
+| Automation Design | [`skills/automation-design/`](skills/automation-design/SKILL.md) | Flow, Workflow, Trigger, Approval |
+| AI Agent Design | [`skills/ai-agent-design/`](skills/ai-agent-design/SKILL.md) | Agent, Skill, RAG, Tool, Model |
+| API Design | [`skills/api-design/`](skills/api-design/SKILL.md) | REST endpoints, Discovery, Datasource |
+
+> **Note:** Zod schema files in `packages/spec/src/` remain the single source of truth.
+> Skills are non-generated, human-curated expert knowledge documents. They are **not** published
+> as npm packages and do not require a build step.
+
+---
+
 ## Related Documents
 
 | Document | Description |
