@@ -169,8 +169,8 @@ export const RestApiEndpointSchema = z.object({
    * - `planned`     – Declared in the protocol spec but not yet implemented.
    * @default 'implemented'
    */
-  handlerStatus: z.enum(['implemented', 'stub', 'planned']).default('implemented')
-    .describe('Handler implementation status: implemented, stub, or planned'),
+  handlerStatus: z.enum(['implemented', 'stub', 'planned']).optional()
+    .describe('Handler implementation status: implemented (default if omitted), stub, or planned'),
 });
 
 export type RestApiEndpoint = z.infer<typeof RestApiEndpointSchema>;
