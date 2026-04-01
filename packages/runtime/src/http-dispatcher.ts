@@ -1211,6 +1211,107 @@ export class HttpDispatcher {
     }
 
     /**
+     * Handle AI service routes (/ai/chat, /ai/models, /ai/conversations, etc.)
+     * Resolves the AI service and its built-in route handlers, then dispatches.
+     */
+    async handleAI(subPath: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        let aiService: any;
+        try {
+            aiService = await this.resolveService('ai');
+        } catch {
+            // AI service not registered
+        }
+
+        if (!aiService) {
+            return {
+                handled: true,
+                response: {
+                    status: 404,
+                    body: { success: false, error: { message: 'AI service is not configured', code: 404 } },
+                },
+            };
+        }
+
+        // The AI service exposes route definitions via buildAIRoutes.
+        // We match the request path against known AI route patterns.
+        const fullPath = `/api/v1${subPath}`;
+
+        // Build a simple param-extracting matcher for route patterns like /api/v1/ai/conversations/:id
+        const matchRoute = (pattern: string, path: string): Record<string, string> | null => {
+            const patternParts = pattern.split('/');
+            const pathParts = path.split('/');
+            if (patternParts.length !== pathParts.length) return null;
+            const params: Record<string, string> = {};
+            for (let i = 0; i < patternParts.length; i++) {
+                if (patternParts[i].startsWith(':')) {
+                    params[patternParts[i].substring(1)] = pathParts[i];
+                } else if (patternParts[i] !== pathParts[i]) {
+                    return null;
+                }
+            }
+            return params;
+        };
+
+        // Try to get route definitions from the AI service's cached routes
+        const routes = (this.kernel as any).__aiRoutes as Array<{
+            method: string; path: string; handler: (req: any) => Promise<any>;
+        }> | undefined;
+
+        if (!routes) {
+            return {
+                handled: true,
+                response: {
+                    status: 503,
+                    body: { success: false, error: { message: 'AI service routes not yet initialized', code: 503 } },
+                },
+            };
+        }
+
+        for (const route of routes) {
+            if (route.method !== method) continue;
+            const params = matchRoute(route.path, fullPath);
+            if (params === null) continue;
+
+            const result = await route.handler({ body, params, query });
+
+            if (result.stream && result.events) {
+                // Return a streaming result for the adapter to handle
+                return {
+                    handled: true,
+                    result: {
+                        type: 'stream',
+                        contentType: result.vercelDataStream
+                            ? 'text/plain; charset=utf-8'
+                            : 'text/event-stream',
+                        events: result.events,
+                        vercelDataStream: result.vercelDataStream,
+                        headers: {
+                            'Content-Type': result.vercelDataStream
+                                ? 'text/plain; charset=utf-8'
+                                : 'text/event-stream',
+                            'Cache-Control': 'no-cache',
+                            'Connection': 'keep-alive',
+                        },
+                    },
+                };
+            }
+
+            return {
+                handled: true,
+                response: {
+                    status: result.status,
+                    body: result.body,
+                },
+            };
+        }
+
+        return {
+            handled: true,
+            response: this.routeNotFound(subPath),
+        };
+    }
+
+    /**
      * Main Dispatcher Entry Point
      * Routes the request to the appropriate handler based on path and precedence
      */
@@ -1282,6 +1383,11 @@ export class HttpDispatcher {
 
         if (cleanPath.startsWith('/i18n')) {
              return this.handleI18n(cleanPath.substring(5), method, query, context);
+        }
+
+        // AI Service — delegate to the registered AI route handlers
+        if (cleanPath.startsWith('/ai')) {
+             return this.handleAI(cleanPath, method, body, query, context);
         }
 
         // OpenAPI Specification

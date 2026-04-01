@@ -25,6 +25,22 @@ export class AuditPlugin implements Plugin {
       objects: [SysAuditLog],
     });
 
+    // Contribute navigation items to the Setup App (if SetupPlugin is loaded).
+    try {
+      const setupNav = ctx.getService<{ contribute(c: any): void }>('setupNav');
+      if (setupNav) {
+        setupNav.contribute({
+          areaId: 'area_system',
+          items: [
+            { id: 'nav_audit_logs', type: 'object', label: { key: 'setup.nav.audit_logs', defaultValue: 'Audit Logs' }, objectName: 'audit_log', icon: 'scroll-text', order: 10 },
+          ],
+        });
+        ctx.logger.info('Audit navigation items contributed to Setup App');
+      }
+    } catch {
+      // SetupPlugin not loaded — skip silently
+    }
+
     ctx.logger.info('Audit Plugin initialized');
   }
 }

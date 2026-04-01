@@ -171,6 +171,12 @@ export class AIServicePlugin implements Plugin {
     // Trigger hook so HTTP server plugins can mount these routes
     await ctx.trigger('ai:routes', routes);
 
+    // Cache routes on the kernel so HttpDispatcher can find them
+    const kernel = ctx.getKernel();
+    if (kernel) {
+      (kernel as any).__aiRoutes = routes;
+    }
+
     ctx.logger.info(
       `[AI] Service started — adapter="${this.service.adapterName}", ` +
       `tools=${this.service.toolRegistry.size}, ` +

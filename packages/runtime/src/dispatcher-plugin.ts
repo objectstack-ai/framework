@@ -12,6 +12,17 @@ export interface DispatcherPluginConfig {
 }
 
 /**
+ * Route definition emitted by service plugins (e.g. AIServicePlugin) via hooks.
+ * Minimal interface — matches the shape produced by `buildAIRoutes()`.
+ */
+interface RouteDefinition {
+    method: 'GET' | 'POST' | 'DELETE';
+    path: string;
+    description: string;
+    handler: (req: any) => Promise<any>;
+}
+
+/**
  * Send an HttpDispatcherResult through IHttpResponse.
  * Differentiates between handled, unhandled (404), and special results.
  */
@@ -379,6 +390,82 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             });
 
             ctx.logger.info('Dispatcher bridge routes registered', { prefix });
+
+            // ── Dynamic service routes (AI, etc.) ───────────────────
+            // Listen for route definitions emitted by service plugins.
+            // The AIServicePlugin emits 'ai:routes' with RouteDefinition[].
+            ctx.hook('ai:routes', async (routes: RouteDefinition[]) => {
+                if (!server) return;
+                for (const route of routes) {
+                    // Strip the /api/v1 prefix if present (it's already in the path)
+                    // and register on the HTTP server with the configured prefix.
+                    const routePath = route.path.startsWith('/api/v1')
+                        ? route.path
+                        : `${prefix}${route.path}`;
+
+                    const handler = async (req: any, res: any) => {
+                        try {
+                            const result = await route.handler({
+                                body: req.body,
+                                params: req.params,
+                                query: req.query,
+                            });
+
+                            if (result.stream && result.events) {
+                                // SSE streaming response
+                                res.status(result.status);
+                                res.header('Content-Type', result.vercelDataStream
+                                    ? 'text/plain; charset=utf-8'
+                                    : 'text/event-stream');
+                                res.header('Cache-Control', 'no-cache');
+                                res.header('Connection', 'keep-alive');
+
+                                // Write the stream — IHttpServer implementations
+                                // may or may not support raw write.  Fall back to
+                                // collecting and sending JSON if write is unavailable.
+                                if (typeof res.write === 'function' && typeof res.end === 'function') {
+                                    for await (const event of result.events) {
+                                        if (result.vercelDataStream) {
+                                            // Events are already TextStreamPart — need encoding
+                                            // Import is dynamic to avoid hard dep on service-ai
+                                            res.write(typeof event === 'string' ? event : JSON.stringify(event) + '\n');
+                                        } else {
+                                            res.write(`data: ${JSON.stringify(event)}\n\n`);
+                                        }
+                                    }
+                                    res.end();
+                                } else {
+                                    // Fallback: collect events into array
+                                    const events = [];
+                                    for await (const event of result.events) {
+                                        events.push(event);
+                                    }
+                                    res.json({ events });
+                                }
+                            } else {
+                                res.status(result.status);
+                                if (result.body !== undefined) {
+                                    res.json(result.body);
+                                } else {
+                                    res.end();
+                                }
+                            }
+                        } catch (err: any) {
+                            errorResponse(err, res);
+                        }
+                    };
+
+                    const m = route.method.toLowerCase();
+                    if (m === 'get' && typeof server.get === 'function') {
+                        server.get(routePath, handler);
+                    } else if (m === 'post' && typeof server.post === 'function') {
+                        server.post(routePath, handler);
+                    } else if (m === 'delete' && typeof server.delete === 'function') {
+                        server.delete(routePath, handler);
+                    }
+                }
+                ctx.logger.info(`[Dispatcher] Registered ${routes.length} AI routes`);
+            });
         },
     };
 }

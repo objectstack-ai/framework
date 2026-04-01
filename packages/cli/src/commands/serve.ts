@@ -243,6 +243,22 @@ export default class Serve extends Command {
         // No translations and no explicit i18n plugin — this is fine, kernel fallback works
       }
 
+      // 3c. Auto-register AIServicePlugin if not already present
+      const hasAiPlugin = plugins.some(
+        (p: any) => p.name === 'com.objectstack.service-ai'
+            || p.constructor?.name === 'AIServicePlugin'
+      );
+      if (!hasAiPlugin) {
+        try {
+          const aiPkg = '@objectstack/service-ai';
+          const { AIServicePlugin } = await import(/* webpackIgnore: true */ aiPkg);
+          await kernel.use(new AIServicePlugin());
+          trackPlugin('AIService');
+        } catch {
+          // @objectstack/service-ai not installed — skip
+        }
+      }
+
       // Add HTTP server plugin BEFORE config plugins so that the
       // http-server service is available for any plugin that needs it
       // during init/start (e.g. AuthPlugin).

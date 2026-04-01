@@ -48,6 +48,23 @@ export class SecurityPlugin implements Plugin {
       objects: [SysRole, SysPermissionSet],
     });
 
+    // Contribute navigation items to the Setup App (if SetupPlugin is loaded).
+    try {
+      const setupNav = ctx.getService<{ contribute(c: any): void }>('setupNav');
+      if (setupNav) {
+        setupNav.contribute({
+          areaId: 'area_administration',
+          items: [
+            { id: 'nav_roles', type: 'object', label: { key: 'setup.nav.roles', defaultValue: 'Roles' }, objectName: 'role', icon: 'shield-check', order: 60 },
+            { id: 'nav_permission_sets', type: 'object', label: { key: 'setup.nav.permission_sets', defaultValue: 'Permission Sets' }, objectName: 'permission_set', icon: 'lock', order: 70 },
+          ],
+        });
+        ctx.logger.info('Security navigation items contributed to Setup App');
+      }
+    } catch {
+      // SetupPlugin not loaded — skip silently
+    }
+
     ctx.logger.info('Security Plugin initialized');
   }
 

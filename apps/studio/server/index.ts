@@ -33,6 +33,7 @@ import { SecurityPlugin } from '@objectstack/plugin-security';
 import { AuditPlugin } from '@objectstack/plugin-audit';
 import { FeedServicePlugin } from '@objectstack/service-feed';
 import { MetadataPlugin } from '@objectstack/metadata';
+import { AIServicePlugin } from '@objectstack/service-ai';
 import { handle } from '@hono/node-server/vercel';
 import { Hono } from 'hono';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
@@ -106,6 +107,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new AuditPlugin());
             await kernel.use(new FeedServicePlugin());
             await kernel.use(new MetadataPlugin({ watch: false }));
+            await kernel.use(new AIServicePlugin());
 
             // Broker shim — bridges HttpDispatcher → ObjectQL engine
             (kernel as any).broker = createBrokerShim(kernel);

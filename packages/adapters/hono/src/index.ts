@@ -66,6 +66,33 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
         if (res.type === 'redirect' && res.url) {
           return c.redirect(res.url);
         }
+        if (res.type === 'stream' && res.events) {
+          // SSE / Vercel Data Stream streaming response
+          const headers: Record<string, string> = {
+            'Content-Type': res.contentType || 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            ...(res.headers || {}),
+          };
+          const stream = new ReadableStream({
+            async start(controller) {
+              try {
+                const encoder = new TextEncoder();
+                for await (const event of res.events) {
+                  const chunk = res.vercelDataStream
+                    ? (typeof event === 'string' ? event : JSON.stringify(event) + '\n')
+                    : `data: ${JSON.stringify(event)}\n\n`;
+                  controller.enqueue(encoder.encode(chunk));
+                }
+              } catch (err) {
+                // Stream error — close gracefully
+              } finally {
+                controller.close();
+              }
+            },
+          });
+          return new Response(stream, { status: 200, headers });
+        }
         if (res.type === 'stream' && res.stream) {
           if (res.headers) {
             Object.entries(res.headers).forEach(([k, v]) => c.header(k, v as string));
