@@ -118,6 +118,23 @@ export class AIServicePlugin implements Plugin {
       });
     }
 
+    // Contribute navigation items to the Setup App (if SetupPlugin is loaded).
+    try {
+      const setupNav = ctx.getService<{ contribute(c: any): void }>('setupNav');
+      if (setupNav) {
+        setupNav.contribute({
+          areaId: 'area_ai',
+          items: [
+            { id: 'nav_ai_conversations', type: 'object', label: { key: 'setup.nav.ai_conversations', defaultValue: 'Conversations' }, objectName: 'conversations', icon: 'message-square', order: 10 },
+            { id: 'nav_ai_messages', type: 'object', label: { key: 'setup.nav.ai_messages', defaultValue: 'Messages' }, objectName: 'messages', icon: 'messages-square', order: 20 },
+          ],
+        });
+        ctx.logger.info('[AI] Navigation items contributed to Setup App');
+      }
+    } catch {
+      // SetupPlugin not loaded — skip silently
+    }
+
     ctx.logger.info('[AI] Service initialized');
   }
 
