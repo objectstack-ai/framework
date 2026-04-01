@@ -486,18 +486,10 @@ describe('AI namespace', () => {
         expect(opts.method).toBe('POST');
     });
 
-    it('should chat with AI', async () => {
-        const { client, fetchMock } = createMockClient({
-            success: true,
-            data: { message: 'Here are the results...', conversationId: 'conv-1' }
-        });
-        const result = await client.ai.chat({
-            message: 'Show me customer stats',
-            conversationId: 'conv-1'
-        });
-        expect(result.conversationId).toBe('conv-1');
-        const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-        expect(body.message).toBe('Show me customer stats');
+    it('should not expose chat method (use Vercel AI SDK useChat directly)', () => {
+        const { client } = createMockClient({ success: true, data: {} });
+        // ai.chat was removed — consumers should use @ai-sdk/react useChat() directly
+        expect(client.ai).not.toHaveProperty('chat');
     });
 
     it('should get AI suggestions', async () => {

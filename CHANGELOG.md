@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Client test aligned with removed `ai.chat` method** — Updated
+  `@objectstack/client` test suite to match the current API surface where
+  `ai.chat()` was removed in favour of the Vercel AI SDK `useChat()` hook.
+  The obsolete test that called `client.ai.chat()` now asserts the method is
+  absent, fixing the CI `@objectstack/client#test` failure.
+
 ### Added
 - **Discovery Schema — `ServiceStatus` enum & `handlerReady` field** — Added `'registered'`
   status to `ServiceInfoSchema` to distinguish routes that are declared in the dispatcher

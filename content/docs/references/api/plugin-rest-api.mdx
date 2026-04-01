@@ -116,8 +116,8 @@ Architecture Alignment:
 ## TypeScript Usage
 
 ```typescript
-import { ErrorHandlingConfig, OpenApiGenerationConfig, RequestValidationConfig, ResponseEnvelopeConfig, RestApiEndpoint, RestApiPluginConfig, RestApiRouteCategory, RestApiRouteRegistration, ValidationMode } from '@objectstack/spec/api';
-import type { ErrorHandlingConfig, OpenApiGenerationConfig, RequestValidationConfig, ResponseEnvelopeConfig, RestApiEndpoint, RestApiPluginConfig, RestApiRouteCategory, RestApiRouteRegistration, ValidationMode } from '@objectstack/spec/api';
+import { ErrorHandlingConfig, HandlerStatus, OpenApiGenerationConfig, RequestValidationConfig, ResponseEnvelopeConfig, RestApiEndpoint, RestApiPluginConfig, RestApiRouteCategory, RestApiRouteRegistration, RouteCoverageEntry, RouteCoverageReport, ValidationMode } from '@objectstack/spec/api';
+import type { ErrorHandlingConfig, HandlerStatus, OpenApiGenerationConfig, RequestValidationConfig, ResponseEnvelopeConfig, RestApiEndpoint, RestApiPluginConfig, RestApiRouteCategory, RestApiRouteRegistration, RouteCoverageEntry, RouteCoverageReport, ValidationMode } from '@objectstack/spec/api';
 
 // Validate data
 const result = ErrorHandlingConfig.parse(data);
@@ -141,6 +141,17 @@ const result = ErrorHandlingConfig.parse(data);
 | **documentationBaseUrl** | `string` | optional | Base URL for error documentation |
 | **customErrorMessages** | `Record<string, string>` | optional | Custom error messages by error code |
 | **redactFields** | `string[]` | optional | Field names to redact from error details |
+
+
+---
+
+## HandlerStatus
+
+### Allowed Values
+
+* `implemented`
+* `stub`
+* `planned`
 
 
 ---
@@ -228,6 +239,7 @@ const result = ErrorHandlingConfig.parse(data);
 | **rateLimit** | `string` | optional | Rate limit policy name |
 | **cacheable** | `boolean` | ✅ | Whether response can be cached |
 | **cacheTtl** | `integer` | optional | Cache TTL in seconds |
+| **handlerStatus** | `Enum<'implemented' \| 'stub' \| 'planned'>` | optional | Handler implementation status: implemented (default if omitted), stub, or planned |
 
 
 ---
@@ -288,6 +300,36 @@ const result = ErrorHandlingConfig.parse(data);
 | **middleware** | `Object[]` | optional | Middleware stack for this route group |
 | **authRequired** | `boolean` | ✅ | Whether authentication is required by default |
 | **documentation** | `Object` | optional | Documentation metadata for this route group |
+
+
+---
+
+## RouteCoverageEntry
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **path** | `string` | ✅ | Full URL path (e.g. /api/v1/analytics/query) |
+| **method** | `Enum<'GET' \| 'POST' \| 'PUT' \| 'DELETE' \| 'PATCH' \| 'HEAD' \| 'OPTIONS'>` | ✅ | HTTP method (GET, POST, etc.) |
+| **category** | `Enum<'discovery' \| 'metadata' \| 'data' \| 'batch' \| 'permission' \| 'analytics' \| 'automation' \| 'workflow' \| 'ui' \| 'realtime' \| 'notification' \| 'ai' \| 'i18n'>` | ✅ | Route category |
+| **handlerStatus** | `Enum<'implemented' \| 'stub' \| 'planned'>` | ✅ | Handler status |
+| **service** | `string` | ✅ | Target service name |
+| **healthCheckPassed** | `boolean` | optional | Whether the health check probe succeeded |
+
+
+---
+
+## RouteCoverageReport
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **timestamp** | `string` | ✅ | ISO 8601 timestamp |
+| **adapter** | `string` | ✅ | Adapter name (e.g. "hono", "express", "nextjs") |
+| **summary** | `Object` | ✅ |  |
+| **entries** | `Object[]` | ✅ | Per-endpoint coverage entries |
 
 
 ---

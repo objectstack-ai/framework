@@ -1,0 +1,38 @@
+---
+title: Core Services
+description: Core Services protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+<Callout type="info">
+**Source:** `packages/spec/src/api/core-services.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { ServiceStatus } from '@objectstack/spec/api';
+import type { ServiceStatus } from '@objectstack/spec/api';
+
+// Validate data
+const result = ServiceStatus.parse(data);
+```
+
+---
+
+## ServiceStatus
+
+available = fully operational, registered = route declared but handler unverified, unavailable = not installed, degraded = partial, stub = placeholder that returns 501
+
+### Allowed Values
+
+* `available`
+* `registered`
+* `unavailable`
+* `degraded`
+* `stub`
+
+
+---
+

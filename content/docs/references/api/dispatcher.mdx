@@ -36,8 +36,8 @@ Architecture alignment:
 ## TypeScript Usage
 
 ```typescript
-import { DispatcherConfig, DispatcherRoute } from '@objectstack/spec/api';
-import type { DispatcherConfig, DispatcherRoute } from '@objectstack/spec/api';
+import { DispatcherConfig, DispatcherErrorCode, DispatcherErrorResponse, DispatcherRoute } from '@objectstack/spec/api';
+import type { DispatcherConfig, DispatcherErrorCode, DispatcherErrorResponse, DispatcherRoute } from '@objectstack/spec/api';
 
 // Validate data
 const result = DispatcherConfig.parse(data);
@@ -54,6 +54,32 @@ const result = DispatcherConfig.parse(data);
 | **routes** | `Object[]` | ✅ | Route-to-service mappings |
 | **fallback** | `Enum<'404' \| 'proxy' \| 'custom'>` | ✅ | Behavior when no route matches |
 | **proxyTarget** | `string` | optional | Proxy target URL when fallback is "proxy" |
+
+
+---
+
+## DispatcherErrorCode
+
+404 = route not found, 405 = method not allowed, 501 = not implemented (stub), 503 = service unavailable
+
+### Allowed Values
+
+* `404`
+* `405`
+* `501`
+* `503`
+
+
+---
+
+## DispatcherErrorResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **success** | `boolean` | ✅ |  |
+| **error** | `Object` | ✅ |  |
 
 
 ---
