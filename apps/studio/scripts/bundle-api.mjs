@@ -37,11 +37,11 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'es2020',
-  outfile: 'api/index.js',
+  outfile: 'dist/api/index.js',
   sourcemap: true,
   external: EXTERNAL,
   // Silence warnings about optional/unused require() calls in knex drivers
   logOverride: { 'require-resolve-not-external': 'silent' },
 });
 
-console.log('[bundle-api] Bundled server/index.ts → api/index.js');
+console.log('[bundle-api] Bundled server/index.ts → dist/api/index.js');
