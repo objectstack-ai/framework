@@ -4,28 +4,39 @@ import { describe, it, expect } from 'vitest';
 import type { TextStreamPart, ToolSet } from '@objectstack/spec/contracts';
 import { encodeStreamPart, encodeVercelDataStream } from '../stream/vercel-stream-encoder.js';
 
+// Helper to parse SSE frame payload
+function parseSSE(frame: string): Record<string, unknown> | null {
+  if (!frame.startsWith('data: ') || !frame.endsWith('\n\n')) return null;
+  const json = frame.slice(6, -2);
+  if (json === '[DONE]') return null;
+  return JSON.parse(json);
+}
+
 // ─────────────────────────────────────────────────────────────────
-// encodeStreamPart — individual frame encoding
+// encodeStreamPart — individual frame encoding (v6 SSE format)
 // ─────────────────────────────────────────────────────────────────
 
 describe('encodeStreamPart', () => {
-  it('should encode text-delta as "0:" frame', () => {
+  it('should encode text-delta as SSE frame', () => {
     const part = { type: 'text-delta', text: 'Hello world' } as TextStreamPart<ToolSet>;
-    expect(encodeStreamPart(part)).toBe('0:"Hello world"\n');
+    const frame = encodeStreamPart(part);
+    const payload = parseSSE(frame);
+    expect(payload).toEqual({ type: 'text-delta', id: '0', delta: 'Hello world' });
   });
 
   it('should JSON-escape text-delta content', () => {
     const part = { type: 'text-delta', text: 'say "hi"\nnewline' } as TextStreamPart<ToolSet>;
     const frame = encodeStreamPart(part);
-    expect(frame).toBe(`0:${JSON.stringify('say "hi"\nnewline')}\n`);
-    expect(frame.startsWith('0:')).toBe(true);
+    expect(frame.startsWith('data: ')).toBe(true);
+    expect(frame.endsWith('\n\n')).toBe(true);
 
     // Verify round-trip: decode the frame payload back to the original text
-    const decoded = JSON.parse(frame.slice(2).trim());
-    expect(decoded).toBe('say "hi"\nnewline');
+    const payload = parseSSE(frame);
+    expect(payload).not.toBeNull();
+    expect((payload as Record<string, unknown>).delta).toBe('say "hi"\nnewline');
   });
 
-  it('should encode tool-call as "9:" frame', () => {
+  it('should encode tool-call as tool-input-available SSE frame', () => {
     const part = {
       type: 'tool-call',
       toolCallId: 'call_1',
@@ -34,17 +45,16 @@ describe('encodeStreamPart', () => {
     } as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
-    expect(frame.startsWith('9:')).toBe(true);
-
-    const payload = JSON.parse(frame.slice(2));
+    const payload = parseSSE(frame);
     expect(payload).toEqual({
+      type: 'tool-input-available',
       toolCallId: 'call_1',
       toolName: 'get_weather',
-      args: { location: 'San Francisco' },
+      input: { location: 'San Francisco' },
     });
   });
 
-  it('should encode tool-input-start as "b:" frame', () => {
+  it('should encode tool-input-start as SSE frame', () => {
     const part = {
       type: 'tool-input-start',
       id: 'call_2',
@@ -52,16 +62,15 @@ describe('encodeStreamPart', () => {
     } as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
-    expect(frame.startsWith('b:')).toBe(true);
-
-    const payload = JSON.parse(frame.slice(2));
+    const payload = parseSSE(frame);
     expect(payload).toEqual({
+      type: 'tool-input-start',
       toolCallId: 'call_2',
       toolName: 'search',
     });
   });
 
-  it('should encode tool-input-delta as "c:" frame', () => {
+  it('should encode tool-input-delta as SSE frame', () => {
     const part = {
       type: 'tool-input-delta',
       id: 'call_2',
@@ -69,16 +78,15 @@ describe('encodeStreamPart', () => {
     } as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
-    expect(frame.startsWith('c:')).toBe(true);
-
-    const payload = JSON.parse(frame.slice(2));
+    const payload = parseSSE(frame);
     expect(payload).toEqual({
+      type: 'tool-input-delta',
       toolCallId: 'call_2',
-      argsTextDelta: '{"query":',
+      inputTextDelta: '{"query":',
     });
   });
 
-  it('should encode tool-result as "a:" frame', () => {
+  it('should encode tool-result as tool-output-available SSE frame', () => {
     const part = {
       type: 'tool-result',
       toolCallId: 'call_1',
@@ -87,16 +95,15 @@ describe('encodeStreamPart', () => {
     } as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
-    expect(frame.startsWith('a:')).toBe(true);
-
-    const payload = JSON.parse(frame.slice(2));
+    const payload = parseSSE(frame);
     expect(payload).toEqual({
+      type: 'tool-output-available',
       toolCallId: 'call_1',
-      result: { temperature: 72 },
+      output: { temperature: 72 },
     });
   });
 
-  it('should encode finish as "d:" frame', () => {
+  it('should return empty string for finish (handled by generator)', () => {
     const part = {
       type: 'finish',
       finishReason: 'stop',
@@ -104,26 +111,17 @@ describe('encodeStreamPart', () => {
       rawFinishReason: 'stop',
     } as unknown as TextStreamPart<ToolSet>;
 
-    const frame = encodeStreamPart(part);
-    expect(frame.startsWith('d:')).toBe(true);
-
-    const payload = JSON.parse(frame.slice(2));
-    expect(payload.finishReason).toBe('stop');
-    expect(payload.usage).toEqual({ promptTokens: 10, completionTokens: 20, totalTokens: 30 });
+    expect(encodeStreamPart(part)).toBe('');
   });
 
-  it('should encode finish-step as "e:" frame', () => {
+  it('should return empty string for finish-step (handled by generator)', () => {
     const part = {
       type: 'finish-step',
       finishReason: 'tool-calls',
       usage: { promptTokens: 5, completionTokens: 10, totalTokens: 15 },
     } as unknown as TextStreamPart<ToolSet>;
 
-    const frame = encodeStreamPart(part);
-    expect(frame.startsWith('e:')).toBe(true);
-
-    const payload = JSON.parse(frame.slice(2));
-    expect(payload.finishReason).toBe('tool-calls');
+    expect(encodeStreamPart(part)).toBe('');
   });
 
   it('should return empty string for unknown event types', () => {
@@ -133,11 +131,13 @@ describe('encodeStreamPart', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// encodeVercelDataStream — async iterable transformation
+// encodeVercelDataStream — async iterable transformation (v6 SSE)
+//
+// Lifecycle: start → start-step → text-start → ...events... → text-end → finish-step → finish → [DONE]
 // ─────────────────────────────────────────────────────────────────
 
 describe('encodeVercelDataStream', () => {
-  it('should transform stream events into Vercel Data Stream frames', async () => {
+  it('should transform stream events into v6 UI Message Stream frames', async () => {
     async function* source(): AsyncIterable<TextStreamPart<ToolSet>> {
       yield { type: 'text-delta', text: 'Hello' } as TextStreamPart<ToolSet>;
       yield { type: 'text-delta', text: ' world' } as TextStreamPart<ToolSet>;
@@ -154,10 +154,25 @@ describe('encodeVercelDataStream', () => {
       frames.push(frame);
     }
 
-    expect(frames).toHaveLength(3);
-    expect(frames[0]).toBe('0:"Hello"\n');
-    expect(frames[1]).toBe('0:" world"\n');
-    expect(frames[2]).toMatch(/^d:/);
+    // Preamble: start, start-step, text-start
+    // Content: 2 text-deltas
+    // Postamble: text-end, finish-step, finish, [DONE]
+    expect(frames).toHaveLength(9);
+
+    // Preamble
+    expect(parseSSE(frames[0])).toEqual({ type: 'start' });
+    expect(parseSSE(frames[1])).toEqual({ type: 'start-step' });
+    expect(parseSSE(frames[2])).toEqual({ type: 'text-start', id: '0' });
+
+    // Content
+    expect(parseSSE(frames[3])).toMatchObject({ type: 'text-delta', delta: 'Hello' });
+    expect(parseSSE(frames[4])).toMatchObject({ type: 'text-delta', delta: ' world' });
+
+    // Postamble
+    expect(parseSSE(frames[5])).toEqual({ type: 'text-end', id: '0' });
+    expect(parseSSE(frames[6])).toEqual({ type: 'finish-step' });
+    expect(parseSSE(frames[7])).toMatchObject({ type: 'finish', finishReason: 'stop' });
+    expect(frames[8]).toBe('data: [DONE]\n\n');
   });
 
   it('should skip events with no wire format mapping', async () => {
@@ -177,10 +192,9 @@ describe('encodeVercelDataStream', () => {
       frames.push(frame);
     }
 
-    // 'unknown-internal' is silently dropped
-    expect(frames).toHaveLength(2);
-    expect(frames[0]).toBe('0:"Hi"\n');
-    expect(frames[1]).toMatch(/^d:/);
+    // Preamble(3) + 1 text-delta + Postamble(4) = 8 ('unknown-internal' dropped)
+    expect(frames).toHaveLength(8);
+    expect(parseSSE(frames[3])).toMatchObject({ type: 'text-delta', delta: 'Hi' });
   });
 
   it('should handle empty stream', async () => {
@@ -193,7 +207,11 @@ describe('encodeVercelDataStream', () => {
       frames.push(frame);
     }
 
-    expect(frames).toHaveLength(0);
+    // Preamble(3) + text-end + finish-step + finish + [DONE] = 7
+    expect(frames).toHaveLength(7);
+    expect(parseSSE(frames[0])).toEqual({ type: 'start' });
+    expect(parseSSE(frames[3])).toEqual({ type: 'text-end', id: '0' });
+    expect(frames[6]).toBe('data: [DONE]\n\n');
   });
 
   it('should handle tool-call events in stream', async () => {
@@ -223,14 +241,23 @@ describe('encodeVercelDataStream', () => {
       frames.push(frame);
     }
 
-    expect(frames).toHaveLength(3);
-    expect(frames[0]).toMatch(/^9:/);
-    expect(frames[1]).toMatch(/^a:/);
-    expect(frames[2]).toMatch(/^d:/);
+    // Preamble(3) + tool-input-available + tool-output-available + Postamble(4) = 9
+    expect(frames).toHaveLength(9);
 
     // Verify tool-call frame content
-    const toolCallPayload = JSON.parse(frames[0].slice(2));
-    expect(toolCallPayload.toolCallId).toBe('call_1');
-    expect(toolCallPayload.args).toEqual({ query: 'test' });
+    const toolCallPayload = parseSSE(frames[3]);
+    expect(toolCallPayload).toMatchObject({
+      type: 'tool-input-available',
+      toolCallId: 'call_1',
+      toolName: 'search',
+      input: { query: 'test' },
+    });
+
+    const toolResultPayload = parseSSE(frames[4]);
+    expect(toolResultPayload).toMatchObject({
+      type: 'tool-output-available',
+      toolCallId: 'call_1',
+      output: { hits: 42 },
+    });
   });
 });
