@@ -41,7 +41,7 @@
             getData: async (object) => {
                 const res = await fetch(`/api/v1/data/${object}`);
                 const json = await res.json();
-                return json.value || []; 
+                return json.records || []; 
             }
         };
 

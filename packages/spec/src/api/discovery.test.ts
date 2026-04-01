@@ -3,11 +3,16 @@ import {
   DiscoverySchema,
   ApiRoutesSchema,
   ServiceInfoSchema,
+  ServiceStatus,
   WellKnownCapabilitiesSchema,
+  RouteHealthEntrySchema,
+  RouteHealthReportSchema,
   type DiscoveryResponse,
   type ApiRoutes,
   type ServiceInfo,
   type WellKnownCapabilities,
+  type RouteHealthEntry,
+  type RouteHealthReport,
 } from './discovery.zod';
 
 describe('ApiRoutesSchema', () => {
@@ -748,5 +753,151 @@ describe('WellKnownCapabilitiesSchema', () => {
     expect(shape.search.description).toBeDefined();
     expect(shape.export.description).toBeDefined();
     expect(shape.chunkedUpload.description).toBeDefined();
+  });
+});
+
+// ==========================================
+// ServiceStatus enum
+// ==========================================
+
+describe('ServiceStatus', () => {
+  it('should accept all valid status values', () => {
+    const values = ['available', 'registered', 'unavailable', 'degraded', 'stub'] as const;
+    values.forEach(status => {
+      expect(() => ServiceStatus.parse(status)).not.toThrow();
+    });
+  });
+
+  it('should include "registered" for declared-but-unverified routes', () => {
+    expect(ServiceStatus.parse('registered')).toBe('registered');
+  });
+
+  it('should reject invalid status values', () => {
+    expect(() => ServiceStatus.parse('unknown')).toThrow();
+    expect(() => ServiceStatus.parse('active')).toThrow();
+  });
+});
+
+// ==========================================
+// ServiceInfoSchema — handlerReady field
+// ==========================================
+
+describe('ServiceInfoSchema (handlerReady field)', () => {
+  it('should default handlerReady to undefined when omitted', () => {
+    const info = ServiceInfoSchema.parse({
+      enabled: true,
+      status: 'available',
+    });
+    expect(info.handlerReady).toBeUndefined();
+  });
+
+  it('should accept explicit handlerReady: true', () => {
+    const info = ServiceInfoSchema.parse({
+      enabled: true,
+      status: 'available',
+      handlerReady: true,
+      route: '/api/v1/data',
+    });
+    expect(info.handlerReady).toBe(true);
+  });
+
+  it('should accept registered status with handlerReady false', () => {
+    const info = ServiceInfoSchema.parse({
+      enabled: true,
+      status: 'registered',
+      handlerReady: false,
+      route: '/api/v1/ai',
+      message: 'Route declared but handler not verified',
+    });
+    expect(info.status).toBe('registered');
+    expect(info.handlerReady).toBe(false);
+  });
+
+  it('should allow clients to filter handler-ready services', () => {
+    const services: Record<string, ServiceInfo> = {
+      data: ServiceInfoSchema.parse({ enabled: true, status: 'available', handlerReady: true }),
+      ai: ServiceInfoSchema.parse({ enabled: true, status: 'registered', handlerReady: false }),
+      workflow: ServiceInfoSchema.parse({ enabled: false, status: 'unavailable', handlerReady: false }),
+    };
+
+    const ready = Object.entries(services)
+      .filter(([, s]) => s.enabled && s.handlerReady)
+      .map(([name]) => name);
+
+    expect(ready).toEqual(['data']);
+  });
+});
+
+// ==========================================
+// RouteHealthReportSchema
+// ==========================================
+
+describe('RouteHealthEntrySchema', () => {
+  it('should accept a valid entry', () => {
+    const entry: RouteHealthEntry = {
+      route: '/api/v1/analytics/query',
+      method: 'POST',
+      service: 'analytics',
+      declared: true,
+      handlerRegistered: true,
+      healthStatus: 'pass',
+    };
+    expect(() => RouteHealthEntrySchema.parse(entry)).not.toThrow();
+  });
+
+  it('should accept all health status values', () => {
+    const statuses = ['pass', 'fail', 'missing', 'skip'] as const;
+    statuses.forEach(healthStatus => {
+      expect(() => RouteHealthEntrySchema.parse({
+        route: '/test',
+        method: 'GET',
+        service: 'test',
+        declared: true,
+        handlerRegistered: false,
+        healthStatus,
+      })).not.toThrow();
+    });
+  });
+
+  it('should accept entry with diagnostic message', () => {
+    const entry = RouteHealthEntrySchema.parse({
+      route: '/api/v1/workflow',
+      method: 'GET',
+      service: 'workflow',
+      declared: true,
+      handlerRegistered: false,
+      healthStatus: 'missing',
+      message: 'No handler registered — install plugin-workflow',
+    });
+    expect(entry.message).toBe('No handler registered — install plugin-workflow');
+  });
+});
+
+describe('RouteHealthReportSchema', () => {
+  it('should accept a valid report', () => {
+    const report: RouteHealthReport = {
+      timestamp: '2026-04-01T00:00:00.000Z',
+      adapter: 'hono',
+      totalDeclared: 3,
+      totalRegistered: 2,
+      totalMissing: 1,
+      routes: [
+        { route: '/api/v1/data', method: 'GET', service: 'data', declared: true, handlerRegistered: true, healthStatus: 'pass' },
+        { route: '/api/v1/meta', method: 'GET', service: 'metadata', declared: true, handlerRegistered: true, healthStatus: 'pass' },
+        { route: '/api/v1/ai/chat', method: 'POST', service: 'ai', declared: true, handlerRegistered: false, healthStatus: 'missing' },
+      ],
+    };
+    expect(() => RouteHealthReportSchema.parse(report)).not.toThrow();
+  });
+
+  it('should validate summary counters are integers', () => {
+    expect(() => RouteHealthReportSchema.parse({
+      timestamp: '2026-04-01T00:00:00.000Z',
+      adapter: 'express',
+      totalDeclared: 1.5,
+      totalRegistered: 1,
+      totalMissing: 0,
+      routes: [],
+    })).toThrow();
   });
 });

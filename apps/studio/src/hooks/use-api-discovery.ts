@@ -227,15 +227,23 @@ export function useApiDiscovery() {
       // 2. Build service endpoints from discovery
       const serviceEndpoints: EndpointDef[] = [];
       for (const [serviceName, catalog] of Object.entries(SERVICE_ENDPOINT_CATALOG)) {
-        const serviceInfo = discoveredServices[serviceName];
+        const serviceInfo = discoveredServices[serviceName] as
+          | { enabled: boolean; status?: string; handlerReady?: boolean; route?: string }
+          | undefined;
+
+        // Only include services that are both enabled and have a handler ready.
+        // Backwards-compatible: if handlerReady is not present (older backends),
+        // treat status === 'available' or status === 'degraded' as equivalent to handlerReady: true.
         const isEnabled = serviceInfo?.enabled ?? false;
+        const hasHandler = serviceInfo?.handlerReady
+          ?? (serviceInfo?.status === 'available' || serviceInfo?.status === 'degraded');
 
         // Use route from discovery services, discovery routes map, or catalog default
         const routePrefix = serviceInfo?.route
           ?? discoveredRoutes[serviceName]
           ?? catalog.defaultRoute;
 
-        if (isEnabled) {
+        if (isEnabled && hasHandler) {
           serviceEndpoints.push(...buildServiceEndpoints(serviceName, routePrefix));
         }
       }

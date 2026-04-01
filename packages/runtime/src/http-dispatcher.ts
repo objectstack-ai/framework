@@ -59,6 +59,25 @@ export class HttpDispatcher {
         };
     }
 
+    /**
+     * 404 Route Not Found — no route is registered for this path.
+     */
+    private routeNotFound(route: string) {
+        return {
+            status: 404,
+            body: {
+                success: false,
+                error: {
+                    code: 404,
+                    message: `Route Not Found: ${route}`,
+                    type: 'ROUTE_NOT_FOUND' as const,
+                    route,
+                    hint: 'No route is registered for this path. Check the API discovery endpoint for available routes.',
+                },
+            },
+        };
+    }
+
     private ensureBroker() {
         if (!this.kernel.broker) {
             throw { statusCode: 500, message: 'Kernel Broker not available' };
@@ -133,11 +152,14 @@ export class HttpDispatcher {
         };
 
         // Build per-service status map
+        // handlerReady: true means the dispatcher has a real, bound handler for this route.
+        // handlerReady: false means the route is present in the discovery table but may not
+        // yet have a concrete implementation or may be served by a stub.
         const svcAvailable = (route?: string, provider?: string) => ({
-            enabled: true, status: 'available' as const, route, provider,
+            enabled: true, status: 'available' as const, handlerReady: true, route, provider,
         });
         const svcUnavailable = (name: string) => ({
-            enabled: false, status: 'unavailable' as const,
+            enabled: false, status: 'unavailable' as const, handlerReady: false,
             message: `Install a ${name} plugin to enable`,
         });
 
@@ -174,7 +196,7 @@ export class HttpDispatcher {
             },
             services: {
                 // Kernel-provided (always available via protocol implementation)
-                metadata:       { enabled: true, status: 'degraded' as const, route: routes.metadata, provider: 'kernel', message: 'In-memory registry; DB persistence pending' },
+                metadata:       { enabled: true, status: 'degraded' as const, handlerReady: true, route: routes.metadata, provider: 'kernel', message: 'In-memory registry; DB persistence pending' },
                 data:           svcAvailable(routes.data, 'kernel'),
                 // Plugin-provided — only available when a plugin registers the service
                 auth:           hasAuth ? svcAvailable(routes.auth) : svcUnavailable('auth'),
@@ -1207,6 +1229,19 @@ export class HttpDispatcher {
              };
         }
 
+        // 0b. Health Endpoint (GET /health)
+        if (cleanPath === '/health' && method === 'GET') {
+            return {
+                handled: true,
+                response: this.success({
+                    status: 'ok',
+                    timestamp: new Date().toISOString(),
+                    version: '1.0.0',
+                    uptime: typeof process !== 'undefined' ? process.uptime() : undefined,
+                }),
+            };
+        }
+
         // 1. System Protocols (Prefix-based)
         if (cleanPath.startsWith('/auth')) {
             return this.handleAuth(cleanPath.substring(5), method, body, context);
@@ -1265,8 +1300,11 @@ export class HttpDispatcher {
         const result = await this.handleApiEndpoint(cleanPath, method, body, query, context);
         if (result.handled) return result;
 
-        // 3. Fallback (404)
-        return { handled: false };
+        // 3. Fallback — return semantic 404 with diagnostic info
+        return {
+            handled: true,
+            response: this.routeNotFound(cleanPath),
+        };
     }
 
     /**

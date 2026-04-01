@@ -123,7 +123,7 @@ export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps)
                 
                 if (mounted) {
                     // Spec: FindDataResponse = { object, records, total?, hasMore? }
-                    const records = result?.records || result?.value || (Array.isArray(result) ? result : []);
+                    const records = result?.records || (Array.isArray(result) ? result : []);
                     setRecords(records);
                     if (typeof result?.total === 'number') setTotal(result.total);
                     else if (typeof result?.count === 'number') setTotal(result.count);
@@ -150,7 +150,7 @@ export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps)
                 }
             });
             // Spec: FindDataResponse = { object, records, total? }
-            const records = result?.records || result?.value || (Array.isArray(result) ? result : []);
+            const records = result?.records || (Array.isArray(result) ? result : []);
             setRecords(records);
             if (typeof result?.total === 'number') setTotal(result.total);
             else if (typeof result?.count === 'number') setTotal(result.count);
@@ -170,7 +170,7 @@ export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps)
                 }
             });
             // Spec: FindDataResponse = { object, records, total? }
-            const records = result?.records || result?.value || (Array.isArray(result) ? result : []);
+            const records = result?.records || (Array.isArray(result) ? result : []);
             setRecords(records);
             if (typeof result?.total === 'number') setTotal(result.total);
             else if (typeof result?.count === 'number') setTotal(result.count);

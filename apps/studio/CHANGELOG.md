@@ -1,5 +1,20 @@
 # @objectstack/studio
 
+## Unreleased
+
+### Minor Changes
+
+- Add collapsible right-side AI Chat floating panel (VS Code Copilot Chat style).
+
+  - New `AiChatPanel` component: fixed right-side panel with 48px collapsed edge
+    button and 380px expanded view. Supports stream chat via Vercel AI SDK
+    `useChat` hook connected to `/api/v1/ai/chat`.
+  - New `use-ai-chat-panel` hook: manages panel visibility toggle, keyboard
+    shortcut (`Ctrl+Shift+I` / `Cmd+Shift+I`), and message history persistence
+    to localStorage.
+  - Added `ai` and `@ai-sdk/react` dependencies for Vercel Data Stream Protocol
+    integration.
+
 ## 4.0.0
 
 ### Patch Changes
@@ -47,6 +62,15 @@
   - Updated group sort order to include service groups between Auth and Metadata
 
 ### Fixes
+
+- **Vercel deployment: Fix `functions` pattern validation error**
+  - The `functions` key in `vercel.json` referenced `api/index.js` — a build artifact created by
+    `bundle-api.mjs` — which does not exist in the source tree. Vercel CLI validates patterns against
+    source files before the build runs, producing the error:
+    `The pattern "api/index.js" defined in "functions" doesn't match any Serverless Functions`.
+  - Removed `functions` from `vercel.json` and moved the memory/maxDuration settings to an inline
+    `export const config` in `server/index.ts`. This is the standard Vercel per-function configuration
+    mechanism and is bundled into `api/index.js` by esbuild.
 
 - **Vercel deployment: Fix `@vercel/node@3` runtime error**
   - Removed the `functions.runtime` config from `vercel.json` — the `runtime` field is only for custom/community runtimes, not Node.js. Vercel auto-detects the pre-bundled `api/index.js` as a Node.js serverless function.
