@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and return `TextStreamPart<ToolSet>` for streaming
   - Deprecated type aliases preserved for migration convenience
   - NLQ, Suggest, and Insights protocols (ObjectStack-specific) are retained
+- **`@objectstack/service-ai` migrated to Vercel AI SDK types** — All source files
+  and tests now use canonical Vercel types (`ModelMessage`, `ToolCallPart`,
+  `ToolResultPart`, `TextStreamPart<ToolSet>`) instead of deprecated aliases:
+  - `ToolRegistry.execute()` accepts `ToolCallPart` and returns `ToolExecutionResult`
+    (extends `ToolResultPart` with `isError?: boolean`)
+  - Tool call loop in `AIService.chatWithTools()` constructs proper
+    `AssistantModelMessage` and `ToolModelMessage` with Vercel-format content arrays
+  - `MemoryLLMAdapter.streamChat()` emits Vercel `TextStreamPart<ToolSet>` events
+  - Conversation services serialize/deserialize `ModelMessage` union to flat DB columns
+  - All 158 service-ai tests updated and passing
 
 ### Removed
 - `AiChatRequestSchema` / `AiChatResponseSchema` Zod schemas from
