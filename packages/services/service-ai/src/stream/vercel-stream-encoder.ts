@@ -33,11 +33,9 @@ function sse(data: object): string {
  */
 export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
   switch (part.type) {
-    // ── Text ──────────────────────────────────────────────────
     case 'text-delta':
       return sse({ type: 'text-delta', id: '0', delta: part.text });
 
-    // ── Tool calling ─────────────────────────────────────────
     case 'tool-input-start':
       return sse({
         type: 'tool-input-start',
@@ -67,24 +65,13 @@ export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
         output: part.output,
       });
 
-    // ── Finish / Step ────────────────────────────────────────
-    case 'finish-step':
-      return sse({ type: 'finish-step' });
-
-    case 'finish':
-      return sse({
-        type: 'finish',
-        finishReason: part.finishReason,
-      });
-
-    // ── Error ────────────────────────────────────────────────
     case 'error':
       return sse({
         type: 'error',
         errorText: String(part.error),
       });
 
-    // ── Unhandled types (silently skip) ──────────────────────
+    // finish-step and finish are handled by the generator, not here
     default:
       return '';
   }
@@ -94,8 +81,8 @@ export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
  * Transform an `AsyncIterable<TextStreamPart>` into an `AsyncIterable<string>`
  * where each yielded string is an SSE-formatted UI Message Stream chunk.
  *
- * Emits the required `start`, `start-step`, `text-start` preamble and
- * `text-end`, `finish-step`, `finish`, `[DONE]` postamble automatically.
+ * Lifecycle order required by the client:
+ *   start → start-step → text-start → text-delta* → text-end → finish-step → finish → [DONE]
  */
 export async function* encodeVercelDataStream(
   events: AsyncIterable<TextStreamPart<ToolSet>>,
@@ -105,24 +92,37 @@ export async function* encodeVercelDataStream(
   yield sse({ type: 'start-step' });
   yield sse({ type: 'text-start', id: '0' });
 
+  let textOpen = true;
   let finishReason = 'stop';
 
   for await (const part of events) {
+    // Capture finish reason
     if (part.type === 'finish') {
       finishReason = part.finishReason ?? 'stop';
     }
+
+    // Before finish-step/finish, close the text part first
+    if (part.type === 'finish-step' || part.type === 'finish') {
+      if (textOpen) {
+        yield sse({ type: 'text-end', id: '0' });
+        textOpen = false;
+      }
+      // Don't emit these via encodeStreamPart — we handle them in postamble
+      continue;
+    }
+
     const frame = encodeStreamPart(part);
     if (frame) {
       yield frame;
     }
   }
 
-  // Postamble — text-end + finish-step + finish are already emitted by
-  // encodeStreamPart when the corresponding parts arrive from the LLM.
-  // However, we always need text-end and the [DONE] sentinel.
-  yield sse({ type: 'text-end', id: '0' });
-  // finish-step and finish may have already been emitted; emit them
-  // again only as safeguards — the client handles duplicates gracefully.
+  // Close text if still open (safety)
+  if (textOpen) {
+    yield sse({ type: 'text-end', id: '0' });
+  }
+
+  // Postamble
   yield sse({ type: 'finish-step' });
   yield sse({ type: 'finish', finishReason });
   yield 'data: [DONE]\n\n';
