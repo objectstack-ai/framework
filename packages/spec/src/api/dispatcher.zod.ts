@@ -171,13 +171,17 @@ export const DEFAULT_DISPATCHER_ROUTES: DispatcherRouteInput[] = [
 /**
  * Semantic HTTP error codes used by the Dispatcher.
  *
- * The dispatcher MUST distinguish between these three failure modes so that
+ * The dispatcher MUST distinguish between these four failure modes so that
  * clients (and developers) can understand *why* an API call failed:
  *
  * - `404` – Route Not Found: no route is registered for this path.
  * - `405` – Method Not Allowed: route exists but the HTTP method is not supported.
  * - `501` – Not Implemented: route is declared but the handler is a stub / not yet coded.
  * - `503` – Service Unavailable: service exists but is temporarily down or not loaded.
+ *
+ * Note: These are string representations of HTTP status codes for use in enum
+ * matching. The `DispatcherErrorResponseSchema.error.code` field carries the
+ * numeric HTTP status code for direct use in HTTP responses.
  */
 export const DispatcherErrorCode = z.enum(['404', '405', '501', '503']).describe(
   '404 = route not found, 405 = method not allowed, 501 = not implemented (stub), 503 = service unavailable'

@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { z } from 'zod';
+import { HttpMethod } from '../shared/http.zod';
 
 /**
  * Service Status Enum
@@ -37,16 +38,19 @@ export const ServiceInfoSchema = z.object({
   status: ServiceStatus,
   /**
    * Whether the HTTP handler for this service is confirmed to be mounted.
-   * `true`  = handler is registered in the adapter / dispatcher (safe to call).
-   * `false` = route is declared (e.g., in Discovery metadata) but no handler exists
-   *           — requests will receive 501 Not Implemented.
    *
-   * Clients SHOULD check this flag before displaying a service endpoint in the UI.
-   * @default false
+   * Semantics:
+   * - `undefined` (omitted) = handler readiness is unknown / not yet verified.
+   * - `true`                = handler is registered in the adapter / dispatcher (safe to call).
+   * - `false`               = route is declared but no handler exists or only a stub is present
+   *                            — requests are expected to receive 501 Not Implemented.
+   *
+   * Clients SHOULD check this flag before displaying or invoking a service endpoint and may
+   * distinguish between "unknown" (omitted) and "known missing" (`false`).
    */
   handlerReady: z.boolean().optional().describe(
     'Whether the HTTP handler is confirmed to be mounted. '
-    + 'Omitted or false means the route is declared but may return 501.'
+    + 'Omitted = readiness unknown/unverified; true = handler mounted; false = handler missing or stub (likely 501).'
   ),
   /** Route path (only present if enabled) */
   route: z.string().optional().describe('e.g. /api/v1/analytics'),
@@ -226,7 +230,7 @@ export const RouteHealthEntrySchema = z.object({
   /** Route path (e.g. /api/v1/analytics) */
   route: z.string().describe('Route path pattern'),
   /** HTTP method */
-  method: z.string().describe('HTTP method (GET, POST, etc.)'),
+  method: HttpMethod.describe('HTTP method (GET, POST, etc.)'),
   /** Target service name */
   service: z.string().describe('Target service name'),
   /** Whether the route is declared in discovery */

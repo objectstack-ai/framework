@@ -152,9 +152,9 @@ export class HttpDispatcher {
         };
 
         // Build per-service status map
-        // handlerReady: true means the dispatcher has a real handler for this route.
-        // handlerReady: false with status 'registered' means the route is in the table
-        // but the handler may not exist or be a stub.
+        // handlerReady: true means the dispatcher has a real, bound handler for this route.
+        // handlerReady: false means the route is present in the discovery table but may not
+        // yet have a concrete implementation or may be served by a stub.
         const svcAvailable = (route?: string, provider?: string) => ({
             enabled: true, status: 'available' as const, handlerReady: true, route, provider,
         });

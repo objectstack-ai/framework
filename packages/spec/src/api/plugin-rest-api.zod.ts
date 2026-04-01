@@ -95,6 +95,18 @@ export type RestApiRouteCategory = z.infer<typeof RestApiRouteCategory>;
 // ==========================================
 
 /**
+ * Handler Implementation Status
+ * Shared enum for tracking whether an endpoint has a real handler.
+ * Used by both `RestApiEndpointSchema` and `RouteCoverageEntrySchema`.
+ *
+ * - `implemented` – A real handler is coded and registered.
+ * - `stub`        – A placeholder handler exists that returns 501 Not Implemented.
+ * - `planned`     – Declared in the protocol spec but not yet implemented.
+ */
+export const HandlerStatusSchema = z.enum(['implemented', 'stub', 'planned']);
+export type HandlerStatus = z.infer<typeof HandlerStatusSchema>;
+
+/**
  * REST API Endpoint Schema
  * Defines a single REST API endpoint with its metadata
  * 
@@ -169,7 +181,7 @@ export const RestApiEndpointSchema = z.object({
    * - `planned`     – Declared in the protocol spec but not yet implemented.
    * @default 'implemented'
    */
-  handlerStatus: z.enum(['implemented', 'stub', 'planned']).optional()
+  handlerStatus: HandlerStatusSchema.optional()
     .describe('Handler implementation status: implemented (default if omitted), stub, or planned'),
 });
 
@@ -1685,11 +1697,11 @@ export const RouteCoverageEntrySchema = z.object({
   /** Full URL path of the endpoint */
   path: z.string().describe('Full URL path (e.g. /api/v1/analytics/query)'),
   /** HTTP method */
-  method: z.string().describe('HTTP method (GET, POST, etc.)'),
+  method: HttpMethod.describe('HTTP method (GET, POST, etc.)'),
   /** Route category */
   category: RestApiRouteCategory.describe('Route category'),
   /** Handler implementation status */
-  handlerStatus: z.enum(['implemented', 'stub', 'planned']).describe('Handler status'),
+  handlerStatus: HandlerStatusSchema.describe('Handler status'),
   /** Target service */
   service: z.string().describe('Target service name'),
   /** Whether the handler was successfully called during health check */

@@ -233,7 +233,7 @@ export function useApiDiscovery() {
 
         // Only include services that are both enabled and have a handler ready.
         // Backwards-compatible: if handlerReady is not present (older backends),
-        // fall back to status !== 'unavailable' && status !== 'stub' && status !== 'registered'.
+        // treat status === 'available' or status === 'degraded' as equivalent to handlerReady: true.
         const isEnabled = serviceInfo?.enabled ?? false;
         const hasHandler = serviceInfo?.handlerReady
           ?? (serviceInfo?.status === 'available' || serviceInfo?.status === 'degraded');

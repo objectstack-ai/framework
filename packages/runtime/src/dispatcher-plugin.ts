@@ -40,7 +40,7 @@ function sendResult(result: HttpDispatcherResult, res: any): void {
             message: 'Not Found',
             code: 404,
             type: 'ROUTE_NOT_FOUND',
-            hint: 'No handler matched this request. Check GET /api/v1/discovery for available routes.',
+            hint: 'No handler matched this request. Check the API discovery endpoint for available routes.',
         },
     });
 }
