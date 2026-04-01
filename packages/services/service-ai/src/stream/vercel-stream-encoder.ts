@@ -46,22 +46,22 @@ export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
         args: part.input,
       })}\n`;
 
-    case 'tool-call-streaming-start':
+    case 'tool-input-start':
       return `b:${JSON.stringify({
-        toolCallId: part.toolCallId,
+        toolCallId: part.id,
         toolName: part.toolName,
       })}\n`;
 
-    case 'tool-call-delta':
+    case 'tool-input-delta':
       return `c:${JSON.stringify({
-        toolCallId: part.toolCallId,
-        argsTextDelta: part.argsTextDelta,
+        toolCallId: part.id,
+        argsTextDelta: part.delta,
       })}\n`;
 
     case 'tool-result':
       return `a:${JSON.stringify({
         toolCallId: part.toolCallId,
-        result: part.result,
+        result: part.output,
       })}\n`;
 
     // ── Finish / Step ────────────────────────────────────────
@@ -71,11 +71,10 @@ export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
         usage: part.totalUsage ?? undefined,
       })}\n`;
 
-    case 'step-finish':
+    case 'finish-step':
       return `e:${JSON.stringify({
         finishReason: part.finishReason,
-        usage: part.totalUsage ?? undefined,
-        isContinued: part.isContinued ?? false,
+        usage: part.usage ?? undefined,
       })}\n`;
 
     // ── Unhandled types (silently skip) ──────────────────────

@@ -9,7 +9,7 @@ import type {
 } from '@objectstack/spec/contracts';
 import type { LLMAdapter } from '@objectstack/spec/contracts';
 import type { AIToolDefinition } from '@objectstack/spec/contracts';
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV2 } from '@ai-sdk/provider';
 import { generateText, streamText, tool as vercelTool, jsonSchema } from 'ai';
 
 /**
@@ -63,7 +63,7 @@ function buildVercelOptions(options?: AIRequestOptions): Record<string, unknown>
 export class VercelLLMAdapter implements LLMAdapter {
   readonly name = 'vercel';
 
-  private readonly model: LanguageModelV3;
+  private readonly model: LanguageModelV2;
 
   constructor(config: VercelLLMAdapterConfig) {
     this.model = config.model;
@@ -81,9 +81,9 @@ export class VercelLLMAdapter implements LLMAdapter {
       model: result.response?.modelId,
       toolCalls: result.toolCalls?.length ? result.toolCalls : undefined,
       usage: result.usage ? {
-        promptTokens: result.usage.promptTokens,
-        completionTokens: result.usage.completionTokens,
-        totalTokens: result.usage.totalTokens,
+        promptTokens: result.usage.inputTokens ?? 0,
+        completionTokens: result.usage.outputTokens ?? 0,
+        totalTokens: result.usage.totalTokens ?? 0,
       } : undefined,
     };
   }
@@ -99,9 +99,9 @@ export class VercelLLMAdapter implements LLMAdapter {
       content: result.text,
       model: result.response?.modelId,
       usage: result.usage ? {
-        promptTokens: result.usage.promptTokens,
-        completionTokens: result.usage.completionTokens,
-        totalTokens: result.usage.totalTokens,
+        promptTokens: result.usage.inputTokens ?? 0,
+        completionTokens: result.usage.outputTokens ?? 0,
+        totalTokens: result.usage.totalTokens ?? 0,
       } : undefined,
     };
   }
@@ -121,7 +121,7 @@ export class VercelLLMAdapter implements LLMAdapter {
     }
   }
 
-  async embed(input: string | string[]): Promise<number[][]> {
+  async embed(_input: string | string[]): Promise<number[][]> {
     // Vercel AI SDK uses a separate EmbeddingModel — not supported via this adapter.
     throw new Error(
       '[VercelLLMAdapter] Embeddings require a dedicated EmbeddingModel. ' +
@@ -144,5 +144,5 @@ export interface VercelLLMAdapterConfig {
    *
    * @example `openai('gpt-4o')` or `anthropic('claude-sonnet-4-20250514')`
    */
-  model: LanguageModelV3;
+  model: LanguageModelV2;
 }

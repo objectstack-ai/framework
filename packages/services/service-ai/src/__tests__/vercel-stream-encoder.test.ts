@@ -44,10 +44,10 @@ describe('encodeStreamPart', () => {
     });
   });
 
-  it('should encode tool-call-streaming-start as "b:" frame', () => {
+  it('should encode tool-input-start as "b:" frame', () => {
     const part = {
-      type: 'tool-call-streaming-start',
-      toolCallId: 'call_2',
+      type: 'tool-input-start',
+      id: 'call_2',
       toolName: 'search',
     } as TextStreamPart<ToolSet>;
 
@@ -61,11 +61,11 @@ describe('encodeStreamPart', () => {
     });
   });
 
-  it('should encode tool-call-delta as "c:" frame', () => {
+  it('should encode tool-input-delta as "c:" frame', () => {
     const part = {
-      type: 'tool-call-delta',
-      toolCallId: 'call_2',
-      argsTextDelta: '{"query":',
+      type: 'tool-input-delta',
+      id: 'call_2',
+      delta: '{"query":',
     } as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
@@ -83,7 +83,7 @@ describe('encodeStreamPart', () => {
       type: 'tool-result',
       toolCallId: 'call_1',
       toolName: 'get_weather',
-      result: { temperature: 72 },
+      output: { temperature: 72 },
     } as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
@@ -112,12 +112,11 @@ describe('encodeStreamPart', () => {
     expect(payload.usage).toEqual({ promptTokens: 10, completionTokens: 20, totalTokens: 30 });
   });
 
-  it('should encode step-finish as "e:" frame', () => {
+  it('should encode finish-step as "e:" frame', () => {
     const part = {
-      type: 'step-finish',
+      type: 'finish-step',
       finishReason: 'tool-calls',
-      totalUsage: { promptTokens: 5, completionTokens: 10, totalTokens: 15 },
-      isContinued: true,
+      usage: { promptTokens: 5, completionTokens: 10, totalTokens: 15 },
     } as unknown as TextStreamPart<ToolSet>;
 
     const frame = encodeStreamPart(part);
@@ -125,7 +124,6 @@ describe('encodeStreamPart', () => {
 
     const payload = JSON.parse(frame.slice(2));
     expect(payload.finishReason).toBe('tool-calls');
-    expect(payload.isContinued).toBe(true);
   });
 
   it('should return empty string for unknown event types', () => {
@@ -210,7 +208,7 @@ describe('encodeVercelDataStream', () => {
         type: 'tool-result',
         toolCallId: 'call_1',
         toolName: 'search',
-        result: { hits: 42 },
+        output: { hits: 42 },
       } as TextStreamPart<ToolSet>;
       yield {
         type: 'finish',
