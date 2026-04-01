@@ -124,6 +124,12 @@ export class AIService implements IAIService {
   /** Default maximum iterations for the tool call loop. */
   static readonly DEFAULT_MAX_ITERATIONS = 10;
 
+  /** Extract the text value from a ToolExecutionResult's output. */
+  private static extractOutputText(tr: ToolExecutionResult): string {
+    return tr.output && typeof tr.output === 'object' && 'value' in tr.output
+      ? String(tr.output.value) : 'unknown error';
+  }
+
   /**
    * Chat with automatic tool call resolution.
    *
@@ -203,8 +209,7 @@ export class AIService implements IAIService {
           // Match tool call by toolCallId for robust attribution
           const matchedCall = result.toolCalls!.find(tc => tc.toolCallId === tr.toolCallId);
           const toolName = matchedCall?.toolName ?? 'unknown';
-          const errorText = tr.output && typeof tr.output === 'object' && 'value' in tr.output
-            ? String(tr.output.value) : 'unknown error';
+          const errorText = AIService.extractOutputText(tr);
           const errorEntry = { iteration, toolName, error: errorText };
           toolErrors.push(errorEntry);
           this.logger.warn('[AI] chatWithTools tool error', errorEntry);
@@ -311,8 +316,7 @@ export class AIService implements IAIService {
         if (tr.isError && onToolError) {
           const matchedCall = result.toolCalls!.find(tc => tc.toolCallId === tr.toolCallId);
           if (matchedCall) {
-            const errorText = tr.output && typeof tr.output === 'object' && 'value' in tr.output
-              ? String(tr.output.value) : 'unknown error';
+            const errorText = AIService.extractOutputText(tr);
             const action = onToolError(matchedCall, errorText);
             if (action === 'abort') {
               abortedByCallback = true;

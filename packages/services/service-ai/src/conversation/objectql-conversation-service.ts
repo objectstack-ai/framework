@@ -182,8 +182,9 @@ export class ObjectQLConversationService implements IAIConversationService {
       if (typeof message.content === 'string') {
         contentStr = message.content;
       } else {
-        const textParts = message.content.filter((p: any) => p.type === 'text').map((p: any) => p.text);
-        const toolCalls = message.content.filter((p: any) => p.type === 'tool-call');
+        const parts = message.content;
+        const textParts = parts.filter(p => p.type === 'text').map(p => 'text' in p ? p.text : '');
+        const toolCalls = parts.filter(p => p.type === 'tool-call');
         contentStr = textParts.join('');
         if (toolCalls.length > 0) toolCallsJson = JSON.stringify(toolCalls);
       }
