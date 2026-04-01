@@ -19,6 +19,10 @@ describe('encodeStreamPart', () => {
     const frame = encodeStreamPart(part);
     expect(frame).toBe(`0:${JSON.stringify('say "hi"\nnewline')}\n`);
     expect(frame.startsWith('0:')).toBe(true);
+
+    // Verify round-trip: decode the frame payload back to the original text
+    const decoded = JSON.parse(frame.slice(2).trim());
+    expect(decoded).toBe('say "hi"\nnewline');
   });
 
   it('should encode tool-call as "9:" frame', () => {

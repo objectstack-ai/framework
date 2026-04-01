@@ -623,12 +623,26 @@ describe('AI Routes', () => {
     const routes = buildAIRoutes(service, service.conversationService, silentLogger);
     const chatRoute = routes.find(r => r.path === '/api/v1/ai/chat')!;
 
+    // Numeric content should be rejected
     const response = await chatRoute.handler({
       body: { messages: [{ role: 'user', content: 123 }] },
     });
-
     expect(response.status).toBe(400);
     expect((response.body as any).error).toContain('content');
+
+    // Object content (not an array) should be rejected
+    const response2 = await chatRoute.handler({
+      body: { messages: [{ role: 'user', content: { nested: true } }] },
+    });
+    expect(response2.status).toBe(400);
+    expect((response2.body as any).error).toContain('content');
+
+    // Boolean content should be rejected
+    const response3 = await chatRoute.handler({
+      body: { messages: [{ role: 'user', content: true }] },
+    });
+    expect(response3.status).toBe(400);
+    expect((response3.body as any).error).toContain('content');
   });
 
   it('POST /api/v1/ai/conversations/:id/messages should return 400 for invalid role', async () => {
