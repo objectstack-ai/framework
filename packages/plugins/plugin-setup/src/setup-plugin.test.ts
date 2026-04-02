@@ -11,6 +11,13 @@ import type { SetupNavContribution } from './setup-app.js';
 // ---------------------------------------------------------------------------
 function createMockContext() {
   const services = new Map<string, any>();
+
+  // Pre-register the manifest service
+  const manifestService = {
+    register: vi.fn(),
+  };
+  services.set('manifest', manifestService);
+
   return {
     logger: {
       info: vi.fn(),
@@ -23,6 +30,7 @@ function createMockContext() {
     }),
     getService: vi.fn((name: string) => services.get(name)),
     services,
+    manifestService, // Expose for test assertions
   } as any;
 }
 
@@ -55,11 +63,10 @@ describe('SETUP_AREAS', () => {
     }
   });
 
-  it('each area should have i18n labels', () => {
+  it('each area should have string labels', () => {
     for (const area of SETUP_AREAS) {
-      expect(typeof area.label).toBe('object');
-      expect((area.label as any).key).toBeDefined();
-      expect((area.label as any).defaultValue).toBeDefined();
+      expect(typeof area.label).toBe('string');
+      expect(area.label).toBeTruthy();
     }
   });
 });
@@ -72,9 +79,9 @@ describe('SETUP_APP_DEFAULTS', () => {
     expect(SETUP_APP_DEFAULTS.name).toBe('setup');
   });
 
-  it('should have i18n label', () => {
-    expect(typeof SETUP_APP_DEFAULTS.label).toBe('object');
-    expect((SETUP_APP_DEFAULTS.label as any).defaultValue).toBe('Setup');
+  it('should have string label', () => {
+    expect(typeof SETUP_APP_DEFAULTS.label).toBe('string');
+    expect(SETUP_APP_DEFAULTS.label).toBe('Setup');
   });
 
   it('should require setup.access permission', () => {
@@ -121,8 +128,8 @@ describe('SetupPlugin', () => {
     await plugin.init(ctx);
     await plugin.start(ctx);
 
-    expect(ctx.registerService).toHaveBeenCalledWith(
-      'app.com.objectstack.setup',
+    // Verify manifest.register was called
+    expect(ctx.manifestService.register).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'com.objectstack.setup',
         apps: expect.arrayContaining([
@@ -132,10 +139,8 @@ describe('SetupPlugin', () => {
     );
 
     // No areas should be present — all areas are empty.
-    const call = ctx.registerService.mock.calls.find(
-      (c: any[]) => c[0] === 'app.com.objectstack.setup',
-    );
-    const app = call[1].apps[0];
+    const call = ctx.manifestService.register.mock.calls[0];
+    const app = call[0].apps[0];
     expect(app.areas).toBeUndefined();
   });
 
@@ -161,10 +166,8 @@ describe('SetupPlugin', () => {
 
     await plugin.start(ctx);
 
-    const call = ctx.registerService.mock.calls.find(
-      (c: any[]) => c[0] === 'app.com.objectstack.setup',
-    );
-    const app = call[1].apps[0];
+    const call = ctx.manifestService.register.mock.calls[0];
+    const app = call[0].apps[0];
 
     // Only non-empty areas should be present.
     expect(app.areas).toHaveLength(2);
@@ -187,10 +190,8 @@ describe('SetupPlugin', () => {
 
     await plugin.start(ctx);
 
-    const call = ctx.registerService.mock.calls.find(
-      (c: any[]) => c[0] === 'app.com.objectstack.setup',
-    );
-    const app = call[1].apps[0];
+    const call = ctx.manifestService.register.mock.calls[0];
+    const app = call[0].apps[0];
     expect(app.areas).toHaveLength(1);
     expect(app.areas[0].id).toBe('area_custom_billing');
     expect(app.areas[0].navigation).toHaveLength(1);
@@ -212,10 +213,8 @@ describe('SetupPlugin', () => {
 
     await plugin.start(ctx);
 
-    const call = ctx.registerService.mock.calls.find(
-      (c: any[]) => c[0] === 'app.com.objectstack.setup',
-    );
-    const app = call[1].apps[0];
+    const call = ctx.manifestService.register.mock.calls[0];
+    const app = call[0].apps[0];
     // Administration (order 10) should come before System (order 30).
     expect(app.areas[0].id).toBe(SETUP_AREA_IDS.administration);
     expect(app.areas[1].id).toBe(SETUP_AREA_IDS.system);
@@ -236,10 +235,8 @@ describe('SetupPlugin', () => {
 
     await plugin.start(ctx);
 
-    const call = ctx.registerService.mock.calls.find(
-      (c: any[]) => c[0] === 'app.com.objectstack.setup',
-    );
-    const app = call[1].apps[0];
+    const call = ctx.manifestService.register.mock.calls[0];
+    const app = call[0].apps[0];
     const platformArea = app.areas.find((a: any) => a.id === SETUP_AREA_IDS.platform);
     expect(platformArea).toBeDefined();
     expect(platformArea!.navigation).toHaveLength(2);
@@ -263,10 +260,8 @@ describe('SetupPlugin', () => {
     await plugin.init(ctx2);
     await plugin.start(ctx2);
 
-    const call = ctx2.registerService.mock.calls.find(
-      (c: any[]) => c[0] === 'app.com.objectstack.setup',
-    );
-    const app = call[1].apps[0];
+    const call = ctx2.manifestService.register.mock.calls[0];
+    const app = call[0].apps[0];
     expect(app.areas).toBeUndefined();
   });
 });

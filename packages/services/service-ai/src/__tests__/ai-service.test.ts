@@ -739,6 +739,9 @@ describe('AIServicePlugin', () => {
     const services = new Map<string, unknown>();
     const hooks = new Map<string, Function[]>();
 
+    // Pre-register manifest service
+    services.set('manifest', { register: vi.fn() });
+
     return {
       registerService: vi.fn((name: string, service: unknown) => services.set(name, service)),
       replaceService: vi.fn((name: string, service: unknown) => services.set(name, service)),

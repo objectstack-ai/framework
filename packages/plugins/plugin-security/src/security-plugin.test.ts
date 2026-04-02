@@ -21,23 +21,32 @@ describe('SecurityPlugin', () => {
 
   it('should register services during init', async () => {
     const plugin = new SecurityPlugin();
+    const manifestService = { register: vi.fn() };
     const ctx: any = {
       logger: { info: vi.fn(), warn: vi.fn() },
       registerService: vi.fn(),
-      getService: vi.fn(),
+      getService: vi.fn().mockImplementation((name: string) => {
+        if (name === 'manifest') return manifestService;
+        return undefined;
+      }),
     };
     await plugin.init(ctx);
     expect(ctx.registerService).toHaveBeenCalledWith('security.permissions', expect.any(PermissionEvaluator));
     expect(ctx.registerService).toHaveBeenCalledWith('security.rls', expect.any(RLSCompiler));
     expect(ctx.registerService).toHaveBeenCalledWith('security.fieldMasker', expect.any(FieldMasker));
+    expect(manifestService.register).toHaveBeenCalled();
   });
 
   it('should warn and return when objectql service is missing', async () => {
     const plugin = new SecurityPlugin();
+    const manifestService = { register: vi.fn() };
     const ctx: any = {
       logger: { info: vi.fn(), warn: vi.fn() },
       registerService: vi.fn(),
-      getService: vi.fn().mockImplementation(() => { throw new Error('not found'); }),
+      getService: vi.fn().mockImplementation((name: string) => {
+        if (name === 'manifest') return manifestService;
+        throw new Error('not found');
+      }),
     };
     await plugin.init(ctx);
     await plugin.start(ctx);
@@ -46,10 +55,14 @@ describe('SecurityPlugin', () => {
 
   it('should warn when objectql does not support middleware', async () => {
     const plugin = new SecurityPlugin();
+    const manifestService = { register: vi.fn() };
     const ctx: any = {
       logger: { info: vi.fn(), warn: vi.fn() },
       registerService: vi.fn(),
-      getService: vi.fn().mockReturnValue({}), // no registerMiddleware
+      getService: vi.fn().mockImplementation((name: string) => {
+        if (name === 'manifest') return manifestService;
+        return {}; // objectql without registerMiddleware
+      }),
     };
     await plugin.init(ctx);
     await plugin.start(ctx);
@@ -59,10 +72,14 @@ describe('SecurityPlugin', () => {
   it('should register middleware when objectql supports it', async () => {
     const plugin = new SecurityPlugin();
     const registerMiddleware = vi.fn();
+    const manifestService = { register: vi.fn() };
     const ctx: any = {
       logger: { info: vi.fn(), warn: vi.fn() },
       registerService: vi.fn(),
-      getService: vi.fn().mockReturnValue({ registerMiddleware }),
+      getService: vi.fn().mockImplementation((name: string) => {
+        if (name === 'manifest') return manifestService;
+        return { registerMiddleware };
+      }),
     };
     await plugin.init(ctx);
     await plugin.start(ctx);
