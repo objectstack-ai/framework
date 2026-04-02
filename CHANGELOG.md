@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Studio Vercel API routes returning HTML instead of JSON** — Updated
+  `apps/studio/vercel.json` to correctly configure Vercel serverless functions.
+  Added `outputDirectory: "public"` so Vercel serves static files from the
+  correct directory, declared `api/index.js` in the `functions` block so Vercel
+  recognises it as a serverless function, and changed the API rewrite destination
+  from `/api` to `/api/index.js` to route requests to the bundled handler.
 - **Client test aligned with removed `ai.chat` method** — Updated
   `@objectstack/client` test suite to match the current API surface where
   `ai.chat()` was removed in favour of the Vercel AI SDK `useChat()` hook.

@@ -3,6 +3,13 @@
   "framework": null,
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "bash scripts/build-vercel.sh",
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
@@ -18,7 +25,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
