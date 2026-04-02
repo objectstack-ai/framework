@@ -36,6 +36,7 @@ import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
 import { handle } from '@hono/node-server/vercel';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
 import studioConfig from '../objectstack.config.js';
 
@@ -217,6 +218,50 @@ async function ensureApp(): Promise<Hono> {
  * guide and covered by the @objectstack/hono adapter test suite.
  */
 const app = new Hono();
+
+// ---------------------------------------------------------------------------
+// CORS middleware
+// ---------------------------------------------------------------------------
+// Placed on the outer app so preflight (OPTIONS) requests are answered
+// immediately, without waiting for the kernel cold-start.  This is essential
+// when the SPA is loaded from a Vercel temporary/preview domain but the
+// API base URL points to a different deployment (cross-origin).
+//
+// Allowed origins:
+//   1. All Vercel deployment URLs exposed via env vars (current deployment)
+//   2. Any *.vercel.app subdomain (covers all preview/branch deployments)
+//   3. localhost (local development)
+// ---------------------------------------------------------------------------
+
+const vercelOrigins: string[] = [];
+if (process.env.VERCEL_URL) {
+    vercelOrigins.push(`https://${process.env.VERCEL_URL}`);
+}
+if (process.env.VERCEL_BRANCH_URL) {
+    vercelOrigins.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+}
+if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    vercelOrigins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+}
+
+app.use('*', cors({
+    origin: (origin) => {
+        // Same-origin or non-browser requests (no Origin header)
+        if (!origin) return origin;
+        // Explicitly listed Vercel deployment origins
+        if (vercelOrigins.includes(origin)) return origin;
+        // Any *.vercel.app subdomain (preview / temp deployments)
+        if (origin.endsWith('.vercel.app') && origin.startsWith('https://')) return origin;
+        // Localhost for development
+        if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return origin;
+        // Deny — return empty string so no Access-Control-Allow-Origin is set
+        return '';
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    maxAge: 86400,
+}));
 
 app.all('*', async (c) => {
     console.log(`[Vercel] ${c.req.method} ${c.req.url}`);

@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   correct directory, declared `api/index.js` in the `functions` block so Vercel
   recognises it as a serverless function, and changed the API rewrite destination
   from `/api` to `/api/index.js` to route requests to the bundled handler.
+- **Studio CORS error on Vercel temporary/preview domains** — Added Hono CORS
+  middleware to `apps/studio/server/index.ts` so the serverless function returns
+  correct `Access-Control-Allow-Origin` headers for cross-origin requests.
+  Dynamically allows all `*.vercel.app` subdomains, explicitly listed Vercel
+  deployment URLs (`VERCEL_URL`, `VERCEL_BRANCH_URL`,
+  `VERCEL_PROJECT_PRODUCTION_URL`), and localhost for development.  Preflight
+  (OPTIONS) requests are answered immediately without waiting for kernel boot.
 - **Client test aligned with removed `ai.chat` method** — Updated
   `@objectstack/client` test suite to match the current API surface where
   `ai.chat()` was removed in favour of the Vercel AI SDK `useChat()` hook.
