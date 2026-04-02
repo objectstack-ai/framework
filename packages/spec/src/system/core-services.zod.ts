@@ -58,10 +58,10 @@ export const ServiceCriticalitySchema = z.enum([
  */
 export const ServiceRequirementDef = {
   // Required: The kernel cannot function without these
-  metadata: 'required',
   data: 'required',
 
   // Core: Highly recommended, defaults to in-memory / no-op if missing
+  metadata: 'core',
   auth: 'core',
 
   // Core: Highly recommended, defaults to in-memory / no-op if missing

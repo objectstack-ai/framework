@@ -15,7 +15,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
   });
 
   describe('Simple Mode (ObjectQL-only)', () => {
-    it('should register ObjectQL as metadata service provider', async () => {
+    it('should register objectql, data, and protocol services', async () => {
       // Arrange
       const plugin = new ObjectQLPlugin();
       await kernel.use(plugin);
@@ -23,16 +23,15 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Act
       await kernel.bootstrap();
 
-      // Assert
-      const metadataService = kernel.getService('metadata');
-      expect(metadataService).toBeDefined();
-
-      // ObjectQL registers a MetadataFacade as the metadata service;
-      // it is separate from (but backed by the same registry as) the objectql service.
+      // Assert — ObjectQL no longer registers metadata (kernel provides fallback)
       const objectql = kernel.getService('objectql');
       expect(objectql).toBeDefined();
-      // metadata and objectql are distinct service instances
-      expect(metadataService).not.toBe(objectql);
+      expect(kernel.getService('data')).toBeDefined();
+      expect(kernel.getService('protocol')).toBeDefined();
+      // metadata is provided by kernel's core fallback, not ObjectQL
+      const metadataService = kernel.getService('metadata');
+      expect(metadataService).toBeDefined();
+      expect((metadataService as any)._fallback).toBe(true);
     });
 
     it('should serve in-memory metadata definitions', async () => {

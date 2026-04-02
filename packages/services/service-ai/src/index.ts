@@ -48,7 +48,7 @@ export { AgentRuntime } from './agent-runtime.js';
 export type { AgentChatContext } from './agent-runtime.js';
 
 // Built-in agents
-export { DATA_CHAT_AGENT } from './agents/index.js';
+export { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
 
 // Object definitions
 export { AiConversationObject, AiMessageObject } from './objects/index.js';

@@ -17,6 +17,11 @@ export const createObjectTool = defineTool({
     'Use this when the user wants to create a new entity, table, or data model.',
   category: 'data',
   builtIn: true,
+  // NOTE: requiresConfirmation is intentionally false (default) because the
+  // server-side tool-call loop in AIService.chatWithTools/streamChatWithTools
+  // executes tool calls immediately without checking this flag.  The flag
+  // should only be set once server-side approval gating is implemented to
+  // avoid giving users a false sense of safety.
   parameters: {
     type: 'object',
     properties: {

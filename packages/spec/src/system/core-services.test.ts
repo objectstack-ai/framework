@@ -46,8 +46,8 @@ describe('ServiceCriticalitySchema', () => {
 
 describe('ServiceRequirementDef', () => {
   it('should define required services', () => {
-    expect(ServiceRequirementDef.metadata).toBe('required');
     expect(ServiceRequirementDef.data).toBe('required');
+    expect(ServiceRequirementDef.metadata).toBe('core');
     expect(ServiceRequirementDef.auth).toBe('core');
   });
 

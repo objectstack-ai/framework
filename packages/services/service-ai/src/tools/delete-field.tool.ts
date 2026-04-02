@@ -16,6 +16,10 @@ export const deleteFieldTool = defineTool({
     'Use this when the user explicitly wants to remove an attribute or column from a table.',
   category: 'data',
   builtIn: true,
+  // NOTE: requiresConfirmation is intentionally false (default) because the
+  // server-side tool-call loop in AIService.chatWithTools/streamChatWithTools
+  // executes tool calls immediately without checking this flag.  The flag
+  // should only be set once server-side approval gating is implemented.
   parameters: {
     type: 'object',
     properties: {

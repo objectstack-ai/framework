@@ -9,8 +9,9 @@ import { buildAgentRoutes } from './routes/agent-routes.js';
 import { ObjectQLConversationService } from './conversation/objectql-conversation-service.js';
 import { AiConversationObject, AiMessageObject } from './objects/index.js';
 import { registerDataTools } from './tools/data-tools.js';
+import { registerMetadataTools } from './tools/metadata-tools.js';
 import { AgentRuntime } from './agent-runtime.js';
-import { DATA_CHAT_AGENT } from './agents/index.js';
+import { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
 
 /**
  * Configuration options for the AIServicePlugin.
@@ -141,10 +142,17 @@ export class AIServicePlugin implements Plugin {
   async start(ctx: PluginContext): Promise<void> {
     if (!this.service) return;
 
-    // ── Auto-register built-in data tools if data engine + metadata are available ──
+    // ── Auto-register built-in tools & agents when services are available ──
+    let metadataService: IMetadataService | undefined;
+    try {
+      metadataService = ctx.getService<IMetadataService>('metadata');
+    } catch {
+      ctx.logger.debug('[AI] Metadata service not available');
+    }
+
+    // Data tools require both data engine and metadata service
     try {
       const dataEngine = ctx.getService<IDataEngine>('data');
-      const metadataService = ctx.getService<IMetadataService>('metadata');
       if (dataEngine && metadataService) {
         registerDataTools(this.service.toolRegistry, { dataEngine, metadataService });
         ctx.logger.info('[AI] Built-in data tools registered');
@@ -163,8 +171,30 @@ export class AIServicePlugin implements Plugin {
         }
       }
     } catch {
-      // Data engine or metadata service not available — skip data tools
-      ctx.logger.debug('[AI] Data engine or metadata service not available, skipping data tools');
+      ctx.logger.debug('[AI] Data engine not available, skipping data tools');
+    }
+
+    // Metadata tools require only the metadata service
+    if (metadataService) {
+      try {
+        registerMetadataTools(this.service.toolRegistry, { metadataService });
+        ctx.logger.info('[AI] Built-in metadata tools registered');
+
+        // Register the built-in metadata_assistant agent
+        const agentExists =
+          typeof metadataService.exists === 'function'
+            ? await metadataService.exists('agent', METADATA_ASSISTANT_AGENT.name)
+            : false;
+
+        if (!agentExists) {
+          await metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT);
+          ctx.logger.info('[AI] metadata_assistant agent registered');
+        } else {
+          ctx.logger.debug('[AI] metadata_assistant agent already exists, skipping auto-registration');
+        }
+      } catch (err) {
+        ctx.logger.debug('[AI] Failed to register metadata tools', err instanceof Error ? err : undefined);
+      }
     }
 
     // Trigger hook to notify AI service is ready — other plugins can register tools

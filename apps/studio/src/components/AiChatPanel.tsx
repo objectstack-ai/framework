@@ -1,12 +1,18 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
-import { Bot, X, Send, Trash2, Sparkles } from 'lucide-react';
+import {
+  Bot, X, Send, Trash2, Sparkles,
+  Wrench, CheckCircle2, XCircle, Loader2, ShieldAlert,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAiChatPanel, loadMessages, saveMessages } from '@/hooks/use-ai-chat-panel';
@@ -14,6 +20,18 @@ import { getApiBaseUrl } from '@/lib/config';
 
 const PANEL_WIDTH = 380;
 const COLLAPSED_WIDTH = 48;
+
+/** @internal — exported for testing */
+export const AGENT_STORAGE_KEY = 'objectstack:ai-chat-agent';
+/** @internal — exported for testing */
+export const GENERAL_CHAT_VALUE = '__general__';
+
+/** Summary returned by GET /api/v1/ai/agents */
+interface AgentSummary {
+  name: string;
+  label: string;
+  role: string;
+}
 
 /**
  * Extract the text content from a UIMessage's parts array.
@@ -25,21 +43,277 @@ function getMessageText(msg: UIMessage): string {
     .join('');
 }
 
+/**
+ * Convert a snake_case tool name to a human-readable label.
+ */
+function formatToolName(name: string): string {
+  return name
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Render a concise summary of tool input arguments.
+ */
+function formatToolArgs(input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0) return '';
+  return entries
+    .slice(0, 4)
+    .map(([k, v]) => {
+      let val: string;
+      try {
+        val = typeof v === 'string' ? v : (JSON.stringify(v) ?? String(v));
+      } catch {
+        val = String(v);
+      }
+      const display = val.length > 30 ? val.slice(0, 30) + '…' : val;
+      return `${k}: ${display}`;
+    })
+    .join(', ');
+}
+
+/**
+ * Type guard to check if a message part is a tool invocation (dynamic-tool).
+ */
+function isToolPart(part: UIMessage['parts'][number]): part is Extract<UIMessage['parts'][number], { type: 'dynamic-tool' }> {
+  return part.type === 'dynamic-tool';
+}
+
+/**
+ * Format tool output for display, truncating to a max length.
+ */
+function formatToolOutput(output: unknown, maxLen = 80): string {
+  let raw: string;
+  try {
+    raw = typeof output === 'string' ? output : (JSON.stringify(output) ?? '');
+  } catch {
+    raw = String(output ?? '');
+  }
+  return raw.length > maxLen ? raw.slice(0, maxLen) + '…' : raw;
+}
+
+/**
+ * Build the chat API URL for the given agent selection.
+ * @internal — exported for testing
+ */
+export function chatApiUrl(baseUrl: string, agentName: string | null): string {
+  if (!agentName || agentName === GENERAL_CHAT_VALUE) {
+    return `${baseUrl}/api/v1/ai/chat`;
+  }
+  return `${baseUrl}/api/v1/ai/agents/${agentName}/chat`;
+}
+
+/**
+ * Load persisted agent selection from localStorage.
+ * @internal — exported for testing
+ */
+export function loadSelectedAgent(): string {
+  try {
+    return localStorage.getItem(AGENT_STORAGE_KEY) ?? GENERAL_CHAT_VALUE;
+  } catch {
+    return GENERAL_CHAT_VALUE;
+  }
+}
+
+/**
+ * Persist agent selection to localStorage.
+ * @internal — exported for testing
+ */
+export function saveSelectedAgent(agent: string): void {
+  try {
+    localStorage.setItem(AGENT_STORAGE_KEY, agent);
+  } catch {
+    // silently ignore
+  }
+}
+
+/**
+ * Hook to fetch the list of available agents from the server.
+ */
+function useAgentList(baseUrl: string) {
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(`${baseUrl}/api/v1/ai/agents`, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { agents: [] }))
+      .then((data: { agents?: AgentSummary[] }) => {
+        if (!cancelled) setAgents(data.agents ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAgents([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [baseUrl]);
+
+  return { agents, loading };
+}
+
+// ── Tool Invocation State Labels ────────────────────────────────────
+
+interface ToolInvocationDisplayProps {
+  part: Extract<UIMessage['parts'][number], { type: 'dynamic-tool' }>;
+  onApprove?: (approvalId: string) => void;
+  onDeny?: (approvalId: string) => void;
+}
+
+/**
+ * Renders a single tool invocation part with appropriate status indicator.
+ */
+function ToolInvocationDisplay({ part, onApprove, onDeny }: ToolInvocationDisplayProps) {
+  const toolLabel = formatToolName(part.toolName);
+  const argsText = formatToolArgs(part.input);
+
+  switch (part.state) {
+    case 'input-streaming':
+    case 'input-available':
+      return (
+        <div
+          data-testid="tool-invocation-calling"
+          className="flex items-start gap-2 rounded-md border border-border/50 bg-muted/50 px-2.5 py-2 text-xs"
+        >
+          <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+          <div className="min-w-0">
+            <span className="font-medium">Calling {toolLabel}</span>
+            {argsText && (
+              <p className="mt-0.5 truncate text-muted-foreground">{argsText}</p>
+            )}
+          </div>
+        </div>
+      );
+
+    case 'approval-requested':
+      return (
+        <div
+          data-testid="tool-invocation-confirm"
+          className="flex flex-col gap-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-2.5 py-2 text-xs"
+        >
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+            <div className="min-w-0">
+              <span className="font-medium">Confirm: {toolLabel}</span>
+              {argsText && (
+                <p className="mt-0.5 text-muted-foreground">{argsText}</p>
+              )}
+            </div>
+          </div>
+          {part.approval && onApprove && onDeny && (
+            <div className="flex gap-2 pl-5">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-xs"
+                onClick={() => onApprove(part.approval!.id)}
+              >
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs text-destructive hover:text-destructive"
+                onClick={() => onDeny(part.approval!.id)}
+              >
+                <XCircle className="mr-1 h-3 w-3" />
+                Deny
+              </Button>
+            </div>
+          )}
+        </div>
+      );
+
+    case 'output-available':
+      return (
+        <div
+          data-testid="tool-invocation-result"
+          className="flex items-start gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-2.5 py-2 text-xs"
+        >
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />
+          <div className="min-w-0">
+            <span className="font-medium">{toolLabel}</span>
+            <p className="mt-0.5 text-muted-foreground truncate">
+              {formatToolOutput(part.output)}
+            </p>
+          </div>
+        </div>
+      );
+
+    case 'output-error':
+      return (
+        <div
+          data-testid="tool-invocation-error"
+          className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs"
+        >
+          <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+          <div className="min-w-0">
+            <span className="font-medium">{toolLabel} failed</span>
+            <p className="mt-0.5 text-destructive/80">{part.errorText}</p>
+          </div>
+        </div>
+      );
+
+    case 'output-denied':
+      return (
+        <div
+          data-testid="tool-invocation-denied"
+          className="flex items-start gap-2 rounded-md border border-border/50 bg-muted/50 px-2.5 py-2 text-xs"
+        >
+          <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="font-medium text-muted-foreground">{toolLabel} — denied</span>
+        </div>
+      );
+
+    default:
+      return (
+        <div
+          data-testid="tool-invocation-unknown"
+          className="flex items-start gap-2 rounded-md border border-border/50 bg-muted/50 px-2.5 py-2 text-xs"
+        >
+          <Wrench className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="font-medium">{toolLabel}</span>
+        </div>
+      );
+  }
+}
+
 export function AiChatPanel() {
   const { isOpen, setOpen, toggle } = useAiChatPanel();
   const [input, setInput] = useState('');
+  const [selectedAgent, setSelectedAgent] = useState<string>(loadSelectedAgent);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const baseUrl = getApiBaseUrl();
+  const { agents, loading: agentsLoading } = useAgentList(baseUrl);
+
+  // Validate persisted agent against fetched list — fall back to general
+  // chat if the previously selected agent is no longer available.
+  useEffect(() => {
+    if (agentsLoading) return;
+    if (selectedAgent === GENERAL_CHAT_VALUE) return;
+    const isValid = agents.some((a) => a.name === selectedAgent);
+    if (!isValid) {
+      setSelectedAgent(GENERAL_CHAT_VALUE);
+      saveSelectedAgent(GENERAL_CHAT_VALUE);
+    }
+  }, [agents, agentsLoading, selectedAgent]);
 
   const initialMessages = useMemo(() => loadMessages() as UIMessage[], []);
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: `${baseUrl}/api/v1/ai/chat` }),
-    [baseUrl],
+    () => new DefaultChatTransport({ api: chatApiUrl(baseUrl, selectedAgent) }),
+    [baseUrl, selectedAgent],
   );
 
-  const { messages, sendMessage, setMessages, status, error } = useChat({
+  const { messages, sendMessage, setMessages, status, error, addToolApprovalResponse } = useChat({
     transport,
     messages: initialMessages,
   });
@@ -71,6 +345,14 @@ export function AiChatPanel() {
     setMessages([]);
     saveMessages([]);
   };
+
+  const handleAgentChange = useCallback((value: string) => {
+    setSelectedAgent(value);
+    saveSelectedAgent(value);
+    // Clear conversation when switching agents to avoid context confusion
+    setMessages([]);
+    saveMessages([]);
+  }, [setMessages]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -129,27 +411,54 @@ export function AiChatPanel() {
       style={{ width: PANEL_WIDTH }}
     >
       {/* ── Header ── */}
-      <div className="flex h-12 shrink-0 items-center justify-between border-b px-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <Bot className="h-4 w-4 text-primary" />
-          AI Chat
+      <div className="shrink-0 border-b">
+        <div className="flex h-12 items-center justify-between px-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Bot className="h-4 w-4 text-primary" />
+            AI Chat
+          </div>
+          <div className="flex items-center gap-1">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clearHistory}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span className="sr-only">Clear chat</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Clear history</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clearHistory}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span className="sr-only">Clear chat</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent><p>Clear history</p></TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
-            <X className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
+        {/* ── Agent Selector ── */}
+        <div className="px-3 pb-2">
+          <Select
+            value={selectedAgent}
+            onValueChange={handleAgentChange}
+            disabled={agentsLoading || isStreaming}
+          >
+            <SelectTrigger
+              data-testid="agent-selector"
+              className="h-8 text-xs"
+            >
+              <SelectValue placeholder="Select agent…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={GENERAL_CHAT_VALUE}>
+                General Chat
+              </SelectItem>
+              {agents.map((a) => (
+                <SelectItem key={a.name} value={a.name}>
+                  {a.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -167,12 +476,14 @@ export function AiChatPanel() {
           )}
           {messages.map((msg) => {
             const text = getMessageText(msg);
-            if (!text && msg.role !== 'user') return null;
+            const toolParts = (msg.parts ?? []).filter(isToolPart);
+            const hasContent = !!text || toolParts.length > 0;
+            if (!hasContent && msg.role !== 'user') return null;
             return (
               <div
                 key={msg.id}
                 className={cn(
-                  'flex flex-col gap-1 rounded-lg px-3 py-2 text-sm',
+                  'flex flex-col gap-1.5 rounded-lg px-3 py-2 text-sm',
                   msg.role === 'user'
                     ? 'ml-8 bg-primary text-primary-foreground'
                     : 'mr-8 bg-muted text-foreground',
@@ -181,7 +492,23 @@ export function AiChatPanel() {
                 <span className="text-[10px] font-medium opacity-60 uppercase">
                   {msg.role === 'user' ? 'You' : 'Assistant'}
                 </span>
-                <div className="whitespace-pre-wrap break-words">{text}</div>
+                {text && <div className="whitespace-pre-wrap break-words">{text}</div>}
+                {toolParts.map((toolPart) => (
+                  <ToolInvocationDisplay
+                    key={toolPart.toolCallId}
+                    part={toolPart}
+                    onApprove={(approvalId) =>
+                      addToolApprovalResponse({ id: approvalId, approved: true })
+                    }
+                    onDeny={(approvalId) =>
+                      addToolApprovalResponse({
+                        id: approvalId,
+                        approved: false,
+                        reason: 'User denied the operation',
+                      })
+                    }
+                  />
+                ))}
               </div>
             );
           })}

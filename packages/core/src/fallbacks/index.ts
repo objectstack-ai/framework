@@ -4,11 +4,13 @@ import { createMemoryCache } from './memory-cache.js';
 import { createMemoryQueue } from './memory-queue.js';
 import { createMemoryJob } from './memory-job.js';
 import { createMemoryI18n } from './memory-i18n.js';
+import { createMemoryMetadata } from './memory-metadata.js';
 
 export { createMemoryCache } from './memory-cache.js';
 export { createMemoryQueue } from './memory-queue.js';
 export { createMemoryJob } from './memory-job.js';
 export { createMemoryI18n, resolveLocale } from './memory-i18n.js';
+export { createMemoryMetadata } from './memory-metadata.js';
 
 /**
  * Map of core-criticality service names to their in-memory fallback factories.
@@ -16,6 +18,7 @@ export { createMemoryI18n, resolveLocale } from './memory-i18n.js';
  * when no real plugin provides the service.
  */
 export const CORE_FALLBACK_FACTORIES: Record<string, () => Record<string, any>> = {
+  metadata: createMemoryMetadata,
   cache: createMemoryCache,
   queue: createMemoryQueue,
   job:   createMemoryJob,

@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ServiceNow Update Sets. See `docs/METADATA_HISTORY.md` for detailed usage.
   ([Phase 4a: Metadata Versioning & History](https://github.com/objectstack-ai/framework/issues/XXXX))
 
+- **CLI: Remote API Commands** - Added 12 new CLI commands for interacting with remote ObjectStack servers:
+  - **Authentication**: `os auth login`, `os auth logout`, `os auth whoami`
+  - **Data API**: `os data query`, `os data get`, `os data create`, `os data update`, `os data delete`
+  - **Metadata API**: `os meta list`, `os meta get`, `os meta register`, `os meta delete`
+  - All commands support `--url` and `--token` flags, or use stored credentials from `~/.objectstack/credentials.json`
+  - Multiple output formats: `--format json|table|yaml` (yaml available on all commands)
+  - Environment variable support: `OBJECTSTACK_URL`, `OBJECTSTACK_TOKEN`
+  - See [REMOTE_API_COMMANDS.md](./REMOTE_API_COMMANDS.md) for full documentation
+
 ### Changed
 - **i18n: `I18nLabelSchema` now accepts `string` only** — `label`, `description`, `title`,
   and other display-text fields across all UI schemas (`AppSchema`, `NavigationArea`,
@@ -86,6 +95,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absent, fixing the CI `@objectstack/client#test` failure.
 
 ### Added
+- **Metadata Assistant Agent (`service-ai`)** — New `metadata_assistant` agent definition that
+  binds all 6 metadata management tools (`create_object`, `add_field`, `modify_field`,
+  `delete_field`, `list_metadata_objects`, `describe_metadata_object`). Includes a tailored
+  system prompt that guides the AI to use snake_case naming, verify existing schemas before
+  modifications, and warn about destructive operations. Configured with `react` planning
+  strategy (10 iterations, replan enabled) for multi-step schema design conversations.
+- **Tool Confirmation Flags** — Added `requiresConfirmation: true` to `create_object` and
+  `delete_field` tool definitions. These destructive/creation operations now signal to the
+  frontend that user approval is needed before execution.
+- **Frontend Tool Call Display (`AiChatPanel`)** — Enhanced the AI Chat Panel to render tool
+  invocation parts from the Vercel AI SDK v6 stream protocol. Displays tool call status with
+  visual indicators:
+  - **Calling**: Spinner animation with tool name and argument summary
+  - **Confirmation**: Yellow-bordered card with Approve/Deny buttons for `requiresConfirmation` tools
+  - **Success**: Green success indicator with result preview
+  - **Error**: Red error indicator with error message
+  - **Denied**: Muted indicator for user-denied operations
+- **Operation Confirmation Mechanism** — Integrated the Vercel AI SDK `addToolApprovalResponse`
+  hook to support approval/denial workflows for tools marked with `requiresConfirmation`.
+  When the server sends an `approval-requested` state, the chat panel shows Approve and Deny
+  buttons. User decisions are sent back to the server to continue or abort the tool execution.
 - **Metadata Management Tools (`service-ai`)** — Added 6 built-in AI tools for metadata
   CRUD operations, each defined as a first-class `Tool` metadata file using `defineTool()`
   from `@objectstack/spec/ai`:

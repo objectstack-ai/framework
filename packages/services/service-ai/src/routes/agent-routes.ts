@@ -36,6 +36,7 @@ function validateAgentMessage(raw: unknown): string | null {
  *
  * | Method | Path | Description |
  * |:---|:---|:---|
+ * | GET  | /api/v1/ai/agents | List all active agents |
  * | POST | /api/v1/ai/agents/:agentName/chat | Chat with a specific agent |
  */
 export function buildAgentRoutes(
@@ -44,6 +45,28 @@ export function buildAgentRoutes(
   logger: Logger,
 ): RouteDefinition[] {
   return [
+    // ── List active agents ──────────────────────────────────────
+    {
+      method: 'GET',
+      path: '/api/v1/ai/agents',
+      description: 'List all active AI agents',
+      auth: true,
+      permissions: ['ai:chat'],
+      handler: async () => {
+        try {
+          const agents = await agentRuntime.listAgents();
+          return { status: 200, body: { agents } };
+        } catch (err) {
+          logger.error(
+            '[AI Route] /agents list error',
+            err instanceof Error ? err : undefined,
+          );
+          return { status: 500, body: { error: 'Internal AI service error' } };
+        }
+      },
+    },
+
+    // ── Chat with a specific agent ──────────────────────────────
     {
       method: 'POST',
       path: '/api/v1/ai/agents/:agentName/chat',

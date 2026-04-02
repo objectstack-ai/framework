@@ -6,8 +6,8 @@ import { createMemoryI18n, resolveLocale } from './memory-i18n';
 import { CORE_FALLBACK_FACTORIES } from './index';
 
 describe('CORE_FALLBACK_FACTORIES', () => {
-    it('should have exactly 4 entries: cache, queue, job, i18n', () => {
-        expect(Object.keys(CORE_FALLBACK_FACTORIES)).toEqual(['cache', 'queue', 'job', 'i18n']);
+    it('should have exactly 5 entries: metadata, cache, queue, job, i18n', () => {
+        expect(Object.keys(CORE_FALLBACK_FACTORIES)).toEqual(['metadata', 'cache', 'queue', 'job', 'i18n']);
     });
 
     it('should map to factory functions', () => {

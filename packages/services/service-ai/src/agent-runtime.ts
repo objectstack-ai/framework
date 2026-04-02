@@ -41,6 +41,30 @@ export class AgentRuntime {
   // ── Public API ────────────────────────────────────────────────
 
   /**
+   * List all active agents registered in the metadata service.
+   *
+   * Returns a summary for each agent (name, label, role) suitable
+   * for populating an agent selector dropdown in the UI.
+   */
+  async listAgents(): Promise<Array<{ name: string; label: string; role: string }>> {
+    const rawItems = await this.metadataService.list('agent');
+    const agents: Array<{ name: string; label: string; role: string }> = [];
+
+    for (const raw of rawItems) {
+      const result = AgentSchema.safeParse(raw);
+      if (result.success && result.data.active) {
+        agents.push({
+          name: result.data.name,
+          label: result.data.label,
+          role: result.data.role,
+        });
+      }
+    }
+
+    return agents;
+  }
+
+  /**
    * Load and validate an agent definition by name.
    *
    * The raw metadata is validated through {@link AgentSchema} to ensure

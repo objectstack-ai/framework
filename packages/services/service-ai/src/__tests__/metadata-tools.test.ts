@@ -122,6 +122,24 @@ describe('Individual Tool Metadata (.tool.ts)', () => {
       });
     });
   }
+
+  it('should not set requiresConfirmation on create_object (server-side enforcement not yet implemented)', () => {
+    expect(createObjectTool.requiresConfirmation).toBe(false);
+  });
+
+  it('should not set requiresConfirmation on delete_field (server-side enforcement not yet implemented)', () => {
+    expect(deleteFieldTool.requiresConfirmation).toBe(false);
+  });
+
+  it('should not mark read-only tools as requiresConfirmation', () => {
+    expect(listMetadataObjectsTool.requiresConfirmation).toBe(false);
+    expect(describeMetadataObjectTool.requiresConfirmation).toBe(false);
+  });
+
+  it('should not mark add_field and modify_field as requiresConfirmation', () => {
+    expect(addFieldTool.requiresConfirmation).toBe(false);
+    expect(modifyFieldTool.requiresConfirmation).toBe(false);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════

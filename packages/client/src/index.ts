@@ -385,6 +385,19 @@ export class ObjectStackClient {
         });
         return this.unwrapResponse(res);
     },
+
+    /**
+     * Delete a metadata item
+     * @param type - Metadata type (e.g., 'object', 'plugin')
+     * @param name - Item name (snake_case identifier)
+     */
+    deleteItem: async (type: string, name: string): Promise<{ type: string; name: string; deleted: boolean }> => {
+        const route = this.getRoute('metadata');
+        const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(type)}/${encodeURIComponent(name)}`, {
+            method: 'DELETE',
+        });
+        return this.unwrapResponse(res);
+    },
     
     /**
      * Get object metadata with cache support

@@ -1,7 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectQL } from './engine.js';
-import { MetadataFacade } from './metadata-facade.js';
 import { ObjectStackProtocolImplementation } from './protocol.js';
 import { Plugin, PluginContext } from '@objectstack/core';
 
@@ -33,40 +32,7 @@ export class ObjectQLPlugin implements Plugin {
     
     // Register as provider for Core Kernel Services
     ctx.registerService('objectql', this.ql);
-    
-    // Register MetadataFacade as metadata service (unless external service exists)
-    let hasMetadata = false;
-    let metadataProvider = 'objectql';
-    try {
-        if (ctx.getService('metadata')) {
-            hasMetadata = true;
-            metadataProvider = 'external';
-        }
-    } catch (e: any) {
-        // Ignore errors during check (e.g. "Service is async")
-    }
 
-    if (!hasMetadata) {
-        try {
-            const metadataFacade = new MetadataFacade();
-            ctx.registerService('metadata', metadataFacade);
-            ctx.logger.info('MetadataFacade registered as metadata service', {
-                mode: 'in-memory',
-                features: ['registry', 'fast-lookup']
-            });
-        } catch (e: any) {
-             // Ignore if already registered (race condition or async mis-detection)
-             if (!e.message?.includes('already registered')) {
-                 throw e;
-             }
-        }
-    } else {
-        ctx.logger.info('External metadata service detected', {
-            provider: metadataProvider,
-            mode: 'will-sync-in-start-phase'
-        });
-    }
-    
     ctx.registerService('data', this.ql); // ObjectQL implements IDataEngine
 
     // Register manifest service for direct app/package registration.
@@ -84,7 +50,6 @@ export class ObjectQLPlugin implements Plugin {
 
     ctx.logger.info('ObjectQL engine registered', {
         services: ['objectql', 'data', 'manifest'],
-        metadataProvider: metadataProvider
     });
 
     // Register Protocol Implementation
@@ -99,16 +64,14 @@ export class ObjectQLPlugin implements Plugin {
 
   start = async (ctx: PluginContext) => {
     ctx.logger.info('ObjectQL engine starting...');
-    
-    // Check if we should load from external metadata service
+
+    // Sync from external metadata service (e.g. MetadataPlugin) if available
     try {
         const metadataService = ctx.getService('metadata') as any;
-        // Only sync if metadata service is external (not our own MetadataFacade)
-        if (metadataService && !(metadataService instanceof MetadataFacade) && this.ql) {
+        if (metadataService && typeof metadataService.loadMany === 'function' && this.ql) {
             await this.loadMetadataFromService(metadataService, ctx);
         }
     } catch (e: any) {
-        // No external metadata service or error accessing it
         ctx.logger.debug('No external metadata service to sync from');
     }
     

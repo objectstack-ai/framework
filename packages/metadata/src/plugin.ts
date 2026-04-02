@@ -44,8 +44,7 @@ export class MetadataPlugin implements Plugin {
             watch: this.options.watch
         });
 
-        // Register Metadata Manager as primary metadata service provider
-        // This takes precedence over ObjectQL's fallback metadata service
+        // Register Metadata Manager as the primary metadata service provider.
         ctx.registerService('metadata', this.manager);
 
         // Register metadata system objects via the manifest service (if available).
