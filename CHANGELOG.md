@@ -8,17 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **Studio Vercel API routes returning HTML instead of JSON** — Updated
-  `apps/studio/scripts/build-vercel.sh` to copy the bundled serverless function
-  (`api/index.js`) into the output directory (`public/api/`).  Vercel's
-  `framework: null` defaults `outputDirectory` to `public/` when that directory
-  exists, and only detects serverless functions **inside** the output directory.
-  Previously `api/index.js` was generated at the project root (outside `public/`)
-  and Vercel never recognised it, causing all `/api/*` routes to fall through to
-  the SPA catch-all rewrite.  Also set `outputDirectory: "public"` explicitly in
-  `vercel.json` for clarity, and removed the `functions` block (the in-code
-  `export const config` already configures memory/maxDuration without pre-build
-  file-pattern validation errors).
+- **Studio Vercel API routes returning HTML instead of JSON** — Adopted the
+  same Vercel deployment pattern used by `hotcrm`: committed
+  `api/[[...route]].ts` catch-all route so Vercel detects it pre-build,
+  switched esbuild output from CJS to ESM (fixes `"type": "module"` conflict),
+  and changed the output path from `api/index.js` to `api/[[...route]].js`.
+  Updated rewrites to match: `/api/:path*` → `/api/[[...route]]`.
 - **Studio CORS error on Vercel temporary/preview domains** — Changed
   `VITE_SERVER_URL` from hardcoded `https://play.objectstack.ai` to `""`
   (empty string / same-origin) in `vercel.json` so each deployment — including

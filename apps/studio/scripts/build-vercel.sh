@@ -3,15 +3,19 @@ set -euo pipefail
 
 # Build script for Vercel deployment of @objectstack/studio.
 #
-# Vercel uses outputDirectory (vercel.json → "public") for BOTH static files
-# and serverless function detection.  The api/ subdirectory MUST be inside
-# the output directory — files at the project root are ignored.
+# Follows the same Vercel deployment pattern as hotcrm:
+#   - api/[[...route]].ts is committed to the repo (Vercel detects it pre-build)
+#   - esbuild bundles server/index.ts → api/[[...route]].js (replaces TS at deploy)
+#   - Vite SPA output is copied to public/ for CDN serving
+#
+# Vercel routing (framework: null, no outputDirectory):
+#   - Static files:        served from public/
+#   - Serverless functions: detected from api/ at project root
 #
 # Steps:
 #   1. Turbo build (Vite SPA → dist/)
-#   2. Bundle the API serverless function (→ api/index.js)
+#   2. Bundle the API serverless function (→ api/[[...route]].js)
 #   3. Copy Vite output to public/ for Vercel CDN serving
-#   4. Copy API function into public/api/ so Vercel detects it
 
 echo "[build-vercel] Starting studio build..."
 
@@ -28,11 +32,4 @@ rm -rf public
 mkdir -p public
 cp -r dist/* public/
 
-# 4. Copy API function into output directory for Vercel detection
-#    Vercel only looks for serverless functions inside outputDirectory.
-#    Without this step, api/index.js at the project root is invisible.
-mkdir -p public/api
-cp api/index.js public/api/
-cp api/index.js.map public/api/ 2>/dev/null || true
-
-echo "[build-vercel] Done. Static files + API function in public/"
+echo "[build-vercel] Done. Static files in public/, serverless function in api/[[...route]].js"

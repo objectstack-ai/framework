@@ -295,7 +295,7 @@ export default handle(app);
 /**
  * Vercel per-function configuration.
  *
- * Picked up by the @vercel/node runtime from the deployed api/index.js bundle.
+ * Picked up by the @vercel/node runtime from the deployed api/[[...route]].js bundle.
  * Replaces the top-level "functions" key in vercel.json so there is no
  * pre-build file-pattern validation against a not-yet-bundled artifact.
  */

@@ -3,7 +3,6 @@
   "framework": null,
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "bash scripts/build-vercel.sh",
-  "outputDirectory": "public",
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
@@ -19,7 +18,7 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/api/:path*", "destination": "/api/[[...route]]" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

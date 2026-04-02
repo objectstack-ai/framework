@@ -5,7 +5,8 @@ pnpm-lock.yaml
 # Build outputs
 dist
 build
-api
+api/*.js
+api/*.js.map
 *.tsbuildinfo
 
 # Development

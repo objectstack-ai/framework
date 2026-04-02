@@ -35,13 +35,17 @@ await build({
   entryPoints: ['server/index.ts'],
   bundle: true,
   platform: 'node',
-  format: 'cjs',
+  format: 'esm',
   target: 'es2020',
-  outfile: 'api/index.js',
+  outfile: 'api/[[...route]].js',
   sourcemap: true,
   external: EXTERNAL,
   // Silence warnings about optional/unused require() calls in knex drivers
   logOverride: { 'require-resolve-not-external': 'silent' },
+  // Vercel resolves ESM .js files correctly when "type": "module" is set.
+  // CJS format would conflict with the project's "type": "module" setting,
+  // causing Node.js to fail parsing require()/module.exports as ESM syntax.
+  banner: { js: '// Bundled by esbuild — see scripts/bundle-api.mjs' },
 });
 
-console.log('[bundle-api] Bundled server/index.ts → api/index.js');
+console.log('[bundle-api] Bundled server/index.ts → api/[[...route]].js');
