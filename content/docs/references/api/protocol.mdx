@@ -522,6 +522,7 @@ const result = AiInsightsRequest.parse(data);
 | :--- | :--- | :--- | :--- |
 | **type** | `string` | ✅ | Metadata type name |
 | **name** | `string` | ✅ | Item name (snake_case identifier) |
+| **packageId** | `string` | optional | Optional package ID to filter items by |
 
 
 ---
@@ -546,6 +547,7 @@ const result = AiInsightsRequest.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **type** | `string` | ✅ | Metadata type name (e.g., "object", "plugin") |
+| **packageId** | `string` | optional | Optional package ID to filter items by |
 
 
 ---

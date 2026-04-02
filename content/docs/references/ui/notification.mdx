@@ -35,14 +35,14 @@ Notification instance definition
 | :--- | :--- | :--- | :--- |
 | **type** | `Enum<'toast' \| 'snackbar' \| 'banner' \| 'alert' \| 'inline'>` | ✅ | Notification presentation style |
 | **severity** | `Enum<'info' \| 'success' \| 'warning' \| 'error'>` | ✅ | Notification severity level |
-| **title** | `string \| Object` | optional | Notification title |
-| **message** | `string \| Object` | ✅ | Notification message body |
+| **title** | `string` | optional | Notification title |
+| **message** | `string` | ✅ | Notification message body |
 | **icon** | `string` | optional | Icon name override |
 | **duration** | `number` | optional | Auto-dismiss duration in ms, omit for persistent |
 | **dismissible** | `boolean` | ✅ | Allow user to dismiss the notification |
 | **actions** | `Object[]` | optional | Action buttons |
 | **position** | `Enum<'top_left' \| 'top_center' \| 'top_right' \| 'bottom_left' \| 'bottom_center' \| 'bottom_right'>` | optional | Override default position |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 
@@ -57,7 +57,7 @@ Notification action button
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **label** | `string \| Object` | ✅ | Action button label |
+| **label** | `string` | ✅ | Action button label |
 | **action** | `string` | ✅ | Action identifier to execute |
 | **variant** | `Enum<'primary' \| 'secondary' \| 'link'>` | ✅ | Button variant style |
 

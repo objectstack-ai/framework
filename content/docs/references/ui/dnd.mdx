@@ -80,12 +80,12 @@ Draggable item configuration
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **type** | `string` | ✅ | Drag item type identifier for matching with drop zones |
-| **label** | `string \| Object` | optional | Accessible label describing the draggable item |
+| **label** | `string` | optional | Accessible label describing the draggable item |
 | **handle** | `Enum<'element' \| 'handle' \| 'grip_icon'>` | ✅ | How to initiate drag |
 | **constraint** | `Object` | optional | Drag movement constraints |
 | **preview** | `Enum<'element' \| 'custom' \| 'none'>` | ✅ | Drag preview type |
 | **disabled** | `boolean` | ✅ | Disable dragging |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 
@@ -114,12 +114,12 @@ Drop zone configuration
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **label** | `string \| Object` | optional | Accessible label for the drop zone |
+| **label** | `string` | optional | Accessible label for the drop zone |
 | **accept** | `string[]` | ✅ | Accepted drag item types |
 | **maxItems** | `number` | optional | Maximum items allowed in drop zone |
 | **highlightOnDragOver** | `boolean` | ✅ | Highlight drop zone when dragging over |
 | **dropEffect** | `Enum<'move' \| 'copy' \| 'link' \| 'none'>` | ✅ | Visual effect on drop |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 

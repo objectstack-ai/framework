@@ -34,7 +34,7 @@ Per-gesture configuration
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **type** | `Enum<'swipe' \| 'pinch' \| 'long_press' \| 'double_tap' \| 'drag' \| 'rotate' \| 'pan'>` | ✅ | Gesture type to configure |
-| **label** | `string \| Object` | optional | Descriptive label for the gesture action |
+| **label** | `string` | optional | Descriptive label for the gesture action |
 | **enabled** | `boolean` | ✅ | Whether this gesture is active |
 | **swipe** | `Object` | optional | Swipe gesture settings (when type is swipe) |
 | **pinch** | `Object` | optional | Pinch gesture settings (when type is pinch) |
@@ -126,7 +126,7 @@ Touch and gesture interaction configuration
 | **gestures** | `Object[]` | optional | Configured gesture recognizers |
 | **touchTarget** | `Object` | optional | Touch target sizing and hit area |
 | **hapticFeedback** | `boolean` | optional | Enable haptic feedback on touch interactions |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 

@@ -60,8 +60,8 @@ const result = WidgetEvent.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Event name |
-| **label** | `string \| Object` | optional | Human-readable event label |
-| **description** | `string \| Object` | optional | Event description and usage |
+| **label** | `string` | optional | Human-readable event label |
+| **description** | `string` | optional | Event description and usage |
 | **bubbles** | `boolean` | ✅ | Whether event bubbles |
 | **cancelable** | `boolean` | ✅ | Whether event is cancelable |
 | **payload** | `Record<string, any>` | optional | Event payload schema |
@@ -93,8 +93,8 @@ const result = WidgetEvent.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Widget identifier (snake_case) |
-| **label** | `string \| Object` | ✅ | Widget display name |
-| **description** | `string \| Object` | optional | Widget description |
+| **label** | `string` | ✅ | Widget display name |
+| **description** | `string` | optional | Widget description |
 | **version** | `string` | optional | Widget version (semver) |
 | **author** | `string` | optional | Widget author |
 | **icon** | `string` | optional | Widget icon |
@@ -122,11 +122,11 @@ const result = WidgetEvent.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Property name (camelCase) |
-| **label** | `string \| Object` | optional | Human-readable label |
+| **label** | `string` | optional | Human-readable label |
 | **type** | `Enum<'string' \| 'number' \| 'boolean' \| 'array' \| 'object' \| 'function' \| 'any'>` | ✅ | TypeScript type |
 | **required** | `boolean` | ✅ | Whether property is required |
 | **default** | `any` | optional | Default value |
-| **description** | `string \| Object` | optional | Property description |
+| **description** | `string` | optional | Property description |
 | **validation** | `Record<string, any>` | optional | Validation rules |
 | **category** | `string` | optional | Property category |
 

@@ -50,7 +50,7 @@ const result = ActionNavItem.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -69,9 +69,9 @@ const result = ActionNavItem.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | App unique machine name (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | App display label |
+| **label** | `string` | ✅ | App display label |
 | **version** | `string` | optional | App version |
-| **description** | `string \| Object` | optional | App description |
+| **description** | `string` | optional | App description |
 | **icon** | `string` | optional | App icon used in the App Launcher |
 | **branding** | `Object` | optional | App-specific branding |
 | **active** | `boolean` | ✅ | Whether the app is enabled |
@@ -110,7 +110,7 @@ const result = ActionNavItem.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -129,7 +129,7 @@ const result = ActionNavItem.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -148,10 +148,10 @@ const result = ActionNavItem.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique area identifier (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Area display label |
+| **label** | `string` | ✅ | Area display label |
 | **icon** | `string` | optional | Area icon name |
 | **order** | `number` | optional | Sort order among areas (lower = first) |
-| **description** | `string \| Object` | optional | Area description |
+| **description** | `string` | optional | Area description |
 | **visible** | `string` | optional | Visibility formula condition for this area |
 | **requiredPermissions** | `string[]` | optional | Permissions required to access this area |
 | **navigation** | `[__schema0](./__schema0)[]` | ✅ | Navigation items within this area |
@@ -174,7 +174,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -196,7 +196,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -216,7 +216,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -237,7 +237,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -258,7 +258,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -278,7 +278,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -298,7 +298,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -320,7 +320,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -340,7 +340,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -360,7 +360,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |
@@ -379,7 +379,7 @@ This schema accepts one of the following structures:
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique identifier for this navigation item (lowercase snake_case) |
-| **label** | `string \| Object` | ✅ | Display proper label |
+| **label** | `string` | ✅ | Display proper label |
 | **icon** | `string` | optional | Icon name |
 | **order** | `number` | optional | Sort order within the same level (lower = first) |
 | **badge** | `string \| number` | optional | Badge text or count displayed on the item |

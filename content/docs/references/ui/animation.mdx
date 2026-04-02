@@ -50,13 +50,13 @@ Component-level animation configuration
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **label** | `string \| Object` | optional | Descriptive label for this animation configuration |
+| **label** | `string` | optional | Descriptive label for this animation configuration |
 | **enter** | `Object` | optional | Enter/mount animation |
 | **exit** | `Object` | optional | Exit/unmount animation |
 | **hover** | `Object` | optional | Hover state animation |
 | **trigger** | `Enum<'on_mount' \| 'on_unmount' \| 'on_hover' \| 'on_focus' \| 'on_click' \| 'on_scroll' \| 'on_visible'>` | optional | When to trigger the animation |
 | **reducedMotion** | `Enum<'respect' \| 'disable' \| 'alternative'>` | ✅ | Accessibility: how to handle prefers-reduced-motion |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 
@@ -87,7 +87,7 @@ Top-level motion and animation design configuration
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **label** | `string \| Object` | optional | Descriptive label for the motion configuration |
+| **label** | `string` | optional | Descriptive label for the motion configuration |
 | **defaultTransition** | `Object` | optional | Default transition applied to all animations |
 | **pageTransitions** | `Object` | optional | Page navigation transition settings |
 | **componentAnimations** | `Record<string, Object>` | optional | Component name to animation configuration mapping |

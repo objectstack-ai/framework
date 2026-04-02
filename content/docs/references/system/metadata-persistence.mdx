@@ -16,8 +16,8 @@ Defines the lifecycle and mutability of a metadata item.
 ## TypeScript Usage
 
 ```typescript
-import { MetadataCollectionInfo, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent, PackagePublishResult } from '@objectstack/spec/system';
-import type { MetadataCollectionInfo, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent, PackagePublishResult } from '@objectstack/spec/system';
+import { MetadataCollectionInfo, MetadataDiffResult, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataHistoryQueryOptions, MetadataHistoryQueryResult, MetadataHistoryRecord, MetadataHistoryRetentionPolicy, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent, PackagePublishResult } from '@objectstack/spec/system';
+import type { MetadataCollectionInfo, MetadataDiffResult, MetadataExportOptions, MetadataFallbackStrategy, MetadataFormat, MetadataHistoryQueryOptions, MetadataHistoryQueryResult, MetadataHistoryRecord, MetadataHistoryRetentionPolicy, MetadataImportOptions, MetadataLoadOptions, MetadataLoadResult, MetadataLoaderContract, MetadataManagerConfig, MetadataRecord, MetadataSaveOptions, MetadataSaveResult, MetadataScope, MetadataSource, MetadataState, MetadataStats, MetadataWatchEvent, PackagePublishResult } from '@objectstack/spec/system';
 
 // Validate data
 const result = MetadataCollectionInfo.parse(data);
@@ -34,6 +34,25 @@ const result = MetadataCollectionInfo.parse(data);
 | **type** | `string` | ✅ |  |
 | **count** | `number` | ✅ |  |
 | **namespaces** | `string[]` | ✅ |  |
+
+
+---
+
+## MetadataDiffResult
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **type** | `string` | ✅ |  |
+| **name** | `string` | ✅ |  |
+| **version1** | `number` | ✅ |  |
+| **version2** | `number` | ✅ |  |
+| **checksum1** | `string` | ✅ |  |
+| **checksum2** | `string` | ✅ |  |
+| **identical** | `boolean` | ✅ |  |
+| **patch** | `any[]` | optional | JSON patch operations |
+| **summary** | `string` | optional | Human-readable summary of changes |
 
 
 ---
@@ -74,6 +93,72 @@ const result = MetadataCollectionInfo.parse(data);
 * `js`
 * `typescript`
 * `javascript`
+
+
+---
+
+## MetadataHistoryQueryOptions
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **limit** | `integer` | optional | Maximum number of history records to return |
+| **offset** | `integer` | optional | Number of records to skip |
+| **since** | `string` | optional | Only return history after this timestamp |
+| **until** | `string` | optional | Only return history before this timestamp |
+| **operationType** | `Enum<'create' \| 'update' \| 'publish' \| 'revert' \| 'delete'>` | optional | Filter by operation type |
+| **includeMetadata** | `boolean` | ✅ | Include full metadata payload |
+
+
+---
+
+## MetadataHistoryQueryResult
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **records** | `Object[]` | ✅ |  |
+| **total** | `integer` | ✅ |  |
+| **hasMore** | `boolean` | ✅ |  |
+
+
+---
+
+## MetadataHistoryRecord
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ |  |
+| **metadataId** | `string` | ✅ | Foreign key to sys_metadata.id |
+| **name** | `string` | ✅ |  |
+| **type** | `string` | ✅ |  |
+| **version** | `number` | ✅ | Version number at this snapshot |
+| **operationType** | `Enum<'create' \| 'update' \| 'publish' \| 'revert' \| 'delete'>` | ✅ | Type of operation that created this history entry |
+| **metadata** | `string \| Record<string, any> \| null` | optional | Snapshot of metadata definition at this version (raw JSON string or parsed object) |
+| **checksum** | `string` | ✅ | SHA-256 checksum of metadata content |
+| **previousChecksum** | `string` | optional | Checksum of the previous version |
+| **changeNote** | `string` | optional | Description of changes made in this version |
+| **tenantId** | `string` | optional | Tenant identifier for multi-tenant isolation |
+| **recordedBy** | `string` | optional | User who made this change |
+| **recordedAt** | `string` | ✅ | Timestamp when this version was recorded |
+
+
+---
+
+## MetadataHistoryRetentionPolicy
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **maxVersions** | `integer` | optional | Maximum number of versions to retain |
+| **maxAgeDays** | `integer` | optional | Maximum age of history records in days |
+| **autoCleanup** | `boolean` | ✅ | Enable automatic cleanup of old history |
+| **cleanupIntervalHours** | `integer` | ✅ | How often to run cleanup (in hours) |
 
 
 ---

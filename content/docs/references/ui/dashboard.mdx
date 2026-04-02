@@ -30,8 +30,8 @@ const result = Dashboard.parse(data);
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **name** | `string` | ✅ | Dashboard unique name |
-| **label** | `string \| Object` | ✅ | Dashboard label |
-| **description** | `string \| Object` | optional | Dashboard description |
+| **label** | `string` | ✅ | Dashboard label |
+| **description** | `string` | optional | Dashboard description |
 | **header** | `Object` | optional | Dashboard header configuration |
 | **widgets** | `Object[]` | ✅ | Widgets to display |
 | **refreshInterval** | `number` | optional | Auto-refresh interval in seconds |
@@ -66,7 +66,7 @@ Dashboard header action
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **label** | `string \| Object` | ✅ | Action button label |
+| **label** | `string` | ✅ | Action button label |
 | **actionUrl** | `string` | ✅ | URL or target for the action |
 | **actionType** | `Enum<'script' \| 'url' \| 'modal' \| 'flow' \| 'api'>` | optional | Type of action |
 | **icon** | `string` | optional | Icon identifier for the action button |
@@ -81,8 +81,8 @@ Dashboard header action
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **id** | `string` | ✅ | Unique widget identifier (snake_case) |
-| **title** | `string \| Object` | optional | Widget title |
-| **description** | `string \| Object` | optional | Widget description text below the header |
+| **title** | `string` | optional | Widget title |
+| **description** | `string` | optional | Widget description text below the header |
 | **type** | `Enum<'bar' \| 'horizontal-bar' \| 'column' \| 'grouped-bar' \| 'stacked-bar' \| 'bi-polar-bar' \| 'line' \| 'area' \| 'stacked-area' \| 'step-line' \| 'spline' \| 'pie' \| 'donut' \| 'funnel' \| 'pyramid' \| 'scatter' \| 'bubble' \| 'treemap' \| 'sunburst' \| 'sankey' \| 'word-cloud' \| 'gauge' \| 'solid-gauge' \| 'metric' \| 'kpi' \| 'bullet' \| 'choropleth' \| 'bubble-map' \| 'gl-map' \| 'heatmap' \| 'radar' \| 'waterfall' \| 'box-plot' \| 'violin' \| 'candlestick' \| 'stock' \| 'table' \| 'pivot'>` | ✅ | Visualization type |
 | **chartConfig** | `Object` | optional | Chart visualization configuration |
 | **colorVariant** | `Enum<'default' \| 'blue' \| 'teal' \| 'orange' \| 'purple' \| 'success' \| 'warning' \| 'danger'>` | optional | Widget color variant for theming |
@@ -110,7 +110,7 @@ Dashboard header action
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **field** | `string` | ✅ | Field name to filter on |
-| **label** | `string \| Object` | optional | Display label for the filter |
+| **label** | `string` | optional | Display label for the filter |
 | **type** | `Enum<'text' \| 'select' \| 'date' \| 'number' \| 'lookup'>` | optional | Filter input type |
 | **options** | `Object[]` | optional | Static filter options |
 | **optionsFrom** | `Object` | optional | Dynamic filter options from object |
@@ -180,7 +180,7 @@ Widget measure definition
 | :--- | :--- | :--- | :--- |
 | **valueField** | `string` | ✅ | Field to aggregate |
 | **aggregate** | `Enum<'count' \| 'sum' \| 'avg' \| 'min' \| 'max'>` | ✅ | Aggregate function |
-| **label** | `string \| Object` | optional | Measure display label |
+| **label** | `string` | optional | Measure display label |
 | **format** | `string` | optional | Number format string |
 
 

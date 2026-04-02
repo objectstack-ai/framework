@@ -69,7 +69,7 @@ Keyboard navigation and shortcut configuration
 | **shortcuts** | `Object[]` | optional | Registered keyboard shortcuts |
 | **focusManagement** | `Object` | optional | Focus and tab order management |
 | **rovingTabindex** | `boolean` | ✅ | Enable roving tabindex pattern for composite widgets |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 
@@ -86,7 +86,7 @@ Keyboard shortcut binding
 | :--- | :--- | :--- | :--- |
 | **key** | `string` | ✅ | Key combination (e.g., "Ctrl+S", "Alt+N", "Escape") |
 | **action** | `string` | ✅ | Action identifier to invoke when shortcut is triggered |
-| **description** | `string \| Object` | optional | Human-readable description of what the shortcut does |
+| **description** | `string` | optional | Human-readable description of what the shortcut does |
 | **scope** | `Enum<'global' \| 'view' \| 'form' \| 'modal' \| 'list'>` | ✅ | Scope in which this shortcut is active |
 
 

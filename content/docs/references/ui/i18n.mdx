@@ -49,7 +49,7 @@ ARIA accessibility attributes
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **ariaLabel** | `string \| Object` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
+| **ariaLabel** | `string` | optional | Accessible label for screen readers (WAI-ARIA aria-label) |
 | **ariaDescribedBy** | `string` | optional | ID of element providing additional description (WAI-ARIA aria-describedby) |
 | **role** | `string` | optional | WAI-ARIA role attribute (e.g., "dialog", "navigation", "alert") |
 
@@ -69,32 +69,6 @@ Date/time formatting rules
 | **timeZone** | `string` | optional | IANA time zone (e.g., "America/New_York") |
 | **hour12** | `boolean` | optional | Use 12-hour format |
 
-
----
-
-## I18nLabel
-
-Display label: plain string or i18n translation object
-
-### Union Options
-
-This schema accepts one of the following structures:
-
-#### Option 1
-
-Type: `string`
-
----
-
-#### Option 2
-
-### Properties
-
-| Property | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| **key** | `string` | ✅ | Translation key (e.g., "views.task_list.label") |
-| **defaultValue** | `string` | optional | Fallback value when translation key is not found |
-| **params** | `Record<string, string \| number \| boolean>` | optional | Interpolation parameters (e.g., `{ count: 5 }`) |
 
 ---
 
