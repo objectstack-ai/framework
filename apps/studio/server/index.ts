@@ -31,9 +31,12 @@ import { createHonoApp } from '@objectstack/hono';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { SecurityPlugin } from '@objectstack/plugin-security';
 import { AuditPlugin } from '@objectstack/plugin-audit';
+import { SetupPlugin } from '@objectstack/plugin-setup';
 import { FeedServicePlugin } from '@objectstack/service-feed';
 import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
+import { AutomationServicePlugin } from '@objectstack/service-automation';
+import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { handle } from '@hono/node-server/vercel';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -127,6 +130,9 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new FeedServicePlugin());
             await kernel.use(new MetadataPlugin({ watch: false }));
             await kernel.use(new AIServicePlugin());
+            await kernel.use(new AutomationServicePlugin());
+            await kernel.use(new AnalyticsServicePlugin());
+            await kernel.use(new SetupPlugin());
 
             // Broker shim — bridges HttpDispatcher → ObjectQL engine
             (kernel as any).broker = createBrokerShim(kernel);

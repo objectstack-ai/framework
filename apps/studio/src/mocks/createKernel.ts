@@ -4,6 +4,12 @@ import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { MSWPlugin } from '@objectstack/plugin-msw';
+import { SetupPlugin } from '@objectstack/plugin-setup';
+import { AutomationServicePlugin } from '@objectstack/service-automation';
+import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
+import { MetadataPlugin } from '@objectstack/metadata';
+import { AIServicePlugin } from '@objectstack/service-ai';
+import { FeedServicePlugin } from '@objectstack/service-feed';
 import { createBrokerShim } from '../lib/create-broker-shim';
 
 // System object definitions — resolved via Vite aliases to plugin source (no runtime deps)
@@ -74,6 +80,14 @@ export async function createKernel(options: KernelOptions) {
         console.log('[KernelFactory] Loading app:', appConfig.manifest?.id || appConfig.name || 'unknown');
         await kernel.use(new AppPlugin(appConfig));
     }
+
+    // Register services and plugins
+    await kernel.use(new FeedServicePlugin());
+    await kernel.use(new MetadataPlugin({ watch: false }));
+    await kernel.use(new AIServicePlugin());
+    await kernel.use(new AutomationServicePlugin());
+    await kernel.use(new AnalyticsServicePlugin());
+    await kernel.use(new SetupPlugin());
 
     // Protocol service is registered automatically by ObjectQLPlugin.init()
     // via ObjectStackProtocolImplementation (which uses SchemaRegistry internally).
