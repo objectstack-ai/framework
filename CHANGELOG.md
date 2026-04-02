@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CLI: Remote API Commands** - Added 12 new CLI commands for interacting with remote ObjectStack servers:
+  - **Authentication**: `os auth login`, `os auth logout`, `os auth whoami`
+  - **Data API**: `os data query`, `os data get`, `os data create`, `os data update`, `os data delete`
+  - **Metadata API**: `os meta list`, `os meta get`, `os meta register`, `os meta delete`
+  - All commands support `--url` and `--token` flags, or use stored credentials from `~/.objectstack/credentials.json`
+  - Multiple output formats: `--format json|table|yaml`
+  - Environment variable support: `OBJECTSTACK_URL`, `OBJECTSTACK_TOKEN`
+  - See [REMOTE_API_COMMANDS.md](./REMOTE_API_COMMANDS.md) for full documentation
+
 ### Changed
 - **i18n: `I18nLabelSchema` now accepts `string` only** — `label`, `description`, `title`,
   and other display-text fields across all UI schemas (`AppSchema`, `NavigationArea`,
