@@ -62,7 +62,12 @@ function formatToolArgs(input: unknown): string {
   return entries
     .slice(0, 4)
     .map(([k, v]) => {
-      const val = typeof v === 'string' ? v : JSON.stringify(v);
+      let val: string;
+      try {
+        val = typeof v === 'string' ? v : (JSON.stringify(v) ?? String(v));
+      } catch {
+        val = String(v);
+      }
       const display = val.length > 30 ? val.slice(0, 30) + '…' : val;
       return `${k}: ${display}`;
     })
@@ -80,7 +85,12 @@ function isToolPart(part: UIMessage['parts'][number]): part is Extract<UIMessage
  * Format tool output for display, truncating to a max length.
  */
 function formatToolOutput(output: unknown, maxLen = 80): string {
-  const raw = typeof output === 'string' ? output : JSON.stringify(output);
+  let raw: string;
+  try {
+    raw = typeof output === 'string' ? output : (JSON.stringify(output) ?? '');
+  } catch {
+    raw = String(output ?? '');
+  }
   return raw.length > maxLen ? raw.slice(0, maxLen) + '…' : raw;
 }
 
@@ -283,6 +293,18 @@ export function AiChatPanel() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const baseUrl = getApiBaseUrl();
   const { agents, loading: agentsLoading } = useAgentList(baseUrl);
+
+  // Validate persisted agent against fetched list — fall back to general
+  // chat if the previously selected agent is no longer available.
+  useEffect(() => {
+    if (agentsLoading) return;
+    if (selectedAgent === GENERAL_CHAT_VALUE) return;
+    const isValid = agents.some((a) => a.name === selectedAgent);
+    if (!isValid) {
+      setSelectedAgent(GENERAL_CHAT_VALUE);
+      saveSelectedAgent(GENERAL_CHAT_VALUE);
+    }
+  }, [agents, agentsLoading, selectedAgent]);
 
   const initialMessages = useMemo(() => loadMessages() as UIMessage[], []);
 
