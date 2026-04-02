@@ -257,7 +257,6 @@ function extractBody(
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null;
 
     if (incoming.rawBody != null) {
-        if (typeof incoming.rawBody === 'string') return incoming.rawBody;
         return incoming.rawBody;
     }
 
@@ -346,9 +345,7 @@ export default getRequestListener(async (request, env) => {
 
     // For GET/HEAD/OPTIONS (or body-less requests): pass through with corrected URL.
     return await app.fetch(
-        url !== request.url
-            ? new Request(url, { method, headers: request.headers })
-            : request,
+        new Request(url, { method, headers: request.headers }),
     );
 });
 
