@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absent, fixing the CI `@objectstack/client#test` failure.
 
 ### Added
+- **Metadata Management Tools & Skill (Tool→Skill→Agent)** — Added 6 platform built-in AI
+  tools for metadata operations (`create_object`, `add_field`, `modify_field`, `delete_field`,
+  `list_objects`, `describe_object`) in `packages/spec/src/ai/metadata-tools.zod.ts`. Each
+  tool has structured JSON Schema parameters, output schema, permission controls, and
+  confirmation requirements for destructive operations. Aggregated into `metadata_management`
+  skill in `metadata-skill.zod.ts` with trigger phrases and programmatic activation conditions.
+  Fully testable with 26 unit tests covering individual tool definitions, schema validation,
+  aggregate exports, and skill structure.
 - **Agent Skills — `skills/` directory (agentskills.io)** — Created `skills/` folder at
   repository root following the [agentskills.io specification](https://agentskills.io/specification).
   Five expert-knowledge skills with hand-written `SKILL.md` files and `references/` quick-lookup

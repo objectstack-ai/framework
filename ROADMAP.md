@@ -663,6 +663,7 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 - [ ] Agent runtime — execute AI agents defined in spec schemas
 - [x] Tool registry — connect agents to ObjectQL operations, APIs, and workflows (initial implementation in `service-ai`)
 - [x] Conversation management — persistent chat with context windows (initial implementation in `service-ai`)
+- [x] Metadata management tools — 6 built-in tools (`create_object`, `add_field`, `modify_field`, `delete_field`, `list_objects`, `describe_object`) with structured parameters, permissions, and `metadata_management` skill
 
 ### 7.3 RAG Pipeline
 
