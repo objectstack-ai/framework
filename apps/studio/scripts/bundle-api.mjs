@@ -37,7 +37,7 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'es2020',
-  outfile: 'api/[[...route]].js',
+  outfile: 'api/_handler.js',
   sourcemap: true,
   external: EXTERNAL,
   // Silence warnings about optional/unused require() calls in knex drivers
@@ -48,4 +48,4 @@ await build({
   banner: { js: '// Bundled by esbuild — see scripts/bundle-api.mjs' },
 });
 
-console.log('[bundle-api] Bundled server/index.ts → api/[[...route]].js');
+console.log('[bundle-api] Bundled server/index.ts → api/_handler.js');

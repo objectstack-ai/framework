@@ -4,8 +4,9 @@ set -euo pipefail
 # Build script for Vercel deployment of @objectstack/studio.
 #
 # Follows the same Vercel deployment pattern as hotcrm:
-#   - api/[[...route]].ts is committed to the repo (Vercel detects it pre-build)
-#   - esbuild bundles server/index.ts → api/[[...route]].js (replaces TS at deploy)
+#   - api/[[...route]].js is committed to the repo (Vercel detects it pre-build)
+#   - esbuild bundles server/index.ts → api/_handler.js (self-contained bundle)
+#   - The committed .js wrapper re-exports from _handler.js at runtime
 #   - Vite SPA output is copied to public/ for CDN serving
 #
 # Vercel routing (framework: null, no outputDirectory):
@@ -14,7 +15,7 @@ set -euo pipefail
 #
 # Steps:
 #   1. Turbo build (Vite SPA → dist/)
-#   2. Bundle the API serverless function (→ api/[[...route]].js)
+#   2. Bundle the API serverless function (→ api/_handler.js)
 #   3. Copy Vite output to public/ for Vercel CDN serving
 
 echo "[build-vercel] Starting studio build..."
@@ -26,15 +27,10 @@ cd apps/studio
 
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
-# Remove the TS source file so Vercel's @vercel/node builder uses the
-# pre-bundled JS directly.  Without this, Vercel compiles the TS stub
-# itself, producing a thin re-export that references ../server/index —
-# a file that doesn't exist at runtime (ERR_MODULE_NOT_FOUND).
-rm -f "api/[[...route]].ts"
 
 # 3. Copy Vite build output to public/ for static file serving
 rm -rf public
 mkdir -p public
 cp -r dist/* public/
 
-echo "[build-vercel] Done. Static files in public/, serverless function in api/[[...route]].js"
+echo "[build-vercel] Done. Static files in public/, serverless function in api/[[...route]].js → api/_handler.js"

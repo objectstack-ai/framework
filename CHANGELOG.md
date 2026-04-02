@@ -10,13 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Studio Vercel API routes returning HTML instead of JSON** — Adopted the
   same Vercel deployment pattern used by `hotcrm`: committed
-  `api/[[...route]].ts` catch-all route so Vercel detects it pre-build,
+  `api/[[...route]].js` catch-all route so Vercel detects it pre-build,
   switched esbuild output from CJS to ESM (fixes `"type": "module"` conflict),
-  and changed the output path from `api/index.js` to `api/[[...route]].js`.
+  and changed the bundle output to `api/_handler.js` (a separate file that
+  the committed wrapper re-exports).  This avoids both Vercel's TS
+  compilation overwriting the bundle (`ERR_MODULE_NOT_FOUND`) and the
+  "File not found" error from deleting source files during build.
   Updated rewrites to match: `/api/:path*` → `/api/[[...route]]`.
-  Added post-bundle cleanup to remove the `.ts` stub so Vercel's
-  `@vercel/node` builder uses the self-contained esbuild bundle instead of
-  compiling the stub (which would fail with `ERR_MODULE_NOT_FOUND`).
 - **Studio CORS error on Vercel temporary/preview domains** — Changed
   `VITE_SERVER_URL` from hardcoded `https://play.objectstack.ai` to `""`
   (empty string / same-origin) in `vercel.json` so each deployment — including
