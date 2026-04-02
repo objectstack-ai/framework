@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 interface MetadataInspectorProps {
   metaType: string;
   metaName: string;
+  packageId?: string;
 }
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
@@ -173,7 +174,7 @@ function JsonTree({ data, depth = 0 }: { data: any; depth?: number }) {
 }
 
 
-export function MetadataInspector({ metaType, metaName }: MetadataInspectorProps) {
+export function MetadataInspector({ metaType, metaName, packageId }: MetadataInspectorProps) {
   const client = useClient();
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -189,7 +190,7 @@ export function MetadataInspector({ metaType, metaName }: MetadataInspectorProps
 
     async function load() {
       try {
-        const result: any = await client.meta.getItem(metaType, metaName);
+        const result: any = await client.meta.getItem(metaType, metaName, packageId ? { packageId } : undefined);
         if (mounted) {
           setItem(result?.item || result);
         }
@@ -201,7 +202,7 @@ export function MetadataInspector({ metaType, metaName }: MetadataInspectorProps
     }
     load();
     return () => { mounted = false; };
-  }, [client, metaType, metaName]);
+  }, [client, metaType, metaName, packageId]);
 
   if (loading) {
     return (

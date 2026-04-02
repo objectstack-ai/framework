@@ -15,8 +15,8 @@ import type { StudioPlugin, MetadataViewerProps } from '../types';
 
 // ─── Viewer Component (adapts MetadataInspector to plugin interface) ─
 
-function DefaultViewerComponent({ metadataType, metadataName }: MetadataViewerProps) {
-  return <MetadataInspector metaType={metadataType} metaName={metadataName} />;
+function DefaultViewerComponent({ metadataType, metadataName, packageId }: MetadataViewerProps) {
+  return <MetadataInspector metaType={metadataType} metaName={metadataName} packageId={packageId} />;
 }
 
 // ─── Plugin Definition ───────────────────────────────────────────────

@@ -26,6 +26,8 @@ export interface MetadataViewerProps {
   data?: any;
   /** Current view mode */
   mode: ViewMode;
+  /** Package ID to filter metadata by (optional) */
+  packageId?: string;
 }
 
 /** Context passed to action handlers */
