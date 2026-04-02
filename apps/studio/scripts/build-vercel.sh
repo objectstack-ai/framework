@@ -28,7 +28,41 @@ cd apps/studio
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
 
-# 3. Copy Vite build output to public/ for static file serving
+# 3. Copy native/external modules into local node_modules for Vercel packaging.
+#
+#    Unlike hotcrm (which uses shamefully-hoist=true), this monorepo uses pnpm's
+#    default strict node_modules structure. Transitive native dependencies like
+#    better-sqlite3 only exist in the monorepo root's node_modules/.pnpm/ virtual
+#    store — they're NOT symlinked into apps/studio/node_modules/.
+#
+#    The vercel.json includeFiles pattern references node_modules/ relative to
+#    apps/studio/, so we must copy the actual module files here for Vercel to
+#    include them in the serverless function's deployment package.
+echo "[build-vercel] Copying external native modules to local node_modules..."
+for mod in better-sqlite3; do
+  src="../../node_modules/$mod"
+  if [ -e "$src" ]; then
+    dest="node_modules/$mod"
+    mkdir -p "$(dirname "$dest")"
+    cp -rL "$src" "$dest"
+    echo "[build-vercel]   ✓ Copied $mod"
+  else
+    echo "[build-vercel]   ⚠ $mod not found at $src (skipped)"
+  fi
+done
+# Copy the @libsql scope (client + its sub-dependencies like core, hrana-client)
+if [ -d "../../node_modules/@libsql" ]; then
+  mkdir -p "node_modules/@libsql"
+  for pkg in ../../node_modules/@libsql/*/; do
+    pkgname="$(basename "$pkg")"
+    cp -rL "$pkg" "node_modules/@libsql/$pkgname"
+  done
+  echo "[build-vercel]   ✓ Copied @libsql/*"
+else
+  echo "[build-vercel]   ⚠ @libsql not found (skipped)"
+fi
+
+# 4. Copy Vite build output to public/ for static file serving
 rm -rf public
 mkdir -p public
 cp -r dist/* public/

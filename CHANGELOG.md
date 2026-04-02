@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `events` without the "Dynamic require is not supported" error.
   Added `functions.includeFiles` in `vercel.json` to include native addons
   (`better-sqlite3`, `@libsql/client`) that esbuild cannot bundle.
+  Added a build step to copy native external modules from the monorepo root
+  `node_modules/` into the studio's local `node_modules/`, since pnpm's strict
+  mode (unlike hotcrm's `shamefully-hoist`) doesn't symlink transitive native
+  dependencies into app-level `node_modules/`.
   Updated rewrites to match: `/api/:path*` → `/api/[[...route]]`.
 - **Studio CORS error on Vercel temporary/preview domains** — Changed
   `VITE_SERVER_URL` from hardcoded `https://play.objectstack.ai` to `""`
