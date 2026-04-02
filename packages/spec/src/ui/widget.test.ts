@@ -330,19 +330,18 @@ describe('FieldWidgetPropsSchema', () => {
 });
 
 describe('Widget I18n Integration', () => {
-  it('should accept i18n object as widget manifest label', () => {
-    const manifest: z.input<typeof WidgetManifestSchema> = {
+  it('should reject i18n object as widget manifest label', () => {
+    expect(() => WidgetManifestSchema.parse({
       name: 'i18n_widget',
       label: { key: 'widgets.date_picker', defaultValue: 'Date Picker' },
-    };
-    expect(() => WidgetManifestSchema.parse(manifest)).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n as widget description', () => {
+  it('should reject i18n as widget description', () => {
     expect(() => WidgetManifestSchema.parse({
       name: 'desc_widget',
       label: 'Test Widget',
       description: { key: 'widgets.test.desc', defaultValue: 'A test widget' },
-    })).not.toThrow();
+    })).toThrow();
   });
 });
 

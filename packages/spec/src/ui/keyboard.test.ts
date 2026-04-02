@@ -152,13 +152,12 @@ describe('Type exports', () => {
 });
 
 describe('I18n and ARIA integration', () => {
-  it('should accept I18n description on KeyboardShortcutSchema', () => {
-    const result = KeyboardShortcutSchema.parse({
+  it('should reject I18n description on KeyboardShortcutSchema', () => {
+    expect(() => KeyboardShortcutSchema.parse({
       key: 'Ctrl+S',
       action: 'save',
       description: { key: 'shortcuts.save', defaultValue: 'Save the current document' },
-    });
-    expect(result.description).toEqual({ key: 'shortcuts.save', defaultValue: 'Save the current document' });
+    })).toThrow();
   });
 
   it('should accept plain string description on KeyboardShortcutSchema', () => {

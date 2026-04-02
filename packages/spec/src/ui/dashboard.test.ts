@@ -576,30 +576,30 @@ describe('Dashboard Factory', () => {
 });
 
 describe('Dashboard I18n Integration', () => {
-  it('should accept i18n object as dashboard label', () => {
+  it('should reject i18n object as dashboard label', () => {
     expect(() => DashboardSchema.parse({
       name: 'i18n_dashboard',
       label: { key: 'dashboards.sales', defaultValue: 'Sales Dashboard' },
       widgets: [],
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n object as dashboard description', () => {
+  it('should reject i18n object as dashboard description', () => {
     expect(() => DashboardSchema.parse({
       name: 'test_dashboard',
       label: 'Test',
       description: { key: 'dashboards.test.desc', defaultValue: 'Test dashboard' },
       widgets: [],
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n object as widget title', () => {
+  it('should reject i18n object as widget title', () => {
     expect(() => DashboardWidgetSchema.parse({
       id: 'total_revenue',
       title: { key: 'widgets.revenue', defaultValue: 'Total Revenue' },
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n object in global filter label', () => {
+  it('should reject i18n object in global filter label', () => {
     expect(() => DashboardSchema.parse({
       name: 'filter_dash',
       label: 'Filtered',
@@ -609,7 +609,7 @@ describe('Dashboard I18n Integration', () => {
         label: { key: 'filters.status', defaultValue: 'Status' },
         type: 'select',
       }],
-    })).not.toThrow();
+    })).toThrow();
   });
 });
 
@@ -783,15 +783,14 @@ describe('DashboardWidgetSchema - description', () => {
     expect(result.description).toBe('Year-to-date total revenue');
   });
 
-  it('should accept widget with i18n description', () => {
-    const result = DashboardWidgetSchema.parse({
+  it('should reject widget with i18n description', () => {
+    expect(() => DashboardWidgetSchema.parse({
       id: 'revenue_i18n',
       title: 'Revenue',
       description: { key: 'widgets.revenue.desc', defaultValue: 'Total revenue' },
       type: 'metric',
       layout: { x: 0, y: 0, w: 3, h: 2 },
-    });
-    expect(result.description).toEqual({ key: 'widgets.revenue.desc', defaultValue: 'Total revenue' });
+    })).toThrow();
   });
 
   it('should accept widget without description (optional)', () => {
@@ -1043,15 +1042,14 @@ describe('GlobalFilterSchema', () => {
     expect(result.options![0].label).toBe('High');
   });
 
-  it('should accept filter with i18n option labels', () => {
-    const result = GlobalFilterSchema.parse({
+  it('should reject filter with i18n option labels', () => {
+    expect(() => GlobalFilterSchema.parse({
       field: 'priority',
       type: 'select',
       options: [
         { value: 'high', label: { key: 'filter.priority.high', defaultValue: 'High' } },
       ],
-    });
-    expect(result.options![0].label).toEqual({ key: 'filter.priority.high', defaultValue: 'High' });
+    })).toThrow();
   });
 
   it('should accept filter with optionsFrom (dynamic binding)', () => {
@@ -1295,12 +1293,11 @@ describe('DashboardHeaderActionSchema', () => {
     expect(result.icon).toBe('play');
   });
 
-  it('should accept i18n label', () => {
-    const result = DashboardHeaderActionSchema.parse({
+  it('should reject i18n label', () => {
+    expect(() => DashboardHeaderActionSchema.parse({
       label: { key: 'actions.export', defaultValue: 'Export' },
       actionUrl: '/export',
-    });
-    expect(result.label).toEqual({ key: 'actions.export', defaultValue: 'Export' });
+    })).toThrow();
   });
 
   it('should reject action without required fields', () => {
@@ -1429,13 +1426,12 @@ describe('WidgetMeasureSchema', () => {
     expect(result.format).toBe('$0,0.00');
   });
 
-  it('should accept measure with i18n label', () => {
-    const result = WidgetMeasureSchema.parse({
+  it('should reject measure with i18n label', () => {
+    expect(() => WidgetMeasureSchema.parse({
       valueField: 'quantity',
       aggregate: 'avg',
       label: { key: 'measures.avg_qty', defaultValue: 'Average Quantity' },
-    });
-    expect(result.label).toEqual({ key: 'measures.avg_qty', defaultValue: 'Average Quantity' });
+    })).toThrow();
   });
 
   it('should accept all aggregate functions', () => {

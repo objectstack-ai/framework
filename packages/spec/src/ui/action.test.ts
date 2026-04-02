@@ -530,28 +530,28 @@ describe('Action Factory', () => {
 });
 
 describe('Action I18n Integration', () => {
-  it('should accept i18n object as action label', () => {
+  it('should reject i18n object as action label', () => {
     expect(() => ActionSchema.parse({
       name: 'i18n_action',
       label: { key: 'actions.approve', defaultValue: 'Approve' },
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n as confirmText and successMessage', () => {
+  it('should reject i18n as confirmText and successMessage', () => {
     expect(() => ActionSchema.parse({
       name: 'i18n_confirm',
       label: 'Delete',
       confirmText: { key: 'actions.confirm_delete', defaultValue: 'Are you sure?' },
       successMessage: { key: 'actions.delete_success', defaultValue: 'Deleted!' },
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n in param labels', () => {
+  it('should reject i18n in param labels', () => {
     expect(() => ActionParamSchema.parse({
       name: 'reason',
       label: { key: 'params.reason', defaultValue: 'Reason' },
       type: 'textarea',
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n in param option labels', () => {
+  it('should reject i18n in param option labels', () => {
     expect(() => ActionParamSchema.parse({
       name: 'priority',
       label: 'Priority',
@@ -560,7 +560,7 @@ describe('Action I18n Integration', () => {
         { label: { key: 'options.high', defaultValue: 'High' }, value: 'high' },
         { label: { key: 'options.low', defaultValue: 'Low' }, value: 'low' },
       ],
-    })).not.toThrow();
+    })).toThrow();
   });
 });
 

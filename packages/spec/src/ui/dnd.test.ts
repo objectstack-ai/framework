@@ -190,12 +190,11 @@ describe('Type exports', () => {
 });
 
 describe('I18n and ARIA integration', () => {
-  it('should accept I18n label on DropZoneSchema', () => {
-    const result = DropZoneSchema.parse({
+  it('should reject I18n label on DropZoneSchema', () => {
+    expect(() => DropZoneSchema.parse({
       accept: ['card'],
       label: { key: 'dnd.drop_zone', defaultValue: 'Drop items here' },
-    });
-    expect(result.label).toEqual({ key: 'dnd.drop_zone', defaultValue: 'Drop items here' });
+    })).toThrow();
   });
 
   it('should accept ARIA props on DropZoneSchema', () => {
@@ -216,14 +215,12 @@ describe('I18n and ARIA integration', () => {
     expect(result.label).toBe('Drag this card');
   });
 
-  it('should accept ARIA props on DragItemSchema', () => {
-    const result = DragItemSchema.parse({
+  it('should reject ARIA props on DragItemSchema', () => {
+    expect(() => DragItemSchema.parse({
       type: 'row',
       ariaLabel: { key: 'dnd.drag_row', defaultValue: 'Draggable row' },
       ariaDescribedBy: 'row-desc',
-    });
-    expect(result.ariaLabel).toEqual({ key: 'dnd.drag_row', defaultValue: 'Draggable row' });
-    expect(result.ariaDescribedBy).toBe('row-desc');
+    })).toThrow();
   });
 
   it('should leave I18n/ARIA fields undefined when not provided', () => {

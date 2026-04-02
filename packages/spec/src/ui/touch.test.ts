@@ -167,12 +167,11 @@ describe('Type exports', () => {
 });
 
 describe('I18n and ARIA integration', () => {
-  it('should accept I18n label on GestureConfigSchema', () => {
-    const result = GestureConfigSchema.parse({
+  it('should reject I18n label on GestureConfigSchema', () => {
+    expect(() => GestureConfigSchema.parse({
       type: 'swipe',
       label: { key: 'gestures.swipe_left', defaultValue: 'Swipe to delete' },
-    });
-    expect(result.label).toEqual({ key: 'gestures.swipe_left', defaultValue: 'Swipe to delete' });
+    })).toThrow();
   });
 
   it('should accept plain string label on GestureConfigSchema', () => {

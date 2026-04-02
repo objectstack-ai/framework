@@ -163,11 +163,10 @@ describe('Type exports', () => {
 });
 
 describe('I18n integration', () => {
-  it('should accept I18n offlineMessage on OfflineConfigSchema', () => {
-    const result = OfflineConfigSchema.parse({
+  it('should reject I18n offlineMessage on OfflineConfigSchema', () => {
+    expect(() => OfflineConfigSchema.parse({
       offlineMessage: { key: 'offline.status', defaultValue: 'You are offline' },
-    });
-    expect(result.offlineMessage).toEqual({ key: 'offline.status', defaultValue: 'You are offline' });
+    })).toThrow();
   });
 
   it('should accept plain string offlineMessage', () => {

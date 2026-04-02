@@ -197,11 +197,10 @@ describe('Type exports', () => {
 });
 
 describe('I18n and ARIA integration', () => {
-  it('should accept I18n label on ComponentAnimationSchema', () => {
-    const result = ComponentAnimationSchema.parse({
+  it('should reject I18n label on ComponentAnimationSchema', () => {
+    expect(() => ComponentAnimationSchema.parse({
       label: { key: 'animations.card_enter', defaultValue: 'Card Enter' },
-    });
-    expect(result.label).toEqual({ key: 'animations.card_enter', defaultValue: 'Card Enter' });
+    })).toThrow();
   });
 
   it('should accept plain string label on ComponentAnimationSchema', () => {
@@ -220,11 +219,10 @@ describe('I18n and ARIA integration', () => {
     expect(result.role).toBe('presentation');
   });
 
-  it('should accept I18n label on MotionConfigSchema', () => {
-    const result = MotionConfigSchema.parse({
+  it('should reject I18n label on MotionConfigSchema', () => {
+    expect(() => MotionConfigSchema.parse({
       label: { key: 'motion.global', defaultValue: 'Global Motion Config' },
-    });
-    expect(result.label).toEqual({ key: 'motion.global', defaultValue: 'Global Motion Config' });
+    })).toThrow();
   });
 
   it('should leave I18n/ARIA fields undefined when not provided', () => {

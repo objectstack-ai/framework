@@ -430,20 +430,19 @@ describe('ReportSchema', () => {
 });
 
 describe('Report I18n Integration', () => {
-  it('should accept i18n object as report label', () => {
+  it('should reject i18n object as report label', () => {
     expect(() => ReportSchema.parse({
       name: 'i18n_report',
       label: { key: 'reports.sales', defaultValue: 'Sales Report' },
       objectName: 'opportunity',
       columns: [{ field: 'name' }],
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n object as column label', () => {
-    const result = ReportColumnSchema.parse({
+  it('should reject i18n object as column label', () => {
+    expect(() => ReportColumnSchema.parse({
       field: 'amount',
       label: { key: 'columns.amount', defaultValue: 'Amount' },
-    });
-    expect(typeof result.label).toBe('object');
+    })).toThrow();
   });
 });
 

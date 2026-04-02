@@ -421,27 +421,27 @@ describe('PageSchema', () => {
 });
 
 describe('Page I18n Integration', () => {
-  it('should accept i18n object as page label', () => {
+  it('should reject i18n object as page label', () => {
     expect(() => PageSchema.parse({
       name: 'i18n_page',
       label: { key: 'pages.dashboard', defaultValue: 'Dashboard' },
       regions: [],
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n as page description', () => {
+  it('should reject i18n as page description', () => {
     expect(() => PageSchema.parse({
       name: 'desc_page',
       label: 'Test',
       description: { key: 'pages.test.desc', defaultValue: 'A test page' },
       regions: [],
-    })).not.toThrow();
+    })).toThrow();
   });
-  it('should accept i18n as component label', () => {
+  it('should reject i18n as component label', () => {
     expect(() => PageComponentSchema.parse({
       type: 'page:header',
       label: { key: 'components.header', defaultValue: 'Header' },
       properties: {},
-    })).not.toThrow();
+    })).toThrow();
   });
 });
 
@@ -700,12 +700,12 @@ describe('PageSchema with page types', () => {
     expect(page.icon).toBe('bar-chart');
   });
 
-  it('should accept page with i18n label', () => {
+  it('should reject page with i18n label', () => {
     expect(() => PageSchema.parse({
       name: 'i18n_page',
       label: { key: 'pages.overview', defaultValue: 'Overview' },
       regions: [],
-    })).not.toThrow();
+    })).toThrow();
   });
 
   it('should accept page with ARIA attributes', () => {

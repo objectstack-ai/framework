@@ -210,20 +210,19 @@ describe('Real-World Chart Configuration Examples', () => {
 });
 
 describe('Chart I18n Integration', () => {
-  it('should accept i18n object as chart title', () => {
-    const result = ChartConfigSchema.parse({
+  it('should reject i18n object as chart title', () => {
+    expect(() => ChartConfigSchema.parse({
       type: 'bar',
       title: { key: 'charts.sales', defaultValue: 'Sales Chart' },
-    });
-    expect(typeof result.title).toBe('object');
+    })).toThrow();
   });
-  it('should accept i18n as chart subtitle and description', () => {
+  it('should reject i18n as chart subtitle and description', () => {
     expect(() => ChartConfigSchema.parse({
       type: 'line',
       title: 'Revenue',
       subtitle: { key: 'charts.subtitle', defaultValue: 'Monthly breakdown' },
       description: { key: 'charts.desc', defaultValue: 'Revenue over time' },
-    })).not.toThrow();
+    })).toThrow();
   });
 });
 

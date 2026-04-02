@@ -180,12 +180,11 @@ describe('ARIA integration', () => {
     expect(result.role).toBe('alert');
   });
 
-  it('should accept I18n ariaLabel on NotificationSchema', () => {
-    const result = NotificationSchema.parse({
+  it('should reject I18n ariaLabel on NotificationSchema', () => {
+    expect(() => NotificationSchema.parse({
       message: 'Error occurred',
       ariaLabel: { key: 'notifications.error_alert', defaultValue: 'Error alert' },
-    });
-    expect(result.ariaLabel).toEqual({ key: 'notifications.error_alert', defaultValue: 'Error alert' });
+    })).toThrow();
   });
 
   it('should leave ARIA fields undefined when not provided', () => {
