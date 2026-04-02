@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the committed wrapper re-exports).  This avoids both Vercel's TS
   compilation overwriting the bundle (`ERR_MODULE_NOT_FOUND`) and the
   "File not found" error from deleting source files during build.
+  Added `createRequire` banner to the esbuild config so that CJS
+  dependencies (knex/tarn) can `require()` Node.js built-in modules like
+  `events` without the "Dynamic require is not supported" error.
   Updated rewrites to match: `/api/:path*` → `/api/[[...route]]`.
 - **Studio CORS error on Vercel temporary/preview domains** — Changed
   `VITE_SERVER_URL` from hardcoded `https://play.objectstack.ai` to `""`
