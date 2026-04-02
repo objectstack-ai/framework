@@ -31,6 +31,7 @@
     "@objectstack/plugin-msw": "workspace:*",
     "@objectstack/plugin-security": "workspace:*",
     "@objectstack/runtime": "workspace:*",
+    "@objectstack/service-ai": "workspace:*",
     "@objectstack/service-feed": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@radix-ui/react-avatar": "^1.1.11",
