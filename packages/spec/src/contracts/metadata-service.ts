@@ -37,7 +37,7 @@
 
 import type { MetadataQuery, MetadataQueryResult, MetadataValidationResult, MetadataBulkResult, MetadataDependency } from '../kernel/metadata-plugin.zod';
 import type { MetadataOverlay } from '../kernel/metadata-customization.zod';
-import type { PackagePublishResult } from '../system/metadata-persistence.zod';
+import type { PackagePublishResult, MetadataHistoryQueryOptions, MetadataHistoryQueryResult, MetadataDiffResult } from '../system/metadata-persistence.zod';
 
 /**
  * Metadata watch callback signature
@@ -402,4 +402,43 @@ export interface IMetadataService {
      * @returns Array of dependent items
      */
     getDependents?(type: string, name: string): Promise<MetadataDependency[]>;
+
+    // ==========================================
+    // Version History & Rollback
+    // ==========================================
+
+    /**
+     * Get version history for a metadata item.
+     * Returns a timeline of all changes made to the item.
+     * @param type - Metadata type
+     * @param name - Item name
+     * @param options - Query options (limit, offset, filters)
+     * @returns History query result with version records
+     */
+    getHistory?(type: string, name: string, options?: MetadataHistoryQueryOptions): Promise<MetadataHistoryQueryResult>;
+
+    /**
+     * Rollback a metadata item to a specific version.
+     * Restores the metadata definition from the history snapshot.
+     * @param type - Metadata type
+     * @param name - Item name
+     * @param version - Target version to rollback to
+     * @param options - Rollback options
+     * @returns The restored metadata definition
+     */
+    rollback?(type: string, name: string, version: number, options?: {
+        changeNote?: string;
+        recordedBy?: string;
+    }): Promise<unknown>;
+
+    /**
+     * Compare two versions of a metadata item.
+     * Returns a diff showing what changed between versions.
+     * @param type - Metadata type
+     * @param name - Item name
+     * @param version1 - First version (older)
+     * @param version2 - Second version (newer)
+     * @returns Diff result with changes
+     */
+    diff?(type: string, name: string, version1: number, version2: number): Promise<MetadataDiffResult>;
 }

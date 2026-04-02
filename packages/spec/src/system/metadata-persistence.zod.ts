@@ -381,3 +381,174 @@ export type MetadataImportOptions = z.infer<typeof MetadataImportOptionsSchema>;
 export type MetadataManagerConfig = z.input<typeof MetadataManagerConfigSchema>;
 export type MetadataFallbackStrategy = z.infer<typeof MetadataFallbackStrategySchema>;
 export type MetadataSource = z.infer<typeof MetadataSourceSchema>;
+
+/**
+ * Metadata History Record
+ *
+ * Represents a single version snapshot in the metadata change history.
+ * Stored in the sys_metadata_history table for version tracking and rollback.
+ */
+export const MetadataHistoryRecordSchema = z.object({
+  /** Primary Key (UUID) */
+  id: z.string(),
+
+  /** Reference to the parent metadata record ID */
+  metadataId: z.string().describe('Foreign key to sys_metadata.id'),
+
+  /**
+   * Machine Name
+   * Denormalized from parent for easier querying.
+   */
+  name: z.string(),
+
+  /**
+   * Metadata Type
+   * Denormalized from parent for easier querying.
+   */
+  type: z.string(),
+
+  /**
+   * Version Number
+   * Snapshot of the metadata version at this point in history.
+   */
+  version: z.number().describe('Version number at this snapshot'),
+
+  /**
+   * Operation Type
+   * Indicates what kind of change triggered this history record.
+   */
+  operationType: z.enum(['create', 'update', 'publish', 'revert', 'delete']).describe('Type of operation that created this history entry'),
+
+  /**
+   * Historical Metadata Snapshot
+   * Full JSON payload of the metadata definition at this version.
+   */
+  metadata: z.record(z.string(), z.unknown()).describe('Snapshot of metadata definition at this version'),
+
+  /**
+   * Content Checksum
+   * SHA-256 checksum of the normalized metadata JSON for change detection.
+   */
+  checksum: z.string().describe('SHA-256 checksum of metadata content'),
+
+  /**
+   * Previous Checksum
+   * Checksum of the previous version for diff optimization.
+   */
+  previousChecksum: z.string().optional().describe('Checksum of the previous version'),
+
+  /**
+   * Change Note
+   * Human-readable description of what changed in this version.
+   */
+  changeNote: z.string().optional().describe('Description of changes made in this version'),
+
+  /** Tenant ID for multi-tenant isolation */
+  tenantId: z.string().optional().describe('Tenant identifier for multi-tenant isolation'),
+
+  /** Audit: who made this change */
+  recordedBy: z.string().optional().describe('User who made this change'),
+
+  /** Audit: when was this version recorded */
+  recordedAt: z.string().datetime().describe('Timestamp when this version was recorded'),
+});
+
+export type MetadataHistoryRecord = z.infer<typeof MetadataHistoryRecordSchema>;
+
+/**
+ * Metadata History Query Options
+ * Options for retrieving metadata version history.
+ */
+export const MetadataHistoryQueryOptionsSchema = z.object({
+  /** Limit number of history records returned */
+  limit: z.number().int().positive().optional().describe('Maximum number of history records to return'),
+
+  /** Offset for pagination */
+  offset: z.number().int().nonnegative().optional().describe('Number of records to skip'),
+
+  /** Only return versions after this timestamp */
+  since: z.string().datetime().optional().describe('Only return history after this timestamp'),
+
+  /** Only return versions before this timestamp */
+  until: z.string().datetime().optional().describe('Only return history before this timestamp'),
+
+  /** Filter by operation type */
+  operationType: z.enum(['create', 'update', 'publish', 'revert', 'delete']).optional().describe('Filter by operation type'),
+
+  /** Include full metadata payload in results (default: true) */
+  includeMetadata: z.boolean().optional().default(true).describe('Include full metadata payload'),
+});
+
+export type MetadataHistoryQueryOptions = z.infer<typeof MetadataHistoryQueryOptionsSchema>;
+
+/**
+ * Metadata History Query Result
+ * Result of querying metadata version history.
+ */
+export const MetadataHistoryQueryResultSchema = z.object({
+  /** Array of history records */
+  records: z.array(MetadataHistoryRecordSchema),
+
+  /** Total number of history records (for pagination) */
+  total: z.number().int().nonnegative(),
+
+  /** Whether there are more records available */
+  hasMore: z.boolean(),
+});
+
+export type MetadataHistoryQueryResult = z.infer<typeof MetadataHistoryQueryResultSchema>;
+
+/**
+ * Metadata Diff Result
+ * Result of comparing two versions of metadata.
+ */
+export const MetadataDiffResultSchema = z.object({
+  /** Metadata type */
+  type: z.string(),
+
+  /** Metadata name */
+  name: z.string(),
+
+  /** Version 1 (older) */
+  version1: z.number(),
+
+  /** Version 2 (newer) */
+  version2: z.number(),
+
+  /** Checksum of version 1 */
+  checksum1: z.string(),
+
+  /** Checksum of version 2 */
+  checksum2: z.string(),
+
+  /** Whether the versions are identical */
+  identical: z.boolean(),
+
+  /** JSON patch operations to transform v1 into v2 */
+  patch: z.array(z.unknown()).optional().describe('JSON patch operations'),
+
+  /** Human-readable diff summary */
+  summary: z.string().optional().describe('Human-readable summary of changes'),
+});
+
+export type MetadataDiffResult = z.infer<typeof MetadataDiffResultSchema>;
+
+/**
+ * Metadata History Retention Policy
+ * Configuration for automatic cleanup of old history records.
+ */
+export const MetadataHistoryRetentionPolicySchema = z.object({
+  /** Maximum number of versions to keep per metadata item */
+  maxVersions: z.number().int().positive().optional().describe('Maximum number of versions to retain'),
+
+  /** Maximum age of history records in days */
+  maxAgeDays: z.number().int().positive().optional().describe('Maximum age of history records in days'),
+
+  /** Whether to enable automatic cleanup */
+  autoCleanup: z.boolean().default(false).describe('Enable automatic cleanup of old history'),
+
+  /** Cleanup interval in hours */
+  cleanupIntervalHours: z.number().int().positive().default(24).describe('How often to run cleanup (in hours)'),
+});
+
+export type MetadataHistoryRetentionPolicy = z.infer<typeof MetadataHistoryRetentionPolicySchema>;
