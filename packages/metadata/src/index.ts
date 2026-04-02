@@ -21,6 +21,13 @@ export { DatabaseLoader, type DatabaseLoaderOptions } from './loaders/database-l
 
 // Objects
 export { SysMetadataObject } from './objects/sys-metadata.object.js';
+export { SysMetadataHistoryObject } from './objects/sys-metadata-history.object.js';
+
+// Routes
+export { registerMetadataHistoryRoutes } from './routes/history-routes.js';
+
+// Utils
+export { calculateChecksum, generateSimpleDiff, generateDiffSummary } from './utils/metadata-history-utils.js';
 
 // Serializers
 export { type MetadataSerializer, type SerializeOptions } from './serializers/serializer-interface.js';
@@ -43,6 +50,11 @@ export type {
   MetadataCollectionInfo,
   MetadataLoaderContract,
   MetadataManagerConfig,
+  MetadataHistoryRecord,
+  MetadataHistoryQueryOptions,
+  MetadataHistoryQueryResult,
+  MetadataDiffResult,
+  MetadataHistoryRetentionPolicy,
 } from '@objectstack/spec/system';
 
 // Re-export IMetadataService contract
