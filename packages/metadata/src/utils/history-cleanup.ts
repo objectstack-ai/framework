@@ -132,7 +132,7 @@ export class HistoryCleanupManager {
               const historyRecords = await driver.find(historyTableName, {
                 object: historyTableName,
                 where: filter,
-                orderBy: { version: 'desc' },
+                orderBy: [{ field: 'version', order: 'desc' as const }],
               });
 
               // If we have more records than the limit, delete the excess
