@@ -47,7 +47,7 @@ describe('I18nObjectSchema', () => {
 });
 
 describe('I18nLabelSchema', () => {
-  it('should accept plain string (backward compatible)', () => {
+  it('should accept plain string', () => {
     const result = I18nLabelSchema.parse('All Active');
     expect(result).toBe('All Active');
   });
@@ -57,29 +57,22 @@ describe('I18nLabelSchema', () => {
     expect(result).toBe('');
   });
 
-  it('should accept i18n object', () => {
-    const label: I18nLabel = {
+  it('should reject i18n object (no longer accepted)', () => {
+    expect(() => I18nLabelSchema.parse({
       key: 'views.task_list.label',
       defaultValue: 'Task List',
-    };
-
-    const result = I18nLabelSchema.parse(label);
-    expect(typeof result).toBe('object');
-    expect((result as I18nObject).key).toBe('views.task_list.label');
+    })).toThrow();
   });
 
-  it('should accept i18n object with params', () => {
-    const label = {
+  it('should reject i18n object with params', () => {
+    expect(() => I18nLabelSchema.parse({
       key: 'common.item_count',
       defaultValue: '{count} items',
       params: { count: 42 },
-    };
-
-    const result = I18nLabelSchema.parse(label);
-    expect((result as I18nObject).params).toEqual({ count: 42 });
+    })).toThrow();
   });
 
-  it('should reject non-string, non-object values', () => {
+  it('should reject non-string values', () => {
     expect(() => I18nLabelSchema.parse(123)).toThrow();
     expect(() => I18nLabelSchema.parse(true)).toThrow();
     expect(() => I18nLabelSchema.parse(null)).toThrow();
@@ -104,17 +97,22 @@ describe('AriaPropsSchema', () => {
     expect(result.ariaLabel).toBe('Close dialog');
   });
 
-  it('should accept ariaLabel as i18n object', () => {
+  it('should accept ariaLabel as string only', () => {
     const props = {
+      ariaLabel: 'Close dialog',
+    };
+
+    const result = AriaPropsSchema.parse(props);
+    expect(result.ariaLabel).toBe('Close dialog');
+  });
+
+  it('should reject ariaLabel as i18n object (no longer accepted)', () => {
+    expect(() => AriaPropsSchema.parse({
       ariaLabel: {
         key: 'common.close_dialog',
         defaultValue: 'Close dialog',
       },
-    };
-
-    const result = AriaPropsSchema.parse(props);
-    expect(typeof result.ariaLabel).toBe('object');
-    expect((result.ariaLabel as I18nObject).key).toBe('common.close_dialog');
+    })).toThrow();
   });
 
   it('should accept all ARIA properties', () => {
@@ -139,19 +137,22 @@ describe('AriaPropsSchema', () => {
   });
 });
 
-describe('I18n Integration (backward compatibility)', () => {
-  it('should seamlessly support both string and object in same context', () => {
-    // Simulates a record with mixed label types (migration scenario)
+describe('I18n Integration', () => {
+  it('should only accept string labels', () => {
     const labels: I18nLabel[] = [
       'Plain String Label',
-      { key: 'labels.translated', defaultValue: 'Translated Label' },
       'Another Plain String',
-      { key: 'labels.with_params', params: { count: 10 } },
+      'Setup',
     ];
 
     labels.forEach(label => {
       expect(() => I18nLabelSchema.parse(label)).not.toThrow();
     });
+  });
+
+  it('should reject i18n objects in label context', () => {
+    expect(() => I18nLabelSchema.parse({ key: 'labels.translated', defaultValue: 'Translated Label' })).toThrow();
+    expect(() => I18nLabelSchema.parse({ key: 'labels.with_params', params: { count: 10 } })).toThrow();
   });
 });
 

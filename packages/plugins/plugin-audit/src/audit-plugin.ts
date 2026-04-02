@@ -33,7 +33,7 @@ export class AuditPlugin implements Plugin {
         setupNav.contribute({
           areaId: 'area_system',
           items: [
-            { id: 'nav_audit_logs', type: 'object', label: { key: 'setup.nav.audit_logs', defaultValue: 'Audit Logs' }, objectName: 'audit_log', icon: 'scroll-text', order: 10 },
+            { id: 'nav_audit_logs', type: 'object', label: 'Audit Logs', objectName: 'audit_log', icon: 'scroll-text', order: 10 },
           ],
         });
         ctx.logger.info('Audit navigation items contributed to Setup App');

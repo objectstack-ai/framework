@@ -119,11 +119,11 @@ export class AuthPlugin implements Plugin {
         setupNav.contribute({
           areaId: 'area_administration',
           items: [
-            { id: 'nav_users', type: 'object', label: { key: 'setup.nav.users', defaultValue: 'Users' }, objectName: 'user', icon: 'users', order: 10 },
-            { id: 'nav_organizations', type: 'object', label: { key: 'setup.nav.organizations', defaultValue: 'Organizations' }, objectName: 'organization', icon: 'building-2', order: 20 },
-            { id: 'nav_teams', type: 'object', label: { key: 'setup.nav.teams', defaultValue: 'Teams' }, objectName: 'team', icon: 'users-round', order: 30 },
-            { id: 'nav_api_keys', type: 'object', label: { key: 'setup.nav.api_keys', defaultValue: 'API Keys' }, objectName: 'api_key', icon: 'key', order: 40 },
-            { id: 'nav_sessions', type: 'object', label: { key: 'setup.nav.sessions', defaultValue: 'Sessions' }, objectName: 'session', icon: 'monitor', order: 50 },
+            { id: 'nav_users', type: 'object', label: 'Users', objectName: 'user', icon: 'users', order: 10 },
+            { id: 'nav_organizations', type: 'object', label: 'Organizations', objectName: 'organization', icon: 'building-2', order: 20 },
+            { id: 'nav_teams', type: 'object', label: 'Teams', objectName: 'team', icon: 'users-round', order: 30 },
+            { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'api_key', icon: 'key', order: 40 },
+            { id: 'nav_sessions', type: 'object', label: 'Sessions', objectName: 'session', icon: 'monitor', order: 50 },
           ],
         });
         ctx.logger.info('Auth navigation items contributed to Setup App');

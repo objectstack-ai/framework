@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **i18n: `I18nLabelSchema` now accepts `string` only** — `label`, `description`, `title`,
+  and other display-text fields across all UI schemas (`AppSchema`, `NavigationArea`,
+  `PageSchema`, `DashboardWidgetSchema`, `ReportSchema`, `ChartSchema`, `NotificationSchema`,
+  `AriaPropsSchema`, etc.) now accept only plain strings. The previous `string | I18nObject`
+  union type has been replaced with `z.string()`. i18n translation keys will be auto-generated
+  by the framework at registration time; developers only need to provide the default-language
+  string value. Translations are managed through translation files, not inline i18n objects.
+  ([#1054](https://github.com/objectstack-ai/framework/issues/1054))
+
+  **Migration:** Replace any `label: { key: '...', defaultValue: 'X' }` with `label: 'X'`.
+  Existing plain-string labels require no changes.
+
+  **Affected plugins updated:**
+  - `@objectstack/plugin-setup` — `setup-app.ts`, `setup-areas.ts`
+  - `@objectstack/plugin-auth` — navigation item labels
+  - `@objectstack/plugin-security` — navigation item labels
+  - `@objectstack/plugin-audit` — navigation item labels
+
 ### Documentation
 - **README rewrite** — Rewrote `README.md` to accurately reflect the `objectstack-ai/framework`
   repository. Updates include: corrected title ("ObjectStack Framework"), updated badges

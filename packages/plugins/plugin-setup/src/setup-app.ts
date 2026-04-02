@@ -12,14 +12,8 @@ import type { App, NavigationArea, NavigationItem } from '@objectstack/spec/ui';
  */
 export const SETUP_APP_DEFAULTS: Omit<App, 'areas'> & { areas: NavigationArea[] } = {
   name: 'setup',
-  label: {
-    key: 'setup.app.label',
-    defaultValue: 'Setup',
-  },
-  description: {
-    key: 'setup.app.description',
-    defaultValue: 'Platform settings and administration',
-  },
+  label: 'Setup',
+  description: 'Platform settings and administration',
   icon: 'settings',
   active: true,
   isDefault: false,

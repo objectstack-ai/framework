@@ -31,58 +31,34 @@ export type SetupAreaId = (typeof SETUP_AREA_IDS)[keyof typeof SETUP_AREA_IDS];
 export const SETUP_AREAS: readonly NavigationArea[] = [
   {
     id: SETUP_AREA_IDS.administration,
-    label: {
-      key: 'setup.areas.administration',
-      defaultValue: 'Administration',
-    },
+    label: 'Administration',
     icon: 'shield',
     order: 10,
-    description: {
-      key: 'setup.areas.administration.description',
-      defaultValue: 'User management, roles, permissions, and security settings',
-    },
+    description: 'User management, roles, permissions, and security settings',
     navigation: [],
   },
   {
     id: SETUP_AREA_IDS.platform,
-    label: {
-      key: 'setup.areas.platform',
-      defaultValue: 'Platform',
-    },
+    label: 'Platform',
     icon: 'layers',
     order: 20,
-    description: {
-      key: 'setup.areas.platform.description',
-      defaultValue: 'Objects, fields, layouts, automation, and extensibility settings',
-    },
+    description: 'Objects, fields, layouts, automation, and extensibility settings',
     navigation: [],
   },
   {
     id: SETUP_AREA_IDS.system,
-    label: {
-      key: 'setup.areas.system',
-      defaultValue: 'System',
-    },
+    label: 'System',
     icon: 'settings',
     order: 30,
-    description: {
-      key: 'setup.areas.system.description',
-      defaultValue: 'Datasources, integrations, jobs, logs, and environment configuration',
-    },
+    description: 'Datasources, integrations, jobs, logs, and environment configuration',
     navigation: [],
   },
   {
     id: SETUP_AREA_IDS.ai,
-    label: {
-      key: 'setup.areas.ai',
-      defaultValue: 'AI',
-    },
+    label: 'AI',
     icon: 'brain',
     order: 40,
-    description: {
-      key: 'setup.areas.ai.description',
-      defaultValue: 'AI agents, model registry, RAG pipelines, and intelligence settings',
-    },
+    description: 'AI agents, model registry, RAG pipelines, and intelligence settings',
     navigation: [],
   },
 ] as const;
