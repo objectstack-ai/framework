@@ -46,7 +46,7 @@ import type { MetadataSerializer } from './serializers/serializer-interface.js';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import type { MetadataLoader } from './loaders/loader-interface.js';
 import { DatabaseLoader } from './loaders/database-loader.js';
-import { calculateChecksum, generateSimpleDiff, generateDiffSummary } from './utils/metadata-history-utils.js';
+import { generateSimpleDiff, generateDiffSummary } from './utils/metadata-history-utils.js';
 
 /**
  * Watch callback function (legacy)
@@ -1256,7 +1256,7 @@ export class MetadataManager implements IMetadataService {
     const historyRecords = await driver.find(historyTableName, {
       object: historyTableName,
       where: historyFilter,
-      orderBy: { recorded_at: 'desc' },
+      orderBy: [{ field: 'recorded_at', order: 'desc' as const }],
       limit: limit + 1, // Fetch one extra to determine hasMore
       offset,
     });
@@ -1316,7 +1316,7 @@ export class MetadataManager implements IMetadataService {
     }
 
     // Get the target version from history
-    const history = await this.getHistory(type, name, { limit: 1000 });
+    const history = await this.getHistory(type, name, { limit: 1000, includeMetadata: true });
     const targetVersion = history.records.find(r => r.version === version);
 
     if (!targetVersion) {
@@ -1382,7 +1382,7 @@ export class MetadataManager implements IMetadataService {
     }
 
     // Get both versions from history
-    const history = await this.getHistory(type, name, { limit: 1000 });
+    const history = await this.getHistory(type, name, { limit: 1000, includeMetadata: true });
     const v1 = history.records.find(r => r.version === version1);
     const v2 = history.records.find(r => r.version === version2);
 
