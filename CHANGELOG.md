@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absent, fixing the CI `@objectstack/client#test` failure.
 
 ### Added
+- **Metadata Management Tools (`service-ai`)** — Added 6 built-in AI tools for metadata
+  CRUD operations, each defined as a first-class `Tool` metadata file using `defineTool()`
+  from `@objectstack/spec/ai`:
+  - `create-object.tool.ts` — Creates a new data object with schema validation
+  - `add-field.tool.ts` — Adds a field to an existing object
+  - `modify-field.tool.ts` — Modifies field properties on an object
+  - `delete-field.tool.ts` — Removes a field from an object
+  - `list-metadata-objects.tool.ts` — Lists all registered metadata objects
+  - `describe-metadata-object.tool.ts` — Returns full schema details of an object
+  
+  Each `.tool.ts` file is an independent metadata unit with `name`, `label`, `description`,
+  `category`, `builtIn`, and `parameters` — following the same `.object.ts` / `.view.ts`
+  metadata file convention. Handler factories remain in `metadata-tools.ts` and bind handlers
+  at `ai:ready` time via `registerMetadataTools(registry, { metadataService })`.
+  79 unit tests covering tool metadata properties, handler execution, input validation,
+  error handling, dual registration with data tools, and a full lifecycle test.
 - **Agent Skills — `skills/` directory (agentskills.io)** — Created `skills/` folder at
   repository root following the [agentskills.io specification](https://agentskills.io/specification).
   Five expert-knowledge skills with hand-written `SKILL.md` files and `references/` quick-lookup

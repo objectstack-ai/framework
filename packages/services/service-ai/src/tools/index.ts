@@ -5,3 +5,14 @@ export type { ToolHandler, ToolExecutionResult } from './tool-registry.js';
 
 export { registerDataTools, DATA_TOOL_DEFINITIONS } from './data-tools.js';
 export type { DataToolContext } from './data-tools.js';
+
+export { registerMetadataTools, METADATA_TOOL_DEFINITIONS } from './metadata-tools.js';
+export type { MetadataToolContext } from './metadata-tools.js';
+
+// Individual tool metadata exports
+export { createObjectTool } from './create-object.tool.js';
+export { addFieldTool } from './add-field.tool.js';
+export { modifyFieldTool } from './modify-field.tool.js';
+export { deleteFieldTool } from './delete-field.tool.js';
+export { listMetadataObjectsTool } from './list-metadata-objects.tool.js';
+export { describeMetadataObjectTool } from './describe-metadata-object.tool.js';
