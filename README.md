@@ -1,48 +1,39 @@
-# ObjectStack Protocol
+# ObjectStack Framework
 
-![ObjectStack Protocol](https://img.shields.io/badge/ObjectStack-Protocol-black)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+![Version](https://img.shields.io/badge/version-v4.0.1-green.svg)
+![Tests](https://img.shields.io/badge/tests-6%2C507%20passing-brightgreen.svg)
 
-> **The "Constitution" of the Post-SaaS Operating System.**
+> A metadata-driven developer framework with microkernel runtime, CLI toolchain, official plugins, framework adapters, and Studio IDE — orchestrating ObjectQL, ObjectOS, and ObjectUI into a unified development experience.
 
-This repository contains the core specifications, schemas, and protocols that power the ObjectStack ecosystem. It defines how data, UI, and system configurations are expressed as code.
+## What is ObjectStack?
 
-## 🎯 What is ObjectStack?
+ObjectStack is a metadata-driven platform built on a **microkernel architecture** and three protocol layers:
 
-ObjectStack is a metadata-driven platform built on three foundational protocols:
+- **ObjectQL** (Data Layer) — Define objects, fields, queries, and relations as metadata
+- **ObjectOS** (Control Layer) — Runtime, permissions, automation, and plugin lifecycle
+- **ObjectUI** (View Layer) — Presentation metadata: apps, views, dashboards, and actions
 
-- **ObjectQL** (Data Layer) — Define data structure and queries
-- **ObjectOS** (Control Layer) — Runtime, permissions, and workflows
-- **ObjectUI** (View Layer) — Presentation and user interaction
+All business logic is expressed as **Zod schemas** (1,600+ exported schemas across 200 schema files). The microkernel loads plugins and services at startup, enabling a fully composable and extensible stack with zero vendor lock-in.
 
-**Learn more:**
-- [Three-Layer Stack](./content/docs/introduction/architecture.mdx) — How ObjectQL, ObjectOS, and ObjectUI work together
-- [Architecture Guide](./ARCHITECTURE.md) — Complete microkernel architecture documentation
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer architecture documentation.
 
-## 📚 Documentation
+## Key Features
 
-📖 **[Read the Full Documentation](https://objectstack.dev/docs)** or run locally with `pnpm docs:dev`
+- **Protocol-first** — All schemas defined with Zod; TypeScript types are derived via `z.infer<>`
+- **Microkernel plugin system** — DI container, EventBus, and lifecycle hooks (init → start → destroy)
+- **Multi-database support** — In-memory, PostgreSQL, MySQL, SQLite, and Turso/libSQL drivers
+- **7 framework adapters** — Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit
+- **Client SDK + React hooks** — `useQuery`, `useMutation`, `usePagination` out of the box
+- **Built-in authentication** — [better-auth](https://www.better-auth.com/) via `plugin-auth`
+- **RBAC / RLS / FLS security** — Role-based, row-level, and field-level access control
+- **Automation engine** — DAG-based flows, triggers, and workflow management
+- **AI service** — Agent, Tool, and Skill protocol built on the Vercel AI SDK
+- **Studio IDE** — Web-based metadata explorer, schema inspector, and AI assistant
+- **CLI toolchain** — `os init`, `os dev`, `os studio`, `os serve`, `os validate`, and more
 
-### Quick Links
-
-- **Getting Started:**
-  - [Introduction](./content/docs/introduction/) — Core concepts and architecture
-  - [CLI Guide](./content/docs/framework/cli.mdx) — `init`, `dev`, `serve`, `studio`, `compile`, `validate`
-  - [Quick Reference](./content/docs/references/quick-reference.mdx) — Fast protocol lookup
-
-- **Protocol References:**
-  - [Protocol Reference](./content/docs/references/) — All protocol specifications (175 Zod schemas)
-  - [ObjectQL](./content/docs/objectql/) — Data layer documentation
-  - [ObjectUI](./content/docs/objectui/) — UI layer documentation
-  - [ObjectOS](./content/docs/objectos/) — System layer documentation
-
-- **Development:**
-  - [Developer Guide](./content/docs/developer/) — Tutorials and best practices
-  - [Package Reference](./content/docs/concepts/packages.mdx) — All 25 packages
-  - [Contributing Guide](./CONTRIBUTING.md) — How to contribute
-
-## 🚀 Quick Start
+## Quick Start
 
 ### For Application Developers
 
@@ -54,160 +45,212 @@ cd my-app
 # Start development server
 os dev
 
-# Start with Console UI (Object Explorer, Schema Inspector)
+# Open Studio IDE
 os studio
-# → API:     http://localhost:3000/api/v1/
-# → Console: http://localhost:3000/_studio/
+# → API:    http://localhost:3000/api/v1/
+# → Studio: http://localhost:3000/_studio/
 ```
 
-### For Protocol Developers
+### For Framework Contributors
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/objectstack-ai/spec.git
-cd spec
+git clone https://github.com/objectstack-ai/framework.git
+cd framework
 pnpm install
 
 # 2. Build all packages
 pnpm build
 
-# 3. Check environment health
-pnpm doctor
+# 3. Run tests
+pnpm test
 
-# 4. Start Documentation Site
+# 4. Start Documentation site
 pnpm docs:dev
 # → http://localhost:3000/docs
-
-# 5. Launch Console UI + dev server
-pnpm studio
 ```
 
-### Monorepo Scripts
+## Monorepo Scripts
 
 | Script | Description |
 | :--- | :--- |
 | `pnpm build` | Build all packages (excludes docs) |
-| `pnpm dev` | Start app-host example dev server |
-| `pnpm studio` | Launch Console UI with dev server |
-| `pnpm dev:console` | Start Console standalone (MSW mode) |
-| `pnpm test` | Run spec tests |
+| `pnpm dev` | Start development server |
+| `pnpm studio` | Launch Studio IDE with dev server |
+| `pnpm test` | Run all tests |
 | `pnpm doctor` | Check environment health |
-| `pnpm docs:dev` | Start documentation site |
+| `pnpm setup` | Install dependencies and build spec |
+| `pnpm docs:dev` | Start documentation site locally |
 | `pnpm docs:build` | Build documentation for production |
 
-### CLI Commands
+## CLI Commands
 
 ```bash
-os init [name]       # Scaffold a new project
-os dev               # Start dev server (hot-reload)
-os dev --ui          # Dev server + Console UI
-os studio            # Alias for dev --ui (one command)
-os serve             # Start production server
-os compile           # Build deployable JSON artifact
-os validate          # Check configuration against protocol
-os info              # Display metadata summary
-os generate          # Scaffold objects, views, flows
-os doctor            # Check environment health
+os init [name]    # Scaffold a new project
+os dev            # Start dev server with hot-reload
+os studio         # Start dev server + Studio IDE
+os serve          # Start production server
+os compile        # Build deployable JSON artifact
+os validate       # Validate configuration against protocol
+os info           # Display metadata summary
+os generate       # Scaffold objects, views, and flows
+os doctor         # Check environment health
 ```
 
-## 📦 Monorepo Structure
+## Package Directory
 
-### Core Packages
+### Core
 
-| Package | Description | Status |
-| :--- | :--- | :--- |
-| [`@objectstack/spec`](packages/spec) | Protocol definitions (Zod schemas, Types, JSON Schemas) | 🟢 Active |
-| [`@objectstack/core`](packages/core) | Microkernel runtime (Plugin system, DI, Event Bus, Logger) | 🟢 Active |
-| [`@objectstack/types`](packages/types) | Shared runtime type definitions | 🟢 Active |
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/spec`](packages/spec) | Protocol definitions — Zod schemas, TypeScript types, JSON Schemas, constants |
+| [`@objectstack/core`](packages/core) | Microkernel runtime — Plugin system, DI container, EventBus, Logger |
+| [`@objectstack/types`](packages/types) | Shared TypeScript type utilities |
 
-### Engine Packages
+### Engine
 
-| Package | Description | Status |
-| :--- | :--- | :--- |
-| [`@objectstack/objectql`](packages/objectql) | ObjectQL query engine and schema registry | 🟢 Active |
-| [`@objectstack/runtime`](packages/runtime) | Runtime utilities, DriverPlugin, AppPlugin | 🟢 Active |
-| [`@objectstack/metadata`](packages/metadata) | Metadata loading and persistence | 🟢 Active |
-| [`@objectstack/rest`](packages/rest) | REST API Server — auto-generated endpoints from protocol | 🟢 Active |
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/objectql`](packages/objectql) | ObjectQL query engine and schema registry |
+| [`@objectstack/runtime`](packages/runtime) | Runtime bootstrap — DriverPlugin, AppPlugin |
+| [`@objectstack/metadata`](packages/metadata) | Metadata loading and persistence |
+| [`@objectstack/rest`](packages/rest) | Auto-generated REST API layer |
 
-### Client Packages
+### Drivers
 
-| Package | Description | Status |
-| :--- | :--- | :--- |
-| [`@objectstack/client`](packages/client) | Official Client SDK (CRUD, Batch API, Error handling) | 🟢 Active |
-| [`@objectstack/client-react`](packages/client-react) | React hooks (useQuery, useMutation, usePagination) | 🟢 Active |
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/driver-memory`](packages/plugins/driver-memory) | In-memory driver (development and testing) |
+| [`@objectstack/driver-sql`](packages/plugins/driver-sql) | SQL driver — PostgreSQL, MySQL, SQLite (production) |
+| [`@objectstack/driver-turso`](packages/plugins/driver-turso) | Turso/libSQL driver |
 
-### Plugin Packages
+### Client
 
-| Package | Description | Status |
-| :--- | :--- | :--- |
-| [`@objectstack/driver-memory`](packages/plugins/driver-memory) | In-memory driver (reference implementation, zero deps) | 🟢 Active |
-| [`@objectstack/plugin-hono-server`](packages/plugins/plugin-hono-server) | HTTP server plugin (Hono-based, auto-discovery) | 🟢 Active |
-| [`@objectstack/plugin-msw`](packages/plugins/plugin-msw) | Mock Service Worker plugin for browser testing | 🟢 Active |
-| [`@objectstack/plugin-auth`](packages/plugins/plugin-auth) | Authentication & identity plugin (better-auth based) | 🟡 In Development |
-| [`@objectstack/plugin-security`](packages/plugins/plugin-security) | RBAC, Row-Level Security, and Field-Level Security | 🟢 Active |
-| [`@objectstack/plugin-dev`](packages/plugins/plugin-dev) | Dev mode — auto-enables all services with in-memory stubs | 🟢 Active |
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/client`](packages/client) | Client SDK — CRUD, batch API, error handling |
+| [`@objectstack/client-react`](packages/client-react) | React hooks — `useQuery`, `useMutation`, `usePagination` |
+
+### Plugins
+
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/plugin-hono-server`](packages/plugins/plugin-hono-server) | Hono-based HTTP server plugin |
+| [`@objectstack/plugin-msw`](packages/plugins/plugin-msw) | Mock Service Worker plugin for browser testing |
+| [`@objectstack/plugin-auth`](packages/plugins/plugin-auth) | Authentication plugin (better-auth) |
+| [`@objectstack/plugin-security`](packages/plugins/plugin-security) | RBAC, Row-Level Security, Field-Level Security |
+| [`@objectstack/plugin-dev`](packages/plugins/plugin-dev) | Developer mode — in-memory stubs for all services |
+| [`@objectstack/plugin-audit`](packages/plugins/plugin-audit) | Audit logging plugin |
+| [`@objectstack/plugin-setup`](packages/plugins/plugin-setup) | First-run setup wizard |
+
+### Services
+
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/service-feed`](packages/services/service-feed) | Activity feed service |
+| [`@objectstack/service-automation`](packages/services/service-automation) | Automation engine — flows, triggers, DAG-based workflows |
+| [`@objectstack/service-ai`](packages/services/service-ai) | AI service — Agent, Tool, Skill, Vercel AI SDK integration |
+| [`@objectstack/service-realtime`](packages/services/service-realtime) | Real-time events and subscriptions |
+| [`@objectstack/service-i18n`](packages/services/service-i18n) | Internationalization service |
 
 ### Framework Adapters
 
-| Package | Description | Status |
-| :--- | :--- | :--- |
-| [`@objectstack/express`](packages/adapters/express) | Express adapter | 🟢 Active |
-| [`@objectstack/fastify`](packages/adapters/fastify) | Fastify adapter | 🟢 Active |
-| [`@objectstack/hono`](packages/adapters/hono) | Hono adapter (Node.js, Bun, Deno, Cloudflare Workers) | 🟢 Active |
-| [`@objectstack/nestjs`](packages/adapters/nestjs) | NestJS module integration | 🟢 Active |
-| [`@objectstack/nextjs`](packages/adapters/nextjs) | Next.js App Router adapter | 🟢 Active |
-| [`@objectstack/nuxt`](packages/adapters/nuxt) | Nuxt adapter (h3-based) | 🟢 Active |
-| [`@objectstack/sveltekit`](packages/adapters/sveltekit) | SvelteKit adapter | 🟢 Active |
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/express`](packages/adapters/express) | Express adapter |
+| [`@objectstack/fastify`](packages/adapters/fastify) | Fastify adapter |
+| [`@objectstack/hono`](packages/adapters/hono) | Hono adapter (Node.js, Bun, Deno, Cloudflare Workers) |
+| [`@objectstack/nestjs`](packages/adapters/nestjs) | NestJS module integration |
+| [`@objectstack/nextjs`](packages/adapters/nextjs) | Next.js App Router adapter |
+| [`@objectstack/nuxt`](packages/adapters/nuxt) | Nuxt adapter (h3-based) |
+| [`@objectstack/sveltekit`](packages/adapters/sveltekit) | SvelteKit adapter |
 
 ### Tools & Apps
 
-| Package | Description | Status |
-| :--- | :--- | :--- |
-| [`@objectstack/cli`](packages/cli) | CLI: init, dev, serve, studio, compile, validate, generate | 🟢 Active |
-| [`create-objectstack`](packages/create-objectstack) | Project scaffolder (`npx create-objectstack`) | 🟢 Active |
-| [`objectstack-vscode`](packages/vscode-objectstack) | VSCode extension — autocomplete, validation, diagnostics | 🟢 Active |
-| [`@objectstack/studio`](apps/studio) | Studio UI (Object Explorer, Schema Inspector) | 🟢 Active |
-| [`@objectstack/docs`](apps/docs) | Documentation site (Fumadocs + Next.js) | 🟢 Active |
+| Package | Description |
+| :--- | :--- |
+| [`@objectstack/cli`](packages/cli) | CLI — `init`, `dev`, `serve`, `studio`, `compile`, `validate`, `generate` |
+| [`create-objectstack`](packages/create-objectstack) | Project scaffolder (`npx create-objectstack`) |
+| [`objectstack-vscode`](packages/vscode-objectstack) | VS Code extension — autocomplete, validation, diagnostics |
+| [`@objectstack/studio`](apps/studio) | Studio IDE — metadata explorer, schema inspector, AI assistant |
+| [`@objectstack/docs`](apps/docs) | Documentation site (Fumadocs + Next.js) |
 
 ### Examples
 
 | Example | Description | Level |
 | :--- | :--- | :--- |
-| [`@example/app-todo`](examples/app-todo) | Task management app — objects, views, dashboards, flows | 🟢 Beginner |
-| [`@example/app-crm`](examples/app-crm) | Enterprise CRM — accounts, contacts, opportunities, leads | 🟡 Intermediate |
-| [`@example/app-host`](examples/app-host) | Server host — multi-app orchestration with plugins | 🔴 Advanced |
-| [`@example/plugin-bi`](examples/plugin-bi) | BI plugin — analytics objects and reports | 🟡 Intermediate |
+| [`@example/app-todo`](examples/app-todo) | Task management app — objects, views, dashboards, flows | Beginner |
+| [`@example/app-crm`](examples/app-crm) | Enterprise CRM — accounts, contacts, opportunities, leads | Intermediate |
+| [`@example/app-host`](examples/app-host) | Server host — multi-app orchestration with plugins | Advanced |
+| [`@example/plugin-bi`](examples/plugin-bi) | BI plugin — analytics objects and reports | Intermediate |
 
-## 🗺️ Roadmap
+## Codebase Metrics
 
-See **[ROADMAP.md](./ROADMAP.md)** for the next-phase optimization and improvement plan (Phases 5–11), covering:
+| Metric | Value |
+| :--- | :--- |
+| Packages | 27 |
+| Zod schema files | 200 |
+| Exported schemas | 1,600+ |
+| `.describe()` annotations | 8,750+ |
+| Service contracts | 27 |
+| Test files | 229 |
+| Tests passing | 6,507 |
 
-- Spec test coverage completion (100% schema coverage)
-- Runtime package hardening (resolve all TODOs)
-- Framework adapter implementations (Hono, Next.js, NestJS)
-- Deprecation cleanup & v3.0 preparation
-- Developer experience & tooling improvements
-- Performance optimization & security hardening
+## Architecture
 
-Studio-specific roadmap: **[apps/studio/ROADMAP.md](./apps/studio/ROADMAP.md)**
+ObjectStack uses a **microkernel architecture** where the kernel provides only the essential infrastructure (DI, EventBus, lifecycle), and all capabilities are delivered as plugins. The three protocol layers sit above the kernel:
 
-Visual design UX optimization plan: **[docs/design/visual-design-ux-optimization.md](./docs/design/visual-design-ux-optimization.md)**
+```
+┌─────────────────────────────────────────────────────┐
+│              ObjectKernel (Core)                     │
+│  ┌───────────────────────────────────────────────┐  │
+│  │  Plugin Lifecycle Manager                     │  │
+│  │  • Dependency Resolution (Topological Sort)   │  │
+│  │  • Init → Start → Destroy Phases              │  │
+│  └───────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────┐  │
+│  │  Service Registry (DI Container)              │  │
+│  │  • registerService(name, service)             │  │
+│  │  • getService<T>(name): T                     │  │
+│  └───────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────┐  │
+│  │  Event Bus (Hook System)                      │  │
+│  │  • hook(name, handler)                        │  │
+│  │  • trigger(name, ...args)                     │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+              │
+    ┌─────────┴─────────┬──────────┬──────────┐
+    │                   │          │          │
+┌───▼────┐      ┌───────▼──┐   ┌──▼───┐  ┌───▼────┐
+│ObjectQL│      │  Driver  │   │ Hono │  │  App   │
+│ Plugin │      │  Plugin  │   │Server│  │ Plugin │
+└────────┘      └──────────┘   └──────┘  └────────┘
+```
 
-## 🤝 Contributing
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete design documentation including the plugin lifecycle state machine, dependency graph, and design decisions.
 
-We welcome contributions! Please read our **[Contributing Guide](./CONTRIBUTING.md)** for:
+## Roadmap
 
-- Development workflow and setup
-- Coding standards (Zod-first, camelCase config, snake_case data)
-- Testing requirements
-- Documentation guidelines
+See [ROADMAP.md](./ROADMAP.md) for the planned phases covering runtime hardening, framework adapter completion, developer experience improvements, performance optimization, and security hardening.
 
-**Key Standards:**
-- All schemas defined using **Zod** with runtime validation
-- Configuration keys: `camelCase` (e.g., `maxLength`)
-- Machine names: `snake_case` (e.g., `project_task`)
-- Comprehensive JSDoc comments
+Studio-specific roadmap: [apps/studio/ROADMAP.md](./apps/studio/ROADMAP.md)
 
-## 📄 License
+## Contributing
+
+We welcome contributions. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow, coding standards, testing requirements, and documentation guidelines.
+
+Key standards:
+- **Zod-first** — all schemas start with Zod; TypeScript types are derived via `z.infer<>`
+- **camelCase** for configuration keys (e.g., `maxLength`, `defaultValue`)
+- **snake_case** for machine names / data values (e.g., `project_task`, `first_name`)
+
+## Documentation
+
+Full documentation: **[https://docs.objectstack.ai](https://docs.objectstack.ai)**
+
+Run locally: `pnpm docs:dev`
+
+## License
 
 Apache 2.0 © ObjectStack

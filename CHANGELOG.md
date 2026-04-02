@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **README rewrite** — Rewrote `README.md` to accurately reflect the `objectstack-ai/framework`
+  repository. Updates include: corrected title ("ObjectStack Framework"), updated badges
+  (v4.0.1, 6,507 tests passing), fixed stale clone URL (`spec.git` → `framework.git`),
+  added all missing packages (`driver-sql`, `driver-turso`, `plugin-audit`, `plugin-setup`,
+  `service-feed`, `service-automation`, `service-ai`, `service-realtime`, `service-i18n`),
+  updated codebase metrics (27 packages, 200 Zod schema files, 1,600+ exported schemas,
+  8,750+ `.describe()` annotations, 6,507 tests passing), and restructured sections to
+  match the current monorepo layout.
+
 ### Fixed
 - **Client test aligned with removed `ai.chat` method** — Updated
   `@objectstack/client` test suite to match the current API surface where
