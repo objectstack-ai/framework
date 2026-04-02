@@ -62,6 +62,7 @@ export default function App() {
   const handleSelectPackage = useCallback((pkg: InstalledPackage) => {
     setSelectedPackage(pkg);
     setSelectedObject(null);
+    setSelectedMeta(null);
     setSelectedView('overview');
   }, []);
 
@@ -126,9 +127,17 @@ export default function App() {
           />
           <div className="flex flex-1 flex-col overflow-hidden">
             {selectedView === 'object' && selectedObject ? (
-              <PluginHost metadataType="object" metadataName={selectedObject} />
+              <PluginHost
+                metadataType="object"
+                metadataName={selectedObject}
+                packageId={selectedPackage?.manifest?.id}
+              />
             ) : selectedView === 'metadata' && selectedMeta ? (
-              <PluginHost metadataType={selectedMeta.type} metadataName={selectedMeta.name} />
+              <PluginHost
+                metadataType={selectedMeta.type}
+                metadataName={selectedMeta.name}
+                packageId={selectedPackage?.manifest?.id}
+              />
             ) : selectedView === 'packages' ? (
               <PackageManager />
             ) : selectedView === 'api-console' ? (

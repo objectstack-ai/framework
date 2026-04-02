@@ -359,10 +359,15 @@ export class ObjectStackClient {
      * Get a specific metadata item by type and name
      * @param type - Metadata type (e.g., 'object', 'plugin')
      * @param name - Item name (snake_case identifier)
+     * @param options - Optional filters (e.g., packageId to scope by package)
      */
-    getItem: async (type: string, name: string) => {
+    getItem: async (type: string, name: string, options?: { packageId?: string }) => {
         const route = this.getRoute('metadata');
-        const res = await this.fetch(`${this.baseUrl}${route}/${type}/${name}`);
+        const params = new URLSearchParams();
+        if (options?.packageId) params.set('package', options.packageId);
+        const qs = params.toString();
+        const url = `${this.baseUrl}${route}/${type}/${name}${qs ? `?${qs}` : ''}`;
+        const res = await this.fetch(url);
         return this.unwrapResponse(res);
     },
 

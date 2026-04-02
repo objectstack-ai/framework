@@ -384,12 +384,14 @@ export class HttpDispatcher {
         // /metadata/:type/:name
         if (parts.length === 2) {
             const [type, name] = parts;
+            // Extract optional package filter from query string
+            const packageId = query?.package || undefined;
 
             // PUT /metadata/:type/:name (Save)
             if (method === 'PUT' && body) {
                 // Try to get the protocol service directly
                 const protocol = await this.resolveService('protocol');
-                
+
                 if (protocol && typeof protocol.saveMetaItem === 'function') {
                     try {
                         const result = await protocol.saveMetaItem({ type, name, item: body });
@@ -398,7 +400,7 @@ export class HttpDispatcher {
                         return { handled: true, response: this.error(e.message, 400) };
                     }
                 }
-                
+
                 // Fallback to broker if protocol not available (legacy)
                 if (broker) {
                     try {
@@ -430,12 +432,12 @@ export class HttpDispatcher {
                 // If type is singular (e.g. 'app'), use it directly
                 // If plural (e.g. 'apps'), slice it
                 const singularType = type.endsWith('s') ? type.slice(0, -1) : type;
-                
+
                 // Try Protocol Service First (Preferred)
                 const protocol = await this.resolveService('protocol');
                 if (protocol && typeof protocol.getMetaItem === 'function') {
                      try {
-                        const data = await protocol.getMetaItem({ type: singularType, name });
+                        const data = await protocol.getMetaItem({ type: singularType, name, packageId });
                         return { handled: true, response: this.success(data) };
                      } catch (e: any) {
                         // Protocol might throw if not found or not supported

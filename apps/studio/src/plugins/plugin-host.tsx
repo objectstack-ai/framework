@@ -48,11 +48,13 @@ interface PluginHostProps {
   metadataName: string;
   /** Pre-loaded metadata data (optional) */
   data?: any;
+  /** Package ID to filter metadata by (optional) */
+  packageId?: string;
 }
 
 // ─── Component ───────────────────────────────────────────────────────
 
-export function PluginHost({ metadataType, metadataName, data }: PluginHostProps) {
+export function PluginHost({ metadataType, metadataName, data, packageId }: PluginHostProps) {
   const [activeMode, setActiveMode] = useState<ViewMode>('preview');
 
   // Get available modes and viewers for this metadata type
@@ -176,6 +178,7 @@ export function PluginHost({ metadataType, metadataName, data }: PluginHostProps
           metadataName={metadataName}
           data={data}
           mode={effectiveMode}
+          packageId={packageId}
         />
       </div>
     </div>
