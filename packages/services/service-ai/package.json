@@ -21,7 +21,7 @@
     "@ai-sdk/provider": "^2.0.0",
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "ai": "^6.0.0"
+    "ai": "^6.0.146"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
