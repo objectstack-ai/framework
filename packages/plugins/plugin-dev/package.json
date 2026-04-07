@@ -70,7 +70,7 @@
     "@objectstack/rest": "workspace:*",
     "@objectstack/runtime": "workspace:*",
     "@objectstack/service-i18n": "workspace:*",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   }
