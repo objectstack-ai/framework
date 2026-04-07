@@ -49,10 +49,15 @@ describe('AppPlugin', () => {
             objects: []
         };
         const plugin = new AppPlugin(bundle);
-        
+
+        // Mock the manifest service
+        const mockManifestService = { register: vi.fn() };
+        vi.mocked(mockContext.getService).mockReturnValue(mockManifestService);
+
         await plugin.init(mockContext);
-        
-        expect(mockContext.registerService).toHaveBeenCalledWith('app.com.test.simple', bundle);
+
+        expect(mockContext.getService).toHaveBeenCalledWith('manifest');
+        expect(mockManifestService.register).toHaveBeenCalledWith(bundle);
     });
 
     it('start should do nothing if no runtime hooks', async () => {
