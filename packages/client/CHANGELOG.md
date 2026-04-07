@@ -1,5 +1,14 @@
 # @objectstack/client
 
+## 4.0.2
+
+### Patch Changes
+
+- 5f659e9: fix ai
+- Updated dependencies [5f659e9]
+  - @objectstack/spec@4.0.2
+  - @objectstack/core@4.0.2
+
 ## 4.0.0
 
 ### Minor Changes

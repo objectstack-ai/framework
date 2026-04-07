@@ -1,5 +1,12 @@
 # @objectstack/hono
 
+## 4.0.2
+
+### Patch Changes
+
+- 5f659e9: fix ai
+  - @objectstack/runtime@4.0.2
+
 ## 4.0.0
 
 ### Patch Changes
