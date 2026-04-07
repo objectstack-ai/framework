@@ -42,7 +42,7 @@ function mountRouteOnServer(route: RouteDefinition, server: IHttpServer, routePa
                 // Apply headers from the route result if available
                 if (result.headers) {
                     for (const [k, v] of Object.entries(result.headers)) {
-                        res.header(k, v as string);
+                        res.header(k, String(v));
                     }
                 } else {
                     res.header('Content-Type', 'text/event-stream');
@@ -480,7 +480,9 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // If AIServicePlugin.start() ran before DispatcherPlugin.start()
             // (possible when plugin start order differs from registration order),
             // the 'ai:routes' trigger fires with no listener. The AIServicePlugin
-            // caches the routes on the kernel as __aiRoutes so we can recover here.
+            // caches the routes on the kernel as __aiRoutes (see AIServicePlugin.start())
+            // as an internal cross-plugin protocol so we can recover them here.
+            // TODO: replace with a formal kernel.getCachedRoutes('ai') API in a future release.
             const cachedRoutes = (kernel as any).__aiRoutes as RouteDefinition[] | undefined;
             if (cachedRoutes && Array.isArray(cachedRoutes) && cachedRoutes.length > 0) {
                 let registered = 0;
