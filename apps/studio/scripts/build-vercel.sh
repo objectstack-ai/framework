@@ -61,6 +61,17 @@ if [ -d "../../node_modules/@libsql" ]; then
 else
   echo "[build-vercel]   ⚠ @libsql not found (skipped)"
 fi
+# Copy the @ai-sdk scope (dynamically loaded provider packages)
+if [ -d "../../node_modules/@ai-sdk" ]; then
+  mkdir -p "node_modules/@ai-sdk"
+  for pkg in ../../node_modules/@ai-sdk/*/; do
+    pkgname="$(basename "$pkg")"
+    cp -rL "$pkg" "node_modules/@ai-sdk/$pkgname"
+  done
+  echo "[build-vercel]   ✓ Copied @ai-sdk/*"
+else
+  echo "[build-vercel]   ⚠ @ai-sdk not found (skipped)"
+fi
 
 # 4. Copy Vite build output to public/ for static file serving
 rm -rf public

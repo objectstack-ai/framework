@@ -23,6 +23,26 @@
     "@objectstack/spec": "workspace:*",
     "ai": "^6.0.0"
   },
+  "peerDependencies": {
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/gateway": "^3.0.0",
+    "@ai-sdk/google": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/anthropic": {
+      "optional": true
+    },
+    "@ai-sdk/gateway": {
+      "optional": true
+    },
+    "@ai-sdk/google": {
+      "optional": true
+    },
+    "@ai-sdk/openai": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "typescript": "^6.0.2",

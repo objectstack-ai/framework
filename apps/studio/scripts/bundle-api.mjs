@@ -18,6 +18,11 @@ import { build } from 'esbuild';
 const EXTERNAL = [
   '@libsql/client',
   'better-sqlite3',
+  // AI SDK provider packages — dynamically imported based on env vars
+  '@ai-sdk/anthropic',
+  '@ai-sdk/gateway',
+  '@ai-sdk/google',
+  '@ai-sdk/openai',
   // Optional knex database drivers — never used at runtime, but knex requires() them
   'pg',
   'pg-native',
