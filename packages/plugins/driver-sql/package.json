@@ -20,7 +20,7 @@
   "dependencies": {
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "knex": "^3.2.7",
+    "knex": "^3.2.9",
     "nanoid": "^5.1.7"
   },
   "devDependencies": {
