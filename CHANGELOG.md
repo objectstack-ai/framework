@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CI Test Failures** — Resolved test failures across multiple packages:
+  - `@objectstack/service-ai`: Fixed SDK fallback test by mocking `@ai-sdk/openai` dynamic import
+    (SDK now available as transitive workspace dependency)
+  - `@objectstack/nuxt`, `@objectstack/nextjs`, `@objectstack/fastify`, `@objectstack/sveltekit`:
+    Added missing `prefix` argument to `dispatch()` assertion calls in adapter tests
+  - `@objectstack/plugin-auth`: Updated `dependencies` assertion and added `manifest` service mock
+    to match current plugin implementation
+
 ### Added
 - **AIServicePlugin Auto-Detection** — AIServicePlugin now automatically detects and initializes
   LLM providers based on environment variables, eliminating the need for manual adapter configuration
