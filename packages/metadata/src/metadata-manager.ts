@@ -162,7 +162,7 @@ export class MetadataManager implements IMetadataService {
     this.registry.get(type)!.set(name, data);
 
     // Persist to writable loaders (e.g., DatabaseLoader for history tracking)
-    for (const loader of this.loaders) {
+    for (const loader of this.loaders.values()) {
       if (loader.save) {
         try {
           await loader.save(type, name, data);
