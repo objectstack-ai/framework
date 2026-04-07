@@ -5,6 +5,7 @@ import type { Logger } from '@objectstack/spec/contracts';
 import type { AIService } from '../ai-service.js';
 import type { AgentRuntime, AgentChatContext } from '../agent-runtime.js';
 import type { RouteDefinition } from './ai-routes.js';
+import { normalizeMessage, validateMessageContent } from './message-utils.js';
 
 /**
  * Allowed message roles for the agent chat endpoint.
@@ -25,10 +26,10 @@ function validateAgentMessage(raw: unknown): string | null {
   if (typeof msg.role !== 'string' || !ALLOWED_AGENT_ROLES.has(msg.role)) {
     return `message.role must be one of ${[...ALLOWED_AGENT_ROLES].map(r => `"${r}"`).join(', ')} for agent chat`;
   }
-  if (typeof msg.content !== 'string') {
-    return 'message.content must be a string';
-  }
-  return null;
+
+  // Assistant messages may legitimately have empty content (e.g. tool-call-only)
+  const allowEmpty = msg.role === 'assistant';
+  return validateMessageContent(msg, { allowEmptyContent: allowEmpty });
 }
 
 /**
@@ -134,7 +135,7 @@ export function buildAgentRoutes(
           // Prepend system messages then user conversation
           const fullMessages: ModelMessage[] = [
             ...systemMessages,
-            ...(rawMessages as ModelMessage[]),
+            ...rawMessages.map(m => normalizeMessage(m as Record<string, unknown>)),
           ];
 
           // Use chatWithTools for automatic tool resolution

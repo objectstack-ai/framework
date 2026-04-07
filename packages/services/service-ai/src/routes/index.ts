@@ -2,3 +2,4 @@
 
 export { buildAIRoutes } from './ai-routes.js';
 export type { RouteDefinition, RouteRequest, RouteResponse, RouteUserContext } from './ai-routes.js';
+export { normalizeMessage, validateMessageContent } from './message-utils.js';

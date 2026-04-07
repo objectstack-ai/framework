@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Agent Chat: Vercel AI SDK v6 `parts` format support** — The agent chat endpoint
+  (`/api/v1/ai/agents/:agentName/chat`) now accepts Vercel AI SDK v6 `parts`-based message
+  format in addition to the legacy `content` string format. Previously, sending messages
+  with `parts` (as `useChat` v6 does by default) resulted in a 400 error:
+  `"message.content must be a string"`. Shared validation and normalization utilities
+  (`validateMessageContent`, `normalizeMessage`) are extracted into `message-utils.ts`
+  for reuse across both the general chat and agent chat routes.
 - **Studio: Code tab now shows CodeExporter** — The Code tab in Studio metadata detail pages
   now correctly renders the `CodeExporter` component (TypeScript/JSON export with copy-to-clipboard)
   instead of always showing the JSON Inspector preview. The default plugin now registers two separate

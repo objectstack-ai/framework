@@ -874,6 +874,78 @@ describe('Agent Routes', () => {
     // temperature is a safe key, should be passed through
     // tools/toolChoice/model should NOT be passed through
   });
+
+  // ── Vercel AI SDK v6 `parts` format support ──
+
+  it('should accept Vercel AI SDK v6 parts format messages', async () => {
+    const chatRoute = routes.find(r => r.method === 'POST')!;
+    const resp = await chatRoute.handler({
+      params: { agentName: 'data_chat' },
+      body: {
+        messages: [
+          {
+            role: 'user',
+            parts: [{ type: 'text', text: 'List all tables' }],
+          },
+        ],
+      },
+    });
+    expect(resp.status).toBe(200);
+    expect((resp.body as any).content).toBe('Agent response');
+  });
+
+  it('should accept mixed parts and content messages', async () => {
+    const chatRoute = routes.find(r => r.method === 'POST')!;
+    const resp = await chatRoute.handler({
+      params: { agentName: 'data_chat' },
+      body: {
+        messages: [
+          { role: 'user', content: 'Hello' },
+          {
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'Hi there' }],
+          },
+          {
+            role: 'user',
+            parts: [{ type: 'text', text: 'List objects' }],
+          },
+        ],
+      },
+    });
+    expect(resp.status).toBe(200);
+  });
+
+  it('should accept assistant message with parts and no content', async () => {
+    const chatRoute = routes.find(r => r.method === 'POST')!;
+    const resp = await chatRoute.handler({
+      params: { agentName: 'data_chat' },
+      body: {
+        messages: [
+          {
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'previous response' }],
+          },
+          {
+            role: 'user',
+            parts: [{ type: 'text', text: 'follow up' }],
+          },
+        ],
+      },
+    });
+    expect(resp.status).toBe(200);
+  });
+
+  it('should reject user message with neither content nor parts', async () => {
+    const chatRoute = routes.find(r => r.method === 'POST')!;
+    const resp = await chatRoute.handler({
+      params: { agentName: 'data_chat' },
+      body: {
+        messages: [{ role: 'user' }],
+      },
+    });
+    expect(resp.status).toBe(400);
+    expect((resp.body as any).error).toContain('content');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════
