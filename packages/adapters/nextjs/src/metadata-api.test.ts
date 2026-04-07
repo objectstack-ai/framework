@@ -132,6 +132,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           undefined,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
     });
@@ -159,6 +160,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           undefined,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
     });
@@ -185,6 +187,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           body,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
     });
@@ -207,6 +210,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           body,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
     });
@@ -238,6 +242,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           undefined,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
 
@@ -250,6 +255,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           undefined,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
 
@@ -262,6 +268,7 @@ describe('Next.js Metadata API Integration Tests', () => {
           undefined,
           {},
           expect.objectContaining({ request: expect.anything() }),
+          '/api',
         );
       });
     });
@@ -696,6 +703,7 @@ describe('Next.js Metadata API Integration Tests', () => {
         undefined,
         {},
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
@@ -709,6 +717,7 @@ describe('Next.js Metadata API Integration Tests', () => {
         undefined,
         {},
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
   });

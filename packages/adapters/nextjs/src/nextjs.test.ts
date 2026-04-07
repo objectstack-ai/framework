@@ -284,6 +284,7 @@ describe('createRouteHandler', () => {
         undefined,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
@@ -299,6 +300,7 @@ describe('createRouteHandler', () => {
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
@@ -314,6 +316,7 @@ describe('createRouteHandler', () => {
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
   });
@@ -330,6 +333,7 @@ describe('createRouteHandler', () => {
         undefined,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
@@ -345,6 +349,7 @@ describe('createRouteHandler', () => {
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
@@ -360,6 +365,7 @@ describe('createRouteHandler', () => {
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 

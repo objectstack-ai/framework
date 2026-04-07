@@ -96,6 +96,7 @@ describe('objectStackPlugin', () => {
       undefined,
       expect.any(Object),
       expect.objectContaining({ request: expect.anything() }),
+      '/api',
     );
   });
 
@@ -112,6 +113,7 @@ describe('objectStackPlugin', () => {
       undefined,
       expect.any(Object),
       expect.objectContaining({ request: expect.anything() }),
+      '/api',
     );
   });
 

@@ -176,6 +176,7 @@ describe('createRequestHandler', () => {
         undefined,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
   });
@@ -191,6 +192,7 @@ describe('createRequestHandler', () => {
         undefined,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
@@ -205,6 +207,7 @@ describe('createRequestHandler', () => {
         body,
         expect.any(Object),
         expect.objectContaining({ request: expect.anything() }),
+        '/api',
       );
     });
 
