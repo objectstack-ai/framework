@@ -153,12 +153,25 @@ export class MetadataManager implements IMetadataService {
 
   /**
    * Register/save a metadata item by type
+   * Stores in-memory registry and persists to writable loaders (if configured)
    */
   async register(type: string, name: string, data: unknown): Promise<void> {
     if (!this.registry.has(type)) {
       this.registry.set(type, new Map());
     }
     this.registry.get(type)!.set(name, data);
+
+    // Persist to writable loaders (e.g., DatabaseLoader for history tracking)
+    for (const loader of this.loaders) {
+      if (loader.save) {
+        try {
+          await loader.save(type, name, data);
+        } catch (error) {
+          // Log but don't fail registration if persistence fails
+          console.error(`Failed to persist metadata ${type}/${name} to loader:`, error);
+        }
+      }
+    }
   }
 
   /**
