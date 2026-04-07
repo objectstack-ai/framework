@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Studio: Code tab now shows CodeExporter** — The Code tab in Studio metadata detail pages
+  now correctly renders the `CodeExporter` component (TypeScript/JSON export with copy-to-clipboard)
+  instead of always showing the JSON Inspector preview. The default plugin now registers two separate
+  viewers: `json-inspector` for preview mode and `code-exporter` for code mode.
 - **CI Test Failures** — Resolved test failures across multiple packages:
   - `@objectstack/service-ai`: Fixed SDK fallback test by mocking `@ai-sdk/openai` dynamic import
     (SDK now available as transitive workspace dependency)
