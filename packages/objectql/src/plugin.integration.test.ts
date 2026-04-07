@@ -822,4 +822,174 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       expect(singleCalls).toContain('nb__item');
     });
   });
+
+  describe('Cold-Start Metadata Restoration', () => {
+    it('should restore metadata from sys_metadata via protocol.loadMetaFromDb on start', async () => {
+      // Arrange — a driver whose find() returns persisted metadata records
+      const findCalls: Array<{ object: string; query: any }> = [];
+      const mockDriver = {
+        name: 'restore-driver',
+        version: '1.0.0',
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async (object: string, query: any) => {
+          findCalls.push({ object, query });
+          if (object === 'sys_metadata') {
+            return [
+              {
+                id: '1',
+                type: 'apps',
+                name: 'custom_crm',
+                state: 'active',
+                metadata: JSON.stringify({ name: 'custom_crm', label: 'Custom CRM' }),
+              },
+              {
+                id: '2',
+                type: 'object',
+                name: 'invoice',
+                state: 'active',
+                metadata: JSON.stringify({
+                  name: 'invoice',
+                  label: 'Invoice',
+                  fields: { amount: { name: 'amount', label: 'Amount', type: 'number' } },
+                }),
+                packageId: 'user_pkg',
+              },
+            ];
+          }
+          return [];
+        },
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async () => {},
+      };
+
+      await kernel.use({
+        name: 'mock-restore-driver',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('driver.restore', mockDriver);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+
+      // Act
+      await kernel.bootstrap();
+
+      // Assert — sys_metadata should have been queried
+      const metaQuery = findCalls.find((c) => c.object === 'sys_metadata');
+      expect(metaQuery).toBeDefined();
+      expect(metaQuery!.query.where).toEqual({ state: 'active' });
+
+      // Assert — items should be restored into the registry
+      const registry = (kernel.getService('objectql') as any).registry;
+      expect(registry.getAllApps()).toContainEqual({
+        name: 'custom_crm',
+        label: 'Custom CRM',
+      });
+    });
+
+    it('should not throw when protocol.loadMetaFromDb fails (graceful degradation)', async () => {
+      // Arrange — driver that throws on find('sys_metadata')
+      const mockDriver = {
+        name: 'failing-db-driver',
+        version: '1.0.0',
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async (object: string) => {
+          if (object === 'sys_metadata') {
+            throw new Error('SQLITE_ERROR: no such table: sys_metadata');
+          }
+          return [];
+        },
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async () => {},
+      };
+
+      await kernel.use({
+        name: 'mock-fail-driver',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('driver.faildb', mockDriver);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+
+      // Act & Assert — should not throw
+      await expect(kernel.bootstrap()).resolves.not.toThrow();
+    });
+
+    it('should restore metadata before syncRegisteredSchemas so restored objects get table sync', async () => {
+      // Arrange — track the order of operations
+      const operations: string[] = [];
+      const mockDriver = {
+        name: 'order-driver',
+        version: '1.0.0',
+        connect: async () => {},
+        disconnect: async () => {},
+        find: async (object: string) => {
+          if (object === 'sys_metadata') {
+            operations.push('loadMetaFromDb');
+            return [
+              {
+                id: '1',
+                type: 'object',
+                name: 'restored_obj',
+                state: 'active',
+                metadata: JSON.stringify({
+                  name: 'restored_obj',
+                  label: 'Restored Object',
+                  fields: { title: { name: 'title', label: 'Title', type: 'text' } },
+                }),
+                packageId: 'user_pkg',
+              },
+            ];
+          }
+          return [];
+        },
+        findOne: async () => null,
+        create: async (_o: string, d: any) => d,
+        update: async (_o: string, _i: any, d: any) => d,
+        delete: async () => true,
+        syncSchema: async (object: string) => {
+          operations.push(`syncSchema:${object}`);
+        },
+      };
+
+      await kernel.use({
+        name: 'mock-order-driver',
+        type: 'driver',
+        version: '1.0.0',
+        init: async (ctx) => {
+          ctx.registerService('driver.order', mockDriver);
+        },
+      });
+
+      const plugin = new ObjectQLPlugin();
+      await kernel.use(plugin);
+
+      // Act
+      await kernel.bootstrap();
+
+      // Assert — loadMetaFromDb must appear before any syncSchema call
+      const loadIdx = operations.indexOf('loadMetaFromDb');
+      expect(loadIdx).toBeGreaterThanOrEqual(0);
+
+      const firstSync = operations.findIndex((op) => op.startsWith('syncSchema:'));
+      if (firstSync >= 0) {
+        expect(loadIdx).toBeLessThan(firstSync);
+      }
+    });
+  });
 });

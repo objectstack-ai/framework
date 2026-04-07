@@ -71,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   match the current monorepo layout.
 
 ### Fixed
+- **ObjectQLPlugin: cold-start metadata restoration** — `ObjectQLPlugin.start()` now calls
+  `protocol.loadMetaFromDb()` after driver initialization and before schema sync, restoring
+  all persisted metadata (objects, views, apps, etc.) from the `sys_metadata` table into the
+  in-memory `SchemaRegistry`. Previously, user-created custom objects were lost after kernel
+  cold starts or redeployments because the hydration step was missing. The fix gracefully
+  degrades in in-memory-only or first-run scenarios where `sys_metadata` does not yet exist.
 - **Studio Vercel API routes returning HTML instead of JSON** — Adopted the
   same Vercel deployment pattern used by `hotcrm`: committed
   `api/[[...route]].js` catch-all route so Vercel detects it pre-build,
