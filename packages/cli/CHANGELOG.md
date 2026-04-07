@@ -1,5 +1,22 @@
 # @objectstack/cli
 
+## 4.0.2
+
+### Patch Changes
+
+- 5f659e9: fix ai
+- Updated dependencies [5f659e9]
+  - @objectstack/plugin-hono-server@4.0.2
+  - @objectstack/driver-memory@4.0.2
+  - @objectstack/service-ai@4.0.2
+  - @objectstack/client@4.0.2
+  - @objectstack/spec@4.0.2
+  - @objectstack/core@4.0.2
+  - @objectstack/objectql@4.0.2
+  - @objectstack/plugin-setup@4.0.2
+  - @objectstack/rest@4.0.2
+  - @objectstack/runtime@4.0.2
+
 ## 4.0.0
 
 ### Patch Changes

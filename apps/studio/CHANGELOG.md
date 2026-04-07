@@ -1,5 +1,30 @@
 # @objectstack/studio
 
+## 4.0.2
+
+### Patch Changes
+
+- 5f659e9: fix ai
+- Updated dependencies [5f659e9]
+  - @objectstack/driver-memory@4.0.2
+  - @objectstack/service-ai@4.0.2
+  - @objectstack/hono@4.0.2
+  - @objectstack/client@4.0.2
+  - @objectstack/spec@4.0.2
+  - @objectstack/driver-turso@4.0.2
+  - @objectstack/client-react@4.0.2
+  - @objectstack/metadata@4.0.2
+  - @objectstack/objectql@4.0.2
+  - @objectstack/plugin-audit@4.0.2
+  - @objectstack/plugin-auth@4.0.2
+  - @objectstack/plugin-msw@4.0.2
+  - @objectstack/plugin-security@4.0.2
+  - @objectstack/plugin-setup@4.0.2
+  - @objectstack/runtime@4.0.2
+  - @objectstack/service-analytics@4.0.2
+  - @objectstack/service-automation@4.0.2
+  - @objectstack/service-feed@4.0.2
+
 ## Unreleased
 
 ### Patch Changes
@@ -12,15 +37,15 @@
 
   The previous approach used `handle()` from `@hono/node-server/vercel`
   wrapped in an outer Hono app that delegated to the inner ObjectStack
-  app via `inner.fetch(c.req.raw)`.  On Vercel, the `IncomingMessage`
+  app via `inner.fetch(c.req.raw)`. On Vercel, the `IncomingMessage`
   stream is already drained by the time the inner app's route handler
   calls `.json()`, causing POST/PUT/PATCH requests to hang indefinitely.
 
   The new approach uses `getRequestListener()` directly, which exposes
-  the raw `IncomingMessage` via `env.incoming`.  For POST/PUT/PATCH
+  the raw `IncomingMessage` via `env.incoming`. For POST/PUT/PATCH
   requests, the body is extracted from Vercel's pre-buffered `rawBody` /
   `body` properties and a fresh standard `Request` is constructed for
-  the inner Hono app.  This also adds `x-forwarded-proto` URL correction
+  the inner Hono app. This also adds `x-forwarded-proto` URL correction
   for proper HTTPS detection behind Vercel's reverse proxy.
 
 - Remove `functions` block from `vercel.json` to fix deployment error:
@@ -96,6 +121,7 @@
 ### Fixes
 
 - **Vercel deployment: Fix `functions` pattern validation error**
+
   - The `functions` key in `vercel.json` referenced `api/index.js` — a build artifact created by
     `bundle-api.mjs` — which does not exist in the source tree. Vercel CLI validates patterns against
     source files before the build runs, producing the error:

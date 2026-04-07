@@ -1,5 +1,21 @@
 # @objectstack/example-host
 
+## 4.0.2
+
+### Patch Changes
+
+- Updated dependencies [5f659e9]
+  - @objectstack/plugin-hono-server@4.0.2
+  - @objectstack/driver-memory@4.0.2
+  - @objectstack/spec@4.0.2
+  - @example/app-todo@4.0.2
+  - @example/app-crm@4.0.2
+  - @example/plugin-bi@4.0.2
+  - @objectstack/metadata@4.0.2
+  - @objectstack/objectql@4.0.2
+  - @objectstack/plugin-auth@4.0.2
+  - @objectstack/runtime@4.0.2
+
 ## 3.0.26
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @objectstack/spec
 
+## 4.0.2
+
+### Patch Changes
+
+- 5f659e9: fix ai
+
 ## 4.0.0
 
 ### Minor Changes
