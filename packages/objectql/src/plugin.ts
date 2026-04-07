@@ -99,6 +99,12 @@ export class ObjectQLPlugin implements Plugin {
     // Initialize drivers (calls driver.connect() which sets up persistence)
     await this.ql?.init();
 
+    // Restore persisted metadata from sys_metadata table.
+    // This hydrates SchemaRegistry with objects/views/apps that were saved
+    // via protocol.saveMetaItem() in a previous session, ensuring custom
+    // schemas survive cold starts and redeployments.
+    await this.restoreMetadataFromDb(ctx);
+
     // Sync all registered object schemas to database
     // This ensures tables/collections are created or updated for every
     // object registered by plugins (e.g., sys_user from plugin-auth).
@@ -329,6 +335,42 @@ export class ObjectQLPlugin implements Plugin {
 
     if (synced > 0 || skipped > 0) {
       ctx.logger.info('Schema sync complete', { synced, skipped, total: allObjects.length });
+    }
+  }
+
+  /**
+   * Restore persisted metadata from the database (sys_metadata) on startup.
+   *
+   * Calls `protocol.loadMetaFromDb()` to bulk-load all active metadata
+   * records (objects, views, apps, etc.) into the in-memory SchemaRegistry.
+   * This closes the persistence loop so that user-created schemas survive
+   * kernel cold starts and redeployments.
+   *
+   * Gracefully degrades when:
+   * - The protocol service is unavailable (e.g., in-memory-only mode).
+   * - `loadMetaFromDb` is not implemented by the protocol shim.
+   * - The underlying driver/table does not exist yet (first-run scenario).
+   */
+  private async restoreMetadataFromDb(ctx: PluginContext): Promise<void> {
+    try {
+      const protocol = ctx.getService('protocol') as any;
+      if (!protocol || typeof protocol.loadMetaFromDb !== 'function') {
+        ctx.logger.debug('Protocol service does not support loadMetaFromDb, skipping DB restore');
+        return;
+      }
+
+      const { loaded, errors } = await protocol.loadMetaFromDb();
+
+      if (loaded > 0 || errors > 0) {
+        ctx.logger.info('Metadata restored from database', { loaded, errors });
+      } else {
+        ctx.logger.debug('No persisted metadata found in database');
+      }
+    } catch (e: unknown) {
+      // Non-fatal: first-run or in-memory driver may not have sys_metadata yet
+      ctx.logger.debug('DB metadata restore skipped (non-fatal)', {
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
