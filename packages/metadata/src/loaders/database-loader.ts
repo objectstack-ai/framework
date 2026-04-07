@@ -608,11 +608,8 @@ export class DatabaseLoader implements MetadataLoader {
       return;
     }
 
-    // Delete from the main metadata table
-    await this.driver.delete(this.tableName, {
-      object: this.tableName,
-      where: this.baseFilter(type, name),
-    });
+    // Delete from the main metadata table using the record's ID
+    await this.driver.delete(this.tableName, existing.id as string);
   }
 }
 
