@@ -6,6 +6,25 @@ import { Plugin, PluginContext } from '@objectstack/core';
 
 export type { Plugin, PluginContext };
 
+/**
+ * Protocol extension for DB-based metadata hydration.
+ * `loadMetaFromDb` is implemented by ObjectStackProtocolImplementation but
+ * is NOT (yet) part of the canonical ObjectStackProtocol wire-contract in
+ * `@objectstack/spec`, since it is a server-side bootstrap concern only.
+ */
+interface ProtocolWithDbRestore {
+  loadMetaFromDb(): Promise<{ loaded: number; errors: number }>;
+}
+
+/** Type guard — checks whether the service exposes `loadMetaFromDb`. */
+function hasLoadMetaFromDb(service: unknown): service is ProtocolWithDbRestore {
+  return (
+    typeof service === 'object' &&
+    service !== null &&
+    typeof (service as Record<string, unknown>)['loadMetaFromDb'] === 'function'
+  );
+}
+
 export class ObjectQLPlugin implements Plugin {
   name = 'com.objectstack.engine.objectql';
   type = 'objectql';
@@ -352,13 +371,24 @@ export class ObjectQLPlugin implements Plugin {
    * - The underlying driver/table does not exist yet (first-run scenario).
    */
   private async restoreMetadataFromDb(ctx: PluginContext): Promise<void> {
+    // Phase 1: Resolve protocol service (separate from DB I/O for clearer diagnostics)
+    let protocol: ProtocolWithDbRestore;
     try {
-      const protocol = ctx.getService('protocol') as any;
-      if (!protocol || typeof protocol.loadMetaFromDb !== 'function') {
+      const service = ctx.getService('protocol');
+      if (!service || !hasLoadMetaFromDb(service)) {
         ctx.logger.debug('Protocol service does not support loadMetaFromDb, skipping DB restore');
         return;
       }
+      protocol = service;
+    } catch (e: unknown) {
+      ctx.logger.debug('Protocol service unavailable, skipping DB restore', {
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return;
+    }
 
+    // Phase 2: DB hydration
+    try {
       const { loaded, errors } = await protocol.loadMetaFromDb();
 
       if (loaded > 0 || errors > 0) {
@@ -368,7 +398,7 @@ export class ObjectQLPlugin implements Plugin {
       }
     } catch (e: unknown) {
       // Non-fatal: first-run or in-memory driver may not have sys_metadata yet
-      ctx.logger.debug('DB metadata restore skipped (non-fatal)', {
+      ctx.logger.debug('DB metadata restore failed (non-fatal)', {
         error: e instanceof Error ? e.message : String(e),
       });
     }

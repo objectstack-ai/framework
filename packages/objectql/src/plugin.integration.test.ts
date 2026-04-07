@@ -838,7 +838,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
             return [
               {
                 id: '1',
-                type: 'app',
+                type: 'apps',
                 name: 'custom_crm',
                 state: 'active',
                 metadata: JSON.stringify({ name: 'custom_crm', label: 'Custom CRM' }),
@@ -888,7 +888,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
 
       // Assert — items should be restored into the registry
       const registry = (kernel.getService('objectql') as any).registry;
-      expect(registry.getItem('app', 'custom_crm')).toEqual({
+      expect(registry.getAllApps()).toContainEqual({
         name: 'custom_crm',
         label: 'Custom CRM',
       });
