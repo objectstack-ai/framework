@@ -226,6 +226,155 @@ describe('MetadataManager', () => {
     });
   });
 
+  describe('register — loader protocol filtering', () => {
+    it('should persist to datasource: protocol loaders', async () => {
+      const dbLoader: MetadataLoader = {
+        contract: { name: 'database', protocol: 'datasource:' as const, capabilities: { read: true, write: true, watch: false, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+      };
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [dbLoader] });
+      await m.register('object', 'account', { name: 'account' });
+
+      expect(dbLoader.save).toHaveBeenCalledWith('object', 'account', { name: 'account' });
+    });
+
+    it('should NOT persist to file: protocol loaders', async () => {
+      const fsLoader: MetadataLoader = {
+        contract: { name: 'filesystem', protocol: 'file:' as const, capabilities: { read: true, write: true, watch: true, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+      };
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [fsLoader] });
+      await m.register('object', 'account', { name: 'account' });
+
+      expect(fsLoader.save).not.toHaveBeenCalled();
+    });
+
+    it('should NOT persist to memory: protocol loaders', async () => {
+      const memLoader: MetadataLoader = {
+        contract: { name: 'memory', protocol: 'memory:' as const, capabilities: { read: true, write: true, watch: false, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+      };
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [memLoader] });
+      await m.register('object', 'account', { name: 'account' });
+
+      expect(memLoader.save).not.toHaveBeenCalled();
+    });
+
+    it('should NOT persist to datasource: protocol loaders with write: false', async () => {
+      const readOnlyDbLoader: MetadataLoader = {
+        contract: { name: 'database-ro', protocol: 'datasource:' as const, capabilities: { read: true, write: false, watch: false, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+      };
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [readOnlyDbLoader] });
+      await m.register('object', 'account', { name: 'account' });
+
+      expect(readOnlyDbLoader.save).not.toHaveBeenCalled();
+    });
+
+    it('should still store in in-memory registry regardless of loaders', async () => {
+      const m = new MetadataManager({ formats: ['json'], loaders: [] });
+      await m.register('object', 'account', { name: 'account' });
+
+      const result = await m.get('object', 'account');
+      expect(result).toEqual({ name: 'account' });
+    });
+  });
+
+  describe('unregister — loader protocol filtering', () => {
+    it('should delete from datasource: protocol loaders', async () => {
+      const deleteFn = vi.fn();
+      const dbLoader: MetadataLoader = {
+        contract: { name: 'database', protocol: 'datasource:' as const, capabilities: { read: true, write: true, watch: false, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+        delete: deleteFn,
+      } as any;
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [dbLoader] });
+      await m.register('object', 'account', { name: 'account' });
+      await m.unregister('object', 'account');
+
+      expect(deleteFn).toHaveBeenCalledWith('object', 'account');
+    });
+
+    it('should NOT delete from file: protocol loaders', async () => {
+      const deleteFn = vi.fn();
+      const fsLoader: MetadataLoader = {
+        contract: { name: 'filesystem', protocol: 'file:' as const, capabilities: { read: true, write: true, watch: true, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+        delete: deleteFn,
+      } as any;
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [fsLoader] });
+      await m.register('object', 'account', { name: 'account' });
+      await m.unregister('object', 'account');
+
+      expect(deleteFn).not.toHaveBeenCalled();
+    });
+
+    it('should NOT delete from datasource: protocol loaders with write: false', async () => {
+      const deleteFn = vi.fn();
+      const readOnlyDbLoader: MetadataLoader = {
+        contract: { name: 'database-ro', protocol: 'datasource:' as const, capabilities: { read: true, write: false, watch: false, list: true } },
+        load: vi.fn().mockResolvedValue({ data: null }),
+        loadMany: vi.fn().mockResolvedValue([]),
+        exists: vi.fn().mockResolvedValue(false),
+        stat: vi.fn().mockResolvedValue(null),
+        list: vi.fn().mockResolvedValue([]),
+        save: vi.fn().mockResolvedValue({ success: true }),
+        delete: deleteFn,
+      } as any;
+
+      const m = new MetadataManager({ formats: ['json'], loaders: [readOnlyDbLoader] });
+      await m.register('object', 'account', { name: 'account' });
+      await m.unregister('object', 'account');
+
+      expect(deleteFn).not.toHaveBeenCalled();
+    });
+
+    it('should remove from in-memory registry', async () => {
+      const m = new MetadataManager({ formats: ['json'], loaders: [] });
+      await m.register('object', 'account', { name: 'account' });
+      expect(await m.get('object', 'account')).toEqual({ name: 'account' });
+
+      await m.unregister('object', 'account');
+      expect(await m.get('object', 'account')).toBeUndefined();
+    });
+  });
+
   describe('registerLoader', () => {
     it('should register a new loader', async () => {
       const newLoader = new MemoryLoader();
@@ -340,6 +489,7 @@ describe('MetadataPlugin', () => {
       registerLoader = vi.fn();
       stopWatching = vi.fn();
       setTypeRegistry = vi.fn();
+      setDatabaseDriver = vi.fn();
       register = vi.fn();
     };
     return { NodeMetadataManager: MockNodeMetadataManager };
@@ -381,6 +531,83 @@ describe('MetadataPlugin', () => {
 
     // start should call logger.info at least once
     expect(ctx.logger.info).toHaveBeenCalled();
+  });
+
+  it('should bridge driver service to MetadataManager in start()', async () => {
+    const { MetadataPlugin } = await import('./plugin.js');
+    const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
+
+    const mockDriver = { name: 'mock-driver', find: vi.fn(), create: vi.fn() };
+    const services = new Map<string, any>();
+    services.set('driver.mock-driver', mockDriver);
+
+    const ctx = createMockPluginContext();
+    ctx.getServices = vi.fn().mockReturnValue(services);
+
+    await plugin.init(ctx);
+    await plugin.start(ctx);
+
+    // Verify setDatabaseDriver was called on the manager with the driver
+    const manager = (plugin as any).manager;
+    expect(manager.setDatabaseDriver).toHaveBeenCalledWith(mockDriver);
+  });
+
+  it('should bridge driver AFTER filesystem metadata loading', async () => {
+    const { MetadataPlugin } = await import('./plugin.js');
+    const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
+
+    const callOrder: string[] = [];
+    const mockDriver = { name: 'mock-driver', find: vi.fn(), create: vi.fn() };
+    const services = new Map<string, any>();
+    services.set('driver.mock-driver', mockDriver);
+
+    const manager = (plugin as any).manager;
+    manager.loadMany = vi.fn().mockImplementation(async () => {
+      callOrder.push('loadMany');
+      return [];
+    });
+    manager.setDatabaseDriver = vi.fn().mockImplementation(() => {
+      callOrder.push('setDatabaseDriver');
+    });
+
+    const ctx = createMockPluginContext();
+    ctx.getServices = vi.fn().mockReturnValue(services);
+
+    await plugin.init(ctx);
+    await plugin.start(ctx);
+
+    // setDatabaseDriver must be called after all loadMany calls
+    const lastLoad = callOrder.lastIndexOf('loadMany');
+    const driverIdx = callOrder.indexOf('setDatabaseDriver');
+    expect(driverIdx).toBeGreaterThan(lastLoad);
+  });
+
+  it('should not fail when no driver service is available', async () => {
+    const { MetadataPlugin } = await import('./plugin.js');
+    const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
+
+    const ctx = createMockPluginContext();
+    ctx.getServices = vi.fn().mockReturnValue(new Map());
+
+    await plugin.init(ctx);
+    // Should not throw
+    await expect(plugin.start(ctx)).resolves.not.toThrow();
+
+    // setDatabaseDriver should not have been called
+    const manager = (plugin as any).manager;
+    expect(manager.setDatabaseDriver).not.toHaveBeenCalled();
+  });
+
+  it('should gracefully handle getServices errors', async () => {
+    const { MetadataPlugin } = await import('./plugin.js');
+    const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
+
+    const ctx = createMockPluginContext();
+    ctx.getServices = vi.fn().mockImplementation(() => { throw new Error('services unavailable'); });
+
+    await plugin.init(ctx);
+    // Should not throw even when getServices fails
+    await expect(plugin.start(ctx)).resolves.not.toThrow();
   });
 });
 

@@ -28,7 +28,7 @@ It implements the **`IMetadataService`** contract from `@objectstack/spec` and a
 │  │ (files)      │  │   (HTTP)     │  │   (test)          │  │
 │  └─────────────┘  └──────────────┘  └───────────────────┘  │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │ DatabaseLoader (planned — datasource-backed storage) │   │
+│  │ DatabaseLoader (datasource-backed storage)          │   │
 │  └──────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
 │                    Serializer Layer                          │
@@ -61,7 +61,7 @@ Loaders are pluggable data sources that know how to read/write metadata from dif
 | `FilesystemLoader`  | `file:`        | ✅   | ✅    | ✅    | Implemented  |
 | `MemoryLoader`      | `memory:`      | ✅   | ✅    | ❌    | Implemented  |
 | `RemoteLoader`      | `http:`        | ✅   | ✅    | ❌    | Implemented  |
-| `DatabaseLoader`    | `datasource:`  | ✅   | ✅    | ✅    | Planned      |
+| `DatabaseLoader`    | `datasource:`  | ✅   | ✅    | ❌    | Implemented  |
 
 ### 3. Serializers
 

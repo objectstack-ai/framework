@@ -153,7 +153,9 @@ export class MetadataManager implements IMetadataService {
 
   /**
    * Register/save a metadata item by type
-   * Stores in-memory registry and persists to writable loaders (if configured)
+   * Stores in-memory registry and persists to database-backed loaders only.
+   * FilesystemLoader (protocol 'file:') is read-only for static metadata and
+   * should not be written to during runtime registration.
    */
   async register(type: string, name: string, data: unknown): Promise<void> {
     if (!this.registry.has(type)) {
@@ -161,9 +163,11 @@ export class MetadataManager implements IMetadataService {
     }
     this.registry.get(type)!.set(name, data);
 
-    // Persist to writable loaders (e.g., DatabaseLoader for history tracking)
+    // Persist only to database-backed loaders that declare write capability.
+    // FilesystemLoader is read-only at runtime — writing to it can crash in
+    // read-only environments (e.g. serverless, containerized deployments).
     for (const loader of this.loaders.values()) {
-      if (loader.save) {
+      if (loader.save && loader.contract.protocol === 'datasource:' && loader.contract.capabilities.write) {
         await loader.save(type, name, data);
       }
     }
@@ -218,7 +222,8 @@ export class MetadataManager implements IMetadataService {
   }
 
   /**
-   * Unregister/remove a metadata item by type and name
+   * Unregister/remove a metadata item by type and name.
+   * Deletes from database-backed loaders only (same rationale as register()).
    */
   async unregister(type: string, name: string): Promise<void> {
     // Remove from in-memory registry
@@ -230,9 +235,9 @@ export class MetadataManager implements IMetadataService {
       }
     }
 
-    // Also delete from all loaders that support deletion
+    // Delete only from database-backed loaders that declare write capability
     for (const loader of this.loaders.values()) {
-      // Check if the loader has a delete method
+      if (loader.contract.protocol !== 'datasource:' || !loader.contract.capabilities.write) continue;
       if (typeof (loader as any).delete === 'function') {
         try {
           await (loader as any).delete(type, name);
