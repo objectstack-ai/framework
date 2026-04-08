@@ -521,14 +521,62 @@ describe('streamChatWithTools', () => {
       events.push(event);
     }
 
-    // Should have tool-call event followed by text-delta + finish (no double call)
+    // Should have tool-call + tool-result events followed by text-delta + finish
     const toolCallEvents = events.filter(e => e.type === 'tool-call');
     expect(toolCallEvents).toHaveLength(1);
     expect((toolCallEvents[0] as any).toolName).toBe('get_weather');
 
+    const toolResultEvents = events.filter(e => e.type === 'tool-result');
+    expect(toolResultEvents).toHaveLength(1);
+    expect((toolResultEvents[0] as any).toolCallId).toBe('call_1');
+    expect((toolResultEvents[0] as any).toolName).toBe('get_weather');
+
     const finishEvent = events.find(e => e.type === 'finish');
     expect(finishEvent).toBeDefined();
     expect(adapter.chat).toHaveBeenCalledTimes(2);
+  });
+
+  it('should yield tool-result events with tool output', async () => {
+    const toolCall: ToolCallPart = {
+      type: 'tool-call',
+      toolCallId: 'call_weather',
+      toolName: 'get_weather',
+      input: { city: 'Paris' },
+    };
+
+    let chatCallIndex = 0;
+    const adapter: LLMAdapter = {
+      name: 'mock-stream',
+      chat: vi.fn(async () => {
+        chatCallIndex++;
+        if (chatCallIndex === 1) {
+          return { content: '', toolCalls: [toolCall] };
+        }
+        return { content: 'Paris is 22°C' };
+      }),
+      complete: vi.fn(async () => ({ content: '' })),
+    };
+
+    const service = new AIService({ adapter, logger: silentLogger, toolRegistry: registry });
+    const events: TextStreamPart<ToolSet>[] = [];
+    for await (const event of service.streamChatWithTools(
+      [{ role: 'user', content: 'Weather in Paris?' }],
+    )) {
+      events.push(event);
+    }
+
+    // Verify the tool-result contains actual tool output
+    const toolResultEvents = events.filter(e => e.type === 'tool-result');
+    expect(toolResultEvents).toHaveLength(1);
+    const toolResult = toolResultEvents[0] as any;
+    expect(toolResult.toolCallId).toBe('call_weather');
+    expect(toolResult.toolName).toBe('get_weather');
+    expect(toolResult.output).toEqual({ type: 'text', value: JSON.stringify({ temp: 22, city: 'Paris' }) });
+
+    // Verify order: tool-call comes before tool-result
+    const toolCallIdx = events.findIndex(e => e.type === 'tool-call');
+    const toolResultIdx = events.findIndex(e => e.type === 'tool-result');
+    expect(toolCallIdx).toBeLessThan(toolResultIdx);
   });
 
   it('should fall back to non-streaming when adapter has no streamChat', async () => {

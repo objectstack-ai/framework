@@ -332,6 +332,13 @@ export class AIService implements IAIService {
             }
           }
         }
+        // Emit tool-result so the client can see tool output via SSE
+        yield {
+          type: 'tool-result',
+          toolCallId: tr.toolCallId,
+          toolName: tr.toolName,
+          output: tr.output,
+        } as TextStreamPart<ToolSet>;
         conversation.push({
           role: 'tool',
           content: [tr],
