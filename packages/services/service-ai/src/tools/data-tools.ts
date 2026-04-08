@@ -273,15 +273,13 @@ function createAggregateDataHandler(ctx: DataToolContext): ToolHandler {
 /**
  * Register all built-in data tools on the given {@link ToolRegistry}.
  *
- * Typically called from the `ai:ready` hook after both the data engine
- * and metadata service are available.
+ * Typically called from the `ai:ready` hook after the data engine is available.
  *
  * @example
  * ```ts
  * ctx.hook('ai:ready', async (aiService) => {
  *   const dataEngine = ctx.getService<IDataEngine>('data');
- *   const metadataService = ctx.getService<IMetadataService>('metadata');
- *   registerDataTools(aiService.toolRegistry, { dataEngine, metadataService });
+ *   registerDataTools(aiService.toolRegistry, { dataEngine });
  * });
  * ```
  */
