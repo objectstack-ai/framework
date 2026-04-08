@@ -163,11 +163,11 @@ export class MetadataManager implements IMetadataService {
     }
     this.registry.get(type)!.set(name, data);
 
-    // Persist only to database-backed loaders (protocol 'datasource:')
+    // Persist only to database-backed loaders that declare write capability.
     // FilesystemLoader is read-only at runtime — writing to it can crash in
     // read-only environments (e.g. serverless, containerized deployments).
     for (const loader of this.loaders.values()) {
-      if (loader.save && loader.contract.protocol === 'datasource:') {
+      if (loader.save && loader.contract.protocol === 'datasource:' && loader.contract.capabilities.write) {
         await loader.save(type, name, data);
       }
     }
@@ -235,9 +235,9 @@ export class MetadataManager implements IMetadataService {
       }
     }
 
-    // Delete only from database-backed loaders (protocol 'datasource:')
+    // Delete only from database-backed loaders that declare write capability
     for (const loader of this.loaders.values()) {
-      if (loader.contract.protocol !== 'datasource:') continue;
+      if (loader.contract.protocol !== 'datasource:' || !loader.contract.capabilities.write) continue;
       if (typeof (loader as any).delete === 'function') {
         try {
           await (loader as any).delete(type, name);

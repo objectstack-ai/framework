@@ -28,7 +28,7 @@ It implements the **`IMetadataService`** contract from `@objectstack/spec` and a
 │  │ (files)      │  │   (HTTP)     │  │   (test)          │  │
 │  └─────────────┘  └──────────────┘  └───────────────────┘  │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │ DatabaseLoader (planned — datasource-backed storage) │   │
+│  │ DatabaseLoader (datasource-backed storage)          │   │
 │  └──────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────┤
 │                    Serializer Layer                          │
