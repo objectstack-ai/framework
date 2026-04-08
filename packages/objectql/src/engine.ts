@@ -594,13 +594,23 @@ export class ObjectQL implements IDataEngine {
       drivers: Array.from(this.drivers.keys())
     });
     
+    const failedDrivers: string[] = [];
     for (const [name, driver] of this.drivers) {
       try {
         await driver.connect();
         this.logger.info('Driver connected successfully', { driverName: name });
       } catch (e) {
+        failedDrivers.push(name);
         this.logger.error('Failed to connect driver', e as Error, { driverName: name });
       }
+    }
+
+    if (failedDrivers.length > 0) {
+      this.logger.warn(
+        `${failedDrivers.length} of ${this.drivers.size} driver(s) failed initial connect. ` +
+        `Operations may recover via lazy reconnection or fail at query time.`,
+        { failedDrivers }
+      );
     }
     
     this.logger.info('ObjectQL engine initialization complete');

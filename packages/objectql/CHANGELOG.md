@@ -1,5 +1,11 @@
 # @objectstack/objectql
 
+## 4.0.3
+
+### Patch Changes
+
+- fix: ObjectQL.init() now tracks and warns about failed driver connections instead of silently swallowing errors, improving debuggability for cold-start and serverless issues.
+
 ## 4.0.2
 
 ### Patch Changes

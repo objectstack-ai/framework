@@ -911,3 +911,147 @@ describe('TursoDriver Remote Mode (via @libsql/client)', () => {
     await expect(driver.syncSchemasBatch([])).resolves.not.toThrow();
   });
 });
+
+// ── Lazy Connect (self-healing for serverless cold starts) ───────────────────
+
+describe('TursoDriver Remote Mode — Lazy Connect', () => {
+  it('should lazy-connect on first find when connect() was never called', async () => {
+    const { createClient } = await import('@libsql/client');
+    const memClient = createClient({ url: 'file::memory:' });
+
+    await memClient.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT
+      )
+    `);
+    await memClient.execute({ sql: `INSERT INTO users (id, name) VALUES (?, ?)`, args: ['1', 'Alice'] });
+
+    // Create driver but intentionally do NOT call connect()
+    const driver = new TursoDriver({
+      url: 'libsql://test.turso.io',
+      authToken: 'test-token',
+      client: memClient,
+    });
+
+    // The first CRUD operation should trigger lazy connect via the factory
+    const results = await driver.find('users', {});
+    expect(results.length).toBe(1);
+    expect((results[0] as any).name).toBe('Alice');
+
+    // Client should now be connected
+    expect(driver.getLibsqlClient()).not.toBeNull();
+    await driver.disconnect();
+  });
+
+  it('should lazy-connect on first create when connect() was never called', async () => {
+    const { createClient } = await import('@libsql/client');
+    const memClient = createClient({ url: 'file::memory:' });
+
+    await memClient.execute(`
+      CREATE TABLE IF NOT EXISTS items (
+        id TEXT PRIMARY KEY,
+        title TEXT
+      )
+    `);
+
+    const driver = new TursoDriver({
+      url: 'libsql://test.turso.io',
+      authToken: 'test-token',
+      client: memClient,
+    });
+
+    // No connect() — should lazy-connect
+    const item = await driver.create('items', { id: 'x', title: 'Test' });
+    expect(item.title).toBe('Test');
+    await driver.disconnect();
+  });
+
+  it('should lazy-connect on checkHealth when connect() was never called', async () => {
+    const { createClient } = await import('@libsql/client');
+    const memClient = createClient({ url: 'file::memory:' });
+
+    const driver = new TursoDriver({
+      url: 'libsql://test.turso.io',
+      authToken: 'test-token',
+      client: memClient,
+    });
+
+    // checkHealth should trigger lazy connect and succeed
+    const healthy = await driver.checkHealth();
+    expect(healthy).toBe(true);
+    await driver.disconnect();
+  });
+
+  it('should de-duplicate concurrent lazy-connect attempts', async () => {
+    const { createClient } = await import('@libsql/client');
+    const memClient = createClient({ url: 'file::memory:' });
+
+    await memClient.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT
+      )
+    `);
+    await memClient.execute({ sql: `INSERT INTO users (id, name) VALUES (?, ?)`, args: ['1', 'Alice'] });
+
+    const driver = new TursoDriver({
+      url: 'libsql://test.turso.io',
+      authToken: 'test-token',
+      client: memClient,
+    });
+
+    // Fire multiple operations concurrently without calling connect()
+    const [r1, r2, r3] = await Promise.all([
+      driver.find('users', {}),
+      driver.find('users', {}),
+      driver.count('users'),
+    ]);
+
+    expect(r1.length).toBe(1);
+    expect(r2.length).toBe(1);
+    expect(r3).toBe(1);
+    await driver.disconnect();
+  });
+
+  it('should recover when transport client is cleared', async () => {
+    const { createClient } = await import('@libsql/client');
+
+    // We create two separate clients: one to simulate the "lost" state, and
+    // a fresh one that the lazy factory should produce on reconnect.
+    const memClient1 = createClient({ url: 'file::memory:' });
+    const memClient2 = createClient({ url: 'file::memory:' });
+
+    await memClient2.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT
+      )
+    `);
+    await memClient2.execute({ sql: `INSERT INTO users (id, name) VALUES (?, ?)`, args: ['1', 'Bob'] });
+
+    const driver = new TursoDriver({
+      url: 'libsql://test.turso.io',
+      authToken: 'test-token',
+      client: memClient1,
+    });
+
+    await driver.connect();
+    expect(driver.getLibsqlClient()).not.toBeNull();
+
+    // Clear only the transport's reference (simulates stale state) and point
+    // the factory at a fresh, working client.
+    const transport = driver.getRemoteTransport()!;
+    transport.setClient(null as unknown as any);
+    // Override the factory to return the second client
+    transport.setConnectFactory(async () => memClient2);
+
+    // Next operation should re-connect via the factory
+    const results = await driver.find('users', {});
+    expect(results.length).toBe(1);
+    expect((results[0] as any).name).toBe('Bob');
+
+    memClient1.close();
+    memClient2.close();
+  });
+});

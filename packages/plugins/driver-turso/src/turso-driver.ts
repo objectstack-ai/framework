@@ -238,6 +238,23 @@ export class TursoDriver extends SqlDriver {
 
     if (mode === 'remote') {
       this.remoteTransport = new RemoteTransport();
+
+      // Register a lazy-connect factory so the transport can self-heal when
+      // connect() was never called, failed on first attempt, or the client
+      // was lost (e.g. serverless cold-start, transient network error).
+      this.remoteTransport.setConnectFactory(async () => {
+        if (this.tursoConfig.client) {
+          this.libsqlClient = this.tursoConfig.client;
+        } else {
+          const { createClient } = await import('@libsql/client');
+          this.libsqlClient = createClient({
+            url: this.tursoConfig.url,
+            authToken: this.tursoConfig.authToken,
+            concurrency: this.tursoConfig.concurrency,
+          });
+        }
+        return this.libsqlClient;
+      });
     }
   }
 

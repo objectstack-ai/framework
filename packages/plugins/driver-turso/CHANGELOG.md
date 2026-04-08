@@ -1,5 +1,11 @@
 # @objectstack/driver-turso
 
+## 4.0.3
+
+### Patch Changes
+
+- fix: implement lazy connect in RemoteTransport to self-heal from serverless cold-start failures, transient network errors, or missed `connect()` calls. The transport now accepts a connect factory and auto-initializes the @libsql/client on first operation when the client is not yet available. Concurrent reconnection attempts are de-duplicated.
+
 ## 4.0.2
 
 ### Patch Changes

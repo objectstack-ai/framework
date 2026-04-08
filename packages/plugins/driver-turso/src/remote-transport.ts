@@ -43,10 +43,37 @@ export class RemoteTransport {
   private client: Client | null = null;
 
   /**
+   * Factory function for lazy (re)connection.
+   *
+   * When set, `ensureConnected()` will invoke this factory to create a
+   * @libsql/client instance on-demand — recovering from cold-start failures,
+   * transient network errors, or serverless recycling without requiring the
+   * caller to explicitly call `connect()` again.
+   */
+  private connectFactory: (() => Promise<Client>) | null = null;
+
+  /**
+   * Tracks whether a lazy-connect attempt is already in progress to prevent
+   * concurrent reconnection storms under high concurrency.
+   */
+  private connectPromise: Promise<Client> | null = null;
+
+  /**
    * Set the @libsql/client instance used for all queries.
    */
   setClient(client: Client): void {
     this.client = client;
+  }
+
+  /**
+   * Register a factory function for lazy (re)connection.
+   *
+   * TursoDriver calls this during construction so that the transport can
+   * self-heal when the initial `connect()` call fails or when the client
+   * becomes unavailable (e.g., serverless cold-start, transient error).
+   */
+  setConnectFactory(factory: () => Promise<Client>): void {
+    this.connectFactory = factory;
   }
 
   /**
@@ -71,9 +98,9 @@ export class RemoteTransport {
   // ===================================
 
   async checkHealth(): Promise<boolean> {
-    if (!this.client) return false;
     try {
-      await this.client.execute('SELECT 1');
+      const client = await this.ensureConnected();
+      await client.execute('SELECT 1');
       return true;
     } catch {
       return false;
@@ -85,7 +112,7 @@ export class RemoteTransport {
   // ===================================
 
   async execute(command: unknown, params?: unknown[]): Promise<unknown> {
-    this.ensureClient();
+    await this.ensureConnected();
     if (typeof command !== 'string') return command;
 
     const stmt: InStatement = params && params.length > 0
@@ -101,7 +128,7 @@ export class RemoteTransport {
   // ===================================
 
   async find(object: string, query: any): Promise<Record<string, unknown>[]> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const { sql, args } = this.buildSelectSQL(object, query);
 
@@ -123,7 +150,7 @@ export class RemoteTransport {
   async findOne(object: string, query: any): Promise<Record<string, unknown> | null> {
     // When called with a string/number id fall back gracefully
     if (typeof query === 'string' || typeof query === 'number') {
-      this.ensureClient();
+      await this.ensureConnected();
       const result = await this.client!.execute({
         sql: `SELECT * FROM "${object}" WHERE "id" = ? LIMIT 1`,
         args: [query],
@@ -148,7 +175,7 @@ export class RemoteTransport {
   }
 
   async create(object: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const { _id, ...rest } = data as any;
     const toInsert = { ...rest };
@@ -176,7 +203,7 @@ export class RemoteTransport {
   }
 
   async update(object: string, id: string | number, data: Record<string, unknown>): Promise<Record<string, unknown>> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const columns = Object.keys(data);
     const setClauses = columns.map((col) => `"${col}" = ?`).join(', ');
@@ -195,7 +222,7 @@ export class RemoteTransport {
   }
 
   async upsert(object: string, data: Record<string, unknown>, conflictKeys?: string[]): Promise<Record<string, unknown>> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const { _id, ...rest } = data as any;
     const toUpsert = { ...rest };
@@ -235,7 +262,7 @@ export class RemoteTransport {
   }
 
   async delete(object: string, id: string | number): Promise<boolean> {
-    this.ensureClient();
+    await this.ensureConnected();
     const result = await this.client!.execute({
       sql: `DELETE FROM "${object}" WHERE "id" = ?`,
       args: [id],
@@ -244,7 +271,7 @@ export class RemoteTransport {
   }
 
   async count(object: string, query?: any): Promise<number> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const { whereClauses, args } = this.buildWhereSQL(query?.where);
     let sql = `SELECT COUNT(*) as count FROM "${object}"`;
@@ -283,7 +310,7 @@ export class RemoteTransport {
   }
 
   async bulkDelete(object: string, ids: Array<string | number>): Promise<void> {
-    this.ensureClient();
+    await this.ensureConnected();
     if (ids.length === 0) return;
 
     const placeholders = ids.map(() => '?').join(', ');
@@ -294,7 +321,7 @@ export class RemoteTransport {
   }
 
   async updateMany(object: string, query: any, data: Record<string, unknown>): Promise<number> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const columns = Object.keys(data);
     const setClauses = columns.map((col) => `"${col}" = ?`).join(', ');
@@ -309,7 +336,7 @@ export class RemoteTransport {
   }
 
   async deleteMany(object: string, query: any): Promise<number> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const { whereClauses, args } = this.buildWhereSQL(query?.where);
     let sql = `DELETE FROM "${object}"`;
@@ -324,7 +351,7 @@ export class RemoteTransport {
   // ===================================
 
   async beginTransaction(): Promise<any> {
-    this.ensureClient();
+    await this.ensureConnected();
     return this.client!.transaction();
   }
 
@@ -341,7 +368,7 @@ export class RemoteTransport {
   // ===================================
 
   async syncSchema(object: string, schema: any): Promise<void> {
-    this.ensureClient();
+    await this.ensureConnected();
 
     const objectDef = schema as { name: string; fields?: Record<string, any> };
     const tableName = object;
@@ -391,7 +418,7 @@ export class RemoteTransport {
    * by the caller if a batch operation is not supported or fails.
    */
   async syncSchemasBatch(schemas: Array<{ object: string; schema: any }>): Promise<void> {
-    this.ensureClient();
+    await this.ensureConnected();
     if (schemas.length === 0) return;
 
     // Validate all identifiers up-front
@@ -459,7 +486,7 @@ export class RemoteTransport {
   }
 
   async dropTable(object: string): Promise<void> {
-    this.ensureClient();
+    await this.ensureConnected();
     await this.client!.execute(`DROP TABLE IF EXISTS "${object}"`);
   }
 
@@ -467,11 +494,37 @@ export class RemoteTransport {
   // Internal Helpers
   // ===================================
 
-  private ensureClient(): Client {
-    if (!this.client) {
-      throw new Error('RemoteTransport: @libsql/client is not initialized. Call connect() first.');
+  /**
+   * Ensure the @libsql/client is initialized, attempting lazy connect if a
+   * factory was registered and the client is not yet available.
+   *
+   * Uses a singleton promise to prevent concurrent reconnection storms:
+   * multiple callers that race into this method while a connect is in flight
+   * will all await the same promise.
+   */
+  private async ensureConnected(): Promise<Client> {
+    if (this.client) return this.client;
+
+    if (this.connectFactory) {
+      // De-duplicate concurrent connect attempts
+      if (!this.connectPromise) {
+        this.connectPromise = this.connectFactory()
+          .then((client) => {
+            this.client = client;
+            this.connectPromise = null;
+            return client;
+          })
+          .catch((err) => {
+            this.connectPromise = null;
+            throw new Error(
+              `RemoteTransport: lazy connect failed: ${err instanceof Error ? err.message : String(err)}`
+            );
+          });
+      }
+      return this.connectPromise;
     }
-    return this.client;
+
+    throw new Error('RemoteTransport: @libsql/client is not initialized. Call connect() first.');
   }
 
   /**
