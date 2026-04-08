@@ -14,5 +14,5 @@ export { createObjectTool } from './create-object.tool.js';
 export { addFieldTool } from './add-field.tool.js';
 export { modifyFieldTool } from './modify-field.tool.js';
 export { deleteFieldTool } from './delete-field.tool.js';
-export { listMetadataObjectsTool } from './list-metadata-objects.tool.js';
-export { describeMetadataObjectTool } from './describe-metadata-object.tool.js';
+export { listObjectsTool } from './list-objects.tool.js';
+export { describeObjectTool } from './describe-object.tool.js';

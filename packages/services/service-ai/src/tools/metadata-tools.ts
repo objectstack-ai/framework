@@ -13,15 +13,15 @@ export { createObjectTool } from './create-object.tool.js';
 export { addFieldTool } from './add-field.tool.js';
 export { modifyFieldTool } from './modify-field.tool.js';
 export { deleteFieldTool } from './delete-field.tool.js';
-export { listMetadataObjectsTool } from './list-metadata-objects.tool.js';
-export { describeMetadataObjectTool } from './describe-metadata-object.tool.js';
+export { listObjectsTool } from './list-objects.tool.js';
+export { describeObjectTool } from './describe-object.tool.js';
 
 import { createObjectTool } from './create-object.tool.js';
 import { addFieldTool } from './add-field.tool.js';
 import { modifyFieldTool } from './modify-field.tool.js';
 import { deleteFieldTool } from './delete-field.tool.js';
-import { listMetadataObjectsTool } from './list-metadata-objects.tool.js';
-import { describeMetadataObjectTool } from './describe-metadata-object.tool.js';
+import { listObjectsTool } from './list-objects.tool.js';
+import { describeObjectTool } from './describe-object.tool.js';
 
 /** All built-in metadata management tool definitions (Tool metadata). */
 export const METADATA_TOOL_DEFINITIONS: Tool[] = [
@@ -29,8 +29,8 @@ export const METADATA_TOOL_DEFINITIONS: Tool[] = [
   addFieldTool,
   modifyFieldTool,
   deleteFieldTool,
-  listMetadataObjectsTool,
-  describeMetadataObjectTool,
+  listObjectsTool,
+  describeObjectTool,
 ];
 
 // ---------------------------------------------------------------------------
@@ -425,6 +425,6 @@ export function registerMetadataTools(
   registry.register(addFieldTool, createAddFieldHandler(context));
   registry.register(modifyFieldTool, createModifyFieldHandler(context));
   registry.register(deleteFieldTool, createDeleteFieldHandler(context));
-  registry.register(listMetadataObjectsTool, createListObjectsHandler(context));
-  registry.register(describeMetadataObjectTool, createDescribeObjectHandler(context));
+  registry.register(listObjectsTool, createListObjectsHandler(context));
+  registry.register(describeObjectTool, createDescribeObjectHandler(context));
 }

@@ -304,15 +304,13 @@ describe('AIService.chatWithTools', () => {
 
 describe('Data Tools', () => {
   describe('DATA_TOOL_DEFINITIONS', () => {
-    it('should define exactly 5 tools', () => {
-      expect(DATA_TOOL_DEFINITIONS).toHaveLength(5);
+    it('should define exactly 3 tools', () => {
+      expect(DATA_TOOL_DEFINITIONS).toHaveLength(3);
     });
 
     it('should include all expected tool names', () => {
       const names = DATA_TOOL_DEFINITIONS.map(t => t.name);
       expect(names).toEqual([
-        'list_objects',
-        'describe_object',
         'query_records',
         'get_record',
         'aggregate_data',
@@ -336,22 +334,24 @@ describe('Data Tools', () => {
       registry = new ToolRegistry();
       dataEngine = createMockDataEngine();
       metadataService = createMockMetadataService();
-      registerDataTools(registry, { dataEngine, metadataService });
+      registerDataTools(registry, { dataEngine });
     });
 
-    it('should register all 5 tools', () => {
-      expect(registry.size).toBe(5);
-      expect(registry.has('list_objects')).toBe(true);
-      expect(registry.has('describe_object')).toBe(true);
+    it('should register all 3 tools', () => {
+      expect(registry.size).toBe(3);
       expect(registry.has('query_records')).toBe(true);
       expect(registry.has('get_record')).toBe(true);
       expect(registry.has('aggregate_data')).toBe(true);
     });
 
-    it('list_objects should return object names and labels', async () => {
+    it('list_objects should return object names and labels (via metadata tools)', async () => {
+      // list_objects is now part of metadata tools — register them
+      const { registerMetadataTools } = await import('../tools/metadata-tools.js');
+      registerMetadataTools(registry, { metadataService });
+
       (metadataService.listObjects as any).mockResolvedValue([
-        { name: 'account', label: 'Account' },
-        { name: 'contact', label: 'Contact' },
+        { name: 'account', label: 'Account', fields: { name: { type: 'text' } } },
+        { name: 'contact', label: 'Contact', fields: {} },
       ]);
 
       const result = await registry.execute({
@@ -362,11 +362,15 @@ describe('Data Tools', () => {
       });
 
       const parsed = JSON.parse((result.output as any).value);
-      expect(parsed).toHaveLength(2);
-      expect(parsed[0]).toEqual({ name: 'account', label: 'Account' });
+      expect(parsed.objects).toHaveLength(2);
+      expect(parsed.objects[0]).toEqual(expect.objectContaining({ name: 'account', label: 'Account' }));
     });
 
-    it('describe_object should return field schema', async () => {
+    it('describe_object should return field schema (via metadata tools)', async () => {
+      // describe_object is now part of metadata tools — register them
+      const { registerMetadataTools } = await import('../tools/metadata-tools.js');
+      registerMetadataTools(registry, { metadataService });
+
       (metadataService.getObject as any).mockResolvedValue({
         name: 'account',
         label: 'Account',
@@ -385,12 +389,19 @@ describe('Data Tools', () => {
 
       const parsed = JSON.parse((result.output as any).value);
       expect(parsed.name).toBe('account');
-      expect(parsed.fields.name.type).toBe('text');
-      expect(parsed.fields.name.required).toBe(true);
-      expect(parsed.fields.revenue.type).toBe('number');
+      // Unified handler returns fields as array (not object)
+      const nameField = parsed.fields.find((f: any) => f.name === 'name');
+      expect(nameField.type).toBe('text');
+      expect(nameField.required).toBe(true);
+      const revenueField = parsed.fields.find((f: any) => f.name === 'revenue');
+      expect(revenueField.type).toBe('number');
     });
 
-    it('describe_object should return error for unknown object', async () => {
+    it('describe_object should return error for unknown object (via metadata tools)', async () => {
+      // describe_object is now part of metadata tools — register them
+      const { registerMetadataTools } = await import('../tools/metadata-tools.js');
+      registerMetadataTools(registry, { metadataService });
+
       const result = await registry.execute({
         type: 'tool-call' as const,
         toolCallId: 'c1',
@@ -1067,8 +1078,8 @@ describe('METADATA_ASSISTANT_AGENT', () => {
     expect(toolNames).toContain('add_field');
     expect(toolNames).toContain('modify_field');
     expect(toolNames).toContain('delete_field');
-    expect(toolNames).toContain('list_metadata_objects');
-    expect(toolNames).toContain('describe_metadata_object');
+    expect(toolNames).toContain('list_objects');
+    expect(toolNames).toContain('describe_object');
   });
 
   it('should use action type for mutation tools and query type for read tools', () => {
@@ -1099,7 +1110,7 @@ describe('METADATA_ASSISTANT_AGENT', () => {
   it('should have instructions mentioning metadata management capabilities', () => {
     const instructions = METADATA_ASSISTANT_AGENT.instructions;
     expect(instructions).toContain('snake_case');
-    expect(instructions).toContain('list_metadata_objects');
-    expect(instructions).toContain('describe_metadata_object');
+    expect(instructions).toContain('list_objects');
+    expect(instructions).toContain('describe_object');
   });
 });

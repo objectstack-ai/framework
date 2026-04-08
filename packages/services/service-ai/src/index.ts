@@ -39,8 +39,8 @@ export {
   addFieldTool,
   modifyFieldTool,
   deleteFieldTool,
-  listMetadataObjectsTool,
-  describeMetadataObjectTool,
+  listObjectsTool,
+  describeObjectTool,
 } from './tools/metadata-tools.js';
 
 // Agent runtime

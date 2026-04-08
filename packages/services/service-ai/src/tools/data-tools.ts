@@ -1,29 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import type { AIToolDefinition, IDataEngine, IMetadataService } from '@objectstack/spec/contracts';
+import type { AIToolDefinition, IDataEngine } from '@objectstack/spec/contracts';
 import type { ToolHandler } from './tool-registry.js';
 import type { ToolRegistry } from './tool-registry.js';
-
-// ---------------------------------------------------------------------------
-// Internal type aliases for metadata payloads (returned as `unknown` from
-// IMetadataService — we cast to these lightweight shapes for field access).
-// ---------------------------------------------------------------------------
-
-/** Minimal shape of an object definition as returned by IMetadataService. */
-interface ObjectDef {
-  name: string;
-  label?: string;
-  fields?: Record<string, FieldDef>;
-}
-
-/** Minimal shape of a field definition inside an object. */
-interface FieldDef {
-  type?: string;
-  label?: string;
-  required?: boolean;
-  reference?: string;
-  options?: unknown;
-}
 
 // ---------------------------------------------------------------------------
 // Data context — injected once at registration time
@@ -38,8 +17,6 @@ interface FieldDef {
 export interface DataToolContext {
   /** ObjectQL data engine for record-level operations. */
   dataEngine: IDataEngine;
-  /** Metadata service for schema/object introspection. */
-  metadataService: IMetadataService;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,34 +28,6 @@ const MAX_QUERY_LIMIT = 200;
 
 /** Default record limit when not specified. */
 const DEFAULT_QUERY_LIMIT = 20;
-
-export const LIST_OBJECTS_TOOL: AIToolDefinition = {
-  name: 'list_objects',
-  description: 'List all available data objects (tables) in the system. Returns object names and labels.',
-  parameters: {
-    type: 'object',
-    properties: {},
-    additionalProperties: false,
-  },
-};
-
-export const DESCRIBE_OBJECT_TOOL: AIToolDefinition = {
-  name: 'describe_object',
-  description:
-    'Get the schema (fields, types, labels) of a specific data object. ' +
-    'Use this to understand the structure of a table before querying it.',
-  parameters: {
-    type: 'object',
-    properties: {
-      objectName: {
-        type: 'string',
-        description: 'The snake_case name of the object to describe',
-      },
-    },
-    required: ['objectName'],
-    additionalProperties: false,
-  },
-};
 
 export const QUERY_RECORDS_TOOL: AIToolDefinition = {
   name: 'query_records',
@@ -203,10 +152,8 @@ export const AGGREGATE_DATA_TOOL: AIToolDefinition = {
   },
 };
 
-/** All built-in data tool definitions. */
+/** All built-in data tools definitions. */
 export const DATA_TOOL_DEFINITIONS: AIToolDefinition[] = [
-  LIST_OBJECTS_TOOL,
-  DESCRIBE_OBJECT_TOOL,
   QUERY_RECORDS_TOOL,
   GET_RECORD_TOOL,
   AGGREGATE_DATA_TOOL,
@@ -215,46 +162,6 @@ export const DATA_TOOL_DEFINITIONS: AIToolDefinition[] = [
 // ---------------------------------------------------------------------------
 // Handler Factories
 // ---------------------------------------------------------------------------
-
-function createListObjectsHandler(ctx: DataToolContext): ToolHandler {
-  return async () => {
-    const objects = await ctx.metadataService.listObjects();
-    const summary = (objects as ObjectDef[]).map(o => ({
-      name: o.name,
-      label: o.label ?? o.name,
-    }));
-    return JSON.stringify(summary);
-  };
-}
-
-function createDescribeObjectHandler(ctx: DataToolContext): ToolHandler {
-  return async (args) => {
-    const { objectName } = args as { objectName: string };
-    const objectDef = await ctx.metadataService.getObject(objectName);
-    if (!objectDef) {
-      return JSON.stringify({ error: `Object "${objectName}" not found` });
-    }
-
-    const def = objectDef as ObjectDef;
-    const fields = def.fields ?? {};
-    const fieldSummary: Record<string, Record<string, unknown>> = {};
-    for (const [key, f] of Object.entries(fields)) {
-      fieldSummary[key] = {
-        type: f.type,
-        label: f.label ?? key,
-        required: f.required ?? false,
-        ...(f.reference ? { reference: f.reference } : {}),
-        ...(f.options ? { options: f.options } : {}),
-      };
-    }
-
-    return JSON.stringify({
-      name: def.name,
-      label: def.label ?? def.name,
-      fields: fieldSummary,
-    });
-  };
-}
 
 function createQueryRecordsHandler(ctx: DataToolContext): ToolHandler {
   return async (args) => {
@@ -366,15 +273,13 @@ function createAggregateDataHandler(ctx: DataToolContext): ToolHandler {
 /**
  * Register all built-in data tools on the given {@link ToolRegistry}.
  *
- * Typically called from the `ai:ready` hook after both the data engine
- * and metadata service are available.
+ * Typically called from the `ai:ready` hook after the data engine is available.
  *
  * @example
  * ```ts
  * ctx.hook('ai:ready', async (aiService) => {
  *   const dataEngine = ctx.getService<IDataEngine>('data');
- *   const metadataService = ctx.getService<IMetadataService>('metadata');
- *   registerDataTools(aiService.toolRegistry, { dataEngine, metadataService });
+ *   registerDataTools(aiService.toolRegistry, { dataEngine });
  * });
  * ```
  */
@@ -382,8 +287,6 @@ export function registerDataTools(
   registry: ToolRegistry,
   context: DataToolContext,
 ): void {
-  registry.register(LIST_OBJECTS_TOOL, createListObjectsHandler(context));
-  registry.register(DESCRIBE_OBJECT_TOOL, createDescribeObjectHandler(context));
   registry.register(QUERY_RECORDS_TOOL, createQueryRecordsHandler(context));
   registry.register(GET_RECORD_TOOL, createGetRecordHandler(context));
   registry.register(AGGREGATE_DATA_TOOL, createAggregateDataHandler(context));

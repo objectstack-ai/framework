@@ -164,7 +164,7 @@ describe('Messages with tool invocation parts', () => {
       role: 'assistant',
       toolParts: [
         {
-          toolName: 'list_metadata_objects',
+          toolName: 'list_objects',
           toolCallId: 'tc_2',
           state: 'output-available',
           input: {},

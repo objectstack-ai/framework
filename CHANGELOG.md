@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Unified `list_objects` / `describe_object` tools (`service-ai`)** — Merged the duplicate
+  `list_metadata_objects` → `list_objects` and `describe_metadata_object` → `describe_object`
+  tool pairs. Both `data_chat` and `metadata_assistant` agents now share the same unified tools
+  with full `filter`, `includeFields`, snake_case validation, and `enableFeatures` support.
+  `DATA_TOOL_DEFINITIONS` is reduced from 5 to 3 (query-only tools), while
+  `METADATA_TOOL_DEFINITIONS` retains all 6 tools under the unified names. The duplicate
+  `ObjectDef`/`FieldDef` type definitions in `data-tools.ts` are removed.
+
 ### Fixed
 - **Agent Chat: Vercel SSE Data Stream support** — The agent chat endpoint
   (`/api/v1/ai/agents/:agentName/chat`) now returns Vercel AI SDK v6 UI Message Stream Protocol
@@ -157,7 +166,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Metadata Assistant Agent (`service-ai`)** — New `metadata_assistant` agent definition that
   binds all 6 metadata management tools (`create_object`, `add_field`, `modify_field`,
-  `delete_field`, `list_metadata_objects`, `describe_metadata_object`). Includes a tailored
+  `delete_field`, `list_objects`, `describe_object`). Includes a tailored
   system prompt that guides the AI to use snake_case naming, verify existing schemas before
   modifications, and warn about destructive operations. Configured with `react` planning
   strategy (10 iterations, replan enabled) for multi-step schema design conversations.

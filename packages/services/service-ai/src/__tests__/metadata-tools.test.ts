@@ -17,8 +17,8 @@ import { createObjectTool } from '../tools/create-object.tool.js';
 import { addFieldTool } from '../tools/add-field.tool.js';
 import { modifyFieldTool } from '../tools/modify-field.tool.js';
 import { deleteFieldTool } from '../tools/delete-field.tool.js';
-import { listMetadataObjectsTool } from '../tools/list-metadata-objects.tool.js';
-import { describeMetadataObjectTool } from '../tools/describe-metadata-object.tool.js';
+import { listObjectsTool } from '../tools/list-objects.tool.js';
+import { describeObjectTool } from '../tools/describe-object.tool.js';
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -63,8 +63,8 @@ describe('Metadata Tool Definitions', () => {
       'add_field',
       'modify_field',
       'delete_field',
-      'list_metadata_objects',
-      'describe_metadata_object',
+      'list_objects',
+      'describe_object',
     ]);
   });
 
@@ -86,8 +86,8 @@ describe('Individual Tool Metadata (.tool.ts)', () => {
     { tool: addFieldTool, expectedName: 'add_field', expectedLabel: 'Add Field' },
     { tool: modifyFieldTool, expectedName: 'modify_field', expectedLabel: 'Modify Field' },
     { tool: deleteFieldTool, expectedName: 'delete_field', expectedLabel: 'Delete Field' },
-    { tool: listMetadataObjectsTool, expectedName: 'list_metadata_objects', expectedLabel: 'List Metadata Objects' },
-    { tool: describeMetadataObjectTool, expectedName: 'describe_metadata_object', expectedLabel: 'Describe Metadata Object' },
+    { tool: listObjectsTool, expectedName: 'list_objects', expectedLabel: 'List Objects' },
+    { tool: describeObjectTool, expectedName: 'describe_object', expectedLabel: 'Describe Object' },
   ];
 
   for (const { tool, expectedName, expectedLabel } of tools) {
@@ -132,8 +132,8 @@ describe('Individual Tool Metadata (.tool.ts)', () => {
   });
 
   it('should not mark read-only tools as requiresConfirmation', () => {
-    expect(listMetadataObjectsTool.requiresConfirmation).toBe(false);
-    expect(describeMetadataObjectTool.requiresConfirmation).toBe(false);
+    expect(listObjectsTool.requiresConfirmation).toBe(false);
+    expect(describeObjectTool.requiresConfirmation).toBe(false);
   });
 
   it('should not mark add_field and modify_field as requiresConfirmation', () => {
@@ -162,8 +162,8 @@ describe('registerMetadataTools', () => {
     expect(registry.has('add_field')).toBe(true);
     expect(registry.has('modify_field')).toBe(true);
     expect(registry.has('delete_field')).toBe(true);
-    expect(registry.has('list_metadata_objects')).toBe(true);
-    expect(registry.has('describe_metadata_object')).toBe(true);
+    expect(registry.has('list_objects')).toBe(true);
+    expect(registry.has('describe_object')).toBe(true);
   });
 });
 
@@ -171,8 +171,8 @@ describe('registerMetadataTools', () => {
 // Dual registration (data tools + metadata tools)
 // ═══════════════════════════════════════════════════════════════════
 
-describe('registerDataTools + registerMetadataTools — no collision', () => {
-  it('should register both tool sets on the same registry without overwriting', () => {
+describe('registerDataTools + registerMetadataTools — unified list/describe', () => {
+  it('should register both tool sets on the same registry with shared list_objects and describe_object', () => {
     const registry = new ToolRegistry();
     const metadataService = createMockMetadataService();
     const dataEngine = {
@@ -181,26 +181,32 @@ describe('registerDataTools + registerMetadataTools — no collision', () => {
       aggregate: vi.fn(),
     } as any;
 
-    registerDataTools(registry, { dataEngine, metadataService });
+    registerDataTools(registry, { dataEngine });
     const sizeAfterData = registry.size;
 
     registerMetadataTools(registry, { metadataService });
     const sizeAfterBoth = registry.size;
 
-    // Data tools define: list_objects, describe_object, query_records, get_record, aggregate_data
-    // Metadata tools define: create_object, add_field, modify_field, delete_field, list_metadata_objects, describe_metadata_object
-    // No overlap — total should be sum of both
+    // Data tools define: query_records, get_record, aggregate_data (3)
+    // Metadata tools define: create_object, add_field, modify_field, delete_field, list_objects, describe_object (6)
+    // Total should be 3 + 6 = 9
+    expect(sizeAfterData).toBe(3);
     expect(sizeAfterBoth).toBe(sizeAfterData + 6);
 
-    // Data tools should still be present
+    // Unified list/describe should be present (from metadata tools)
     expect(registry.has('list_objects')).toBe(true);
     expect(registry.has('describe_object')).toBe(true);
-    expect(registry.has('query_records')).toBe(true);
 
-    // Metadata tools should also be present with distinct names
-    expect(registry.has('list_metadata_objects')).toBe(true);
-    expect(registry.has('describe_metadata_object')).toBe(true);
+    // Data-only tools should be present
+    expect(registry.has('query_records')).toBe(true);
+    expect(registry.has('get_record')).toBe(true);
+    expect(registry.has('aggregate_data')).toBe(true);
+
+    // Metadata-only tools should be present
     expect(registry.has('create_object')).toBe(true);
+    expect(registry.has('add_field')).toBe(true);
+    expect(registry.has('modify_field')).toBe(true);
+    expect(registry.has('delete_field')).toBe(true);
   });
 });
 
@@ -752,7 +758,7 @@ describe('list_metadata_objects handler', () => {
     const result = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 'c1',
-      toolName: 'list_metadata_objects',
+      toolName: 'list_objects',
       input: {},
     });
 
@@ -767,7 +773,7 @@ describe('list_metadata_objects handler', () => {
     const result = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 'c2',
-      toolName: 'list_metadata_objects',
+      toolName: 'list_objects',
       input: { filter: 'account' },
     });
 
@@ -780,7 +786,7 @@ describe('list_metadata_objects handler', () => {
     const result = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 'c3',
-      toolName: 'list_metadata_objects',
+      toolName: 'list_objects',
       input: { includeFields: true },
     });
 
@@ -797,7 +803,7 @@ describe('list_metadata_objects handler', () => {
     const result = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 'c4',
-      toolName: 'list_metadata_objects',
+      toolName: 'list_objects',
       input: {},
     });
 
@@ -836,7 +842,7 @@ describe('describe_metadata_object handler', () => {
     const result = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 'c1',
-      toolName: 'describe_metadata_object',
+      toolName: 'describe_object',
       input: { objectName: 'account' },
     });
 
@@ -858,7 +864,7 @@ describe('describe_metadata_object handler', () => {
     const result = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 'c2',
-      toolName: 'describe_metadata_object',
+      toolName: 'describe_object',
       input: { objectName: 'nonexistent' },
     });
 
@@ -909,7 +915,7 @@ describe('Metadata Tools — full lifecycle', () => {
     const descResult = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 's4',
-      toolName: 'describe_metadata_object',
+      toolName: 'describe_object',
       input: { objectName: 'invoice' },
     });
     const desc = JSON.parse((descResult.output as any).value);
@@ -941,7 +947,7 @@ describe('Metadata Tools — full lifecycle', () => {
     const descResult2 = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 's7',
-      toolName: 'describe_metadata_object',
+      toolName: 'describe_object',
       input: { objectName: 'invoice' },
     });
     const desc2 = JSON.parse((descResult2.output as any).value);
@@ -954,7 +960,7 @@ describe('Metadata Tools — full lifecycle', () => {
     const listResult = await registry.execute({
       type: 'tool-call' as const,
       toolCallId: 's8',
-      toolName: 'list_metadata_objects',
+      toolName: 'list_objects',
       input: {},
     });
     const list = JSON.parse((listResult.output as any).value);

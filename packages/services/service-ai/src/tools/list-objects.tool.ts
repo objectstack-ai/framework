@@ -3,18 +3,18 @@
 import { defineTool } from '@objectstack/spec/ai';
 
 /**
- * list_metadata_objects — AI Tool Metadata
+ * list_objects — AI Tool Metadata
  *
- * Lists all registered metadata objects (tables) with optional filtering.
- * Uses a unique name (`list_metadata_objects`) to avoid collision with
- * the data-tools `list_objects` tool.
+ * Lists all registered data objects (tables) with optional filtering
+ * and field summaries. This is the single, unified tool for listing
+ * objects — used by both data_chat and metadata_assistant agents.
  */
-export const listMetadataObjectsTool = defineTool({
-  name: 'list_metadata_objects',
-  label: 'List Metadata Objects',
+export const listObjectsTool = defineTool({
+  name: 'list_objects',
+  label: 'List Objects',
   description:
-    'Lists all registered metadata objects (tables) in the current environment. ' +
-    'Use this when the user wants to see what tables, entities, or data models are defined in metadata.',
+    'Lists all registered data objects (tables) in the current environment. ' +
+    'Use this when the user wants to see what tables, entities, or data models are available.',
   category: 'data',
   builtIn: true,
   parameters: {
