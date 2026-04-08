@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **MetadataPlugin: Driver bridging for database-backed persistence** — `MetadataPlugin.start()`
+  now discovers registered driver services (`driver.*`) from the kernel service registry and
+  calls `manager.setDatabaseDriver()` to enable `DatabaseLoader`. Previously, no code bridged
+  the kernel's database driver to the `MetadataManager`, leaving `DatabaseLoader` unconfigured
+  and metadata persistence limited to the filesystem only.
+- **MetadataManager: register() no longer writes to FilesystemLoader** — `register()` now
+  persists metadata only to `datasource:` protocol loaders (i.e. `DatabaseLoader`), skipping
+  `file:` protocol loaders (`FilesystemLoader`). Previously, `register()` broadcast writes to
+  all loaders indiscriminately, causing crashes in read-only environments (e.g. serverless,
+  containerized deployments) when `FilesystemLoader.save()` attempted to write to disk.
+  The same protocol filter is applied to `unregister()` for consistency.
 - **Agent Chat: Vercel SSE Data Stream support** — The agent chat endpoint
   (`/api/v1/ai/agents/:agentName/chat`) now returns Vercel AI SDK v6 UI Message Stream Protocol
   (SSE) by default, matching the general chat endpoint behaviour. Previously, the agent chat route

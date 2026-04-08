@@ -80,7 +80,7 @@ export class MetadataPlugin implements Plugin {
                         driverService: serviceName,
                     });
                     this.manager.setDatabaseDriver(service);
-                    break; // Use the first available driver
+                    break; // Use the first discovered driver — typically only one driver is registered per deployment
                 }
             }
         } catch (e: any) {
