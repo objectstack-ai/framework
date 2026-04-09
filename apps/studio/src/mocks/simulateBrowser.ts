@@ -142,6 +142,17 @@ export async function simulateBrowser() {
             }
         }),
 
+        // Metadata - Get all types (base route returns types)
+        http.get('http://localhost:3000/api/v1/meta', async () => {
+             console.log('[VirtualNetwork] GET /meta (types)');
+             try {
+                 const result = await (kernel as any).broker.call('metadata.types', {});
+                 return HttpResponse.json({ success: true, data: result });
+             } catch (err: any) {
+                  return HttpResponse.json({ error: err.message }, { status: 500 });
+             }
+        }),
+
         // Metadata - Objects List (Singular & Plural support)
         http.get('http://localhost:3000/api/v1/meta/object', async () => {
              console.log('[VirtualNetwork] GET /meta/object');
@@ -190,6 +201,22 @@ export async function simulateBrowser() {
                      return HttpResponse.json({ error: 'Not Found' }, { status: 404 });
                  }
                  // Return Standard Envelope to match packages/runtime/src/http-dispatcher.ts
+                 return HttpResponse.json({ success: true, data: result });
+             } catch (err: any) {
+                  return HttpResponse.json({ error: err.message }, { status: 500 });
+             }
+        }),
+
+        // Metadata - Generic type list (for agents, tools, etc.)
+        // This must come AFTER specific routes like /meta/object to avoid conflicts
+        http.get('http://localhost:3000/api/v1/meta/:type', async ({ params }) => {
+             // Skip if it's a specific route we already handled
+             if (params.type === 'object' || params.type === 'objects') {
+                 return;
+             }
+             console.log(`[VirtualNetwork] GET /meta/${params.type}`);
+             try {
+                 const result = await (kernel as any).broker.call(`metadata.${params.type}`, {});
                  return HttpResponse.json({ success: true, data: result });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
