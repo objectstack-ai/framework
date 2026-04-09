@@ -38,6 +38,8 @@ node scripts/bundle-api.mjs
 #    The vercel.json includeFiles pattern references node_modules/ relative to
 #    apps/studio/, so we must copy the actual module files here for Vercel to
 #    include them in the serverless function's deployment package.
+#
+#    Note: @libsql/client is now bundled by esbuild, so we no longer copy it.
 echo "[build-vercel] Copying external native modules to local node_modules..."
 for mod in better-sqlite3; do
   src="../../node_modules/$mod"
@@ -50,17 +52,6 @@ for mod in better-sqlite3; do
     echo "[build-vercel]   ⚠ $mod not found at $src (skipped)"
   fi
 done
-# Copy the @libsql scope (client + its sub-dependencies like core, hrana-client)
-if [ -d "../../node_modules/@libsql" ]; then
-  mkdir -p "node_modules/@libsql"
-  for pkg in ../../node_modules/@libsql/*/; do
-    pkgname="$(basename "$pkg")"
-    cp -rL "$pkg" "node_modules/@libsql/$pkgname"
-  done
-  echo "[build-vercel]   ✓ Copied @libsql/*"
-else
-  echo "[build-vercel]   ⚠ @libsql not found (skipped)"
-fi
 # Copy the @ai-sdk scope (dynamically loaded provider packages)
 if [ -d "../../node_modules/@ai-sdk" ]; then
   mkdir -p "node_modules/@ai-sdk"

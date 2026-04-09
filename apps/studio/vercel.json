@@ -13,7 +13,7 @@
     "api/**/*.js": {
       "memory": 1024,
       "maxDuration": 300,
-      "includeFiles": "{node_modules/@libsql,node_modules/better-sqlite3,node_modules/@ai-sdk}/**"
+      "includeFiles": "node_modules/{better-sqlite3,@ai-sdk}/**"
     }
   },
   "headers": [
