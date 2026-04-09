@@ -128,6 +128,53 @@ describe('encodeStreamPart', () => {
     const part = { type: 'unknown-internal' } as unknown as TextStreamPart<ToolSet>;
     expect(encodeStreamPart(part)).toBe('');
   });
+
+  it('should encode reasoning-start part with g: prefix', () => {
+    const part = {
+      type: 'reasoning-start',
+      id: 'r1',
+    } as unknown as TextStreamPart<ToolSet>;
+
+    const frame = encodeStreamPart(part);
+    expect(frame).toBe('g:{"text":""}\n');
+  });
+
+  it('should encode reasoning-delta part with g: prefix', () => {
+    const part = {
+      type: 'reasoning-delta',
+      id: 'r1',
+      text: 'Let me think through this step by step...',
+    } as unknown as TextStreamPart<ToolSet>;
+
+    const frame = encodeStreamPart(part);
+    expect(frame).toBe('g:{"text":"Let me think through this step by step..."}\n');
+  });
+
+  it('should encode reasoning-end part as empty (no specific end marker)', () => {
+    const part = {
+      type: 'reasoning-end',
+      id: 'r1',
+    } as unknown as TextStreamPart<ToolSet>;
+
+    const frame = encodeStreamPart(part);
+    expect(frame).toBe('');
+  });
+
+  it('should pass through custom step events', () => {
+    const part = {
+      type: 'step-start',
+      stepId: 'step_1',
+      stepName: 'Query database',
+    } as unknown as TextStreamPart<ToolSet>;
+
+    const frame = encodeStreamPart(part);
+    const payload = parseSSE(frame);
+    expect(payload).toEqual({
+      type: 'step-start',
+      stepId: 'step_1',
+      stepName: 'Query database',
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────

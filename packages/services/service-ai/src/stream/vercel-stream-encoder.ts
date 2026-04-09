@@ -23,6 +23,14 @@ function sse(data: object): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
+/**
+ * Encode data using Vercel AI SDK Data Stream Protocol prefixes.
+ * @see https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+ */
+function dataStreamLine(prefix: string, data: object): string {
+  return `${prefix}:${JSON.stringify(data)}\n`;
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 /**
@@ -71,8 +79,24 @@ export function encodeStreamPart(part: TextStreamPart<ToolSet>): string {
         errorText: String(part.error),
       });
 
+    // Handle reasoning/thinking streams (DeepSeek R1, o1-style models)
+    // Use 'g:' prefix for reasoning content per Vercel AI SDK protocol
+    case 'reasoning-start':
+      return dataStreamLine('g', { text: '' });
+
+    case 'reasoning-delta':
+      return dataStreamLine('g', { text: part.text });
+
+    case 'reasoning-end':
+      return ''; // No specific end marker needed for reasoning
+
     // finish-step and finish are handled by the generator, not here
     default:
+      // Pass through any unknown event types that might be custom
+      // (e.g., step-start, step-finish from custom providers)
+      if ((part as any).type?.startsWith('step-')) {
+        return sse(part as any);
+      }
       return '';
   }
 }
