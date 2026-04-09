@@ -1,0 +1,29 @@
+{
+  "name": "@objectstack/service-user-preferences",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "description": "User Preferences Service for ObjectStack — implements IUserPreferencesService and IUserFavoritesService with ObjectQL persistence and REST routes",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}
