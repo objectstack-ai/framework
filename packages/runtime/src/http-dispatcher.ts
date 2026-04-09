@@ -343,31 +343,39 @@ export class HttpDispatcher {
         if (parts[0] === 'types') {
             // PRIORITY 1: Try MetadataService directly (includes both typeRegistry with agent/tool AND runtime-registered types)
             const metadataService = await this.getService(CoreServiceName.enum.metadata);
+            console.log('[HttpDispatcher] MetadataService retrieved:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
             if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
                 try {
                     const types = await (metadataService as any).getRegisteredTypes();
+                    console.log('[HttpDispatcher] MetadataService.getRegisteredTypes() returned:', types);
                     return { handled: true, response: this.success({ types }) };
                 } catch (e: any) {
                     // Log error but continue to fallbacks
-                    console.debug('[HttpDispatcher] MetadataService.getRegisteredTypes() failed:', e.message);
+                    console.warn('[HttpDispatcher] MetadataService.getRegisteredTypes() failed:', e.message, e.stack);
                 }
+            } else {
+                console.log('[HttpDispatcher] MetadataService not available or missing getRegisteredTypes, falling back to protocol service');
             }
             // PRIORITY 2: Try protocol service (returns SchemaRegistry types only - missing agent/tool)
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.getMetaTypes === 'function') {
                 const result = await protocol.getMetaTypes({});
+                console.log('[HttpDispatcher] Protocol service returned types:', result);
                 return { handled: true, response: this.success(result) };
             }
             // PRIORITY 3: ask broker for registered types
             if (broker) {
                 try {
                     const data = await broker.call('metadata.types', {}, { request: context.request });
+                    console.log('[HttpDispatcher] Broker returned types:', data);
                     return { handled: true, response: this.success(data) };
-                } catch {
+                } catch (e) {
+                    console.log('[HttpDispatcher] Broker call failed:', e);
                     // fall through to hardcoded defaults
                 }
             }
             // Last resort: hardcoded defaults
+            console.warn('[HttpDispatcher] Falling back to hardcoded defaults for metadata types');
             return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
 
