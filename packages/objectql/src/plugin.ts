@@ -129,12 +129,16 @@ export class ObjectQLPlugin implements Plugin {
     // object registered by plugins (e.g., sys_user from plugin-auth).
     await this.syncRegisteredSchemas(ctx);
 
+    // Bridge all SchemaRegistry objects to metadata service
+    // This ensures AI tools and other IMetadataService consumers can see all objects
+    await this.bridgeObjectsToMetadataService(ctx);
+
     // Register built-in audit hooks
     this.registerAuditHooks(ctx);
 
     // Register tenant isolation middleware
     this.registerTenantMiddleware(ctx);
-    
+
     ctx.logger.info('ObjectQL engine started', {
         driversRegistered: this.ql?.['drivers']?.size || 0,
         objectsRegistered: this.ql?.registry?.getAllObjects?.()?.length || 0
@@ -365,9 +369,6 @@ export class ObjectQLPlugin implements Plugin {
    * This closes the persistence loop so that user-created schemas survive
    * kernel cold starts and redeployments.
    *
-   * Also registers loaded objects with the metadata service so they are
-   * visible to tools like AI chat that query the metadata service.
-   *
    * Gracefully degrades when:
    * - The protocol service is unavailable (e.g., in-memory-only mode).
    * - `loadMetaFromDb` is not implemented by the protocol shim.
@@ -398,47 +399,67 @@ export class ObjectQLPlugin implements Plugin {
         ctx.logger.info('Metadata restored from database to SchemaRegistry', { loaded, errors });
       } else {
         ctx.logger.debug('No persisted metadata found in database');
-        return;
-      }
-
-      // Phase 3: Bridge SchemaRegistry objects to metadata service
-      // This ensures objects loaded from sys_metadata are visible to AI tools and other
-      // consumers that query via IMetadataService.listObjects()
-      if (loaded > 0) {
-        try {
-          const metadataService = ctx.getService<any>('metadata');
-          if (metadataService && typeof metadataService.register === 'function' && this.ql?.registry) {
-            const objects = this.ql.registry.getAllObjects();
-            let bridged = 0;
-            for (const obj of objects) {
-              try {
-                // Check if object is already in metadata service to avoid duplicates
-                const existing = await metadataService.getObject(obj.name);
-                if (!existing) {
-                  // Register object that exists in SchemaRegistry but not in metadata service
-                  await metadataService.register('object', obj.name, obj);
-                  bridged++;
-                }
-              } catch (e: unknown) {
-                ctx.logger.debug('Failed to bridge object to metadata service', {
-                  object: obj.name,
-                  error: e instanceof Error ? e.message : String(e),
-                });
-              }
-            }
-            if (bridged > 0) {
-              ctx.logger.info('Bridged objects from SchemaRegistry to metadata service', { count: bridged });
-            }
-          }
-        } catch (e: unknown) {
-          ctx.logger.debug('Metadata service unavailable for bridging, skipping', {
-            error: e instanceof Error ? e.message : String(e),
-          });
-        }
       }
     } catch (e: unknown) {
       // Non-fatal: first-run or in-memory driver may not have sys_metadata yet
       ctx.logger.debug('DB metadata restore failed (non-fatal)', {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  /**
+   * Bridge all SchemaRegistry objects to the metadata service.
+   *
+   * This ensures objects registered by plugins and loaded from sys_metadata
+   * are visible to AI tools and other consumers that query IMetadataService.
+   *
+   * Runs after both restoreMetadataFromDb() and syncRegisteredSchemas() to
+   * catch all objects in the SchemaRegistry regardless of their source.
+   */
+  private async bridgeObjectsToMetadataService(ctx: PluginContext): Promise<void> {
+    try {
+      const metadataService = ctx.getService<any>('metadata');
+      if (!metadataService || typeof metadataService.register !== 'function') {
+        ctx.logger.debug('Metadata service unavailable for bridging, skipping');
+        return;
+      }
+
+      if (!this.ql?.registry) {
+        ctx.logger.debug('SchemaRegistry unavailable for bridging, skipping');
+        return;
+      }
+
+      const objects = this.ql.registry.getAllObjects();
+      let bridged = 0;
+
+      for (const obj of objects) {
+        try {
+          // Check if object is already in metadata service to avoid duplicates
+          const existing = await metadataService.getObject(obj.name);
+          if (!existing) {
+            // Register object that exists in SchemaRegistry but not in metadata service
+            await metadataService.register('object', obj.name, obj);
+            bridged++;
+          }
+        } catch (e: unknown) {
+          ctx.logger.debug('Failed to bridge object to metadata service', {
+            object: obj.name,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      if (bridged > 0) {
+        ctx.logger.info('Bridged objects from SchemaRegistry to metadata service', {
+          count: bridged,
+          total: objects.length
+        });
+      } else {
+        ctx.logger.debug('No objects needed bridging (all already in metadata service)');
+      }
+    } catch (e: unknown) {
+      ctx.logger.debug('Failed to bridge objects to metadata service', {
         error: e instanceof Error ? e.message : String(e),
       });
     }
