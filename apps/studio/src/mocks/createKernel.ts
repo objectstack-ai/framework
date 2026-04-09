@@ -82,12 +82,14 @@ export async function createKernel(options: KernelOptions) {
     }
 
     // Register services and plugins
+    // SetupPlugin must load BEFORE other plugins that contribute navigation items
+    // so that the setupNav service is available during their init() phase
+    await kernel.use(new SetupPlugin());
     await kernel.use(new FeedServicePlugin());
     await kernel.use(new MetadataPlugin({ watch: false }));
     await kernel.use(new AIServicePlugin());
     await kernel.use(new AutomationServicePlugin());
     await kernel.use(new AnalyticsServicePlugin());
-    await kernel.use(new SetupPlugin());
 
     // Protocol service is registered automatically by ObjectQLPlugin.init()
     // via ObjectStackProtocolImplementation (which uses SchemaRegistry internally).
