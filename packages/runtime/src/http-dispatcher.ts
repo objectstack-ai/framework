@@ -342,8 +342,49 @@ export class HttpDispatcher {
         // GET /metadata/types
         if (parts[0] === 'types') {
             // PRIORITY 1: Try MetadataService directly (includes both typeRegistry with agent/tool AND runtime-registered types)
-            const metadataService = await this.getService(CoreServiceName.enum.metadata);
-            console.log('[HttpDispatcher] MetadataService retrieved:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
+            console.log('[HttpDispatcher] Attempting to resolve MetadataService...');
+            console.log('[HttpDispatcher] Available kernel methods:', {
+                hasGetServiceAsync: typeof this.kernel.getServiceAsync === 'function',
+                hasGetService: typeof this.kernel.getService === 'function',
+                hasContext: !!this.kernel.context,
+                hasContextGetService: typeof this.kernel.context?.getService === 'function',
+            });
+
+            // Try all service resolution paths with detailed logging
+            let metadataService: any = null;
+
+            // Path 1: kernel.getServiceAsync
+            if (typeof this.kernel.getServiceAsync === 'function') {
+                try {
+                    metadataService = await this.kernel.getServiceAsync('metadata');
+                    console.log('[HttpDispatcher] kernel.getServiceAsync("metadata") returned:', !!metadataService);
+                } catch (e: any) {
+                    console.log('[HttpDispatcher] kernel.getServiceAsync("metadata") failed:', e.message);
+                }
+            }
+
+            // Path 2: kernel.getService (if not found via async)
+            if (!metadataService && typeof this.kernel.getService === 'function') {
+                try {
+                    metadataService = await this.kernel.getService('metadata');
+                    console.log('[HttpDispatcher] kernel.getService("metadata") returned:', !!metadataService);
+                } catch (e: any) {
+                    console.log('[HttpDispatcher] kernel.getService("metadata") failed:', e.message);
+                }
+            }
+
+            // Path 3: kernel.context.getService (if not found)
+            if (!metadataService && this.kernel.context?.getService) {
+                try {
+                    metadataService = await this.kernel.context.getService('metadata');
+                    console.log('[HttpDispatcher] kernel.context.getService("metadata") returned:', !!metadataService);
+                } catch (e: any) {
+                    console.log('[HttpDispatcher] kernel.context.getService("metadata") failed:', e.message);
+                }
+            }
+
+            console.log('[HttpDispatcher] Final metadataService:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
+
             if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
                 try {
                     const types = await (metadataService as any).getRegisteredTypes();

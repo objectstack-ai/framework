@@ -250,7 +250,9 @@ export class AIServicePlugin implements Plugin {
     let metadataService: IMetadataService | undefined;
     try {
       metadataService = ctx.getService<IMetadataService>('metadata');
-    } catch {
+      console.log('[AI Plugin] Retrieved metadata service:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
+    } catch (e: any) {
+      console.log('[AI] Metadata service not available:', e.message);
       ctx.logger.debug('[AI] Metadata service not available');
     }
 
@@ -287,8 +289,10 @@ export class AIServicePlugin implements Plugin {
 
             if (!agentExists) {
               await metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT);
+              console.log('[AI] Registered data_chat agent to metadataService');
               ctx.logger.info('[AI] data_chat agent registered');
             } else {
+              console.log('[AI] data_chat agent already exists, skipping');
               ctx.logger.debug('[AI] data_chat agent already exists, skipping auto-registration');
             }
           } catch (err) {
@@ -329,8 +333,10 @@ export class AIServicePlugin implements Plugin {
 
           if (!agentExists) {
             await metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT);
+            console.log('[AI] Registered metadata_assistant agent to metadataService');
             ctx.logger.info('[AI] metadata_assistant agent registered');
           } else {
+            console.log('[AI] metadata_assistant agent already exists, skipping');
             ctx.logger.debug('[AI] metadata_assistant agent already exists, skipping auto-registration');
           }
         } catch (err) {
