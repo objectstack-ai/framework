@@ -341,13 +341,7 @@ export class HttpDispatcher {
         
         // GET /metadata/types
         if (parts[0] === 'types') {
-            // Try protocol service for dynamic types
-            const protocol = await this.resolveService('protocol');
-            if (protocol && typeof protocol.getMetaTypes === 'function') {
-                const result = await protocol.getMetaTypes({});
-                return { handled: true, response: this.success(result) };
-            }
-            // Try MetadataService directly (includes runtime-registered types like agents/tools)
+            // PRIORITY 1: Try MetadataService directly (includes both typeRegistry with agent/tool AND runtime-registered types)
             const metadataService = await this.getService(CoreServiceName.enum.metadata);
             if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
                 try {
@@ -358,7 +352,13 @@ export class HttpDispatcher {
                     console.debug('[HttpDispatcher] MetadataService.getRegisteredTypes() failed:', e.message);
                 }
             }
-            // Fallback: ask broker for registered types
+            // PRIORITY 2: Try protocol service (returns SchemaRegistry types only - missing agent/tool)
+            const protocol = await this.resolveService('protocol');
+            if (protocol && typeof protocol.getMetaTypes === 'function') {
+                const result = await protocol.getMetaTypes({});
+                return { handled: true, response: this.success(result) };
+            }
+            // PRIORITY 3: ask broker for registered types
             if (broker) {
                 try {
                     const data = await broker.call('metadata.types', {}, { request: context.request });
@@ -500,7 +500,9 @@ export class HttpDispatcher {
                     }
                 } catch (e: any) {
                     // MetadataService doesn't know this type or failed, continue to other fallbacks
-                    console.debug(`[HttpDispatcher] MetadataService.list('${typeOrName}') failed:`, e.message);
+                    // Sanitize typeOrName to prevent log injection (CodeQL warning)
+                    const sanitizedType = String(typeOrName).replace(/[\r\n\t]/g, '');
+                    console.debug(`[HttpDispatcher] MetadataService.list() failed for type:`, sanitizedType, 'error:', e.message);
                 }
             }
 
