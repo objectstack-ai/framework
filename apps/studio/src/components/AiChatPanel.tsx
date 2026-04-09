@@ -457,7 +457,7 @@ export function AiChatPanel() {
     [baseUrl, selectedAgent],
   );
 
-  const { messages, sendMessage, setMessages, status, error, addToolApprovalResponse } = useChat({
+  const { messages, sendMessage, setMessages, status, error, addToolApprovalResponse, data } = useChat({
     transport,
     messages: initialMessages,
     streamMode: 'stream-data',
@@ -473,56 +473,42 @@ export function AiChatPanel() {
 
   const isStreaming = status === 'streaming' || status === 'submitted';
 
-  // Listen to custom stream data events
+  // Process stream data events for reasoning and step progress
   useEffect(() => {
-    if (!isStreaming) return;
+    if (!data || data.length === 0) return;
 
-    // Create a custom event listener for stream data
-    const handleStreamData = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'reasoning-delta') {
-          setThinkingState((prev) => ({
+    // Process each data event from the stream
+    data.forEach((event: any) => {
+      if (event.type === 'reasoning-delta') {
+        setThinkingState((prev) => ({
+          ...prev,
+          reasoning: [...prev.reasoning, event.delta],
+        }));
+      } else if (event.type === 'step-start') {
+        setThinkingState((prev) => {
+          const newActiveSteps = new Map(prev.activeSteps);
+          newActiveSteps.set(event.stepId, {
+            stepName: event.stepName,
+            startedAt: Date.now(),
+          });
+          return {
             ...prev,
-            reasoning: [...prev.reasoning, data.delta],
-          }));
-        } else if (data.type === 'step-start') {
-          setThinkingState((prev) => {
-            const newActiveSteps = new Map(prev.activeSteps);
-            newActiveSteps.set(data.stepId, {
-              stepName: data.stepName,
-              startedAt: Date.now(),
-            });
-            return {
-              ...prev,
-              activeSteps: newActiveSteps,
-            };
-          });
-        } else if (data.type === 'step-finish') {
-          setThinkingState((prev) => {
-            const newActiveSteps = new Map(prev.activeSteps);
-            newActiveSteps.delete(data.stepId);
-            return {
-              ...prev,
-              activeSteps: newActiveSteps,
-              completedSteps: [...prev.completedSteps, data.stepName],
-            };
-          });
-        }
-      } catch {
-        // Ignore parsing errors for non-JSON events
+            activeSteps: newActiveSteps,
+          };
+        });
+      } else if (event.type === 'step-finish') {
+        setThinkingState((prev) => {
+          const newActiveSteps = new Map(prev.activeSteps);
+          newActiveSteps.delete(event.stepId);
+          return {
+            ...prev,
+            activeSteps: newActiveSteps,
+            completedSteps: [...prev.completedSteps, event.stepName],
+          };
+        });
       }
-    };
-
-    // Note: This is a simplified approach. In production, you'd want to
-    // integrate more deeply with the transport layer or use a custom
-    // transport that exposes stream events.
-
-    return () => {
-      // Cleanup if needed
-    };
-  }, [isStreaming]);
+    });
+  }, [data]);
 
   // Persist messages to localStorage whenever they change
   useEffect(() => {
