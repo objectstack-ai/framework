@@ -35,6 +35,7 @@ import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
 import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
+import { UserPreferencesServicePlugin } from '@objectstack/service-user-preferences';
 import { getRequestListener } from '@hono/node-server';
 import type { Hono } from 'hono';
 import { createBrokerShim } from '../src/lib/create-broker-shim.js';
@@ -129,6 +130,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new SecurityPlugin());
             await kernel.use(new AuditPlugin());
             await kernel.use(new FeedServicePlugin());
+            await kernel.use(new UserPreferencesServicePlugin());
             await kernel.use(new MetadataPlugin({ watch: false }));
             await kernel.use(new AIServicePlugin());
             await kernel.use(new AutomationServicePlugin());

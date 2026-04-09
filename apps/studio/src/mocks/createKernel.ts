@@ -10,6 +10,7 @@ import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
 import { FeedServicePlugin } from '@objectstack/service-feed';
+import { UserPreferencesServicePlugin } from '@objectstack/service-user-preferences';
 import { createBrokerShim } from '../lib/create-broker-shim';
 
 // System object definitions — resolved via Vite aliases to plugin source (no runtime deps)
@@ -86,6 +87,7 @@ export async function createKernel(options: KernelOptions) {
     // so that the setupNav service is available during their init() phase
     await kernel.use(new SetupPlugin());
     await kernel.use(new FeedServicePlugin());
+    await kernel.use(new UserPreferencesServicePlugin());
     await kernel.use(new MetadataPlugin({ watch: false }));
     await kernel.use(new AIServicePlugin());
     await kernel.use(new AutomationServicePlugin());

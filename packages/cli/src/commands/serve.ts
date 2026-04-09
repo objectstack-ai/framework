@@ -356,6 +356,22 @@ export default class Serve extends Command {
         }
       }
 
+      // 5. Auto-register UserPreferencesServicePlugin if not already loaded by config plugins.
+      const hasUserPrefsPlugin = plugins.some(
+        (p: any) => p.name === 'com.objectstack.service-user-preferences'
+            || p.constructor?.name === 'UserPreferencesServicePlugin'
+      );
+      if (!hasUserPrefsPlugin) {
+        try {
+          const userPrefsPkg = '@objectstack/service-user-preferences';
+          const { UserPreferencesServicePlugin } = await import(/* webpackIgnore: true */ userPrefsPkg);
+          await kernel.use(new UserPreferencesServicePlugin());
+          trackPlugin('UserPreferences');
+        } catch {
+          // @objectstack/service-user-preferences not installed — preferences features unavailable
+        }
+      }
+
       // ── Studio UI ─────────────────────────────────────────────────
       // In dev mode, Studio UI is enabled by default (use --no-ui to disable).
       // Always serves the pre-built dist/ — no Vite dev server, no extra port.
