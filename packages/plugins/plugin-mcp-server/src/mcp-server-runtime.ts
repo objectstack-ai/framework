@@ -4,7 +4,8 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { Logger, IMetadataService, IDataEngine, AIToolDefinition } from '@objectstack/spec/contracts';
 import type { Agent } from '@objectstack/spec';
-import type { ToolRegistry } from './types.js';
+import type { ToolRegistry, ToolExecutionResult } from './types.js';
+import { z } from 'zod';
 
 /**
  * Configuration for the MCP Server Runtime.
@@ -91,6 +92,22 @@ export class MCPServerRuntime {
     return this.started;
   }
 
+  // ── Helpers ─────────────────────────────────────────────────────
+
+  /**
+   * Extract the text value from a ToolExecutionResult's output.
+   *
+   * The output may be a `{ type: 'text', value: string }` object (from the
+   * Vercel AI SDK ToolResultPart) or any serialisable value.
+   */
+  private static formatToolOutput(result: ToolExecutionResult): string {
+    const output = result.output;
+    if (output && typeof output === 'object' && 'value' in output) {
+      return String((output as { value: unknown }).value);
+    }
+    return JSON.stringify(output ?? '');
+  }
+
   // ── Tool Bridge ────────────────────────────────────────────────
 
   /**
@@ -133,9 +150,10 @@ export class MCPServerRuntime {
         },
       },
       async (extra) => {
-        // MCP SDK passes the raw arguments when no inputSchema is defined
-        // We need to extract them from the request
-        const args = (extra as any)?.arguments ?? (extra as any)?.params?.arguments ?? {};
+        // The MCP SDK passes tool arguments via the extra.arguments property
+        // when registerTool is called without an inputSchema.
+        const rawExtra = extra as Record<string, unknown>;
+        const args = (rawExtra.arguments ?? {}) as Record<string, unknown>;
 
         try {
           const result = await toolRegistry.execute({
@@ -145,9 +163,7 @@ export class MCPServerRuntime {
             input: args,
           });
 
-          const outputText = result.output && typeof result.output === 'object' && 'value' in result.output
-            ? String(result.output.value)
-            : JSON.stringify(result.output ?? '');
+          const outputText = MCPServerRuntime.formatToolOutput(result);
 
           if (result.isError) {
             return {
@@ -370,22 +386,10 @@ export class MCPServerRuntime {
         description: 'Load an agent\'s system prompt with optional UI context. ' +
           'Use the agentName argument to select which agent\'s instructions to use.',
         argsSchema: {
-          agentName: {
-            type: 'string' as any,
-            description: 'Name of the agent to load (e.g. "data_chat", "metadata_assistant")',
-          },
-          objectName: {
-            type: 'string' as any,
-            description: 'Current object the user is viewing',
-          },
-          recordId: {
-            type: 'string' as any,
-            description: 'Currently selected record ID',
-          },
-          viewName: {
-            type: 'string' as any,
-            description: 'Current view name',
-          },
+          agentName: z.string().describe('Name of the agent to load (e.g. "data_chat", "metadata_assistant")'),
+          objectName: z.string().optional().describe('Current object the user is viewing'),
+          recordId: z.string().optional().describe('Currently selected record ID'),
+          viewName: z.string().optional().describe('Current view name'),
         },
       },
       async (args) => {

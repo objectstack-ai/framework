@@ -79,6 +79,10 @@ export class MCPServerPlugin implements Plugin {
     if (!this.runtime) return;
 
     // ── Bridge tools from AIService ──
+    // The IAIService contract does not formally include `toolRegistry` because
+    // it is an implementation detail of AIService.  We use duck-typing here to
+    // avoid a hard dependency on @objectstack/service-ai while still bridging
+    // tools when the full AIService implementation is present.
     try {
       const aiService = ctx.getService<IAIService & { toolRegistry?: ToolRegistry }>('ai');
       if (aiService?.toolRegistry) {
