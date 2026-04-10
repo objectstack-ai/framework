@@ -186,20 +186,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         let runtimeTypes: string[] = [];
         try {
             const services = this.getServicesRegistry?.();
-            console.log('[Protocol] getMetaTypes - services registry available:', !!services, 'size:', services?.size);
             const metadataService = services?.get('metadata');
-            console.log('[Protocol] getMetaTypes - metadata service available:', !!metadataService, 'has getRegisteredTypes:', typeof metadataService?.getRegisteredTypes);
             if (metadataService && typeof metadataService.getRegisteredTypes === 'function') {
                 runtimeTypes = await metadataService.getRegisteredTypes();
-                console.log('[Protocol] getMetaTypes - runtime types from metadata service:', runtimeTypes);
             }
-        } catch (err) {
+        } catch {
             // MetadataService not available
-            console.warn('[Protocol] getMetaTypes - error accessing metadata service:', err);
         }
 
         const allTypes = Array.from(new Set([...schemaTypes, ...runtimeTypes]));
-        console.log('[Protocol] getMetaTypes - final types:', allTypes);
         return { types: allTypes };
     }
 
@@ -253,12 +248,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // Merge with MetadataService (runtime-registered items: agents, tools, etc.)
         try {
             const services = this.getServicesRegistry?.();
-            console.log('[Protocol] getMetaItems - type:', request.type, 'services available:', !!services, 'size:', services?.size);
             const metadataService = services?.get('metadata');
-            console.log('[Protocol] getMetaItems - metadata service available:', !!metadataService, 'has list:', typeof metadataService?.list);
             if (metadataService && typeof metadataService.list === 'function') {
                 const runtimeItems = await metadataService.list(request.type);
-                console.log('[Protocol] getMetaItems - runtime items from metadata service:', runtimeItems?.length, 'items');
                 if (runtimeItems && runtimeItems.length > 0) {
                     // Merge, avoiding duplicates by name
                     const itemMap = new Map<string, any>();
@@ -275,12 +267,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         }
                     }
                     items = Array.from(itemMap.values());
-                    console.log('[Protocol] getMetaItems - merged items count:', items.length);
                 }
             }
-        } catch (err) {
+        } catch {
             // MetadataService not available or doesn't support this type
-            console.warn('[Protocol] getMetaItems - error accessing metadata service:', err);
         }
 
         return {
