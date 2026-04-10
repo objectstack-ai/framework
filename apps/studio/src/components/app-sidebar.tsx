@@ -36,7 +36,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { useClient } from '@objectstack/client-react';
+import { useClient, useMetadataSubscriptionCallback } from '@objectstack/client-react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 import {
@@ -259,6 +259,17 @@ export function AppSidebar({
   }, [client, selectedPackage]);
 
   useEffect(() => { loadMetadata(); }, [loadMetadata]);
+
+  // Subscribe to metadata changes for real-time updates
+  // Subscribe to all major metadata types for live sidebar updates
+  useMetadataSubscriptionCallback('object', loadMetadata);
+  useMetadataSubscriptionCallback('view', loadMetadata);
+  useMetadataSubscriptionCallback('app', loadMetadata);
+  useMetadataSubscriptionCallback('agent', loadMetadata);
+  useMetadataSubscriptionCallback('tool', loadMetadata);
+  useMetadataSubscriptionCallback('flow', loadMetadata);
+  useMetadataSubscriptionCallback('dashboard', loadMetadata);
+  useMetadataSubscriptionCallback('report', loadMetadata);
 
   // Search helper
   const matchesSearch = (label: string, name: string) =>

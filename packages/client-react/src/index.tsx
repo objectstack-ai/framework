@@ -45,5 +45,15 @@ export {
   type UseMetadataResult
 } from './metadata-hooks';
 
+// Realtime Event Hooks
+export {
+  useMetadataSubscription,
+  useDataSubscription,
+  useMetadataSubscriptionCallback,
+  useDataSubscriptionCallback,
+  useRealtimeConnection,
+  useAutoRefresh
+} from './realtime-hooks';
+
 // Re-export ObjectStackClient and types from @objectstack/client
 export { ObjectStackClient, type ClientConfig } from '@objectstack/client';

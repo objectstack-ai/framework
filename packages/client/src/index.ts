@@ -1,9 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { QueryAST, SortNode, AggregationNode, isFilterAST } from '@objectstack/spec/data';
-import { 
-  BatchUpdateRequest, 
-  BatchUpdateResponse, 
+import {
+  BatchUpdateRequest,
+  BatchUpdateResponse,
   UpdateManyRequest,
   DeleteManyRequest,
   BatchOptions,
@@ -88,6 +88,7 @@ import {
   ApiRoutes,
 } from '@objectstack/spec/api';
 import { Logger, createLogger } from '@objectstack/core';
+import { RealtimeAPI } from './realtime-api';
 
 /**
  * Route types that the client can resolve.
@@ -228,18 +229,22 @@ export class ObjectStackClient {
   private fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   private discoveryInfo?: DiscoveryResult;
   private logger: Logger;
+  private realtimeAPI: RealtimeAPI;
 
   constructor(config: ClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, ''); // Remove trailing slash
     this.token = config.token;
     this.fetchImpl = config.fetch || globalThis.fetch.bind(globalThis);
-    
+
     // Initialize logger
-    this.logger = config.logger || createLogger({ 
+    this.logger = config.logger || createLogger({
       level: config.debug ? 'debug' : 'info',
       format: 'pretty'
     });
-    
+
+    // Initialize realtime API
+    this.realtimeAPI = new RealtimeAPI(this.baseUrl, this.token);
+
     this.logger.debug('ObjectStack client created', { baseUrl: this.baseUrl });
   }
 
@@ -886,6 +891,12 @@ export class ObjectStackClient {
           },
       },
   };
+
+  /**
+   * Event Subscription API
+   * Provides real-time event subscriptions for metadata and data changes
+   */
+  events = this.realtimeAPI;
 
   /**
    * Permissions Services
@@ -1788,6 +1799,9 @@ export class ObjectStackClient {
 
 // Re-export type-safe query builder
 export { QueryBuilder, FilterBuilder, createQuery, createFilter } from './query-builder';
+
+// Re-export realtime API types
+export { RealtimeAPI, RealtimeSubscriptionFilter, RealtimeEventHandler } from './realtime-api';
 
 // Re-export commonly used types from @objectstack/spec/api for convenience
 export type {
