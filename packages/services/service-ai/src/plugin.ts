@@ -6,6 +6,7 @@ import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
 import { buildAIRoutes } from './routes/ai-routes.js';
 import { buildAgentRoutes } from './routes/agent-routes.js';
+import { buildToolRoutes } from './routes/tool-routes.js';
 import { ObjectQLConversationService } from './conversation/objectql-conversation-service.js';
 import { AiConversationObject, AiMessageObject } from './objects/index.js';
 import { registerDataTools } from './tools/data-tools.js';
@@ -352,6 +353,11 @@ export class AIServicePlugin implements Plugin {
 
     // Build and expose route definitions
     const routes = buildAIRoutes(this.service, this.service.conversationService, ctx.logger);
+
+    // Build tool routes
+    const toolRoutes = buildToolRoutes(this.service, ctx.logger);
+    routes.push(...toolRoutes);
+    ctx.logger.info(`[AI] Tool routes registered (${toolRoutes.length} routes)`);
 
     // Build agent routes if metadata service is available
     if (metadataService) {

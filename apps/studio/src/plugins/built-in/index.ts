@@ -13,6 +13,10 @@ import type { StudioPlugin } from '../types';
 import { objectDesignerPlugin } from './object-plugin';
 import { defaultInspectorPlugin } from './default-plugin';
 
+// Playground plugins
+import { agentPlaygroundPlugin } from './agent-playground-plugin';
+import { toolPlaygroundPlugin } from './tool-playground-plugin';
+
 // Protocol plugins (sidebar groups + icons)
 import { uiProtocolPlugin } from './ui-plugin';
 import { automationProtocolPlugin } from './automation-plugin';
@@ -28,6 +32,10 @@ export const builtInPlugins: StudioPlugin[] = [
   // Object designer (highest priority for object/objects types)
   objectDesignerPlugin,
 
+  // Playground plugins (priority 10, higher than default inspector)
+  agentPlaygroundPlugin,
+  toolPlaygroundPlugin,
+
   // Protocol group plugins (provide sidebar groups + icons)
   uiProtocolPlugin,
   automationProtocolPlugin,
@@ -40,6 +48,8 @@ export const builtInPlugins: StudioPlugin[] = [
 export {
   objectDesignerPlugin,
   defaultInspectorPlugin,
+  agentPlaygroundPlugin,
+  toolPlaygroundPlugin,
   uiProtocolPlugin,
   automationProtocolPlugin,
   securityProtocolPlugin,
