@@ -73,8 +73,9 @@ export class ObjectQLPlugin implements Plugin {
 
     // Register Protocol Implementation
     const protocolShim = new ObjectStackProtocolImplementation(
-      this.ql, 
-      () => ctx.getServices ? ctx.getServices() : new Map()
+      this.ql,
+      () => ctx.getServices ? ctx.getServices() : new Map(),
+      () => ctx.getServices()?.get('feed') as any
     );
 
     ctx.registerService('protocol', protocolShim);
