@@ -30,6 +30,8 @@ const METADATA_TO_EXPORT_TYPE: Record<string, CodeExporterProps['type']> = {
   flows: 'flow',
   agent: 'agent',
   agents: 'agent',
+  tool: 'tool',
+  tools: 'tool',
   app: 'app',
   apps: 'app',
 };

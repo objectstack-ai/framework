@@ -180,9 +180,22 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     async getMetaTypes() {
-        return {
-            types: SchemaRegistry.getRegisteredTypes()
-        };
+        const schemaTypes = SchemaRegistry.getRegisteredTypes();
+
+        // Also include types from MetadataService (runtime-registered: agent, tool, etc.)
+        let runtimeTypes: string[] = [];
+        try {
+            const services = this.getServicesRegistry?.();
+            const metadataService = services?.get('metadata');
+            if (metadataService && typeof metadataService.getRegisteredTypes === 'function') {
+                runtimeTypes = await metadataService.getRegisteredTypes();
+            }
+        } catch {
+            // MetadataService not available
+        }
+
+        const allTypes = Array.from(new Set([...schemaTypes, ...runtimeTypes]));
+        return { types: allTypes };
     }
 
     async getMetaItems(request: { type: string; packageId?: string }) {
@@ -232,6 +245,34 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         }
 
+        // Merge with MetadataService (runtime-registered items: agents, tools, etc.)
+        try {
+            const services = this.getServicesRegistry?.();
+            const metadataService = services?.get('metadata');
+            if (metadataService && typeof metadataService.list === 'function') {
+                const runtimeItems = await metadataService.list(request.type);
+                if (runtimeItems && runtimeItems.length > 0) {
+                    // Merge, avoiding duplicates by name
+                    const itemMap = new Map<string, any>();
+                    for (const item of items) {
+                        const entry = item as any;
+                        if (entry && typeof entry === 'object' && 'name' in entry) {
+                            itemMap.set(entry.name, entry);
+                        }
+                    }
+                    for (const item of runtimeItems) {
+                        const entry = item as any;
+                        if (entry && typeof entry === 'object' && 'name' in entry) {
+                            itemMap.set(entry.name, entry);
+                        }
+                    }
+                    items = Array.from(itemMap.values());
+                }
+            }
+        } catch {
+            // MetadataService not available or doesn't support this type
+        }
+
         return {
             type: request.type,
             items
@@ -274,6 +315,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 }
             } catch {
                 // DB not available, return undefined
+            }
+        }
+
+        // Fallback to MetadataService for runtime-registered items (agents, tools, etc.)
+        if (item === undefined) {
+            try {
+                const services = this.getServicesRegistry?.();
+                const metadataService = services?.get('metadata');
+                if (metadataService && typeof metadataService.get === 'function') {
+                    item = await metadataService.get(request.type, request.name);
+                }
+            } catch {
+                // MetadataService not available
             }
         }
 

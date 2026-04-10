@@ -9,7 +9,7 @@
 
 import { defineStudioPlugin } from '@objectstack/spec/studio';
 import type { StudioPlugin } from '../types';
-import { Bot, BookOpen } from 'lucide-react';
+import { Bot, BookOpen, Wrench } from 'lucide-react';
 
 export const aiProtocolPlugin: StudioPlugin = {
   manifest: defineStudioPlugin({
@@ -23,19 +23,21 @@ export const aiProtocolPlugin: StudioPlugin = {
           key: 'ai',
           label: 'AI',
           icon: 'bot',
-          metadataTypes: ['agents', 'ragPipelines'],
+          metadataTypes: ['agent', 'tool', 'ragPipeline'],
           order: 50,
         },
       ],
       metadataIcons: [
-        { metadataType: 'agents', label: 'Agents', icon: 'bot' },
-        { metadataType: 'ragPipelines', label: 'RAG Pipelines', icon: 'book-open' },
+        { metadataType: 'agent', label: 'Agents', icon: 'bot' },
+        { metadataType: 'tool', label: 'Tools', icon: 'wrench' },
+        { metadataType: 'ragPipeline', label: 'RAG Pipelines', icon: 'book-open' },
       ],
     },
   }),
 
   activate(api) {
-    api.registerMetadataIcon('agents', Bot, 'Agents');
-    api.registerMetadataIcon('ragPipelines', BookOpen, 'RAG Pipelines');
+    api.registerMetadataIcon('agent', Bot, 'Agents');
+    api.registerMetadataIcon('tool', Wrench, 'Tools');
+    api.registerMetadataIcon('ragPipeline', BookOpen, 'RAG Pipelines');
   },
 };

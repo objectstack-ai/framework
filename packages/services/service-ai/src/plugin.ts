@@ -250,7 +250,9 @@ export class AIServicePlugin implements Plugin {
     let metadataService: IMetadataService | undefined;
     try {
       metadataService = ctx.getService<IMetadataService>('metadata');
-    } catch {
+      console.log('[AI Plugin] Retrieved metadata service:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
+    } catch (e: any) {
+      console.log('[AI] Metadata service not available:', e.message);
       ctx.logger.debug('[AI] Metadata service not available');
     }
 
@@ -261,18 +263,40 @@ export class AIServicePlugin implements Plugin {
         registerDataTools(this.service.toolRegistry, { dataEngine });
         ctx.logger.info('[AI] Built-in data tools registered');
 
+        // Register data tools as metadata (for Studio visibility)
+        if (metadataService) {
+          const { DATA_TOOL_DEFINITIONS } = await import('./tools/data-tools.js');
+          for (const toolDef of DATA_TOOL_DEFINITIONS) {
+            const toolExists =
+              typeof metadataService.exists === 'function'
+                ? await metadataService.exists('tool', toolDef.name)
+                : false;
+
+            if (!toolExists) {
+              await metadataService.register('tool', toolDef.name, toolDef);
+            }
+          }
+          ctx.logger.info(`[AI] ${DATA_TOOL_DEFINITIONS.length} data tools registered as metadata`);
+        }
+
         // Register the built-in data_chat agent (requires metadata service)
         if (metadataService) {
-          const agentExists =
-            typeof metadataService.exists === 'function'
-              ? await metadataService.exists('agent', DATA_CHAT_AGENT.name)
-              : false;
+          try {
+            const agentExists =
+              typeof metadataService.exists === 'function'
+                ? await metadataService.exists('agent', DATA_CHAT_AGENT.name)
+                : false;
 
-          if (!agentExists) {
-            await metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT);
-            ctx.logger.info('[AI] data_chat agent registered');
-          } else {
-            ctx.logger.debug('[AI] data_chat agent already exists, skipping auto-registration');
+            if (!agentExists) {
+              await metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT);
+              console.log('[AI] Registered data_chat agent to metadataService');
+              ctx.logger.info('[AI] data_chat agent registered');
+            } else {
+              console.log('[AI] data_chat agent already exists, skipping');
+              ctx.logger.debug('[AI] data_chat agent already exists, skipping auto-registration');
+            }
+          } catch (err) {
+            ctx.logger.warn('[AI] Failed to register data_chat agent', err instanceof Error ? { error: err.message, stack: err.stack } : { error: String(err) });
           }
         }
       }
@@ -286,17 +310,37 @@ export class AIServicePlugin implements Plugin {
         registerMetadataTools(this.service.toolRegistry, { metadataService });
         ctx.logger.info('[AI] Built-in metadata tools registered');
 
-        // Register the built-in metadata_assistant agent
-        const agentExists =
-          typeof metadataService.exists === 'function'
-            ? await metadataService.exists('agent', METADATA_ASSISTANT_AGENT.name)
-            : false;
+        // Register metadata tools as metadata (for Studio visibility)
+        const { METADATA_TOOL_DEFINITIONS } = await import('./tools/metadata-tools.js');
+        for (const toolDef of METADATA_TOOL_DEFINITIONS) {
+          const toolExists =
+            typeof metadataService.exists === 'function'
+              ? await metadataService.exists('tool', toolDef.name)
+              : false;
 
-        if (!agentExists) {
-          await metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT);
-          ctx.logger.info('[AI] metadata_assistant agent registered');
-        } else {
-          ctx.logger.debug('[AI] metadata_assistant agent already exists, skipping auto-registration');
+          if (!toolExists) {
+            await metadataService.register('tool', toolDef.name, toolDef);
+          }
+        }
+        ctx.logger.info(`[AI] ${METADATA_TOOL_DEFINITIONS.length} metadata tools registered as metadata`);
+
+        // Register the built-in metadata_assistant agent
+        try {
+          const agentExists =
+            typeof metadataService.exists === 'function'
+              ? await metadataService.exists('agent', METADATA_ASSISTANT_AGENT.name)
+              : false;
+
+          if (!agentExists) {
+            await metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT);
+            console.log('[AI] Registered metadata_assistant agent to metadataService');
+            ctx.logger.info('[AI] metadata_assistant agent registered');
+          } else {
+            console.log('[AI] metadata_assistant agent already exists, skipping');
+            ctx.logger.debug('[AI] metadata_assistant agent already exists, skipping auto-registration');
+          }
+        } catch (err) {
+          ctx.logger.warn('[AI] Failed to register metadata_assistant agent', err instanceof Error ? { error: err.message, stack: err.stack } : { error: String(err) });
         }
       } catch (err) {
         ctx.logger.debug('[AI] Failed to register metadata tools', err instanceof Error ? err : undefined);

@@ -178,8 +178,22 @@ export function createBrokerShim(kernel: any): BrokerShim {
             }
 
             if (service === 'metadata') {
+                // Get MetadataService for runtime-registered metadata (agents, tools, etc.)
+                const metadataService = kernel.context?.getService('metadata');
+
                 if (method === 'types') {
-                    return { types: SchemaRegistry.getRegisteredTypes() };
+                    // Combine types from both SchemaRegistry (static) and MetadataService (runtime)
+                    const schemaTypes = SchemaRegistry.getRegisteredTypes();
+
+                    // MetadataService exposes types through getRegisteredTypes() method
+                    let runtimeTypes: string[] = [];
+                    if (metadataService && typeof metadataService.getRegisteredTypes === 'function') {
+                        runtimeTypes = await metadataService.getRegisteredTypes();
+                    }
+
+                    // Merge and deduplicate
+                    const allTypes = Array.from(new Set([...schemaTypes, ...runtimeTypes]));
+                    return { types: allTypes };
                 }
                 if (method === 'objects') {
                     const packageId = params.packageId;
@@ -206,9 +220,33 @@ export function createBrokerShim(kernel: any): BrokerShim {
                     }
                     return def || null;
                 }
-                // Generic metadata type: metadata.<type> → SchemaRegistry.listItems(type, packageId?)
+                // Generic metadata type: metadata.<type> → check both SchemaRegistry and MetadataService
                 const packageId = params.packageId;
-                const items = SchemaRegistry.listItems(method, packageId);
+
+                // Try SchemaRegistry first (static metadata from packages)
+                let items = SchemaRegistry.listItems(method, packageId);
+
+                // Also check MetadataService for runtime-registered metadata (agents, tools, etc.)
+                if (metadataService && typeof metadataService.list === 'function') {
+                    try {
+                        const runtimeItems = await metadataService.list(method);
+                        if (runtimeItems && runtimeItems.length > 0) {
+                            // Merge items, avoiding duplicates by name
+                            const itemMap = new Map();
+                            items.forEach((item: any) => itemMap.set(item.name, item));
+                            runtimeItems.forEach((item: any) => {
+                                if (item && typeof item === 'object' && 'name' in item) {
+                                    itemMap.set(item.name, item);
+                                }
+                            });
+                            items = Array.from(itemMap.values());
+                        }
+                    } catch (err) {
+                        // MetadataService.list might fail for unknown types, that's OK
+                        console.debug(`[BrokerShim] MetadataService.list('${method}') failed:`, err);
+                    }
+                }
+
                 if (items && items.length > 0) {
                     return { type: method, items };
                 }

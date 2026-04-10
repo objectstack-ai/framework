@@ -32,6 +32,7 @@ import {
   UserCog,
   ChevronRight,
   Settings,
+  Wrench,
   type LucideIcon,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
@@ -94,7 +95,11 @@ const META_TYPE_HINTS: Record<string, { label: string; icon: LucideIcon }> = {
   profiles:       { label: 'Profiles',        icon: Shield },
   sharingRules:   { label: 'Sharing Rules',   icon: Shield },
   policies:       { label: 'Policies',        icon: Shield },
+  agent:          { label: 'Agents',          icon: Bot },
   agents:         { label: 'Agents',          icon: Bot },
+  tool:           { label: 'Tools',           icon: Wrench },
+  tools:          { label: 'Tools',           icon: Wrench },
+  ragPipeline:    { label: 'RAG Pipelines',   icon: BookOpen },
   ragPipelines:   { label: 'RAG Pipelines',   icon: BookOpen },
   apis:           { label: 'APIs',            icon: Globe },
   connectors:     { label: 'Connectors',      icon: Link2 },
@@ -123,7 +128,7 @@ const PROTOCOL_GROUPS: ProtocolGroup[] = [
   { key: 'ui',         label: 'UI',         icon: AppWindow,  types: ['app', 'apps', 'actions', 'views', 'pages', 'dashboards', 'reports', 'themes'] },
   { key: 'automation', label: 'Automation', icon: Workflow,   types: ['flows', 'workflows', 'approvals', 'webhooks'] },
   { key: 'security',   label: 'Security',   icon: Shield,     types: ['roles', 'permissions', 'profiles', 'sharingRules', 'policies'] },
-  { key: 'ai',         label: 'AI',         icon: Bot,        types: ['agents', 'ragPipelines'] },
+  { key: 'ai',         label: 'AI',         icon: Bot,        types: ['agent', 'agents', 'tool', 'tools', 'ragPipeline', 'ragPipelines'] },
   { key: 'api',        label: 'API',        icon: Globe,      types: ['apis', 'connectors'] },
 ];
 
@@ -211,12 +216,32 @@ export function AppSidebar({
       } else if (Array.isArray(typesResult)) {
         types = typesResult as any;
       }
-      setMetaTypes(types);
+
+      // Normalize types: prefer singular form (agent, tool) over plural (agents, tools)
+      // when both exist in PROTOCOL_GROUPS, since the singular REST endpoint merges
+      // SchemaRegistry items with MetadataService runtime items.
+      const groupSingulars = new Set(PROTOCOL_GROUPS.flatMap(g => g.types).filter(t => !t.endsWith('s')));
+      const normalized = types.map(t => {
+        if (t.endsWith('s') && groupSingulars.has(t.slice(0, -1))) {
+          return t.slice(0, -1); // agents → agent, tools → tool
+        }
+        return t;
+      });
+      // Also add group types that aren't covered at all by the server types
+      const groupTypes = PROTOCOL_GROUPS.flatMap(g => g.types);
+      const coveredSet = new Set(normalized);
+      const extraTypes = groupTypes.filter(t => {
+        if (coveredSet.has(t)) return false;
+        const variant = t.endsWith('s') ? t.slice(0, -1) : t + 's';
+        return !coveredSet.has(variant);
+      });
+      const allTypes = Array.from(new Set([...normalized, ...extraTypes]));
+      setMetaTypes(allTypes);
 
       const packageId = selectedPackage?.manifest?.id;
 
       const entries = await Promise.all(
-        types
+        allTypes
           .filter(t => !HIDDEN_TYPES.has(t))
           .map(async (type) => {
             try {

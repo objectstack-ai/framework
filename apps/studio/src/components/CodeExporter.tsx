@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Code2, Copy, Check, Database, Layout, Workflow, Bot, AppWindow } from 'lucide-react';
+import { Code2, Copy, Check, Database, Layout, Workflow, Bot, AppWindow, Wrench } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-type ExportType = 'object' | 'view' | 'flow' | 'agent' | 'app';
+type ExportType = 'object' | 'view' | 'flow' | 'agent' | 'tool' | 'app';
 
 export interface CodeExporterProps {
   type: ExportType;
@@ -24,6 +24,7 @@ const TYPE_LABELS: Record<ExportType, { label: string; icon: React.ElementType }
   view: { label: 'View', icon: Layout },
   flow: { label: 'Flow', icon: Workflow },
   agent: { label: 'Agent', icon: Bot },
+  tool: { label: 'Tool', icon: Wrench },
   app: { label: 'App', icon: AppWindow },
 };
 
@@ -135,11 +136,26 @@ function generateAppCode(def: Record<string, unknown>, name?: string): string {
   return lines.join('\n');
 }
 
+function generateToolCode(def: Record<string, unknown>, name?: string): string {
+  const toolName = name || (def.name as string) || 'my_tool';
+  const lines = [
+    "import { defineStack } from '@objectstack/spec';",
+    '',
+    'export default defineStack({',
+    '  tools: {',
+    `    ${toolName}: ${formatValue(def, 2)},`,
+    '  },',
+    '});',
+  ];
+  return lines.join('\n');
+}
+
 const CODE_GENERATORS: Record<ExportType, (def: Record<string, unknown>, name?: string) => string> = {
   object: generateObjectCode,
   view: generateViewCode,
   flow: generateFlowCode,
   agent: generateAgentCode,
+  tool: generateToolCode,
   app: generateAppCode,
 };
 

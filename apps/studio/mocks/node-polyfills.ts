@@ -27,6 +27,7 @@ export const promises = {
   stat: async () => ({ isDirectory: () => false, isFile: () => false }),
   mkdir: async () => {},
   rm: async () => {},
+  access: async () => { throw new Error('ENOENT: no such file or directory (polyfill)'); },
 };
 
 // os polyfills
@@ -81,8 +82,8 @@ realpathSync.native = () => '';
 export const constants = {};
 export const lstat = async () => ({ isDirectory: () => false, isFile: () => false, isSymbolicLink: () => false });
 export const stat = async () => ({ isDirectory: () => false, isFile: () => false, isSymbolicLink: () => false });
-export const access = () => {};
-export const accessSync = () => {};
+export const access = async () => { throw new Error('ENOENT: no such file or directory (polyfill)'); };
+export const accessSync = () => { throw new Error('ENOENT: no such file or directory (polyfill)'); };
 export const mkdir = () => {};
 export const mkdirSync = () => {};
 export const rmdir = () => {};

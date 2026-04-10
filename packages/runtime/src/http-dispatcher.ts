@@ -341,22 +341,82 @@ export class HttpDispatcher {
         
         // GET /metadata/types
         if (parts[0] === 'types') {
-            // Try protocol service for dynamic types
+            // PRIORITY 1: Try MetadataService directly (includes both typeRegistry with agent/tool AND runtime-registered types)
+            console.log('[HttpDispatcher] Attempting to resolve MetadataService...');
+            console.log('[HttpDispatcher] Available kernel methods:', {
+                hasGetServiceAsync: typeof this.kernel.getServiceAsync === 'function',
+                hasGetService: typeof this.kernel.getService === 'function',
+                hasContext: !!this.kernel.context,
+                hasContextGetService: typeof this.kernel.context?.getService === 'function',
+            });
+
+            // Try all service resolution paths with detailed logging
+            let metadataService: any = null;
+
+            // Path 1: kernel.getServiceAsync
+            if (typeof this.kernel.getServiceAsync === 'function') {
+                try {
+                    metadataService = await this.kernel.getServiceAsync('metadata');
+                    console.log('[HttpDispatcher] kernel.getServiceAsync("metadata") returned:', !!metadataService);
+                } catch (e: any) {
+                    console.log('[HttpDispatcher] kernel.getServiceAsync("metadata") failed:', e.message);
+                }
+            }
+
+            // Path 2: kernel.getService (if not found via async)
+            if (!metadataService && typeof this.kernel.getService === 'function') {
+                try {
+                    metadataService = await this.kernel.getService('metadata');
+                    console.log('[HttpDispatcher] kernel.getService("metadata") returned:', !!metadataService);
+                } catch (e: any) {
+                    console.log('[HttpDispatcher] kernel.getService("metadata") failed:', e.message);
+                }
+            }
+
+            // Path 3: kernel.context.getService (if not found)
+            if (!metadataService && this.kernel.context?.getService) {
+                try {
+                    metadataService = await this.kernel.context.getService('metadata');
+                    console.log('[HttpDispatcher] kernel.context.getService("metadata") returned:', !!metadataService);
+                } catch (e: any) {
+                    console.log('[HttpDispatcher] kernel.context.getService("metadata") failed:', e.message);
+                }
+            }
+
+            console.log('[HttpDispatcher] Final metadataService:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
+
+            if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
+                try {
+                    const types = await (metadataService as any).getRegisteredTypes();
+                    console.log('[HttpDispatcher] MetadataService.getRegisteredTypes() returned:', types);
+                    return { handled: true, response: this.success({ types }) };
+                } catch (e: any) {
+                    // Log error but continue to fallbacks
+                    console.warn('[HttpDispatcher] MetadataService.getRegisteredTypes() failed:', e.message, e.stack);
+                }
+            } else {
+                console.log('[HttpDispatcher] MetadataService not available or missing getRegisteredTypes, falling back to protocol service');
+            }
+            // PRIORITY 2: Try protocol service (returns SchemaRegistry types only - missing agent/tool)
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.getMetaTypes === 'function') {
                 const result = await protocol.getMetaTypes({});
+                console.log('[HttpDispatcher] Protocol service returned types:', result);
                 return { handled: true, response: this.success(result) };
             }
-            // Fallback: ask broker for registered types
+            // PRIORITY 3: ask broker for registered types
             if (broker) {
                 try {
                     const data = await broker.call('metadata.types', {}, { request: context.request });
+                    console.log('[HttpDispatcher] Broker returned types:', data);
                     return { handled: true, response: this.success(data) };
-                } catch {
+                } catch (e) {
+                    console.log('[HttpDispatcher] Broker call failed:', e);
                     // fall through to hardcoded defaults
                 }
             }
             // Last resort: hardcoded defaults
+            console.warn('[HttpDispatcher] Falling back to hardcoded defaults for metadata types');
             return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
 
@@ -464,7 +524,7 @@ export class HttpDispatcher {
             const typeOrName = parts[0];
             // Extract optional package filter from query string
             const packageId = query?.package || undefined;
-            
+
             // Try protocol service first for any type
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.getMetaItems === 'function') {
@@ -476,6 +536,22 @@ export class HttpDispatcher {
                     }
                 } catch {
                     // Protocol doesn't know this type, fall through
+                }
+            }
+
+            // Try MetadataService directly for runtime-registered metadata (agents, tools, etc.)
+            const metadataService = await this.getService(CoreServiceName.enum.metadata);
+            if (metadataService && typeof (metadataService as any).list === 'function') {
+                try {
+                    const items = await (metadataService as any).list(typeOrName);
+                    if (items && items.length > 0) {
+                        return { handled: true, response: this.success({ type: typeOrName, items }) };
+                    }
+                } catch (e: any) {
+                    // MetadataService doesn't know this type or failed, continue to other fallbacks
+                    // Sanitize typeOrName to prevent log injection (CodeQL warning)
+                    const sanitizedType = String(typeOrName).replace(/[\r\n\t]/g, '');
+                    console.debug(`[HttpDispatcher] MetadataService.list() failed for type:`, sanitizedType, 'error:', e.message);
                 }
             }
 

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Search, Copy, Check, ChevronRight, ChevronDown,
-  Zap, BarChart3, FileText, Workflow, Bot, Globe, BookOpen, Shield,
+  Zap, BarChart3, FileText, Workflow, Bot, Globe, BookOpen, Shield, Wrench,
   type LucideIcon,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -34,8 +34,12 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   dashboards: BarChart3,
   reports: FileText,
   flows: Workflow,
+  agent: Bot,
   agents: Bot,
+  tool: Wrench,
+  tools: Wrench,
   apis: Globe,
+  ragPipeline: BookOpen,
   ragPipelines: BookOpen,
   profiles: Shield,
   sharingRules: Shield,
@@ -46,8 +50,12 @@ const TYPE_LABELS: Record<string, string> = {
   dashboards: 'Dashboard',
   reports: 'Report',
   flows: 'Flow',
+  agent: 'Agent',
   agents: 'Agent',
+  tool: 'Tool',
+  tools: 'Tool',
   apis: 'API',
+  ragPipeline: 'RAG Pipeline',
   ragPipelines: 'RAG Pipeline',
   profiles: 'Profile',
   sharingRules: 'Sharing Rule',
