@@ -34,6 +34,25 @@ interface ObjectDef {
 }
 
 /**
+ * Names of tools that are read-only (no side effects).
+ * Kept as a module-level constant for easy extension.
+ */
+const READ_ONLY_TOOLS = new Set([
+  'list_objects',
+  'describe_object',
+  'query_records',
+  'get_record',
+  'aggregate_data',
+]);
+
+/**
+ * Names of tools that perform destructive mutations.
+ */
+const DESTRUCTIVE_TOOLS = new Set([
+  'delete_field',
+]);
+
+/**
  * MCPServerRuntime — Bridges ObjectStack kernel services to the Model Context Protocol.
  *
  * Responsibilities:
@@ -191,14 +210,14 @@ export class MCPServerRuntime {
    * Check if a tool is read-only (data query tools).
    */
   private isReadOnlyTool(name: string): boolean {
-    return ['list_objects', 'describe_object', 'query_records', 'get_record', 'aggregate_data'].includes(name);
+    return READ_ONLY_TOOLS.has(name);
   }
 
   /**
    * Check if a tool performs destructive operations.
    */
   private isDestructiveTool(name: string): boolean {
-    return ['delete_field'].includes(name);
+    return DESTRUCTIVE_TOOLS.has(name);
   }
 
   // ── Resource Bridge ────────────────────────────────────────────
