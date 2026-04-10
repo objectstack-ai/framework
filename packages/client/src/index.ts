@@ -896,7 +896,9 @@ export class ObjectStackClient {
    * Event Subscription API
    * Provides real-time event subscriptions for metadata and data changes
    */
-  events = this.realtimeAPI;
+  get events() {
+    return this.realtimeAPI;
+  }
 
   /**
    * Permissions Services

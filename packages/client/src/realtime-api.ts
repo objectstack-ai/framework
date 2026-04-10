@@ -25,10 +25,14 @@ export type RealtimeEventHandler = (event: RealtimeEventPayload) => void;
 
 /**
  * Realtime API for subscribing to server events
+ *
+ * Note: Currently uses in-memory adapter. WebSocket/SSE transport planned for future.
  */
 export class RealtimeAPI {
-  private baseUrl: string;
-  private token?: string;
+  // @ts-expect-error - Reserved for future WebSocket/SSE implementation
+  private _baseUrl: string;
+  // @ts-expect-error - Reserved for future WebSocket/SSE implementation
+  private _token?: string;
   private subscriptions = new Map<string, {
     filter: RealtimeSubscriptionFilter;
     handler: RealtimeEventHandler;
@@ -37,8 +41,8 @@ export class RealtimeAPI {
   private eventBuffer: RealtimeEventPayload[] = [];
 
   constructor(baseUrl: string, token?: string) {
-    this.baseUrl = baseUrl;
-    this.token = token;
+    this._baseUrl = baseUrl;
+    this._token = token;
   }
 
   /**

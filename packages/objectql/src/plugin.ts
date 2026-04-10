@@ -119,9 +119,9 @@ export class ObjectQLPlugin implements Plugin {
         // This enables ObjectQL to publish data change events.
         try {
             const realtimeService = ctx.getService('realtime');
-            if (realtimeService) {
+            if (realtimeService && typeof realtimeService === 'object' && 'publish' in realtimeService) {
                 ctx.logger.info('[ObjectQLPlugin] Bridging realtime service to ObjectQL for event publishing');
-                this.ql.setRealtimeService(realtimeService);
+                this.ql.setRealtimeService(realtimeService as any);
             }
         } catch (e: any) {
             ctx.logger.debug('[ObjectQLPlugin] No realtime service found — data events will not be published', {

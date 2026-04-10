@@ -992,18 +992,20 @@ export class ObjectQL implements IDataEngine {
            // Publish data.record.updated event to realtime service
            if (this.realtimeService) {
              try {
+               const resultId = (typeof result === 'object' && result && 'id' in result) ? (result as any).id : undefined;
+               const recordId = String(hookContext.input.id || resultId || '');
                const event: RealtimeEventPayload = {
                  type: 'data.record.updated',
                  object,
                  payload: {
-                   recordId: hookContext.input.id || result?.id,
+                   recordId,
                    changes: hookContext.input.data,
                    after: result,
                  },
                  timestamp: new Date().toISOString(),
                };
                await this.realtimeService.publish(event);
-               this.logger.debug('Published data.record.updated event', { object, recordId: hookContext.input.id });
+               this.logger.debug('Published data.record.updated event', { object, recordId });
              } catch (error) {
                this.logger.warn('Failed to publish data event', { object, error });
              }
@@ -1066,16 +1068,18 @@ export class ObjectQL implements IDataEngine {
           // Publish data.record.deleted event to realtime service
           if (this.realtimeService) {
             try {
+              const resultId = (typeof result === 'object' && result && 'id' in result) ? (result as any).id : undefined;
+              const recordId = String(hookContext.input.id || resultId || '');
               const event: RealtimeEventPayload = {
                 type: 'data.record.deleted',
                 object,
                 payload: {
-                  recordId: hookContext.input.id || result?.id,
+                  recordId,
                 },
                 timestamp: new Date().toISOString(),
               };
               await this.realtimeService.publish(event);
-              this.logger.debug('Published data.record.deleted event', { object, recordId: hookContext.input.id });
+              this.logger.debug('Published data.record.deleted event', { object, recordId });
             } catch (error) {
               this.logger.warn('Failed to publish data event', { object, error });
             }

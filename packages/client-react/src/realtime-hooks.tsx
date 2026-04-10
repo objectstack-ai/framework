@@ -253,7 +253,7 @@ export function useAutoRefresh(
   refetch: () => void,
   options?: { recordId?: string }
 ): void {
-  const handleEvent = useCallback((event: DataEvent) => {
+  const handleEvent = useCallback((_event: DataEvent) => {
     // Refetch on any data change
     refetch();
   }, [refetch]);

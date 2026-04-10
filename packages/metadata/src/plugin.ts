@@ -131,9 +131,9 @@ export class MetadataPlugin implements Plugin {
         // This enables MetadataManager to publish metadata change events.
         try {
             const realtimeService = ctx.getService('realtime');
-            if (realtimeService) {
+            if (realtimeService && typeof realtimeService === 'object' && 'publish' in realtimeService) {
                 ctx.logger.info('[MetadataPlugin] Bridging realtime service to MetadataManager for event publishing');
-                this.manager.setRealtimeService(realtimeService);
+                this.manager.setRealtimeService(realtimeService as any);
             }
         } catch (e: any) {
             ctx.logger.debug('[MetadataPlugin] No realtime service found — metadata events will not be published', {
