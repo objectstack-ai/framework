@@ -1,17 +1,18 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { QueryAST, HookContext, ServiceObject } from '@objectstack/spec/data';
-import { 
+import {
   EngineQueryOptions,
-  DataEngineInsertOptions, 
-  EngineUpdateOptions, 
+  DataEngineInsertOptions,
+  EngineUpdateOptions,
   EngineDeleteOptions,
   EngineAggregateOptions,
-  EngineCountOptions 
+  EngineCountOptions
 } from '@objectstack/spec/data';
 import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kernel';
 import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
+import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
 import { SchemaRegistry } from './registry.js';
 
 export type HookHandler = (context: HookContext) => Promise<void> | void;
@@ -69,7 +70,7 @@ export class ObjectQL implements IDataEngine {
   private drivers = new Map<string, DriverInterface>();
   private defaultDriver: string | null = null;
   private logger: Logger;
-  
+
   // Per-object hooks with priority support
   private hooks: Map<string, HookEntry[]> = new Map([
     ['beforeFind', []], ['afterFind', []],
@@ -86,9 +87,12 @@ export class ObjectQL implements IDataEngine {
 
   // Action registry: key = "objectName:actionName"
   private actions = new Map<string, { handler: (ctx: any) => Promise<any> | any; package?: string }>();
-  
+
   // Host provided context additions (e.g. Server router)
   private hostContext: Record<string, any> = {};
+
+  // Realtime service for event publishing
+  private realtimeService?: IRealtimeService;
 
   constructor(hostContext: Record<string, any> = {}) {
     this.hostContext = hostContext;
@@ -514,8 +518,8 @@ export class ObjectQL implements IDataEngine {
     }
 
     this.drivers.set(driver.name, driver);
-    this.logger.info('Registered driver', { 
-      driverName: driver.name, 
+    this.logger.info('Registered driver', {
+      driverName: driver.name,
       version: driver.version
     });
 
@@ -523,6 +527,17 @@ export class ObjectQL implements IDataEngine {
       this.defaultDriver = driver.name;
       this.logger.info('Set default driver', { driverName: driver.name });
     }
+  }
+
+  /**
+   * Set the realtime service for publishing data change events.
+   * Should be called after kernel resolves the realtime service.
+   *
+   * @param service - An IRealtimeService instance for event publishing
+   */
+  setRealtimeService(service: IRealtimeService): void {
+    this.realtimeService = service;
+    this.logger.info('RealtimeService configured for data events');
   }
 
   /**
@@ -883,6 +898,42 @@ export class ObjectQL implements IDataEngine {
         hookContext.result = result;
         await this.triggerHooks('afterInsert', hookContext);
 
+        // Publish data.record.created event to realtime service
+        if (this.realtimeService) {
+          try {
+            if (Array.isArray(result)) {
+              // Bulk insert - publish event for each record
+              for (const record of result) {
+                const event: RealtimeEventPayload = {
+                  type: 'data.record.created',
+                  object,
+                  payload: {
+                    recordId: record.id,
+                    after: record,
+                  },
+                  timestamp: new Date().toISOString(),
+                };
+                await this.realtimeService.publish(event);
+              }
+              this.logger.debug(`Published ${result.length} data.record.created events`, { object });
+            } else {
+              const event: RealtimeEventPayload = {
+                type: 'data.record.created',
+                object,
+                payload: {
+                  recordId: result.id,
+                  after: result,
+                },
+                timestamp: new Date().toISOString(),
+              };
+              await this.realtimeService.publish(event);
+              this.logger.debug('Published data.record.created event', { object, recordId: result.id });
+            }
+          } catch (error) {
+            this.logger.warn('Failed to publish data event', { object, error });
+          }
+        }
+
         return hookContext.result;
       } catch (e) {
         this.logger.error('Insert operation failed', e as Error, { object });
@@ -937,6 +988,27 @@ export class ObjectQL implements IDataEngine {
            hookContext.event = 'afterUpdate';
            hookContext.result = result;
            await this.triggerHooks('afterUpdate', hookContext);
+
+           // Publish data.record.updated event to realtime service
+           if (this.realtimeService) {
+             try {
+               const event: RealtimeEventPayload = {
+                 type: 'data.record.updated',
+                 object,
+                 payload: {
+                   recordId: hookContext.input.id || result?.id,
+                   changes: hookContext.input.data,
+                   after: result,
+                 },
+                 timestamp: new Date().toISOString(),
+               };
+               await this.realtimeService.publish(event);
+               this.logger.debug('Published data.record.updated event', { object, recordId: hookContext.input.id });
+             } catch (error) {
+               this.logger.warn('Failed to publish data event', { object, error });
+             }
+           }
+
            return hookContext.result;
        } catch (e) {
           this.logger.error('Update operation failed', e as Error, { object });
@@ -990,6 +1062,25 @@ export class ObjectQL implements IDataEngine {
           hookContext.event = 'afterDelete';
           hookContext.result = result;
           await this.triggerHooks('afterDelete', hookContext);
+
+          // Publish data.record.deleted event to realtime service
+          if (this.realtimeService) {
+            try {
+              const event: RealtimeEventPayload = {
+                type: 'data.record.deleted',
+                object,
+                payload: {
+                  recordId: hookContext.input.id || result?.id,
+                },
+                timestamp: new Date().toISOString(),
+              };
+              await this.realtimeService.publish(event);
+              this.logger.debug('Published data.record.deleted event', { object, recordId: hookContext.input.id });
+            } catch (error) {
+              this.logger.warn('Failed to publish data event', { object, error });
+            }
+          }
+
           return hookContext.result;
       } catch (e) {
           this.logger.error('Delete operation failed', e as Error, { object });

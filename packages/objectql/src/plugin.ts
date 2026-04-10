@@ -113,6 +113,21 @@ export class ObjectQLPlugin implements Plugin {
                 ctx.logger.debug('Discovered and registered app service (legacy)', { serviceName: name });
             }
         }
+
+        // Bridge realtime service from kernel service registry to ObjectQL.
+        // RealtimeServicePlugin registers as 'realtime' service during init().
+        // This enables ObjectQL to publish data change events.
+        try {
+            const realtimeService = ctx.getService('realtime');
+            if (realtimeService) {
+                ctx.logger.info('[ObjectQLPlugin] Bridging realtime service to ObjectQL for event publishing');
+                this.ql.setRealtimeService(realtimeService);
+            }
+        } catch (e: any) {
+            ctx.logger.debug('[ObjectQLPlugin] No realtime service found — data events will not be published', {
+                error: e.message,
+            });
+        }
     }
 
     // Initialize drivers (calls driver.connect() which sets up persistence)
