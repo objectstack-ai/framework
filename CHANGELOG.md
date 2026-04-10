@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **MCP Runtime Server Plugin (`plugin-mcp-server`)** — New kernel plugin that exposes ObjectStack
+  as a Model Context Protocol (MCP) server for external AI clients (Claude Desktop, Cursor, VS Code
+  Copilot, etc.). Features include:
+  - **Tool Bridge**: All registered AI tools from `ToolRegistry` (9 built-in tools: `list_objects`,
+    `describe_object`, `query_records`, `get_record`, `aggregate_data`, `create_object`, `add_field`,
+    `modify_field`, `delete_field`) are automatically exposed as MCP tools with correct annotations
+    (readOnlyHint, destructiveHint).
+  - **Resource Bridge**: Object schemas (`objectstack://objects/{objectName}`), object list
+    (`objectstack://objects`), record access (`objectstack://objects/{objectName}/records/{recordId}`),
+    and metadata types (`objectstack://metadata/types`) exposed as MCP resources.
+  - **Prompt Bridge**: Registered agents (`data_chat`, `metadata_assistant`, etc.) exposed as MCP
+    prompts with context arguments (objectName, recordId, viewName).
+  - **Transport**: stdio transport via `@modelcontextprotocol/sdk` for local AI client integration.
+  - **Environment Configuration**: `MCP_SERVER_ENABLED=true` to auto-start, `MCP_SERVER_NAME` and
+    `MCP_SERVER_TRANSPORT` for customization.
+  - **Extensibility**: `mcp:ready` kernel hook allows other plugins to extend the MCP server.
+  - Studio frontend AI interface remains unchanged — it continues to use REST/SSE via
+    Vercel Data Stream Protocol.
+
 ### Changed
 - **Unified `list_objects` / `describe_object` tools (`service-ai`)** — Merged the duplicate
   `list_metadata_objects` → `list_objects` and `describe_metadata_object` → `describe_object`
