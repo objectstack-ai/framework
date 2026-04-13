@@ -28,28 +28,16 @@ cd apps/studio
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
 
-# 3. Copy native/external modules into local node_modules for Vercel packaging.
+# 3. Copy @ai-sdk packages into local node_modules for Vercel packaging.
 #
-#    Unlike hotcrm (which uses shamefully-hoist=true), this monorepo uses pnpm's
-#    default strict node_modules structure. Transitive native dependencies like
-#    better-sqlite3 only exist in the monorepo root's node_modules/.pnpm/ virtual
-#    store — they're NOT symlinked into apps/studio/node_modules/.
+#    The @ai-sdk packages are workspace dependencies that need to be copied from
+#    the monorepo root. @libsql/client and better-sqlite3 are now direct dependencies
+#    in apps/studio/package.json, so pnpm installs them automatically.
 #
 #    The vercel.json includeFiles pattern references node_modules/ relative to
-#    apps/studio/, so we must copy the actual module files here for Vercel to
-#    include them in the serverless function's deployment package.
-echo "[build-vercel] Copying external native modules to local node_modules..."
-for mod in better-sqlite3 @libsql/client; do
-  src="../../node_modules/$mod"
-  if [ -e "$src" ]; then
-    dest="node_modules/$mod"
-    mkdir -p "$(dirname "$dest")"
-    cp -rL "$src" "$dest"
-    echo "[build-vercel]   ✓ Copied $mod"
-  else
-    echo "[build-vercel]   ⚠ $mod not found at $src (skipped)"
-  fi
-done
+#    apps/studio/, so we must copy @ai-sdk packages here for Vercel to include
+#    them in the serverless function's deployment package.
+echo "[build-vercel] Copying external modules to local node_modules..."
 # Copy the @ai-sdk scope (dynamically loaded provider packages)
 if [ -d "../../node_modules/@ai-sdk" ]; then
   mkdir -p "node_modules/@ai-sdk"
