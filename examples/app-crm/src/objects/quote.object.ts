@@ -158,11 +158,11 @@ export const Quote = ObjectSchema.create({
   
   // Database indexes
   indexes: [
-    { fields: ['account'], unique: false },
-    { fields: ['opportunity'], unique: false },
-    { fields: ['owner'], unique: false },
-    { fields: ['status'], unique: false },
-    { fields: ['quote_date'], unique: false },
+    { fields: ['account'], type: 'btree' },
+    { fields: ['opportunity'], type: 'btree' },
+    { fields: ['owner'], type: 'btree' },
+    { fields: ['status'], type: 'btree' },
+    { fields: ['quote_date'], type: 'btree' },
   ],
   
   // Enable advanced features

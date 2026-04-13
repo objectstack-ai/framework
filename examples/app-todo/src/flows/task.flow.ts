@@ -177,7 +177,7 @@ export const QuickAddTaskFlow: Flow = {
           { name: 'subject', label: 'Task Subject', type: 'text', required: true },
           { name: 'priority', label: 'Priority', type: 'select', options: ['low', 'normal', 'high', 'urgent'], defaultValue: 'normal' },
           { name: 'dueDate', label: 'Due Date', type: 'date', required: false },
-          { name: 'category', label: 'Category', type: 'select', options: ['Personal', 'Work', 'Shopping', 'Health', 'Finance', 'Other'] },
+          { name: 'category', label: 'Category', type: 'select', options: ['personal', 'work', 'shopping', 'health', 'finance', 'other'] },
         ],
       },
     },

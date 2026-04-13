@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
+import { OpportunityStateMachine } from './opportunity.state';
 
 export const Opportunity = ObjectSchema.create({
   name: 'opportunity',
@@ -83,18 +84,37 @@ export const Opportunity = ObjectSchema.create({
     }),
     
     // Additional Classification
-    type: Field.select(['New Business', 'Existing Customer - Upgrade', 'Existing Customer - Renewal', 'Existing Customer - Expansion'], {
+    type: Field.select({
       label: 'Opportunity Type',
+      options: [
+        { label: 'New Business', value: 'new_business' },
+        { label: 'Existing Customer - Upgrade', value: 'existing_upgrade' },
+        { label: 'Existing Customer - Renewal', value: 'existing_renewal' },
+        { label: 'Existing Customer - Expansion', value: 'existing_expansion' },
+      ]
     }),
     
-    lead_source: Field.select(['Web', 'Referral', 'Event', 'Partner', 'Advertisement', 'Cold Call'], {
+    lead_source: Field.select({
       label: 'Lead Source',
+      options: [
+        { label: 'Web', value: 'web' },
+        { label: 'Referral', value: 'referral' },
+        { label: 'Event', value: 'event' },
+        { label: 'Partner', value: 'partner' },
+        { label: 'Advertisement', value: 'advertisement' },
+        { label: 'Cold Call', value: 'cold_call' },
+      ]
     }),
     
     // Competitor Analysis
-    competitors: Field.select(['Competitor A', 'Competitor B', 'Competitor C'], {
+    competitors: Field.select({
       label: 'Competitors',
       multiple: true,
+      options: [
+        { label: 'Competitor A', value: 'competitor_a' },
+        { label: 'Competitor B', value: 'competitor_b' },
+        { label: 'Competitor C', value: 'competitor_c' },
+      ]
     }),
     
     // Campaign tracking
@@ -124,18 +144,25 @@ export const Opportunity = ObjectSchema.create({
       defaultValue: false,
     }),
     
-    forecast_category: Field.select(['Pipeline', 'Best Case', 'Commit', 'Omitted', 'Closed'], {
+    forecast_category: Field.select({
       label: 'Forecast Category',
+      options: [
+        { label: 'Pipeline', value: 'pipeline' },
+        { label: 'Best Case', value: 'best_case' },
+        { label: 'Commit', value: 'commit' },
+        { label: 'Omitted', value: 'omitted' },
+        { label: 'Closed', value: 'closed' },
+      ]
     }),
   },
   
   // Database indexes for performance
   indexes: [
-    { fields: ['name'], unique: false },
-    { fields: ['account'], unique: false },
-    { fields: ['owner'], unique: false },
-    { fields: ['stage'], unique: false },
-    { fields: ['close_date'], unique: false },
+    { fields: ['name'], type: 'btree' },
+    { fields: ['account'], type: 'btree' },
+    { fields: ['owner'], type: 'btree' },
+    { fields: ['stage'], type: 'btree' },
+    { fields: ['close_date'], type: 'btree' },
   ],
   
   // Enable advanced features
@@ -153,6 +180,11 @@ export const Opportunity = ObjectSchema.create({
   
   // Removed: list_views and form_views belong in UI configuration, not object definition
   
+  // Lifecycle State Machine(s)
+  stateMachines: {
+    lifecycle: OpportunityStateMachine,
+  },
+  
   // Validation Rules
   validations: [
     {
@@ -168,22 +200,6 @@ export const Opportunity = ObjectSchema.create({
       severity: 'error',
       message: 'Amount must be greater than zero',
       condition: 'amount <= 0',
-    },
-    {
-      name: 'stage_progression',
-      type: 'state_machine',
-      severity: 'error',
-      message: 'Invalid stage transition',
-      field: 'stage',
-      transitions: {
-        'prospecting': ['qualification', 'closed_lost'],
-        'qualification': ['needs_analysis', 'closed_lost'],
-        'needs_analysis': ['proposal', 'closed_lost'],
-        'proposal': ['negotiation', 'closed_lost'],
-        'negotiation': ['closed_won', 'closed_lost'],
-        'closed_won': [],  // Terminal state
-        'closed_lost': []  // Terminal state
-      }
     },
   ],
   

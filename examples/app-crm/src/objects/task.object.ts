@@ -23,8 +23,7 @@ export const Task = ObjectSchema.create({
     }),
     
     // Task Management
-    status: {
-      type: 'select',
+    status: Field.select({
       label: 'Status',
       required: true,
       options: [
@@ -34,10 +33,9 @@ export const Task = ObjectSchema.create({
         { label: 'Completed', value: 'completed', color: '#00AA00' },
         { label: 'Deferred', value: 'deferred', color: '#999999' },
       ]
-    },
+    }),
     
-    priority: {
-      type: 'select',
+    priority: Field.select({
       label: 'Priority',
       required: true,
       options: [
@@ -46,10 +44,18 @@ export const Task = ObjectSchema.create({
         { label: 'High', value: 'high', color: '#FFA500' },
         { label: 'Urgent', value: 'urgent', color: '#FF0000' },
       ]
-    },
+    }),
     
-    type: Field.select(['Call', 'Email', 'Meeting', 'Follow-up', 'Demo', 'Other'], {
+    type: Field.select({
       label: 'Task Type',
+      options: [
+        { label: 'Call', value: 'call' },
+        { label: 'Email', value: 'email' },
+        { label: 'Meeting', value: 'meeting' },
+        { label: 'Follow-up', value: 'follow_up' },
+        { label: 'Demo', value: 'demo' },
+        { label: 'Other', value: 'other' },
+      ]
     }),
     
     // Dates
@@ -73,8 +79,15 @@ export const Task = ObjectSchema.create({
     }),
     
     // Related To (Polymorphic relationship - can link to multiple object types)
-    related_to_type: Field.select(['Account', 'Contact', 'Opportunity', 'Lead', 'Case'], {
+    related_to_type: Field.select({
       label: 'Related To Type',
+      options: [
+        { label: 'Account', value: 'account' },
+        { label: 'Contact', value: 'contact' },
+        { label: 'Opportunity', value: 'opportunity' },
+        { label: 'Lead', value: 'lead' },
+        { label: 'Case', value: 'case' },
+      ]
     }),
     
     related_to_account: Field.lookup('account', {
@@ -103,8 +116,14 @@ export const Task = ObjectSchema.create({
       defaultValue: false,
     }),
     
-    recurrence_type: Field.select(['Daily', 'Weekly', 'Monthly', 'Yearly'], {
+    recurrence_type: Field.select({
       label: 'Recurrence Type',
+      options: [
+        { label: 'Daily', value: 'daily' },
+        { label: 'Weekly', value: 'weekly' },
+        { label: 'Monthly', value: 'monthly' },
+        { label: 'Yearly', value: 'yearly' },
+      ]
     }),
     
     recurrence_interval: Field.number({
@@ -162,6 +181,14 @@ export const Task = ObjectSchema.create({
     trash: true,
     mru: true,              // Track Most Recently Used
   },
+  
+  // Database indexes for performance
+  indexes: [
+    { fields: ['status'], type: 'btree' },
+    { fields: ['priority'], type: 'btree' },
+    { fields: ['owner'], type: 'btree' },
+    { fields: ['due_date'], type: 'btree' },
+  ],
   
   titleFormat: '{subject}',
   compactLayout: ['subject', 'status', 'priority', 'due_date', 'owner'],

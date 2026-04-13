@@ -116,10 +116,10 @@ export const Product = ObjectSchema.create({
   
   // Database indexes
   indexes: [
-    { fields: ['name'], unique: false },
-    { fields: ['sku'], unique: true },
-    { fields: ['category'], unique: false },
-    { fields: ['is_active'], unique: false },
+    { fields: ['name'], type: 'btree' },
+    { fields: ['sku'], type: 'btree', unique: true },
+    { fields: ['category'], type: 'btree' },
+    { fields: ['is_active'], type: 'btree' },
   ],
   
   // Enable advanced features

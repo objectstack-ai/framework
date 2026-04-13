@@ -65,12 +65,25 @@ export const Case = ObjectSchema.create({
       ]
     }),
     
-    type: Field.select(['Question', 'Problem', 'Feature Request', 'Bug'], {
+    type: Field.select({
       label: 'Case Type',
+      options: [
+        { label: 'Question', value: 'question' },
+        { label: 'Problem', value: 'problem' },
+        { label: 'Feature Request', value: 'feature_request' },
+        { label: 'Bug', value: 'bug' },
+      ]
     }),
     
-    origin: Field.select(['Email', 'Phone', 'Web', 'Chat', 'Social Media'], {
+    origin: Field.select({
       label: 'Case Origin',
+      options: [
+        { label: 'Email', value: 'email' },
+        { label: 'Phone', value: 'phone' },
+        { label: 'Web', value: 'web' },
+        { label: 'Chat', value: 'chat' },
+        { label: 'Social Media', value: 'social_media' },
+      ]
     }),
     
     // Assignment
@@ -164,11 +177,11 @@ export const Case = ObjectSchema.create({
   
   // Database indexes for performance
   indexes: [
-    { fields: ['case_number'], unique: true },
-    { fields: ['account'], unique: false },
-    { fields: ['owner'], unique: false },
-    { fields: ['status'], unique: false },
-    { fields: ['priority'], unique: false },
+    { fields: ['case_number'], type: 'btree', unique: true },
+    { fields: ['account'], type: 'btree' },
+    { fields: ['owner'], type: 'btree' },
+    { fields: ['status'], type: 'btree' },
+    { fields: ['priority'], type: 'btree' },
   ],
   
   enable: {

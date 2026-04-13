@@ -42,14 +42,14 @@ export default defineStack({
       mode: 'upsert' as const,
       externalId: 'subject',
       records: [
-        { subject: 'Learn ObjectStack', status: 'completed', priority: 'high', category: 'Work' },
-        { subject: 'Build a cool app', status: 'in_progress', priority: 'normal', category: 'Work', due_date: new Date(Date.now() + 86400000 * 3) },
-        { subject: 'Review PR #102', status: 'completed', priority: 'high', category: 'Work' },
-        { subject: 'Write Documentation', status: 'not_started', priority: 'normal', category: 'Work', due_date: new Date(Date.now() + 86400000) },
-        { subject: 'Fix Server bug', status: 'waiting', priority: 'urgent', category: 'Work' },
-        { subject: 'Buy groceries', status: 'not_started', priority: 'low', category: 'Shopping', due_date: new Date() },
-        { subject: 'Schedule dentist appointment', status: 'not_started', priority: 'normal', category: 'Health', due_date: new Date(Date.now() + 86400000 * 7) },
-        { subject: 'Pay utility bills', status: 'not_started', priority: 'high', category: 'Finance', due_date: new Date(Date.now() + 86400000 * 2) },
+        { subject: 'Learn ObjectStack', status: 'completed', priority: 'high', category: 'work' },
+        { subject: 'Build a cool app', status: 'in_progress', priority: 'normal', category: 'work', due_date: new Date(Date.now() + 86400000 * 3) },
+        { subject: 'Review PR #102', status: 'completed', priority: 'high', category: 'work' },
+        { subject: 'Write Documentation', status: 'not_started', priority: 'normal', category: 'work', due_date: new Date(Date.now() + 86400000) },
+        { subject: 'Fix Server bug', status: 'waiting', priority: 'urgent', category: 'work' },
+        { subject: 'Buy groceries', status: 'not_started', priority: 'low', category: 'shopping', due_date: new Date() },
+        { subject: 'Schedule dentist appointment', status: 'not_started', priority: 'normal', category: 'health', due_date: new Date(Date.now() + 86400000 * 7) },
+        { subject: 'Pay utility bills', status: 'not_started', priority: 'high', category: 'finance', due_date: new Date(Date.now() + 86400000 * 2) },
       ]
     }
   ],

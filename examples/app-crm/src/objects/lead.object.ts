@@ -12,8 +12,14 @@ export const Lead = ObjectSchema.create({
   
   fields: {
     // Personal Information
-    salutation: Field.select(['Mr.', 'Ms.', 'Mrs.', 'Dr.'], {
+    salutation: Field.select({
       label: 'Salutation',
+      options: [
+        { label: 'Mr.', value: 'mr' },
+        { label: 'Ms.', value: 'ms' },
+        { label: 'Mrs.', value: 'mrs' },
+        { label: 'Dr.', value: 'dr' },
+      ]
     }),
     
     first_name: Field.text({
@@ -44,8 +50,16 @@ export const Lead = ObjectSchema.create({
       label: 'Job Title',
     }),
     
-    industry: Field.select(['Technology', 'Finance', 'Healthcare', 'Retail', 'Manufacturing', 'Education'], {
+    industry: Field.select({
       label: 'Industry',
+      options: [
+        { label: 'Technology', value: 'technology' },
+        { label: 'Finance', value: 'finance' },
+        { label: 'Healthcare', value: 'healthcare' },
+        { label: 'Retail', value: 'retail' },
+        { label: 'Manufacturing', value: 'manufacturing' },
+        { label: 'Education', value: 'education' },
+      ]
     }),
     
     // Contact Information
@@ -88,8 +102,16 @@ export const Lead = ObjectSchema.create({
       allowHalf: true,
     }),
     
-    lead_source: Field.select(['Web', 'Referral', 'Event', 'Partner', 'Advertisement', 'Cold Call'], {
+    lead_source: Field.select({
       label: 'Lead Source',
+      options: [
+        { label: 'Web', value: 'web' },
+        { label: 'Referral', value: 'referral' },
+        { label: 'Event', value: 'event' },
+        { label: 'Partner', value: 'partner' },
+        { label: 'Advertisement', value: 'advertisement' },
+        { label: 'Cold Call', value: 'cold_call' },
+      ]
     }),
     
     // Assignment
@@ -173,10 +195,10 @@ export const Lead = ObjectSchema.create({
   
   // Database indexes for performance
   indexes: [
-    { fields: ['email'], unique: true },
-    { fields: ['owner'], unique: false },
-    { fields: ['status'], unique: false },
-    { fields: ['company'], unique: false },
+    { fields: ['email'], type: 'btree', unique: true },
+    { fields: ['owner'], type: 'btree' },
+    { fields: ['status'], type: 'btree' },
+    { fields: ['company'], type: 'btree' },
   ],
   
   enable: {

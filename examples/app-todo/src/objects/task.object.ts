@@ -23,8 +23,7 @@ export const Task = ObjectSchema.create({
     }),
     
     // Task Management
-    status: {
-      type: 'select',
+    status: Field.select({
       label: 'Status',
       required: true,
       options: [
@@ -34,10 +33,9 @@ export const Task = ObjectSchema.create({
         { label: 'Completed', value: 'completed', color: '#10B981' },
         { label: 'Deferred', value: 'deferred', color: '#6B7280' },
       ]
-    },
+    }),
     
-    priority: {
-      type: 'select',
+    priority: Field.select({
       label: 'Priority',
       required: true,
       options: [
@@ -46,10 +44,18 @@ export const Task = ObjectSchema.create({
         { label: 'High', value: 'high', color: '#F59E0B' },
         { label: 'Urgent', value: 'urgent', color: '#EF4444' },
       ]
-    },
+    }),
     
-    category: Field.select(['Personal', 'Work', 'Shopping', 'Health', 'Finance', 'Other'], {
+    category: Field.select({
       label: 'Category',
+      options: [
+        { label: 'Personal', value: 'personal' },
+        { label: 'Work', value: 'work' },
+        { label: 'Shopping', value: 'shopping' },
+        { label: 'Health', value: 'health' },
+        { label: 'Finance', value: 'finance' },
+        { label: 'Other', value: 'other' },
+      ]
     }),
     
     // Dates
@@ -73,8 +79,7 @@ export const Task = ObjectSchema.create({
     }),
     
     // Tags
-    tags: {
-      type: 'select',
+    tags: Field.select({
       label: 'Tags',
       multiple: true,
       options: [
@@ -84,7 +89,7 @@ export const Task = ObjectSchema.create({
         { label: 'Follow Up', value: 'follow_up', color: '#3B82F6' },
         { label: 'Review', value: 'review', color: '#8B5CF6' },
       ]
-    },
+    }),
     
     // Recurrence
     is_recurring: Field.boolean({
@@ -92,8 +97,14 @@ export const Task = ObjectSchema.create({
       defaultValue: false,
     }),
     
-    recurrence_type: Field.select(['Daily', 'Weekly', 'Monthly', 'Yearly'], {
+    recurrence_type: Field.select({
       label: 'Recurrence Type',
+      options: [
+        { label: 'Daily', value: 'daily' },
+        { label: 'Weekly', value: 'weekly' },
+        { label: 'Monthly', value: 'monthly' },
+        { label: 'Yearly', value: 'yearly' },
+      ]
     }),
     
     recurrence_interval: Field.number({
@@ -159,6 +170,15 @@ export const Task = ObjectSchema.create({
     trash: true,
     mru: true,
   },
+  
+  // Database indexes for performance
+  indexes: [
+    { fields: ['status'], type: 'btree' },
+    { fields: ['priority'], type: 'btree' },
+    { fields: ['owner'], type: 'btree' },
+    { fields: ['due_date'], type: 'btree' },
+    { fields: ['category'], type: 'btree' },
+  ],
   
   titleFormat: '{subject}',
   compactLayout: ['subject', 'status', 'priority', 'due_date', 'owner'],
