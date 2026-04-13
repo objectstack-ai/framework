@@ -62,11 +62,11 @@
     "@objectstack/core": "workspace:^"
   },
   "devDependencies": {
-    "@oclif/plugin-help": "^6.2.43",
-    "@oclif/plugin-plugins": "^5.4.59",
-    "@types/node": "^25.5.2",
+    "@oclif/plugin-help": "^6.2.44",
+    "@oclif/plugin-plugins": "^5.4.60",
+    "@types/node": "^25.6.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   }
 }

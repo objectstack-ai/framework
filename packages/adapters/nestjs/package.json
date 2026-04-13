@@ -10,15 +10,15 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@nestjs/common": "^11.1.18",
-    "@nestjs/core": "^11.1.18",
+    "@nestjs/common": "^11.1.19",
+    "@nestjs/core": "^11.1.19",
     "@objectstack/runtime": "workspace:^"
   },
   "devDependencies": {
-    "@nestjs/common": "^11.1.18",
-    "@nestjs/core": "^11.1.18",
+    "@nestjs/common": "^11.1.19",
+    "@nestjs/core": "^11.1.19",
     "@objectstack/runtime": "workspace:*",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   }
 }
