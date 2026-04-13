@@ -24,6 +24,6 @@
     "@objectstack/runtime": "workspace:*",
     "hono": "^4.12.10",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   }
 }
