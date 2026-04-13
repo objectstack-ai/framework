@@ -1,0 +1,24 @@
+# Ignore build artifacts
+dist/
+.turbo/
+
+# Ignore test files
+test/
+*.test.ts
+*.spec.ts
+
+# Ignore development files
+debug-registry.ts
+src/
+
+# Ignore source files (only need the bundle)
+server/
+scripts/bundle-api.mjs
+
+# Ignore metadata (using in-memory driver)
+metadata/
+
+# Keep only the bundled API handler
+!api/_handler.js
+!api/_handler.js.map
+!api/[[...route]].js

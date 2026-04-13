@@ -3,6 +3,12 @@
 This is a reference implementation of the ObjectStack Server Protocol (Kernel).
 It demonstrates how to build a metadata-driven backend that dynamically loads object definitions from plugins and automatically generates REST APIs.
 
+## Deployment
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/objectstack-ai/framework/tree/main/examples/app-host&project-name=objectstack-app-host&repository-name=objectstack-app-host)
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+
 ## Features
 
 - **Dynamic Schema Loading**: Loads `crm` and `todo` apps as plugins.
@@ -10,6 +16,7 @@ It demonstrates how to build a metadata-driven backend that dynamically loads ob
 - **Unified Data API**: `/api/v1/data/:object` (CRUD)
 - **Zero-Code Backend**: No creating routes or controllers per object.
 - **Preview Mode**: Run in demo mode — bypass login, auto-simulate admin identity.
+- **Vercel Deployment**: Ready-to-deploy to Vercel with Hono adapter.
 
 ## Setup
 
