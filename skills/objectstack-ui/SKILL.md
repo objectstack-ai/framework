@@ -1,5 +1,5 @@
 ---
-name: ui-design
+name: objectstack-ui
 description: >
   Design ObjectStack user interfaces (Views, Apps, Dashboards, Reports, Actions).
   Use when creating list views, form layouts, navigation structures, dashboard

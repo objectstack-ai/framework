@@ -1,5 +1,5 @@
 ---
-name: automation-design
+name: objectstack-automation
 description: >
   Design ObjectStack automation (Flows, Workflows, Triggers, Approvals).
   Use when building visual logic flows, state machines, scheduled jobs,
