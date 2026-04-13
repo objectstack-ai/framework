@@ -28,16 +28,27 @@ cd apps/studio
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
 
-# 3. Copy @ai-sdk packages into local node_modules for Vercel packaging.
+# 3. Dereference symlinks in node_modules for Vercel packaging.
 #
-#    The @ai-sdk packages are workspace dependencies that need to be copied from
-#    the monorepo root. @libsql/client and better-sqlite3 are now direct dependencies
-#    in apps/studio/package.json, so pnpm installs them automatically.
+#    pnpm creates symlinks in node_modules/ by default. Vercel's serverless function
+#    packaging doesn't support symlinked directories, so we need to replace symlinks
+#    with actual file copies.
 #
 #    The vercel.json includeFiles pattern references node_modules/ relative to
-#    apps/studio/, so we must copy @ai-sdk packages here for Vercel to include
-#    them in the serverless function's deployment package.
-echo "[build-vercel] Copying external modules to local node_modules..."
+#    apps/studio/, so we must ensure these directories contain real files, not symlinks.
+echo "[build-vercel] Dereferencing symlinks in node_modules..."
+for mod in better-sqlite3 @libsql/client; do
+  if [ -L "node_modules/$mod" ] || [ -d "node_modules/$mod" ]; then
+    # Get the real path that the symlink points to
+    real_path=$(readlink -f "node_modules/$mod" 2>/dev/null || echo "")
+    if [ -n "$real_path" ] && [ -d "$real_path" ]; then
+      echo "[build-vercel]   Dereferencing $mod..."
+      rm -rf "node_modules/$mod"
+      cp -rL "$real_path" "node_modules/$mod"
+      echo "[build-vercel]   ✓ Dereferenced $mod"
+    fi
+  fi
+done
 # Copy the @ai-sdk scope (dynamically loaded provider packages)
 if [ -d "../../node_modules/@ai-sdk" ]; then
   mkdir -p "node_modules/@ai-sdk"
