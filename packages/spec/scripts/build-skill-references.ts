@@ -30,7 +30,7 @@ const SKILLS_DIR = path.resolve(REPO_ROOT, 'skills');
 // Paths are relative to packages/spec/src/ (category/file.zod.ts)
 
 const SKILL_MAP: Record<string, string[]> = {
-  'objectstack-schema': [
+  'objectstack-data': [
     'data/field.zod.ts',
     'data/object.zod.ts',
     'data/validation.zod.ts',
@@ -236,25 +236,37 @@ function main() {
     const allFiles = resolveAll(coreFiles);
     console.log(`   ${coreFiles.length} core + ${allFiles.length - coreFiles.length} deps = ${allFiles.length} files`);
 
-    // Target directory
-    const zodDir = path.resolve(skillDir, 'references/zod');
+    // Target directory — directly under references/ (no zod/ subdirectory)
+    const refsDir = path.resolve(skillDir, 'references');
 
-    // Clean previous output
-    if (fs.existsSync(zodDir)) {
-      fs.rmSync(zodDir, { recursive: true });
+    // Clean previous generated files (preserve directory, remove .zod.ts and _index.md)
+    if (fs.existsSync(refsDir)) {
+      // Remove old zod/ subdirectory if it exists (migration from previous structure)
+      const oldZodDir = path.resolve(refsDir, 'zod');
+      if (fs.existsSync(oldZodDir)) {
+        fs.rmSync(oldZodDir, { recursive: true });
+      }
+      // Remove generated category directories and _index.md
+      for (const entry of fs.readdirSync(refsDir)) {
+        const entryPath = path.resolve(refsDir, entry);
+        const stat = fs.statSync(entryPath);
+        if (stat.isDirectory() || entry === '_index.md') {
+          fs.rmSync(entryPath, { recursive: true });
+        }
+      }
     }
 
     // Copy files preserving directory structure
     for (const rel of allFiles) {
       const src = path.resolve(SPEC_SRC, rel);
-      const dest = path.resolve(zodDir, rel);
+      const dest = path.resolve(refsDir, rel);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.copyFileSync(src, dest);
     }
 
     // Generate _index.md
     const indexContent = generateIndex(skillName, coreFiles, allFiles);
-    fs.writeFileSync(path.resolve(zodDir, '_index.md'), indexContent);
+    fs.writeFileSync(path.resolve(refsDir, '_index.md'), indexContent);
 
     totalFiles += allFiles.length;
   }

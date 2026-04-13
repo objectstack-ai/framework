@@ -343,21 +343,14 @@ Actions are user-triggered operations attached to objects or views.
 
 ## References
 
-### Zod Source Schemas (auto-copied)
-
-- [view.zod.ts](./references/zod/ui/view.zod.ts) — Grid/kanban/calendar views, columns, filters
-- [app.zod.ts](./references/zod/ui/app.zod.ts) — App definition, navigation items
-- [dashboard.zod.ts](./references/zod/ui/dashboard.zod.ts) — Dashboard widgets, layout, data queries
-- [chart.zod.ts](./references/zod/ui/chart.zod.ts) — 25+ chart types, axis config, legends
-- [action.zod.ts](./references/zod/ui/action.zod.ts) — UI actions, parameters, confirmation
-- [page.zod.ts](./references/zod/ui/page.zod.ts) — Page layouts, SDUI, slot definitions
-- [widget.zod.ts](./references/zod/ui/widget.zod.ts) — Widget definitions, data bindings
-- [component.zod.ts](./references/zod/ui/component.zod.ts) — Component registry, props schema
-- [report.zod.ts](./references/zod/ui/report.zod.ts) — Report definitions, grouping, aggregations
-- [theme.zod.ts](./references/zod/ui/theme.zod.ts) — Design tokens, color modes, typography
-- [Schema index](./references/zod/_index.md) — All bundled schemas with dependency tree
-
-### Quick Reference
-
-- [View Type Reference](./references/view-types.md) — Compact view type table
-- [Dashboard & Chart Reference](./references/dashboard-chart-reference.md) — Widget/chart overview
+- [view.zod.ts](./references/ui/view.zod.ts) — Grid/kanban/calendar views, columns, filters
+- [app.zod.ts](./references/ui/app.zod.ts) — App definition, navigation items
+- [dashboard.zod.ts](./references/ui/dashboard.zod.ts) — Dashboard widgets, layout, data queries
+- [chart.zod.ts](./references/ui/chart.zod.ts) — 25+ chart types, axis config, legends
+- [action.zod.ts](./references/ui/action.zod.ts) — UI actions, parameters, confirmation
+- [page.zod.ts](./references/ui/page.zod.ts) — Page layouts, SDUI, slot definitions
+- [widget.zod.ts](./references/ui/widget.zod.ts) — Widget definitions, data bindings
+- [component.zod.ts](./references/ui/component.zod.ts) — Component registry, props schema
+- [report.zod.ts](./references/ui/report.zod.ts) — Report definitions, grouping, aggregations
+- [theme.zod.ts](./references/ui/theme.zod.ts) — Design tokens, color modes, typography
+- [Schema index](./references/_index.md) — All bundled schemas with dependency tree

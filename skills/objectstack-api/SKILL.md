@@ -319,20 +319,13 @@ const aiService = kernel.resolve<AIService>('ai');
 
 ## References
 
-### Zod Source Schemas (auto-copied)
-
-- [endpoint.zod.ts](./references/zod/api/endpoint.zod.ts) — Custom endpoint definitions
-- [auth.zod.ts](./references/zod/api/auth.zod.ts) — Auth providers, login types, session
-- [realtime.zod.ts](./references/zod/api/realtime.zod.ts) — WebSocket/SSE subscriptions
-- [rest-server.zod.ts](./references/zod/api/rest-server.zod.ts) — REST server config, routing
-- [graphql.zod.ts](./references/zod/api/graphql.zod.ts) — GraphQL schema, resolvers, subscriptions
-- [websocket.zod.ts](./references/zod/api/websocket.zod.ts) — WebSocket protocol, channels, messages
-- [errors.zod.ts](./references/zod/api/errors.zod.ts) — Error response schemas, status codes
-- [batch.zod.ts](./references/zod/api/batch.zod.ts) — Batch operations, bulk request/response
-- [versioning.zod.ts](./references/zod/api/versioning.zod.ts) — API versioning strategies, deprecation
-- [Schema index](./references/zod/_index.md) — All bundled schemas with dependency tree
-
-### Quick Reference
-
-- [Endpoint & Method Reference](./references/endpoint-reference.md) — Compact API method table
-- [Auth & Realtime Reference](./references/auth-realtime-reference.md) — Providers, transport, sessions
+- [endpoint.zod.ts](./references/api/endpoint.zod.ts) — Custom endpoint definitions
+- [auth.zod.ts](./references/api/auth.zod.ts) — Auth providers, login types, session
+- [realtime.zod.ts](./references/api/realtime.zod.ts) — WebSocket/SSE subscriptions
+- [rest-server.zod.ts](./references/api/rest-server.zod.ts) — REST server config, routing
+- [graphql.zod.ts](./references/api/graphql.zod.ts) — GraphQL schema, resolvers, subscriptions
+- [websocket.zod.ts](./references/api/websocket.zod.ts) — WebSocket protocol, channels, messages
+- [errors.zod.ts](./references/api/errors.zod.ts) — Error response schemas, status codes
+- [batch.zod.ts](./references/api/batch.zod.ts) — Batch operations, bulk request/response
+- [versioning.zod.ts](./references/api/versioning.zod.ts) — API versioning strategies, deprecation
+- [Schema index](./references/_index.md) — All bundled schemas with dependency tree

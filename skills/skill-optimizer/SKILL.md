@@ -51,14 +51,12 @@ exist after installation. The fix:
 
 ```markdown
 ## References
-### Zod Source Schemas (auto-copied)
-- [field.zod.ts](./references/zod/data/field.zod.ts) — FieldType enum  ✅ relative link to real source
-### Quick Reference
-- [Field Type Reference](./references/field-types.md) — Compact summary  ✅ optional human overview
+- [field.zod.ts](./references/data/field.zod.ts) — FieldType enum  ✅ relative link to real source
+- [Schema index](./references/_index.md) — All bundled schemas  ✅ auto-generated index
 ```
 
 **Best practice**: If your skill documents schemas defined in Zod, copy the actual
-`.zod.ts` files into `references/zod/` using a build script. AI agents read Zod
+`.zod.ts` files into `references/` using a build script. AI agents read Zod
 natively — no need to manually convert to markdown. Use `build-skill-references.ts`
 as a reference implementation.
 
@@ -87,19 +85,16 @@ For each SKILL.md, inspect the `## References` section at the bottom:
 
 | Pattern | Status | Fix |
 |:--------|:-------|:----|
-| `[name](./references/zod/...)` | ✅ Best | Zod source files — highest precision |
-| `[name](./references/file.md)` | ✅ Good | Markdown summary — compact overview |
-| `` `packages/spec/src/...` `` | ❌ Broken | Copy Zod source into `./references/zod/` |
+| `[name](./references/domain/...)` | ✅ Best | Zod source files — highest precision |
+| `` `packages/spec/src/...` `` | ❌ Broken | Copy Zod source into `./references/` |
 | `content/docs/references/...` | ❌ Broken | Extract content into `./references/` |
 | No references section | ⚠️ Missing | Add if skill needs external data |
 
-**Recommended structure** (Zod source + markdown summary):
+**Recommended structure** (Zod sources with auto-generated index):
 ```markdown
-### Zod Source Schemas (auto-copied)
-- [field.zod.ts](./references/zod/data/field.zod.ts) — FieldType enum
-- [Schema index](./references/zod/_index.md) — All bundled schemas
-### Quick Reference
-- [Field Types](./references/field-types.md) — Compact overview
+## References
+- [field.zod.ts](./references/data/field.zod.ts) — FieldType enum
+- [Schema index](./references/_index.md) — All bundled schemas
 ```
 
 ### Step 3: Validate Bundled Assets

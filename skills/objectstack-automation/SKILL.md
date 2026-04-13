@@ -322,19 +322,12 @@ Triggers fire automatically when data events occur.
 
 ## References
 
-### Zod Source Schemas (auto-copied)
-
-- [flow.zod.ts](./references/zod/automation/flow.zod.ts) — Flow types, 18 node types, variables
-- [workflow.zod.ts](./references/zod/automation/workflow.zod.ts) — Workflow rules, trigger types, actions
-- [trigger-registry.zod.ts](./references/zod/automation/trigger-registry.zod.ts) — Trigger definitions
-- [approval.zod.ts](./references/zod/automation/approval.zod.ts) — Approval process, steps, escalation
-- [state-machine.zod.ts](./references/zod/automation/state-machine.zod.ts) — State machine transitions
-- [execution.zod.ts](./references/zod/automation/execution.zod.ts) — Execution state, history, scheduling
-- [webhook.zod.ts](./references/zod/automation/webhook.zod.ts) — Webhook triggers, delivery, retry
-- [node-executor.zod.ts](./references/zod/automation/node-executor.zod.ts) — Flow node execution runtime
-- [Schema index](./references/zod/_index.md) — All bundled schemas with dependency tree
-
-### Quick Reference
-
-- [Node & Event Reference](./references/node-types.md) — Compact node type table
-- [Workflow Actions Reference](./references/workflow-actions.md) — Action types, approval config
+- [flow.zod.ts](./references/automation/flow.zod.ts) — Flow types, 18 node types, variables
+- [workflow.zod.ts](./references/automation/workflow.zod.ts) — Workflow rules, trigger types, actions
+- [trigger-registry.zod.ts](./references/automation/trigger-registry.zod.ts) — Trigger definitions
+- [approval.zod.ts](./references/automation/approval.zod.ts) — Approval process, steps, escalation
+- [state-machine.zod.ts](./references/automation/state-machine.zod.ts) — State machine transitions
+- [execution.zod.ts](./references/automation/execution.zod.ts) — Execution state, history, scheduling
+- [webhook.zod.ts](./references/automation/webhook.zod.ts) — Webhook triggers, delivery, retry
+- [node-executor.zod.ts](./references/automation/node-executor.zod.ts) — Flow node execution runtime
+- [Schema index](./references/_index.md) — All bundled schemas with dependency tree

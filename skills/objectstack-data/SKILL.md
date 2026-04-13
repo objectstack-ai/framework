@@ -1,5 +1,5 @@
 ---
-name: objectstack-schema
+name: objectstack-data
 description: >
   Design ObjectStack data schemas (Objects, Fields, Validations, Indexes).
   Use when creating or modifying business object definitions, choosing field types,
@@ -352,19 +352,12 @@ export default ObjectSchema.create({
 
 ## References
 
-### Zod Source Schemas (auto-copied)
-
-- [field.zod.ts](./references/zod/data/field.zod.ts) — FieldType enum, FieldSchema, option/currency/vector config
-- [object.zod.ts](./references/zod/data/object.zod.ts) — ObjectSchema, capabilities, extension model
-- [validation.zod.ts](./references/zod/data/validation.zod.ts) — Validation rule types
-- [query.zod.ts](./references/zod/data/query.zod.ts) — Query operations, pagination, sorting
-- [filter.zod.ts](./references/zod/data/filter.zod.ts) — Filter operators, compound conditions
-- [datasource.zod.ts](./references/zod/data/datasource.zod.ts) — Datasource config, driver capabilities
-- [hook.zod.ts](./references/zod/data/hook.zod.ts) — Lifecycle hooks (beforeInsert, afterUpdate, etc.)
-- [permission.zod.ts](./references/zod/security/permission.zod.ts) — Field/object-level permissions, CRUD access
-- [Schema index](./references/zod/_index.md) — All bundled schemas with dependency tree
-
-### Quick Reference
-
-- [Field Type Reference](./references/field-types.md) — Compact type table
-- [Object Schema Reference](./references/object-schema.md) — Property summary
+- [field.zod.ts](./references/data/field.zod.ts) — FieldType enum, FieldSchema, option/currency/vector config
+- [object.zod.ts](./references/data/object.zod.ts) — ObjectSchema, capabilities, extension model
+- [validation.zod.ts](./references/data/validation.zod.ts) — Validation rule types
+- [query.zod.ts](./references/data/query.zod.ts) — Query operations, pagination, sorting
+- [filter.zod.ts](./references/data/filter.zod.ts) — Filter operators, compound conditions
+- [datasource.zod.ts](./references/data/datasource.zod.ts) — Datasource config, driver capabilities
+- [hook.zod.ts](./references/data/hook.zod.ts) — Lifecycle hooks (beforeInsert, afterUpdate, etc.)
+- [permission.zod.ts](./references/security/permission.zod.ts) — Field/object-level permissions, CRUD access
+- [Schema index](./references/_index.md) — All bundled schemas with dependency tree
