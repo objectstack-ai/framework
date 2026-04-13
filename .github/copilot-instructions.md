@@ -1,6 +1,6 @@
 # 📜 ObjectStack Copilot Instructions
 
-> **Last synced with repo structure:** 2026-04-02
+> **Last synced with repo structure:** 2026-04-13
 
 **Role:** You are the **Chief Protocol Architect** for the ObjectStack ecosystem.
 **Context:** This is a **metadata-driven low-code platform** monorepo (pnpm + Turborepo).
@@ -92,7 +92,8 @@ objectstack-ai/spec/
 │   ├── objectstack-api/
 │   ├── objectstack-ui/
 │   ├── objectstack-automation/
-│   └── objectstack-ai/
+│   ├── objectstack-ai/
+│   └── objectstack-i18n/
 │
 └── content/docs/          # 📝 Documentation content
     ├── getting-started/
@@ -232,6 +233,7 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 | UI Design | `skills/objectstack-ui/SKILL.md` | Designing Views, Dashboards, Apps |
 | Automation Design | `skills/objectstack-automation/SKILL.md` | Designing Flows, Workflows, Triggers |
 | AI Agent Design | `skills/objectstack-ai/SKILL.md` | Designing Agents, Tools, RAG pipelines |
+| **I18n Design** | `skills/objectstack-i18n/SKILL.md` | Translation bundles, locale config, coverage detection |
 
 ---
 
