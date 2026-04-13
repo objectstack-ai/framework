@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **CI: Replace `pnpm/action-setup@v6` with corepack** — Switched all GitHub Actions workflows (`ci.yml`, `lint.yml`, `release.yml`, `validate-deps.yml`, `pr-automation.yml`) from `pnpm/action-setup@v6` to `corepack enable` to fix persistent `ERR_PNPM_BROKEN_LOCKFILE` errors. Corepack reads the exact `packageManager` field from `package.json` (including SHA verification), ensuring the correct pnpm version is used in CI. Also bumped pnpm store cache keys to v3 and added a pnpm version verification step.
 - **Broken pnpm lockfile** — Regenerated `pnpm-lock.yaml` from scratch to fix `ERR_PNPM_BROKEN_LOCKFILE` ("expected a single document in the stream, but found more") that was causing all CI jobs to fail. The previous merge of PR #1117 only included workflow cache key changes but did not carry over the regenerated lockfile.
 
 ### Added
