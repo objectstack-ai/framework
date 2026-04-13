@@ -264,7 +264,7 @@ export function useApiDiscovery() {
       // 4. Fetch object names from metadata
       let objectNames: string[] = [];
       try {
-        const objectType = metaTypes.includes('objects') ? 'objects' : metaTypes.includes('object') ? 'object' : null;
+        const objectType = metaTypes.includes('object') ? 'object' : null;
         if (objectType) {
           const objectResult = await client.meta.getItems(objectType);
           let items: any[] = [];

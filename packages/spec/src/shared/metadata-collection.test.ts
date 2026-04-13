@@ -7,6 +7,10 @@ import {
   normalizePluginMetadata,
   MAP_SUPPORTED_FIELDS,
   METADATA_ALIASES,
+  PLURAL_TO_SINGULAR,
+  SINGULAR_TO_PLURAL,
+  pluralToSingular,
+  singularToPlural,
 } from './metadata-collection.zod';
 
 describe('normalizeMetadataCollection', () => {
@@ -266,6 +270,62 @@ describe('MAP_SUPPORTED_FIELDS', () => {
 describe('METADATA_ALIASES', () => {
   it('should map triggers to hooks', () => {
     expect(METADATA_ALIASES.triggers).toBe('hooks');
+  });
+});
+
+describe('PLURAL_TO_SINGULAR / SINGULAR_TO_PLURAL', () => {
+  it('should cover every entry in MAP_SUPPORTED_FIELDS', () => {
+    for (const field of MAP_SUPPORTED_FIELDS) {
+      expect(PLURAL_TO_SINGULAR).toHaveProperty(field);
+    }
+  });
+
+  it('should map standard plural forms correctly', () => {
+    expect(PLURAL_TO_SINGULAR['objects']).toBe('object');
+    expect(PLURAL_TO_SINGULAR['apps']).toBe('app');
+    expect(PLURAL_TO_SINGULAR['actions']).toBe('action');
+    expect(PLURAL_TO_SINGULAR['flows']).toBe('flow');
+    expect(PLURAL_TO_SINGULAR['agents']).toBe('agent');
+    expect(PLURAL_TO_SINGULAR['dashboards']).toBe('dashboard');
+  });
+
+  it('should map irregular plural forms correctly', () => {
+    expect(PLURAL_TO_SINGULAR['policies']).toBe('policy');
+    expect(PLURAL_TO_SINGULAR['sharingRules']).toBe('sharingRule');
+    expect(PLURAL_TO_SINGULAR['analyticsCubes']).toBe('analyticsCube');
+    expect(PLURAL_TO_SINGULAR['ragPipelines']).toBe('ragPipeline');
+  });
+
+  it('should have a reverse map that is consistent', () => {
+    for (const [plural, singular] of Object.entries(PLURAL_TO_SINGULAR)) {
+      expect(SINGULAR_TO_PLURAL[singular]).toBe(plural);
+    }
+  });
+});
+
+describe('pluralToSingular', () => {
+  it('should convert known plural to singular', () => {
+    expect(pluralToSingular('apps')).toBe('app');
+    expect(pluralToSingular('policies')).toBe('policy');
+    expect(pluralToSingular('sharingRules')).toBe('sharingRule');
+  });
+
+  it('should return unknown keys unchanged', () => {
+    expect(pluralToSingular('unknown')).toBe('unknown');
+    expect(pluralToSingular('object')).toBe('object');
+  });
+});
+
+describe('singularToPlural', () => {
+  it('should convert known singular to plural', () => {
+    expect(singularToPlural('app')).toBe('apps');
+    expect(singularToPlural('policy')).toBe('policies');
+    expect(singularToPlural('sharingRule')).toBe('sharingRules');
+  });
+
+  it('should return unknown keys unchanged', () => {
+    expect(singularToPlural('unknown')).toBe('unknown');
+    expect(singularToPlural('objects')).toBe('objects');
   });
 });
 

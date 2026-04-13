@@ -2,15 +2,16 @@
 
 import { ObjectStackProtocol } from '@objectstack/spec/api';
 import { IDataEngine } from '@objectstack/core';
-import type { 
-    BatchUpdateRequest, 
-    BatchUpdateResponse, 
+import type {
+    BatchUpdateRequest,
+    BatchUpdateResponse,
     UpdateManyDataRequest,
     DeleteManyDataRequest
 } from '@objectstack/spec/api';
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
 import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
+import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
 
 // We import SchemaRegistry directly since this class lives in the same package
 import { SchemaRegistry } from './registry.js';
@@ -201,10 +202,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     async getMetaItems(request: { type: string; packageId?: string }) {
         const { packageId } = request;
         let items = SchemaRegistry.listItems(request.type, packageId);
-        // Normalize singular/plural: REST uses singular ('app') but registry may store as plural ('apps')
+        // Normalize singular/plural using explicit mapping
         if (items.length === 0) {
-            const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
-            items = SchemaRegistry.listItems(alt, packageId);
+            const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+            if (alt) items = SchemaRegistry.listItems(alt, packageId);
         }
 
         // Fallback to database if registry is empty for this type
@@ -225,8 +226,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         return data;
                     });
                 } else {
-                    // Try alternate type name in DB
-                    const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
+                    // Try alternate type name in DB using explicit mapping
+                    const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                    if (alt) {
                     const altRecords = await this.engine.find('sys_metadata', {
                         where: { type: alt, state: 'active' }
                     });
@@ -238,6 +240,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             SchemaRegistry.registerItem(request.type, data, 'name' as any);
                             return data;
                         });
+                    }
                     }
                 }
             } catch {
@@ -281,10 +284,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async getMetaItem(request: { type: string, name: string, packageId?: string }) {
         let item = SchemaRegistry.getItem(request.type, request.name);
-        // Normalize singular/plural
+        // Normalize singular/plural using explicit mapping
         if (item === undefined) {
-            const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
-            item = SchemaRegistry.getItem(alt, request.name);
+            const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+            if (alt) item = SchemaRegistry.getItem(alt, request.name);
         }
 
         // Fallback to database if not in registry
@@ -300,8 +303,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     // Hydrate back into registry for next time
                     SchemaRegistry.registerItem(request.type, item, 'name' as any);
                 } else {
-                    // Try alternate type name
-                    const alt = request.type.endsWith('s') ? request.type.slice(0, -1) : request.type + 's';
+                    // Try alternate type name using explicit mapping
+                    const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                    if (alt) {
                     const altRecord = await this.engine.findOne('sys_metadata', {
                         where: { type: alt, name: request.name, state: 'active' }
                     });
@@ -311,6 +315,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             : altRecord.metadata;
                         // Hydrate back into registry for next time
                         SchemaRegistry.registerItem(request.type, item, 'name' as any);
+                    }
                     }
                 }
             } catch {
@@ -617,7 +622,27 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async getMetaItemCached(request: { type: string, name: string, cacheRequest?: MetadataCacheRequest }): Promise<MetadataCacheResponse> {
         try {
-            const item = SchemaRegistry.getItem(request.type, request.name);
+            let item = SchemaRegistry.getItem(request.type, request.name);
+
+            // Normalize singular/plural using explicit mapping
+            if (!item) {
+                const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                if (alt) item = SchemaRegistry.getItem(alt, request.name);
+            }
+
+            // Fallback to MetadataService (e.g. agents, tools registered in MetadataManager)
+            if (!item) {
+                try {
+                    const services = this.getServicesRegistry?.();
+                    const metadataService = services?.get('metadata');
+                    if (metadataService && typeof metadataService.get === 'function') {
+                        item = await metadataService.get(request.type, request.name);
+                    }
+                } catch {
+                    // MetadataService not available
+                }
+            }
+
             if (!item) {
                 throw new Error(`Metadata item ${request.type}/${request.name} not found`);
             }
@@ -1038,10 +1063,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     const data = typeof record.metadata === 'string'
                         ? JSON.parse(record.metadata)
                         : record.metadata;
-                    if (record.type === 'object') {
+                    // Normalize DB type to singular (DB may store legacy plural forms)
+                    const normalizedType = PLURAL_TO_SINGULAR[record.type] ?? record.type;
+                    if (normalizedType === 'object') {
                         SchemaRegistry.registerObject(data as any, record.packageId || 'sys_metadata');
                     } else {
-                        SchemaRegistry.registerItem(record.type, data, 'name' as any);
+                        SchemaRegistry.registerItem(normalizedType, data, 'name' as any);
                     }
                     loaded++;
                 } catch (e) {

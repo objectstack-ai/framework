@@ -77,7 +77,7 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate }: Dev
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
-  const objectCount = stats.metadata.counts['object'] || stats.metadata.counts['objects'] || 0;
+  const objectCount = stats.metadata.counts['object'] || 0;
   const totalMetaItems = Object.values(stats.metadata.counts).reduce((a, b) => a + b, 0);
 
   return (

@@ -485,7 +485,7 @@ export class SchemaRegistry {
     if (type === 'object') {
       return ObjectSchema.parse(item);
     }
-    if (type === 'apps') {
+    if (type === 'app') {
       return AppSchema.parse(item);
     }
     if (type === 'package') {
@@ -664,15 +664,15 @@ export class SchemaRegistry {
   // ==========================================
 
   static registerApp(app: any, packageId?: string) {
-    this.registerItem('apps', app, 'name', packageId);
+    this.registerItem('app', app, 'name', packageId);
   }
 
   static getApp(name: string): any {
-    return this.getItem('apps', name);
+    return this.getItem('app', name);
   }
 
   static getAllApps(): any[] {
-    return this.listItems('apps');
+    return this.listItems('app');
   }
 
   // ==========================================

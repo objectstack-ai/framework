@@ -353,17 +353,17 @@ describe('SchemaRegistry', () => {
     describe('Generic Metadata', () => {
         it('should register and retrieve generic items', () => {
             const item = { name: 'test_action', type: 'custom' };
-            SchemaRegistry.registerItem('actions', item, 'name', 'com.pkg');
-            
-            const retrieved = SchemaRegistry.getItem('actions', 'test_action');
+            SchemaRegistry.registerItem('action', item, 'name', 'com.pkg');
+
+            const retrieved = SchemaRegistry.getItem('action', 'test_action');
             expect(retrieved).toEqual(item);
         });
 
         it('should list items by type with package filter', () => {
-            SchemaRegistry.registerItem('actions', { name: 'a1' }, 'name', 'com.pkg1');
-            SchemaRegistry.registerItem('actions', { name: 'a2' }, 'name', 'com.pkg2');
-            
-            const filtered = SchemaRegistry.listItems('actions', 'com.pkg1');
+            SchemaRegistry.registerItem('action', { name: 'a1' }, 'name', 'com.pkg1');
+            SchemaRegistry.registerItem('action', { name: 'a2' }, 'name', 'com.pkg2');
+
+            const filtered = SchemaRegistry.listItems('action', 'com.pkg1');
             expect(filtered).toHaveLength(1);
         });
     });
@@ -396,12 +396,12 @@ describe('SchemaRegistry', () => {
     describe('Reset', () => {
         it('should clear all state', () => {
             SchemaRegistry.registerObject({ name: 'obj', fields: {} } as any, 'com.pkg', 'pkg', 'own');
-            SchemaRegistry.registerItem('actions', { name: 'act' }, 'name');
-            
+            SchemaRegistry.registerItem('action', { name: 'act' }, 'name');
+
             SchemaRegistry.reset();
-            
+
             expect(SchemaRegistry.getAllObjects()).toHaveLength(0);
-            expect(SchemaRegistry.listItems('actions')).toHaveLength(0);
+            expect(SchemaRegistry.listItems('action')).toHaveLength(0);
         });
     });
 

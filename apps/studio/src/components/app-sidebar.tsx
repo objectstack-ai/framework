@@ -118,16 +118,16 @@ interface ProtocolGroup {
 }
 
 const PROTOCOL_GROUPS: ProtocolGroup[] = [
-  { key: 'data',       label: 'Data',       icon: Database,  types: ['object', 'objects', 'hooks', 'mappings', 'analyticsCubes', 'data'] },
-  { key: 'ui',         label: 'UI',         icon: AppWindow,  types: ['app', 'apps', 'actions', 'views', 'pages', 'dashboards', 'reports', 'themes'] },
-  { key: 'automation', label: 'Automation', icon: Workflow,   types: ['flows', 'workflows', 'approvals', 'webhooks'] },
-  { key: 'security',   label: 'Security',   icon: Shield,     types: ['roles', 'permissions', 'profiles', 'sharingRules', 'policies'] },
-  { key: 'ai',         label: 'AI',         icon: Bot,        types: ['agent', 'agents', 'tool', 'tools', 'ragPipeline', 'ragPipelines'] },
-  { key: 'api',        label: 'API',        icon: Globe,      types: ['apis', 'connectors'] },
+  { key: 'data',       label: 'Data',       icon: Database,  types: ['object', 'hook', 'mapping', 'analyticsCube', 'data'] },
+  { key: 'ui',         label: 'UI',         icon: AppWindow,  types: ['app', 'action', 'view', 'page', 'dashboard', 'report', 'theme'] },
+  { key: 'automation', label: 'Automation', icon: Workflow,   types: ['flow', 'workflow', 'approval', 'webhook'] },
+  { key: 'security',   label: 'Security',   icon: Shield,     types: ['role', 'permission', 'profile', 'sharingRule', 'policy'] },
+  { key: 'ai',         label: 'AI',         icon: Bot,        types: ['agent', 'tool', 'ragPipeline'] },
+  { key: 'api',        label: 'API',        icon: Globe,      types: ['api', 'connector'] },
 ];
 
 /** Types that are internal / should be hidden from the sidebar */
-const HIDDEN_TYPES = new Set(['plugin', 'plugins', 'kind']);
+const HIDDEN_TYPES = new Set(['plugin', 'kind']);
 
 /** System namespace used for FQN-based names (e.g., sys__user) */
 const SYSTEM_NAMESPACE = 'sys';
@@ -186,7 +186,7 @@ export function AppSidebar({
   const [metaItems, setMetaItems] = useState<Record<string, any[]>>({});
 
   // Track which metadata *types* are expanded (show individual items)
-  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(['object', 'objects']));
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(['object']));
 
   // Toggle to show/hide system objects in the Data protocol group
   const [showSystemInData, setShowSystemInData] = useState(true);
@@ -277,25 +277,18 @@ export function AppSidebar({
     label.toLowerCase().includes(searchQuery.toLowerCase()) ||
     name.toLowerCase().includes(searchQuery.toLowerCase());
 
-  // Extract system objects from loaded metadata (object/objects types)
+  // Extract system objects from loaded metadata
   const systemObjects = useMemo(() => {
-    const objectTypes = ['object', 'objects'];
-    const sysItems: any[] = [];
-    for (const type of objectTypes) {
-      const items = metaItems[type] || [];
-      sysItems.push(...items.filter(isSystemObject));
-    }
-    return sysItems;
+    const items = metaItems['object'] || [];
+    return items.filter(isSystemObject);
   }, [metaItems]);
 
   // Filter system objects out of the Data protocol group when toggled off
   const filteredMetaItems = useMemo(() => {
     if (showSystemInData) return metaItems;
     const result = { ...metaItems };
-    for (const type of ['object', 'objects']) {
-      if (result[type]) {
-        result[type] = result[type].filter((item: any) => !isSystemObject(item));
-      }
+    if (result['object']) {
+      result['object'] = result['object'].filter((item: any) => !isSystemObject(item));
     }
     return result;
   }, [metaItems, showSystemInData]);
@@ -433,7 +426,7 @@ export function AppSidebar({
                     const items = filteredMetaItems[type] || [];
                     const TypeIcon = getTypeIcon(type);
                     const typeLabel = getTypeLabel(type);
-                    const isObjectType = type === 'object' || type === 'objects';
+                    const isObjectType = type === 'object';
                     const isExpanded = expandedTypes.has(type) || !!searchQuery;
 
                     const filtered = items.filter((item: any) =>

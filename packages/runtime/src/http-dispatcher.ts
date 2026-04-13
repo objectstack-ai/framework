@@ -2,6 +2,7 @@
 
 import { ObjectKernel, getEnv, resolveLocale } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
+import { pluralToSingular } from '@objectstack/spec/shared';
 
 /** Browser-safe UUID generator — prefers Web Crypto, falls back to RFC 4122 v4 */
 function randomUUID(): string {
@@ -489,9 +490,8 @@ export class HttpDispatcher {
                     return { handled: true, response: this.error('Not found', 404) };
                 }
 
-                // If type is singular (e.g. 'app'), use it directly
-                // If plural (e.g. 'apps'), slice it
-                const singularType = type.endsWith('s') ? type.slice(0, -1) : type;
+                // Normalize plural URL paths to singular registry type names
+                const singularType = pluralToSingular(type);
 
                 // Try Protocol Service First (Preferred)
                 const protocol = await this.resolveService('protocol');

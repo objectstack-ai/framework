@@ -13,6 +13,7 @@ import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kern
 import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
+import { pluralToSingular } from '@objectstack/spec/shared';
 import { SchemaRegistry } from './registry.js';
 
 export type HookHandler = (context: HookContext) => Promise<void> | void;
@@ -395,7 +396,7 @@ export class ObjectQL implements IDataEngine {
               for (const item of items) {
                   const itemName = item.name || item.id;
                   if (itemName) {
-                      SchemaRegistry.registerItem(key, item, 'name' as any, id);
+                      SchemaRegistry.registerItem(pluralToSingular(key), item, 'name' as any, id);
                   }
               }
           }
@@ -501,7 +502,7 @@ export class ObjectQL implements IDataEngine {
               for (const item of items) {
                   const itemName = item.name || item.id;
                   if (itemName) {
-                      SchemaRegistry.registerItem(key, item, 'name' as any, ownerId);
+                      SchemaRegistry.registerItem(pluralToSingular(key), item, 'name' as any, ownerId);
                   }
               }
           }

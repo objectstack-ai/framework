@@ -97,6 +97,60 @@ export const MAP_SUPPORTED_FIELDS = [
 export type MapSupportedField = (typeof MAP_SUPPORTED_FIELDS)[number];
 
 /**
+ * Mapping from plural manifest field names to singular metadata type names.
+ *
+ * Manifest / `defineStack()` uses plural property names because they are
+ * collection fields (e.g. `objects: [...]`, `apps: [...]`).  The metadata
+ * registry and `MetadataTypeSchema` use singular names as the canonical form.
+ *
+ * Use this mapping at the boundary where manifest fields are fed into the
+ * metadata registry to ensure a consistent singular naming convention.
+ */
+export const PLURAL_TO_SINGULAR: Record<string, string> = {
+  objects: 'object',
+  apps: 'app',
+  pages: 'page',
+  dashboards: 'dashboard',
+  reports: 'report',
+  actions: 'action',
+  themes: 'theme',
+  workflows: 'workflow',
+  approvals: 'approval',
+  flows: 'flow',
+  roles: 'role',
+  permissions: 'permission',
+  profiles: 'profile',
+  sharingRules: 'sharingRule',
+  policies: 'policy',
+  apis: 'api',
+  webhooks: 'webhook',
+  agents: 'agent',
+  ragPipelines: 'ragPipeline',
+  hooks: 'hook',
+  mappings: 'mapping',
+  analyticsCubes: 'analyticsCube',
+  connectors: 'connector',
+  datasources: 'datasource',
+  views: 'view',
+};
+
+/** Reverse mapping: singular metadata type → plural manifest field name. */
+export const SINGULAR_TO_PLURAL: Record<string, string> = Object.fromEntries(
+  Object.entries(PLURAL_TO_SINGULAR).map(([plural, singular]) => [singular, plural]),
+);
+
+/** Convert a plural manifest field name to its singular metadata type name. Returns the input unchanged if no mapping exists. */
+export function pluralToSingular(key: string): string {
+  return PLURAL_TO_SINGULAR[key] ?? key;
+}
+
+/** Convert a singular metadata type name to its plural manifest field name. Returns the input unchanged if no mapping exists. */
+export function singularToPlural(key: string): string {
+  return SINGULAR_TO_PLURAL[key] ?? key;
+}
+
+
+/**
  * Normalize a single metadata collection value from map format to array format.
  * If the input is already an array (or nullish), it is returned unchanged.
  * If the input is a plain object (map), it is converted to an array where
