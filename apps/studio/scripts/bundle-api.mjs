@@ -16,9 +16,9 @@ import { build } from 'esbuild';
 
 // Packages that cannot be bundled (native bindings / optional drivers)
 const EXTERNAL = [
-  // @libsql/client is now bundled (pure JS, no native bindings)
-  // Bundling it solves Vercel deployment issues where external packages
-  // aren't properly included in the serverless function despite includeFiles config
+  // @libsql/client has native bindings (platform-specific like @libsql/linux-x64-gnu)
+  // and must be kept external, then copied to node_modules with includeFiles
+  '@libsql/client',
   'better-sqlite3',
   // AI SDK provider packages — dynamically imported based on env vars
   '@ai-sdk/anthropic',
