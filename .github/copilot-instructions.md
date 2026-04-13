@@ -225,6 +225,7 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 
 | Skill | Path | Use When |
 |:---|:---|:---|
+| **Quickstart** | `skills/objectstack-quickstart/SKILL.md` | Project creation, defineStack(), drivers, adapters, bootstrap |
 | Data Design | `skills/objectstack-data/SKILL.md` | Designing Objects, Fields, Relations |
 | API Design | `skills/objectstack-api/SKILL.md` | Designing REST/GraphQL endpoints |
 | UI Design | `skills/objectstack-ui/SKILL.md` | Designing Views, Dashboards, Apps |
@@ -239,6 +240,7 @@ When editing files matching these patterns, apply the corresponding architectura
 
 | File Pattern | Role | Key Constraints |
 |:---|:---|:---|
+| `**/objectstack.config.ts` | **Project Architect** | defineStack(), driver/adapter selection, bootstrap |
 | `packages/spec/src/data/**` | **Data Architect** | Zod-first, snake_case names, TSDoc on every property |
 | `packages/spec/src/ui/**` | **UI Protocol Designer** | View types, SDUI patterns, navigation structures |
 | `packages/spec/src/automation/**` | **Automation Architect** | Flow/Workflow state machines, trigger patterns |
@@ -264,6 +266,7 @@ When editing files matching these patterns, apply the corresponding architectura
 
 | Command | Action |
 |:---|:---|
+| "Create a project" | Use `npx create-objectstack` or write `objectstack.config.ts` from scratch |
 | "Define a field" | Create/modify `packages/spec/src/data/field.zod.ts` |
 | "Define an object" | Create/modify `packages/spec/src/data/object.zod.ts` |
 | "Define a view" | Create/modify `packages/spec/src/ui/view.zod.ts` |

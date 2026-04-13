@@ -84,6 +84,11 @@ const SKILL_MAP: Record<string, string[]> = {
     'ui/report.zod.ts',
     'ui/theme.zod.ts',
   ],
+  'objectstack-quickstart': [
+    'kernel/manifest.zod.ts',
+    'data/datasource.zod.ts',
+    'data/dataset.zod.ts',
+  ],
 };
 
 // ── Import resolver ──────────────────────────────────────────────────────────
@@ -250,7 +255,7 @@ function main() {
       for (const entry of fs.readdirSync(refsDir)) {
         const entryPath = path.resolve(refsDir, entry);
         const stat = fs.statSync(entryPath);
-        if (stat.isDirectory() || entry === '_index.md') {
+        if (stat.isDirectory() || entry === '_index.md' || entry.endsWith('.zod.ts')) {
           fs.rmSync(entryPath, { recursive: true });
         }
       }
