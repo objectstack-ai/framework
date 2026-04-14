@@ -12,6 +12,10 @@ This example demonstrates how to deploy the ObjectStack app-host to Vercel using
 Set the following environment variables in your Vercel project:
 
 - `AUTH_SECRET`: A secure random string (minimum 32 characters) for authentication
+- `TURSO_DATABASE_URL`: Your Turso database URL (e.g., `libsql://your-database.turso.io`)
+- `TURSO_AUTH_TOKEN`: Your Turso authentication token
+
+You can get these credentials from [Turso Dashboard](https://turso.tech/).
 
 ## Deployment Steps
 
@@ -35,6 +39,8 @@ Set the following environment variables in your Vercel project:
 4. Set environment variables:
    ```bash
    vercel env add AUTH_SECRET
+   vercel env add TURSO_DATABASE_URL
+   vercel env add TURSO_AUTH_TOKEN
    ```
 
 ### Option 2: Using Vercel Dashboard
@@ -50,14 +56,13 @@ The build is configured in `vercel.json`:
 
 - **Install Command**: `cd ../.. && pnpm install` (installs monorepo dependencies)
 - **Build Command**: `bash scripts/build-vercel.sh` (builds and bundles the application)
-- **Framework**: `null` (uses custom build setup)
+- **Framework**: `hono` (uses Vercel's Hono framework preset)
 
 ## How It Works
 
 1. **Build Process** (`scripts/build-vercel.sh`):
    - Builds the TypeScript project using Turbo
    - Bundles the server code using esbuild (`scripts/bundle-api.mjs`)
-   - Copies native dependencies (like better-sqlite3) to local node_modules
 
 2. **API Handler** (`api/[[...route]].js`):
    - Committed catch-all route handler that Vercel detects pre-build
@@ -66,6 +71,7 @@ The build is configured in `vercel.json`:
 3. **Server Entrypoint** (`server/index.ts`):
    - Boots ObjectStack kernel with Hono adapter
    - Uses `@hono/node-server`'s `getRequestListener()` for Vercel compatibility
+   - Connects to Turso database in remote mode (HTTP-only, no local SQLite)
    - Handles Vercel's pre-buffered request body properly
 
 4. **Hono Integration**:
@@ -125,14 +131,15 @@ After deployment, your API will be available at:
 ### Runtime Errors
 
 - Check function logs in Vercel dashboard
-- Verify environment variables are set correctly
+- Verify environment variables are set correctly (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `AUTH_SECRET`)
 - Ensure `AUTH_SECRET` is at least 32 characters
+- Test Turso connection using the provided credentials
 
-### Module Not Found
+### Database Connection Issues
 
-- The build script copies native modules to local node_modules
-- Check that `better-sqlite3` is in dependencies
-- Verify `vercel.json` includeFiles pattern matches the module
+- Verify your Turso database URL and auth token are correct
+- Check that your Turso database is accessible (not paused)
+- The deployment uses TursoDriver in **remote mode** (HTTP-only), which doesn't require native modules like better-sqlite3
 
 ## References
 

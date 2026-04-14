@@ -17,7 +17,9 @@
     "@example/app-todo": "workspace:*",
     "@example/plugin-bi": "workspace:*",
     "@hono/node-server": "^1.19.14",
+    "@libsql/client": "^0.14.0",
     "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/driver-turso": "workspace:*",
     "@objectstack/hono": "workspace:*",
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:*",
@@ -25,7 +27,6 @@
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/runtime": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "better-sqlite3": "^12.9.0",
     "hono": "^4.12.12"
   },
   "devDependencies": {

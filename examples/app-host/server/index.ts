@@ -12,7 +12,7 @@
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
-import { InMemoryDriver } from '@objectstack/driver-memory';
+import { TursoDriver } from '@objectstack/driver-turso';
 import { createHonoApp } from '@objectstack/hono';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { getRequestListener } from '@hono/node-server';
@@ -54,8 +54,21 @@ async function ensureKernel(): Promise<ObjectKernel> {
             // Register ObjectQL engine
             await kernel.use(new ObjectQLPlugin());
 
-            // Database driver (in-memory for demo)
-            await kernel.use(new DriverPlugin(new InMemoryDriver()));
+            // Database driver - Turso (remote mode for Vercel)
+            const tursoUrl = process.env.TURSO_DATABASE_URL;
+            const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+            if (!tursoUrl || !tursoToken) {
+                throw new Error('Missing required environment variables: TURSO_DATABASE_URL and TURSO_AUTH_TOKEN');
+            }
+
+            const tursoDriver = new TursoDriver({
+                url: tursoUrl,
+                authToken: tursoToken,
+                // Remote mode - no local sync needed for Vercel
+            });
+
+            await kernel.use(new DriverPlugin(tursoDriver));
 
             // Auth plugin — uses environment variables for configuration
             // Prefer VERCEL_PROJECT_PRODUCTION_URL (stable across deployments)

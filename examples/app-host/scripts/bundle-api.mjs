@@ -16,7 +16,6 @@ import { build } from 'esbuild';
 
 // Packages that cannot be bundled (native bindings / optional drivers)
 const EXTERNAL = [
-  'better-sqlite3',
   // Optional knex database drivers — never used at runtime, but knex requires() them
   'pg',
   'pg-native',
