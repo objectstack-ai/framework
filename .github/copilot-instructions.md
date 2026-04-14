@@ -88,11 +88,13 @@ objectstack-ai/spec/
 │   └── plugin-bi/         # Plugin example: BI dashboard
 │
 ├── skills/                # 🤖 AI skill definitions (for Copilot/Cursor)
-│   ├── objectstack-data/
+│   ├── objectstack-schema/
+│   ├── objectstack-query/
 │   ├── objectstack-api/
 │   ├── objectstack-ui/
 │   ├── objectstack-automation/
 │   ├── objectstack-ai/
+│   ├── objectstack-plugin/
 │   └── objectstack-i18n/
 │
 └── content/docs/          # 📝 Documentation content
@@ -227,8 +229,9 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 | Skill | Path | Use When |
 |:---|:---|:---|
 | **Quickstart** | `skills/objectstack-quickstart/SKILL.md` | Project creation, defineStack(), drivers, adapters, bootstrap |
-| **Kernel** | `skills/objectstack-kernel/SKILL.md` | Plugin lifecycle, DI, EventBus, Kernel config |
-| Data Design | `skills/objectstack-data/SKILL.md` | Designing Objects, Fields, Relations |
+| **Plugin** | `skills/objectstack-plugin/SKILL.md` | Plugin lifecycle, DI, EventBus, Kernel config |
+| Schema Design | `skills/objectstack-schema/SKILL.md` | Designing Objects, Fields, Relations, Validations |
+| Query Design | `skills/objectstack-query/SKILL.md` | Filters, sorting, pagination, aggregation, joins |
 | API Design | `skills/objectstack-api/SKILL.md` | Designing REST/GraphQL endpoints |
 | UI Design | `skills/objectstack-ui/SKILL.md` | Designing Views, Dashboards, Apps |
 | Automation Design | `skills/objectstack-automation/SKILL.md` | Designing Flows, Workflows, Triggers |

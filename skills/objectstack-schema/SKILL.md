@@ -1,16 +1,20 @@
 ---
-name: objectstack-data
+name: objectstack-schema
 description: >
   Design ObjectStack data schemas (Objects, Fields, Validations, Indexes).
   Use when creating or modifying business object definitions, choosing field types,
   configuring relationships, or setting up validation rules in an ObjectStack project.
+  ALWAYS use this skill when you see: "define object", "add field", "create table",
+  "data model", "schema design", "relationship", "validation rule", "index",
+  "master_detail", "lookup field", "field type", "object definition".
+  Do NOT use for querying, filtering, or aggregating data — use objectstack-query instead.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "2.0"
-  domain: data
-  tags: object, field, validation, index, relationship, hooks
+  version: "3.0"
+  domain: schema
+  tags: object, field, validation, index, relationship, hooks, schema, data-model
 ---
 
 # Schema Design — ObjectStack Data Protocol
@@ -18,6 +22,17 @@ metadata:
 Expert instructions for designing business data schemas using the ObjectStack
 specification. This skill covers Object definitions, Field type selection,
 relationship modelling, validation rules, index strategy, and lifecycle hooks.
+
+---
+
+## Skill Boundaries
+
+| Need | Use instead |
+|:-----|:------------|
+| Query, filter, or aggregate records | **objectstack-query** |
+| Define REST API endpoints or auth | **objectstack-api** |
+| Build views, dashboards, or apps | **objectstack-ui** |
+| Create a plugin or register services | **objectstack-plugin** |
 
 ---
 

@@ -14,6 +14,6 @@
 
 These schemas are included in the references for completeness but are primarily managed by other skills:
 
-- **objectstack-data** — Object, Field schemas (source for translation extraction)
+- **objectstack-schema** — Object, Field schemas (source for translation extraction)
 - **objectstack-ui** — View, App, Dashboard schemas (UI translation sources)
 - **objectstack-automation** — Flow, Workflow schemas (automation message translations)

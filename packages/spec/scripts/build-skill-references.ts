@@ -30,15 +30,17 @@ const SKILLS_DIR = path.resolve(REPO_ROOT, 'skills');
 // Paths are relative to packages/spec/src/ (category/file.zod.ts)
 
 const SKILL_MAP: Record<string, string[]> = {
-  'objectstack-data': [
+  'objectstack-schema': [
     'data/field.zod.ts',
     'data/object.zod.ts',
     'data/validation.zod.ts',
+    'data/hook.zod.ts',
+    'data/datasource.zod.ts',
+    'security/permission.zod.ts',
+  ],
+  'objectstack-query': [
     'data/query.zod.ts',
     'data/filter.zod.ts',
-    'data/datasource.zod.ts',
-    'data/hook.zod.ts',
-    'security/permission.zod.ts',
   ],
   'objectstack-ai': [
     'ai/agent.zod.ts',
@@ -89,7 +91,7 @@ const SKILL_MAP: Record<string, string[]> = {
     'data/datasource.zod.ts',
     'data/dataset.zod.ts',
   ],
-  'objectstack-kernel': [
+  'objectstack-plugin': [
     'kernel/plugin.zod.ts',
     'kernel/context.zod.ts',
     'kernel/service-registry.zod.ts',

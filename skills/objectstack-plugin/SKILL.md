@@ -1,23 +1,25 @@
 ---
-name: objectstack-kernel
+name: objectstack-plugin
 description: >
-  Develop ObjectStack plugins and work with the kernel internals.
+  Develop ObjectStack plugins, register services, and manage the runtime lifecycle.
   Use when creating plugins, registering services, using the hook/event system,
   configuring ObjectKernel or LiteKernel, managing the bootstrap lifecycle,
   or debugging plugin loading issues. ALWAYS use this skill when you see:
   "create a plugin", "register a service", "hook", "trigger", "kernel config",
   "plugin lifecycle", "ObjectKernel", "LiteKernel", "DI", "dependency injection",
-  "service registry", "health check", "graceful shutdown", or "bootstrap".
+  "service registry", "health check", "graceful shutdown", "bootstrap",
+  "extend the platform", or "write an extension".
+  Do NOT use for data schema design (use objectstack-schema) or query patterns (use objectstack-query).
 license: Apache-2.0
 compatibility: Requires @objectstack/core v4+, @objectstack/spec v4+
 metadata:
   author: objectstack-ai
-  version: "2.0"
-  domain: kernel
-  tags: plugin, kernel, service, hook, event, DI, lifecycle, bootstrap
+  version: "3.0"
+  domain: plugin
+  tags: plugin, kernel, service, hook, event, DI, lifecycle, bootstrap, extension
 ---
 
-# Kernel Engineering — ObjectStack Plugin & Runtime System
+# Plugin Development — ObjectStack Plugin & Runtime System
 
 Expert instructions for developing plugins, managing services, and working
 with the ObjectStack microkernel. Covers the Plugin interface, PluginContext

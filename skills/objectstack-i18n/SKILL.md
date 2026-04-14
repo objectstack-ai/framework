@@ -691,6 +691,6 @@ export default {
 
 ## See Also
 
-- **objectstack-data** — For understanding object and field metadata structure
+- **objectstack-schema** — For understanding object and field metadata structure
 - **objectstack-ui** — For view, app, and action translations
 - **objectstack-automation** — For workflow and flow message translations

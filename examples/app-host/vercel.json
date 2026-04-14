@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "hono",
+  "framework": null,
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "bash scripts/build-vercel.sh",
   "functions": {
@@ -9,7 +9,16 @@
       "maxDuration": 60
     }
   },
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ],
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/[[...route]]" }
+    { "source": "/api/:path*", "destination": "/api/[[...route]]" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

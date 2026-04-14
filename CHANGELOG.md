@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **`rules/` directory** — Detailed implementation rules with incorrect/correct code examples for better AI comprehension
   - **`evals/` directory** — Placeholder for future evaluation tests to validate AI assistant understanding
   - **Skills refactored:**
-    - `objectstack-data` — Extracted rules for naming, relationships, validation, indexing, field types, and hooks (moved from objectstack-hooks)
-    - `objectstack-kernel` — Extracted rules for plugin lifecycle, service registry, and hooks/events system
-    - `objectstack-hooks` — **DEPRECATED** and consolidated into `objectstack-data/rules/hooks.md` (hooks are core to data operations)
+    - `objectstack-schema` (formerly `objectstack-data`) — Extracted rules for naming, relationships, validation, indexing, field types, and hooks (moved from objectstack-hooks)
+    - `objectstack-plugin` (formerly `objectstack-kernel`) — Extracted rules for plugin lifecycle, service registry, and hooks/events system
+    - `objectstack-query` — NEW skill for filters, sorting, pagination, aggregation, joins, expand, full-text search, window functions
+    - `objectstack-hooks` — **DEPRECATED** and consolidated into `objectstack-schema/rules/hooks.md` (hooks are core to data operations)
     - `objectstack-ui`, `objectstack-api`, `objectstack-automation`, `objectstack-ai`, `objectstack-i18n`, `objectstack-quickstart` — Added `rules/` and `evals/` structure with initial pattern documentation
   - **Benefits:**
     - Improved maintainability — Detailed rules are separated from high-level overview

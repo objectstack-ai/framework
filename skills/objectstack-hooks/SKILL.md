@@ -1,8 +1,8 @@
 ---
 name: objectstack-hooks
 description: >
-  ⚠️ DEPRECATED: This skill has been integrated into objectstack-data.
-  Please use the objectstack-data skill and refer to rules/hooks.md for
+  ⚠️ DEPRECATED: This skill has been integrated into objectstack-schema.
+  Please use the objectstack-schema skill and refer to rules/hooks.md for
   data lifecycle hook documentation.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+, @objectstack/objectql v4+
@@ -12,22 +12,22 @@ metadata:
   domain: hooks
   tags: hooks, lifecycle, validation, business-logic, side-effects, data-enrichment
   deprecated: true
-  replacement: objectstack-data
+  replacement: objectstack-schema
 ---
 
 # ⚠️ DEPRECATED: Hooks Skill Migrated
 
-This skill has been **deprecated** and integrated into the **objectstack-data** skill.
+This skill has been **deprecated** and integrated into the **objectstack-schema** skill.
 
 ## Migration
 
 For data lifecycle hook documentation, please use:
 
-**New location:** [`objectstack-data/rules/hooks.md`](../objectstack-data/rules/hooks.md)
+**New location:** [`objectstack-schema/rules/hooks.md`](../objectstack-schema/rules/hooks.md)
 
 ## Rationale
 
-Hooks are a core part of data operations and are best documented alongside object definitions, field types, and validations. The objectstack-data skill now provides comprehensive coverage of:
+Hooks are a core part of data operations and are best documented alongside object definitions, field types, and validations. The objectstack-schema skill now provides comprehensive coverage of:
 
 - Object and field schema design
 - Validation rules
@@ -40,10 +40,10 @@ This consolidation reduces skill overlap and makes it easier for AI assistants t
 
 All content from this skill is now available at:
 
-- **Full documentation:** [`../objectstack-data/rules/hooks.md`](../objectstack-data/rules/hooks.md)
-- **Parent skill:** [`../objectstack-data/SKILL.md`](../objectstack-data/SKILL.md)
+- **Full documentation:** [`../objectstack-schema/rules/hooks.md`](../objectstack-schema/rules/hooks.md)
+- **Parent skill:** [`../objectstack-schema/SKILL.md`](../objectstack-schema/SKILL.md)
 
-The objectstack-data skill now includes:
+The objectstack-schema skill now includes:
 - Hook definition schema
 - Hook context API
 - 14 lifecycle events (before/after for find/insert/update/delete, etc.)
@@ -58,10 +58,10 @@ The objectstack-data skill now includes:
 
 For hook lifecycle documentation, see:
 
-- [objectstack-data/rules/hooks.md](../objectstack-data/rules/hooks.md) — Complete hook documentation
-- [objectstack-data/SKILL.md](../objectstack-data/SKILL.md) — Data skill overview
+- [objectstack-schema/rules/hooks.md](../objectstack-schema/rules/hooks.md) — Complete hook documentation
+- [objectstack-schema/SKILL.md](../objectstack-schema/SKILL.md) — Schema skill overview
 
 For kernel-level hooks (kernel:ready, kernel:shutdown, custom plugin events), see:
 
-- [objectstack-kernel/rules/hooks-events.md](../objectstack-kernel/rules/hooks-events.md) — Kernel hook system
-- [objectstack-kernel/SKILL.md](../objectstack-kernel/SKILL.md) — Kernel skill overview
+- [objectstack-plugin/rules/hooks-events.md](../objectstack-plugin/rules/hooks-events.md) — Plugin hook system
+- [objectstack-plugin/SKILL.md](../objectstack-plugin/SKILL.md) — Plugin skill overview
