@@ -1,6 +1,6 @@
-# Deploying App Host to Vercel
+# Deploying ObjectStack Server to Vercel
 
-This example demonstrates how to deploy the ObjectStack app-host to Vercel using Hono.
+This guide demonstrates how to deploy the ObjectStack production server to Vercel using Hono.
 
 ## Prerequisites
 
@@ -26,9 +26,9 @@ You can get these credentials from [Turso Dashboard](https://turso.tech/).
    npm i -g vercel
    ```
 
-2. Navigate to the app-host directory:
+2. Navigate to the server directory:
    ```bash
-   cd examples/app-host
+   cd apps/server
    ```
 
 3. Deploy to Vercel:
@@ -46,7 +46,7 @@ You can get these credentials from [Turso Dashboard](https://turso.tech/).
 ### Option 2: Using Vercel Dashboard
 
 1. Import the repository to Vercel
-2. Set the root directory to `examples/app-host`
+2. Set the root directory to `apps/server`
 3. Add environment variables in the project settings
 4. Deploy
 
@@ -64,7 +64,7 @@ The build is configured in `vercel.json`:
 ## How It Works
 
 1. **Build Process** (`scripts/build-vercel.sh`):
-   - Builds both app-host and Studio using Turbo
+   - Builds both server and Studio using Turbo
    - Studio is built with `VITE_RUNTIME_MODE=server` (set in vercel.json build.env)
    - Bundles the server code using esbuild (`scripts/bundle-api.mjs`)
    - Copies Studio dist files to `public/` for static file serving
@@ -95,7 +95,7 @@ The build is configured in `vercel.json`:
 The deployment follows Vercel's serverless function pattern:
 
 ```
-examples/app-host/
+apps/server/
 ├── api/
 │   ├── [[...route]].js      # Committed entry point
 │   └── _handler.js           # Generated bundle (not committed)

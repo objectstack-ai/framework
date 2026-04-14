@@ -79,12 +79,12 @@ objectstack-ai/spec/
 │
 ├── apps/
 │   ├── studio/            # 🎨 Studio UI (React + Hono, web-based)
-│   └── docs/              # 📖 Documentation site (Fumadocs + Next.js)
+│   ├── docs/              # 📖 Documentation site (Fumadocs + Next.js)
+│   └── server/            # 🚀 Production server (multi-app orchestration)
 │
 ├── examples/              # 📚 Reference implementations
 │   ├── app-todo/          # Beginner: simple CRUD
 │   ├── app-crm/           # Advanced: full CRM with relations
-│   ├── app-host/          # Host application bootstrap
 │   └── plugin-bi/         # Plugin example: BI dashboard
 │
 ├── skills/                # 🤖 AI skill definitions (for Copilot/Cursor)

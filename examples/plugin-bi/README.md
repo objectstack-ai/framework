@@ -75,7 +75,7 @@ See the [App CRM](../app-crm/) example for comprehensive dashboard and report pa
 
 - [App Todo](../app-todo/) — Dashboard widgets and reports (beginner)
 - [App CRM](../app-crm/) — Enterprise dashboards with 10+ widgets (intermediate)
-- [App Host](../app-host/) — Plugin orchestration and loading (advanced)
+- [Server](../../apps/server/) — Plugin orchestration and loading (advanced)
 
 ---
 

@@ -9,7 +9,7 @@
  * npm packages), so the deployed function is self-contained. Only packages
  * with native bindings are kept external.
  *
- * Run from the examples/app-host directory during the Vercel build step.
+ * Run from the apps/server directory during the Vercel build step.
  */
 
 import { build } from 'esbuild';

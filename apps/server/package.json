@@ -1,5 +1,5 @@
 {
-  "name": "@example/app-host",
+  "name": "@objectstack/server",
   "version": "4.0.3",
   "license": "Apache-2.0",
   "type": "module",
