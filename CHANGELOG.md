@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Skills Module Structure Refactor** — Refactored all skills in `skills/` directory to follow shadcn-ui's fine-grained layering pattern. Each skill now has:
+  - **Concise `SKILL.md`** — High-level overview with decision trees and quick-start examples, referencing detailed rules
+  - **`rules/` directory** — Detailed implementation rules with incorrect/correct code examples for better AI comprehension
+  - **`evals/` directory** — Placeholder for future evaluation tests to validate AI assistant understanding
+  - **Skills refactored:**
+    - `objectstack-data` — Extracted rules for naming, relationships, validation, indexing, field types, and hooks (moved from objectstack-hooks)
+    - `objectstack-kernel` — Extracted rules for plugin lifecycle, service registry, and hooks/events system
+    - `objectstack-hooks` — **DEPRECATED** and consolidated into `objectstack-data/rules/hooks.md` (hooks are core to data operations)
+    - `objectstack-ui`, `objectstack-api`, `objectstack-automation`, `objectstack-ai`, `objectstack-i18n`, `objectstack-quickstart` — Added `rules/` and `evals/` structure with initial pattern documentation
+  - **Benefits:**
+    - Improved maintainability — Detailed rules are separated from high-level overview
+    - Better AI comprehension — Incorrect/correct examples make patterns clearer
+    - Enhanced testability — `evals/` directory ready for skill validation tests
+    - Reduced skill overlap — Hooks integrated into data skill where they belong
+    - Preserved skill independence — Each skill remains independently installable/referenceable (no global routing required)
+
 ### Fixed
 - **CI: Replace `pnpm/action-setup@v6` with corepack** — Switched all GitHub Actions workflows (`ci.yml`, `lint.yml`, `release.yml`, `validate-deps.yml`, `pr-automation.yml`) from `pnpm/action-setup@v6` to `corepack enable` to fix persistent `ERR_PNPM_BROKEN_LOCKFILE` errors. Corepack reads the exact `packageManager` field from `package.json` (including SHA verification), ensuring the correct pnpm version is used in CI. Also bumped pnpm store cache keys to v3 and added a pnpm version verification step.
 - **Broken pnpm lockfile** — Regenerated `pnpm-lock.yaml` from scratch to fix `ERR_PNPM_BROKEN_LOCKFILE` ("expected a single document in the stream, but found more") that was causing all CI jobs to fail. The previous merge of PR #1117 only included workflow cache key changes but did not carry over the regenerated lockfile.
