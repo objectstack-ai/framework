@@ -3,8 +3,9 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": ".",
-    "module": "NodeNext"
+    "module": "NodeNext",
+    "skipLibCheck": true
   },
-  "include": ["**/*.ts"],
+  "include": ["*.ts", "lib/**/*.ts", "server/**/*.ts", "api/**/*.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }

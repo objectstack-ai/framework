@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "objectstack serve --dev",
     "start": "objectstack serve",
-    "build": "tsc && objectstack compile",
+    "build": "objectstack compile",
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",
     "test:e2e": "tsx test/e2e.test.ts",
