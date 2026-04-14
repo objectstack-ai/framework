@@ -38,6 +38,29 @@ TursoDriver extends SqlDriver (dual transport)
 pnpm add @objectstack/driver-turso
 ```
 
+### Dependencies by Mode
+
+The `driver-turso` package has different dependency requirements based on the connection mode:
+
+| Mode | Required Dependencies | Notes |
+|:---|:---|:---|
+| **Remote** | `@libsql/client` only | ✅ Vercel/Edge compatible — no native dependencies |
+| **Local** | `@libsql/client` + `better-sqlite3` | Requires `better-sqlite3` for local SQLite access |
+| **Replica** | `@libsql/client` + `better-sqlite3` | Requires `better-sqlite3` for local SQLite + sync |
+
+**For Vercel/Edge deployments (remote mode only):**
+```bash
+pnpm add @objectstack/driver-turso
+# better-sqlite3 is NOT required
+```
+
+**For local/replica modes:**
+```bash
+pnpm add @objectstack/driver-turso better-sqlite3
+```
+
+The `better-sqlite3` package is an **optional peer dependency**. If you're only using remote mode (e.g., on Vercel), you don't need to install it. npm/pnpm will show a warning that can be safely ignored.
+
 ## Connection Modes
 
 ### Local File (Embedded SQLite)
