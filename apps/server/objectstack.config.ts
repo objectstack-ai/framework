@@ -4,6 +4,7 @@ import { defineStack } from '@objectstack/spec';
 import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
+import { TursoDriver } from '@objectstack/driver-turso';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import CrmApp from '../../examples/app-crm/objectstack.config';
 import TodoApp from '../../examples/app-todo/objectstack.config';
@@ -31,13 +32,34 @@ export default defineStack({
     description: 'Production server aggregating CRM, Todo and BI plugins',
     type: 'app',
   },
-  
+
+  // Datasource Mapping Configuration
+  // Routes different namespaces to different datasources for optimal performance
+  datasourceMapping: [
+    // Example apps use in-memory driver for fast, ephemeral data
+    { namespace: 'crm', datasource: 'memory' },
+    { namespace: 'todo', datasource: 'memory' },
+    { namespace: 'bi', datasource: 'memory' },
+    // System objects use Turso for persistent, production-grade storage
+    { namespace: 'sys', datasource: 'turso' },
+    // Default fallback to memory driver
+    { default: true, datasource: 'memory' },
+  ],
+
   // Explicitly Load Plugins and Apps
   // The Runtime CLI will iterate this list and call kernel.use()
   plugins: [
     new ObjectQLPlugin(),
-    // Register Default Driver (Memory)
-    new DriverPlugin(new InMemoryDriver()),
+    // Register Memory Driver for example apps (volatile, fast)
+    new DriverPlugin(new InMemoryDriver(), { name: 'memory' }),
+    // Register Turso Driver for system objects (persistent, production)
+    new DriverPlugin(
+      new TursoDriver({
+        url: process.env.TURSO_DATABASE_URL ?? 'file:./data/server.db',
+        authToken: process.env.TURSO_AUTH_TOKEN,
+      }),
+      { name: 'turso' }
+    ),
     // Authentication — required for production (Vercel) deployments
     authPlugin,
     // Wrap Manifests/Stacks in AppPlugin adapter
@@ -100,10 +122,26 @@ export const PreviewHostExample = defineStack({
     type: 'app',
   },
 
+  // Same datasource mapping as standard server
+  datasourceMapping: [
+    { namespace: 'crm', datasource: 'memory' },
+    { namespace: 'todo', datasource: 'memory' },
+    { namespace: 'bi', datasource: 'memory' },
+    { namespace: 'sys', datasource: 'turso' },
+    { default: true, datasource: 'memory' },
+  ],
+
   // Same plugins as the standard host
   plugins: [
     new ObjectQLPlugin(),
-    new DriverPlugin(new InMemoryDriver()),
+    new DriverPlugin(new InMemoryDriver(), { name: 'memory' }),
+    new DriverPlugin(
+      new TursoDriver({
+        url: process.env.TURSO_DATABASE_URL ?? 'file:./data/server.db',
+        authToken: process.env.TURSO_AUTH_TOKEN,
+      }),
+      { name: 'turso' }
+    ),
     authPlugin,
     new AppPlugin(CrmApp),
     new AppPlugin(TodoApp),
