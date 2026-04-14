@@ -3,6 +3,12 @@
   "framework": null,
   "installCommand": "cd ../.. && pnpm install",
   "buildCommand": "bash scripts/build-vercel.sh",
+  "build": {
+    "env": {
+      "VITE_RUNTIME_MODE": "server",
+      "VITE_SERVER_URL": ""
+    }
+  },
   "functions": {
     "api/**/*.js": {
       "memory": 1024,

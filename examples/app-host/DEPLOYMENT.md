@@ -56,13 +56,18 @@ The build is configured in `vercel.json`:
 
 - **Install Command**: `cd ../.. && pnpm install` (installs monorepo dependencies)
 - **Build Command**: `bash scripts/build-vercel.sh` (builds and bundles the application)
-- **Framework**: `hono` (uses Vercel's Hono framework preset)
+- **Framework**: `null` (disabled - uses custom serverless function)
+- **Build Environment Variables**:
+  - `VITE_RUNTIME_MODE=server`: Configures Studio to run in server mode (connects to API instead of using MSW)
+  - `VITE_SERVER_URL=""`: Empty string for same-origin API requests (Studio and API served from same domain)
 
 ## How It Works
 
 1. **Build Process** (`scripts/build-vercel.sh`):
-   - Builds the TypeScript project using Turbo
+   - Builds both app-host and Studio using Turbo
+   - Studio is built with `VITE_RUNTIME_MODE=server` (set in vercel.json build.env)
    - Bundles the server code using esbuild (`scripts/bundle-api.mjs`)
+   - Copies Studio dist files to `public/` for static file serving
 
 2. **API Handler** (`api/[[...route]].js`):
    - Committed catch-all route handler that Vercel detects pre-build
@@ -78,6 +83,12 @@ The build is configured in `vercel.json`:
    - Uses `@objectstack/hono` adapter to create the HTTP application
    - Provides REST API at `/api/v1` prefix
    - Includes authentication via AuthPlugin
+
+5. **Studio UI** (Frontend SPA):
+   - Built with Vite in server mode (not MSW mode)
+   - Served as static files from `public/` directory
+   - Connects to same-origin API server (relative URLs)
+   - All API requests go to `/api/v1/*` endpoints
 
 ## Architecture
 
@@ -112,13 +123,14 @@ pnpm dev
 curl http://localhost:3000/api/v1/discovery
 ```
 
-## Accessing the API
+## Accessing the Application
 
-After deployment, your API will be available at:
+After deployment, your application will be available at:
 
-- Discovery: `https://your-app.vercel.app/api/v1/discovery`
-- Data API: `https://your-app.vercel.app/api/v1/data/:object`
-- Meta API: `https://your-app.vercel.app/api/v1/meta/:type`
+- **Studio UI**: `https://your-app.vercel.app/` (main interface)
+- **API Discovery**: `https://your-app.vercel.app/api/v1/discovery`
+- **Data API**: `https://your-app.vercel.app/api/v1/data/:object`
+- **Meta API**: `https://your-app.vercel.app/api/v1/meta/:type`
 
 ## Troubleshooting
 
@@ -140,6 +152,15 @@ After deployment, your API will be available at:
 - Verify your Turso database URL and auth token are correct
 - Check that your Turso database is accessible (not paused)
 - The deployment uses TursoDriver in **remote mode** (HTTP-only), which doesn't require native modules like better-sqlite3
+
+### Studio Still in MSW Mode
+
+If Studio is running in MSW (Mock Service Worker) mode instead of server mode:
+
+- Verify that `vercel.json` includes the `build.env` section with `VITE_RUNTIME_MODE=server`
+- Check that the build process logs show "VITE_RUNTIME_MODE=server" during Studio build
+- Open browser DevTools Console and check for `[Console Config]` log to verify runtime mode
+- Clear Vercel build cache and redeploy: `vercel --force`
 
 ## References
 
