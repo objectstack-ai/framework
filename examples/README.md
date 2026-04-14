@@ -12,7 +12,7 @@ Welcome to the ObjectStack examples catalog! This directory contains carefully c
 |-------|----------|-------------|
 | 🟢 **Beginner** | [App Todo](#app-todo), [Plugin BI](#plugin-bi) | Start here - simple, focused examples |
 | 🟡 **Intermediate** | [App CRM](#app-crm) | Real-world enterprise application |
-| 🔴 **Advanced** | [App Host](#app-host) | Server hosting & plugin orchestration |
+| 🔴 **Advanced** | [Server](../apps/server/) | Server hosting & plugin orchestration |
 
 ### By Protocol Category
 
@@ -20,9 +20,9 @@ Welcome to the ObjectStack examples catalog! This directory contains carefully c
 |----------|----------|--------|
 | **Data (ObjectQL)** | [App CRM](./app-crm/), [App Todo](./app-todo/) | ✅ Complete |
 | **UI (ObjectUI)** | [App CRM](./app-crm/), [App Todo](./app-todo/) | ✅ Complete |
-| **System (ObjectOS)** | [App Host](./app-host/), [App CRM](./app-crm/) | ✅ Complete |
+| **System (ObjectOS)** | [Server](../apps/server/), [App CRM](./app-crm/) | ✅ Complete |
 | **Automation** | [App CRM](./app-crm/), [App Todo](./app-todo/) | ✅ Complete |
-| **API** | [App Host](./app-host/) | ✅ Complete |
+| **API** | [Server](../apps/server/) | ✅ Complete |
 | **BI / Analytics** | [Plugin BI](./plugin-bi/) | 🔴 Stub |
 | **Hub & Marketplace** | _Coming soon_ | 🔴 Planned |
 
@@ -147,24 +147,7 @@ pnpm build
 
 ---
 
-### App Host
-**Path:** [`examples/app-host/`](./app-host/)  
-**Level:** 🔴 Advanced  
-**Protocols:** System, API, Data  
-
-**Complete server implementation** showing how to build a metadata-driven backend. Features dynamic schema loading from plugins, auto-generated REST APIs, unified metadata API, plugin orchestration, and **preview/demo mode**.
-
-**Preview Mode:** Run with `OS_MODE=preview` to bypass login/registration and simulate an admin identity — ideal for marketplace demos and app showcases.
-
-**Quick Start:**
-```bash
-cd examples/app-host
-pnpm install
-pnpm dev
-
-# Preview mode (no login required)
-OS_MODE=preview pnpm dev
-```
+**Note:** The production server example has been moved to [`apps/server/`](../apps/server/) — see the [Server documentation](../apps/server/README.md) for details on server hosting, plugin orchestration, and deployment.
 
 ---
 
@@ -228,9 +211,9 @@ pnpm typecheck
 | Protocol | Example | Location |
 |----------|---------|----------|
 | Manifest | ✅ Complete | All examples with `objectstack.config.ts` |
-| Plugin System | ✅ Complete | [App Host](./app-host/) |
-| Preview Mode | ✅ Complete | [App Host](./app-host/) — `OS_MODE=preview` |
-| Datasources | 🟡 Partial | [App Host](./app-host/) |
+| Plugin System | ✅ Complete | [Server](../apps/server/) |
+| Preview Mode | ✅ Complete | [Server](../apps/server/) — `OS_MODE=preview` |
+| Datasources | 🟡 Partial | [Server](../apps/server/) |
 | I18n / Translations | ✅ Complete | [Todo Translations](./app-todo/src/translations/), [CRM Translations](./app-crm/src/translations/) |
 | Job Scheduling | 🔴 Missing | _Planned_ |
 | Metrics | 🔴 Missing | _Planned_ |
@@ -260,7 +243,7 @@ pnpm typecheck
 ### API Protocol
 | Protocol | Example | Location |
 |----------|---------|----------|
-| REST Server | ✅ Complete | [App Host](./app-host/) |
+| REST Server | ✅ Complete | [Server](../apps/server/) |
 | Custom APIs | ✅ Complete | [CRM APIs](./app-crm/src/apis/) |
 | GraphQL | 🔴 Missing | _Planned_ |
 | WebSocket/Realtime | 🔴 Missing | _Planned_ |
@@ -306,7 +289,7 @@ pnpm build
 1. Complete Path 1
 2. Study all [CRM Objects](./app-crm/src/objects/) - Master field types and relationships
 3. Review [CRM Flows](./app-crm/src/flows/) - Understand automation patterns
-4. Explore [App Host](./app-host/) - Server and plugin orchestration
+4. Explore [Server](../apps/server/) - Server and plugin orchestration
 
 ---
 
@@ -380,7 +363,7 @@ All examples are licensed under Apache 2.0. See [LICENSE](../LICENSE) for detail
 
 ---
 
-**Last Updated:** 2026-02-12  
-**Protocol Version:** 3.0.0  
-**Total Examples:** 4 (app-todo, app-crm, app-host, plugin-bi)  
+**Last Updated:** 2026-02-12
+**Protocol Version:** 3.0.0
+**Total Examples:** 3 (app-todo, app-crm, plugin-bi)
 **Directory Convention:** By-Type (Salesforce DX style)

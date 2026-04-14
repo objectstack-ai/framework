@@ -125,6 +125,91 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
 
+  apps/server:
+    dependencies:
+      '@example/app-crm':
+        specifier: workspace:*
+        version: link:../../examples/app-crm
+      '@example/app-todo':
+        specifier: workspace:*
+        version: link:../../examples/app-todo
+      '@example/plugin-bi':
+        specifier: workspace:*
+        version: link:../../examples/plugin-bi
+      '@hono/node-server':
+        specifier: ^1.19.14
+        version: 1.19.14(hono@4.12.12)
+      '@libsql/client':
+        specifier: ^0.14.0
+        version: 0.14.0
+      '@objectstack/driver-memory':
+        specifier: workspace:*
+        version: link:../../packages/plugins/driver-memory
+      '@objectstack/driver-turso':
+        specifier: workspace:*
+        version: link:../../packages/plugins/driver-turso
+      '@objectstack/hono':
+        specifier: workspace:*
+        version: link:../../packages/adapters/hono
+      '@objectstack/metadata':
+        specifier: workspace:*
+        version: link:../../packages/metadata
+      '@objectstack/objectql':
+        specifier: workspace:*
+        version: link:../../packages/objectql
+      '@objectstack/plugin-audit':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-audit
+      '@objectstack/plugin-auth':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-auth
+      '@objectstack/plugin-hono-server':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-hono-server
+      '@objectstack/plugin-security':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-security
+      '@objectstack/plugin-setup':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-setup
+      '@objectstack/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@objectstack/service-ai':
+        specifier: workspace:*
+        version: link:../../packages/services/service-ai
+      '@objectstack/service-analytics':
+        specifier: workspace:*
+        version: link:../../packages/services/service-analytics
+      '@objectstack/service-automation':
+        specifier: workspace:*
+        version: link:../../packages/services/service-automation
+      '@objectstack/service-feed':
+        specifier: workspace:*
+        version: link:../../packages/services/service-feed
+      '@objectstack/spec':
+        specifier: workspace:*
+        version: link:../../packages/spec
+      hono:
+        specifier: ^4.12.12
+        version: 4.12.12
+    devDependencies:
+      '@objectstack/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      esbuild:
+        specifier: ^0.24.2
+        version: 0.24.2
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@25.6.0)(typescript@6.0.2)
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   apps/studio:
     dependencies:
       '@ai-sdk/anthropic':
@@ -324,91 +409,6 @@ importers:
       '@objectstack/cli':
         specifier: workspace:*
         version: link:../../packages/cli
-      typescript:
-        specifier: ^6.0.2
-        version: 6.0.2
-
-  examples/app-host:
-    dependencies:
-      '@example/app-crm':
-        specifier: workspace:*
-        version: link:../app-crm
-      '@example/app-todo':
-        specifier: workspace:*
-        version: link:../app-todo
-      '@example/plugin-bi':
-        specifier: workspace:*
-        version: link:../plugin-bi
-      '@hono/node-server':
-        specifier: ^1.19.14
-        version: 1.19.14(hono@4.12.12)
-      '@libsql/client':
-        specifier: ^0.14.0
-        version: 0.14.0
-      '@objectstack/driver-memory':
-        specifier: workspace:*
-        version: link:../../packages/plugins/driver-memory
-      '@objectstack/driver-turso':
-        specifier: workspace:*
-        version: link:../../packages/plugins/driver-turso
-      '@objectstack/hono':
-        specifier: workspace:*
-        version: link:../../packages/adapters/hono
-      '@objectstack/metadata':
-        specifier: workspace:*
-        version: link:../../packages/metadata
-      '@objectstack/objectql':
-        specifier: workspace:*
-        version: link:../../packages/objectql
-      '@objectstack/plugin-audit':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-audit
-      '@objectstack/plugin-auth':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-auth
-      '@objectstack/plugin-hono-server':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-hono-server
-      '@objectstack/plugin-security':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-security
-      '@objectstack/plugin-setup':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-setup
-      '@objectstack/runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
-      '@objectstack/service-ai':
-        specifier: workspace:*
-        version: link:../../packages/services/service-ai
-      '@objectstack/service-analytics':
-        specifier: workspace:*
-        version: link:../../packages/services/service-analytics
-      '@objectstack/service-automation':
-        specifier: workspace:*
-        version: link:../../packages/services/service-automation
-      '@objectstack/service-feed':
-        specifier: workspace:*
-        version: link:../../packages/services/service-feed
-      '@objectstack/spec':
-        specifier: workspace:*
-        version: link:../../packages/spec
-      hono:
-        specifier: ^4.12.12
-        version: 4.12.12
-    devDependencies:
-      '@objectstack/cli':
-        specifier: workspace:*
-        version: link:../../packages/cli
-      esbuild:
-        specifier: ^0.24.2
-        version: 0.24.2
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@25.6.0)(typescript@6.0.2)
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
       typescript:
         specifier: ^6.0.2
         version: 6.0.2

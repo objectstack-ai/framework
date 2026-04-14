@@ -7,7 +7,7 @@ import { CheckSquare, Building2, BarChart3, Server } from 'lucide-react';
 
 # Example Apps
 
-The monorepo includes 4 ready-to-run examples that progressively demonstrate ObjectStack features — from a simple Todo app to a full enterprise CRM.
+The monorepo includes 3 ready-to-run examples that progressively demonstrate ObjectStack features — from a simple Todo app to a full enterprise CRM.
 
 <Cards>
   <Card
@@ -25,12 +25,11 @@ The monorepo includes 4 ready-to-run examples that progressively demonstrate Obj
     title="plugin-bi"
     description="A reusable plugin template. Shows how to package metadata for distribution."
   />
-  <Card
-    icon={<Server />}
-    title="app-host"
-    description="Platform server that loads multiple apps. Demonstrates multi-app composition."
-  />
 </Cards>
+
+<Callout type="info">
+  **Looking for the production server example?** It has been moved to [`apps/server/`](../../apps/server/) — see the [Server documentation](../../apps/server/README.md) for multi-app orchestration and deployment.
+</Callout>
 
 ---
 
@@ -274,25 +273,23 @@ new AppPlugin(BiPlugin)  // Load into host
 
 ---
 
-## app-host — Multi-App Composition
+## Multi-App Composition Pattern
 
-**Path:** `examples/app-host/`
-
-Demonstrates the **Platform Server** pattern: one host loading multiple apps and plugins. This is how you'd run ObjectStack in production with multiple teams' apps.
+The production server at [`apps/server/`](../../apps/server/) demonstrates the **Platform Server** pattern: one host loading multiple apps and plugins. This is how you'd run ObjectStack in production with multiple teams' apps.
 
 ```typescript
-// examples/app-host/objectstack.config.ts
+// apps/server/objectstack.config.ts
 import { defineStack } from '@objectstack/spec';
 import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
-import CrmApp from '../app-crm/objectstack.config';
-import TodoApp from '../app-todo/objectstack.config';
-import BiPlugin from '../plugin-bi/objectstack.config';
+import CrmApp from '../examples/app-crm/objectstack.config';
+import TodoApp from '../examples/app-todo/objectstack.config';
+import BiPlugin from '../examples/plugin-bi/objectstack.config';
 
 export default defineStack({
   manifest: {
-    id: 'app-host',
+    id: 'com.objectstack.server',
     version: '1.0.0',
     type: 'app',
   },
@@ -321,7 +318,7 @@ The double-underscore `__` separator prevents collisions when multiple apps defi
 ### Run It
 
 ```bash
-cd examples/app-host
+cd apps/server
 pnpm dev        # Loads all 3 apps on one server
 ```
 

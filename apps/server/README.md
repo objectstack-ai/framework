@@ -1,11 +1,11 @@
-# ObjectStack Example Server
+# ObjectStack Production Server
 
 This is a reference implementation of the ObjectStack Server Protocol (Kernel).
 It demonstrates how to build a metadata-driven backend that dynamically loads object definitions from plugins and automatically generates REST APIs.
 
 ## Deployment
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/objectstack-ai/framework/tree/main/examples/app-host&project-name=objectstack-app-host&repository-name=objectstack-app-host)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/objectstack-ai/framework/tree/main/apps/server&project-name=objectstack-server&repository-name=objectstack-server)
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 

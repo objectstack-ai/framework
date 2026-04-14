@@ -5,11 +5,11 @@ import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { AuthPlugin } from '@objectstack/plugin-auth';
-import CrmApp from '../app-crm/objectstack.config';
-import TodoApp from '../app-todo/objectstack.config';
-import BiPluginManifest from '../plugin-bi/objectstack.config';
+import CrmApp from '../../examples/app-crm/objectstack.config';
+import TodoApp from '../../examples/app-todo/objectstack.config';
+import BiPluginManifest from '../../examples/plugin-bi/objectstack.config';
 
-// App Host Example
+// Production Server
 // This project acts as a "Platform Server" that loads multiple apps and plugins.
 // It effectively replaces the manual composition in `src/index.ts`.
 
@@ -24,11 +24,11 @@ const authPlugin = new AuthPlugin({
 
 export default defineStack({
   manifest: {
-    id: 'com.example.host',
-    namespace: 'host',
-    name: 'App Host',
+    id: 'com.objectstack.server',
+    namespace: 'server',
+    name: 'ObjectStack Server',
     version: '1.0.0',
-    description: 'Host application aggregating CRM, Todo and BI plugins',
+    description: 'Production server aggregating CRM, Todo and BI plugins',
     type: 'app',
   },
   
@@ -92,11 +92,11 @@ export default defineStack({
  */
 export const PreviewHostExample = defineStack({
   manifest: {
-    id: 'com.example.host-preview',
-    namespace: 'host',
-    name: 'App Host Preview',
+    id: 'com.objectstack.server-preview',
+    namespace: 'server',
+    name: 'ObjectStack Server Preview',
     version: '1.0.0',
-    description: 'Host application in preview/demo mode — bypasses login, simulates admin user',
+    description: 'Production server in preview/demo mode — bypasses login, simulates admin user',
     type: 'app',
   },
 

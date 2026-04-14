@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build script for Vercel deployment of @example/app-host.
+# Build script for Vercel deployment of @objectstack/server.
 #
 # Follows the Vercel deployment pattern:
 #   - api/[[...route]].js is committed to the repo (Vercel detects it pre-build)
@@ -14,13 +14,13 @@ set -euo pipefail
 #   2. Bundle the API serverless function (→ api/_handler.js)
 #   3. Copy studio dist files to public/ for UI serving
 
-echo "[build-vercel] Starting app-host build..."
+echo "[build-vercel] Starting server build..."
 
 # 1. Build the project with turbo (from monorepo root)
-# This builds both app-host and studio
+# This builds both server and studio
 cd ../..
-pnpm turbo run build --filter=@example/app-host --filter=@objectstack/studio
-cd examples/app-host
+pnpm turbo run build --filter=@objectstack/server --filter=@objectstack/studio
+cd apps/server
 
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
@@ -29,8 +29,8 @@ node scripts/bundle-api.mjs
 echo "[build-vercel] Copying studio dist to public/..."
 rm -rf public
 mkdir -p public
-if [ -d "../../apps/studio/dist" ]; then
-  cp -r ../../apps/studio/dist/* public/
+if [ -d "../studio/dist" ]; then
+  cp -r ../studio/dist/* public/
   echo "[build-vercel]   ✓ Copied studio dist to public/"
 else
   echo "[build-vercel]   ⚠ Studio dist not found (skipped)"

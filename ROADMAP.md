@@ -852,7 +852,7 @@ Final polish and advanced features.
 
 - [x] **app-todo** — Beginner reference (objects, actions, flows, dashboards, reports, i18n) ✅
 - [x] **app-crm** — Enterprise reference (10 objects, 5 AI agents, 4 RAG pipelines, security profiles) ✅
-- [x] **app-host** — Multi-app orchestration pattern ✅
+- [x] **server** (formerly app-host) — Production server with multi-app orchestration pattern ✅
 - [ ] **plugin-bi** — Business Intelligence plugin (currently a stub/placeholder)
 - [ ] **app-hrm** — Human Resource Management example
 - [ ] **app-project** — Project Management example

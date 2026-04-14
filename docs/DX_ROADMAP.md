@@ -37,14 +37,14 @@ This roadmap prioritizes improvements based on the **"Time to First Wow"** metri
 
 - [x] Create StackBlitz starter template from `app-todo`
 - [x] Add "Try Online" button to spec README.md and docs site hero
-- [x] Add "How to Run" section to each example README (app-todo, app-crm, app-host, plugin-bi)
+- [x] Add "How to Run" section to each example README (app-todo, app-crm, server, plugin-bi)
 - [x] Add prerequisites section to getting-started docs
 - [x] Create first-run troubleshooting page
 - [x] Implement `create-objectstack` CLI wizard with 3 templates
 - [ ] Record 5-minute getting-started video
 - [x] Fix `examples/README.md`: remove `minimal-auth` ghost reference, update metadata
 - [x] Fix `plugin-bi` example: add README.md, add package.json scripts
-- [x] Fix `app-host` README: use `pnpm dev` instead of `npm run dev`
+- [x] Fix `server` (formerly app-host) README: use `pnpm dev` instead of `npm run dev`
 
 </details>
 
