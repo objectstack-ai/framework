@@ -5,7 +5,11 @@ import type { Auth, BetterAuthOptions } from 'better-auth';
 import { organization } from 'better-auth/plugins/organization';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { magicLink } from 'better-auth/plugins/magic-link';
-import type { AuthConfig } from '@objectstack/spec/system';
+import type {
+  AuthConfig,
+  EmailAndPasswordConfig,
+  AuthPluginConfig,
+} from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
 import { createObjectQLAdapterFactory } from './objectql-adapter.js';
 import {
@@ -374,20 +378,20 @@ export class AuthManager {
     }
 
     // Extract email/password config (safe fields only)
-    const emailPasswordConfig = this.config.emailAndPassword || {};
+    const emailPasswordConfig: Partial<EmailAndPasswordConfig> = this.config.emailAndPassword ?? {};
     const emailPassword = {
       enabled: emailPasswordConfig.enabled !== false, // Default to true
-      disableSignUp: emailPasswordConfig.disableSignUp,
-      requireEmailVerification: emailPasswordConfig.requireEmailVerification,
+      disableSignUp: emailPasswordConfig.disableSignUp ?? false,
+      requireEmailVerification: emailPasswordConfig.requireEmailVerification ?? false,
     };
 
     // Extract enabled features
-    const pluginConfig = this.config.plugins || {};
+    const pluginConfig: Partial<AuthPluginConfig> = this.config.plugins ?? {};
     const features = {
-      twoFactor: pluginConfig.twoFactor || false,
-      passkeys: pluginConfig.passkeys || false,
-      magicLink: pluginConfig.magicLink || false,
-      organization: pluginConfig.organization || false,
+      twoFactor: pluginConfig.twoFactor ?? false,
+      passkeys: pluginConfig.passkeys ?? false,
+      magicLink: pluginConfig.magicLink ?? false,
+      organization: pluginConfig.organization ?? false,
     };
 
     return {
