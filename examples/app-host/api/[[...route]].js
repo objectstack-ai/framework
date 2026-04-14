@@ -13,7 +13,4 @@
 // @see ../server/index.ts    — the actual server entrypoint
 // @see ../scripts/bundle-api.mjs — the esbuild bundler
 
-// Import Hono to satisfy Vercel's framework detection (unused, but required for detection).
-import 'hono';
-
 export { default, config } from './_handler.js';
