@@ -46,7 +46,7 @@ For comprehensive documentation with incorrect/correct examples:
 
 - **[Plugin Lifecycle](./rules/plugin-lifecycle.md)** — 3-phase lifecycle (init/start/destroy), execution order, complete examples
 - **[Service Registry](./rules/service-registry.md)** — DI container, factories, lifecycles (singleton/transient/scoped), core fallbacks
-- **[Hooks & Events](./rules/hooks-events.md)** — 14 built-in hooks, custom events, handler patterns, performance tips
+- **[Hooks & Events](./rules/hooks-events.md)** — Plugin hooks reference (→ [objectstack-hooks](../objectstack-hooks/SKILL.md))
 
 ---
 
@@ -396,7 +396,7 @@ Strategies: `boolean` | `percentage` | `user_list` | `group` | `custom`
 
 - [rules/plugin-lifecycle.md](./rules/plugin-lifecycle.md) — 3-phase lifecycle, dependencies, complete examples
 - [rules/service-registry.md](./rules/service-registry.md) — DI container, factories, core fallbacks
-- [rules/hooks-events.md](./rules/hooks-events.md) — 14 built-in hooks, custom events, patterns
+- [rules/hooks-events.md](./rules/hooks-events.md) — Plugin hooks quick reference (→ [objectstack-hooks](../objectstack-hooks/references/plugin-hooks.md))
 - [references/kernel/plugin.zod.ts](./references/kernel/plugin.zod.ts) — PluginContext schema, lifecycle hooks
 - [references/kernel/context.zod.ts](./references/kernel/context.zod.ts) — RuntimeMode, KernelContext
 - [references/kernel/service-registry.zod.ts](./references/kernel/service-registry.zod.ts) — Service scope types

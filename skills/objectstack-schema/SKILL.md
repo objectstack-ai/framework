@@ -101,7 +101,7 @@ For comprehensive documentation with incorrect/correct examples:
 - **[Relationships](./rules/relationships.md)** — lookup vs master_detail, junction patterns, delete behaviors
 - **[Validation Rules](./rules/validation.md)** — All validation types, script inversion, severity levels
 - **[Index Strategy](./rules/indexing.md)** — btree/gin/gist/fulltext, composite indexes, partial indexes
-- **[Lifecycle Hooks](./rules/hooks.md)** — Data lifecycle hooks, before/after patterns, side effects
+- **[Lifecycle Hooks](./rules/hooks.md)** — Data lifecycle hooks reference (→ [objectstack-hooks](../objectstack-hooks/SKILL.md))
 
 ---
 
@@ -254,7 +254,7 @@ const accountHook: Hook = {
 export default accountHook;
 ```
 
-See [rules/hooks.md](./rules/hooks.md) for all 14 lifecycle events and patterns.
+See [rules/hooks.md](./rules/hooks.md) for quick reference, or [objectstack-hooks](../objectstack-hooks/SKILL.md) for complete documentation of all 14 lifecycle events and patterns.
 
 ---
 
@@ -297,7 +297,7 @@ When extending an object you do not own:
 - [rules/relationships.md](./rules/relationships.md) — lookup vs master_detail, patterns
 - [rules/validation.md](./rules/validation.md) — All validation types, script inversion
 - [rules/indexing.md](./rules/indexing.md) — Index types, composite/partial strategies
-- [rules/hooks.md](./rules/hooks.md) — Data lifecycle hooks, 14 events, patterns
+- [rules/hooks.md](./rules/hooks.md) — Data lifecycle hooks quick reference (→ [objectstack-hooks](../objectstack-hooks/references/data-hooks.md))
 - [references/data/field.zod.ts](./references/data/field.zod.ts) — FieldType enum, FieldSchema
 - [references/data/object.zod.ts](./references/data/object.zod.ts) — ObjectSchema, capabilities
 - [references/data/validation.zod.ts](./references/data/validation.zod.ts) — Validation rule types

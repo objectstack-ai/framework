@@ -1,67 +1,155 @@
 ---
 name: objectstack-hooks
 description: >
-  ⚠️ DEPRECATED: This skill has been integrated into objectstack-schema.
-  Please use the objectstack-schema skill and refer to rules/hooks.md for
-  data lifecycle hook documentation.
+  Canonical reference for all ObjectStack hooks and lifecycle events.
+  Use when implementing data lifecycle hooks, plugin hooks, kernel events,
+  or understanding the hook system architecture. This skill serves as the
+  single source of truth for hook documentation across the platform.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+, @objectstack/objectql v4+
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "2.0"
   domain: hooks
-  tags: hooks, lifecycle, validation, business-logic, side-effects, data-enrichment
-  deprecated: true
-  replacement: objectstack-schema
+  tags: hooks, lifecycle, validation, business-logic, side-effects, data-enrichment, events, plugin-hooks
 ---
 
-# ⚠️ DEPRECATED: Hooks Skill Migrated
+# Hooks System — ObjectStack Canonical Reference
 
-This skill has been **deprecated** and integrated into the **objectstack-schema** skill.
+This skill is the **single source of truth** for all hook and event documentation in ObjectStack.
+It consolidates hook patterns across data lifecycle, plugin system, and kernel events to eliminate
+duplication and ensure consistency.
 
-## Migration
+---
 
-For data lifecycle hook documentation, please use:
+## When to Use This Skill
 
-**New location:** [`objectstack-schema/rules/hooks.md`](../objectstack-schema/rules/hooks.md)
+- You need to understand the **complete hooks architecture** across ObjectStack
+- You are implementing **data lifecycle hooks** (beforeInsert, afterUpdate, etc.)
+- You are working with **plugin hooks** (kernel:ready, data:*, custom events)
+- You need to compare **data hooks vs plugin hooks** patterns
+- You are designing hook-based integrations or extensions
+- You want to reference hook best practices and common patterns
 
-## Rationale
+---
 
-Hooks are a core part of data operations and are best documented alongside object definitions, field types, and validations. The objectstack-schema skill now provides comprehensive coverage of:
+## Skill Organization
 
-- Object and field schema design
-- Validation rules
-- Index strategy
-- **Data lifecycle hooks** (before/after patterns, all 14 events)
+This skill is organized into two main reference documents:
 
-This consolidation reduces skill overlap and makes it easier for AI assistants to understand the complete data layer in ObjectStack.
+### 1. **Data Lifecycle Hooks** → [references/data-hooks.md](./references/data-hooks.md)
 
-## What Was Moved
-
-All content from this skill is now available at:
-
-- **Full documentation:** [`../objectstack-schema/rules/hooks.md`](../objectstack-schema/rules/hooks.md)
-- **Parent skill:** [`../objectstack-schema/SKILL.md`](../objectstack-schema/SKILL.md)
-
-The objectstack-schema skill now includes:
-- Hook definition schema
-- Hook context API
-- 14 lifecycle events (before/after for find/insert/update/delete, etc.)
+Comprehensive guide for data operation hooks:
+- 14 lifecycle events (beforeFind, afterFind, beforeInsert, afterInsert, etc.)
+- Hook definition schema and HookContext API
+- Registration methods (declarative, programmatic, file-based)
 - Common patterns (validation, defaults, audit logging, workflows)
-- Performance considerations
-- Testing hooks
-- Best practices
+- Performance considerations and best practices
+- Complete code examples and testing strategies
+
+**Use for:** Object-level business logic, validation, data enrichment, side effects during CRUD operations.
+
+### 2. **Plugin & Kernel Hooks** → [references/plugin-hooks.md](./references/plugin-hooks.md)
+
+Guide for plugin-level hooks and event system:
+- Kernel lifecycle hooks (kernel:ready, kernel:shutdown)
+- Plugin event system (ctx.hook, ctx.trigger)
+- Built-in data events (data:beforeInsert, data:afterInsert, etc.)
+- Custom plugin events and namespacing
+- Hook handler patterns and error handling
+- Cross-plugin communication
+
+**Use for:** Plugin development, kernel events, cross-plugin communication, system-level hooks.
 
 ---
 
-## Quick Reference (for backwards compatibility)
+## Quick Comparison: Data Hooks vs Plugin Hooks
 
-For hook lifecycle documentation, see:
+| Aspect | Data Hooks | Plugin Hooks |
+|:-------|:-----------|:-------------|
+| **Defined in** | Object metadata (Stack) | Plugin code (init/start) |
+| **Registration** | `hooks: [...]` in stack config | `ctx.hook()` in plugin |
+| **Context** | Rich HookContext with input/result/api | Flexible arguments per event |
+| **Scope** | Object-specific or global (`object: '*'`) | Global, across all objects |
+| **Priority** | Explicit `priority` field | Plugin dependency order |
+| **Use case** | Business logic tied to objects | System integration, cross-cutting concerns |
 
-- [objectstack-schema/rules/hooks.md](../objectstack-schema/rules/hooks.md) — Complete hook documentation
-- [objectstack-schema/SKILL.md](../objectstack-schema/SKILL.md) — Schema skill overview
+---
 
-For kernel-level hooks (kernel:ready, kernel:shutdown, custom plugin events), see:
+## References from Other Skills
 
-- [objectstack-plugin/rules/hooks-events.md](../objectstack-plugin/rules/hooks-events.md) — Plugin hook system
-- [objectstack-plugin/SKILL.md](../objectstack-plugin/SKILL.md) — Plugin skill overview
+This skill is referenced by:
+
+- **[objectstack-schema](../objectstack-schema/SKILL.md)** — Uses data hooks for object lifecycle
+- **[objectstack-plugin](../objectstack-plugin/SKILL.md)** — Uses plugin hooks for kernel integration
+- **[objectstack-automation](../objectstack-automation/SKILL.md)** — Flows can trigger via hooks
+
+---
+
+## Documentation Map
+
+```
+objectstack-hooks/
+├── SKILL.md (this file)
+└── references/
+    ├── data-hooks.md        — Data lifecycle hooks (14 events)
+    └── plugin-hooks.md      — Plugin & kernel hooks
+```
+
+---
+
+## Quick Start
+
+### For Data Lifecycle Hooks
+
+See [references/data-hooks.md](./references/data-hooks.md) for complete documentation.
+
+Quick example:
+```typescript
+import { Hook, HookContext } from '@objectstack/spec/data';
+
+const hook: Hook = {
+  name: 'validate_account',
+  object: 'account',
+  events: ['beforeInsert', 'beforeUpdate'],
+  handler: async (ctx: HookContext) => {
+    if (!ctx.input.email?.includes('@')) {
+      throw new Error('Valid email required');
+    }
+  },
+};
+```
+
+### For Plugin Hooks
+
+See [references/plugin-hooks.md](./references/plugin-hooks.md) for complete documentation.
+
+Quick example:
+```typescript
+async init(ctx: PluginContext) {
+  ctx.hook('kernel:ready', async () => {
+    ctx.logger.info('System ready');
+  });
+
+  ctx.hook('data:afterInsert', async (objectName, record, result) => {
+    console.log(`Created ${objectName}:`, result.id);
+  });
+}
+```
+
+---
+
+## Design Philosophy
+
+1. **Single Source of Truth** — All hook documentation lives here, other skills reference it
+2. **Clear Separation** — Data hooks vs plugin hooks serve different purposes
+3. **Consistency** — Patterns and best practices apply across both systems
+4. **Cross-References** — Easy navigation between related concepts
+
+---
+
+## See Also
+
+- [objectstack-schema/SKILL.md](../objectstack-schema/SKILL.md) — Object and field definitions
+- [objectstack-plugin/SKILL.md](../objectstack-plugin/SKILL.md) — Plugin development guide
+- [objectstack-automation/SKILL.md](../objectstack-automation/SKILL.md) — Flows and workflows
