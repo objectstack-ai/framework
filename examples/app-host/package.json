@@ -2,6 +2,7 @@
   "name": "@example/app-host",
   "version": "4.0.3",
   "license": "Apache-2.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "objectstack serve --dev",
@@ -16,16 +17,22 @@
     "@example/app-crm": "workspace:*",
     "@example/app-todo": "workspace:*",
     "@example/plugin-bi": "workspace:*",
+    "@hono/node-server": "^1.19.14",
+    "@libsql/client": "^0.14.0",
     "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/driver-turso": "workspace:*",
+    "@objectstack/hono": "workspace:*",
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:*",
     "@objectstack/plugin-auth": "workspace:*",
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/runtime": "workspace:*",
-    "@objectstack/spec": "workspace:*"
+    "@objectstack/spec": "workspace:*",
+    "hono": "^4.12.12"
   },
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
+    "esbuild": "^0.24.2",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"

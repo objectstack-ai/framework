@@ -1,10 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "hono",
   "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../.. && pnpm turbo run build --filter=@example/app-host",
-  "outputDirectory": "dist",
-  "env": {
-    "AUTH_SECRET": "@auth_secret",
-    "VERCEL_URL": "@vercel_url"
-  }
+  "buildCommand": "bash scripts/build-vercel.sh",
+  "functions": {
+    "api/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/[[...route]]" }
+  ]
 }
