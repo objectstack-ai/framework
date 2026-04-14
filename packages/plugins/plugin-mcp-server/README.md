@@ -1,0 +1,528 @@
+# @objectstack/plugin-mcp-server
+
+MCP Runtime Server Plugin for ObjectStack — exposes AI tools, data resources, and agent prompts via the Model Context Protocol.
+
+## Features
+
+- **Model Context Protocol (MCP)**: Expose ObjectStack resources to AI models via MCP
+- **AI Tools**: Auto-generate MCP tools from ObjectStack actions and flows
+- **Data Resources**: Expose objects, records, and metadata as MCP resources
+- **Agent Prompts**: Register prompt templates for AI agents
+- **Type-Safe**: Full Zod schema validation for tool inputs/outputs
+- **Auto-Discovery**: MCP clients automatically discover available tools and resources
+- **Streaming Support**: Stream large datasets and real-time updates
+- **Security**: Built-in permission checks for tool execution
+
+## What is MCP?
+
+Model Context Protocol (MCP) is an open protocol that standardizes how AI applications provide context to Large Language Models (LLMs). It allows AI models to:
+
+- **Access Tools**: Execute functions and operations
+- **Read Resources**: Access data and content
+- **Use Prompts**: Leverage pre-defined prompt templates
+
+Read more: [MCP Specification](https://modelcontextprotocol.io/)
+
+## Installation
+
+```bash
+pnpm add @objectstack/plugin-mcp-server
+```
+
+## Basic Usage
+
+```typescript
+import { defineStack } from '@objectstack/spec';
+import { PluginMCPServer } from '@objectstack/plugin-mcp-server';
+
+const stack = defineStack({
+  plugins: [
+    PluginMCPServer.configure({
+      serverName: 'objectstack-server',
+      version: '1.0.0',
+      autoRegisterTools: true,
+    }),
+  ],
+});
+```
+
+## Configuration
+
+```typescript
+interface MCPServerConfig {
+  /** Server name (shown to AI clients) */
+  serverName?: string;
+
+  /** Server version */
+  version?: string;
+
+  /** Auto-register tools from actions and flows */
+  autoRegisterTools?: boolean;
+
+  /** Auto-expose objects as resources */
+  autoExposeObjects?: boolean;
+
+  /** Enable streaming for large responses */
+  enableStreaming?: boolean;
+
+  /** Transport mechanism ('stdio' | 'http') */
+  transport?: 'stdio' | 'http';
+
+  /** HTTP port (if transport is 'http') */
+  port?: number;
+}
+```
+
+## MCP Tools
+
+### Auto-Generated Tools
+
+ObjectStack automatically exposes these operations as MCP tools:
+
+```typescript
+// CRUD operations (auto-registered)
+'objectstack_find'         // Query records
+'objectstack_findOne'      // Get single record
+'objectstack_create'       // Create record
+'objectstack_update'       // Update record
+'objectstack_delete'       // Delete record
+
+// Metadata operations
+'objectstack_describeObject'   // Get object schema
+'objectstack_listObjects'      // List all objects
+'objectstack_listFields'       // List object fields
+```
+
+### Custom Tools
+
+Register custom tools that AI models can call:
+
+```typescript
+import { defineTool } from '@objectstack/spec';
+
+const calculateRevenueTool = defineTool({
+  name: 'calculate_revenue',
+  description: 'Calculate total revenue for an account',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      accountId: { type: 'string', description: 'Account ID' },
+      startDate: { type: 'string', description: 'Start date (ISO 8601)' },
+      endDate: { type: 'string', description: 'End date (ISO 8601)' },
+    },
+    required: ['accountId'],
+  },
+  async execute({ accountId, startDate, endDate }) {
+    const opportunities = await kernel.getDriver().find({
+      object: 'opportunity',
+      filters: [
+        { field: 'account_id', operator: 'eq', value: accountId },
+        { field: 'stage', operator: 'eq', value: 'closed_won' },
+        { field: 'close_date', operator: 'gte', value: startDate },
+        { field: 'close_date', operator: 'lte', value: endDate },
+      ],
+    });
+
+    const total = opportunities.reduce((sum, opp) => sum + opp.amount, 0);
+
+    return {
+      accountId,
+      totalRevenue: total,
+      opportunityCount: opportunities.length,
+    };
+  },
+});
+
+// Register with MCP server
+kernel.getService('mcp').registerTool(calculateRevenueTool);
+```
+
+## MCP Resources
+
+### Auto-Exposed Objects
+
+All ObjectStack objects are automatically exposed as MCP resources:
+
+```
+objectstack://objects/opportunity           # Opportunity object schema
+objectstack://objects/opportunity/records   # All opportunity records
+objectstack://objects/opportunity/123       # Specific opportunity record
+```
+
+### Custom Resources
+
+Expose custom resources to AI models:
+
+```typescript
+kernel.getService('mcp').registerResource({
+  uri: 'objectstack://reports/sales-pipeline',
+  name: 'Sales Pipeline Report',
+  description: 'Current sales pipeline with stages and amounts',
+  mimeType: 'application/json',
+  async read() {
+    const opportunities = await kernel.getDriver().find({
+      object: 'opportunity',
+      filters: [
+        { field: 'stage', operator: 'neq', value: 'closed_won' },
+        { field: 'stage', operator: 'neq', value: 'closed_lost' },
+      ],
+    });
+
+    const pipeline = opportunities.reduce((acc, opp) => {
+      acc[opp.stage] = (acc[opp.stage] || 0) + opp.amount;
+      return acc;
+    }, {});
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(pipeline, null, 2),
+        },
+      ],
+    };
+  },
+});
+```
+
+## MCP Prompts
+
+Register prompt templates that AI models can use:
+
+```typescript
+kernel.getService('mcp').registerPrompt({
+  name: 'analyze_account',
+  description: 'Analyze an account and its opportunities',
+  arguments: [
+    {
+      name: 'accountId',
+      description: 'Account ID to analyze',
+      required: true,
+    },
+  ],
+  async render({ accountId }) {
+    const account = await kernel.getDriver().findOne({
+      object: 'account',
+      filters: [{ field: 'id', operator: 'eq', value: accountId }],
+    });
+
+    const opportunities = await kernel.getDriver().find({
+      object: 'opportunity',
+      filters: [{ field: 'account_id', operator: 'eq', value: accountId }],
+    });
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Analyze this account and provide insights:
+
+Account: ${account.name}
+Industry: ${account.industry}
+Total Opportunities: ${opportunities.length}
+Total Value: $${opportunities.reduce((sum, o) => sum + o.amount, 0)}
+
+Opportunities:
+${opportunities.map(o => `- ${o.name} (${o.stage}): $${o.amount}`).join('\n')}
+
+Please provide:
+1. Key insights about this account
+2. Risk assessment
+3. Recommendations for next steps`,
+          },
+        },
+      ],
+    };
+  },
+});
+```
+
+## Using with AI Clients
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "objectstack": {
+      "command": "node",
+      "args": ["/path/to/your/objectstack/server.js"],
+      "env": {
+        "DATABASE_URL": "your-database-url"
+      }
+    }
+  }
+}
+```
+
+### Cursor IDE
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "objectstack": {
+      "command": "node",
+      "args": ["./server.js"]
+    }
+  }
+}
+```
+
+### Cline VS Code Extension
+
+Configure in Cline settings:
+
+```json
+{
+  "cline.mcpServers": {
+    "objectstack": {
+      "command": "node",
+      "args": ["./server.js"]
+    }
+  }
+}
+```
+
+## Server Implementation
+
+### Stdio Transport (Default)
+
+```typescript
+// server.ts
+import { defineStack } from '@objectstack/spec';
+import { PluginMCPServer } from '@objectstack/plugin-mcp-server';
+import { DriverTurso } from '@objectstack/driver-turso';
+
+const stack = defineStack({
+  driver: DriverTurso.configure({
+    url: process.env.DATABASE_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN!,
+  }),
+  plugins: [
+    PluginMCPServer.configure({
+      serverName: 'my-crm',
+      transport: 'stdio', // Claude Desktop, Cursor, Cline
+    }),
+  ],
+});
+
+await stack.boot();
+```
+
+### HTTP Transport
+
+```typescript
+const stack = defineStack({
+  driver: DriverTurso.configure({ /* ... */ }),
+  plugins: [
+    PluginMCPServer.configure({
+      serverName: 'my-crm',
+      transport: 'http',
+      port: 3100,
+    }),
+  ],
+});
+
+await stack.boot();
+// MCP server running on http://localhost:3100
+```
+
+## Advanced Features
+
+### Streaming Resources
+
+```typescript
+kernel.getService('mcp').registerResource({
+  uri: 'objectstack://exports/opportunities-csv',
+  name: 'Opportunities Export (CSV)',
+  mimeType: 'text/csv',
+  async *stream() {
+    // Stream header
+    yield 'Name,Stage,Amount,Close Date\n';
+
+    // Stream records in batches
+    let offset = 0;
+    const batchSize = 100;
+
+    while (true) {
+      const batch = await kernel.getDriver().find({
+        object: 'opportunity',
+        limit: batchSize,
+        offset,
+      });
+
+      if (batch.length === 0) break;
+
+      for (const opp of batch) {
+        yield `${opp.name},${opp.stage},${opp.amount},${opp.close_date}\n`;
+      }
+
+      offset += batchSize;
+    }
+  },
+});
+```
+
+### Tool Permissions
+
+```typescript
+kernel.getService('mcp').registerTool({
+  name: 'delete_opportunity',
+  description: 'Delete an opportunity',
+  permissions: ['opportunity:delete'], // Require permission
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+    },
+    required: ['id'],
+  },
+  async execute({ id }, context) {
+    // context includes userId, permissions, etc.
+    if (!context.hasPermission('opportunity:delete')) {
+      throw new Error('Permission denied');
+    }
+
+    await kernel.getDriver().delete({
+      object: 'opportunity',
+      filters: [{ field: 'id', operator: 'eq', value: id }],
+    });
+
+    return { success: true, deleted: id };
+  },
+});
+```
+
+### Dynamic Tool Registration
+
+```typescript
+// Register tools from flow definitions
+const flows = await kernel.getMetadata('flow');
+
+for (const flow of flows) {
+  kernel.getService('mcp').registerTool({
+    name: `flow_${flow.name}`,
+    description: flow.description,
+    inputSchema: generateSchemaFromFlow(flow),
+    async execute(inputs) {
+      return await kernel.executeFlow(flow.name, inputs);
+    },
+  });
+}
+```
+
+## Server Capabilities
+
+The MCP server exposes these capabilities:
+
+```json
+{
+  "capabilities": {
+    "tools": {
+      "listChanged": true
+    },
+    "resources": {
+      "subscribe": true,
+      "listChanged": true
+    },
+    "prompts": {
+      "listChanged": true
+    },
+    "logging": {},
+    "experimental": {
+      "streaming": true
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Tool Design**: Keep tools focused and well-documented
+2. **Resource Naming**: Use clear, hierarchical URI schemes
+3. **Prompt Templates**: Make prompts flexible with arguments
+4. **Error Handling**: Always return helpful error messages
+5. **Permissions**: Check permissions before tool execution
+6. **Performance**: Use streaming for large datasets
+7. **Versioning**: Version your server and tools
+
+## Debugging
+
+Enable debug logging:
+
+```typescript
+PluginMCPServer.configure({
+  serverName: 'my-crm',
+  debug: true, // Log all MCP messages
+});
+```
+
+View MCP messages in client:
+- **Claude Desktop**: Check logs in `~/Library/Logs/Claude/mcp*.log`
+- **Cursor**: Check Output panel → MCP Server
+- **Cline**: Check extension logs
+
+## Example: Complete CRM Server
+
+```typescript
+import { defineStack, defineTool } from '@objectstack/spec';
+import { PluginMCPServer } from '@objectstack/plugin-mcp-server';
+
+const stack = defineStack({
+  driver: /* ... */,
+  plugins: [
+    PluginMCPServer.configure({
+      serverName: 'crm-assistant',
+      autoRegisterTools: true,
+    }),
+  ],
+});
+
+await stack.boot();
+
+const mcp = stack.kernel.getService('mcp');
+
+// Register custom tools
+mcp.registerTool(defineTool({
+  name: 'forecast_revenue',
+  description: 'Forecast revenue based on pipeline',
+  async execute() {
+    // Implementation
+  },
+}));
+
+// Register custom resources
+mcp.registerResource({
+  uri: 'objectstack://dashboards/sales',
+  name: 'Sales Dashboard',
+  async read() {
+    // Implementation
+  },
+});
+
+// Register prompts
+mcp.registerPrompt({
+  name: 'weekly_report',
+  description: 'Generate weekly sales report',
+  async render() {
+    // Implementation
+  },
+});
+```
+
+## License
+
+Apache-2.0
+
+## See Also
+
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/)
+- [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
+- [@objectstack/spec/ai](../../spec/src/ai/)
+- [Building MCP Servers Guide](/content/docs/guides/mcp/)

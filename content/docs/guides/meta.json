@@ -2,6 +2,7 @@
   "title": "Guides",
   "pages": [
     "index",
+    "packages",
     "metadata",
     "data-modeling",
     "common-patterns",

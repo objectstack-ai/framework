@@ -1,0 +1,473 @@
+---
+title: Package Overview
+description: Complete guide to all ObjectStack packages, services, drivers, plugins, and adapters
+---
+
+# Package Overview
+
+ObjectStack is organized into **27 packages** across multiple categories. This guide provides a complete overview of each package, its purpose, and when to use it.
+
+## Core Packages
+
+### @objectstack/spec
+
+**The Constitution** — Protocol schemas, types, and constants for the entire ObjectStack ecosystem.
+
+- **Purpose**: Zod-first schema definitions for all 15 protocol domains
+- **Exports**: Data, UI, System, Automation, AI, API, Identity, Security, Kernel, Cloud, QA, Contracts, Integration, Studio, Shared namespaces
+- **When to use**: Import types, schemas, and builder functions (`defineObject`, `defineView`, `defineFlow`, etc.)
+- **Documentation**: [Protocol Reference](/docs/references)
+
+```typescript
+import { Data, UI, defineObject, defineView } from '@objectstack/spec';
+```
+
+### @objectstack/core
+
+**The Microkernel** — DI container, plugin manager, and service registry.
+
+- **Purpose**: ObjectKernel with dependency injection, lifecycle hooks, and event bus
+- **Exports**: `ObjectKernel`, `LiteKernel`, `Plugin` interface, service management
+- **When to use**: Bootstrap your application, manage plugins and services
+- **README**: [View README](/packages/core/README.md)
+
+```typescript
+import { ObjectKernel } from '@objectstack/core';
+const kernel = new ObjectKernel();
+```
+
+### @objectstack/runtime
+
+**Runtime Bootstrap** — DriverPlugin, AppPlugin, and capability contracts.
+
+- **Purpose**: High-level runtime bootstrap and plugin composition
+- **Exports**: Runtime configuration, plugin loaders, capability system
+- **When to use**: Use with `defineStack()` for application setup
+- **README**: [View README](/packages/runtime/README.md)
+
+### @objectstack/objectql
+
+**Data Query Engine** — MongoDB-style queries with SQL execution.
+
+- **Purpose**: ObjectQL query engine with filters, aggregations, and window functions
+- **Exports**: Query parser, filter engine, schema registry
+- **When to use**: Advanced query operations, custom data access patterns
+- **README**: [View README](/packages/objectql/README.md)
+
+### @objectstack/metadata
+
+**Metadata Management** — Loaders, serializers, and overlay system.
+
+- **Purpose**: Load, validate, and manage metadata from files or runtime
+- **Exports**: Metadata loaders, serializers, overlay system, validation
+- **When to use**: Dynamic metadata loading, multi-source metadata composition
+- **README**: [View README](/packages/metadata/README.md)
+
+### @objectstack/rest
+
+**REST API Layer** — Auto-generated REST endpoints from metadata.
+
+- **Purpose**: Automatic REST API generation based on object definitions
+- **Exports**: REST server, route generators, middleware
+- **When to use**: Expose ObjectStack data via REST API
+- **README**: [View README](/packages/rest/README.md)
+
+---
+
+## Client Packages
+
+### @objectstack/client
+
+**Framework-Agnostic SDK** — Universal TypeScript client for ObjectStack.
+
+- **Purpose**: Type-safe client for ObjectStack REST API with batching and error handling
+- **Exports**: `ObjectStackClient`, query builders, error classes
+- **When to use**: Any JavaScript/TypeScript application (Node, React, Vue, Angular, etc.)
+- **README**: [View README](/packages/client/README.md)
+
+```typescript
+import { ObjectStackClient } from '@objectstack/client';
+const client = new ObjectStackClient({ baseURL: 'https://api.example.com' });
+```
+
+### @objectstack/client-react
+
+**React Hooks & Bindings** — React hooks for ObjectStack.
+
+- **Purpose**: React hooks for queries, mutations, real-time subscriptions
+- **Exports**: `useQuery`, `useMutation`, `useRealtime`, `useAuth`, etc.
+- **When to use**: React applications
+- **README**: [View README](/packages/client-react/README.md)
+
+```typescript
+import { useQuery, useMutation } from '@objectstack/client-react';
+```
+
+---
+
+## Data Drivers
+
+### @objectstack/driver-memory
+
+**In-Memory Driver** — Ephemeral storage for development and testing.
+
+- **Purpose**: Fast in-memory data storage with full ObjectQL support
+- **When to use**: Development, testing, demos (data is lost on restart)
+- **README**: [View README](/packages/plugins/driver-memory/README.md)
+
+```typescript
+import { DriverMemory } from '@objectstack/driver-memory';
+```
+
+### @objectstack/driver-sql
+
+**SQL Driver** — PostgreSQL, MySQL, SQLite support via Knex.js.
+
+- **Purpose**: Production-ready SQL database support with migrations
+- **Supports**: PostgreSQL, MySQL, SQLite, and all Knex-compatible databases
+- **When to use**: Traditional relational database deployments
+- **README**: [View README](/packages/plugins/driver-sql/README.md)
+
+```typescript
+import { DriverSQL } from '@objectstack/driver-sql';
+const driver = DriverSQL.configure({
+  client: 'pg',
+  connection: { /* PostgreSQL config */ },
+});
+```
+
+### @objectstack/driver-turso
+
+**Turso/libSQL Driver** — Edge-first SQLite with embedded replicas.
+
+- **Purpose**: Edge-native SQLite with local-first architecture and multi-tenancy
+- **Modes**: Remote (edge), Embedded Replica (local-first), Local (dev)
+- **When to use**: Vercel Edge, Cloudflare Workers, global low-latency deployments
+- **README**: [View README](/packages/plugins/driver-turso/README.md)
+
+```typescript
+import { DriverTurso } from '@objectstack/driver-turso';
+const driver = DriverTurso.configure({
+  url: 'libsql://mydb-username.turso.io',
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
+```
+
+---
+
+## Platform Services
+
+All services implement contracts from `@objectstack/spec/contracts` and are kernel-managed singletons.
+
+### @objectstack/service-ai
+
+**AI Service** — LLM adapter layer, conversation management, tool registry.
+
+- **Supports**: OpenAI, Anthropic, Google, custom providers via Vercel AI SDK
+- **Features**: Multi-model support, streaming, tool calling, conversation history
+- **When to use**: AI-powered features, chatbots, agents, RAG pipelines
+- **README**: [View README](/packages/services/service-ai/README.md)
+
+### @objectstack/service-analytics
+
+**Analytics Service** — Multi-driver analytics with NativeSQL, ObjectQL, InMemory strategies.
+
+- **Features**: Aggregations, time series, funnels, dashboards
+- **When to use**: Business intelligence, reporting, metrics dashboards
+- **README**: [View README](/packages/services/service-analytics/README.md)
+
+### @objectstack/service-automation
+
+**Automation Service** — DAG flow execution engine for workflows.
+
+- **Features**: Autolaunched, screen, and scheduled flows with visual builder support
+- **When to use**: Business process automation, approval workflows, scheduled tasks
+- **README**: [View README](/packages/services/service-automation/README.md)
+
+### @objectstack/service-cache
+
+**Cache Service** — In-memory and Redis caching.
+
+- **Adapters**: Memory (dev), Redis (production)
+- **Features**: TTL, namespaces, pattern matching, statistics
+- **When to use**: Performance optimization, reduce database load
+- **README**: [View README](/packages/services/service-cache/README.md)
+
+### @objectstack/service-feed
+
+**Feed/Chatter Service** — Activity feed with comments, reactions, subscriptions.
+
+- **Features**: Comments, @mentions, reactions, field change tracking, presence
+- **When to use**: Collaboration features, activity streams, social features
+- **README**: [View README](/packages/services/service-feed/README.md)
+
+### @objectstack/service-i18n
+
+**I18n Service** — Internationalization with file-based locales.
+
+- **Features**: Multi-language support, interpolation, pluralization, fallback chains
+- **When to use**: Multi-language applications, global deployments
+- **README**: [View README](/packages/services/service-i18n/README.md)
+
+### @objectstack/service-job
+
+**Job Service** — Cron and interval-based job scheduling.
+
+- **Features**: Cron expressions, intervals, one-time jobs, retry logic, history
+- **When to use**: Background tasks, scheduled reports, cleanup jobs
+- **README**: [View README](/packages/services/service-job/README.md)
+
+### @objectstack/service-queue
+
+**Queue Service** — Job queues with in-memory and BullMQ adapters.
+
+- **Features**: Priority queues, retry, rate limiting, worker pools, job events
+- **When to use**: Async processing, email sending, report generation, webhooks
+- **README**: [View README](/packages/services/service-queue/README.md)
+
+### @objectstack/service-realtime
+
+**Realtime Service** — WebSocket pub/sub for live updates.
+
+- **Features**: Channels, presence, broadcasting, typing indicators, cursor tracking
+- **When to use**: Real-time dashboards, collaborative editing, live notifications
+- **README**: [View README](/packages/services/service-realtime/README.md)
+
+### @objectstack/service-storage
+
+**Storage Service** — File storage with local filesystem and S3 adapters.
+
+- **Features**: Upload, download, signed URLs, multipart uploads, metadata
+- **When to use**: File attachments, document management, media storage
+- **README**: [View README](/packages/services/service-storage/README.md)
+
+---
+
+## Official Plugins
+
+### @objectstack/plugin-auth
+
+**Authentication Plugin** — Better-auth integration with ObjectQL.
+
+- **Features**: Email/password, OAuth providers, session management, RBAC
+- **When to use**: User authentication and authorization
+- **README**: [View README](/packages/plugins/plugin-auth/README.md)
+
+### @objectstack/plugin-security
+
+**Security Plugin** — RBAC, permissions, field-level security.
+
+- **Features**: Role-based access control, object/field permissions, row-level security
+- **When to use**: Multi-user applications with access control requirements
+- **README**: [View README](/packages/plugins/plugin-security/README.md)
+
+### @objectstack/plugin-audit
+
+**Audit Plugin** — Compliance audit trail and activity logging.
+
+- **Features**: CRUD audit logs, field-level changes, security events, compliance reports
+- **When to use**: SOC 2, HIPAA, GDPR compliance, security monitoring
+- **README**: [View README](/packages/plugins/plugin-audit/README.md)
+
+### @objectstack/plugin-mcp-server
+
+**MCP Server Plugin** — Expose ObjectStack via Model Context Protocol.
+
+- **Features**: AI tools, data resources, prompt templates for Claude, Cursor, Cline
+- **When to use**: AI agent integration, MCP-compatible tools
+- **README**: [View README](/packages/plugins/plugin-mcp-server/README.md)
+
+### @objectstack/plugin-hono-server
+
+**Hono Server Plugin** — HTTP server with Hono framework.
+
+- **Features**: Lightweight HTTP server, middleware support, edge-compatible
+- **When to use**: Serve ObjectStack REST API with Hono
+- **README**: [View README](/packages/plugins/plugin-hono-server/README.md)
+
+### @objectstack/plugin-msw
+
+**MSW Plugin** — Mock Service Worker for testing.
+
+- **Features**: Mock HTTP handlers for testing without real server
+- **When to use**: Frontend testing, integration tests
+- **README**: [View README](/packages/plugins/plugin-msw/README.md)
+
+### @objectstack/plugin-dev
+
+**Developer Tools Plugin** — Development-time utilities.
+
+- **Features**: Metadata validation, schema introspection, debugging tools
+- **When to use**: Development and debugging
+- **README**: [View README](/packages/plugins/plugin-dev/README.md)
+
+### @objectstack/plugin-setup
+
+**Setup Plugin** — First-run setup wizard.
+
+- **Features**: Initial configuration, sample data, guided setup
+- **When to use**: New project initialization
+- **README**: [View README](/packages/plugins/plugin-setup/README.md)
+
+---
+
+## Framework Adapters
+
+ObjectStack integrates with popular web frameworks via adapters. All adapters expose ObjectStack's REST API through the framework's routing system.
+
+### @objectstack/express
+
+**Express.js Adapter** — Traditional Node.js web framework.
+
+- **Use case**: Classic Node.js applications, RESTful APIs
+- **README**: [View README](/packages/adapters/express/README.md)
+
+### @objectstack/fastify
+
+**Fastify Adapter** — High-performance Node.js framework.
+
+- **Use case**: Performance-critical applications, microservices
+- **README**: [View README](/packages/adapters/fastify/README.md)
+
+### @objectstack/hono
+
+**Hono Adapter** — Edge-native web framework.
+
+- **Use case**: Cloudflare Workers, Vercel Edge, Deno, Bun
+- **README**: [View README](/packages/adapters/hono/README.md)
+
+### @objectstack/nestjs
+
+**NestJS Adapter** — Enterprise TypeScript framework.
+
+- **Use case**: Enterprise applications, complex architectures
+- **README**: [View README](/packages/adapters/nestjs/README.md)
+
+### @objectstack/nextjs
+
+**Next.js Adapter** — React metaframework.
+
+- **Use case**: Full-stack React applications, App Router, Server Components
+- **README**: [View README](/packages/adapters/nextjs/README.md)
+
+### @objectstack/nuxt
+
+**Nuxt Adapter** — Vue metaframework.
+
+- **Use case**: Full-stack Vue applications
+- **README**: [View README](/packages/adapters/nuxt/README.md)
+
+### @objectstack/sveltekit
+
+**SvelteKit Adapter** — Svelte metaframework.
+
+- **Use case**: Full-stack Svelte applications
+- **README**: [View README](/packages/adapters/sveltekit/README.md)
+
+---
+
+## Developer Tools
+
+### @objectstack/cli
+
+**CLI Tool** — Command-line interface for ObjectStack.
+
+- **Commands**: `serve`, `studio`, `doctor`, `migrate`, `deploy`
+- **When to use**: Development, deployment, project management
+- **README**: [View README](/packages/cli/README.md)
+
+```bash
+npx @objectstack/cli serve --dev
+```
+
+### @objectstack/create-objectstack
+
+**Project Scaffolding** — Create new ObjectStack projects.
+
+- **Templates**: Minimal, CRM, Todo, E-commerce
+- **When to use**: Start a new ObjectStack project
+- **README**: [View README](/packages/create-objectstack/README.md)
+
+```bash
+npx create-objectstack my-app
+```
+
+### @objectstack/vscode-objectstack
+
+**VS Code Extension** — IDE support for ObjectStack.
+
+- **Features**: Syntax highlighting, autocomplete, validation for metadata files
+- **When to use**: Enhanced development experience in VS Code
+- **README**: [View README](/packages/vscode-objectstack/README.md)
+
+---
+
+## Utility Packages
+
+### @objectstack/types
+
+**Shared Type Utilities** — Common TypeScript types and utilities.
+
+- **Exports**: Type helpers, utility types, branded types
+- **When to use**: Imported automatically by other packages
+- **README**: [View README](/packages/types/README.md)
+
+---
+
+## Package Selection Guide
+
+### For New Projects
+
+```typescript
+import { defineStack } from '@objectstack/spec';
+import { DriverTurso } from '@objectstack/driver-turso'; // Edge-first
+import { ServiceAI } from '@objectstack/service-ai'; // AI features
+
+const stack = defineStack({
+  driver: DriverTurso.configure({ /* ... */ }),
+  services: [ServiceAI.configure({ /* ... */ })],
+});
+```
+
+### For Traditional Web Apps
+
+```typescript
+import { DriverSQL } from '@objectstack/driver-sql'; // PostgreSQL/MySQL
+import { PluginAuth } from '@objectstack/plugin-auth'; // Authentication
+import { ServiceQueue } from '@objectstack/service-queue'; // Background jobs
+
+const stack = defineStack({
+  driver: DriverSQL.configure({ client: 'pg', /* ... */ }),
+  plugins: [PluginAuth.configure({ /* ... */ })],
+  services: [ServiceQueue.configure({ /* ... */ })],
+});
+```
+
+### For Enterprise Applications
+
+```typescript
+import { PluginSecurity } from '@objectstack/plugin-security'; // RBAC
+import { PluginAudit } from '@objectstack/plugin-audit'; // Compliance
+import { ServiceAnalytics } from '@objectstack/service-analytics'; // BI
+
+const stack = defineStack({
+  driver: DriverSQL.configure({ /* PostgreSQL */ }),
+  plugins: [
+    PluginSecurity.configure({ /* ... */ }),
+    PluginAudit.configure({ /* ... */ }),
+  ],
+  services: [
+    ServiceAnalytics.configure({ /* ... */ }),
+    ServiceI18n.configure({ /* ... */ }),
+  ],
+});
+```
+
+---
+
+## Next Steps
+
+- **Architecture Overview**: [Learn the architecture](/docs/getting-started/architecture)
+- **Quick Start**: [Build your first app](/docs/getting-started/quick-start)
+- **API Reference**: [Explore the API](/docs/references)
+- **Examples**: [Browse examples](/docs/getting-started/examples)
