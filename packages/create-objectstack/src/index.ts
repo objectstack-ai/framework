@@ -5,6 +5,11 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const TEMPLATES_DIR = path.resolve(__dirname, 'templates');
 
 // ─── Template Registry ──────────────────────────────────────────────
 
@@ -555,6 +560,23 @@ MIT
   },
 };
 
+// ─── Shared AI Configuration Files ──────────────────────────────────
+// These files are added to every template so third-party developers
+// get AI-assisted development (Copilot + Claude) out of the box.
+// Templates are maintained as standalone files in src/templates/ for
+// easy editing — no need to modify TypeScript code.
+
+function readTemplate(filename: string): string {
+  return fs.readFileSync(path.join(TEMPLATES_DIR, filename), 'utf-8');
+}
+
+const AI_CONFIG_FILES: TemplateFiles = {
+  '.github/copilot-instructions.md': (name) =>
+    readTemplate('copilot-instructions.md')
+      .replaceAll('{{PROJECT_NAME}}', name)
+      .replaceAll('{{PROJECT_TITLE}}', toTitleCase(name)),
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function toCamelCase(str: string): string {
@@ -650,8 +672,11 @@ const program = new Command()
         fs.mkdirSync(targetDir, { recursive: true });
       }
 
-      // Write every file defined by the template
-      for (const [filePath, contentFn] of Object.entries(template.files)) {
+      // Merge template files with shared AI configuration files
+      const allFiles: TemplateFiles = { ...template.files, ...AI_CONFIG_FILES };
+
+      // Write every file defined by the template + AI config
+      for (const [filePath, contentFn] of Object.entries(allFiles)) {
         const fullPath = path.join(targetDir, filePath);
         const dir = path.dirname(fullPath);
 
@@ -684,6 +709,24 @@ const program = new Command()
         }
       }
 
+      // Install ObjectStack AI skills via the standard skills CLI
+      if (!options.skipInstall) {
+        printStep('Installing AI skills for your coding agent...');
+        try {
+          execSync('npx -y skills add objectstack-ai/framework --all', {
+            stdio: 'inherit',
+            cwd: targetDir,
+          });
+          console.log('');
+        } catch {
+          printWarning(
+            'Skills installation skipped. Run manually:\n' +
+            '    npx skills add objectstack-ai/framework',
+          );
+          console.log('');
+        }
+      }
+
       printSuccess('Project created!');
       console.log('');
 
@@ -697,6 +740,11 @@ const program = new Command()
       }
       console.log(chalk.dim('    npm run dev           # Start development server'));
       console.log(chalk.dim('    npm run validate      # Check configuration'));
+      if (options.skipInstall) {
+        console.log('');
+        console.log(chalk.bold('  AI Skills (recommended):'));
+        console.log(chalk.dim('    npx skills add objectstack-ai/framework'));
+      }
       console.log('');
 
     } catch (error: any) {
