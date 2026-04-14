@@ -1,0 +1,32 @@
+{
+  "name": "@example/vercel",
+  "version": "4.0.3",
+  "description": "Example: Deploy ObjectStack server with Hono to Vercel",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "hono dev",
+    "build": "bash scripts/build-vercel.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.14",
+    "@objectstack/core": "workspace:*",
+    "@objectstack/driver-memory": "workspace:*",
+    "@objectstack/driver-turso": "workspace:*",
+    "@objectstack/hono": "workspace:*",
+    "@objectstack/metadata": "workspace:*",
+    "@objectstack/objectql": "workspace:*",
+    "@objectstack/plugin-auth": "workspace:*",
+    "@objectstack/plugin-security": "workspace:*",
+    "@objectstack/runtime": "workspace:*",
+    "@objectstack/spec": "workspace:*",
+    "hono": "^4.12.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.3",
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.2"
+  }
+}
