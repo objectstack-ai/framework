@@ -29,24 +29,24 @@ node scripts/bundle-api.mjs
 # 3. Copy native/external modules into local node_modules for Vercel packaging.
 #
 #    This monorepo uses pnpm's default strict node_modules structure. External
-#    dependencies marked in bundle-api.mjs (@libsql/client, better-sqlite3) only
-#    exist in the monorepo root's node_modules/.pnpm/ virtual store.
+#    dependencies marked in bundle-api.mjs (@libsql/client) only exist in the
+#    monorepo root's node_modules/.pnpm/ virtual store.
 #
 #    The vercel.json includeFiles pattern references node_modules/ relative to
 #    apps/server/, so we must copy the actual module files here for Vercel to
 #    include them in the serverless function's deployment package.
-echo "[build-vercel] Copying external native modules to local node_modules..."
-for mod in "@libsql/client" better-sqlite3; do
-  src="../../node_modules/$mod"
-  if [ -e "$src" ]; then
-    dest="node_modules/$mod"
-    mkdir -p "$(dirname "$dest")"
-    cp -rL "$src" "$dest"
-    echo "[build-vercel]   ✓ Copied $mod"
-  else
-    echo "[build-vercel]   ⚠ $mod not found at $src (skipped)"
-  fi
-done
+#
+#    Note: better-sqlite3 is NOT needed for Turso remote mode on Vercel.
+echo "[build-vercel] Copying @libsql/client to local node_modules..."
+src="../../node_modules/@libsql/client"
+if [ -e "$src" ]; then
+  dest="node_modules/@libsql/client"
+  mkdir -p "$(dirname "$dest")"
+  cp -rL "$src" "$dest"
+  echo "[build-vercel]   ✓ Copied @libsql/client"
+else
+  echo "[build-vercel]   ⚠ @libsql/client not found at $src (skipped)"
+fi
 
 # Copy native binary subdirectories for @libsql/client
 if [ -d "../../node_modules/@libsql" ]; then

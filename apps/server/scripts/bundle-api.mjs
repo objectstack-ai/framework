@@ -25,7 +25,7 @@ const EXTERNAL = [
   'mysql',
   'mysql2',
   'sqlite3',
-  'better-sqlite3',
+  // better-sqlite3 NOT needed for Turso remote mode on Vercel
   'oracledb',
   'tedious',
   // macOS-only native file watcher
