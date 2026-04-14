@@ -15,8 +15,17 @@ import { ObjectQLPlugin } from '@objectstack/objectql';
 import { TursoDriver } from '@objectstack/driver-turso';
 import { createHonoApp } from '@objectstack/hono';
 import { AuthPlugin } from '@objectstack/plugin-auth';
+import { SecurityPlugin } from '@objectstack/plugin-security';
+import { AuditPlugin } from '@objectstack/plugin-audit';
+import { SetupPlugin } from '@objectstack/plugin-setup';
+import { FeedServicePlugin } from '@objectstack/service-feed';
+import { MetadataPlugin } from '@objectstack/metadata';
+import { AIServicePlugin } from '@objectstack/service-ai';
+import { AutomationServicePlugin } from '@objectstack/service-automation';
+import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { getRequestListener } from '@hono/node-server';
 import type { Hono } from 'hono';
+import { createBrokerShim } from '../lib/create-broker-shim.js';
 import CrmApp from '@example/app-crm';
 import TodoApp from '@example/app-todo';
 import BiPluginManifest from '@example/plugin-bi';
@@ -70,6 +79,15 @@ async function ensureKernel(): Promise<ObjectKernel> {
 
             await kernel.use(new DriverPlugin(tursoDriver));
 
+            // Load app manifests (BEFORE plugins that need object schemas)
+            await kernel.use(new AppPlugin(CrmApp));
+            await kernel.use(new AppPlugin(TodoApp));
+            await kernel.use(new AppPlugin(BiPluginManifest));
+
+            // SetupPlugin must load BEFORE other plugins that contribute navigation items
+            // so that the setupNav service is available during their init() phase
+            await kernel.use(new SetupPlugin());
+
             // Auth plugin — uses environment variables for configuration
             // Prefer VERCEL_PROJECT_PRODUCTION_URL (stable across deployments)
             // over VERCEL_URL (unique per deployment, causes origin mismatch).
@@ -84,12 +102,25 @@ async function ensureKernel(): Promise<ObjectKernel> {
                 baseUrl: vercelUrl,
             }));
 
-            // Load app manifests
-            await kernel.use(new AppPlugin(CrmApp));
-            await kernel.use(new AppPlugin(TodoApp));
-            await kernel.use(new AppPlugin(BiPluginManifest));
+            // Register all kernel plugins (matching studio configuration)
+            await kernel.use(new SecurityPlugin());
+            await kernel.use(new AuditPlugin());
+            await kernel.use(new FeedServicePlugin());
+            await kernel.use(new MetadataPlugin({ watch: false }));
+            await kernel.use(new AIServicePlugin());
+            await kernel.use(new AutomationServicePlugin());
+            await kernel.use(new AnalyticsServicePlugin());
+
+            // Broker shim — bridges HttpDispatcher → ObjectQL engine
+            (kernel as any).broker = createBrokerShim(kernel);
 
             await kernel.bootstrap();
+
+            // Validate broker attachment
+            if (!(kernel as any).broker) {
+                console.warn('[Vercel] Broker shim lost during bootstrap — reattaching.');
+                (kernel as any).broker = createBrokerShim(kernel);
+            }
 
             _kernel = kernel;
             console.log('[Vercel] Kernel ready.');
