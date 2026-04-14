@@ -281,37 +281,41 @@ export class HonoServerPlugin implements Plugin {
 
         ctx.logger.info('Registered discovery endpoints', { prefix });
 
-        // Basic CRUD data endpoints — delegate to kernel.broker when available
-        const getBroker = () => (ctx.getKernel() as any).broker;
+        // Basic CRUD data endpoints — delegate to ObjectQL service directly
+        const getObjectQL = () => ctx.getKernel().context?.getService('objectql');
 
         // Create
         rawApp.post(`${prefix}/data/:object`, async (c: any) => {
-            const broker = getBroker();
-            if (!broker) return c.json({ error: 'Broker not available' }, 500);
+            const ql = getObjectQL();
+            if (!ql) return c.json({ error: 'Data service not available' }, 503);
             const object = c.req.param('object');
             const data = await c.req.json().catch(() => ({}));
-            const result = await broker.call('data.create', { object, data }, {});
-            return c.json(result);
+            const res = await ql.insert(object, data);
+            const record = { ...data, ...res };
+            return c.json({ object, id: record.id, record });
         });
 
         // Get by ID
         rawApp.get(`${prefix}/data/:object/:id`, async (c: any) => {
-            const broker = getBroker();
-            if (!broker) return c.json({ error: 'Broker not available' }, 500);
+            const ql = getObjectQL();
+            if (!ql) return c.json({ error: 'Data service not available' }, 503);
             const object = c.req.param('object');
             const id = c.req.param('id');
-            const result = await broker.call('data.get', { object, id }, {});
-            return result ? c.json(result) : c.json({ error: 'Not found' }, 404);
+            let all = await ql.find(object);
+            if (!all) all = [];
+            const match = all.find((i: any) => i.id === id);
+            return match ? c.json({ object, id, record: match }) : c.json({ error: 'Not found' }, 404);
         });
 
         // Find / List
         rawApp.get(`${prefix}/data/:object`, async (c: any) => {
-            const broker = getBroker();
-            if (!broker) return c.json({ error: 'Broker not available' }, 500);
+            const ql = getObjectQL();
+            if (!ql) return c.json({ error: 'Data service not available' }, 503);
             const object = c.req.param('object');
-            const filters = c.req.query();
-            const result = await broker.call('data.find', { object, filters }, {});
-            return c.json(result);
+            let all = await ql.find(object);
+            if (!Array.isArray(all) && all && (all as any).value) all = (all as any).value;
+            if (!all) all = [];
+            return c.json({ object, records: all, total: all.length });
         });
 
         ctx.logger.debug('Registered standard CRUD data endpoints', { prefix });

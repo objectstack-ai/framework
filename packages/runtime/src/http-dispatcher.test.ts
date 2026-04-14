@@ -7,24 +7,35 @@ describe('HttpDispatcher', () => {
     let kernel: ObjectKernel;
     let dispatcher: HttpDispatcher;
     let mockProtocol: any;
-    let mockBroker: any;
+    let mockObjectQL: any;
 
     beforeEach(() => {
         // Mock Kernel
         mockProtocol = {
             saveMetaItem: vi.fn().mockResolvedValue({ success: true, message: 'Saved' }),
-            getMetaItem: vi.fn().mockResolvedValue({ success: true, item: { foo: 'bar' } })
+            getMetaItem: vi.fn().mockResolvedValue({ success: true, item: { foo: 'bar' } }),
+            findData: vi.fn().mockResolvedValue({ object: 'test', records: [], total: 0 }),
+            getData: vi.fn().mockResolvedValue({ object: 'test', id: '1', record: {} }),
         };
-        
-        mockBroker = {
-            call: vi.fn(),
+
+        mockObjectQL = {
+            insert: vi.fn().mockResolvedValue({ id: 'new_1' }),
+            find: vi.fn().mockResolvedValue([]),
+            update: vi.fn().mockResolvedValue({}),
+            delete: vi.fn().mockResolvedValue({}),
+            getObjects: vi.fn().mockReturnValue({}),
+            registry: {
+                getObject: vi.fn().mockReturnValue({ name: 'test_obj' }),
+                getRegisteredTypes: vi.fn().mockReturnValue([]),
+                getAllPackages: vi.fn().mockReturnValue([]),
+            },
         };
 
         kernel = {
-            broker: mockBroker,
             context: {
                 getService: (name: string) => {
                     if (name === 'protocol') return mockProtocol;
+                    if (name === 'objectql') return mockObjectQL;
                     return null;
                 }
             }
@@ -55,11 +66,17 @@ describe('HttpDispatcher', () => {
             });
         });
 
-        it('should fallback to broker call if protocol is missing saveMetaItem', async () => {
-             // Mock protocol without saveMetaItem
-            (kernel as any).context.getService = () => ({}); 
-            // Mock broker success
-            mockBroker.call.mockResolvedValue({ success: true, fromBroker: true });
+        it('should fallback to MetadataService when protocol is missing saveMetaItem', async () => {
+             // Mock protocol without saveMetaItem, but MetadataService with saveItem
+            const mockMetaSvc = {
+                saveItem: vi.fn().mockResolvedValue({ success: true, fromMetaSvc: true }),
+            };
+            (kernel as any).context.getService = (name: string) => {
+                if (name === 'protocol') return {};
+                if (name === 'metadata') return mockMetaSvc;
+                if (name === 'objectql') return mockObjectQL;
+                return null;
+            };
 
             const context = { request: {} };
             const body = { label: 'Fallback' };
@@ -68,12 +85,8 @@ describe('HttpDispatcher', () => {
             const result = await dispatcher.handleMetadata(path, context, 'PUT', body);
 
             expect(result.handled).toBe(true);
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'metadata.saveItem',
-                { type: 'objects', name: 'my_obj', item: body },
-                { request: context.request }
-            );
-            expect(result.response?.body?.data).toEqual({ success: true, fromBroker: true });
+            expect(mockMetaSvc.saveItem).toHaveBeenCalledWith('objects', 'my_obj', body);
+            expect(result.response?.body?.data).toEqual({ success: true, fromMetaSvc: true });
         });
 
         it('should return error if save fails', async () => {
@@ -90,18 +103,14 @@ describe('HttpDispatcher', () => {
             expect(result.response?.body?.error?.message).toBe('Save failed');
         });
         
-        it('should handle READ operations as before', async () => {
-             mockBroker.call.mockResolvedValue({ name: 'my_obj' });
+        it('should handle READ operations via ObjectQL registry', async () => {
+             mockObjectQL.registry.getObject.mockReturnValue({ name: 'my_obj', fields: {} });
              
              const context = { request: {} };
              const result = await dispatcher.handleMetadata('/objects/my_obj', context, 'GET');
              
              expect(result.handled).toBe(true);
-             expect(mockBroker.call).toHaveBeenCalledWith(
-                 'metadata.getObject', 
-                 { objectName: 'my_obj' }, 
-                 { request: context.request }
-             );
+             expect(mockObjectQL.registry.getObject).toHaveBeenCalledWith('my_obj');
         });
     });
 
@@ -287,13 +296,14 @@ describe('HttpDispatcher', () => {
                 expect(mockAuth.handler).toHaveBeenCalled();
             });
 
-            it('should fallback to legacy login when async auth service has no handler', async () => {
+            it('should fallback to mock auth when async auth service has no handler', async () => {
                 (kernel as any).getService = vi.fn().mockResolvedValue({});
-                mockBroker.call.mockResolvedValue({ token: 'abc' });
 
-                const result = await dispatcher.handleAuth('/login', 'POST', { user: 'a' }, { request: {} });
+                const result = await dispatcher.handleAuth('/login', 'POST', { email: 'test@example.com' }, { request: {} });
                 expect(result.handled).toBe(true);
-                expect(mockBroker.call).toHaveBeenCalledWith('auth.login', { user: 'a' }, { request: {} });
+                // Falls through to mock auth fallback (sign-in behavior)
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body?.user).toBeDefined();
             });
 
             it('should return unhandled when auth service not registered and no legacy match', async () => {
@@ -307,10 +317,9 @@ describe('HttpDispatcher', () => {
 
         describe('handleAuth mock fallback (MSW/test mode)', () => {
             beforeEach(() => {
-                // No auth service, no broker — simulates MSW/mock mode
+                // No auth service — simulates MSW/mock mode
                 (kernel as any).getService = vi.fn().mockResolvedValue(null);
                 (kernel as any).services = new Map();
-                (kernel as any).broker = null;
             });
 
             it('should mock sign-up/email endpoint', async () => {
@@ -344,7 +353,7 @@ describe('HttpDispatcher', () => {
                 expect(result.response?.body).toEqual({ success: true });
             });
 
-            it('should mock login fallback when broker unavailable', async () => {
+            it('should mock login fallback when no auth service registered', async () => {
                 const result = await dispatcher.handleAuth('/login', 'POST', { email: 'test@example.com' }, { request: {} });
                 expect(result.handled).toBe(true);
                 expect(result.response?.status).toBe(200);
@@ -449,17 +458,16 @@ describe('HttpDispatcher', () => {
                 expect(asyncProtocol.saveMetaItem).toHaveBeenCalled();
             });
 
-            it('should fallback to broker when async protocol returns null', async () => {
-                (kernel as any).context.getService = vi.fn().mockResolvedValue(null);
-                mockBroker.call.mockResolvedValue({ name: 'my_obj' });
+            it('should fallback to ObjectQL registry when async protocol returns null', async () => {
+                (kernel as any).context.getService = vi.fn().mockImplementation((name: string) => {
+                    if (name === 'objectql') return mockObjectQL;
+                    return null;
+                });
+                mockObjectQL.registry.getObject.mockReturnValue({ name: 'my_obj', fields: {} });
 
                 const result = await dispatcher.handleMetadata('/objects/my_obj', { request: {} }, 'GET');
                 expect(result.handled).toBe(true);
-                expect(mockBroker.call).toHaveBeenCalledWith(
-                    'metadata.getObject',
-                    { objectName: 'my_obj' },
-                    { request: {} }
-                );
+                expect(mockObjectQL.registry.getObject).toHaveBeenCalledWith('my_obj');
             });
         });
     });
@@ -599,8 +607,8 @@ describe('HttpDispatcher', () => {
     // ═══════════════════════════════════════════════════════════════
 
     describe('handleData', () => {
-        it('should pass expand and select to broker for GET /data/:object/:id', async () => {
-            mockBroker.call.mockResolvedValue({ object: 'order_item', id: 'oi_1', record: { id: 'oi_1' } });
+        it('should pass expand and select to protocol for GET /data/:object/:id', async () => {
+            mockProtocol.getData.mockResolvedValue({ object: 'order_item', id: 'oi_1', record: { id: 'oi_1' } });
 
             const result = await dispatcher.handleData(
                 '/order_item/oi_1', 'GET', {},
@@ -610,15 +618,13 @@ describe('HttpDispatcher', () => {
 
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'data.get',
-                { object: 'order_item', id: 'oi_1', expand: 'order,product', select: 'name,total' },
-                { request: {} }
+            expect(mockProtocol.getData).toHaveBeenCalledWith(
+                { object: 'order_item', id: 'oi_1', expand: 'order,product', select: 'name,total' }
             );
         });
 
         it('should NOT pass non-allowlisted params for GET /data/:object/:id', async () => {
-            mockBroker.call.mockResolvedValue({ object: 'task', id: 't1', record: {} });
+            mockProtocol.getData.mockResolvedValue({ object: 'task', id: 't1', record: {} });
 
             await dispatcher.handleData(
                 '/task/t1', 'GET', {},
@@ -627,15 +633,13 @@ describe('HttpDispatcher', () => {
             );
 
             // Only expand is passed; malicious and filter are dropped
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'data.get',
-                { object: 'task', id: 't1', expand: 'assignee' },
-                { request: {} }
+            expect(mockProtocol.getData).toHaveBeenCalledWith(
+                { object: 'task', id: 't1', expand: 'assignee' }
             );
         });
 
         it('should pass full query (with expand/populate) for GET /data/:object list', async () => {
-            mockBroker.call.mockResolvedValue({ object: 'task', records: [], total: 0 });
+            mockProtocol.findData.mockResolvedValue({ object: 'task', records: [], total: 0 });
 
             const query = { populate: 'assignee,project', top: '10', skip: '0' };
             const result = await dispatcher.handleData(
@@ -646,23 +650,19 @@ describe('HttpDispatcher', () => {
 
             expect(result.handled).toBe(true);
             // top → limit and skip → offset are normalized by the dispatcher
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'data.query',
-                { object: 'task', query: { populate: 'assignee,project', limit: '10', offset: '0' } },
-                { request: {} }
+            expect(mockProtocol.findData).toHaveBeenCalledWith(
+                { object: 'task', query: { populate: 'assignee,project', limit: '10', offset: '0' } }
             );
         });
 
         it('should pass expand in query for GET /data/:object list', async () => {
-            mockBroker.call.mockResolvedValue({ object: 'order', records: [], total: 0 });
+            mockProtocol.findData.mockResolvedValue({ object: 'order', records: [], total: 0 });
 
             const query = { expand: 'customer,products' };
             await dispatcher.handleData('/order', 'GET', {}, query, { request: {} });
 
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'data.query',
-                { object: 'order', query: { expand: 'customer,products' } },
-                { request: {} }
+            expect(mockProtocol.findData).toHaveBeenCalledWith(
+                { object: 'order', query: { expand: 'customer,products' } }
             );
         });
 
@@ -673,7 +673,7 @@ describe('HttpDispatcher', () => {
         });
 
         it('should handle POST /data/:object/query with body containing expand', async () => {
-            mockBroker.call.mockResolvedValue({ object: 'task', records: [] });
+            mockProtocol.findData.mockResolvedValue({ object: 'task', records: [] });
 
             await dispatcher.handleData(
                 '/task/query', 'POST',
@@ -682,10 +682,8 @@ describe('HttpDispatcher', () => {
                 { request: {} }
             );
 
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'data.query',
-                { object: 'task', filter: { status: 'active' }, populate: ['assignee'] },
-                { request: {} }
+            expect(mockProtocol.findData).toHaveBeenCalledWith(
+                { object: 'task', query: { filter: { status: 'active' }, populate: ['assignee'] } }
             );
         });
     });
@@ -774,7 +772,7 @@ describe('HttpDispatcher', () => {
             expect(mockMetadata.revertPackage).toHaveBeenCalledWith('com.acme.crm');
         });
 
-        it('should fallback to broker for publish when metadata service unavailable', async () => {
+        it('should return 503 for publish when metadata service unavailable', async () => {
             const mockRegistry = {
                 getAllPackages: vi.fn().mockReturnValue([]),
             };
@@ -783,11 +781,10 @@ describe('HttpDispatcher', () => {
                 if (name === 'objectql') return Promise.resolve({ registry: mockRegistry });
                 return null;
             });
-            mockBroker.call.mockResolvedValue({ success: true, packageId: 'crm', version: 1, publishedAt: '2025-01-01T00:00:00Z', itemsPublished: 2 });
 
             const result = await dispatcher.handlePackages('/crm/publish', 'POST', {}, {}, { request: {} });
             expect(result.handled).toBe(true);
-            expect(mockBroker.call).toHaveBeenCalledWith('metadata.publishPackage', { packageId: 'crm' }, { request: {} });
+            expect(result.response?.status).toBe(503);
         });
     });
 
@@ -826,18 +823,27 @@ describe('HttpDispatcher', () => {
             expect(result.response?.status).toBe(404);
         });
 
-        it('should fallback to broker for getPublished when metadata service unavailable', async () => {
-            (kernel as any).getService = vi.fn().mockResolvedValue(null);
-            mockBroker.call.mockResolvedValue({ name: 'account', fields: ['name'] });
+        it('should fallback to resolveService for getPublished when metadata service unavailable', async () => {
+            const metaSvc = {
+                getPublished: vi.fn().mockResolvedValue({ name: 'account', fields: ['name'] }),
+            };
+            (kernel as any).getService = vi.fn().mockImplementation((name: string) => {
+                if (name === 'metadata') return Promise.resolve(metaSvc);
+                if (name === 'objectql') return Promise.resolve(mockObjectQL);
+                return null;
+            });
+            (kernel as any).context = {
+                getService: (name: string) => {
+                    if (name === 'metadata') return metaSvc;
+                    if (name === 'objectql') return mockObjectQL;
+                    return null;
+                }
+            };
 
             const result = await dispatcher.handleMetadata('/object/account/published', { request: {} }, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
-            expect(mockBroker.call).toHaveBeenCalledWith(
-                'metadata.getPublished',
-                { type: 'object', name: 'account' },
-                { request: {} }
-            );
+            expect(metaSvc.getPublished).toHaveBeenCalledWith('object', 'account');
         });
     });
 
@@ -1210,99 +1216,98 @@ describe('HttpDispatcher', () => {
         });
     });
 
-    describe('handleMetadata without broker (serverless degradation)', () => {
-        let brokerlessKernel: any;
-        let brokerlessDispatcher: HttpDispatcher;
+    describe('handleMetadata with minimal kernel (serverless/lightweight)', () => {
+        let minimalKernel: any;
+        let minimalDispatcher: HttpDispatcher;
 
         beforeEach(() => {
-            // Kernel with NO broker — simulates a lightweight/serverless setup
+            // Minimal kernel — simulates a lightweight/serverless setup
             // where only the protocol service and/or ObjectQL registry are available.
-            brokerlessKernel = {
-                broker: null,
+            minimalKernel = {
                 context: {
                     getService: vi.fn().mockReturnValue(null),
                 },
             };
-            brokerlessDispatcher = new HttpDispatcher(brokerlessKernel);
+            minimalDispatcher = new HttpDispatcher(minimalKernel);
         });
 
-        it('GET /meta should return default types when broker is missing', async () => {
+        it('GET /meta should return default types with minimal kernel', async () => {
             const context = { request: {} };
-            const result = await brokerlessDispatcher.handleMetadata('', context, 'GET');
+            const result = await minimalDispatcher.handleMetadata('', context, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
             expect(result.response?.body?.data?.types).toContain('object');
         });
 
-        it('GET /meta/types should return default types when broker is missing', async () => {
+        it('GET /meta/types should return default types with minimal kernel', async () => {
             const context = { request: {} };
-            const result = await brokerlessDispatcher.handleMetadata('/types', context, 'GET');
+            const result = await minimalDispatcher.handleMetadata('/types', context, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
             expect(result.response?.body?.data?.types).toContain('object');
         });
 
-        it('GET /meta/objects should use ObjectQL registry when broker is missing', async () => {
+        it('GET /meta/objects should use ObjectQL registry', async () => {
             const mockRegistry = {
                 getAllObjects: vi.fn().mockReturnValue([{ name: 'account' }]),
                 getObject: vi.fn(),
             };
-            brokerlessKernel.context.getService = vi.fn().mockImplementation((name: string) => {
+            minimalKernel.context.getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'objectql') return { registry: mockRegistry };
                 return null;
             });
 
             const context = { request: {} };
-            const result = await brokerlessDispatcher.handleMetadata('/objects', context, 'GET');
+            const result = await minimalDispatcher.handleMetadata('/objects', context, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
             expect(mockRegistry.getAllObjects).toHaveBeenCalled();
         });
 
-        it('GET /meta/objects/:name should use ObjectQL registry when broker is missing', async () => {
+        it('GET /meta/objects/:name should use ObjectQL registry', async () => {
             const mockRegistry = {
                 registry: {
                     getObject: vi.fn().mockReturnValue({ name: 'account', fields: {} }),
                 },
             };
-            brokerlessKernel.context.getService = vi.fn().mockImplementation((name: string) => {
+            minimalKernel.context.getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'objectql') return mockRegistry;
                 return null;
             });
 
             const context = { request: {} };
-            const result = await brokerlessDispatcher.handleMetadata('/objects/account', context, 'GET');
+            const result = await minimalDispatcher.handleMetadata('/objects/account', context, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
             expect(mockRegistry.registry.getObject).toHaveBeenCalledWith('account');
         });
 
-        it('GET /meta/:type/:name/published should return 404 when broker is missing and metadata service is unavailable', async () => {
+        it('GET /meta/:type/:name/published should return 404 when metadata service is unavailable', async () => {
             const context = { request: {} };
-            const result = await brokerlessDispatcher.handleMetadata('/object/my_obj/published', context, 'GET');
+            const result = await minimalDispatcher.handleMetadata('/object/my_obj/published', context, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(404);
         });
 
-        it('PUT /meta/:type/:name should return 501 when broker is missing and protocol is unavailable', async () => {
+        it('PUT /meta/:type/:name should return 501 when protocol is unavailable', async () => {
             const context = { request: {} };
             const body = { label: 'Test' };
-            const result = await brokerlessDispatcher.handleMetadata('/objects/my_obj', context, 'PUT', body);
+            const result = await minimalDispatcher.handleMetadata('/objects/my_obj', context, 'PUT', body);
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(501);
         });
 
-        it('should use protocol service even when broker is missing', async () => {
+        it('should use protocol service with minimal kernel', async () => {
             const mockProtocolLocal = {
                 getMetaTypes: vi.fn().mockResolvedValue({ types: ['custom_type'] }),
             };
-            brokerlessKernel.context.getService = vi.fn().mockImplementation((name: string) => {
+            minimalKernel.context.getService = vi.fn().mockImplementation((name: string) => {
                 if (name === 'protocol') return mockProtocolLocal;
                 return null;
             });
 
             const context = { request: {} };
-            const result = await brokerlessDispatcher.handleMetadata('/types', context, 'GET');
+            const result = await minimalDispatcher.handleMetadata('/types', context, 'GET');
             expect(result.handled).toBe(true);
             expect(result.response?.status).toBe(200);
             expect(mockProtocolLocal.getMetaTypes).toHaveBeenCalled();

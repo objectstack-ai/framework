@@ -11,9 +11,6 @@ describe('HttpDispatcher Root Handling', () => {
         // Mock minimal Kernel structure
         kernel = {
             services: {},
-            broker: {
-                call: vi.fn(),
-            },
             context: {
                 getService: vi.fn(),
             }

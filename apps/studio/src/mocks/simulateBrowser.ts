@@ -12,7 +12,7 @@ import studioConfig from '../../objectstack.config';
  * This harness:
  * 1. Boots the actual ObjectStack Kernel (Memory Driver)
  * 2. Sets up the MSW Node Server (Network Layer)
- * 3. Wires the Network Layer directly to the Kernel Broker
+ * 3. Wires the Network Layer directly to the Kernel ObjectQL service
  * 4. Returns a ready-to-use Client
  */
 export async function simulateBrowser() {
@@ -26,7 +26,8 @@ export async function simulateBrowser() {
     console.log('[SimulateBrowser] Kernel booted. Configuring Network Interceptors...');
 
     // 2. Define Network Handlers (The "Virtual Router")
-    // These maps HTTP requests -> Kernel Broker Actions
+    // These map HTTP requests -> Kernel ObjectQL service actions
+    const ql = (kernel as any).context?.getService('objectql');
     const handlers = [
         // Discovery
         http.get('http://localhost:3000/.well-known/objectstack', () => {
@@ -50,28 +51,17 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/data/:object', async ({ params, request }) => {
             const url = new URL(request.url);
             const filters = {}; 
-            
-            // Extract query params 
-            // Simulate MSW Plugin behavior: Put ALL Query Params into `filters`
             url.searchParams.forEach((val, key) => {
                  (filters as any)[key] = val;
             });
-
             console.log(`[VirtualNetwork] GET /data/${params.object}`, filters);
             
             try {
-                // Call Kernel
-                const result = await (kernel as any).broker.call('data.find', {
-                    object: params.object,
-                    filters: filters
-                });
-                
-                // Broker now returns spec-compliant FindDataResponse = { object, records, total? }
-                // Wrap in standard envelope: { success, data: <protocol_response> }
-                return HttpResponse.json({ 
-                    success: true, 
-                    data: result
-                });
+                let all = await ql.find(params.object);
+                if (!Array.isArray(all) && all && (all as any).value) all = (all as any).value;
+                if (!all) all = [];
+                const result = { object: params.object, records: all, total: all.length };
+                return HttpResponse.json({ success: true, data: result });
             } catch (err: any) {
                 return HttpResponse.json({ error: err.message }, { status: 500 });
             }
@@ -83,10 +73,9 @@ export async function simulateBrowser() {
             console.log(`[VirtualNetwork] POST /data/${params.object}`);
             
             try {
-                const result = await (kernel as any).broker.call('data.create', {
-                    object: params.object,
-                    data: body
-                });
+                const res = await ql.insert(params.object, body);
+                const record = { ...body, ...res };
+                const result = { object: params.object, id: record.id, record };
                 return HttpResponse.json({ success: true, data: result }, { status: 201 });
             } catch (err: any) {
                 return HttpResponse.json({ error: err.message }, { status: 500 });
@@ -99,12 +88,8 @@ export async function simulateBrowser() {
             console.log(`[VirtualNetwork] PUT /data/${params.object}/${params.id}`);
             
             try {
-                // Ensure broker receives { object, id, data } explicitly
-                const result = await (kernel as any).broker.call('data.update', {
-                    object: params.object,
-                    id: params.id,
-                    data: body
-                });
+                await ql.update(params.object, body, { where: { id: params.id } });
+                const result = { object: params.object, id: params.id, record: body };
                 return HttpResponse.json({ success: true, data: result });
             } catch (err: any) {
                  return HttpResponse.json({ error: err.message }, { status: 500 });
@@ -117,11 +102,8 @@ export async function simulateBrowser() {
             console.log(`[VirtualNetwork] PATCH /data/${params.object}/${params.id}`);
             
             try {
-                const result = await (kernel as any).broker.call('data.update', {
-                    object: params.object,
-                    id: params.id,
-                    data: body
-                });
+                await ql.update(params.object, body, { where: { id: params.id } });
+                const result = { object: params.object, id: params.id, record: body };
                 return HttpResponse.json({ success: true, data: result });
             } catch (err: any) {
                  return HttpResponse.json({ error: err.message }, { status: 500 });
@@ -132,10 +114,8 @@ export async function simulateBrowser() {
         http.delete('http://localhost:3000/api/v1/data/:object/:id', async ({ params }) => {
             console.log(`[VirtualNetwork] DELETE /data/${params.object}/${params.id}`);
             try {
-                const result = await (kernel as any).broker.call('data.delete', {
-                    object: params.object,
-                    id: params.id
-                });
+                await ql.delete(params.object, { where: { id: params.id } });
+                const result = { object: params.object, id: params.id, deleted: true };
                 return HttpResponse.json({ success: true, data: result });
             } catch (err: any) {
                  return HttpResponse.json({ error: err.message }, { status: 500 });
@@ -146,8 +126,8 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta', async () => {
              console.log('[VirtualNetwork] GET /meta (types)');
              try {
-                 const result = await (kernel as any).broker.call('metadata.types', {});
-                 return HttpResponse.json({ success: true, data: result });
+                 const types = ql?.registry?.getRegisteredTypes?.() || [];
+                 return HttpResponse.json({ success: true, data: { types } });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -157,9 +137,8 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/object', async () => {
              console.log('[VirtualNetwork] GET /meta/object');
              try {
-                 const result = await (kernel as any).broker.call('metadata.objects', {});
-                 // Return Standard Envelope to match packages/runtime/src/http-dispatcher.ts
-                 return HttpResponse.json({ success: true, data: result });
+                 const objects = ql?.getObjects?.() || {};
+                 return HttpResponse.json({ success: true, data: objects });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -167,9 +146,8 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/objects', async () => {
              console.log('[VirtualNetwork] GET /meta/objects');
              try {
-                 const result = await (kernel as any).broker.call('metadata.objects', {});
-                 // Return Standard Envelope to match packages/runtime/src/http-dispatcher.ts
-                 return HttpResponse.json({ success: true, data: result });
+                 const objects = ql?.getObjects?.() || {};
+                 return HttpResponse.json({ success: true, data: objects });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -179,13 +157,10 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/object/:name', async ({ params }) => {
              console.log(`[VirtualNetwork] GET /meta/object/${params.name}`);
              try {
-                 const result = await (kernel as any).broker.call('metadata.getObject', {
-                     objectName: params.name
-                 });
+                 const result = ql?.registry?.getObject?.(params.name);
                  if (!result) {
                      return HttpResponse.json({ error: 'Not Found' }, { status: 404 });
                  }
-                 // Return Standard Envelope to match packages/runtime/src/http-dispatcher.ts
                  return HttpResponse.json({ success: true, data: result });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
@@ -194,13 +169,10 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/objects/:name', async ({ params }) => {
              console.log(`[VirtualNetwork] GET /meta/objects/${params.name}`);
              try {
-                 const result = await (kernel as any).broker.call('metadata.getObject', {
-                     objectName: params.name
-                 });
+                 const result = ql?.registry?.getObject?.(params.name);
                  if (!result) {
                      return HttpResponse.json({ error: 'Not Found' }, { status: 404 });
                  }
-                 // Return Standard Envelope to match packages/runtime/src/http-dispatcher.ts
                  return HttpResponse.json({ success: true, data: result });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
@@ -208,16 +180,14 @@ export async function simulateBrowser() {
         }),
 
         // Metadata - Generic type list (for agents, tools, etc.)
-        // This must come AFTER specific routes like /meta/object to avoid conflicts
         http.get('http://localhost:3000/api/v1/meta/:type', async ({ params }) => {
-             // Skip if it's a specific route we already handled
              if (params.type === 'object' || params.type === 'objects') {
                  return;
              }
              console.log(`[VirtualNetwork] GET /meta/${params.type}`);
              try {
-                 const result = await (kernel as any).broker.call(`metadata.${params.type}`, {});
-                 return HttpResponse.json({ success: true, data: result });
+                 const items = ql?.registry?.listItems?.(params.type) || [];
+                 return HttpResponse.json({ success: true, data: items });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }

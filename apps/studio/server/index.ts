@@ -37,7 +37,6 @@ import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { getRequestListener } from '@hono/node-server';
 import type { Hono } from 'hono';
-import { createBrokerShim } from '../src/lib/create-broker-shim.js';
 import studioConfig from '../objectstack.config.js';
 
 // ---------------------------------------------------------------------------
@@ -134,16 +133,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new AutomationServicePlugin());
             await kernel.use(new AnalyticsServicePlugin());
 
-            // Broker shim — bridges HttpDispatcher → ObjectQL engine
-            (kernel as any).broker = createBrokerShim(kernel);
-
             await kernel.bootstrap();
-
-            // Validate broker attachment
-            if (!(kernel as any).broker) {
-                console.warn('[Vercel] Broker shim lost during bootstrap — reattaching.');
-                (kernel as any).broker = createBrokerShim(kernel);
-            }
 
             // Seed data from config (non-fatal — the kernel is usable without seed data)
             try {

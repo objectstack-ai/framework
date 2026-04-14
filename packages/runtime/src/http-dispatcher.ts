@@ -40,7 +40,7 @@ export interface HttpDispatcherResult {
  * ```
  */
 export class HttpDispatcher {
-    private kernel: any; // Casting to any to access dynamic props like broker, services, graphql
+    private kernel: any; // Casting to any to access dynamic props like services, graphql
 
     constructor(kernel: ObjectKernel) {
         this.kernel = kernel;
@@ -79,11 +79,82 @@ export class HttpDispatcher {
         };
     }
 
-    private ensureBroker() {
-        if (!this.kernel.broker) {
-            throw { statusCode: 500, message: 'Kernel Broker not available' };
+    /**
+     * Direct data service dispatch — replaces broker.call('data.*').
+     * Tries protocol service first (supports expand/populate), falls back to ObjectQL.
+     */
+    private async callData(action: string, params: any): Promise<any> {
+        const protocol = await this.resolveService('protocol');
+        const qlService = await this.getObjectQLService();
+        const ql = qlService ?? await this.resolveService('objectql');
+
+        if (action === 'create') {
+            if (ql) {
+                const res = await ql.insert(params.object, params.data);
+                const record = { ...params.data, ...res };
+                return { object: params.object, id: record.id, record };
+            }
+            throw { statusCode: 503, message: 'Data service not available' };
         }
-        return this.kernel.broker;
+
+        if (action === 'get') {
+            if (protocol && typeof protocol.getData === 'function') {
+                return await protocol.getData({ object: params.object, id: params.id, expand: params.expand, select: params.select });
+            }
+            if (ql) {
+                let all = await ql.find(params.object);
+                if (!all) all = [];
+                const match = all.find((i: any) => i.id === params.id);
+                return match ? { object: params.object, id: params.id, record: match } : null;
+            }
+            throw { statusCode: 503, message: 'Data service not available' };
+        }
+
+        if (action === 'update') {
+            if (ql && params.id) {
+                let all = await ql.find(params.object);
+                if (all && (all as any).value) all = (all as any).value;
+                if (!all) all = [];
+                const existing = all.find((i: any) => i.id === params.id);
+                if (!existing) throw new Error('[ObjectStack] Not Found');
+                await ql.update(params.object, params.data, { where: { id: params.id } });
+                return { object: params.object, id: params.id, record: { ...existing, ...params.data } };
+            }
+            throw { statusCode: 503, message: 'Data service not available' };
+        }
+
+        if (action === 'delete') {
+            if (ql) {
+                await ql.delete(params.object, { where: { id: params.id } });
+                return { object: params.object, id: params.id, deleted: true };
+            }
+            throw { statusCode: 503, message: 'Data service not available' };
+        }
+
+        if (action === 'query' || action === 'find') {
+            if (protocol && typeof protocol.findData === 'function') {
+                // Build query: use explicit params.query if provided, otherwise extract query fields from params
+                const query = params.query || (() => {
+                    const { object, ...rest } = params;
+                    return rest;
+                })();
+                return await protocol.findData({ object: params.object, query });
+            }
+            if (ql) {
+                let all = await ql.find(params.object);
+                if (!Array.isArray(all) && all && (all as any).value) all = (all as any).value;
+                if (!all) all = [];
+                return { object: params.object, records: all, total: all.length };
+            }
+            throw { statusCode: 503, message: 'Data service not available' };
+        }
+
+        if (action === 'batch') {
+            // Batch operations — not yet supported via direct service dispatch
+            return { object: params.object, results: [] };
+        }
+
+        throw { statusCode: 400, message: `Unknown data action: ${action}` };
     }
 
     /**
@@ -249,24 +320,8 @@ export class HttpDispatcher {
             return { handled: true, result: response };
         }
 
-        // 2. Legacy Login via broker
+        // 2. Mock fallback for MSW/test environments when no auth service is registered
         const normalizedPath = path.replace(/^\/+/, '');
-        if (normalizedPath === 'login' && method.toUpperCase() === 'POST') {
-            try {
-                const broker = this.ensureBroker();
-                const data = await broker.call('auth.login', body, { request: context.request });
-                return { handled: true, response: { status: 200, body: data } };
-            } catch (error: any) {
-                // Only fall through to mock when the broker is truly unavailable
-                // (ensureBroker throws statusCode 500 when kernel.broker is null)
-                const statusCode = error?.statusCode ?? error?.status;
-                if (statusCode !== 500 || !error?.message?.includes('Broker not available')) {
-                    throw error;
-                }
-            }
-        }
-
-        // 3. Mock fallback for MSW/test environments when no auth service is registered
         return this.mockAuthFallback(normalizedPath, method, body);
     }
 
@@ -334,90 +389,29 @@ export class HttpDispatcher {
      * Fallback for backward compat: /metadata (all objects), /metadata/:objectName (get object)
      */
     async handleMetadata(path: string, context: HttpProtocolContext, method?: string, body?: any, query?: any): Promise<HttpDispatcherResult> {
-        // Broker is used as a fallback — not required upfront.
-        // This allows metadata to be served when only the protocol service
-        // or ObjectQL service is available (e.g. lightweight / serverless setups).
-        const broker = this.kernel.broker ?? null;
         const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
         
         // GET /metadata/types
         if (parts[0] === 'types') {
             // PRIORITY 1: Try MetadataService directly (includes both typeRegistry with agent/tool AND runtime-registered types)
-            console.log('[HttpDispatcher] Attempting to resolve MetadataService...');
-            console.log('[HttpDispatcher] Available kernel methods:', {
-                hasGetServiceAsync: typeof this.kernel.getServiceAsync === 'function',
-                hasGetService: typeof this.kernel.getService === 'function',
-                hasContext: !!this.kernel.context,
-                hasContextGetService: typeof this.kernel.context?.getService === 'function',
-            });
-
-            // Try all service resolution paths with detailed logging
-            let metadataService: any = null;
-
-            // Path 1: kernel.getServiceAsync
-            if (typeof this.kernel.getServiceAsync === 'function') {
-                try {
-                    metadataService = await this.kernel.getServiceAsync('metadata');
-                    console.log('[HttpDispatcher] kernel.getServiceAsync("metadata") returned:', !!metadataService);
-                } catch (e: any) {
-                    console.log('[HttpDispatcher] kernel.getServiceAsync("metadata") failed:', e.message);
-                }
-            }
-
-            // Path 2: kernel.getService (if not found via async)
-            if (!metadataService && typeof this.kernel.getService === 'function') {
-                try {
-                    metadataService = await this.kernel.getService('metadata');
-                    console.log('[HttpDispatcher] kernel.getService("metadata") returned:', !!metadataService);
-                } catch (e: any) {
-                    console.log('[HttpDispatcher] kernel.getService("metadata") failed:', e.message);
-                }
-            }
-
-            // Path 3: kernel.context.getService (if not found)
-            if (!metadataService && this.kernel.context?.getService) {
-                try {
-                    metadataService = await this.kernel.context.getService('metadata');
-                    console.log('[HttpDispatcher] kernel.context.getService("metadata") returned:', !!metadataService);
-                } catch (e: any) {
-                    console.log('[HttpDispatcher] kernel.context.getService("metadata") failed:', e.message);
-                }
-            }
-
-            console.log('[HttpDispatcher] Final metadataService:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
+            const metadataService = await this.resolveService('metadata');
 
             if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
                 try {
                     const types = await (metadataService as any).getRegisteredTypes();
-                    console.log('[HttpDispatcher] MetadataService.getRegisteredTypes() returned:', types);
                     return { handled: true, response: this.success({ types }) };
                 } catch (e: any) {
                     // Log error but continue to fallbacks
-                    console.warn('[HttpDispatcher] MetadataService.getRegisteredTypes() failed:', e.message, e.stack);
+                    console.warn('[HttpDispatcher] MetadataService.getRegisteredTypes() failed:', e.message);
                 }
-            } else {
-                console.log('[HttpDispatcher] MetadataService not available or missing getRegisteredTypes, falling back to protocol service');
             }
             // PRIORITY 2: Try protocol service (returns SchemaRegistry types only - missing agent/tool)
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.getMetaTypes === 'function') {
                 const result = await protocol.getMetaTypes({});
-                console.log('[HttpDispatcher] Protocol service returned types:', result);
                 return { handled: true, response: this.success(result) };
             }
-            // PRIORITY 3: ask broker for registered types
-            if (broker) {
-                try {
-                    const data = await broker.call('metadata.types', {}, { request: context.request });
-                    console.log('[HttpDispatcher] Broker returned types:', data);
-                    return { handled: true, response: this.success(data) };
-                } catch (e) {
-                    console.log('[HttpDispatcher] Broker call failed:', e);
-                    // fall through to hardcoded defaults
-                }
-            }
             // Last resort: hardcoded defaults
-            console.warn('[HttpDispatcher] Falling back to hardcoded defaults for metadata types');
             return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
 
@@ -430,14 +424,13 @@ export class HttpDispatcher {
                 if (data === undefined) return { handled: true, response: this.error('Not found', 404) };
                 return { handled: true, response: this.success(data) };
             }
-            // Broker fallback
-            if (broker) {
+            // Fallback — try MetadataService via resolveService
+            const metaSvc = await this.resolveService('metadata');
+            if (metaSvc && typeof (metaSvc as any).getPublished === 'function') {
                 try {
-                    const data = await broker.call('metadata.getPublished', { type, name }, { request: context.request });
-                    return { handled: true, response: this.success(data) };
-                } catch (e: any) {
-                    return { handled: true, response: this.error(e.message, 404) };
-                }
+                    const fallbackData = await (metaSvc as any).getPublished(type, name);
+                    if (fallbackData !== undefined) return { handled: true, response: this.success(fallbackData) };
+                } catch { /* fall through */ }
             }
             return { handled: true, response: this.error('Not found', 404) };
         }
@@ -462,13 +455,14 @@ export class HttpDispatcher {
                     }
                 }
 
-                // Fallback to broker if protocol not available (legacy)
-                if (broker) {
+                // Fallback: try MetadataService directly
+                const metaSvc = await this.resolveService('metadata');
+                if (metaSvc && typeof (metaSvc as any).saveItem === 'function') {
                     try {
-                         const data = await broker.call('metadata.saveItem', { type, name, item: body }, { request: context.request });
-                         return { handled: true, response: this.success(data) };
+                        const data = await (metaSvc as any).saveItem(type, name, body);
+                        return { handled: true, response: this.success(data) };
                     } catch (e: any) {
-                         return { handled: true, response: this.error(e.message || 'Save not supported', 501) };
+                        return { handled: true, response: this.error(e.message || 'Save not supported', 501) };
                     }
                 }
                 return { handled: true, response: this.error('Save not supported', 501) };
@@ -477,11 +471,7 @@ export class HttpDispatcher {
             try {
                 // Try specific calls based on type
                 if (type === 'objects' || type === 'object') {
-                    if (broker) {
-                        const data = await broker.call('metadata.getObject', { objectName: name }, { request: context.request });
-                        return { handled: true, response: this.success(data) };
-                    }
-                    // Try ObjectQL service directly when broker is unavailable
+                    // Try ObjectQL service directly
                     const qlService = await this.getObjectQLService();
                     if (qlService?.registry) {
                         const data = qlService.registry.getObject(name);
@@ -501,15 +491,16 @@ export class HttpDispatcher {
                         return { handled: true, response: this.success(data) };
                      } catch (e: any) {
                         // Protocol might throw if not found or not supported
-                        // Fallback to broker?
                      }
                 }
 
-                // Generic call for other types if supported via Broker (Legacy)
-                if (broker) {
-                    const method = `metadata.get${this.capitalize(singularType)}`;
-                    const data = await broker.call(method, { name }, { request: context.request });
-                    return { handled: true, response: this.success(data) };
+                // Try MetadataService for runtime-registered types
+                const metaSvc = await this.resolveService('metadata');
+                if (metaSvc && typeof (metaSvc as any).getItem === 'function') {
+                    try {
+                        const data = await (metaSvc as any).getItem(singularType, name);
+                        if (data) return { handled: true, response: this.success(data) };
+                    } catch { /* not found */ }
                 }
                 return { handled: true, response: this.error('Not found', 404) };
             } catch (e: any) {
@@ -555,31 +546,7 @@ export class HttpDispatcher {
                 }
             }
 
-            // Try broker for the type
-            if (broker) {
-                try {
-                    if (typeOrName === 'objects') {
-                        const data = await broker.call('metadata.objects', { packageId }, { request: context.request });
-                        return { handled: true, response: this.success(data) };
-                    }
-                    const data = await broker.call(`metadata.${typeOrName}`, { packageId }, { request: context.request });
-                    if (data !== null && data !== undefined) {
-                        return { handled: true, response: this.success(data) };
-                    }
-                } catch {
-                    // Broker doesn't support this action, fall through
-                }
-
-                // Legacy: /metadata/:objectName (treat as single object lookup)
-                try {
-                    const data = await broker.call('metadata.getObject', { objectName: typeOrName }, { request: context.request });
-                    return { handled: true, response: this.success(data) };
-                } catch (e: any) {
-                    return { handled: true, response: this.error(e.message, 404) };
-                }
-            }
-
-            // No broker — try ObjectQL registry directly for object lookups
+            // Try ObjectQL registry directly for object/type lookups
             const qlService = await this.getObjectQLService();
             if (qlService?.registry) {
                 if (typeOrName === 'objects') {
@@ -600,20 +567,19 @@ export class HttpDispatcher {
 
         // GET /metadata — return available metadata types
         if (parts.length === 0) {
+            // Try MetadataService for registered types
+            const metadataService = await this.resolveService('metadata');
+            if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
+                try {
+                    const types = await (metadataService as any).getRegisteredTypes();
+                    return { handled: true, response: this.success({ types }) };
+                } catch { /* fall through */ }
+            }
             // Try protocol service for dynamic types
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.getMetaTypes === 'function') {
                 const result = await protocol.getMetaTypes({});
                 return { handled: true, response: this.success(result) };
-            }
-            // Fallback: ask broker for registered types
-            if (broker) {
-                try {
-                    const data = await broker.call('metadata.types', {}, { request: context.request });
-                    return { handled: true, response: this.success(data) };
-                } catch {
-                    // fall through to hardcoded defaults
-                }
             }
             return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
@@ -626,7 +592,6 @@ export class HttpDispatcher {
      * path: sub-path after /data/ (e.g. "contacts", "contacts/123", "contacts/query")
      */
     async handleData(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
-        const broker = this.ensureBroker();
         const parts = path.replace(/^\/+/, '').split('/');
         const objectName = parts[0];
         
@@ -642,14 +607,14 @@ export class HttpDispatcher {
             
             // POST /data/:object/query
             if (action === 'query' && m === 'POST') {
-                // Spec: broker returns FindDataResponse = { object, records, total?, hasMore? }
-                const result = await broker.call('data.query', { object: objectName, ...body }, { request: context.request });
+                // Spec: returns FindDataResponse = { object, records, total?, hasMore? }
+                const result = await this.callData('query', { object: objectName, ...body });
                 return { handled: true, response: this.success(result) };
             }
 
             // POST /data/:object/batch
             if (action === 'batch' && m === 'POST') {
-                const result = await broker.call('data.batch', { object: objectName, ...body }, { request: context.request });
+                const result = await this.callData('batch', { object: objectName, ...body });
                 return { handled: true, response: this.success(result) };
             }
 
@@ -662,24 +627,24 @@ export class HttpDispatcher {
                 const allowedParams: Record<string, unknown> = {};
                 if (select != null) allowedParams.select = select;
                 if (expand != null) allowedParams.expand = expand;
-                // Spec: broker returns GetDataResponse = { object, id, record }
-                const result = await broker.call('data.get', { object: objectName, id, ...allowedParams }, { request: context.request });
+                // Spec: returns GetDataResponse = { object, id, record }
+                const result = await this.callData('get', { object: objectName, id, ...allowedParams });
                 return { handled: true, response: this.success(result) };
             }
 
             // PATCH /data/:object/:id
             if (parts.length === 2 && m === 'PATCH') {
                 const id = parts[1];
-                // Spec: broker returns UpdateDataResponse = { object, id, record }
-                const result = await broker.call('data.update', { object: objectName, id, data: body }, { request: context.request });
+                // Spec: returns UpdateDataResponse = { object, id, record }
+                const result = await this.callData('update', { object: objectName, id, data: body });
                 return { handled: true, response: this.success(result) };
             }
 
             // DELETE /data/:object/:id
             if (parts.length === 2 && m === 'DELETE') {
                 const id = parts[1];
-                // Spec: broker returns DeleteDataResponse = { object, id, deleted }
-                const result = await broker.call('data.delete', { object: objectName, id }, { request: context.request });
+                // Spec: returns DeleteDataResponse = { object, id, deleted }
+                const result = await this.callData('delete', { object: objectName, id });
                 return { handled: true, response: this.success(result) };
             }
         } else {
@@ -689,16 +654,16 @@ export class HttpDispatcher {
                 // HTTP GET query params use transport-level names (filter, sort, top,
                 // skip, select, expand) which are normalized here to canonical
                 // QueryAST field names (where, orderBy, limit, offset, fields,
-                // expand) before forwarding to the broker layer.
+                // expand) before forwarding to the data service layer.
                 // The protocol.ts findData() method performs a deeper normalization
-                // pass, but pre-normalizing here ensures the broker always receives
+                // pass, but pre-normalizing here ensures the data service always receives
                 // Spec-canonical keys.
                 const normalized: Record<string, unknown> = { ...query };
 
                 // filter/filters → where
                 // Note: `filter` is the canonical HTTP *transport* parameter name
                 // (see HttpFindQueryParamsSchema). It is normalized here to the
-                // canonical *QueryAST* field name `where` before broker dispatch.
+                // canonical *QueryAST* field name `where` before data dispatch.
                 // `filters` (plural) is a deprecated alias for `filter`.
                 if (normalized.filter != null || normalized.filters != null) {
                     normalized.where = normalized.where ?? normalized.filter ?? normalized.filters;
@@ -726,15 +691,15 @@ export class HttpDispatcher {
                     delete normalized.skip;
                 }
 
-                // Spec: broker returns FindDataResponse = { object, records, total?, hasMore? }
-                const result = await broker.call('data.query', { object: objectName, query: normalized }, { request: context.request });
+                // Spec: returns FindDataResponse = { object, records, total?, hasMore? }
+                const result = await this.callData('query', { object: objectName, query: normalized });
                 return { handled: true, response: this.success(result) };
             }
 
             // POST /data/:object (Create)
             if (m === 'POST') {
-                // Spec: broker returns CreateDataResponse = { object, id, record }
-                const result = await broker.call('data.create', { object: objectName, data: body }, { request: context.request });
+                // Spec: returns CreateDataResponse = { object, id, record }
+                const result = await this.callData('create', { object: objectName, data: body });
                 const res = this.success(result);
                 res.status = 201;
                 return { handled: true, response: res };
@@ -869,8 +834,7 @@ export class HttpDispatcher {
      * - POST   /packages/:id/publish → publish a package (metadata snapshot)
      * - POST   /packages/:id/revert  → revert a package to last published state
      * 
-     * Uses ObjectQL SchemaRegistry directly (via the 'objectql' service)
-     * with broker fallback for backward compatibility.
+     * Uses ObjectQL SchemaRegistry directly (via the 'objectql' service).
      */
     async handlePackages(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const m = method.toUpperCase();
@@ -880,11 +844,8 @@ export class HttpDispatcher {
         const qlService = await this.getObjectQLService();
         const registry = qlService?.registry;
 
-        // If no registry available, try broker as fallback
+        // If no registry available, return 503
         if (!registry) {
-            if (this.kernel.broker) {
-                return this.handlePackagesViaBroker(parts, m, body, query, context);
-            }
             return { handled: true, response: this.error('Package service not available', 503) };
         }
 
@@ -934,11 +895,6 @@ export class HttpDispatcher {
                     const result = await (metadataService as any).publishPackage(id, body || {});
                     return { handled: true, response: this.success(result) };
                 }
-                // Broker fallback
-                if (this.kernel.broker) {
-                    const result = await this.kernel.broker.call('metadata.publishPackage', { packageId: id, ...body }, { request: context.request });
-                    return { handled: true, response: this.success(result) };
-                }
                 return { handled: true, response: this.error('Metadata service not available', 503) };
             }
 
@@ -948,11 +904,6 @@ export class HttpDispatcher {
                 const metadataService = await this.getService(CoreServiceName.enum.metadata);
                 if (metadataService && typeof (metadataService as any).revertPackage === 'function') {
                     await (metadataService as any).revertPackage(id);
-                    return { handled: true, response: this.success({ success: true }) };
-                }
-                // Broker fallback
-                if (this.kernel.broker) {
-                    await this.kernel.broker.call('metadata.revertPackage', { packageId: id }, { request: context.request });
                     return { handled: true, response: this.success({ success: true }) };
                 }
                 return { handled: true, response: this.error('Metadata service not available', 503) };
@@ -980,47 +931,7 @@ export class HttpDispatcher {
         return { handled: false };
     }
 
-    /**
-     * Fallback: handle packages via broker (for backward compatibility)
-     */
-    private async handlePackagesViaBroker(parts: string[], m: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
-        const broker = this.kernel.broker;
-        try {
-            if (parts.length === 0 && m === 'GET') {
-                const result = await broker.call('package.list', query || {}, { request: context.request });
-                return { handled: true, response: this.success(result) };
-            }
-            if (parts.length === 0 && m === 'POST') {
-                const result = await broker.call('package.install', body, { request: context.request });
-                const res = this.success(result);
-                res.status = 201;
-                return { handled: true, response: res };
-            }
-            if (parts.length === 2 && parts[1] === 'enable' && m === 'PATCH') {
-                const id = decodeURIComponent(parts[0]);
-                const result = await broker.call('package.enable', { id }, { request: context.request });
-                return { handled: true, response: this.success(result) };
-            }
-            if (parts.length === 2 && parts[1] === 'disable' && m === 'PATCH') {
-                const id = decodeURIComponent(parts[0]);
-                const result = await broker.call('package.disable', { id }, { request: context.request });
-                return { handled: true, response: this.success(result) };
-            }
-            if (parts.length === 1 && m === 'GET') {
-                const id = decodeURIComponent(parts[0]);
-                const result = await broker.call('package.get', { id }, { request: context.request });
-                return { handled: true, response: this.success(result) };
-            }
-            if (parts.length === 1 && m === 'DELETE') {
-                const id = decodeURIComponent(parts[0]);
-                const result = await broker.call('package.uninstall', { id }, { request: context.request });
-                return { handled: true, response: this.success(result) };
-            }
-        } catch (e: any) {
-            return { handled: true, response: this.error(e.message, e.statusCode || 500) };
-        }
-        return { handled: false };
-    }
+
 
     /**
      * Handles Storage requests
@@ -1469,10 +1380,12 @@ export class HttpDispatcher {
 
         // OpenAPI Specification
         if (cleanPath === '/openapi.json' && method === 'GET') {
-             const broker = this.ensureBroker();
              try {
-                const result = await broker.call('metadata.generateOpenApi', {}, { request: context.request });
-                return { handled: true, response: this.success(result) };
+                const metaSvc = await this.resolveService('metadata');
+                if (metaSvc && typeof (metaSvc as any).generateOpenApi === 'function') {
+                    const result = await (metaSvc as any).generateOpenApi({});
+                    return { handled: true, response: this.success(result) };
+                }
              } catch (e) {
                 // If not implemented, fall through or return 404
              }
@@ -1494,17 +1407,22 @@ export class HttpDispatcher {
      * Handles Custom API Endpoints defined in metadata
      */
     async handleApiEndpoint(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
-        const broker = this.ensureBroker();
         try {
             // Attempt to find a matching endpoint in the registry
-            // This assumes a 'metadata.matchEndpoint' action exists in the kernel/registry
-            // path should include initial slash e.g. /api/v1/customers
-            const endpoint = await broker.call('metadata.matchEndpoint', { path, method });
+            const metaSvc = await this.resolveService('metadata');
+            if (!metaSvc || typeof (metaSvc as any).matchEndpoint !== 'function') {
+                return { handled: false };
+            }
+            const endpoint = await (metaSvc as any).matchEndpoint({ path, method });
             
             if (endpoint) {
                 // Execute the endpoint target logic
                 if (endpoint.type === 'flow') {
-                    const result = await broker.call('automation.runFlow', { 
+                    const automationSvc = await this.resolveService('automation');
+                    if (!automationSvc || typeof (automationSvc as any).runFlow !== 'function') {
+                        return { handled: true, response: this.error('Automation service not available', 503) };
+                    }
+                    const result = await (automationSvc as any).runFlow({ 
                         flowId: endpoint.target, 
                         inputs: { ...query, ...body, _request: context.request } 
                     });
@@ -1512,10 +1430,14 @@ export class HttpDispatcher {
                 }
                 
                 if (endpoint.type === 'script') {
-                     const result = await broker.call('automation.runScript', { 
+                    const automationSvc = await this.resolveService('automation');
+                    if (!automationSvc || typeof (automationSvc as any).runScript !== 'function') {
+                        return { handled: true, response: this.error('Automation service not available', 503) };
+                    }
+                     const result = await (automationSvc as any).runScript({ 
                         scriptName: endpoint.target, 
                         context: { ...query, ...body, request: context.request } 
-                    }, { request: context.request });
+                    });
                      return { handled: true, response: this.success(result) };
                 }
 
@@ -1525,25 +1447,22 @@ export class HttpDispatcher {
                         const { object, operation } = endpoint.objectParams;
                         // Map standard CRUD operations
                         if (operation === 'find') {
-                             const result = await broker.call('data.query', { object, query }, { request: context.request });
+                             const result = await this.callData('query', { object, query });
                              // Spec: FindDataResponse = { object, records, total?, hasMore? }
                              return { handled: true, response: this.success(result.records, { total: result.total }) };
                         }
                         if (operation === 'get' && query.id) {
-                             const result = await broker.call('data.get', { object, id: query.id }, { request: context.request });
+                             const result = await this.callData('get', { object, id: query.id });
                              return { handled: true, response: this.success(result) };
                         }
                          if (operation === 'create') {
-                             const result = await broker.call('data.create', { object, data: body }, { request: context.request });
+                             const result = await this.callData('create', { object, data: body });
                              return { handled: true, response: this.success(result) };
                         }
                     }
                 }
 
                 if (endpoint.type === 'proxy') {
-                     // Simple proxy implementation (requires a network call, which usually is done by a service but here we can stub return)
-                     // In real implementation this might fetch(endpoint.target)
-                     // For now, return target info
                      return { 
                          handled: true, 
                          response: { 

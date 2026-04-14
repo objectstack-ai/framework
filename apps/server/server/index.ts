@@ -25,7 +25,6 @@ import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { getRequestListener } from '@hono/node-server';
 import type { Hono } from 'hono';
-import { createBrokerShim } from '../lib/create-broker-shim.js';
 import CrmApp from '@example/app-crm';
 import TodoApp from '@example/app-todo';
 import BiPluginManifest from '@example/plugin-bi';
@@ -111,16 +110,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new AutomationServicePlugin());
             await kernel.use(new AnalyticsServicePlugin());
 
-            // Broker shim — bridges HttpDispatcher → ObjectQL engine
-            (kernel as any).broker = createBrokerShim(kernel);
-
             await kernel.bootstrap();
-
-            // Validate broker attachment
-            if (!(kernel as any).broker) {
-                console.warn('[Vercel] Broker shim lost during bootstrap — reattaching.');
-                (kernel as any).broker = createBrokerShim(kernel);
-            }
 
             _kernel = kernel;
             console.log('[Vercel] Kernel ready.');

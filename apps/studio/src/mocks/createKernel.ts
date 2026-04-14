@@ -10,7 +10,6 @@ import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
 import { FeedServicePlugin } from '@objectstack/service-feed';
-import { createBrokerShim } from '../lib/create-broker-shim';
 
 // System object definitions — resolved via Vite aliases to plugin source (no runtime deps)
 import {
@@ -97,12 +96,7 @@ export async function createKernel(options: KernelOptions) {
     // ObjectQLPlugin's ctx.registerService('protocol', ...) during bootstrap.
     console.log('[KernelFactory] Protocol service will be registered by ObjectQLPlugin');
 
-    // --- BROKER SHIM (MUST be registered BEFORE MSWPlugin) ---
-    // HttpDispatcher requires a broker to function. We inject a shim.
-    (kernel as any).broker = createBrokerShim(kernel);
-    // --- BROKER SHIM END ---
-
-    // MSW Plugin (AFTER protocol service and broker shim are registered)
+    // MSW Plugin (AFTER protocol service is registered)
     await kernel.use(new MSWPlugin({
         enableBrowser: enableBrowser,
         baseUrl: '/api/v1',
