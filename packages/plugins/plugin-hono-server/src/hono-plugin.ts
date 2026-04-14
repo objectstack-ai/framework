@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
+import { Plugin, PluginContext, IHttpServer, IDataEngine } from '@objectstack/core';
 import {
     RestServerConfig,
 } from '@objectstack/spec/api';
@@ -282,7 +282,7 @@ export class HonoServerPlugin implements Plugin {
         ctx.logger.info('Registered discovery endpoints', { prefix });
 
         // Basic CRUD data endpoints — delegate to ObjectQL service directly
-        const getObjectQL = () => ctx.getKernel().context?.getService('objectql');
+        const getObjectQL = () => ctx.getService<IDataEngine>('objectql');
 
         // Create
         rawApp.post(`${prefix}/data/:object`, async (c: any) => {

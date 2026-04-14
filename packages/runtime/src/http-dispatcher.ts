@@ -388,7 +388,7 @@ export class HttpDispatcher {
      * Standard: /metadata/:type/:name
      * Fallback for backward compat: /metadata (all objects), /metadata/:objectName (get object)
      */
-    async handleMetadata(path: string, context: HttpProtocolContext, method?: string, body?: any, query?: any): Promise<HttpDispatcherResult> {
+    async handleMetadata(path: string, _context: HttpProtocolContext, method?: string, body?: any, query?: any): Promise<HttpDispatcherResult> {
         const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
         
         // GET /metadata/types
@@ -591,7 +591,7 @@ export class HttpDispatcher {
      * Handles Data requests
      * path: sub-path after /data/ (e.g. "contacts", "contacts/123", "contacts/query")
      */
-    async handleData(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+    async handleData(path: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const parts = path.replace(/^\/+/, '').split('/');
         const objectName = parts[0];
         
@@ -836,7 +836,7 @@ export class HttpDispatcher {
      * 
      * Uses ObjectQL SchemaRegistry directly (via the 'objectql' service).
      */
-    async handlePackages(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+    async handlePackages(path: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const m = method.toUpperCase();
         const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
 
@@ -1193,10 +1193,6 @@ export class HttpDispatcher {
             if (svc?.registry) return svc;
         } catch { /* service not available */ }
         return null;
-    }
-
-    private capitalize(s: string) {
-        return s.charAt(0).toUpperCase() + s.slice(1);
     }
 
     /**
