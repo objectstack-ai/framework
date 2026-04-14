@@ -618,13 +618,14 @@ export class ObjectQL implements IDataEngine {
     }
 
     // 3. Check package's defaultDatasource
-    if (object?.packageId) {
-      const manifest = this.manifests.get(object.packageId);
+    const owner = SchemaRegistry.getObjectOwner(objectName);
+    if (owner?.packageId) {
+      const manifest = this.manifests.get(owner.packageId);
       if (manifest?.defaultDatasource && manifest.defaultDatasource !== 'default') {
         if (this.drivers.has(manifest.defaultDatasource)) {
           this.logger.debug('Resolved datasource from package manifest', {
             object: objectName,
-            package: object.packageId,
+            package: owner.packageId,
             datasource: manifest.defaultDatasource
           });
           return this.drivers.get(manifest.defaultDatasource)!;
