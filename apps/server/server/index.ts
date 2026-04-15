@@ -64,7 +64,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new ObjectQLPlugin());
 
             // Register Memory Driver for example apps (volatile, fast)
-            await kernel.use(new DriverPlugin(new InMemoryDriver(), { name: 'memory' }));
+            await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
 
             // Register Turso Driver for system objects (persistent, production)
             const tursoUrl = process.env.TURSO_DATABASE_URL;
@@ -80,7 +80,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
                 // Remote mode - no local sync needed for Vercel
             });
 
-            await kernel.use(new DriverPlugin(tursoDriver, { name: 'turso' }));
+            await kernel.use(new DriverPlugin(tursoDriver, 'turso'));
 
             // Configure datasource mapping
             // This must be done before loading apps, so ObjectQL can route objects correctly
