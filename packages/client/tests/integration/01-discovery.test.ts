@@ -13,15 +13,15 @@ import { ObjectStackClient } from '../../src/index';
 const TEST_SERVER_URL = process.env.TEST_SERVER_URL || 'http://localhost:3000';
 
 describe('Discovery & Connection', () => {
-  describe('TC-DISC-001: Standard Discovery via .well-known', () => {
-    test('should discover API from .well-known/objectstack', async () => {
-      const client = new ObjectStackClient({ 
+  describe('TC-DISC-001: Protocol-standard Discovery via /api/v1/discovery', () => {
+    test('should discover API from /api/v1/discovery', async () => {
+      const client = new ObjectStackClient({
         baseUrl: TEST_SERVER_URL,
         debug: true
       });
-      
+
       const discovery = await client.connect();
-      
+
       expect(discovery.version).toBeDefined();
       expect(discovery.apiName).toBeDefined();
       expect(discovery.routes).toBeDefined();
