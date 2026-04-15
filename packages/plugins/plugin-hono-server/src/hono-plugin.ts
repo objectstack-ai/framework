@@ -4,7 +4,8 @@ import { Plugin, PluginContext, IHttpServer, IDataEngine } from '@objectstack/co
 import {
     RestServerConfig,
 } from '@objectstack/spec/api';
-import { HonoHttpServer } from './adapter';
+import { HonoHttpServer, HonoCorsOptions } from './adapter';
+import { cors } from 'hono/cors';
 import { serveStatic } from '@hono/node-server/serve-static';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -45,33 +46,97 @@ export interface HonoPluginOptions {
      * @default false
      */
     spaFallback?: boolean;
+
+    /**
+     * CORS configuration. Set to `false` to disable entirely.
+     * Enabled by default with origin '*'.
+     * Can also be controlled via environment variables:
+     *   CORS_ENABLED, CORS_ORIGIN, CORS_CREDENTIALS, CORS_MAX_AGE
+     */
+    cors?: HonoCorsOptions | false;
 }
 
 /**
  * Hono Server Plugin
- * 
+ *
  * Provides HTTP server capabilities using Hono framework.
  * Registers the IHttpServer service so other plugins can register routes.
- * 
+ *
  * Route registration is handled by plugins:
  * - `@objectstack/rest` → CRUD, metadata, discovery, UI, batch
  * - `createDispatcherPlugin()` → auth, graphql, analytics, packages, etc.
  */
+/**
+ * Check if an origin matches a pattern with wildcards.
+ * Supports patterns like:
+ * - "https://*.example.com" - matches any subdomain
+ * - "http://localhost:*" - matches any port
+ * - "https://*.objectui.org,https://*.objectstack.ai" - comma-separated patterns
+ *
+ * @param origin The origin to check (e.g., "https://app.example.com")
+ * @param pattern The pattern to match against (supports * wildcard)
+ * @returns true if origin matches the pattern
+ */
+function matchOriginPattern(origin: string, pattern: string): boolean {
+    if (pattern === '*') return true;
+    if (pattern === origin) return true;
+
+    // Convert wildcard pattern to regex
+    // Escape special regex characters except *
+    const regexPattern = pattern
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')  // Escape special chars
+        .replace(/\*/g, '.*');                    // Convert * to .*
+
+    const regex = new RegExp(`^${regexPattern}$`);
+    return regex.test(origin);
+}
+
+/**
+ * Create a CORS origin matcher function that supports wildcard patterns.
+ *
+ * @param patterns Single pattern, array of patterns, or comma-separated patterns
+ * @returns Function that returns the origin if it matches, or null/undefined
+ */
+function createOriginMatcher(
+    patterns: string | string[]
+): (origin: string) => string | undefined | null {
+    // Normalize to array
+    let patternList: string[];
+    if (typeof patterns === 'string') {
+        // Handle comma-separated patterns
+        patternList = patterns.includes(',')
+            ? patterns.split(',').map(s => s.trim()).filter(Boolean)
+            : [patterns];
+    } else {
+        patternList = patterns;
+    }
+
+    // Return matcher function
+    return (requestOrigin: string) => {
+        for (const pattern of patternList) {
+            if (matchOriginPattern(requestOrigin, pattern)) {
+                return requestOrigin;
+            }
+        }
+        return null;
+    };
+}
+
 export class HonoServerPlugin implements Plugin {
     name = 'com.objectstack.server.hono';
     type = 'server';
     version = '0.9.0';
-    
+
     // Constants
     private static readonly DEFAULT_ENDPOINT_PRIORITY = 100;
     private static readonly CORE_ENDPOINT_PRIORITY = 950;
     private static readonly DISCOVERY_ENDPOINT_PRIORITY = 900;
-    
+
     private options: HonoPluginOptions;
     private server: HonoHttpServer;
 
     constructor(options: HonoPluginOptions = {}) {
-        this.options = { 
+        this.options = {
             port: 3000,
             registerStandardEndpoints: true,
             useApiRegistry: true,
@@ -86,17 +151,76 @@ export class HonoServerPlugin implements Plugin {
      * Init phase - Setup HTTP server and register as service
      */
     init = async (ctx: PluginContext) => {
-        ctx.logger.debug('Initializing Hono server plugin', { 
+        ctx.logger.debug('Initializing Hono server plugin', {
             port: this.options.port,
-            staticRoot: this.options.staticRoot 
+            staticRoot: this.options.staticRoot
         });
-        
+
         // Register HTTP server service as IHttpServer
         // Register as 'http.server' to match core requirements
         ctx.registerService('http.server', this.server);
         // Alias 'http-server' for backward compatibility
         ctx.registerService('http-server', this.server);
         ctx.logger.debug('HTTP server service registered', { serviceName: 'http.server' });
+
+        // ─── CORS Middleware ──────────────────────────────────────────────────
+        // Enabled by default. Controlled via options.cors or environment variables.
+        const corsDisabledByEnv = process.env.CORS_ENABLED === 'false';
+        if (this.options.cors !== false && !corsDisabledByEnv) {
+            const corsOpts = typeof this.options.cors === 'object' ? this.options.cors : {};
+            const enabled = corsOpts.enabled ?? true;
+
+            if (enabled) {
+                let configuredOrigin: string | string[];
+                if (corsOpts.origins) {
+                    configuredOrigin = corsOpts.origins;
+                } else if (process.env.CORS_ORIGIN) {
+                    const envOrigin = process.env.CORS_ORIGIN.trim();
+                    configuredOrigin = envOrigin.includes(',') ? envOrigin.split(',').map(s => s.trim()) : envOrigin;
+                } else {
+                    configuredOrigin = '*';
+                }
+
+                const credentials = corsOpts.credentials ?? (process.env.CORS_CREDENTIALS !== 'false');
+                const maxAge = corsOpts.maxAge ?? (process.env.CORS_MAX_AGE ? parseInt(process.env.CORS_MAX_AGE, 10) : 86400);
+
+                // Determine origin handler based on configuration
+                let origin: string | string[] | ((origin: string) => string | undefined | null);
+
+                // Check if patterns contain wildcards (*, subdomain patterns, port patterns)
+                const hasWildcard = (patterns: string | string[]): boolean => {
+                    const list = Array.isArray(patterns) ? patterns : [patterns];
+                    return list.some(p => p.includes('*'));
+                };
+
+                // When credentials is true, browsers reject wildcard '*' for Access-Control-Allow-Origin.
+                // For wildcard patterns (like "https://*.example.com"), always use a matcher function.
+                // For exact origins, we can pass them directly as string/array.
+                if (configuredOrigin === '*' && credentials) {
+                    // Credentials mode with '*' - reflect the request origin
+                    origin = (requestOrigin: string) => requestOrigin || '*';
+                } else if (hasWildcard(configuredOrigin)) {
+                    // Wildcard patterns (including better-auth style patterns like "https://*.objectui.org")
+                    // Use pattern matcher to support subdomain and port wildcards
+                    origin = createOriginMatcher(configuredOrigin);
+                } else {
+                    // Exact origin(s) - pass through as-is
+                    origin = configuredOrigin;
+                }
+
+                const rawApp = this.server.getRawApp();
+                rawApp.use('*', cors({
+                    origin: origin as any,
+                    allowMethods: corsOpts.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
+                    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+                    exposeHeaders: [],
+                    credentials,
+                    maxAge,
+                }));
+
+                ctx.logger.debug('CORS middleware enabled', { origin: configuredOrigin, credentials });
+            }
+        }
     }
 
     /**
@@ -112,8 +236,8 @@ export class HonoServerPlugin implements Plugin {
         try {
             const rawKernel = ctx.getKernel() as any;
             if (rawKernel.plugins) {
-                const loadedPlugins = rawKernel.plugins instanceof Map 
-                    ? Array.from(rawKernel.plugins.values()) 
+                const loadedPlugins = rawKernel.plugins instanceof Map
+                    ? Array.from(rawKernel.plugins.values())
                     : Array.isArray(rawKernel.plugins) ? rawKernel.plugins : Object.values(rawKernel.plugins);
 
                 for (const plugin of (loadedPlugins as any[])) {
@@ -123,10 +247,10 @@ export class HonoServerPlugin implements Plugin {
                         // Derive base route from name: @org/console -> console
                         const slug = plugin.slug || plugin.name.split('/').pop();
                         const baseRoute = `/${slug}`;
-                        
-                        ctx.logger.debug(`Auto-mounting UI Plugin: ${plugin.name}`, { 
-                            path: baseRoute, 
-                            root: plugin.staticPath 
+
+                        ctx.logger.debug(`Auto-mounting UI Plugin: ${plugin.name}`, {
+                            path: baseRoute,
+                            root: plugin.staticPath
                         });
 
                         mounts.push({
@@ -161,7 +285,7 @@ export class HonoServerPlugin implements Plugin {
 
         if (mounts.length > 0) {
             const rawApp = this.server.getRawApp();
-            
+
             for (const mount of mounts) {
                 const mountRoot = path.resolve(process.cwd(), mount.root);
 
@@ -173,22 +297,22 @@ export class HonoServerPlugin implements Plugin {
                 const mountPath = mount.path || '/';
                 const normalizedPath = mountPath.startsWith('/') ? mountPath : `/${mountPath}`;
                 const routePattern = normalizedPath === '/' ? '/*' : `${normalizedPath.replace(/\/$/, '')}/*`;
-                
+
                 // Routes to register: both /mount and /mount/*
                 const routes = normalizedPath === '/' ? [routePattern] : [normalizedPath, routePattern];
 
-                ctx.logger.debug('Mounting static files', { 
-                    to: routes, 
-                    from: mountRoot, 
-                    rewrite: mount.rewrite, 
-                    spa: mount.spa 
+                ctx.logger.debug('Mounting static files', {
+                    to: routes,
+                    from: mountRoot,
+                    rewrite: mount.rewrite,
+                    spa: mount.spa
                 });
 
                 routes.forEach(route => {
                     // 1. Serve Static Files
                     rawApp.get(
-                        route, 
-                        serveStatic({ 
+                        route,
+                        serveStatic({
                             root: mount.root,
                             rewriteRequestPath: (reqPath) => {
                                 if (mount.rewrite && normalizedPath !== '/') {
@@ -208,12 +332,12 @@ export class HonoServerPlugin implements Plugin {
                             // Skip if API path check
                             const config = this.options.restConfig || {};
                             const basePath = config.api?.basePath || '/api';
-                            
+
                             if (c.req.path.startsWith(basePath)) {
                                 return next();
                             }
 
-                            return serveStatic({ 
+                            return serveStatic({
                                 root: mount.root,
                                 rewriteRequestPath: () => 'index.html'
                             })(c, next);
@@ -232,7 +356,7 @@ export class HonoServerPlugin implements Plugin {
 
             const port = this.options.port ?? 3000;
             ctx.logger.debug('Starting HTTP server', { port });
-            
+
             await this.server.listen(port);
 
             const actualPort = this.server.getPort();

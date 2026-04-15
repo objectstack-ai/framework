@@ -1,11 +1,31 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { type ObjectKernel, HttpDispatcher, HttpDispatcherResult } from '@objectstack/runtime';
+
+export interface ObjectStackHonoCorsOptions {
+  /** Enable or disable CORS. Defaults to true. */
+  enabled?: boolean;
+  /** Allowed origins. Defaults to env `CORS_ORIGIN` or '*'. Comma-separated string or array. */
+  origin?: string | string[];
+  /** Allowed methods. */
+  methods?: string[];
+  /** Allow credentials (cookies, authorization headers). */
+  credentials?: boolean;
+  /** Preflight cache max-age in seconds. */
+  maxAge?: number;
+  /** Allowed headers. */
+  allowHeaders?: string[];
+  /** Exposed headers. */
+  exposeHeaders?: string[];
+}
 
 export interface ObjectStackHonoOptions {
   kernel: ObjectKernel;
   prefix?: string;
+  /** CORS configuration. Set to `false` to disable entirely. */
+  cors?: ObjectStackHonoCorsOptions | false;
 }
 
 /**
@@ -48,6 +68,52 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
   const app = new Hono();
   const prefix = options.prefix || '/api';
   const dispatcher = new HttpDispatcher(options.kernel);
+
+  // ─── CORS Middleware ──────────────────────────────────────────────────────
+  // Enabled by default. Controlled via options.cors or environment variables:
+  //   CORS_ENABLED     – "false" to disable (default: true)
+  //   CORS_ORIGIN      – comma-separated origins or "*" (default: "*")
+  //   CORS_CREDENTIALS – "false" to disallow credentials (default: true)
+  //   CORS_MAX_AGE     – preflight cache seconds (default: 86400)
+  const corsDisabledByEnv = process.env.CORS_ENABLED === 'false';
+  if (options.cors !== false && !corsDisabledByEnv) {
+    const corsOpts = typeof options.cors === 'object' ? options.cors : {};
+    const enabled = corsOpts.enabled ?? true;
+
+    if (enabled) {
+      // Resolve origins: options > env > default '*'
+      let configuredOrigin: string | string[];
+      if (corsOpts.origin) {
+        configuredOrigin = corsOpts.origin;
+      } else if (process.env.CORS_ORIGIN) {
+        const envOrigin = process.env.CORS_ORIGIN.trim();
+        configuredOrigin = envOrigin.includes(',') ? envOrigin.split(',').map(s => s.trim()) : envOrigin;
+      } else {
+        configuredOrigin = '*';
+      }
+
+      const credentials = corsOpts.credentials ?? (process.env.CORS_CREDENTIALS !== 'false');
+      const maxAge = corsOpts.maxAge ?? (process.env.CORS_MAX_AGE ? parseInt(process.env.CORS_MAX_AGE, 10) : 86400);
+
+      // When credentials is true, browsers reject wildcard '*' for Access-Control-Allow-Origin.
+      // Use a function to reflect the request's Origin header instead.
+      let origin: string | string[] | ((origin: string) => string | undefined | null);
+      if (credentials && configuredOrigin === '*') {
+        origin = (requestOrigin: string) => requestOrigin || '*';
+      } else {
+        origin = configuredOrigin;
+      }
+
+      app.use('*', cors({
+        origin: origin as any,
+        allowMethods: corsOpts.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
+        allowHeaders: corsOpts.allowHeaders || ['Content-Type', 'Authorization', 'X-Requested-With'],
+        exposeHeaders: corsOpts.exposeHeaders || [],
+        credentials,
+        maxAge,
+      }));
+    }
+  }
 
   const errorJson = (c: any, message: string, code: number = 500) => {
     return c.json({ success: false, error: { message, code } }, code);

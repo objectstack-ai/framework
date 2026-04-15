@@ -80,10 +80,36 @@ function writeFileWithRetry(filePath: string, content: string, retries = MAX_RET
 // Clean output directory ensures no stale files remain
 if (fs.existsSync(OUT_DIR)) {
   console.log(`Cleaning output directory: ${OUT_DIR}`);
-  fs.rmSync(OUT_DIR, { recursive: true, force: true, maxRetries: MAX_RETRIES, retryDelay: RETRY_DELAY_BASE_MS });
-  
+
+  // Use a more robust cleanup with multiple retries and longer delays
+  // to handle filesystem race conditions in CI environments
+  for (let attempt = 0; attempt < MAX_RETRIES * 2; attempt++) {
+    try {
+      // Try removing with native Node.js rmSync
+      if (fs.existsSync(OUT_DIR)) {
+        fs.rmSync(OUT_DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: RETRY_DELAY_BASE_MS * 2 });
+      }
+
+      // Verify the directory is actually gone
+      if (!fs.existsSync(OUT_DIR)) {
+        break;
+      }
+
+      // If still exists, wait before retrying with exponential backoff
+      sleepSync(RETRY_DELAY_BASE_MS * (attempt + 1));
+    } catch (error) {
+      // If this is the last attempt, log but continue (we'll try to work with what's there)
+      if (attempt === (MAX_RETRIES * 2 - 1)) {
+        console.warn(`Warning: Failed to fully clean directory after ${attempt + 1} attempts:`, error);
+        // Try to continue anyway - ensureDir will create missing parts
+        break;
+      }
+      // Wait before retry with exponential backoff
+      sleepSync(RETRY_DELAY_BASE_MS * (attempt + 1));
+    }
+  }
+
   // Wait a bit to ensure file system has synced
-  // This prevents ENOENT errors on some file systems, particularly in CI environments
   sleepSync(FS_SYNC_DELAY_MS);
 }
 

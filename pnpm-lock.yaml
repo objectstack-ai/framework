@@ -10,37 +10,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      '@objectstack/driver-memory':
-        specifier: workspace:*
-        version: link:packages/plugins/driver-memory
-      '@objectstack/driver-sql':
-        specifier: workspace:*
-        version: link:packages/plugins/driver-sql
-      '@objectstack/objectql':
-        specifier: workspace:*
-        version: link:packages/objectql
-      '@objectstack/plugin-auth':
-        specifier: workspace:*
-        version: link:packages/plugins/plugin-auth
-      '@objectstack/plugin-hono-server':
-        specifier: workspace:*
-        version: link:packages/plugins/plugin-hono-server
-      '@objectstack/runtime':
-        specifier: workspace:*
-        version: link:packages/runtime
-      '@objectstack/service-i18n':
-        specifier: workspace:*
-        version: link:packages/services/service-i18n
-      '@objectstack/spec':
-        specifier: workspace:*
-        version: link:packages/spec
-      better-sqlite3:
-        specifier: ^12.9.0
-        version: 12.9.0
-      lucide-react:
-        specifier: ^1.8.0
-        version: 1.8.0(react@19.2.5)
     devDependencies:
       '@changesets/cli':
         specifier: ^2.30.0

@@ -137,6 +137,7 @@ describe('AuthPlugin', () => {
     it('should register routes with HTTP server on kernel:ready', async () => {
       const mockRawApp = {
         all: vi.fn(),
+        get: vi.fn(),
       };
 
       const mockHttpServer = {
@@ -173,6 +174,7 @@ describe('AuthPlugin', () => {
     it('should log via ctx.logger when better-auth returns a 500 response', async () => {
       const mockRawApp = {
         all: vi.fn(),
+        get: vi.fn(),
       };
 
       const mockHttpServer = {
@@ -270,7 +272,7 @@ describe('AuthPlugin', () => {
     });
 
     it('should auto-detect baseUrl from http-server port when port differs', async () => {
-      const mockRawApp = { all: vi.fn() };
+      const mockRawApp = { all: vi.fn(), get: vi.fn() };
       const mockHttpServer = {
         post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn(),
         patch: vi.fn(), use: vi.fn(),
@@ -306,7 +308,7 @@ describe('AuthPlugin', () => {
       (mockContext.registerService as any).mockClear();
       await localPlugin.init(mockContext);
 
-      const mockRawApp = { all: vi.fn() };
+      const mockRawApp = { all: vi.fn(), get: vi.fn() };
       const mockHttpServer = {
         post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn(),
         patch: vi.fn(), use: vi.fn(),
@@ -338,7 +340,7 @@ describe('AuthPlugin', () => {
       (mockContext.registerService as any).mockClear();
       await localPlugin.init(mockContext);
 
-      const mockRawApp = { all: vi.fn() };
+      const mockRawApp = { all: vi.fn(), get: vi.fn() };
       const mockHttpServer = {
         post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn(),
         patch: vi.fn(), use: vi.fn(),
@@ -400,6 +402,7 @@ describe('AuthPlugin', () => {
 
       const mockRawApp = {
         all: vi.fn(),
+        get: vi.fn(),
       };
 
       const mockHttpServer = {

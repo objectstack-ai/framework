@@ -157,7 +157,23 @@ export class AuthManager {
       plugins: this.buildPluginList(),
 
       // Trusted origins for CSRF protection (supports wildcards like "https://*.example.com")
-      ...(this.config.trustedOrigins?.length ? { trustedOrigins: this.config.trustedOrigins } : {}),
+      // Auto-includes origins from CORS_ORIGIN env var so CORS and CSRF stay in sync.
+      ...(() => {
+        const origins: string[] = [...(this.config.trustedOrigins || [])];
+        // Sync with CORS_ORIGIN env var (comma-separated)
+        const corsOrigin = process.env.CORS_ORIGIN;
+        if (corsOrigin && corsOrigin !== '*') {
+          corsOrigin.split(',').map(s => s.trim()).filter(Boolean).forEach(o => {
+            if (!origins.includes(o)) origins.push(o);
+          });
+        }
+        // When CORS allows all origins (default) and no explicit trustedOrigins,
+        // trust all localhost ports in development for convenience.
+        if (!origins.length && (!corsOrigin || corsOrigin === '*')) {
+          origins.push('http://localhost:*');
+        }
+        return origins.length ? { trustedOrigins: origins } : {};
+      })(),
 
       // Advanced options (cross-subdomain cookies, secure cookies, CSRF, etc.)
       ...(this.config.advanced ? {

@@ -105,25 +105,46 @@ export class MetadataPlugin implements Plugin {
         });
 
         // Bridge database driver from kernel service registry to MetadataManager.
-        // DriverPlugin registers drivers as 'driver.{name}' services during init().
-        // This runs AFTER filesystem loading so that system metadata populated via
-        // register() above is stored in-memory only, without being persisted to the
-        // database (which would create noisy DB state/history on every cold boot).
+        // Uses ObjectQL engine's datasource mapping to resolve the correct driver
+        // for sys_metadata (respects namespace → datasource routing).
+        // Falls back to the first available driver.* service when ObjectQL is unavailable.
+        let driverBridged = false;
         try {
-            const services = ctx.getServices();
-            for (const [serviceName, service] of services) {
-                if (serviceName.startsWith('driver.') && service) {
-                    ctx.logger.info('[MetadataPlugin] Bridging driver to MetadataManager for database-backed persistence', {
-                        driverService: serviceName,
+            const ql = ctx.getService<any>('objectql');
+            if (ql) {
+                const tableName = this.manager['config']?.tableName ?? 'sys_metadata';
+                const driver = ql.getDriverForObject?.(tableName);
+                if (driver) {
+                    ctx.logger.info('[MetadataPlugin] Bridging driver to MetadataManager via ObjectQL routing', {
+                        tableName,
+                        driver: driver.name,
                     });
-                    this.manager.setDatabaseDriver(service);
-                    break; // Use the first discovered driver — typically only one driver is registered per deployment
+                    this.manager.setDatabaseDriver(driver);
+                    driverBridged = true;
+                } else {
+                    ctx.logger.debug('[MetadataPlugin] ObjectQL could not resolve driver for metadata table', { tableName });
                 }
             }
-        } catch (e: any) {
-            ctx.logger.debug('[MetadataPlugin] No driver service found — database metadata persistence not available', {
-                error: e.message,
-            });
+        } catch {
+            // ObjectQL not available — will fall through to driver service fallback below
+        }
+
+        // Fallback: scan for driver.* services when ObjectQL didn't provide a driver
+        if (!driverBridged) {
+            try {
+                const services = ctx.getServices();
+                for (const [serviceName, service] of services) {
+                    if (serviceName.startsWith('driver.') && service) {
+                        ctx.logger.info('[MetadataPlugin] Bridging driver to MetadataManager (fallback: first driver)', {
+                            driverService: serviceName,
+                        });
+                        this.manager.setDatabaseDriver(service);
+                        break;
+                    }
+                }
+            } catch (e: any) {
+                ctx.logger.debug('[MetadataPlugin] No driver service found', { error: e.message });
+            }
         }
 
         // Bridge realtime service from kernel service registry to MetadataManager.

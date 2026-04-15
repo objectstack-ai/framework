@@ -8,6 +8,7 @@ HTTP Server adapter for ObjectStack using Hono.
 - **Fast**: Built on Hono, a high-performance web framework.
 - **Full Protocol Support**: Automatically provides all ObjectStack Runtime endpoints (Auth, Data, Metadata, etc.).
 - **Middleware**: Supports standard Hono middleware.
+- **Wildcard CORS**: Supports wildcard patterns in CORS origins (compatible with better-auth).
 
 ## Usage
 
@@ -18,7 +19,7 @@ import { HonoServerPlugin } from '@objectstack/plugin-hono-server';
 const kernel = new ObjectKernel();
 
 // Register the server plugin
-kernel.use(new HonoServerPlugin({ 
+kernel.use(new HonoServerPlugin({
   port: 3000,
   restConfig: {
       api: {
@@ -28,6 +29,75 @@ kernel.use(new HonoServerPlugin({
 }));
 
 await kernel.start();
+```
+
+## CORS Configuration
+
+The Hono server plugin supports flexible CORS configuration with wildcard pattern matching.
+
+### Basic CORS
+
+```typescript
+kernel.use(new HonoServerPlugin({
+  port: 3000,
+  cors: {
+    origins: ['https://app.example.com'],
+    credentials: true
+  }
+}));
+```
+
+### Wildcard Patterns (better-auth compatible)
+
+```typescript
+// Subdomain wildcards
+kernel.use(new HonoServerPlugin({
+  cors: {
+    origins: ['https://*.objectui.org', 'https://*.objectstack.ai'],
+    credentials: true
+  }
+}));
+
+// Port wildcards (useful for development)
+kernel.use(new HonoServerPlugin({
+  cors: {
+    origins: 'http://localhost:*'
+  }
+}));
+
+// Comma-separated patterns
+kernel.use(new HonoServerPlugin({
+  cors: {
+    origins: 'https://*.objectui.org,https://*.objectstack.ai,http://localhost:*'
+  }
+}));
+```
+
+### Environment Variables
+
+CORS can also be configured via environment variables:
+
+```bash
+# Single origin
+CORS_ORIGIN=https://app.example.com
+
+# Wildcard patterns (comma-separated)
+CORS_ORIGIN=https://*.objectui.org,https://*.objectstack.ai
+
+# Disable CORS
+CORS_ENABLED=false
+
+# Additional options
+CORS_CREDENTIALS=true
+CORS_MAX_AGE=86400
+```
+
+### Disable CORS
+
+```typescript
+kernel.use(new HonoServerPlugin({
+  cors: false  // Completely disable CORS
+}));
 ```
 
 ## Architecture

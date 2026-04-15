@@ -434,7 +434,7 @@ describe('AuthManager', () => {
       ]);
     });
 
-    it('should NOT include trustedOrigins key when not provided', () => {
+    it('should default to localhost wildcard when trustedOrigins not provided', () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -449,10 +449,10 @@ describe('AuthManager', () => {
       manager.getAuthInstance();
       warnSpy.mockRestore();
 
-      expect(capturedConfig).not.toHaveProperty('trustedOrigins');
+      expect(capturedConfig.trustedOrigins).toEqual(['http://localhost:*']);
     });
 
-    it('should NOT include trustedOrigins key when array is empty', () => {
+    it('should default to localhost wildcard when trustedOrigins array is empty', () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -468,7 +468,7 @@ describe('AuthManager', () => {
       manager.getAuthInstance();
       warnSpy.mockRestore();
 
-      expect(capturedConfig).not.toHaveProperty('trustedOrigins');
+      expect(capturedConfig.trustedOrigins).toEqual(['http://localhost:*']);
     });
   });
 

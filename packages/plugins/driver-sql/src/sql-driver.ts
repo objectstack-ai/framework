@@ -148,7 +148,9 @@ export class SqlDriver implements IDataDriver {
   // ===================================
 
   async connect(): Promise<void> {
-    return Promise.resolve();
+    // Ensure the database directory exists before any query can trigger
+    // better-sqlite3 to open the file (e.g. loadMetaFromDb on startup).
+    await this.ensureDatabaseExists();
   }
 
   async checkHealth(): Promise<boolean> {
@@ -1006,8 +1008,21 @@ export class SqlDriver implements IDataDriver {
   // ── Database helpers ────────────────────────────────────────────────────────
 
   protected async ensureDatabaseExists() {
-    // SQLite auto-creates database files — no need to check
-    if (this.isSqlite) return;
+    // SQLite auto-creates database files but NOT parent directories.
+    // Ensure the directory exists so better-sqlite3 can create the file.
+    if (this.isSqlite) {
+      const conn = (this.config as any).connection;
+      const filename = typeof conn === 'string' ? conn : conn?.filename;
+      if (filename && filename !== ':memory:' && !filename.startsWith(':')) {
+        const { dirname } = await import('node:path');
+        const { mkdir } = await import('node:fs/promises');
+        const dir = dirname(filename);
+        if (dir && dir !== '.') {
+          await mkdir(dir, { recursive: true });
+        }
+      }
+      return;
+    }
 
     // Only PostgreSQL and MySQL support programmatic database creation
     if (!this.isPostgres && !this.isMysql) return;

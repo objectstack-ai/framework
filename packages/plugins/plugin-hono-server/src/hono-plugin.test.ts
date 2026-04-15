@@ -27,6 +27,7 @@ vi.mock('./adapter', () => ({
             close: vi.fn(),
             getRawApp: vi.fn().mockReturnValue({
                 get: vi.fn(),
+                use: vi.fn(),
             })
         };
     })
@@ -109,5 +110,127 @@ describe('HonoServerPlugin', () => {
         expect(rawApp.get).toHaveBeenCalledWith('/*', expect.anything());
         // Should register SPA fallback middleware
         expect(rawApp.get).toHaveBeenCalledWith('/*', expect.anything());
+    });
+
+    describe('CORS wildcard pattern matching', () => {
+        beforeEach(() => {
+            vi.clearAllMocks();
+        });
+
+        it('should enable CORS middleware with wildcard subdomain patterns', async () => {
+            const plugin = new HonoServerPlugin({
+                cors: {
+                    origins: ['https://*.objectui.org', 'https://*.objectstack.ai'],
+                    credentials: true
+                }
+            });
+
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            // CORS middleware should be registered
+            expect(rawApp.use).toHaveBeenCalledWith('*', expect.any(Function));
+        });
+
+        it('should enable CORS middleware with port wildcard patterns', async () => {
+            const plugin = new HonoServerPlugin({
+                cors: {
+                    origins: 'http://localhost:*',
+                }
+            });
+
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            expect(rawApp.use).toHaveBeenCalledWith('*', expect.any(Function));
+        });
+
+        it('should support comma-separated wildcard patterns', async () => {
+            const plugin = new HonoServerPlugin({
+                cors: {
+                    origins: 'https://*.objectui.org,https://*.objectstack.ai',
+                }
+            });
+
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            expect(rawApp.use).toHaveBeenCalledWith('*', expect.any(Function));
+        });
+
+        it('should support exact origins without wildcards', async () => {
+            const plugin = new HonoServerPlugin({
+                cors: {
+                    origins: ['https://app.example.com', 'https://api.example.com'],
+                }
+            });
+
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            expect(rawApp.use).toHaveBeenCalledWith('*', expect.any(Function));
+        });
+
+        it('should support CORS_ORIGIN environment variable with wildcards', async () => {
+            const originalEnv = process.env.CORS_ORIGIN;
+            process.env.CORS_ORIGIN = 'https://*.objectui.org,https://*.objectstack.ai';
+
+            const plugin = new HonoServerPlugin();
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            expect(rawApp.use).toHaveBeenCalledWith('*', expect.any(Function));
+
+            // Restore environment
+            if (originalEnv !== undefined) {
+                process.env.CORS_ORIGIN = originalEnv;
+            } else {
+                delete process.env.CORS_ORIGIN;
+            }
+        });
+
+        it('should disable CORS when cors option is false', async () => {
+            const plugin = new HonoServerPlugin({
+                cors: false
+            });
+
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            // CORS middleware should NOT be registered
+            expect(rawApp.use).not.toHaveBeenCalled();
+        });
+
+        it('should disable CORS when CORS_ENABLED env is false', async () => {
+            const originalEnv = process.env.CORS_ENABLED;
+            process.env.CORS_ENABLED = 'false';
+
+            const plugin = new HonoServerPlugin();
+            await plugin.init(context as PluginContext);
+
+            const serverInstance = (HonoHttpServer as any).mock.instances[0];
+            const rawApp = serverInstance.getRawApp();
+
+            expect(rawApp.use).not.toHaveBeenCalled();
+
+            // Restore environment
+            if (originalEnv !== undefined) {
+                process.env.CORS_ENABLED = originalEnv;
+            } else {
+                delete process.env.CORS_ENABLED;
+            }
+        });
     });
 });

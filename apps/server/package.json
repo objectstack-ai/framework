@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "objectstack serve --dev",
     "start": "objectstack serve",
+    "doctor": "objectstack doctor",
     "build": "objectstack compile",
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",

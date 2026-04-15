@@ -9,6 +9,15 @@ const config = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  turbopack: {
+    resolveAlias: {
+      // MDX content lives in ../../content/docs/ (outside the app directory).
+      // Turbopack resolves modules starting from the file's directory, so it
+      // can't find packages installed under this app's node_modules/.
+      // Alias lucide-react so external MDX files can import it.
+      'lucide-react': './node_modules/lucide-react',
+    },
+  },
   images: {
     remotePatterns: [
       {

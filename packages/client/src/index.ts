@@ -253,12 +253,26 @@ export class ObjectStackClient {
    */
   async connect() {
     this.logger.debug('Connecting to ObjectStack server', { baseUrl: this.baseUrl });
-    
+
     try {
       let data: DiscoveryResult | undefined;
 
-      // 1. Try Standard Discovery (.well-known)
+      // 1. Try Protocol-standard Discovery Path /api/v1/discovery (primary)
       try {
+        const discoveryUrl = `${this.baseUrl}/api/v1/discovery`;
+        this.logger.debug('Probing protocol-standard discovery endpoint', { url: discoveryUrl });
+        const res = await this.fetchImpl(discoveryUrl);
+        if (res.ok) {
+          const body = await res.json();
+          data = body.data || body;
+          this.logger.debug('Discovered via /api/v1/discovery');
+        }
+      } catch (e) {
+        this.logger.debug('Protocol-standard discovery probe failed', { error: (e as Error).message });
+      }
+
+      // 2. Fallback to Standard Discovery (.well-known)
+      if (!data) {
         let wellKnownUrl: string;
         try {
           // If baseUrl is absolute, get origin
@@ -269,24 +283,10 @@ export class ObjectStackClient {
           wellKnownUrl = '/.well-known/objectstack';
         }
 
-        this.logger.debug('Probing .well-known discovery', { url: wellKnownUrl });
+        this.logger.debug('Falling back to .well-known discovery', { url: wellKnownUrl });
         const res = await this.fetchImpl(wellKnownUrl);
-        if (res.ok) {
-          const body = await res.json();
-          data = body.data || body;
-          this.logger.debug('Discovered via .well-known');
-        }
-      } catch (e) {
-        this.logger.debug('Standard discovery probe failed', { error: (e as Error).message });
-      }
-
-      // 2. Fallback to Protocol-standard Discovery Path /api/v1/discovery
-      if (!data) {
-        const fallbackUrl = `${this.baseUrl}/api/v1/discovery`;
-        this.logger.debug('Falling back to standard discovery endpoint', { url: fallbackUrl });
-        const res = await this.fetchImpl(fallbackUrl);
         if (!res.ok) {
-           throw new Error(`Failed to connect to ${fallbackUrl}: ${res.statusText}`);
+           throw new Error(`Failed to connect to ${wellKnownUrl}: ${res.statusText}`);
         }
         const body = await res.json();
         data = body.data || body;
@@ -297,13 +297,13 @@ export class ObjectStackClient {
       }
 
       this.discoveryInfo = data;
-      
-      this.logger.info('Connected to ObjectStack server', { 
+
+      this.logger.info('Connected to ObjectStack server', {
         version: data.version,
         apiName: data.apiName,
-        services: data.services 
+        services: data.services
       });
-      
+
       return data as DiscoveryResult;
     } catch (e) {
       this.logger.error('Failed to connect to ObjectStack server', e as Error, { baseUrl: this.baseUrl });

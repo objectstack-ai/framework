@@ -3,14 +3,22 @@
 // Export IHttpServer from core
 export * from '@objectstack/core';
 
-import { 
-    IHttpServer, 
-    RouteHandler, 
-    Middleware 
+import {
+    IHttpServer,
+    RouteHandler,
+    Middleware
 } from '@objectstack/core';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+
+export interface HonoCorsOptions {
+    enabled?: boolean;
+    origins?: string | string[];
+    methods?: string[];
+    credentials?: boolean;
+    maxAge?: number;
+}
 
 /**
  * Hono Implementation of IHttpServer
@@ -137,7 +145,7 @@ export class HonoHttpServer implements IHttpServer {
     patch(path: string, handler: RouteHandler) {
         this.app.patch(path, this.wrap(handler));
     }
-    
+
     use(pathOrHandler: string | Middleware, handler?: Middleware) {
         if (typeof pathOrHandler === 'string' && handler) {
              // Path based middleware
@@ -217,6 +225,4 @@ export class HonoHttpServer implements IHttpServer {
             this.server.close();
         }
     }
-
-
 }

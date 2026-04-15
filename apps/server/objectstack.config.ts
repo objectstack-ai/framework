@@ -1,26 +1,56 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+/**
+ * Shared ObjectStack Server Configuration
+ *
+ * Single source of truth for all plugins — used by both:
+ *   - `objectstack serve` (local dev via CLI)
+ *   - `server/index.ts` (Vercel serverless deployment)
+ */
+
 import { defineStack } from '@objectstack/spec';
 import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
+import { TursoDriver } from '@objectstack/driver-turso';
 import { AuthPlugin } from '@objectstack/plugin-auth';
+import { SecurityPlugin } from '@objectstack/plugin-security';
+import { AuditPlugin } from '@objectstack/plugin-audit';
+import { SetupPlugin } from '@objectstack/plugin-setup';
+import { FeedServicePlugin } from '@objectstack/service-feed';
+import { MetadataPlugin } from '@objectstack/metadata';
+import { AIServicePlugin } from '@objectstack/service-ai';
+import { AutomationServicePlugin } from '@objectstack/service-automation';
+import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import CrmApp from '../../examples/app-crm/objectstack.config';
 import TodoApp from '../../examples/app-todo/objectstack.config';
 import BiPluginManifest from '../../examples/plugin-bi/objectstack.config';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
-// Production Server
-// This project acts as a "Platform Server" that loads multiple apps and plugins.
-// It effectively replaces the manual composition in `src/index.ts`.
+// Resolve base URL: explicit env > Vercel production URL > Vercel preview URL > localhost
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined)
+  ?? (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}` : undefined)
+  ?? 'http://localhost:3000';
 
-// Shared authentication plugin — reads secrets from environment variables so the
-// same config works both locally and on Vercel (where VERCEL_URL is injected).
-const authPlugin = new AuthPlugin({
-  secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',
-  baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'),
-});
+// Turso driver for sys namespace — remote when env vars are configured, local SQLite otherwise
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const tursoDriver = new TursoDriver(
+  process.env.TURSO_DATABASE_URL
+    ? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
+    : { url: `file:${resolve(__dirname, '.objectstack/data/dev.db')}` },
+);
+
+// Datasource routing: sys namespace → turso, everything else → memory
+const datasourceMapping = [
+  { namespace: 'sys', datasource: 'com.objectstack.driver.turso' },
+  { default: true, datasource: 'com.objectstack.driver.memory' },
+];
+
+const oqlPlugin = new ObjectQLPlugin();
 
 export default defineStack({
   manifest: {
@@ -31,82 +61,33 @@ export default defineStack({
     description: 'Production server aggregating CRM, Todo and BI plugins',
     type: 'app',
   },
-  
-  // Explicitly Load Plugins and Apps
-  // The Runtime CLI will iterate this list and call kernel.use()
   plugins: [
-    new ObjectQLPlugin(),
-    // Register Default Driver (Memory)
-    new DriverPlugin(new InMemoryDriver()),
-    // Authentication — required for production (Vercel) deployments
-    authPlugin,
-    // Wrap Manifests/Stacks in AppPlugin adapter
+    oqlPlugin,
+    // Set datasourceMapping right after ObjectQL init — access ql instance directly
+    {
+      name: 'datasource-mapping',
+      init() {
+        const ql = (oqlPlugin as any).ql;
+        if (ql?.setDatasourceMapping) ql.setDatasourceMapping(datasourceMapping);
+      },
+    },
+    new DriverPlugin(new InMemoryDriver(), 'memory'),
+    new DriverPlugin(tursoDriver, 'turso'),
     new AppPlugin(CrmApp),
     new AppPlugin(TodoApp),
-    new AppPlugin(BiPluginManifest)
-  ]
-});
-
-/**
- * Preview Mode Host Example
- *
- * Demonstrates how to run the platform in "preview" mode.
- * When `mode` is set to `'preview'`, the kernel signals the frontend to:
- * - Skip login/registration screens
- * - Automatically simulate an admin identity
- * - Display a preview-mode banner to the user
- *
- * Use this for marketplace demos, app showcases, or onboarding
- * tours where visitors should explore the system without signing up.
- *
- * ## Usage
- *
- * Set the `OS_MODE` environment variable to `preview` at boot:
- *
- * ```bash
- * OS_MODE=preview pnpm dev
- * ```
- *
- * Or use this stack definition directly as a starting point.
- *
- * ## KernelContext (created by the Runtime at boot)
- *
- * ```ts
- * import { KernelContextSchema } from '@objectstack/spec/kernel';
- *
- * const ctx = KernelContextSchema.parse({
- *   instanceId: '550e8400-e29b-41d4-a716-446655440000',
- *   mode: 'preview',
- *   version: '1.0.0',
- *   cwd: process.cwd(),
- *   startTime: Date.now(),
- *   previewMode: {
- *     autoLogin: true,
- *     simulatedRole: 'admin',
- *     simulatedUserName: 'Demo Admin',
- *     readOnly: false,
- *     bannerMessage: 'You are exploring a demo — data will be reset periodically.',
- *   },
- * });
- * ```
- */
-export const PreviewHostExample = defineStack({
-  manifest: {
-    id: 'com.objectstack.server-preview',
-    namespace: 'server',
-    name: 'ObjectStack Server Preview',
-    version: '1.0.0',
-    description: 'Production server in preview/demo mode — bypasses login, simulates admin user',
-    type: 'app',
-  },
-
-  // Same plugins as the standard host
-  plugins: [
-    new ObjectQLPlugin(),
-    new DriverPlugin(new InMemoryDriver()),
-    authPlugin,
-    new AppPlugin(CrmApp),
-    new AppPlugin(TodoApp),
-    new AppPlugin(BiPluginManifest)
-  ]
-});
+    new AppPlugin(BiPluginManifest),
+    new SetupPlugin(),
+    new AuthPlugin({
+      secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',
+      baseUrl,
+    }),
+    new SecurityPlugin(),
+    new AuditPlugin(),
+    new FeedServicePlugin(),
+    new MetadataPlugin({ watch: false }),
+    new AIServicePlugin(),
+    new AutomationServicePlugin(),
+    new AnalyticsServicePlugin(),
+  ],
+  datasourceMapping,
+}, { strict: false });

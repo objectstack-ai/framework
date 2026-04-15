@@ -11,7 +11,8 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * Belongs to `service-feed` package per "protocol + service ownership" pattern.
  */
 export const FeedItem = ObjectSchema.create({
-  name: 'sys_feed_item',
+  namespace: 'sys',
+  name: 'feed_item',
   label: 'Feed Item',
   pluralLabel: 'Feed Items',
   icon: 'message-square',

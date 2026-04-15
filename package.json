@@ -5,12 +5,13 @@
   "description": "ObjectStack Protocol & Specification - Monorepo for TypeScript Interfaces, JSON Schemas, and Convention Configurations",
   "scripts": {
     "build": "turbo run build --filter=!@objectstack/docs",
-    "dev": "pnpm --filter @objectstack/cli build && node packages/cli/bin/run.js serve --dev",
-    "dev:studio": "pnpm --filter @objectstack/studio dev",
-    "studio": "pnpm --filter @objectstack/cli build && node packages/cli/bin/run.js studio",
+    "dev": "pnpm --filter @objectstack/server dev",
+    "start": "pnpm --filter @objectstack/server start",
+    "studio:dev": "pnpm --filter @objectstack/studio dev",
+    "studio:start": "pnpm --filter @objectstack/studio start",
     "test": "turbo run test",
     "clean": "turbo run clean && rm -rf dist",
-    "doctor": "pnpm --filter @objectstack/cli build && node packages/cli/bin/run.js doctor",
+    "doctor": "pnpm --filter @objectstack/server doctor",
     "setup": "pnpm install && pnpm --filter @objectstack/spec build",
     "version": "changeset version",
     "release": "pnpm run build && changeset publish",
@@ -35,18 +36,7 @@
     "turbo": "^2.9.6",
     "typescript": "^6.0.2"
   },
-  "dependencies": {
-    "@objectstack/driver-memory": "workspace:*",
-    "@objectstack/driver-sql": "workspace:*",
-    "@objectstack/objectql": "workspace:*",
-    "@objectstack/plugin-auth": "workspace:*",
-    "@objectstack/plugin-hono-server": "workspace:*",
-    "@objectstack/runtime": "workspace:*",
-    "@objectstack/service-i18n": "workspace:*",
-    "@objectstack/spec": "workspace:*",
-    "better-sqlite3": "^12.9.0",
-    "lucide-react": "^1.8.0"
-  },
+  "dependencies": {},
   "engines": {
     "node": ">=18.0.0"
   },
