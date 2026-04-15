@@ -1,5 +1,22 @@
 # @objectstack/plugin-dev
 
+## 4.0.4
+
+### Patch Changes
+
+- Updated dependencies [326b66b]
+  - @objectstack/spec@4.0.4
+  - @objectstack/core@4.0.4
+  - @objectstack/objectql@4.0.4
+  - @objectstack/driver-memory@4.0.4
+  - @objectstack/plugin-auth@4.0.4
+  - @objectstack/plugin-hono-server@4.0.4
+  - @objectstack/plugin-security@4.0.4
+  - @objectstack/plugin-setup@4.0.4
+  - @objectstack/rest@4.0.4
+  - @objectstack/runtime@4.0.4
+  - @objectstack/service-i18n@4.0.4
+
 ## 4.0.3
 
 ### Patch Changes

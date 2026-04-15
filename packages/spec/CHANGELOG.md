@@ -1,5 +1,11 @@
 # @objectstack/spec
 
+## 4.0.4
+
+### Patch Changes
+
+- 326b66b: fix: studio CI test failures and metadata protocol mock handler improvements
+
 ## 4.0.3
 
 ## 4.0.2
