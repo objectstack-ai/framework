@@ -1082,9 +1082,13 @@ export class InMemoryDriver implements IDataDriver {
 
   /**
    * Detect whether the current runtime is a browser environment.
+   * Checks for window, document AND a functional localStorage to avoid
+   * false positives in Node.js runtimes that partially polyfill globals.
    */
   private isBrowserEnvironment(): boolean {
-    return typeof globalThis.localStorage !== 'undefined';
+    return typeof globalThis.window !== 'undefined'
+      && typeof globalThis.document !== 'undefined'
+      && typeof globalThis.localStorage?.setItem === 'function';
   }
 
   /**
