@@ -84,7 +84,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new DriverPlugin(tursoDriver, 'turso'));
 
             // Configure datasource mapping: sys namespace → Turso, everything else → Memory
-            const ql = kernel.getService('objectql');
+            const ql = await kernel.getServiceAsync<any>('objectql');
             if (ql && typeof ql.setDatasourceMapping === 'function') {
                 ql.setDatasourceMapping([
                     // System objects (sys namespace) use Turso for persistent storage
@@ -266,6 +266,5 @@ export default getRequestListener(async (request, env) => {
  * Vercel per-function configuration.
  */
 export const config = {
-    memory: 1024,
     maxDuration: 60,
 };
