@@ -83,18 +83,6 @@ async function ensureKernel(): Promise<ObjectKernel> {
 
             await kernel.use(new DriverPlugin(tursoDriver, 'turso'));
 
-            // Configure datasource mapping: sys namespace → Turso, everything else → Memory
-            const ql = await kernel.getServiceAsync<ObjectQL>('objectql');
-            if (ql && typeof ql.setDatasourceMapping === 'function') {
-                ql.setDatasourceMapping([
-                    // System objects (sys namespace) use Turso for persistent storage
-                    { namespace: 'sys', datasource: 'turso' },
-                    // All other objects use Memory driver as default
-                    { default: true, datasource: 'memory' },
-                ]);
-                console.log('[Vercel] Datasource mapping configured: sys → turso, default → memory');
-            }
-
             // Load app manifests (BEFORE plugins that need object schemas)
             await kernel.use(new AppPlugin(CrmApp));
             await kernel.use(new AppPlugin(TodoApp));
@@ -128,6 +116,18 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new AnalyticsServicePlugin());
 
             await kernel.bootstrap();
+
+            // Configure datasource mapping AFTER bootstrap (ObjectQL service is registered during init)
+            const ql = await kernel.getServiceAsync<ObjectQL>('objectql');
+            if (ql && typeof ql.setDatasourceMapping === 'function') {
+                ql.setDatasourceMapping([
+                    // System objects (sys namespace) use Turso for persistent storage
+                    { namespace: 'sys', datasource: 'turso' },
+                    // All other objects use Memory driver as default
+                    { default: true, datasource: 'memory' },
+                ]);
+                console.log('[Vercel] Datasource mapping configured: sys → turso, default → memory');
+            }
 
             _kernel = kernel;
             console.log('[Vercel] Kernel ready.');
