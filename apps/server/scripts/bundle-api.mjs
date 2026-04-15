@@ -27,6 +27,9 @@ const EXTERNAL = [
   'tedious',
   // macOS-only native file watcher
   'fsevents',
+  // Logging libraries - use dynamic require, must be external
+  'pino',
+  'pino-pretty',
 ];
 
 await build({
