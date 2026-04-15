@@ -1086,9 +1086,10 @@ export class InMemoryDriver implements IDataDriver {
    * false positives in Node.js runtimes that partially polyfill globals.
    */
   private isBrowserEnvironment(): boolean {
-    return typeof globalThis.window !== 'undefined'
-      && typeof globalThis.document !== 'undefined'
-      && typeof globalThis.localStorage?.setItem === 'function';
+    const g = globalThis as any;
+    return typeof g.window !== 'undefined'
+      && typeof g.document !== 'undefined'
+      && typeof g.localStorage?.setItem === 'function';
   }
 
   /**
