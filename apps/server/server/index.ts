@@ -11,8 +11,9 @@
  */
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
-import { ObjectQLPlugin } from '@objectstack/objectql';
+import { ObjectQLPlugin, ObjectQL } from '@objectstack/objectql';
 import { TursoDriver } from '@objectstack/driver-turso';
+import { InMemoryDriver } from '@objectstack/driver-memory';
 import { createHonoApp } from '@objectstack/hono';
 import { AuthPlugin } from '@objectstack/plugin-auth';
 import { SecurityPlugin } from '@objectstack/plugin-security';
@@ -62,7 +63,11 @@ async function ensureKernel(): Promise<ObjectKernel> {
             // Register ObjectQL engine
             await kernel.use(new ObjectQLPlugin());
 
-            // Database driver - Turso (remote mode for Vercel)
+            // Register Memory driver (default for CRM, Todo, BI apps)
+            const memoryDriver = new InMemoryDriver();
+            await kernel.use(new DriverPlugin(memoryDriver, 'memory'));
+
+            // Register Turso driver (for sys namespace)
             const tursoUrl = process.env.TURSO_DATABASE_URL;
             const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
@@ -76,7 +81,7 @@ async function ensureKernel(): Promise<ObjectKernel> {
                 // Remote mode - no local sync needed for Vercel
             });
 
-            await kernel.use(new DriverPlugin(tursoDriver));
+            await kernel.use(new DriverPlugin(tursoDriver, 'turso'));
 
             // Load app manifests (BEFORE plugins that need object schemas)
             await kernel.use(new AppPlugin(CrmApp));
@@ -111,6 +116,18 @@ async function ensureKernel(): Promise<ObjectKernel> {
             await kernel.use(new AnalyticsServicePlugin());
 
             await kernel.bootstrap();
+
+            // Configure datasource mapping AFTER bootstrap (ObjectQL service is registered during init)
+            const ql = await kernel.getServiceAsync<ObjectQL>('objectql');
+            if (ql && typeof ql.setDatasourceMapping === 'function') {
+                ql.setDatasourceMapping([
+                    // System objects (sys namespace) use Turso for persistent storage
+                    { namespace: 'sys', datasource: 'turso' },
+                    // All other objects use Memory driver as default
+                    { default: true, datasource: 'memory' },
+                ]);
+                console.log('[Vercel] Datasource mapping configured: sys → turso, default → memory');
+            }
 
             _kernel = kernel;
             console.log('[Vercel] Kernel ready.');
@@ -249,6 +266,5 @@ export default getRequestListener(async (request, env) => {
  * Vercel per-function configuration.
  */
 export const config = {
-    memory: 1024,
     maxDuration: 60,
 };

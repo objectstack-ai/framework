@@ -11,8 +11,8 @@
   },
   "functions": {
     "api/**/*.js": {
-      "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "api/node_modules/**"
     }
   },
   "headers": [

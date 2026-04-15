@@ -27,6 +27,11 @@ const EXTERNAL = [
   'tedious',
   // macOS-only native file watcher
   'fsevents',
+  // LibSQL client — has native bindings, must remain external for Vercel
+  '@libsql/client',
+  // Logging libraries - use dynamic require, must be external
+  'pino',
+  'pino-pretty',
 ];
 
 await build({
