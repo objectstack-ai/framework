@@ -7,6 +7,51 @@ import { ObjectStackClient } from '@objectstack/client';
 import studioConfig from '../../objectstack.config';
 
 /**
+ * Parse query parameters from a request URL into an ObjectQL query options object.
+ * Supports: top, skip, sort, select, filter (JSON), and individual key-value filters.
+ */
+function parseQueryOptions(url: URL): Record<string, any> {
+    const query: Record<string, any> = {};
+    const where: Record<string, any> = {};
+
+    url.searchParams.forEach((val, key) => {
+        switch (key) {
+            case 'top':
+            case '$top':
+                query.limit = parseInt(val, 10);
+                break;
+            case 'skip':
+            case '$skip':
+                query.offset = parseInt(val, 10);
+                break;
+            case 'sort':
+            case '$sort': {
+                // JSON array or comma-separated string
+                try { query.orderBy = JSON.parse(val); } catch {
+                    query.orderBy = val.split(',').map((s: string) => s.trim());
+                }
+                break;
+            }
+            case 'select':
+            case '$select':
+                query.fields = val.split(',').map((s: string) => s.trim());
+                break;
+            case 'filter':
+            case '$filter':
+                try { Object.assign(where, JSON.parse(val)); } catch { /* ignore malformed */ }
+                break;
+            default:
+                // Individual key-value filter params (e.g. id=abc)
+                where[key] = val;
+                break;
+        }
+    });
+
+    if (Object.keys(where).length > 0) query.where = where;
+    return query;
+}
+
+/**
  * Creates a Realistic Browser Simulation
  * 
  * This harness:
@@ -28,6 +73,7 @@ export async function simulateBrowser() {
     // 2. Define Network Handlers (The "Virtual Router")
     // These map HTTP requests -> Kernel ObjectQL service actions
     const ql = (kernel as any).context?.getService('objectql');
+    const protocol = (kernel as any).context?.getService('protocol');
     const handlers = [
         // Discovery
         http.get('http://localhost:3000/.well-known/objectstack', () => {
@@ -47,17 +93,14 @@ export async function simulateBrowser() {
              });
         }),
 
-        // Query / Find
+        // Query / Find — parse query params for filtering, pagination, sorting, field selection
         http.get('http://localhost:3000/api/v1/data/:object', async ({ params, request }) => {
             const url = new URL(request.url);
-            const filters = {}; 
-            url.searchParams.forEach((val, key) => {
-                 (filters as any)[key] = val;
-            });
-            console.log(`[VirtualNetwork] GET /data/${params.object}`, filters);
+            const queryOpts = parseQueryOptions(url);
+            console.log(`[VirtualNetwork] GET /data/${params.object}`, queryOpts);
             
             try {
-                let all = await ql.find(params.object);
+                let all = await ql.find(params.object, queryOpts);
                 if (!Array.isArray(all) && all && (all as any).value) all = (all as any).value;
                 if (!all) all = [];
                 const result = { object: params.object, records: all, total: all.length };
@@ -122,12 +165,12 @@ export async function simulateBrowser() {
             }
         }),
 
-        // Metadata - Get all types (base route returns types)
+        // Metadata - Get all types (merges SchemaRegistry + MetadataService types)
         http.get('http://localhost:3000/api/v1/meta', async () => {
              console.log('[VirtualNetwork] GET /meta (types)');
              try {
-                 const types = ql?.registry?.getRegisteredTypes?.() || [];
-                 return HttpResponse.json({ success: true, data: { types } });
+                 const result = await protocol?.getMetaTypes?.();
+                 return HttpResponse.json({ success: true, data: result || { types: [] } });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -137,8 +180,8 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/object', async () => {
              console.log('[VirtualNetwork] GET /meta/object');
              try {
-                 const objects = ql?.getObjects?.() || {};
-                 return HttpResponse.json({ success: true, data: objects });
+                 const result = await protocol?.getMetaItems?.({ type: 'object' });
+                 return HttpResponse.json({ success: true, data: result || { type: 'object', items: [] } });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -146,22 +189,23 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/objects', async () => {
              console.log('[VirtualNetwork] GET /meta/objects');
              try {
-                 const objects = ql?.getObjects?.() || {};
-                 return HttpResponse.json({ success: true, data: objects });
+                 const result = await protocol?.getMetaItems?.({ type: 'object' });
+                 return HttpResponse.json({ success: true, data: result || { type: 'object', items: [] } });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
         }),
 
         // Metadata - Object Detail (Singular & Plural support)
+        // Returns the raw ServiceObject directly (with name, fields, etc.)
         http.get('http://localhost:3000/api/v1/meta/object/:name', async ({ params }) => {
              console.log(`[VirtualNetwork] GET /meta/object/${params.name}`);
              try {
-                 const result = ql?.registry?.getObject?.(params.name);
-                 if (!result) {
+                 const result = await protocol?.getMetaItem?.({ type: 'object', name: params.name as string });
+                 if (!result?.item) {
                      return HttpResponse.json({ error: 'Not Found' }, { status: 404 });
                  }
-                 return HttpResponse.json({ success: true, data: result });
+                 return HttpResponse.json({ success: true, data: result.item });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -169,11 +213,11 @@ export async function simulateBrowser() {
         http.get('http://localhost:3000/api/v1/meta/objects/:name', async ({ params }) => {
              console.log(`[VirtualNetwork] GET /meta/objects/${params.name}`);
              try {
-                 const result = ql?.registry?.getObject?.(params.name);
-                 if (!result) {
+                 const result = await protocol?.getMetaItem?.({ type: 'object', name: params.name as string });
+                 if (!result?.item) {
                      return HttpResponse.json({ error: 'Not Found' }, { status: 404 });
                  }
-                 return HttpResponse.json({ success: true, data: result });
+                 return HttpResponse.json({ success: true, data: result.item });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }
@@ -186,8 +230,8 @@ export async function simulateBrowser() {
              }
              console.log(`[VirtualNetwork] GET /meta/${params.type}`);
              try {
-                 const items = ql?.registry?.listItems?.(params.type) || [];
-                 return HttpResponse.json({ success: true, data: items });
+                 const result = await protocol?.getMetaItems?.({ type: params.type as string });
+                 return HttpResponse.json({ success: true, data: result || { type: params.type, items: [] } });
              } catch (err: any) {
                   return HttpResponse.json({ error: err.message }, { status: 500 });
              }

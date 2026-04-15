@@ -4,6 +4,7 @@
 
 ### Patch Changes
 
+- Fix simulateBrowser mock handlers to properly support query parameters (top, skip, sort, select, filter) in data endpoints, use protocol service for metadata endpoints (types, items), and return correct response formats matching the ObjectStack protocol spec
 - Updated dependencies [ee39bff]
   - @objectstack/service-ai@4.0.3
   - @objectstack/plugin-auth@4.0.3
