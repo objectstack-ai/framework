@@ -534,7 +534,12 @@ export class HttpDispatcher {
             const metadataService = await this.getService(CoreServiceName.enum.metadata);
             if (metadataService && typeof (metadataService as any).list === 'function') {
                 try {
-                    const items = await (metadataService as any).list(typeOrName);
+                    let items = await (metadataService as any).list(typeOrName);
+                    // Respect package filter: MetadataService.list() returns ALL items,
+                    // so filter by _packageId when a specific package is requested.
+                    if (packageId && items && items.length > 0) {
+                        items = items.filter((item: any) => item?._packageId === packageId);
+                    }
                     if (items && items.length > 0) {
                         return { handled: true, response: this.success({ type: typeOrName, items }) };
                     }

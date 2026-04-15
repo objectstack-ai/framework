@@ -253,7 +253,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const services = this.getServicesRegistry?.();
             const metadataService = services?.get('metadata');
             if (metadataService && typeof metadataService.list === 'function') {
-                const runtimeItems = await metadataService.list(request.type);
+                let runtimeItems = await metadataService.list(request.type);
+                // When filtering by packageId, only include runtime items that
+                // belong to the requested package. MetadataService.list() returns
+                // items from ALL packages, so we must filter here to respect the
+                // package scope requested by the caller (e.g., Studio sidebar).
+                if (packageId && runtimeItems && runtimeItems.length > 0) {
+                    runtimeItems = runtimeItems.filter((item: any) => item?._packageId === packageId);
+                }
                 if (runtimeItems && runtimeItems.length > 0) {
                     // Merge, avoiding duplicates by name
                     const itemMap = new Map<string, any>();
