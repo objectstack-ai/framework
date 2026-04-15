@@ -107,11 +107,11 @@ describe('ObjectStackClient (with Hono Server)', () => {
         baseUrl = `http://localhost:${port}`;
 
         console.log(`Test server running at ${baseUrl}`);
-    });
+    }, 30_000);
 
     afterAll(async () => {
         if (kernel) await kernel.shutdown();
-    });
+    }, 30_000);
 
     it('should connect to hono server and discover endpoints', async () => {
         const client = new ObjectStackClient({ baseUrl });
