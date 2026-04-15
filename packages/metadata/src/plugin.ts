@@ -107,6 +107,8 @@ export class MetadataPlugin implements Plugin {
         // Bridge database driver from kernel service registry to MetadataManager.
         // Uses ObjectQL engine's datasource mapping to resolve the correct driver
         // for sys_metadata (respects namespace → datasource routing).
+        // Falls back to the first available driver.* service when ObjectQL is unavailable.
+        let driverBridged = false;
         try {
             const ql = ctx.getService<any>('objectql');
             if (ql) {
@@ -118,12 +120,17 @@ export class MetadataPlugin implements Plugin {
                         driver: driver.name,
                     });
                     this.manager.setDatabaseDriver(driver);
+                    driverBridged = true;
                 } else {
                     ctx.logger.debug('[MetadataPlugin] ObjectQL could not resolve driver for metadata table', { tableName });
                 }
             }
         } catch {
-            // ObjectQL not available — fall back to first available driver service
+            // ObjectQL not available — will fall through to driver service fallback below
+        }
+
+        // Fallback: scan for driver.* services when ObjectQL didn't provide a driver
+        if (!driverBridged) {
             try {
                 const services = ctx.getServices();
                 for (const [serviceName, service] of services) {
