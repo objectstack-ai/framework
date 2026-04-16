@@ -1,8 +1,8 @@
 {
-  "name": "@objectstack/rest",
-  "version": "4.0.4",
+  "name": "@objectstack/service-package",
+  "version": "1.0.0",
   "license": "Apache-2.0",
-  "description": "ObjectStack REST API Server - automatic REST endpoint generation from protocol",
+  "description": "Package management service for ObjectStack — publish, install, and manage packages",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,17 +14,15 @@
     }
   },
   "scripts": {
-    "build": "tsup --config ../../tsup.config.ts",
-    "dev": "tsc -w",
-    "test": "vitest run"
+    "build": "tsup --config ../../../tsup.config.ts",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@objectstack/core": "workspace:*",
-    "@objectstack/spec": "workspace:*",
-    "zod": "^4.3.6",
-    "@objectstack/service-package": "workspace:*"
+    "@objectstack/spec": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
   }
