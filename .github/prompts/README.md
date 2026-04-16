@@ -142,9 +142,15 @@ These prompts help with specific development tasks:
 
 ## 🎯 How to Use These Prompts
 
-### For GitHub Copilot
+### For AI Coding Assistants
 
-These prompts are automatically loaded by GitHub Copilot when working in the repository. They provide context-aware assistance based on:
+These prompts are compatible with multiple AI coding assistants:
+
+- **Claude Code** (Recommended): Automatically loaded from the repository context
+- **GitHub Copilot**: Automatically loaded when working in the repository
+- **Cursor**: Can reference these prompts for context-aware assistance
+
+They provide context-aware assistance based on:
 - The file you're editing
 - The protocol layer you're working on
 - The task you're performing

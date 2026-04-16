@@ -90,7 +90,7 @@ objectstack-ai/spec/
 │   ├── app-crm/           # Advanced: full CRM with relations
 │   └── plugin-bi/         # Plugin example: BI dashboard
 │
-├── skills/                # 🤖 AI skill definitions (for Copilot/Cursor)
+├── skills/                # 🤖 AI skill definitions (for Claude Code, Copilot, Cursor)
 │   ├── objectstack-schema/
 │   ├── objectstack-query/
 │   ├── objectstack-api/
