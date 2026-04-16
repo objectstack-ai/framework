@@ -5,6 +5,7 @@ import { NodeMetadataManager } from './node-metadata-manager.js';
 import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
 import type { MetadataPluginConfig } from '@objectstack/spec/kernel';
 import { SysMetadataObject } from './objects/sys-metadata.object.js';
+import { SysMetadataHistoryObject } from './objects/sys-metadata-history.object.js';
 
 export interface MetadataPluginOptions {
     rootDir?: string;
@@ -57,7 +58,7 @@ export class MetadataPlugin implements Plugin {
                 version: '1.0.0',
                 type: 'plugin',
                 namespace: 'sys',
-                objects: [SysMetadataObject],
+                objects: [SysMetadataObject, SysMetadataHistoryObject],
             });
         } catch {
             // ObjectQL not loaded yet — objects will be discovered via legacy fallback
