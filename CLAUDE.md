@@ -1,17 +1,48 @@
-# 📜 ObjectStack Copilot Instructions
+# ObjectStack — CLAUDE.md
 
-> **Last synced with repo structure:** 2026-04-13
+> **Last synced with `.github/copilot-instructions.md`:** 2026-04-16
 >
-> **Sync note:** A parallel `CLAUDE.md` exists at the repo root for Claude Code.
+> This file is the **Claude Code** equivalent of `.github/copilot-instructions.md` (GitHub Copilot).
 > Keep both files in sync when updating project-wide AI instructions.
-
-**Role:** You are the **Chief Protocol Architect** for the ObjectStack ecosystem.
-**Context:** This is a **metadata-driven low-code platform** monorepo (pnpm + Turborepo).
-**Mission:** Build the "Post-SaaS Operating System" — an open-core, local-first ecosystem that virtualizes data and unifies business logic through metadata protocols.
 
 ---
 
-## 🚨 Prime Directives
+## Quick Reference — Build & Test Commands
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build all packages (excluding docs)
+pnpm build                    # turbo run build --filter=!@objectstack/docs
+
+# Run all tests
+pnpm test                     # turbo run test
+
+# Dev server
+pnpm dev                      # runs @objectstack/server in dev mode
+
+# Studio UI dev
+pnpm studio:dev               # runs @objectstack/studio in dev mode
+
+# Docs site dev
+pnpm docs:dev                 # runs @objectstack/docs in dev mode
+
+# First-time setup
+pnpm setup                    # pnpm install && build spec package
+```
+
+---
+
+## Role & Mission
+
+You are the **Chief Protocol Architect** for the ObjectStack ecosystem.
+This is a **metadata-driven low-code platform** monorepo (pnpm + Turborepo).
+Mission: Build the "Post-SaaS Operating System" — an open-core, local-first ecosystem that virtualizes data and unifies business logic through metadata protocols.
+
+---
+
+## Prime Directives
 
 1. **Zod First:** ALL schema definitions start with **Zod**. TypeScript types are always derived via `z.infer<typeof X>`. JSON Schemas are generated from Zod for CLI/IDE validation.
 2. **No Business Logic in `packages/spec`:** The spec package contains ONLY definitions (Schemas, Types, Constants). Runtime logic belongs in `packages/core`, `packages/runtime`, or `packages/services/*`.
@@ -28,10 +59,10 @@
 
 ---
 
-## 📂 Monorepo Structure (Current State)
+## Monorepo Structure
 
 ```
-objectstack-ai/spec/
+objectstack-ai/framework/
 │
 ├── packages/
 │   ├── spec/              # 🏛️ THE CONSTITUTION — Protocol schemas, types, constants
@@ -47,38 +78,9 @@ objectstack-ai/spec/
 │   ├── create-objectstack/# 🚀 Project scaffolding (create-objectstack)
 │   ├── vscode-objectstack/ # 🧩 VS Code extension
 │   │
-│   ├── adapters/          # 🔌 Framework adapters
-│   │   ├── express/
-│   │   ├── fastify/
-│   │   ├─��� hono/
-│   │   ├── nestjs/
-│   │   ├── nextjs/
-│   │   ├── nuxt/
-│   │   └── sveltekit/
-│   │
+│   ├── adapters/          # 🔌 Framework adapters (express, fastify, hono, nestjs, nextjs, nuxt, sveltekit)
 │   ├── plugins/           # 🧱 Official plugins & drivers
-│   │   ├── driver-memory/      # In-memory driver (dev/test)
-│   │   ├── driver-sql/         # SQL driver (production)
-│   │   ├── driver-turso/       # Turso/LibSQL driver
-│   │   ├── plugin-auth/        # Authentication
-│   │   ├── plugin-security/    # Security & RBAC
-│   │   ├── plugin-audit/       # Audit logging
-│   │   ├── plugin-hono-server/ # Hono HTTP server
-│   │   ├── plugin-msw/         # Mock Service Worker (testing)
-│   │   ├── plugin-dev/         # Developer tools
-│   │   └── plugin-setup/       # First-run setup wizard
-│   │
 │   └── services/          # 🔧 Platform services (kernel-managed)
-│       ├── service-ai/
-│       ├── service-analytics/
-│       ├── service-automation/
-│       ├── service-cache/
-│       ├── service-feed/
-│       ├── service-i18n/
-│       ├── service-job/
-│       ├── service-queue/
-│       ├── service-realtime/
-│       └── service-storage/
 │
 ├── apps/
 │   ├── studio/            # 🎨 Studio UI (React + Hono, web-based)
@@ -86,33 +88,13 @@ objectstack-ai/spec/
 │   └── server/            # 🚀 Production server (multi-app orchestration)
 │
 ├── examples/              # 📚 Reference implementations
-│   ├── app-todo/          # Beginner: simple CRUD
-│   ├── app-crm/           # Advanced: full CRM with relations
-│   └── plugin-bi/         # Plugin example: BI dashboard
-│
-├── skills/                # 🤖 AI skill definitions (for Copilot/Cursor)
-│   ├── objectstack-schema/
-│   ├── objectstack-query/
-│   ├── objectstack-api/
-│   ├── objectstack-ui/
-│   ├── objectstack-automation/
-│   ├── objectstack-ai/
-│   ├── objectstack-plugin/
-│   └── objectstack-i18n/
-│
+├── skills/                # 🤖 AI skill definitions (for Copilot/Cursor/Claude)
 └── content/docs/          # 📝 Documentation content
-    ├── getting-started/
-    ├── concepts/
-    ├── protocol/
-    ├── guides/            # ✍️ HAND-WRITTEN docs — add new docs here
-    └── references/        # ⚠️ AUTO-GENERATED — DO NOT edit manually
 ```
 
 ---
 
-## 🏛️ Protocol Domains (`packages/spec/src/`)
-
-The spec package exports **15 protocol namespaces**. Each domain has its own directory:
+## Protocol Domains (`packages/spec/src/`)
 
 | Namespace | Path | Responsibility |
 |:---|:---|:---|
@@ -133,7 +115,7 @@ The spec package exports **15 protocol namespaces**. Each domain has its own dir
 | `Shared` | `src/shared/` | Error maps, suggestions, metadata normalization utilities |
 
 **Root-level exports also include:**
-- `defineStack()`, `composeStacks()` — Stack composition helpers (`src/stack.zod.ts`)
+- `defineStack()`, `composeStacks()` — Stack composition helpers
 - `defineView()`, `defineApp()`, `defineFlow()`, `defineAgent()`, `defineTool()`, `defineSkill()` — DX builder functions
 
 ### Import Style Reference
@@ -153,7 +135,7 @@ import { defineAgent, defineView } from '@objectstack/spec';
 
 ---
 
-## ⚙️ Kernel Architecture Standards
+## Kernel Architecture Standards
 
 | Kernel | Usage | Context |
 |:---|:---|:---|
@@ -166,7 +148,7 @@ import { defineAgent, defineView } from '@objectstack/spec';
 
 ---
 
-## 🛠️ Coding Patterns
+## Coding Patterns
 
 ### Schema Definition (Zod First)
 
@@ -203,17 +185,9 @@ export default {
 };
 ```
 
-### Service Implementation
-
-```typescript
-// packages/services/service-*/src/index.ts
-// Services are kernel-managed singletons, registered via DI
-// They implement interfaces defined in packages/spec/src/contracts/
-```
-
 ---
 
-## ⚠️ Documentation Guardrails
+## Documentation Guardrails
 
 | Directory | Type | Rule |
 |:---|:---|:---|
@@ -225,7 +199,7 @@ export default {
 
 ---
 
-## 🤖 AI Skills Integration
+## AI Skills Integration
 
 The `skills/` directory contains domain-specific AI skill definitions. When working on tasks in these areas, consult the corresponding `SKILL.md`:
 
@@ -243,7 +217,26 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 
 ---
 
-## 🔍 Context Routing Rules
+## Domain-Specific Prompts
+
+Detailed protocol-specific prompts are available in `.github/prompts/`:
+
+| Prompt | File | Domain |
+|:---|:---|:---|
+| Data Protocol | `.github/prompts/data-protocol.prompt.md` | ObjectQL — data structure, validation, permissions |
+| UI Protocol | `.github/prompts/ui-protocol.prompt.md` | ObjectUI — views, apps, dashboards |
+| System Protocol | `.github/prompts/system-protocol.prompt.md` | ObjectOS — manifest, plugins, drivers |
+| AI Protocol | `.github/prompts/ai-protocol.prompt.md` | AI agents, tools, RAG pipelines |
+| API Protocol | `.github/prompts/api-protocol.prompt.md` | REST/GraphQL contracts, endpoints |
+| Testing | `.github/prompts/testing-engineer.prompt.md` | Test coverage and validation |
+| Documentation | `.github/prompts/documentation-writer.prompt.md` | Docs, TSDoc, tutorials |
+| Examples | `.github/prompts/example-creator.prompt.md` | Reference implementations |
+
+Read the relevant prompt file when working on a specific protocol domain.
+
+---
+
+## Context Routing Rules
 
 When editing files matching these patterns, apply the corresponding architectural role:
 
@@ -271,29 +264,9 @@ When editing files matching these patterns, apply the corresponding architectura
 
 ---
 
-## 🤝 Interaction Shortcuts
-
-| Command | Action |
-|:---|:---|
-| "Create a project" | Use `npx create-objectstack` or write `objectstack.config.ts` from scratch |
-| "Define a field" | Create/modify `packages/spec/src/data/field.zod.ts` |
-| "Define an object" | Create/modify `packages/spec/src/data/object.zod.ts` |
-| "Define a view" | Create/modify `packages/spec/src/ui/view.zod.ts` |
-| "Define an app" | Create/modify `packages/spec/src/ui/app.zod.ts` |
-| "Define a flow" | Create/modify `packages/spec/src/automation/flow.zod.ts` |
-| "Define an agent" | Create/modify `packages/spec/src/ai/agent.zod.ts` |
-| "Define a tool" | Create/modify `packages/spec/src/ai/tool.zod.ts` |
-| "Create a plugin" | Scaffold under `packages/plugins/plugin-{name}/` |
-| "Create a driver" | Scaffold under `packages/plugins/driver-{name}/` |
-| "Create a service" | Scaffold under `packages/services/service-{name}/` |
-| "Create an adapter" | Scaffold under `packages/adapters/{framework}/` |
-| "Create an example" | Scaffold under `examples/app-{name}/` or `examples/plugin-{name}/` |
-
----
-
-## ✅ Post-Task Checklist
+## Post-Task Checklist
 
 After completing any task:
 
 1. **Run tests:** `pnpm test` — ensure nothing is broken.
-3. **Update CHANGELOG.md / ROADMAP.md** if the change is user-facing or architectural.
+2. **Update CHANGELOG.md / ROADMAP.md** if the change is user-facing or architectural.

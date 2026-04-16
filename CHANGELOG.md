@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Claude Code integration (`CLAUDE.md`)** — Added root `CLAUDE.md` file so that [Claude Code](https://docs.anthropic.com/en/docs/claude-code) automatically loads the project's system prompt when launched in the repository. Content is synced with `.github/copilot-instructions.md` and includes build/test quick-reference commands, all prime directives, monorepo structure, protocol domains, coding patterns, and domain-specific prompt references. This complements the existing GitHub Copilot instructions and `skills/` directory.
+
 ### Changed
 - **Skills Module Structure Refactor** — Refactored all skills in `skills/` directory to follow shadcn-ui's fine-grained layering pattern. Each skill now has:
   - **Concise `SKILL.md`** — High-level overview with decision trees and quick-start examples, referencing detailed rules
