@@ -282,4 +282,37 @@ export class AppPlugin implements Plugin {
             ctx.logger.info('[i18n] Loaded translation bundles', { appId, bundles: bundles.length, locales: loadedLocales });
         }
     }
+
+    /**
+     * Plugin onDisable hook - cleanup when plugin is unloaded
+     */
+    onDisable = async (ctx: PluginContext) => {
+        const sys = this.bundle.manifest || this.bundle;
+        const appId = sys.id || sys.name;
+
+        ctx.logger.info('Disabling app plugin', { appId, pluginName: this.name });
+
+        // Call user-defined onDisable if exists
+        const runtime = this.bundle.default || this.bundle;
+        if (runtime && typeof runtime.onDisable === 'function') {
+            try {
+                const ql = ctx.getService('objectql');
+                const hostContext = {
+                    ...ctx,
+                    ql,
+                    logger: ctx.logger
+                };
+
+                await runtime.onDisable(hostContext);
+                ctx.logger.debug('Runtime.onDisable completed', { appId });
+            } catch (err: any) {
+                ctx.logger.error('Runtime.onDisable failed', {
+                    appId,
+                    error: err.message
+                });
+            }
+        }
+
+        ctx.logger.info('App plugin disabled', { appId });
+    }
 }

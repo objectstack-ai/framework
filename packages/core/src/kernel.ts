@@ -628,4 +628,77 @@ export class ObjectKernel {
     onShutdown(handler: () => Promise<void>): void {
         this.shutdownHandlers.push(handler);
     }
+
+    /**
+     * Unload a plugin at runtime
+     *
+     * This method safely unloads a plugin by:
+     * 1. Calling the plugin's stop() hook if available
+     * 2. Calling the plugin's onDisable() hook if available
+     * 3. Unregistering services registered by the plugin
+     * 4. Removing plugin hooks
+     * 5. Removing plugin from the registry
+     * 6. Emitting 'plugin:unloaded' event
+     */
+    async unload(pluginName: string): Promise<void> {
+        const metadata = this.plugins.get(pluginName);
+
+        if (!metadata) {
+            this.logger.warn('Plugin not found, cannot unload', { pluginName });
+            return;
+        }
+
+        this.logger.info('Unloading plugin', { pluginName });
+
+        try {
+            // 1. Call plugin's stop hook
+            if (metadata.plugin.stop) {
+                this.logger.debug('Calling plugin stop hook', { pluginName });
+                await metadata.plugin.stop(this.context);
+            }
+
+            // 2. Call plugin's onDisable hook (if available)
+            if (typeof (metadata.plugin as any).onDisable === 'function') {
+                this.logger.debug('Calling plugin onDisable hook', { pluginName });
+                await (metadata.plugin as any).onDisable(this.context);
+            }
+
+            // 3. Unregister services registered by this plugin
+            // Note: We track registered services in plugin metadata during init
+            const registeredServices = (metadata as any)._registeredServices || [];
+            for (const serviceName of registeredServices) {
+                this.logger.debug('Unregistering service', { service: serviceName, plugin: pluginName });
+                this.services.delete(serviceName);
+                this.pluginLoader.unregisterService(serviceName);
+            }
+
+            // 4. Clean up hooks
+            for (const [hookName, handlers] of this.hooks.entries()) {
+                const filteredHandlers = handlers.filter(
+                    h => h !== (metadata.plugin as any)[hookName]
+                );
+                if (filteredHandlers.length < handlers.length) {
+                    this.hooks.set(hookName, filteredHandlers);
+                    this.logger.debug('Removed plugin hooks', { hook: hookName, plugin: pluginName });
+                }
+            }
+
+            // 5. Remove from plugin registry
+            this.plugins.delete(pluginName);
+            this.startedPlugins.delete(pluginName);
+            this.pluginStartTimes.delete(pluginName);
+
+            // 6. Emit unloaded event
+            await this.emit('plugin:unloaded', { pluginName });
+
+            this.logger.info('Plugin unloaded successfully', { pluginName });
+        } catch (err: any) {
+            this.logger.error('Failed to unload plugin', {
+                pluginName,
+                error: err.message,
+                stack: err.stack
+            });
+            throw new Error(`Failed to unload plugin ${pluginName}: ${err.message}`);
+        }
+    }
 }

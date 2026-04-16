@@ -22,9 +22,7 @@ import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
 import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
-import CrmApp from '../../examples/app-crm/objectstack.config';
-import TodoApp from '../../examples/app-todo/objectstack.config';
-import BiPluginManifest from '../../examples/plugin-bi/objectstack.config';
+import { MarketplaceServicePlugin } from '@objectstack/service-marketplace';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -52,13 +50,37 @@ const datasourceMapping = [
 
 const oqlPlugin = new ObjectQLPlugin();
 
+// Conditional loading: load example apps only in development mode
+const isDev = process.env.NODE_ENV === 'development';
+const devPlugins = isDev ? await loadDevExamples() : [];
+
+async function loadDevExamples() {
+  try {
+    const [CrmApp, TodoApp, BiPlugin] = await Promise.all([
+      import('../../examples/app-crm/objectstack.config.js'),
+      import('../../examples/app-todo/objectstack.config.js'),
+      import('../../examples/plugin-bi/objectstack.config.js'),
+    ]);
+
+    return [
+      new AppPlugin(CrmApp.default),
+      new AppPlugin(TodoApp.default),
+      new AppPlugin(BiPlugin.default),
+    ];
+  } catch (err) {
+    // Examples not available in production build
+    console.warn('[Server] Example apps not loaded:', (err as Error).message);
+    return [];
+  }
+}
+
 export default defineStack({
   manifest: {
     id: 'com.objectstack.server',
     namespace: 'server',
     name: 'ObjectStack Server',
     version: '1.0.0',
-    description: 'Production server aggregating CRM, Todo and BI plugins',
+    description: 'Production server with marketplace support',
     type: 'app',
   },
   plugins: [
@@ -73,9 +95,20 @@ export default defineStack({
     },
     new DriverPlugin(new InMemoryDriver(), 'memory'),
     new DriverPlugin(tursoDriver, 'turso'),
-    new AppPlugin(CrmApp),
-    new AppPlugin(TodoApp),
-    new AppPlugin(BiPluginManifest),
+
+    // Load example apps in development mode only
+    ...devPlugins,
+
+    // Marketplace service for runtime plugin loading
+    new MarketplaceServicePlugin({
+      marketplaceUrl: process.env.OBJECTSTACK_MARKETPLACE_URL
+        || 'https://cloud.objectstack.ai',
+      authToken: process.env.OBJECTSTACK_AUTH_TOKEN,
+      enableCache: true,
+      cacheTTL: 3600,
+      persistState: true,
+    }),
+
     new SetupPlugin(),
     new AuthPlugin({
       secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',

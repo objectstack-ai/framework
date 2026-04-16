@@ -481,4 +481,19 @@ export class PluginLoader {
             this.creating.delete(registration.name);
         }
     }
+
+    /**
+     * Unregister a service (used during plugin unload)
+     */
+    unregisterService(name: string): void {
+        this.serviceFactories.delete(name);
+        this.serviceInstances.delete(name);
+
+        // Remove from all scoped services
+        for (const scope of this.scopedServices.values()) {
+            scope.delete(name);
+        }
+
+        this.logger.debug(`Service unregistered: ${name}`);
+    }
 }

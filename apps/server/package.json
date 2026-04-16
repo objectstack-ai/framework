@@ -15,11 +15,6 @@
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
-    "@example/app-crm": "workspace:*",
-    "@example/app-todo": "workspace:*",
-    "@example/plugin-bi": "workspace:*",
-    "@hono/node-server": "^1.19.14",
-    "@libsql/client": "^0.14.0",
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/driver-turso": "workspace:*",
     "@objectstack/hono": "workspace:*",
@@ -35,7 +30,10 @@
     "@objectstack/service-analytics": "workspace:*",
     "@objectstack/service-automation": "workspace:*",
     "@objectstack/service-feed": "workspace:*",
+    "@objectstack/service-marketplace": "workspace:*",
     "@objectstack/spec": "workspace:*",
+    "@hono/node-server": "^1.19.14",
+    "@libsql/client": "^0.14.0",
     "hono": "^4.12.12",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3"
