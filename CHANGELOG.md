@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Claude Code integration (`CLAUDE.md`)** — Added root `CLAUDE.md` file so that [Claude Code](https://docs.anthropic.com/en/docs/claude-code) automatically loads the project's system prompt when launched in the repository. Content is synced with `.github/copilot-instructions.md` and includes build/test quick-reference commands, all prime directives, monorepo structure, protocol domains, coding patterns, and domain-specific prompt references. This complements the existing GitHub Copilot instructions and `skills/` directory.
+- **AI Skills documentation pages** — Added two new documentation pages covering the Skills System:
+  - `content/docs/concepts/skills.mdx` — Conceptual overview of the skills architecture, philosophy, and structure
+  - `content/docs/guides/skills.mdx` — Complete reference for all 10 ObjectStack AI skills with usage examples and prompts
+  - Updated top-level navigation to include `concepts` section
+  - Added skills links to homepage cards, guides index, and navigation meta files
 
 ### Changed
 - **Skills Module Structure Refactor** — Refactored all skills in `skills/` directory to follow shadcn-ui's fine-grained layering pattern. Each skill now has:

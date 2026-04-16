@@ -1,0 +1,444 @@
+---
+title: AI Skills Reference
+description: Complete reference for all 10 ObjectStack AI skills — structured knowledge modules for intelligent code generation
+---
+
+import { Bot, Brain, Cpu, Database, Globe, Layout, Shield, Workflow, Wrench, Languages, Zap, Puzzle, BookOpen, Target, ArrowRight, FileCode, CheckCircle, AlertTriangle, FolderOpen } from 'lucide-react';
+
+# AI Skills Reference
+
+ObjectStack ships with **10 domain-specific skills** that teach AI assistants the protocol's schemas, patterns, and constraints. This guide covers every skill in detail.
+
+<Callout type="info">
+**New to skills?** Read [AI Skills System](/docs/concepts/skills) first for the conceptual overview, then return here for the complete reference.
+</Callout>
+
+---
+
+## Quick Reference
+
+| # | Skill | Domain | Path | Use When... |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | [Quickstart](#quickstart) | Bootstrap | `skills/objectstack-quickstart/` | Creating projects, configuring `defineStack()` |
+| 2 | [Schema Design](#schema-design) | Data | `skills/objectstack-schema/` | Designing objects, fields, relationships |
+| 3 | [Query Design](#query-design) | Data | `skills/objectstack-query/` | Building filters, aggregations, search |
+| 4 | [API Design](#api-design) | API | `skills/objectstack-api/` | Defining endpoints, service contracts |
+| 5 | [UI Design](#ui-design) | Interface | `skills/objectstack-ui/` | Creating views, dashboards, apps |
+| 6 | [Automation Design](#automation-design) | Logic | `skills/objectstack-automation/` | Building flows, workflows, triggers |
+| 7 | [AI Agent Design](#ai-agent-design) | Intelligence | `skills/objectstack-ai/` | Configuring agents, tools, RAG |
+| 8 | [Plugin Development](#plugin-development) | Kernel | `skills/objectstack-plugin/` | Plugin lifecycle, service registry |
+| 9 | [I18n Design](#i18n-design) | System | `skills/objectstack-i18n/` | Translation, locale configuration |
+| 10 | [Hooks System](#hooks-system) | Core | `skills/objectstack-hooks/` | Data lifecycle events, kernel events |
+
+---
+
+## Quickstart
+
+<Callout type="info">
+**Path:** `skills/objectstack-quickstart/`  
+**Tags:** `project`, `scaffold`, `init`, `defineStack`, `driver`, `adapter`, `bootstrap`, `config`
+</Callout>
+
+### What It Covers
+
+The Quickstart skill guides AI assistants through **project bootstrap and configuration**:
+
+- **Project scaffolding** — Using `npx @objectstack/cli init` with templates (minimal-api, full-stack, plugin)
+- **`defineStack()` configuration** — The core entry point for every ObjectStack project
+- **Driver selection** — Choosing between memory, SQL, Turso drivers
+- **Adapter integration** — Framework adapters (Express, Fastify, Hono, Next.js, etc.)
+- **Runtime boot sequence** — How the kernel loads plugins and starts services
+- **Multi-app composition** — `composeStacks()` for combining multiple stacks
+
+### When to Use
+
+Use this skill when you need to:
+- Create a new ObjectStack project from scratch
+- Configure `objectstack.config.ts`
+- Choose the right driver and adapter for your use case
+- Understand the boot sequence
+
+### Example Prompt
+
+```
+Using the objectstack-quickstart skill, create a new project
+with a Turso driver and Hono adapter for Cloudflare Workers.
+```
+
+---
+
+## Schema Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-schema/`  
+**Tags:** `object`, `field`, `validation`, `index`, `relationship`, `hooks`, `schema`, `data-model`
+</Callout>
+
+### What It Covers
+
+The Schema Design skill is the **most comprehensive skill** in the system, covering the entire Data Protocol:
+
+- **48 field types** with a decision tree for selection
+- **Object definitions** — capabilities like `trackHistory`, `apiEnabled`, `trash`, `versioning`
+- **Relationships** — lookup, master-detail, many-to-many patterns
+- **Validation rules** — script, unique, state machine, cross-field, format validators
+- **Index strategy** — btree, gin, gist, fulltext, composite, partial indexes
+- **Lifecycle hooks** — beforeInsert, afterUpdate, and 12 other data events
+- **Advanced features** — tenancy, soft delete, versioning, field encryption
+
+### When to Use
+
+Use this skill when you need to:
+- Design new business objects or modify existing ones
+- Choose the right field type for your data
+- Configure relationships between objects
+- Set up validation rules and indexes
+
+### When NOT to Use
+
+| Instead of... | Use... |
+| :--- | :--- |
+| Querying/filtering records | [Query Design](#query-design) |
+| Building REST APIs | [API Design](#api-design) |
+| Creating views or forms | [UI Design](#ui-design) |
+| Workflow state machines | [Automation Design](#automation-design) |
+
+### Example Prompt
+
+```
+Using the objectstack-schema skill, design a project_task object
+with status state machine (draft → active → completed → archived),
+priority field, and master-detail relationship to a project object.
+```
+
+---
+
+## Query Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-query/`  
+**Tags:** `query`, `filter`, `sort`, `pagination`, `aggregation`, `search`, `ObjectQL`, `DSL`
+</Callout>
+
+### What It Covers
+
+The Query Design skill covers the **ObjectQL query language**:
+
+- **Query structure** — QueryAST with required properties
+- **Filter operators** — comparison (`$eq`, `$gt`, `$in`), string (`$contains`, `$startsWith`), logical (`$and`, `$or`, `$not`)
+- **Nested filters** — Relation filters and `$field` references
+- **Sorting & pagination** — `orderBy` with offset and cursor pagination
+- **Aggregation** — count, sum, avg, min, max, count_distinct, array_agg, string_agg
+- **GroupBy + HAVING** — Grouped aggregations with filtering
+- **Expand system** — Related record expansion (max depth 3)
+- **Joins** — inner, left, right, full with strategy hints
+- **Full-text search** — Fuzzy matching, boost, and highlighting
+- **Window functions** — row_number, rank, dense_rank, lag, lead
+
+### When to Use
+
+Use this skill when you need to:
+- Build complex data queries
+- Implement search functionality
+- Create aggregated reports
+- Join data across objects
+
+### Example Prompt
+
+```
+Using the objectstack-query skill, build a query that finds all
+opportunities closing this quarter with amount > $100,000,
+grouped by stage with total revenue per stage.
+```
+
+---
+
+## API Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-api/`  
+**Tags:** `rest`, `endpoint`, `service`, `datasource`
+</Callout>
+
+### What It Covers
+
+- **Auto-generated CRUD** — GET, POST, PATCH, DELETE with filter/sort/pagination
+- **Custom endpoints** — Definition with `handlerStatus` (implemented, stub, planned)
+- **14 API methods** — get, list, create, update, delete, upsert, bulk, aggregate, history, search, restore, purge, import, export
+- **Service discovery** — `/api/v1/discovery` and `/.well-known/objectstack`
+- **Authentication & authorization** — RBAC, RLS, FLS, rate limiting
+- **Datasource configuration** — SQL, MySQL, SQLite, Turso, memory drivers
+- **Inter-service communication** — Service contracts and kernel resolution
+
+### When to Use
+
+Use this skill when you need to:
+- Define custom API endpoints
+- Configure datasources and connections
+- Set up authentication and authorization
+- Design inter-service communication
+
+### Example Prompt
+
+```
+Using the objectstack-api skill, define a custom endpoint
+POST /api/v1/invoices/:id/send that triggers an email flow
+and updates the invoice status.
+```
+
+---
+
+## UI Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-ui/`  
+**Tags:** `view`, `app`, `dashboard`, `report`, `action`
+</Callout>
+
+### What It Covers
+
+- **7 view types** — grid, kanban, gallery, calendar, timeline, gantt, map
+- **3 form types** — simple, tabbed, wizard
+- **List view columns** — field, label, width, align, hidden, pinned, sortable, link, summary
+- **App navigation** — object, dashboard, url, divider items
+- **Dashboard design** — Grid layout with metric, chart, list, calendar, custom widgets
+- **Report types** — tabular, summary, matrix, chart
+- **Actions** — button, url, flow, api with visibility conditions and confirmations
+
+### When to Use
+
+Use this skill when you need to:
+- Design list views, forms, or kanban boards
+- Build app navigation structures
+- Create dashboards with widgets
+- Configure user-facing actions and buttons
+
+### Example Prompt
+
+```
+Using the objectstack-ui skill, design a CRM app with:
+- A kanban view for opportunities grouped by stage
+- A tabbed form for customer details
+- A dashboard with revenue metrics and pipeline chart
+```
+
+---
+
+## Automation Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-automation/`  
+**Tags:** `flow`, `workflow`, `trigger`, `approval`, `state-machine`
+</Callout>
+
+### What It Covers
+
+- **5 flow types** — autolaunched, screen, schedule, record_triggered, platform_event
+- **18 flow node types** — start, end, decision, loop, assignment, create_record, update_record, http_request, script, screen, etc.
+- **Workflows** — State machine configuration with initial/final states, transition guards
+- **Approval processes** — Entry conditions, steps, escalation, timeouts
+- **Triggers** — before/after events with OLD/NEW variable access
+
+### When to Use
+
+Use this skill when you need to:
+- Build visual logic flows for business processes
+- Design state machines for record lifecycle
+- Set up approval workflows
+- Configure scheduled or event-driven automations
+
+### Example Prompt
+
+```
+Using the objectstack-automation skill, design an auto-escalation
+flow that reassigns overdue support cases to a manager after 48 hours.
+```
+
+---
+
+## AI Agent Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-ai/`  
+**Tags:** `agent`, `skill`, `tool`, `rag`, `llm`
+</Callout>
+
+### What It Covers
+
+- **Three-tier architecture** — Agent → Skill → Tool
+- **Agent configuration** — name, role, instructions, skills, tools, model, guardrails, temperature
+- **Skill bundles** — Groups of related tools with trigger conditions
+- **Tool types** — action, flow, query, vector_search
+- **RAG pipelines** — Sources, indexes, retrieval strategy, generation model
+- **LLM providers** — OpenAI, Anthropic, Azure OpenAI, local (Ollama, vLLM)
+- **Guardrails** — Input/output validation, PII masking, content filtering
+
+### When to Use
+
+Use this skill when you need to:
+- Configure AI agents for specific business tasks
+- Design RAG pipelines with vector search
+- Define agent tools and skills
+- Choose LLM models and temperature settings
+
+### Example Prompt
+
+```
+Using the objectstack-ai skill, design a customer service agent
+with case triage, knowledge base search, and response generation tools.
+```
+
+---
+
+## Plugin Development
+
+<Callout type="info">
+**Path:** `skills/objectstack-plugin/`  
+**Tags:** `plugin`, `kernel`, `service`, `hook`, `event`, `DI`, `lifecycle`, `bootstrap`
+</Callout>
+
+### What It Covers
+
+- **ObjectKernel vs LiteKernel** — Production vs serverless/test environments
+- **Plugin interface** — name, version, type, dependencies, init/start/destroy phases
+- **PluginContext API** — Service registry, hook/event system, logger, kernel access
+- **Service registry** — DI container, factories, lifecycle (singleton/transient/scoped)
+- **Hook/event system** — Inter-plugin communication and lifecycle events
+- **Bootstrap sequence** — The full initialization order
+- **Health monitoring** — Plugin health checks and feature flags
+
+### When to Use
+
+Use this skill when you need to:
+- Build a custom plugin from scratch
+- Register services with the DI container
+- Subscribe to kernel lifecycle events
+- Understand the bootstrap sequence
+
+### Example Prompt
+
+```
+Using the objectstack-plugin skill, create a caching plugin
+that registers a cache service with TTL support and integrates
+with the kernel's health monitoring.
+```
+
+---
+
+## I18n Design
+
+<Callout type="info">
+**Path:** `skills/objectstack-i18n/`  
+**Tags:** `i18n`, `translation`, `locale`, `internationalization`, `l10n`
+</Callout>
+
+### What It Covers
+
+- **Translation architecture** — Object-first model, global groups, locale files
+- **File organization** — bundled, per_locale (recommended), per_namespace (enterprise)
+- **Object translation** — Fields, options, views, sections, actions, notifications, errors
+- **Coverage detection** — Missing, redundant, and stale translation detection
+- **Message interpolation** — Simple format vs ICU MessageFormat
+- **Translation workflow** — Extract → translate → validate → deploy
+- **Advanced patterns** — RTL support, namespace isolation, translation memory
+
+### When to Use
+
+Use this skill when you need to:
+- Add multi-language support to your application
+- Design translation bundle structures
+- Configure locale settings and fallback chains
+- Detect missing translations
+
+### Example Prompt
+
+```
+Using the objectstack-i18n skill, set up i18n for a CRM app
+with English, Chinese, and Japanese locales using per_locale
+file organization.
+```
+
+---
+
+## Hooks System
+
+<Callout type="info">
+**Path:** `skills/objectstack-hooks/`  
+**Tags:** `hooks`, `lifecycle`, `validation`, `business-logic`, `events`
+</Callout>
+
+### What It Covers
+
+- **14 data lifecycle events** — beforeFind, afterFind, beforeInsert, afterInsert, beforeUpdate, afterUpdate, beforeDelete, afterDelete, and more
+- **Plugin hooks** — kernel:ready, data:*, custom events
+- **HookContext API** — Access to record data, query, user context
+- **Registration methods** — Inline hooks, plugin hooks, object-level hooks
+- **Data hooks vs Plugin hooks** — When to use each
+
+### When to Use
+
+Use this skill when you need to:
+- Add validation logic before record creation
+- Enrich data after record updates
+- Listen to kernel lifecycle events
+- Implement cross-cutting concerns (audit, cache invalidation)
+
+### Example Prompt
+
+```
+Using the objectstack-hooks skill, implement a beforeInsert hook
+that validates email uniqueness and an afterInsert hook that sends
+a welcome notification.
+```
+
+---
+
+## Skill Directory Structure
+
+Every skill follows a consistent directory layout:
+
+```
+skills/objectstack-{domain}/
+├── SKILL.md              # Entry point — overview, decision trees, quick-start
+├── rules/                # Detailed implementation rules
+│   ├── naming.md         # Naming convention rules
+│   ├── patterns.md       # Common pattern rules
+│   └── ...
+├── evals/                # AI comprehension test cases
+│   └── ...
+└── references/           # Reference materials
+    └── ...
+```
+
+---
+
+## Best Practices
+
+### 1. Start with the Right Skill
+
+Don't guess — use the [Quick Reference](#quick-reference) table to find the skill that matches your task. If unsure, start with **Quickstart**.
+
+### 2. Chain Skills for Complex Tasks
+
+Most real-world tasks span multiple domains. Chain skills in order:
+
+```
+Schema Design → Query Design → UI Design → API Design
+```
+
+### 3. Reference Skills in Prompts
+
+Be explicit about which skill you're using. This helps the AI assistant load the right context and constraints.
+
+### 4. Respect Skill Boundaries
+
+If a skill says "delegate to X for Y", follow that guidance. Skills are designed to be focused and composable — not monolithic.
+
+---
+
+## Next Steps
+
+- [AI Skills System](/docs/concepts/skills) — Conceptual overview of the skills architecture
+- [AI Capabilities](/docs/guides/ai-capabilities) — AI agents, RAG pipelines, and intelligent automation
+- [Plugin Development](/docs/guides/plugin-development) — Build custom plugins
+- [Development Standards](/docs/guides/standards) — Naming conventions and project structure
