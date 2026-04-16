@@ -1,0 +1,260 @@
+---
+title: AI Skills System
+description: How ObjectStack uses structured AI skills to enable intelligent code generation, review, and automation
+---
+
+import { Bot, Brain, Cpu, Database, Globe, Layout, Shield, Workflow, Wrench, Languages, Zap, Puzzle, BookOpen, Target, ArrowRight } from 'lucide-react';
+
+# AI Skills System
+
+ObjectStack introduces a **Skills System** — structured, domain-specific knowledge modules that enable AI assistants (GitHub Copilot, Claude Code, Cursor, etc.) to understand and generate protocol-compliant code.
+
+<Callout type="info">
+Skills are **not runtime code**. They are machine-readable knowledge definitions that teach AI assistants the ObjectStack protocol — its schemas, patterns, constraints, and best practices.
+</Callout>
+
+---
+
+## Why Skills?
+
+Traditional AI code assistants generate generic code. They don't understand:
+
+- That ObjectStack field names **must** be `snake_case`
+- That schemas are **Zod-first**, not TypeScript-first
+- That plugins follow a specific **lifecycle** (init → start → destroy)
+- That queries use a **structured AST**, not raw SQL strings
+
+**Skills solve this.** Each skill teaches the AI assistant the rules, patterns, and constraints for a specific ObjectStack protocol domain.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AI Assistant                              │
+│  (GitHub Copilot / Claude Code / Cursor)                    │
+├─────────────────────────────────────────────────────────────┤
+│                    Skills Layer                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ Schema   │ │ Query    │ │ UI       │ │ Plugin   │ ...   │
+│  │ Skill    │ │ Skill    │ │ Skill    │ │ Skill    │      │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+├─────────────────────────────────────────────────────────────┤
+│                  ObjectStack Protocol                        │
+│  Objects, Fields, Views, Flows, Agents, Plugins, ...        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Skill Architecture
+
+Each skill follows a **three-layer structure** inspired by [shadcn/ui](https://ui.shadcn.com/):
+
+| Layer | File | Purpose |
+| :--- | :--- | :--- |
+| **Overview** | `SKILL.md` | High-level guide with decision trees and quick-start examples |
+| **Rules** | `rules/*.md` | Detailed implementation rules with ✅ correct / ❌ incorrect code examples |
+| **Evaluations** | `evals/*.md` | Test cases to validate AI assistant understanding |
+
+### SKILL.md — The Entry Point
+
+Each `SKILL.md` starts with structured metadata:
+
+```yaml
+---
+skill: objectstack-schema
+version: 3.0
+domain: data
+description: Design ObjectStack data schemas
+tags: [object, field, validation, index, relationship]
+---
+```
+
+The body contains:
+- **When to use** this skill (and when NOT to)
+- **Decision trees** for choosing between options
+- **Quick-start examples** for common patterns
+- **Cross-references** to related skills
+
+### Rules — The Guardrails
+
+Rules are detailed implementation constraints shown with side-by-side correct/incorrect examples:
+
+```markdown
+## ❌ INCORRECT: TypeScript types without Zod
+interface User {
+  name: string;
+  email: string;
+}
+
+## ✅ CORRECT: Zod-first schema definition
+const UserSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+type User = z.infer<typeof UserSchema>;
+```
+
+This format ensures AI assistants generate protocol-compliant code.
+
+---
+
+## The 10 Skills
+
+ObjectStack provides **10 domain-specific skills** covering every aspect of the protocol:
+
+<Cards>
+  <Card
+    icon={<Database />}
+    title="Schema Design"
+    description="Objects, Fields, Relationships, Validations, and Indexes."
+  />
+  <Card
+    icon={<Target />}
+    title="Query Design"
+    description="Filters, sorting, pagination, aggregation, joins, and full-text search."
+  />
+  <Card
+    icon={<Globe />}
+    title="API Design"
+    description="REST endpoints, service discovery, authentication, and inter-service communication."
+  />
+  <Card
+    icon={<Layout />}
+    title="UI Design"
+    description="Views, Apps, Dashboards, Reports, and Actions."
+  />
+  <Card
+    icon={<Workflow />}
+    title="Automation Design"
+    description="Flows, Workflows, Triggers, and Approval processes."
+  />
+  <Card
+    icon={<Bot />}
+    title="AI Agent Design"
+    description="Agents, Tools, Skills, and RAG pipelines."
+  />
+  <Card
+    icon={<Puzzle />}
+    title="Plugin Development"
+    description="Plugin lifecycle, Service registry, Hooks, and Events."
+  />
+  <Card
+    icon={<Zap />}
+    title="Quickstart"
+    description="Project scaffolding, defineStack(), drivers, and adapters."
+  />
+  <Card
+    icon={<Languages />}
+    title="I18n Design"
+    description="Translation bundles, locale configuration, and coverage detection."
+  />
+  <Card
+    icon={<Wrench />}
+    title="Hooks System"
+    description="Data lifecycle hooks, plugin hooks, and kernel events."
+  />
+</Cards>
+
+---
+
+## Skill Boundaries
+
+Each skill has **clear boundaries** — it knows what it's responsible for and explicitly delegates to other skills when needed:
+
+```
+                    ┌──────────────┐
+                    │  Quickstart  │
+                    │  (Bootstrap) │
+                    └──────┬───────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+       ┌────────────┐ ┌────────┐ ┌──────────┐
+       │   Schema   │ │ Plugin │ │   I18n   │
+       │   Design   │ │  Dev   │ │  Design  │
+       └──────┬─────┘ └────────┘ └──────────┘
+              │
+    ┌─────────┼─────────┐
+    ▼         ▼         ▼
+┌────────┐ ┌──────┐ ┌──────────┐
+│ Query  │ │  UI  │ │Automation│
+│ Design │ │Design│ │  Design  │
+└────────┘ └──────┘ └────┬─────┘
+                         │
+                    ┌────┴─────┐
+                    ▼          ▼
+              ┌──────────┐ ┌──────┐
+              │ AI Agent │ │ API  │
+              │  Design  │ │Design│
+              └──────────┘ └──────┘
+```
+
+| Skill | Delegates To | For |
+| :--- | :--- | :--- |
+| Schema | Query | Querying and filtering records |
+| Schema | UI | Building views and forms |
+| Query | Schema | Understanding field types |
+| UI | Schema | Field definitions for columns |
+| Automation | Schema | Record-triggered flows |
+| AI Agent | Automation | Flow-based agent tools |
+| Plugin | Schema | Registering objects |
+| Quickstart | All | Setting up the full stack |
+
+---
+
+## Using Skills
+
+### With GitHub Copilot
+
+Skills are automatically loaded from the `skills/` directory when using GitHub Copilot in VS Code. Reference a skill directly:
+
+```
+@workspace Use the objectstack-schema skill to design a customer object
+with name, email, industry, and annual_revenue fields.
+```
+
+### With Claude Code
+
+Claude Code reads `CLAUDE.md` at the repo root, which references all skills:
+
+```
+Read skills/objectstack-query/SKILL.md and help me build a query
+that filters opportunities by stage and aggregates revenue by quarter.
+```
+
+### With Cursor
+
+Add the skill files to your Cursor rules or reference them in prompts:
+
+```
+@skills/objectstack-plugin/SKILL.md Create a plugin that adds
+an audit logging service to the kernel.
+```
+
+---
+
+## Design Philosophy
+
+The Skills System embodies ObjectStack's core principles:
+
+### 1. Metadata-Driven
+
+Skills are **structured metadata** — not executable code. They define *what* the AI should know, not *how* to run it. This mirrors ObjectStack's approach to data, UI, and automation.
+
+### 2. Composable
+
+Skills are independently installable and referenceable. A developer working only on data modeling can load `objectstack-schema` without loading `objectstack-ui`. This follows the same composability pattern as ObjectStack plugins.
+
+### 3. Protocol-Aligned
+
+Each skill maps directly to an ObjectStack protocol domain. The schema skill teaches the Data Protocol, the UI skill teaches the UI Protocol, and so on. This ensures consistency between AI-generated code and the protocol specification.
+
+### 4. Testable
+
+The `evals/` directory in each skill allows teams to validate that their AI assistant correctly understands the protocol. This is analogous to test suites for runtime code — but for AI comprehension.
+
+---
+
+## Next Steps
+
+- [AI Skills Reference](/docs/guides/skills) — Detailed guide to each skill with usage examples
+- [AI Capabilities](/docs/guides/ai-capabilities) — AI agents, RAG pipelines, and intelligent automation
+- [Plugin Development](/docs/guides/plugin-development) — Build custom plugins
+- [Quick Start](/docs/getting-started/quick-start) — Build your first ObjectStack app
