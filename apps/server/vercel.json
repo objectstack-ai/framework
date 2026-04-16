@@ -6,8 +6,7 @@
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
-      "VITE_SERVER_URL": "",
-      "VERCEL": "true"
+      "VITE_SERVER_URL": ""
     }
   },
   "functions": {
@@ -18,18 +17,14 @@
   },
   "headers": [
     {
-      "source": "/_studio/assets/(.*)",
+      "source": "/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     }
   ],
-  "redirects": [
-    { "source": "/", "destination": "/_studio", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[[...route]]" },
-    { "source": "/_studio/(.*)", "destination": "/_studio/$1" },
-    { "source": "/_studio", "destination": "/_studio/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

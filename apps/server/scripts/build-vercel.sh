@@ -13,7 +13,7 @@ set -euo pipefail
 # Steps:
 #   1. Build the project with turbo (includes studio)
 #   2. Bundle the API serverless function (→ api/_handler.js)
-#   3. Copy studio dist files to public/_studio/ for UI serving at /_studio path
+#   3. Copy studio dist files to public/ for UI serving
 #   4. Install external deps in api/node_modules/ (resolve pnpm symlinks)
 
 echo "[build-vercel] Starting server build..."
@@ -27,13 +27,13 @@ cd apps/server
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
 
-# 3. Copy studio dist files to public/_studio/ for UI serving at /_studio path
-echo "[build-vercel] Copying studio dist to public/_studio/..."
+# 3. Copy studio dist files to public/ for UI serving
+echo "[build-vercel] Copying studio dist to public/..."
 rm -rf public
-mkdir -p public/_studio
+mkdir -p public
 if [ -d "../studio/dist" ]; then
-  cp -r ../studio/dist/* public/_studio/
-  echo "[build-vercel]   ✓ Copied studio dist to public/_studio/"
+  cp -r ../studio/dist/* public/
+  echo "[build-vercel]   ✓ Copied studio dist to public/"
 else
   echo "[build-vercel]   ⚠ Studio dist not found (skipped)"
 fi
@@ -60,4 +60,4 @@ rm package.json
 cd ..
 echo "[build-vercel]   ✓ External dependencies installed in api/node_modules/"
 
-echo "[build-vercel] Done. Static files in public/_studio/, serverless function in api/[[...route]].js → api/_handler.js"
+echo "[build-vercel] Done. Static files in public/, serverless function in api/[[...route]].js → api/_handler.js"

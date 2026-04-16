@@ -18,6 +18,8 @@ export function ObjectExplorer({ objectApiName }: ObjectExplorerProps) {
   const [activeTab, setActiveTab] = useState<ObjectTab>('schema');
   const [editingRecord, setEditingRecord] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
+  // Refresh trigger: increment this to force data table to refetch
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   function handleEdit(record: any) {
     setEditingRecord(record);
@@ -27,11 +29,8 @@ export function ObjectExplorer({ objectApiName }: ObjectExplorerProps) {
   function handleFormSuccess() {
     setShowForm(false);
     setEditingRecord(null);
-    // Force data tab re-fetch by toggling activeTab
-    if (activeTab === 'data') {
-      setActiveTab('schema');
-      setTimeout(() => setActiveTab('data'), 0);
-    }
+    // Trigger data table refresh by incrementing the refresh counter
+    setRefreshTrigger(prev => prev + 1);
   }
 
   const tabs: { id: ObjectTab; label: string; icon: React.ElementType }[] = [
@@ -78,7 +77,7 @@ export function ObjectExplorer({ objectApiName }: ObjectExplorerProps) {
           <ObjectSchemaInspector objectApiName={objectApiName} />
         )}
         {activeTab === 'data' && (
-          <ObjectDataTable objectApiName={objectApiName} onEdit={handleEdit} />
+          <ObjectDataTable objectApiName={objectApiName} onEdit={handleEdit} refreshTrigger={refreshTrigger} />
         )}
         {activeTab === 'api' && (
           <ObjectApiConsole objectApiName={objectApiName} />
