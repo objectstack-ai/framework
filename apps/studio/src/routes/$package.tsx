@@ -7,7 +7,7 @@ import { usePackages } from '../hooks/usePackages';
 import { useEffect } from 'react';
 
 function PackageLayoutComponent() {
-  const { packageId } = Route.useParams();
+  const { package: packageId } = Route.useParams();
   const { packages, selectedPackage, setSelectedPackage } = usePackages();
 
   // Update selected package when route param changes
@@ -23,6 +23,7 @@ function PackageLayoutComponent() {
       <AppSidebar
         packages={packages}
         selectedPackage={selectedPackage}
+        onSelectPackage={setSelectedPackage}
       />
       <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
         <SiteHeader

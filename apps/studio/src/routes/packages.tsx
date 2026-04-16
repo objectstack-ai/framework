@@ -7,13 +7,14 @@ import { PackageManager } from '../components/PackageManager';
 import { usePackages } from '../hooks/usePackages';
 
 function PackagesViewComponent() {
-  const { packages, selectedPackage } = usePackages();
+  const { packages, selectedPackage, setSelectedPackage } = usePackages();
 
   return (
     <>
       <AppSidebar
         packages={packages}
         selectedPackage={selectedPackage}
+        onSelectPackage={setSelectedPackage}
       />
       <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
         <SiteHeader

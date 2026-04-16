@@ -36,6 +36,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useNavigate, useParams, useLocation } from '@tanstack/react-router';
 import { useClient, useMetadataSubscriptionCallback } from '@objectstack/client-react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
@@ -163,23 +164,24 @@ const PKG_TYPE_ICONS: Record<string, LucideIcon> = {
 };
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  selectedObject: string | null;
-  onSelectObject: (name: string) => void;
-  selectedMeta?: { type: string; name: string } | null;
-  onSelectMeta?: (type: string, name: string) => void;
   packages: InstalledPackage[];
   selectedPackage: InstalledPackage | null;
   onSelectPackage: (pkg: InstalledPackage) => void;
-  onSelectView?: (view: 'overview' | 'packages' | 'api-console') => void;
-  selectedView?: 'overview' | 'packages' | 'object' | 'metadata' | 'api-console';
 }
 
 export function AppSidebar({
-  selectedObject, onSelectObject, selectedMeta, onSelectMeta,
-  packages, selectedPackage, onSelectPackage, onSelectView, selectedView,
+  packages, selectedPackage, onSelectPackage,
   ...props
 }: AppSidebarProps) {
   const client = useClient();
+  const navigate = useNavigate();
+  const params = useParams({ strict: false });
+  const location = useLocation();
+
+  // Extract current selection from URL params
+  const selectedObject = params.name && params.package && !params.type ? params.name : null;
+  const selectedMeta = params.type && params.name ? { type: params.type, name: params.name } : null;
+
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [metaTypes, setMetaTypes] = useState<string[]>([]);
@@ -362,8 +364,8 @@ export function AppSidebar({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive={selectedView === 'overview' && !selectedObject}
-                  onClick={() => { onSelectObject(''); onSelectView?.('overview'); }}
+                  isActive={!!params.package && !params.name && !params.type}
+                  onClick={() => navigate({ to: `/${selectedPackage?.manifest?.id || 'default'}` })}
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   <span>Overview</span>
@@ -456,9 +458,11 @@ export function AppSidebar({
                                 const isActive = isObjectType
                                   ? selectedObject === itemName
                                   : selectedMeta?.type === type && selectedMeta?.name === itemName;
+
+                                const packagePath = selectedPackage?.manifest?.id || 'default';
                                 const handleClick = isObjectType
-                                  ? () => onSelectObject(itemName)
-                                  : () => onSelectMeta?.(type, itemName);
+                                  ? () => navigate({ to: `/${packagePath}/objects/${itemName}` })
+                                  : () => navigate({ to: `/${packagePath}/metadata/${type}/${itemName}` });
 
                                 return (
                                   <SidebarMenuSubItem key={itemName}>
@@ -540,7 +544,7 @@ export function AppSidebar({
                               <SidebarMenuSubItem key={itemName}>
                                 <SidebarMenuSubButton
                                   isActive={selectedObject === itemName}
-                                  onClick={() => onSelectObject(itemName)}
+                                  onClick={() => navigate({ to: `/${selectedPackage?.manifest?.id || 'default'}/objects/${itemName}` })}
                                 >
                                   <span className="truncate">
                                     {isSystemObject(item) && (
@@ -562,8 +566,8 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="API Console"
-                  isActive={selectedView === 'api-console'}
-                  onClick={() => onSelectView?.('api-console')}
+                  isActive={location.pathname === '/api-console'}
+                  onClick={() => navigate({ to: '/api-console' })}
                 >
                   <Globe className="h-4 w-4" />
                   <span>API Console</span>
@@ -572,8 +576,8 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Packages"
-                  isActive={selectedView === 'packages'}
-                  onClick={() => onSelectView?.('packages')}
+                  isActive={location.pathname === '/packages'}
+                  onClick={() => navigate({ to: '/packages' })}
                 >
                   <Package className="h-4 w-4" />
                   <span>Packages</span>
