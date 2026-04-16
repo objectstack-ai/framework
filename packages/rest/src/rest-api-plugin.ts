@@ -3,6 +3,8 @@
 import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
 import { RestServer } from './rest-server.js';
 import { ObjectStackProtocol, RestServerConfig } from '@objectstack/spec/api';
+import { registerPackageRoutes } from './package-routes.js';
+import type { PackageService } from '@objectstack/service-package';
 
 export interface RestApiPluginConfig {
     serverServiceName?: string;
@@ -61,11 +63,25 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             try {
                 const restServer = new RestServer(server, protocol, config.api as any);
                 restServer.registerRoutes();
-                
+
                 ctx.logger.info('REST API successfully registered');
             } catch (err: any) {
                 ctx.logger.error('Failed to register REST API routes', { error: err.message } as any);
                 throw err;
+            }
+
+            // Register package management routes if service is available
+            try {
+                const packageService = ctx.getService<PackageService>('package');
+                if (packageService) {
+                    const basePath = config.api?.api?.basePath || '/api';
+                    const version = config.api?.api?.version || 'v1';
+                    registerPackageRoutes(server, packageService, `${basePath}/${version}`);
+                    ctx.logger.info('Package management routes registered');
+                }
+            } catch (e) {
+                // Package service not available, skip
+                ctx.logger.debug('Package service not available, package routes skipped');
             }
         }
     };
