@@ -491,7 +491,6 @@ describe('MetadataPlugin', () => {
       setTypeRegistry = vi.fn();
       setDatabaseDriver = vi.fn();
       setDataEngine = vi.fn();
-      setRealtimeService = vi.fn();
       register = vi.fn();
     };
     return { NodeMetadataManager: MockNodeMetadataManager };
@@ -539,28 +538,27 @@ describe('MetadataPlugin', () => {
     const { MetadataPlugin } = await import('./plugin.js');
     const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
 
-    const mockObjectQL = { find: vi.fn(), create: vi.fn(), update: vi.fn() };
-
+    const mockObjectQL = { name: 'objectql', find: vi.fn(), create: vi.fn() };
     const ctx = createMockPluginContext();
-    ctx.getService = vi.fn().mockImplementation((name: string) => {
-      if (name === 'objectql') return mockObjectQL;
-      return null;
+    ctx.getService = vi.fn().mockImplementation((serviceName: string) => {
+      if (serviceName === 'objectql') return mockObjectQL;
+      throw new Error(`Service ${serviceName} not found`);
     });
 
     await plugin.init(ctx);
     await plugin.start(ctx);
 
-    // Verify setDataEngine was called on the manager with the ObjectQL engine
+    // Verify setDataEngine was called on the manager with ObjectQL
     const manager = (plugin as any).manager;
     expect(manager.setDataEngine).toHaveBeenCalledWith(mockObjectQL);
   });
 
-  it('should bridge ObjectQL engine AFTER filesystem metadata loading', async () => {
+  it('should bridge ObjectQL AFTER filesystem metadata loading', async () => {
     const { MetadataPlugin } = await import('./plugin.js');
     const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
 
     const callOrder: string[] = [];
-    const mockObjectQL = { find: vi.fn(), create: vi.fn(), update: vi.fn() };
+    const mockObjectQL = { name: 'objectql', find: vi.fn(), create: vi.fn() };
 
     const manager = (plugin as any).manager;
     manager.loadMany = vi.fn().mockImplementation(async () => {
@@ -572,9 +570,9 @@ describe('MetadataPlugin', () => {
     });
 
     const ctx = createMockPluginContext();
-    ctx.getService = vi.fn().mockImplementation((name: string) => {
-      if (name === 'objectql') return mockObjectQL;
-      return null;
+    ctx.getService = vi.fn().mockImplementation((serviceName: string) => {
+      if (serviceName === 'objectql') return mockObjectQL;
+      throw new Error(`Service ${serviceName} not found`);
     });
 
     await plugin.init(ctx);
@@ -582,8 +580,8 @@ describe('MetadataPlugin', () => {
 
     // setDataEngine must be called after all loadMany calls
     const lastLoad = callOrder.lastIndexOf('loadMany');
-    const driverIdx = callOrder.indexOf('setDataEngine');
-    expect(driverIdx).toBeGreaterThan(lastLoad);
+    const engineIdx = callOrder.indexOf('setDataEngine');
+    expect(engineIdx).toBeGreaterThan(lastLoad);
   });
 
   it('should not fail when no ObjectQL service is available', async () => {
@@ -591,7 +589,9 @@ describe('MetadataPlugin', () => {
     const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
 
     const ctx = createMockPluginContext();
-    // getService returns null by default — no objectql available
+    ctx.getService = vi.fn().mockImplementation((serviceName: string) => {
+      throw new Error(`Service ${serviceName} not found`);
+    });
 
     await plugin.init(ctx);
     // Should not throw
@@ -602,15 +602,15 @@ describe('MetadataPlugin', () => {
     expect(manager.setDataEngine).not.toHaveBeenCalled();
   });
 
-  it('should gracefully handle getService errors', async () => {
+  it('should gracefully handle getServices errors', async () => {
     const { MetadataPlugin } = await import('./plugin.js');
     const plugin = new MetadataPlugin({ rootDir: '/tmp/test', watch: false });
 
     const ctx = createMockPluginContext();
-    ctx.getService = vi.fn().mockImplementation(() => { throw new Error('service unavailable'); });
+    ctx.getServices = vi.fn().mockImplementation(() => { throw new Error('services unavailable'); });
 
     await plugin.init(ctx);
-    // Should not throw even when getService fails
+    // Should not throw even when getServices fails
     await expect(plugin.start(ctx)).resolves.not.toThrow();
   });
 });

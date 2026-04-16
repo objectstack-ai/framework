@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **Metadata plugin tests** — Updated `MetadataPlugin` test suite in `packages/metadata/src/metadata.test.ts` to match the refactored `start()` implementation. Tests now verify `setDataEngine` (via `getService('objectql')`) instead of the removed `setDatabaseDriver` (via `getServices()`) pattern. Also added `setDataEngine` and `setRealtimeService` to the `NodeMetadataManager` mock class.
-
 ### Added
 - **Claude Code integration (`CLAUDE.md`)** — Added root `CLAUDE.md` file so that [Claude Code](https://docs.anthropic.com/en/docs/claude-code) automatically loads the project's system prompt when launched in the repository. Content is synced with `.github/copilot-instructions.md` and includes build/test quick-reference commands, all prime directives, monorepo structure, protocol domains, coding patterns, and domain-specific prompt references. This complements the existing GitHub Copilot instructions and `skills/` directory.
 

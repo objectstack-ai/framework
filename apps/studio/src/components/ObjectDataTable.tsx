@@ -21,6 +21,7 @@ import {
 interface ObjectDataTableProps {
     objectApiName: string;
     onEdit: (record: any) => void;
+    refreshTrigger?: number;
 }
 
 function CellValue({ value, type }: { value: any; type: string }) {
@@ -78,7 +79,7 @@ function TableSkeleton({ cols }: { cols: number }) {
     );
 }
 
-export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps) {
+export function ObjectDataTable({ objectApiName, onEdit, refreshTrigger = 0 }: ObjectDataTableProps) {
     const client = useClient();
     const [def, setDef] = useState<any>(null);
     const [records, setRecords] = useState<any[]>([]);
@@ -136,7 +137,7 @@ export function ObjectDataTable({ objectApiName, onEdit }: ObjectDataTableProps)
         }
         loadData();
         return () => { mounted = false; };
-    }, [client, objectApiName, page]);
+    }, [client, objectApiName, page, refreshTrigger]);
 
     async function handleDelete(id: string) {
         if (!confirm('Are you sure you want to delete this record?')) return;

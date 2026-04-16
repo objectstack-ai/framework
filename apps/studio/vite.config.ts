@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 import path from 'path';
 
 // HMR config for embedded mode (running inside CLI via --ui)
@@ -9,7 +10,7 @@ const hmrConfig = process.env.VITE_HMR_PORT
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: process.env.VITE_BASE || (process.env.VERCEL ? '/_studio/' : './'),  // Use /_studio/ for Vercel, relative base for other sub-path mounting
+  base: process.env.VITE_BASE || './',  // Relative base for sub-path mounting (e.g. /_studio/)
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
@@ -49,7 +50,10 @@ export default defineConfig({
     // 'process.cwd': '() => "/"', 
     // 'process.platform': '"browser"'
   },
-  plugins: [react()],
+  plugins: [
+    TanStackRouterVite(),
+    react(),
+  ],
   server: {
     // Default to 5173 (Vite default) to avoid conflict with ObjectStack API server on 3000.
     // Use VITE_PORT env var to override (e.g. when embedded in CLI via --ui).
