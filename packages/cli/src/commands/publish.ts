@@ -1,10 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Args, Command, Flags } from '@oclif/core';
-import chalk from 'chalk';
 import { loadConfig } from '../utils/config.js';
 import { printHeader, printKV, printSuccess, printError, printStep } from '../utils/format.js';
-import { existsSync } from 'node:fs';
 
 export default class Publish extends Command {
   static override description = 'Publish package to ObjectStack server';

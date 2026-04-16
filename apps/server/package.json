@@ -35,6 +35,7 @@
     "@objectstack/service-analytics": "workspace:*",
     "@objectstack/service-automation": "workspace:*",
     "@objectstack/service-feed": "workspace:*",
+    "@objectstack/service-package": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "hono": "^4.12.12",
     "pino": "^10.3.1",
