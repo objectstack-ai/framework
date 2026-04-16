@@ -2,7 +2,8 @@
 
 > **Last synced with `.github/copilot-instructions.md`:** 2026-04-16
 >
-> This file is the **Claude Code** equivalent of `.github/copilot-instructions.md` (GitHub Copilot).
+> This file is the **Claude Code** primary instruction file for ObjectStack development.
+> A parallel `.github/copilot-instructions.md` exists for GitHub Copilot compatibility.
 > Keep both files in sync when updating project-wide AI instructions.
 
 ---
@@ -88,7 +89,7 @@ objectstack-ai/framework/
 │   └── server/            # 🚀 Production server (multi-app orchestration)
 │
 ├── examples/              # 📚 Reference implementations
-├── skills/                # 🤖 AI skill definitions (for Copilot/Cursor/Claude)
+├── skills/                # 🤖 AI skill definitions (for Claude Code, Copilot, Cursor)
 └── content/docs/          # 📝 Documentation content
 ```
 
@@ -261,6 +262,54 @@ When editing files matching these patterns, apply the corresponding architectura
 | `apps/docs/**` | **Documentation Engineer** | Fumadocs + Next.js, MDX content |
 | `examples/**` | **Example Author** | Minimal, runnable, follows `defineStack()` pattern |
 | `content/docs/**` | **Technical Writer** | Respect auto-gen vs hand-written boundaries |
+
+---
+
+## Claude Code Best Practices
+
+This project is optimized for development with **Claude Code** (Anthropic's official AI coding assistant). Follow these practices for the best experience:
+
+### Effective Prompting
+
+1. **Be Specific**: Reference exact file paths and line numbers when discussing code
+2. **Provide Context**: Mention the protocol domain you're working in (Data, UI, System, AI, API)
+3. **Use Domain Skills**: Reference the appropriate skill file when working on specialized tasks
+4. **Sequential Tasks**: Break complex tasks into smaller, testable increments
+
+### Leveraging Claude Code Features
+
+1. **Multi-File Awareness**: Claude Code can read and edit multiple files simultaneously
+2. **Deep Analysis**: Request architectural analysis before making significant changes
+3. **Code Review**: Ask for code review suggestions before committing
+4. **Test-Driven**: Request test generation alongside implementation
+
+### Working with This Repository
+
+1. **Start with Skills**: Consult `skills/objectstack-{domain}/SKILL.md` for domain-specific guidance
+2. **Check Prompts**: Review `.github/prompts/{domain}-protocol.prompt.md` for detailed context
+3. **Follow Conventions**: Always adhere to Prime Directives (Zod-first, naming conventions, etc.)
+4. **Incremental Changes**: Make small, focused changes and test frequently
+
+### Example Prompts
+
+**Data Protocol Work:**
+```
+"I need to add a new field type 'geolocation' to packages/spec/src/data/field-type.zod.ts.
+First, read the existing field types to understand the pattern, then implement following
+the Zod-first approach with proper TSDoc comments."
+```
+
+**Testing:**
+```
+"Review the test coverage for packages/spec/src/ui/view.zod.ts and suggest additional
+edge cases we should test, particularly around view type validation."
+```
+
+**Architecture:**
+```
+"I want to add a new service for caching. Review packages/services/service-cache/ if it exists,
+or suggest the architecture following the kernel-managed service pattern used in other services."
+```
 
 ---
 

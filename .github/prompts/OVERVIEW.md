@@ -114,16 +114,22 @@ ObjectStack AI Prompts
 
 ## 🚀 使用方式 (Usage)
 
-### GitHub Copilot 集成
+### AI 编码助手集成
 
-这些提示词会被 GitHub Copilot 自动加载：
+这些提示词兼容多个 AI 编码助手：
+
+- **Claude Code**（推荐）：从代码库上下文自动加载
+- **GitHub Copilot**：在代码库中工作时自动加载
+- **Cursor**：可引用这些提示词获取上下文感知帮助
+
+提示词会根据以下内容自动加载：
 
 ```
 .github/
 └── prompts/
-    ├── data-protocol.prompt.md      ← 编辑数据协议时自动加载
-    ├── ui-protocol.prompt.md        ← 编辑UI协议时自动加载
-    ├── system-protocol.prompt.md    ← 编辑系统协议时自动加载
+    ├── data-protocol.prompt.md      ← 编辑数据协议时加载
+    ├── ui-protocol.prompt.md        ← 编辑UI协议时加载
+    ├── system-protocol.prompt.md    ← 编辑系统协议时加载
     └── ...
 ```
 
