@@ -1,0 +1,82 @@
+# Claude Code Ignore File
+# Files and directories that Claude Code should not analyze or modify
+
+# Build outputs
+dist/
+build/
+.next/
+.turbo/
+out/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Generated files
+*.generated.ts
+*.generated.js
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Auto-generated documentation (do not edit manually)
+content/docs/references/
+
+# Logs
+*.log
+logs/
+.DS_Store
+
+# IDE and editor files (except .vscode settings we want to keep)
+.idea/
+*.swp
+*.swo
+*~
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Environment files with secrets
+.env.local
+.env.*.local
+*.key
+*.pem
+*.cert
+
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Large binary files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.pdf
+*.zip
+*.tar.gz
+
+# Vercel
+.vercel/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup

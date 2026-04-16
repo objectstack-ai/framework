@@ -245,6 +245,49 @@ Key standards:
 - **camelCase** for configuration keys (e.g., `maxLength`, `defaultValue`)
 - **snake_case** for machine names / data values (e.g., `project_task`, `first_name`)
 
+## AI-Assisted Development
+
+### Claude Code Integration
+
+This project is fully optimized for [Claude Code](https://claude.ai/claude-code) development:
+
+- **[CLAUDE.md](./CLAUDE.md)** — Main AI instructions (auto-loaded by Claude Code)
+- **[docs/CLAUDE_CODE_GUIDE.md](./docs/CLAUDE_CODE_GUIDE.md)** — Complete development guide
+- **[.github/prompts/](. /.github/prompts/)** — Domain-specific prompts (Data, UI, System, AI, API)
+- **[skills/](./skills/)** — Detailed implementation guides for each domain
+
+**Quick Start with Claude Code:**
+
+```bash
+# 1. Clone and setup
+git clone https://github.com/objectstack-ai/framework.git
+cd framework
+pnpm install && pnpm build
+
+# 2. Open in Claude Code
+# CLAUDE.md is automatically loaded
+
+# 3. Ask Claude Code for help:
+# "Create a new field type for encrypted data"
+# "Add a new view type for timeline visualization"
+# "Implement a plugin for analytics"
+```
+
+**Key Features:**
+- ✅ Comprehensive AI instruction system with 10+ domain-specific prompts
+- ✅ Auto-routing context based on file patterns
+- ✅ Zod-first development patterns enforced
+- ✅ Built-in best practices from Salesforce, ServiceNow, Kubernetes
+- ✅ 100+ code examples and patterns
+
+See **[docs/CLAUDE_CODE_GUIDE.md](./docs/CLAUDE_CODE_GUIDE.md)** for complete documentation.
+
+### GitHub Copilot Support
+
+For GitHub Copilot users:
+- **[.github/copilot-instructions.md](./.github/copilot-instructions.md)** — Parallel to CLAUDE.md, kept in sync
+- All domain-specific prompts in `.github/prompts/` are automatically loaded
+
 ## Documentation
 
 Full documentation: **[https://docs.objectstack.ai](https://docs.objectstack.ai)**
