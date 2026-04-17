@@ -347,6 +347,13 @@ export class HonoServerPlugin implements Plugin {
             }
         }
 
+        // Catch-all: ensure unmatched requests always get a proper Response
+        // (prevents Hono "Context is not finalized" error)
+        const rawAppForNotFound = this.server.getRawApp();
+        if (typeof rawAppForNotFound.notFound === 'function') {
+            rawAppForNotFound.notFound((c: any) => c.json({ error: 'Not found' }, 404));
+        }
+
         // Start server on kernel:ready hook
         ctx.hook('kernel:ready', async () => {
             // Register standard endpoints before starting to listen

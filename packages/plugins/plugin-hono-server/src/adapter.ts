@@ -126,7 +126,7 @@ export class HonoHttpServer implements IHttpServer {
             });
 
             const streamResponse = await streamPromise;
-            return streamResponse ?? capturedResponse;
+            return streamResponse ?? capturedResponse ?? c.json({ error: 'No response from handler' }, 500);
         };
     }
 
@@ -148,16 +148,18 @@ export class HonoHttpServer implements IHttpServer {
 
     use(pathOrHandler: string | Middleware, handler?: Middleware) {
         if (typeof pathOrHandler === 'string' && handler) {
-             // Path based middleware
-             // Hono middleware signature is different (c, next) => ...
              this.app.use(pathOrHandler, async (c, next) => {
-                 // Simplistic conversion
-                 await handler({} as any, {} as any, next);
+                 let nextCalled = false;
+                 const wrappedNext = () => { nextCalled = true; return next(); };
+                 await handler({} as any, {} as any, wrappedNext);
+                 if (!nextCalled) await next();
              });
         } else if (typeof pathOrHandler === 'function') {
-             // Global middleware
              this.app.use('*', async (c, next) => {
-                 await pathOrHandler({} as any, {} as any, next);
+                 let nextCalled = false;
+                 const wrappedNext = () => { nextCalled = true; return next(); };
+                 await pathOrHandler({} as any, {} as any, wrappedNext);
+                 if (!nextCalled) await next();
              });
         }
     }
