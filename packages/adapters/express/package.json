@@ -26,5 +26,31 @@
     "express": "^5.2.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "description": "Express adapter for ObjectStack — mounts the generated REST API onto an Express app.",
+  "keywords": [
+    "objectstack",
+    "express",
+    "adapter",
+    "rest",
+    "node"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/adapters/express"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

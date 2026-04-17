@@ -25,5 +25,30 @@
     "@sveltejs/kit": "^2.57.1",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "description": "SvelteKit adapter for ObjectStack — server endpoints for the ObjectStack REST API.",
+  "keywords": [
+    "objectstack",
+    "sveltekit",
+    "adapter",
+    "rest"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/adapters/sveltekit"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

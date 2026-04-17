@@ -27,5 +27,31 @@
     "@types/node": "^25.6.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "keywords": [
+    "objectstack",
+    "plugin",
+    "mcp",
+    "ai",
+    "llm",
+    "tools"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/plugins/plugin-mcp-server"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

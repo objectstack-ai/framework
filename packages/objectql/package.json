@@ -24,5 +24,30 @@
   "devDependencies": {
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "keywords": [
+    "objectstack",
+    "objectql",
+    "query-engine",
+    "orm",
+    "data-access"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/objectql"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

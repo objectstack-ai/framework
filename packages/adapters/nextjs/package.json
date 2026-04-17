@@ -22,5 +22,31 @@
     "react-dom": "^19.2.5",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "description": "Next.js adapter for ObjectStack — App Router route handlers for the ObjectStack REST API.",
+  "keywords": [
+    "objectstack",
+    "nextjs",
+    "adapter",
+    "app-router",
+    "rest"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/adapters/nextjs"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

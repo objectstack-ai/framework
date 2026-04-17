@@ -25,5 +25,31 @@
     "h3": "^1.15.11",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "description": "Nuxt adapter for ObjectStack — Nitro server routes for the ObjectStack REST API.",
+  "keywords": [
+    "objectstack",
+    "nuxt",
+    "adapter",
+    "nitro",
+    "rest"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/adapters/nuxt"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -25,5 +25,31 @@
     "fastify": "^5.8.4",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
+  },
+  "description": "Fastify adapter for ObjectStack — mounts the generated REST API onto a Fastify app.",
+  "keywords": [
+    "objectstack",
+    "fastify",
+    "adapter",
+    "rest",
+    "node"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/adapters/fastify"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

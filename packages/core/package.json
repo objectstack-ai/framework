@@ -36,5 +36,31 @@
     "pino": {
       "optional": true
     }
+  },
+  "keywords": [
+    "objectstack",
+    "kernel",
+    "microkernel",
+    "plugin",
+    "dependency-injection",
+    "event-bus"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

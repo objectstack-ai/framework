@@ -7,10 +7,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nickmessing/spec"
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/vscode-objectstack"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.85.0",
+    "node": ">=18.0.0"
   },
   "categories": [
     "Programming Languages",
@@ -60,5 +62,22 @@
     "@types/vscode": "^1.115.0",
     "@vscode/vsce": "^3.7.1",
     "typescript": "^6.0.2"
-  }
+  },
+  "keywords": [
+    "objectstack",
+    "vscode",
+    "extension",
+    "intellisense",
+    "schema"
+  ],
+  "author": "ObjectStack",
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }
