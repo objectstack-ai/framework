@@ -20,6 +20,10 @@ export const addFieldTool = defineTool({
   parameters: {
     type: 'object',
     properties: {
+      packageId: {
+        type: 'string',
+        description: 'Package ID that owns the target object (e.g., com.acme.crm). If not provided, uses the active package from conversation context.',
+      },
       objectName: {
         type: 'string',
         description: 'Target object machine name (snake_case)',
