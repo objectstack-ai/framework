@@ -76,7 +76,9 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 if (packageService) {
                     const basePath = config.api?.api?.basePath || '/api';
                     const version = config.api?.api?.version || 'v1';
-                    registerPackageRoutes(server, packageService, `${basePath}/${version}`);
+                    registerPackageRoutes(server, packageService, `${basePath}/${version}`, {
+                        protocol,
+                    });
                     ctx.logger.info('Package management routes registered');
                 }
             } catch (e) {
