@@ -17,23 +17,24 @@ export function registerPackageRoutes(server: IHttpServer, packageService: Packa
   const packagesPath = `${basePath}/packages`;
 
   // POST /api/v1/packages - Publish a package
-  server.post(packagesPath, async (c) => {
+  server.post(packagesPath, async (req, res) => {
     try {
-      const body = await c.req.json();
-      const { manifest, metadata } = body;
+      const { manifest, metadata } = req.body || {};
 
       if (!manifest || !metadata) {
-        return c.json({ error: 'Missing required fields: manifest, metadata' }, 400);
+        res.status(400).json({ error: 'Missing required fields: manifest, metadata' });
+        return;
       }
 
       if (!manifest.id || !manifest.version) {
-        return c.json({ error: 'Invalid manifest: id and version are required' }, 400);
+        res.status(400).json({ error: 'Invalid manifest: id and version are required' });
+        return;
       }
 
       const result = await packageService.publish({ manifest, metadata });
 
       if (result.success) {
-        return c.json({
+        res.json({
           success: true,
           message: `Published ${manifest.id}@${manifest.version}`,
           package: {
@@ -41,60 +42,63 @@ export function registerPackageRoutes(server: IHttpServer, packageService: Packa
             version: manifest.version,
           },
         });
+        return;
       }
 
-      return c.json({ success: false, error: result.error }, 400);
+      res.status(400).json({ success: false, error: result.error });
     } catch (error) {
-      return c.json({ error: (error as Error).message }, 500);
+      res.status(500).json({ error: (error as Error).message });
     }
   });
 
   // GET /api/v1/packages - List all packages (latest versions)
-  server.get(packagesPath, async (c) => {
+  server.get(packagesPath, async (_req, res) => {
     try {
       const packages = await packageService.list();
-      return c.json({ packages });
+      res.json({ packages });
     } catch (error) {
-      return c.json({ error: (error as Error).message }, 500);
+      res.status(500).json({ error: (error as Error).message });
     }
   });
 
   // GET /api/v1/packages/:id - Get a specific package
-  server.get(`${packagesPath}/:id`, async (c) => {
+  server.get(`${packagesPath}/:id`, async (req, res) => {
     try {
-      const packageId = c.req.param('id');
-      const version = c.req.query('version') || 'latest';
+      const packageId = req.params.id;
+      const version = req.query?.version || 'latest';
 
       const pkg = await packageService.get(packageId, version);
 
       if (!pkg) {
-        return c.json({ error: 'Package not found' }, 404);
+        res.status(404).json({ error: 'Package not found' });
+        return;
       }
 
-      return c.json({ package: pkg });
+      res.json({ package: pkg });
     } catch (error) {
-      return c.json({ error: (error as Error).message }, 500);
+      res.status(500).json({ error: (error as Error).message });
     }
   });
 
   // DELETE /api/v1/packages/:id - Delete a package
-  server.delete(`${packagesPath}/:id`, async (c) => {
+  server.delete(`${packagesPath}/:id`, async (req, res) => {
     try {
-      const packageId = c.req.param('id');
-      const version = c.req.query('version');
+      const packageId = req.params.id;
+      const version = req.query?.version;
 
       const result = await packageService.delete(packageId, version);
 
       if (result.success) {
-        return c.json({
+        res.json({
           success: true,
           message: `Deleted ${packageId}${version ? `@${version}` : ''}`,
         });
+        return;
       }
 
-      return c.json({ success: false }, 400);
+      res.status(400).json({ success: false });
     } catch (error) {
-      return c.json({ error: (error as Error).message }, 500);
+      res.status(500).json({ error: (error as Error).message });
     }
   });
 }

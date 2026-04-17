@@ -119,7 +119,7 @@ export class HonoHttpServer implements IHttpServer {
                         streamController?.close();
                         resolve(null);
                     }
-                }).catch(() => {
+                }).catch((err) => {
                     streamController?.close();
                     resolve(null);
                 });
