@@ -3,3 +3,6 @@
 export * from './tenant-context';
 export * from './tenant-plugin';
 export * from './tenant-provisioning';
+export * from './turso-platform-client';
+export * from './tenant-schema-initializer';
+export * from './objects';

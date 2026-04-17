@@ -615,15 +615,15 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
   - [x] TenantProvisioningService skeleton — Minimal prototype for tenant database provisioning (Turso Platform API integration pending)
   - [x] Multi-tenant router documentation updates — UUID naming conventions and examples
   - [x] Test coverage — TenantContextService identification and caching tests
-- [ ] **Phase 2: Turso Platform API Integration (v3.5)** — 🔴 Planned
-  - [ ] Turso Platform API client implementation
-  - [ ] Automated tenant database creation
-  - [ ] Tenant-specific auth token generation
-  - [ ] Global control plane database setup (sys_tenant_registry, sys_package_installation)
-  - [ ] Tenant database schema initialization
-  - [ ] Package installation per tenant
-- [ ] **Phase 3: Production Hardening (v4.0)** — 🔴 Planned
-  - [ ] Tenant lifecycle management (suspend, archive, restore)
+- [x] **Phase 2: Turso Platform API Integration (v3.5)** — ✅ Complete (2026-04-17)
+  - [x] Turso Platform API client implementation
+  - [x] Automated tenant database creation
+  - [x] Tenant-specific auth token generation
+  - [x] Global control plane database setup (sys_tenant_registry, sys_package_installation)
+  - [x] Tenant database schema initialization
+  - [x] Package installation per tenant
+- [ ] **Phase 3: Production Hardening (v4.0)** — 🟡 Partially Complete
+  - [x] Tenant lifecycle management (suspend, archive, restore)
   - [ ] Multi-region tenant migration
   - [ ] Tenant usage tracking and quota enforcement
   - [ ] Cross-tenant data sharing policies
