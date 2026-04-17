@@ -162,7 +162,7 @@ export class FilesystemLoader implements MetadataLoader {
 
       for (const pattern of globPatterns) {
         const files = await glob(pattern, {
-          ignore: ['**/node_modules/**', '**/*.test.*', '**/*.spec.*'],
+          ignore: ['**/node_modules/**', '**/*.test.*', '**/*.spec.*', '**/*[*]*'],
           nodir: true,
         });
 

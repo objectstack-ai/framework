@@ -81,7 +81,8 @@ export class MetadataPlugin implements Plugin {
         for (const entry of sortedTypes) {
             try {
                 const items = await this.manager.loadMany(entry.type, {
-                    recursive: true
+                    recursive: true,
+                    patterns: entry.filePatterns,
                 });
 
                 if (items.length > 0) {
