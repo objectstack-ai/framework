@@ -1,376 +1,271 @@
 ## 概述
 
-本 Issue 汇总基于 ObjectUI 开发完整 ObjectStack 前端界面的最终开发方案。ObjectUI 是 ObjectStack 的 **Server-Driven UI (SDUI) 渲染引擎**，基于 `@objectstack/spec` 的 UI 协议（ViewSchema、PageSchema、AppSchema、ActionSchema、ThemeSchema）将 JSON 元数据渲染为 Shadcn/Tailwind 品质的 React 组件。
+本 Issue 汇总基于 ObjectUI (`objectstack-ai/objectui`) 开发完整 ObjectStack 前端界面的集成方案。
 
-### 定位
+**关键认知：ObjectUI 已经是一个成熟的 30+ 包的 monorepo 项目**，核心组件（Grid、Form、Kanban、Calendar、Gantt、Dashboard、Designer 等）已全部开发完成。本项目（`objectstack-ai/framework`）的任务是 **集成和消费** ObjectUI 的包，而非从零重建。
+
+### 两个仓库的关系
 
 ```
-@objectstack/spec (协议层)        → 定义 UI 的 JSON Schema（what）
-@objectstack/client + client-react → 数据/元数据获取 hooks（how to get data）  
-ObjectUI (渲染层)                  → 将 JSON 元数据渲染为 React 组件（how to render）
-apps/studio (开发工具)             → 元数据编辑 IDE（设计器）
+objectstack-ai/objectui   (MIT, 独立仓库)
+  └── 30+ @object-ui/* packages  → 渲染引擎、字段、视图插件、App Shell
+  └── @object-ui/data-objectstack → 已内置 @objectstack/client 数据适配器
+  └── apps/console               → 完整的业务控制台应用
+
+objectstack-ai/framework  (本仓库)
+  └── @objectstack/spec          → 协议定义 (Zod schemas)
+  └── @objectstack/client        → HTTP 客户端
+  └── @objectstack/client-react  → React hooks
+  └── apps/studio                → 开发者 IDE (元数据设计器)
+  └── apps/server                → 生产服务器
 ```
 
-**ObjectUI ≠ Studio**：
-- **Studio** = 面向开发者的元数据编辑器（当前仓库 `apps/studio/`）
-- **ObjectUI** = 面向终端用户的业务应用渲染引擎（新建 `packages/objectui/`）
+### 核心原则
+
+> **不重复造轮子**：ObjectUI 的 `@object-ui/*` 包已经实现了所有 UI 组件。
+> 本项目的任务是做好 **集成层**（桥接 `@objectstack/spec` 协议 ↔ `@object-ui/*` 渲染）。
 
 ---
 
-## 现有基础设施
+## ObjectUI 已完成的包清单
 
-### ✅ 已完成 — 协议层（`@objectstack/spec`）
+### ✅ 核心包（已稳定）
 
-| Schema | 文件 | 描述 |
-|:---|:---|:---|
-| `AppSchema` | `spec/src/ui/app.zod.ts` | App 导航壳：navigation tree、areas、branding |
-| `ViewSchema` (ListView + FormView) | `spec/src/ui/view.zod.ts` | 7 种视图类型 (grid/kanban/gallery/calendar/timeline/gantt/map) + 表单 |
-| `PageSchema` | `spec/src/ui/page.zod.ts` | 16 种页面类型，Region 布局、FlexiPage + Airtable Interface 混合 |
-| `DashboardSchema` | `spec/src/ui/dashboard.zod.ts` | Widget 组合面板：KPI、Chart、Pivot、Matrix |
-| `ActionSchema` | `spec/src/ui/action.zod.ts` | 交互抽象：script / url / modal / flow / api |
-| `ThemeSchema` | `spec/src/ui/theme.zod.ts` | 设计令牌：颜色、排版、间距、圆角、模式 |
-| `PageComponentSchema` | `spec/src/ui/component.zod.ts` | 组件 Props 定义（RecordDetails、RelatedList、Activity 等） |
-| `WidgetSchema` | `spec/src/ui/widget.zod.ts` | 自定义 Widget 生命周期（onMount/onUpdate/onUnmount） |
-| I18n、Responsive、Keyboard、Touch、DnD、Offline、Animation、Notification | `spec/src/ui/*.zod.ts` | 完整的 PWA 级 UI 协议 |
+| 包名 | 版本 | 职责 |
+|:---|:---:|:---|
+| `@object-ui/types` | 3.3.0 | TypeScript 类型定义 & 协议规范 |
+| `@object-ui/core` | 3.3.0 | 核心逻辑、验证、注册中心、表达式引擎（零 React 依赖） |
+| `@object-ui/react` | 3.3.0 | React 绑定 & `<SchemaRenderer>` |
+| `@object-ui/components` | 3.3.0 | 标准 UI 组件库（Tailwind + Shadcn） |
+| `@object-ui/fields` | 3.3.0 | 字段渲染器 & 注册中心（30+ 字段类型） |
+| `@object-ui/layout` | 3.3.0 | 布局组件 + React Router 集成 |
+| `@object-ui/app-shell` | 3.3.0 | App Shell 框架（侧边栏 + 头部 + 内容区） |
+| `@object-ui/providers` | 3.3.0 | Theme / DataSource / Auth 上下文 Provider |
+| `@object-ui/i18n` | 3.3.0 | 国际化 |
+| `@object-ui/auth` | 3.3.0 | 认证 UI |
+| `@object-ui/permissions` | 3.3.0 | 权限控制 UI |
+| `@object-ui/tenant` | 3.3.0 | 多租户 UI |
+| `@object-ui/mobile` | 3.3.0 | 移动端优化组件 |
+| `@object-ui/collaboration` | 3.3.0 | 协作功能 |
 
-### ✅ 已完成 — 客户端 SDK
+### ✅ 数据适配器
 
-| Hook | 包 | 描述 |
-|:---|:---|:---|
-| `useQuery` / `useMutation` | `client-react` | 数据 CRUD |
-| `usePagination` / `useInfiniteQuery` | `client-react` | 分页/无限滚动 |
-| `useObject` / `useView` / `useFields` / `useMetadata` | `client-react` | 元数据获取 |
-| `useDataSubscription` / `useMetadataSubscription` | `client-react` | 实时订阅 |
-| `ObjectStackProvider` / `useClient` | `client-react` | 上下文提供 |
-
-### ✅ 已完成 — REST API
-
-| API | 描述 |
+| 包名 | 职责 |
 |:---|:---|
-| `GET /api/v1/meta/objects/:name` | Object Schema (字段、关系、验证) |
-| `GET /api/v1/meta/views/:name` | View 定义 (列、排序、筛选) |
-| `GET /api/v1/meta/apps` | App 列表 (导航、图标、权限) |
-| `GET /api/v1/data/:object` | 数据查询 (OData-style filter/sort/select) |
-| `POST /PUT /DELETE /api/v1/data/:object` | 数据 CRUD |
+| `@object-ui/data-objectstack` | **ObjectStack 数据适配器**（内置 `@objectstack/client`，连接框架 REST API） |
+
+### ✅ 视图插件（全部已实现）
+
+| 包名 | 对应 Spec ViewSchema.type | 状态 |
+|:---|:---|:---:|
+| `@object-ui/plugin-grid` | `grid` (TanStack Table) | ✅ |
+| `@object-ui/plugin-aggrid` | `grid` (AG Grid 高级版) | ✅ |
+| `@object-ui/plugin-kanban` | `kanban` (dnd-kit) | ✅ |
+| `@object-ui/plugin-calendar` | `calendar` | ✅ |
+| `@object-ui/plugin-gantt` | `gantt` | ✅ |
+| `@object-ui/plugin-timeline` | `timeline` | ✅ |
+| `@object-ui/plugin-map` | `map` | ✅ |
+| `@object-ui/plugin-list` | `list` | ✅ |
+| `@object-ui/plugin-form` | `form` (高级表单) | ✅ |
+| `@object-ui/plugin-detail` | 记录详情页 | ✅ |
+| `@object-ui/plugin-view` | ObjectQL 集成视图 | ✅ |
+
+### ✅ 功能插件
+
+| 包名 | 职责 | 状态 |
+|:---|:---|:---:|
+| `@object-ui/plugin-charts` | 图表 (Recharts) | ✅ |
+| `@object-ui/plugin-dashboard` | Dashboard 布局 & Widgets | ✅ |
+| `@object-ui/plugin-designer` | 可视化设计器 (beta) | ✅ |
+| `@object-ui/plugin-chatbot` | AI 聊天机器人界面 | ✅ |
+| `@object-ui/plugin-editor` | 富文本编辑器 (Monaco) | ✅ |
+| `@object-ui/plugin-markdown` | Markdown 渲染 | ✅ |
+| `@object-ui/plugin-report` | 报表生成器 | ✅ |
+| `@object-ui/plugin-workflow` | 工作流设计器 | ✅ |
+
+### ✅ 工具 & CLI
+
+| 包名 | 职责 |
+|:---|:---|
+| `@object-ui/cli` | CLI 工具（init、serve、generate） |
+| `@object-ui/runner` | 通用应用运行器 |
+| `@object-ui/create-plugin` | 插件脚手架 |
+| `@object-ui/vscode-extension` | VS Code 扩展（IntelliSense + 实时预览） |
 
 ---
 
-## 开发方案：分 5 个阶段
+## 本项目（framework）需要做什么
 
-### Phase 1: 核心渲染引擎 (`packages/objectui/`)
+既然 ObjectUI 已完成所有 UI 组件，本项目的工作重心是 **集成层** 和 **部署层**：
 
-> **目标**：能将 ViewSchema JSON 渲染为 Shadcn 品质的 React 组件
+### Phase 1: 依赖集成 — 将 ObjectUI 引入 framework 生态 🔴 P0
 
-#### 1.1 ViewRenderer — 视图渲染工厂
+> **目标**：让 `apps/studio` 和 `apps/server` 能正确消费 `@object-ui/*` 包
 
-```
-ViewSchema.type → React Component
-  'grid'     → <DataGrid />       (TanStack Table + virtual scroll)
-  'kanban'   → <KanbanBoard />    (dnd-kit)
-  'gallery'  → <GalleryGrid />    (CSS Grid / Masonry)
-  'calendar' → <CalendarView />   (FullCalendar or custom)
-  'timeline' → <TimelineView />   (custom)
-  'gantt'    → <GanttChart />     (custom or gantt-task-react)
-  'map'      → <MapView />        (Mapbox/Leaflet)
-```
+| # | 任务 | 描述 |
+|:---:|:---|:---|
+| 1.1 | **添加 `@object-ui/*` 依赖到 framework** | 在 `apps/studio/package.json` 和 `apps/server/package.json` 中添加 `@object-ui/app-shell`、`@object-ui/data-objectstack`、`@object-ui/providers` 等依赖 |
+| 1.2 | **配置 `@object-ui/data-objectstack` 适配器** | 确保它正确使用 `@objectstack/client` 连接框架 REST API（`/api/v1/data/*`、`/api/v1/meta/*`） |
+| 1.3 | **Spec 协议对齐验证** | 验证 `@object-ui/types` 与 `@objectstack/spec` 的 schema 定义一致性（ViewSchema、AppSchema、PageSchema 等） |
+| 1.4 | **Vite 别名 & 构建配置** | 确保 `@object-ui/*` 包在 Vite 构建中正确解析（参考 studio 现有 alias 配置） |
 
-**核心 API 设计**：
+### Phase 2: Studio 集成 — 用 ObjectUI 增强开发者体验 🔴 P0
 
-```typescript
-// packages/objectui/src/index.tsx
+> **目标**：在 Studio 中嵌入 ObjectUI 的设计器和预览功能
 
-// 1. View Renderer — 根据 ViewSchema 类型分发
-export function ViewRenderer({ view, object }: { view: ListView; object: string }) {
-  // useQuery + useObject 获取数据和字段定义
-  // 根据 view.type 选择对应组件
-}
+| # | 任务 | 描述 |
+|:---:|:---|:---|
+| 2.1 | **Studio 预览面板** | 嵌入 `<SchemaRenderer>` 实现"设计时即预览"——编辑 ViewSchema JSON 时实时渲染 ObjectUI 组件 |
+| 2.2 | **View Designer 集成** | 嵌入 `@object-ui/plugin-designer` 实现可视化 View 编辑器 |
+| 2.3 | **Dashboard Designer** | 嵌入 `@object-ui/plugin-dashboard` 实现 Dashboard 可视化编辑 |
+| 2.4 | **Flow Designer** | 嵌入 `@object-ui/plugin-workflow` 实现工作流可视化设计 |
 
-// 2. Form Renderer — 根据 FormViewSchema 渲染表单
-export function FormRenderer({ form, object, recordId? }: Props) {
-  // useObject 获取字段定义
-  // 根据 form.sections 渲染分组字段
-}
+### Phase 3: 终端用户应用 — 基于 ObjectUI Console 构建 apps/portal 🟡 P1
 
-// 3. Field Renderer — 根据 FieldType 渲染单个字段
-export function FieldRenderer({ field, value, mode }: Props) {
-  // mode: 'display' | 'edit' | 'filter'
-  // field.type: 'text' | 'number' | 'date' | 'select' | 'reference' | ...
-}
-```
+> **目标**：创建面向终端用户的业务应用入口
 
-**关键实现细节**：
+| # | 任务 | 描述 |
+|:---:|:---|:---|
+| 3.1 | **创建 `apps/portal`** | 基于 `@object-ui/app-shell` + `@object-ui/providers` + `@object-ui/data-objectstack` 组合搭建终端用户应用 |
+| 3.2 | **AppShell 路由配置** | 使用 `@object-ui/layout` 实现路由：`/app/:appName/object/:objectName`、`/app/:appName/dashboard/:name` 等 |
+| 3.3 | **插件按需加载** | 仅注册需要的视图插件（Grid、Kanban、Calendar 等），利用 ObjectUI 的 lazy-load 机制减小包体积 |
+| 3.4 | **Authentication 集成** | 使用 `@object-ui/auth` + `@objectstack/plugin-auth` 实现登录/注册/会话管理 |
+| 3.5 | **多租户支持** | 使用 `@object-ui/tenant` 实现租户切换 UI |
 
-| 组件 | Spec 对应 | 依赖库 | 优先级 |
-|:---|:---|:---|:---:|
-| `<DataGrid />` | `ListViewSchema` (type: grid) | TanStack Table v8 + TanStack Virtual | 🔴 P0 |
-| `<FormRenderer />` | `FormViewSchema` + `FormSectionSchema` | React Hook Form + Zod resolver | 🔴 P0 |
-| `<FieldRenderer />` | `FieldSchema.type` (30+ 字段类型) | Shadcn UI primitives | 🔴 P0 |
-| `<KanbanBoard />` | `KanbanConfigSchema` | dnd-kit | 🟡 P1 |
-| `<CalendarView />` | `CalendarConfigSchema` | date-fns + custom | 🟡 P1 |
-| `<GalleryGrid />` | `GalleryConfigSchema` | CSS Grid | 🟡 P1 |
+### Phase 4: 部署 & 打包 🟡 P1
 
-#### 1.2 FieldType → Widget 映射
+> **目标**：确保 ObjectUI 应用能在所有 ObjectStack 部署模式下运行
 
-```
-text           → <Input />
-textarea       → <Textarea />
-number         → <NumberInput />
-currency       → <CurrencyInput />
-percent        → <PercentInput />
-date           → <DatePicker />
-datetime       → <DateTimePicker />
-time           → <TimePicker />
-boolean        → <Switch /> or <Checkbox />
-select         → <Select /> (single)
-multiselect    → <MultiSelect /> (tags)
-reference      → <RecordPicker /> (lookup)
-multi_reference→ <MultiRecordPicker />
-email          → <Input type="email" />
-url            → <Input type="url" /> with preview
-phone          → <PhoneInput />
-rating         → <StarRating />
-image          → <ImageUpload />
-file           → <FileUpload />
-rich_text      → <RichTextEditor /> (Tiptap)
-json           → <CodeEditor /> (Monaco)
-formula        → <FormulaDisplay /> (read-only)
-autonumber     → <Badge /> (read-only)
-```
+| # | 任务 | 描述 |
+|:---:|:---|:---|
+| 4.1 | **CLI 嵌入模式** | 类似 `apps/studio` 的 `/_studio/` 挂载方式，将 Portal 构建产物挂载到 `/_portal/` 或 `/app/` |
+| 4.2 | **Vercel 部署** | 更新 `apps/server/vercel.json` 和 build 脚本，支持同时部署 Studio + Portal |
+| 4.3 | **MSW 开发模式** | 利用 `@objectstack/plugin-msw` 支持纯前端开发模式（无需后端服务器） |
+| 4.4 | **Server 静态托管** | 从 `apps/server` 同时托管 Studio（`/_studio/`）和 Portal（`/app/`）静态文件 |
+
+### Phase 5: 协议完善 — 确保 Spec ↔ ObjectUI 100% 对齐 🟢 P2
+
+> **目标**：持续对齐两个仓库的协议定义
+
+| # | 任务 | 描述 |
+|:---:|:---|:---|
+| 5.1 | **Spec 版本对齐** | 确保 `@objectstack/spec` 的 UI schemas 与 `@object-ui/types` 100% 兼容 |
+| 5.2 | **新字段类型同步** | 当 Spec 新增字段类型时，确认 `@object-ui/fields` 已有对应渲染器 |
+| 5.3 | **Action 协议对齐** | 确认 `@object-ui/core` 的 Action 引擎支持 `@objectstack/spec` ActionSchema 的所有 type |
+| 5.4 | **Theme 协议对齐** | 确认 `@object-ui/providers` ThemeProvider 支持 `@objectstack/spec` ThemeSchema 的所有令牌 |
 
 ---
 
-### Phase 2: App Shell — 应用导航框架
+## 使用方式参考
 
-> **目标**：将 `AppSchema` 渲染为完整的应用壳
+### 最简集成（~100 行代码）
 
-#### 2.1 AppShell 组件
+ObjectUI 的 `examples/minimal-console` 展示了最小集成方案：
 
 ```typescript
-// packages/objectui/src/app/AppShell.tsx
+import { AppShell, ObjectRenderer } from '@object-ui/app-shell';
+import { ThemeProvider, DataSourceProvider } from '@object-ui/providers';
+import { createObjectStackAdapter } from '@object-ui/data-objectstack';
 
-export function AppShell({ app }: { app: App }) {
+// 创建 ObjectStack 数据适配器（连接 framework 的 REST API）
+const dataSource = createObjectStackAdapter({
+  baseUrl: 'http://localhost:3000',  // ObjectStack server 地址
+  token: 'your-auth-token'
+});
+
+function MyApp() {
   return (
-    <SidebarProvider>
-      <AppSidebar app={app} />       {/* 左侧导航 */}
-      <main>
-        <SiteHeader app={app} />      {/* 顶部栏 */}
-        <Outlet />                     {/* 页面内容 */}
-      </main>
-    </SidebarProvider>
+    <ThemeProvider>
+      <DataSourceProvider dataSource={dataSource}>
+        <AppShell sidebar={<MySidebar />}>
+          <ObjectRenderer objectName="contact" />
+        </AppShell>
+      </DataSourceProvider>
+    </ThemeProvider>
   );
 }
 ```
 
-#### 2.2 导航渲染
-
-| AppSchema 字段 | 渲染为 |
-|:---|:---|
-| `app.navigation[]` | 递归侧边栏菜单 (GroupNavItem → 折叠组, ObjectNavItem → 链接) |
-| `app.areas[]` | 顶部 Area 切换器 (类似 Salesforce App Launcher) |
-| `app.branding` | Logo + 主题色 |
-| `app.mobileNavigation` | 移动端底部 Tab / 抽屉菜单 |
-
-#### 2.3 路由系统
-
-```
-/app/:appName                          → App Shell
-/app/:appName/object/:objectName       → 默认 ListView
-/app/:appName/object/:objectName/view/:viewName → 指定 ListView
-/app/:appName/object/:objectName/:id   → 记录详情 (FormView)
-/app/:appName/dashboard/:dashboardName → Dashboard
-/app/:appName/page/:pageName           → Custom Page
-```
-
----
-
-### Phase 3: Page Renderer — 页面组合引擎
-
-> **目标**：将 `PageSchema` 渲染为组件组合页面
-
-#### 3.1 PageRenderer
+### 完整业务应用
 
 ```typescript
-export function PageRenderer({ page }: { page: Page }) {
-  // 1. 根据 page.type 选择布局模板
-  // 2. 遍历 page.regions，每个 region 渲染其 components
-  // 3. 每个 component 根据 type 分发到 ComponentRegistry
+import { AppShell } from '@object-ui/app-shell';
+import { ThemeProvider, DataSourceProvider } from '@object-ui/providers';
+import { registerField } from '@object-ui/fields';
+import { createObjectStackAdapter } from '@object-ui/data-objectstack';
+
+// 1. 创建数据适配器
+const dataSource = createObjectStackAdapter({ baseUrl: '/api/v1' });
+
+// 2. 按需注册字段类型（Lazy Field Registration，减小 30-50% 包体积）
+registerField('text');
+registerField('number');
+registerField('date');
+registerField('select');
+registerField('reference');
+
+// 3. 按需注册视图插件
+import '@object-ui/plugin-grid';
+import '@object-ui/plugin-kanban';
+import '@object-ui/plugin-form';
+import '@object-ui/plugin-dashboard';
+import '@object-ui/plugin-charts';
+
+// 4. 组装应用
+function App() {
+  return (
+    <ThemeProvider>
+      <DataSourceProvider dataSource={dataSource}>
+        <AppShell>
+          {/* ObjectUI 自动根据 metadata 渲染界面 */}
+        </AppShell>
+      </DataSourceProvider>
+    </ThemeProvider>
+  );
 }
 ```
 
-#### 3.2 ComponentRegistry（核心扩展点）
-
-```typescript
-const COMPONENT_REGISTRY: Record<string, React.ComponentType<any>> = {
-  // Structure
-  'page:header': PageHeader,
-  'page:tabs': PageTabs,
-  'page:card': PageCard,
-  
-  // Record Context
-  'record:details': RecordDetails,    // → 字段详情面板
-  'record:highlights': RecordHighlights, // → KPI 高亮卡
-  'record:related_list': RecordRelatedList, // → 关联记录列表
-  'record:activity': RecordActivity,  // → 活动/评论流
-  
-  // AI
-  'ai:chat_window': AIChatWindow,
-  'ai:suggestion': AISuggestion,
-  
-  // Elements (Airtable Interface parity)
-  'element:text': TextElement,
-  'element:number': NumberElement,
-  'element:button': ButtonElement,
-  'element:filter': FilterElement,
-  'element:form': FormElement,
-  'element:record_picker': RecordPicker,
-};
-```
-
 ---
 
-### Phase 4: Dashboard & Reports
-
-> **目标**：将 `DashboardSchema` 渲染为 KPI/图表面板
-
-| Widget 类型 | 渲染组件 | 图表库 |
-|:---|:---|:---|
-| `chart` | `<ChartWidget />` | Recharts 或 ECharts |
-| `kpi` | `<KPICard />` | Shadcn Card + 数字动画 |
-| `table` | `<TableWidget />` | 复用 DataGrid |
-| `pivot` | `<PivotTable />` | TanStack Table + grouping |
-| `list` | `<ListWidget />` | 复用 DataGrid (简化版) |
-
----
-
-### Phase 5: Interface Builder (Design → Publish)
-
-> **目标**：可视化拖拽构建界面，参考 Issue #823 分析
-
-此阶段实现 Airtable-style Interface Designer：
-- **设计模式**：拖拽组件到画布，右侧属性面板
-- **预览模式**：以终端用户视角预览
-- **发布流程**：Draft → Staged → Published 三阶段生命周期
-- **版本管理**：版本快照、回滚、差异对比
-
-详见 Issue #823 的架构设计。
-
----
-
-## 技术栈决策
-
-| 领域 | 选择 | 理由 |
-|:---|:---|:---|
-| **UI 框架** | React 19 | 与 client-react、Studio 统一 |
-| **组件库** | Shadcn UI + Radix | 可定制、无锁定、对标 ThemeSchema |
-| **样式** | Tailwind CSS 4 | 设计令牌驱动、响应式 |
-| **表格** | TanStack Table v8 + TanStack Virtual | 虚拟滚动、列排序/筛选/分组/固定 |
-| **表单** | React Hook Form + Zod | Zod-first 验证、与 Spec FieldValidation 对齐 |
-| **拖拽** | dnd-kit | Kanban + Interface Builder + DnD 排序 |
-| **图表** | Recharts (轻量) 或 ECharts (全功能) | Dashboard Widget 渲染 |
-| **富文本** | Tiptap v2 | rich_text 字段类型 |
-| **路由** | TanStack Router | 类型安全、与 Studio 统一 |
-| **状态** | Zustand + React Query (TanStack Query) | 服务器状态 + 本地 UI 状态 |
-| **日期** | date-fns | Calendar/Timeline/Gantt 视图 |
-| **国际化** | 运行时渲染 `I18nLabelSchema` | 协议内置 i18n |
-
----
-
-## 包结构
+## 依赖关系图（更正版）
 
 ```
-packages/objectui/
-├── src/
-│   ├── index.tsx              # 公开 API 入口
-│   ├── provider.tsx           # <ObjectUIProvider> (配置 + 客户端注入)
-│   │
-│   ├── app/                   # App Shell 层
-│   │   ├── AppShell.tsx       # 主布局 (sidebar + header + outlet)
-│   │   ├── AppSidebar.tsx     # 导航渲染 (NavigationItemSchema → 递归菜单)
-│   │   ├── AppLauncher.tsx    # App 切换器
-│   │   └── AppRouter.tsx      # 路由配置
-│   │
-│   ├── views/                 # View Renderers
-│   │   ├── ViewRenderer.tsx   # 视图分发工厂
-│   │   ├── DataGrid.tsx       # grid 视图
-│   │   ├── KanbanBoard.tsx    # kanban 视图
-│   │   ├── GalleryGrid.tsx    # gallery 视图
-│   │   ├── CalendarView.tsx   # calendar 视图
-│   │   ├── TimelineView.tsx   # timeline 视图
-│   │   ├── GanttChart.tsx     # gantt 视图
-│   │   └── MapView.tsx        # map 视图
-│   │
-│   ├── forms/                 # Form Renderers
-│   │   ├── FormRenderer.tsx   # 表单布局工厂
-│   │   ├── FormSection.tsx    # 分组渲染
-│   │   └── FormWizard.tsx     # 向导模式
-│   │
-│   ├── fields/                # Field Renderers (30+ 字段类型)
-│   │   ├── FieldRenderer.tsx  # 字段分发工厂
-│   │   ├── TextField.tsx
-│   │   ├── NumberField.tsx
-│   │   ├── DateField.tsx
-│   │   ├── SelectField.tsx
-│   │   ├── ReferenceField.tsx # Lookup / Record Picker
-│   │   └── ...
-│   │
-│   ├── pages/                 # Page Renderers
-│   │   ├── PageRenderer.tsx   # 页面分发工厂
-│   │   ├── RecordPage.tsx     # 记录详情页
-│   │   ├── HomePage.tsx       # 首页
-│   │   └── BlankPage.tsx      # 自由画布
-│   │
-│   ├── dashboard/             # Dashboard Renderers
-│   │   ├── DashboardRenderer.tsx
-│   │   ├── ChartWidget.tsx
-│   │   ├── KPICard.tsx
-│   │   └── PivotTable.tsx
-│   │
-│   ├── actions/               # Action Execution Engine
-│   │   ├── ActionRunner.tsx
-│   │   └── ActionButton.tsx
-│   │
-│   └── theme/                 # ThemeSchema → CSS Variables
-│       ├── ThemeProvider.tsx
-│       └── tokens.ts
-│
-├── package.json
-├── tsconfig.json
-└── vitest.config.ts
-```
-
----
-
-## 依赖关系
-
-```
-@objectstack/spec          ← 协议定义 (Zod schemas)
-@objectstack/client        ← HTTP 客户端 (data + metadata API)
-@objectstack/client-react  ← React hooks (useQuery, useObject, useView, ...)
+objectstack-ai/objectui 仓库 (MIT)
+  @object-ui/core          ← 渲染引擎核心（表达式、验证、注册中心）
+  @object-ui/react         ← SchemaRenderer
+  @object-ui/components    ← Shadcn UI 组件库
+  @object-ui/fields        ← 30+ 字段渲染器
+  @object-ui/app-shell     ← App Shell 框架
+  @object-ui/providers     ← Theme / DataSource Provider
+  @object-ui/plugin-*      ← 视图插件（grid/kanban/calendar/gantt/dashboard/...）
+  @object-ui/data-objectstack ← 数据适配器（使用 @objectstack/client）
          │
+         │ npm install（已发布到 npm / 或 workspace link）
          ▼
-@objectstack/objectui      ← UI 渲染引擎 (本 Issue 开发目标)
-         │
-         ▼
-apps/studio                ← 开发者 IDE (导入 objectui 组件)
-apps/portal                ← 终端用户业务应用 (未来)
+objectstack-ai/framework 仓库 (本项目)
+  @objectstack/spec        ← 协议定义（被 @object-ui/core 依赖）
+  @objectstack/client      ← HTTP 客户端（被 @object-ui/data-objectstack 依赖）
+  @objectstack/client-react← React hooks（可与 @object-ui/react 互补使用）
+  apps/studio              ← 开发者 IDE（嵌入 @object-ui/plugin-designer 作为预览）
+  apps/server              ← 生产服务器（托管 Portal 静态文件）
+  apps/portal (新建)       ← 终端用户应用（基于 @object-ui/app-shell 搭建）
 ```
 
 ---
 
-## 实施优先级
+## 实施优先级（更正版）
 
-| 阶段 | 内容 | 预估工期 | 依赖 |
+| 阶段 | 内容 | 预估工期 | 说明 |
 |:---:|:---|:---:|:---|
-| **P0** | Phase 1: DataGrid + FormRenderer + FieldRenderer (核心三件套) | 4-6 周 | spec + client-react |
-| **P0** | Phase 2: AppShell + Navigation + Router | 2-3 周 | Phase 1 |
-| **P1** | Phase 1 续: Kanban + Calendar + Gallery 视图 | 3-4 周 | Phase 1 |
-| **P1** | Phase 3: PageRenderer + ComponentRegistry | 3-4 周 | Phase 2 |
-| **P1** | Phase 4: Dashboard + Chart Widgets | 2-3 周 | Phase 1 |
-| **P2** | Phase 5: Interface Builder (参见 #823) | 12-16 周 | Phase 1-4 |
-| **P2** | 移动端适配 (mobileNavigation + Touch) | 3-4 周 | Phase 2 |
-| **P2** | 离线模式 (OfflineConfigSchema) | 2-3 周 | Phase 1 |
+| **P0** | Phase 1: 依赖集成 + 协议对齐验证 | 1-2 周 | 纯配置工作，确保包能正确引入 |
+| **P0** | Phase 2: Studio 预览面板 | 2-3 周 | 嵌入 SchemaRenderer 到 Studio |
+| **P1** | Phase 3: 创建 apps/portal | 3-4 周 | 搭建终端用户应用框架 |
+| **P1** | Phase 4: 部署 & 打包 | 1-2 周 | CLI 嵌入 + Vercel 部署 |
+| **P2** | Phase 5: 持续协议对齐 | 持续 | 随 Spec 版本迭代同步 |
 
-**总预估**: 核心可用 (P0) = 6-9 周, 完整功能 (P0+P1) = 15-20 周
+**总预估**: 核心可用 (P0) = **3-5 周**, 完整功能 (P0+P1) = **7-11 周**
+
+> ⚡ 对比旧方案（从零构建）的 15-20 周，集成方案节省 **50-65%** 的开发时间。
 
 ---
 
@@ -378,22 +273,20 @@ apps/portal                ← 终端用户业务应用 (未来)
 
 | Issue | 关系 |
 |:---|:---|
-| #823 Assessment: Airtable Interface Designer | Phase 5 的架构基础，Interface Builder 设计方案 |
-| #1159 Studio 优化 | Studio 是设计器，ObjectUI 是渲染器，两者互补 |
-| #989 统一前后端 API 查询语法 | ObjectUI 的 DataGrid 依赖 API 查询语法正确性 |
-| #866 Filter operators broken | ObjectUI 的 filter/sort 功能依赖此 fix |
-| #724 基础设施核心服务 | ObjectUI 的 realtime/search/notification 功能依赖 |
+| #823 Assessment: Airtable Interface Designer | ObjectUI `plugin-designer` 已实现 beta 版，可直接集成 |
+| #1159 Studio 优化 | Studio 嵌入 ObjectUI 组件是优化的关键路径 |
+| #989 统一前后端 API 查询语法 | `@object-ui/data-objectstack` 适配器依赖查询语法正确性 |
+| #866 Filter operators broken | 影响 ObjectUI plugin-grid 的筛选功能 |
+| #724 基础设施核心服务 | ObjectUI 的 realtime/collaboration 功能依赖 |
 
 ---
 
 ## 验收标准
 
-- [ ] 能基于 `defineStack()` 中的 objects + views + apps 定义，**零代码**渲染出完整 CRUD 应用
-- [ ] DataGrid 支持排序、筛选、分页、虚拟滚动、行选择、内联编辑
-- [ ] FormRenderer 支持 simple / tabbed / wizard 布局，含字段级验证
-- [ ] AppShell 支持递归侧边栏导航、Area 切换、移动端适配
-- [ ] 所有 30+ 字段类型在 display / edit / filter 三种模式下均有渲染实现
-- [ ] Dashboard 支持 KPI 卡片 + 图表 + 表格 Widget 组合
-- [ ] 主题令牌 (ThemeSchema) 驱动所有颜色/排版/间距，支持亮/暗模式
-- [ ] 完整的 TypeScript 类型推导，无 `any` 泄漏
-- [ ] 组件测试覆盖率 > 60%
+- [ ] `@object-ui/data-objectstack` 能正确连接 `@objectstack/client` REST API，完成 CRUD 操作
+- [ ] `apps/studio` 能嵌入 `<SchemaRenderer>` 实时预览 View 定义
+- [ ] `apps/portal` 能基于 `defineStack()` 中的 objects + views + apps 定义，渲染完整业务应用
+- [ ] ObjectUI 的所有视图插件（Grid、Kanban、Calendar、Gantt、Dashboard 等）在 Portal 中正常工作
+- [ ] `@objectstack/spec` ViewSchema ↔ `@object-ui/types` 100% 类型兼容
+- [ ] Portal 可通过 CLI `--portal` 参数嵌入服务，或通过 Vercel 独立部署
+- [ ] 包体积 < 100KB（利用 ObjectUI 的 lazy-load 按需加载机制）
