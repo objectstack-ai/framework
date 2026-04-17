@@ -3,6 +3,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { type ObjectKernel, HttpDispatcher, HttpDispatcherResult } from '@objectstack/runtime';
+import { createOriginMatcher, hasWildcardPattern } from '@objectstack/plugin-hono-server';
 
 export interface ObjectStackHonoCorsOptions {
   /** Enable or disable CORS. Defaults to true. */
@@ -96,11 +97,24 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
       const maxAge = corsOpts.maxAge ?? (process.env.CORS_MAX_AGE ? parseInt(process.env.CORS_MAX_AGE, 10) : 86400);
 
       // When credentials is true, browsers reject wildcard '*' for Access-Control-Allow-Origin.
-      // Use a function to reflect the request's Origin header instead.
+      // For wildcard patterns (like "https://*.example.com" or "http://localhost:*") we must
+      // use a matcher function — Hono's cors() middleware does exact-string matching only and
+      // treats '*' in patterns as a literal character, so passing wildcard strings straight
+      // through would silently drop the Access-Control-Allow-Origin header on every real
+      // request (preflight can still succeed via apps/server's short-circuit, but the
+      // subsequent POST/GET would be blocked by the browser).
+      //
+      // This mirrors `plugin-hono-server`'s CORS wiring and uses the shared pattern matcher
+      // from `@objectstack/plugin-hono-server` so all Hono-based code paths stay in sync.
       let origin: string | string[] | ((origin: string) => string | undefined | null);
-      if (credentials && configuredOrigin === '*') {
+      if (configuredOrigin === '*' && credentials) {
+        // Credentials mode with '*' — reflect the request origin
         origin = (requestOrigin: string) => requestOrigin || '*';
+      } else if (hasWildcardPattern(configuredOrigin)) {
+        // Wildcard patterns (e.g., "https://*.objectui.org", "http://localhost:*")
+        origin = createOriginMatcher(configuredOrigin);
       } else {
+        // Exact origin(s) — pass through as-is
         origin = configuredOrigin;
       }
 
