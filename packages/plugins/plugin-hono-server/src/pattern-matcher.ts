@@ -19,13 +19,34 @@
  */
 
 /**
+ * Returns true when the origin points to localhost (any port, http or https).
+ *
+ * Matches:
+ * - `http://localhost`
+ * - `http://localhost:3000`
+ * - `https://localhost:8443`
+ * - `http://127.0.0.1:5173`
+ * - `http://[::1]:3000`
+ */
+export function isLocalhostOrigin(origin: string): boolean {
+    return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+}
+
+/**
  * Check if an origin matches a pattern with wildcards.
+ *
+ * Localhost origins (`http(s)://localhost:<any-port>`, `127.0.0.1`, `[::1]`)
+ * are **always allowed** regardless of the pattern — this removes the need to
+ * enumerate every development port in `CORS_ORIGIN`.
  *
  * @param origin The origin to check (e.g., `https://app.example.com`)
  * @param pattern The pattern to match against (supports `*` wildcard)
  * @returns true if origin matches the pattern
  */
 export function matchOriginPattern(origin: string, pattern: string): boolean {
+    // Always allow localhost for development convenience
+    if (isLocalhostOrigin(origin)) return true;
+
     if (pattern === '*') return true;
     if (pattern === origin) return true;
 

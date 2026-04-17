@@ -9,7 +9,7 @@ import { cors } from 'hono/cors';
 import { serveStatic } from '@hono/node-server/serve-static';
 import * as fs from 'fs';
 import * as path from 'path';
-import { createOriginMatcher, hasWildcardPattern } from './pattern-matcher';
+import { createOriginMatcher, hasWildcardPattern, isLocalhostOrigin } from './pattern-matcher';
 
 export interface StaticMount {
     root: string;
@@ -129,7 +129,11 @@ export class HonoServerPlugin implements Plugin {
                 const credentials = corsOpts.credentials ?? (process.env.CORS_CREDENTIALS !== 'false');
                 const maxAge = corsOpts.maxAge ?? (process.env.CORS_MAX_AGE ? parseInt(process.env.CORS_MAX_AGE, 10) : 86400);
 
-                // Determine origin handler based on configuration
+                // Determine origin handler based on configuration.
+                // Always use a function so that localhost origins are
+                // automatically allowed regardless of the configured
+                // pattern list (handled inside matchOriginPattern /
+                // createOriginMatcher).
                 let origin: string | string[] | ((origin: string) => string | undefined | null);
 
                 // When credentials is true, browsers reject wildcard '*' for Access-Control-Allow-Origin.
@@ -143,8 +147,10 @@ export class HonoServerPlugin implements Plugin {
                     // Use pattern matcher to support subdomain and port wildcards
                     origin = createOriginMatcher(configuredOrigin);
                 } else {
-                    // Exact origin(s) - pass through as-is
-                    origin = configuredOrigin;
+                    // Exact origin(s) — wrap in a function so localhost is
+                    // still auto-allowed via the matcher.
+                    const matcher = createOriginMatcher(configuredOrigin);
+                    origin = (requestOrigin: string) => matcher(requestOrigin);
                 }
 
                 const rawApp = this.server.getRawApp();

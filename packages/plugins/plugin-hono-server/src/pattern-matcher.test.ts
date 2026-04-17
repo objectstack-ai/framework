@@ -119,7 +119,22 @@ describe('createOriginMatcher', () => {
 
             expect(matcher('http://localhost:3000')).toBe('http://localhost:3000');
             expect(matcher('http://localhost:8080')).toBe('http://localhost:8080');
-            expect(matcher('http://127.0.0.1:3000')).toBe(null);
+            // 127.0.0.1 is also considered localhost and always allowed
+            expect(matcher('http://127.0.0.1:3000')).toBe('http://127.0.0.1:3000');
+        });
+
+        it('should always allow localhost origins regardless of configured patterns', () => {
+            // Even with a restrictive pattern, localhost should be allowed
+            const matcher = createOriginMatcher('https://app.example.com');
+
+            expect(matcher('http://localhost:3000')).toBe('http://localhost:3000');
+            expect(matcher('http://localhost:5173')).toBe('http://localhost:5173');
+            expect(matcher('https://localhost:8443')).toBe('https://localhost:8443');
+            expect(matcher('http://localhost')).toBe('http://localhost');
+            expect(matcher('http://127.0.0.1:3000')).toBe('http://127.0.0.1:3000');
+            expect(matcher('http://[::1]:3000')).toBe('http://[::1]:3000');
+            // Non-localhost should still be rejected
+            expect(matcher('https://evil.com')).toBe(null);
         });
     });
 
