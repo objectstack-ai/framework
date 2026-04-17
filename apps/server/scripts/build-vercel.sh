@@ -27,13 +27,16 @@ cd apps/server
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
 
-# 3. Copy studio dist files to public/ for UI serving
-echo "[build-vercel] Copying studio dist to public/..."
+# 3. Copy studio dist files to public/_studio/ for UI serving.
+# Studio is always mounted under /_studio/ (same convention as the CLI
+# static plugin). Vite builds with base: '/_studio/' so its asset URLs
+# and router basepath are already correct for this mount point.
+echo "[build-vercel] Copying studio dist to public/_studio/..."
 rm -rf public
-mkdir -p public
+mkdir -p public/_studio
 if [ -d "../studio/dist" ]; then
-  cp -r ../studio/dist/* public/
-  echo "[build-vercel]   ✓ Copied studio dist to public/"
+  cp -r ../studio/dist/. public/_studio/
+  echo "[build-vercel]   ✓ Copied studio dist to public/_studio/"
 else
   echo "[build-vercel]   ⚠ Studio dist not found (skipped)"
 fi

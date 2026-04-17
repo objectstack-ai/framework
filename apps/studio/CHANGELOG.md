@@ -4,13 +4,20 @@
 
 ### Patch Changes
 
-- Fix TanStack Router basepath resolution when Studio is mounted under a sub-path
-  (e.g. `/_studio/` via the CLI `--ui` flag). Previously, routes such as
-  `/_studio/packages` or `/_studio/:package/objects/:name` failed to match —
-  the router treated the mount prefix as a `$package` route parameter, producing
-  "Not Found" errors. The router now derives `basepath` from Vite's
-  `import.meta.env.BASE_URL`, which works transparently for both root and
-  sub-path deployments.
+- **Fix duplicate sidebar rendering on `/$package/objects/:name` and `/$package/metadata/:type/:name`.** Both the parent `$package.tsx` layout and its children rendered their own `<AppSidebar>` + `<main>` + `<SiteHeader>` shell. With TanStack Router's flat file routing, children render inside the parent's `<Outlet>` — producing a visible copy of the left sidebar in the right content pane instead of the metadata detail.
+  - `$package.tsx` is now a pure layout: `<AppSidebar>` + `<main>` wrapper + `<Outlet>`. No `SiteHeader`.
+  - New `$package.index.tsx` leaf handles the exact `/$package` URL, rendering `<SiteHeader selectedView="overview">` + `<DeveloperOverview>`.
+  - `$package.objects.$name.tsx` and `$package.metadata.$type.$name.tsx` simplified to render only their `<SiteHeader>` + `<PluginHost>`; shell is inherited from the parent layout.
+- **Unified Studio mount path to `/_studio/` for all deployments.** The Vite
+  build default is now `base: '/_studio/'` (was `'./'`), baking the correct
+  absolute asset URLs and router basepath into every bundle. This removes the
+  previous build-time/runtime ambiguity that required the host server to
+  rewrite `href="/..."` URLs or inject a `window.__OBJECTSTACK_STUDIO_BASEPATH__`
+  marker.
+- `resolveBasepath()` in `src/router.ts` simplified to rely solely on Vite's
+  `import.meta.env.BASE_URL`, which now always yields `/_studio/` for
+  production bundles and CLI dev (the CLI dev server sets
+  `VITE_BASE=/_studio/`). Runtime `window` injection workaround removed.
 
 ## 4.0.4
 

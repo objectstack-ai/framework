@@ -13,17 +13,13 @@ import { routeTree } from './routeTree.gen';
 /**
  * Compute the router basepath from Vite's `BASE_URL`.
  *
- * When Studio is mounted under a sub-path (e.g. `/_studio/` via the CLI `--ui`
- * flag, which sets `VITE_BASE=/_studio/`), TanStack Router must strip that
- * prefix before matching route patterns. Otherwise URLs such as
- * `/_studio/packages` are mis-interpreted as `/$package="_studio"/packages`.
+ * Studio is always mounted under `/_studio/` — the Vite build sets
+ * `base: '/_studio/'` by default (see `vite.config.ts`), which makes
+ * `import.meta.env.BASE_URL === '/_studio/'` for every production bundle
+ * and `/_studio/` for the CLI dev server (which also sets `VITE_BASE`).
  *
- * Vite exposes the configured base as `import.meta.env.BASE_URL`:
- *   - Root deployment: `'/'` → basepath `'/'` (no-op)
- *   - Sub-path deployment: `'/_studio/'` → basepath `'/_studio'`
- *
- * TanStack Router expects the basepath WITHOUT a trailing slash (except for
- * the root `'/'`), so we normalise accordingly.
+ * TanStack Router expects the basepath WITHOUT a trailing slash (except
+ * for the root `'/'`), so we normalise accordingly.
  */
 function resolveBasepath(): string {
   const base = (import.meta.env.BASE_URL ?? '/').trim();

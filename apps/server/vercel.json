@@ -6,7 +6,8 @@
   "build": {
     "env": {
       "VITE_RUNTIME_MODE": "server",
-      "VITE_SERVER_URL": ""
+      "VITE_SERVER_URL": "",
+      "VITE_BASE": "/_studio/"
     }
   },
   "functions": {
@@ -17,14 +18,18 @@
   },
   "headers": [
     {
-      "source": "/assets/(.*)",
+      "source": "/_studio/assets/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     }
   ],
+  "redirects": [
+    { "source": "/", "destination": "/_studio/", "permanent": false },
+    { "source": "/_studio", "destination": "/_studio/", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/[[...route]]" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/_studio/:path*", "destination": "/_studio/index.html" }
   ]
 }

@@ -281,14 +281,10 @@ export function createStudioStaticPlugin(distPath: string, options?: { isDev?: b
         return;
       }
 
-      // Read and rewrite index.html so asset paths respect the mount path.
-      // The dist may have been built with base '/' (absolute paths like
-      // /assets/...) which won't resolve when mounted under /_studio/.
-      const rawHtml = fs.readFileSync(indexPath, 'utf-8');
-      const rewrittenHtml = rawHtml.replace(
-        /(\s(?:href|src))="\/(?!\/)/g,
-        `$1="${STUDIO_PATH}/`,
-      );
+      // Studio is always built with `base: '/_studio/'`, so its asset URLs
+      // (and runtime router basepath) are already absolute and correct. We
+      // can serve the pre-built dist verbatim.
+      const indexHtml = fs.readFileSync(indexPath, 'utf-8');
 
       // In dev mode, redirect root to Studio for convenience
       if (options?.isDev) {
@@ -315,8 +311,8 @@ export function createStudioStaticPlugin(distPath: string, options?: { isDev?: b
           });
         }
 
-        // SPA fallback: serve rewritten index.html for non-file routes
-        return new Response(rewrittenHtml, {
+        // SPA fallback: serve index.html for non-file routes
+        return new Response(indexHtml, {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         });
       });

@@ -1,5 +1,15 @@
 # @objectstack/cli
 
+## Unreleased
+
+### Patch Changes
+
+- `createStudioStaticPlugin` simplified now that the Studio is always built with
+  `base: '/_studio/'`: asset URLs in `index.html` are already absolute and
+  correct, so the HTML is served verbatim (no `href="/..."` rewriting, no
+  runtime basepath script injection). Single source of truth for the mount
+  path: Vite `base`.
+
 ## 4.0.4
 
 ### Patch Changes

@@ -13,6 +13,7 @@ import { Route as PackagesRouteImport } from './routes/packages'
 import { Route as ApiConsoleRouteImport } from './routes/api-console'
 import { Route as PackageRouteImport } from './routes/$package'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PackageIndexRouteImport } from './routes/$package.index'
 import { Route as PackageObjectsNameRouteImport } from './routes/$package.objects.$name'
 import { Route as PackageMetadataTypeNameRouteImport } from './routes/$package.metadata.$type.$name'
 
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PackageIndexRoute = PackageIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PackageRoute,
+} as any)
 const PackageObjectsNameRoute = PackageObjectsNameRouteImport.update({
   id: '/objects/$name',
   path: '/objects/$name',
@@ -52,14 +58,15 @@ export interface FileRoutesByFullPath {
   '/$package': typeof PackageRouteWithChildren
   '/api-console': typeof ApiConsoleRoute
   '/packages': typeof PackagesRoute
+  '/$package/': typeof PackageIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$package': typeof PackageRouteWithChildren
   '/api-console': typeof ApiConsoleRoute
   '/packages': typeof PackagesRoute
+  '/$package': typeof PackageIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
@@ -69,6 +76,7 @@ export interface FileRoutesById {
   '/$package': typeof PackageRouteWithChildren
   '/api-console': typeof ApiConsoleRoute
   '/packages': typeof PackagesRoute
+  '/$package/': typeof PackageIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
@@ -79,14 +87,15 @@ export interface FileRouteTypes {
     | '/$package'
     | '/api-console'
     | '/packages'
+    | '/$package/'
     | '/$package/objects/$name'
     | '/$package/metadata/$type/$name'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/$package'
     | '/api-console'
     | '/packages'
+    | '/$package'
     | '/$package/objects/$name'
     | '/$package/metadata/$type/$name'
   id:
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
     | '/$package'
     | '/api-console'
     | '/packages'
+    | '/$package/'
     | '/$package/objects/$name'
     | '/$package/metadata/$type/$name'
   fileRoutesById: FileRoutesById
@@ -136,6 +146,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$package/': {
+      id: '/$package/'
+      path: '/'
+      fullPath: '/$package/'
+      preLoaderRoute: typeof PackageIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
     '/$package/objects/$name': {
       id: '/$package/objects/$name'
       path: '/objects/$name'
@@ -154,11 +171,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface PackageRouteChildren {
+  PackageIndexRoute: typeof PackageIndexRoute
   PackageObjectsNameRoute: typeof PackageObjectsNameRoute
   PackageMetadataTypeNameRoute: typeof PackageMetadataTypeNameRoute
 }
 
 const PackageRouteChildren: PackageRouteChildren = {
+  PackageIndexRoute: PackageIndexRoute,
   PackageObjectsNameRoute: PackageObjectsNameRoute,
   PackageMetadataTypeNameRoute: PackageMetadataTypeNameRoute,
 }
