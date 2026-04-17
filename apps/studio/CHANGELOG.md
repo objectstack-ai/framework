@@ -1,5 +1,17 @@
 # @objectstack/studio
 
+## Unreleased
+
+### Patch Changes
+
+- Fix TanStack Router basepath resolution when Studio is mounted under a sub-path
+  (e.g. `/_studio/` via the CLI `--ui` flag). Previously, routes such as
+  `/_studio/packages` or `/_studio/:package/objects/:name` failed to match —
+  the router treated the mount prefix as a `$package` route parameter, producing
+  "Not Found" errors. The router now derives `basepath` from Vite's
+  `import.meta.env.BASE_URL`, which works transparently for both root and
+  sub-path deployments.
+
 ## 4.0.4
 
 ### Patch Changes
