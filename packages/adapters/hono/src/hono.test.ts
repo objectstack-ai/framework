@@ -1025,4 +1025,65 @@ describe('createHonoApp', () => {
       expect(res.headers.get('access-control-allow-origin')).toBe('https://app.objectui.org');
     });
   });
+
+  describe('CORS expose-headers defaults', () => {
+    // `set-auth-token` must always be exposed so the better-auth bearer()
+    // plugin can deliver rotated session tokens to cross-origin clients.
+    // This mirrors plugin-hono-server's CORS wiring — all three Hono-based
+    // CORS sites must stay in lockstep on this default.
+    const ORIG_CORS_ORIGIN = process.env.CORS_ORIGIN;
+
+    beforeEach(() => {
+      delete process.env.CORS_ORIGIN;
+    });
+
+    afterAll(() => {
+      if (ORIG_CORS_ORIGIN === undefined) delete process.env.CORS_ORIGIN;
+      else process.env.CORS_ORIGIN = ORIG_CORS_ORIGIN;
+    });
+
+    it('always exposes set-auth-token by default', async () => {
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://app.example.com' },
+      });
+      const exposed = res.headers.get('access-control-expose-headers') || '';
+      expect(exposed.toLowerCase()).toContain('set-auth-token');
+    });
+
+    it('merges user-supplied exposeHeaders with set-auth-token (does not replace)', async () => {
+      const app = createHonoApp({
+        kernel: mockKernel,
+        prefix: '/api/v1',
+        cors: { exposeHeaders: ['X-Custom-Header'] },
+      });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://app.example.com' },
+      });
+      const exposed = (res.headers.get('access-control-expose-headers') || '').toLowerCase();
+      expect(exposed).toContain('set-auth-token');
+      expect(exposed).toContain('x-custom-header');
+    });
+
+    it('does not duplicate set-auth-token when user also supplies it', async () => {
+      const app = createHonoApp({
+        kernel: mockKernel,
+        prefix: '/api/v1',
+        cors: { exposeHeaders: ['set-auth-token', 'X-Other'] },
+      });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://app.example.com' },
+      });
+      const exposed = (res.headers.get('access-control-expose-headers') || '').toLowerCase();
+      const occurrences = exposed.split(',').map(s => s.trim()).filter(s => s === 'set-auth-token');
+      expect(occurrences.length).toBe(1);
+      expect(exposed).toContain('x-other');
+    });
+  });
 });

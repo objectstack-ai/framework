@@ -118,11 +118,26 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
         origin = configuredOrigin;
       }
 
+      // Always include `set-auth-token` in exposed headers so that the
+      // better-auth `bearer()` plugin (registered by plugin-auth) can
+      // deliver rotated session tokens to cross-origin clients. Without
+      // this, browsers strip the header from every response, the client
+      // never sees the new token, and cross-origin sessions silently
+      // break even when preflight and the actual request both succeed.
+      //
+      // This mirrors `plugin-hono-server`'s CORS wiring — all three
+      // Hono-based CORS sites must stay in lockstep on this default.
+      const defaultExposeHeaders = ['set-auth-token'];
+      const exposeHeaders = Array.from(new Set([
+        ...defaultExposeHeaders,
+        ...(corsOpts.exposeHeaders ?? []),
+      ]));
+
       app.use('*', cors({
         origin: origin as any,
         allowMethods: corsOpts.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
         allowHeaders: corsOpts.allowHeaders || ['Content-Type', 'Authorization', 'X-Requested-With'],
-        exposeHeaders: corsOpts.exposeHeaders || [],
+        exposeHeaders,
         credentials,
         maxAge,
       }));
