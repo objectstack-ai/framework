@@ -70,6 +70,77 @@ function isSnakeCase(value: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Package Resolution Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Retrieves the active package ID from the conversation context.
+ * Returns null if no conversation service is available or no active package is set.
+ */
+async function getActivePackageId(ctx: MetadataToolContext): Promise<string | null> {
+  if (!ctx.conversationService?.getMetadata || !ctx.conversationId) {
+    return null;
+  }
+
+  const metadata = await ctx.conversationService.getMetadata(ctx.conversationId);
+  return (metadata?.activePackageId as string) ?? null;
+}
+
+/**
+ * Resolves the package ID to use for a metadata operation.
+ * Priority: explicit packageId > active package from conversation > error
+ *
+ * Also validates that the package exists and checks if it's read-only.
+ *
+ * @returns Object with packageId or error message
+ */
+async function resolvePackageId(
+  ctx: MetadataToolContext,
+  explicitPackageId?: string,
+): Promise<{ packageId: string | null; error?: string; warning?: string }> {
+  let packageId: string | null = null;
+
+  // 1. Try explicit packageId parameter
+  if (explicitPackageId) {
+    packageId = explicitPackageId;
+  } else {
+    // 2. Try active package from conversation
+    packageId = await getActivePackageId(ctx);
+  }
+
+  // If no package ID could be resolved, return null (backward compatibility)
+  // This allows metadata to be stored without package association
+  if (!packageId) {
+    return {
+      packageId: null,
+      warning: 'No package specified. Metadata will be created without package association. Consider using set_active_package or providing packageId parameter.',
+    };
+  }
+
+  // Validate package exists (if registry is available)
+  if (ctx.packageRegistry) {
+    const exists = await ctx.packageRegistry.exists(packageId);
+    if (!exists) {
+      return {
+        packageId: null,
+        error: `Package "${packageId}" not found. Use list_packages to see available packages or create_package to create a new one.`,
+      };
+    }
+
+    // Check if package is read-only (code-based)
+    const pkg = await ctx.packageRegistry.get(packageId);
+    if (pkg?.manifest.source === 'filesystem') {
+      return {
+        packageId: null,
+        error: `Package "${packageId}" is read-only (loaded from code). Only database packages can be modified. Use create_package to create a new database package.`,
+      };
+    }
+  }
+
+  return { packageId };
+}
+
+// ---------------------------------------------------------------------------
 // Context — injected once at registration time
 // ---------------------------------------------------------------------------
 
@@ -82,6 +153,20 @@ function isSnakeCase(value: string): boolean {
 export interface MetadataToolContext {
   /** Metadata service for schema CRUD operations. */
   metadataService: IMetadataService;
+
+  /** Optional: Conversation service for retrieving active package context */
+  conversationService?: {
+    getMetadata?(conversationId: string): Promise<Record<string, unknown> | undefined>;
+  };
+
+  /** Optional: Current conversation ID (if in a conversation context) */
+  conversationId?: string;
+
+  /** Optional: Package registry for validating package existence */
+  packageRegistry?: {
+    exists(packageId: string): Promise<boolean>;
+    get(packageId: string): Promise<{ manifest: { scope?: string; source?: string } } | undefined>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -90,9 +175,10 @@ export interface MetadataToolContext {
 
 function createCreateObjectHandler(ctx: MetadataToolContext): ToolHandler {
   return async (args) => {
-    const { name, label, fields, enableFeatures } = args as {
+    const { name, label, packageId: explicitPackageId, fields, enableFeatures } = args as {
       name: string;
       label: string;
+      packageId?: string;
       fields?: Array<{ name: string; label?: string; type: string; required?: boolean }>;
       enableFeatures?: Record<string, boolean>;
     };
@@ -100,6 +186,13 @@ function createCreateObjectHandler(ctx: MetadataToolContext): ToolHandler {
     if (!name || !label) {
       return JSON.stringify({ error: 'Both "name" and "label" are required' });
     }
+
+    // Resolve package ID
+    const resolved = await resolvePackageId(ctx, explicitPackageId);
+    if (resolved.error) {
+      return JSON.stringify({ error: resolved.error });
+    }
+    const packageId = resolved.packageId;
 
     // Validate snake_case name
     if (!isSnakeCase(name)) {
@@ -138,6 +231,7 @@ function createCreateObjectHandler(ctx: MetadataToolContext): ToolHandler {
     const objectDef: Record<string, unknown> = {
       name,
       label,
+      ...(packageId ? { packageId } : {}),
       ...(Object.keys(fieldMap).length > 0 ? { fields: fieldMap } : {}),
       ...(enableFeatures ? { enable: enableFeatures } : {}),
     };
@@ -147,6 +241,7 @@ function createCreateObjectHandler(ctx: MetadataToolContext): ToolHandler {
     return JSON.stringify({
       name,
       label,
+      ...(packageId ? { packageId } : {}),
       fieldCount: Object.keys(fieldMap).length,
     });
   };
@@ -154,7 +249,7 @@ function createCreateObjectHandler(ctx: MetadataToolContext): ToolHandler {
 
 function createAddFieldHandler(ctx: MetadataToolContext): ToolHandler {
   return async (args) => {
-    const { objectName, name, label, type, required, defaultValue, options, reference } = args as {
+    const { objectName, name, label, type, required, defaultValue, options, reference, packageId: explicitPackageId } = args as {
       objectName: string;
       name: string;
       label?: string;
@@ -163,10 +258,17 @@ function createAddFieldHandler(ctx: MetadataToolContext): ToolHandler {
       defaultValue?: unknown;
       options?: Array<{ label: string; value: string }>;
       reference?: string;
+      packageId?: string;
     };
 
     if (!objectName || !name || !type) {
       return JSON.stringify({ error: '"objectName", "name", and "type" are required' });
+    }
+
+    // Resolve package ID (for validation and tracking)
+    const resolved = await resolvePackageId(ctx, explicitPackageId);
+    if (resolved.error) {
+      return JSON.stringify({ error: resolved.error });
     }
 
     // Validate snake_case names
@@ -224,20 +326,28 @@ function createAddFieldHandler(ctx: MetadataToolContext): ToolHandler {
       objectName,
       fieldName: name,
       fieldType: type,
+      packageId: resolved.packageId,
     });
   };
 }
 
 function createModifyFieldHandler(ctx: MetadataToolContext): ToolHandler {
   return async (args) => {
-    const { objectName, fieldName, changes } = args as {
+    const { objectName, fieldName, changes, packageId: explicitPackageId } = args as {
       objectName: string;
       fieldName: string;
       changes: Record<string, unknown>;
+      packageId?: string;
     };
 
     if (!objectName || !fieldName || !changes) {
       return JSON.stringify({ error: '"objectName", "fieldName", and "changes" are required' });
+    }
+
+    // Resolve package ID (for validation and tracking)
+    const resolved = await resolvePackageId(ctx, explicitPackageId);
+    if (resolved.error) {
+      return JSON.stringify({ error: resolved.error });
     }
 
     // Validate snake_case names
@@ -273,19 +383,27 @@ function createModifyFieldHandler(ctx: MetadataToolContext): ToolHandler {
       objectName,
       fieldName,
       updatedProperties: Object.keys(changes),
+      packageId: resolved.packageId,
     });
   };
 }
 
 function createDeleteFieldHandler(ctx: MetadataToolContext): ToolHandler {
   return async (args) => {
-    const { objectName, fieldName } = args as {
+    const { objectName, fieldName, packageId: explicitPackageId } = args as {
       objectName: string;
       fieldName: string;
+      packageId?: string;
     };
 
     if (!objectName || !fieldName) {
       return JSON.stringify({ error: '"objectName" and "fieldName" are required' });
+    }
+
+    // Resolve package ID (for validation and tracking)
+    const resolved = await resolvePackageId(ctx, explicitPackageId);
+    if (resolved.error) {
+      return JSON.stringify({ error: resolved.error });
     }
 
     // Validate snake_case names
@@ -318,6 +436,7 @@ function createDeleteFieldHandler(ctx: MetadataToolContext): ToolHandler {
       objectName,
       fieldName,
       success: true,
+      packageId: resolved.packageId,
     });
   };
 }

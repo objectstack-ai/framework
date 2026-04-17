@@ -33,6 +33,10 @@ export const createObjectTool = defineTool({
         type: 'string',
         description: 'Human-readable display name (e.g. Project Task)',
       },
+      packageId: {
+        type: 'string',
+        description: 'Package ID that will own this object (e.g., com.acme.crm). If not provided, uses the active package from conversation context.',
+      },
       fields: {
         type: 'array',
         description: 'Initial fields to create with the object',

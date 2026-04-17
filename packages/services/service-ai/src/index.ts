@@ -43,6 +43,19 @@ export {
   describeObjectTool,
 } from './tools/metadata-tools.js';
 
+// Package tools
+export { registerPackageTools, PACKAGE_TOOL_DEFINITIONS } from './tools/package-tools.js';
+export type { PackageToolContext, IPackageRegistry, IConversationService } from './tools/package-tools.js';
+
+// Individual package tool metadata
+export {
+  listPackagesTool,
+  getPackageTool,
+  createPackageTool,
+  getActivePackageTool,
+  setActivePackageTool,
+} from './tools/package-tools.js';
+
 // Agent runtime
 export { AgentRuntime } from './agent-runtime.js';
 export type { AgentChatContext } from './agent-runtime.js';
