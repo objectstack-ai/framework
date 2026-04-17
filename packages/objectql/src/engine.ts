@@ -14,7 +14,7 @@ import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack
 import { CoreServiceName } from '@objectstack/spec/system';
 import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
 import { pluralToSingular } from '@objectstack/spec/shared';
-import { SchemaRegistry } from './registry.js';
+import { SchemaRegistry, computeFQN } from './registry.js';
 
 export type HookHandler = (context: HookContext) => Promise<void> | void;
 
@@ -372,12 +372,15 @@ export class ObjectQL implements IDataEngine {
       }
 
       // 3. Register apps (UI navigation definitions) as their own metadata type
+      //    Resolve short objectName references in navigation to FQN so the
+      //    Console UI can match them against the object registry.
       if (Array.isArray(manifest.apps) && manifest.apps.length > 0) {
           this.logger.debug('Registering apps from manifest', { id, count: manifest.apps.length });
           for (const app of manifest.apps) {
               const appName = app.name || app.id;
               if (appName) {
-                  SchemaRegistry.registerApp(app, id);
+                  const resolved = namespace ? this.resolveNavObjectNames(app, namespace) : app;
+                  SchemaRegistry.registerApp(resolved, id);
                   this.logger.debug('Registered App', { app: appName, from: id });
               }
           }
@@ -386,7 +389,8 @@ export class ObjectQL implements IDataEngine {
       // 4. If manifest itself looks like an App (has navigation), also register as app
       //    This handles the case where the manifest IS the app definition (legacy/simple packages)
       if (manifest.name && manifest.navigation && !manifest.apps?.length) {
-          SchemaRegistry.registerApp(manifest, id);
+          const resolved = namespace ? this.resolveNavObjectNames(manifest, namespace) : manifest;
+          SchemaRegistry.registerApp(resolved, id);
           this.logger.debug('Registered manifest-as-app', { app: manifest.name, from: id });
       }
 
@@ -454,6 +458,30 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Deep-clone an app definition, resolving short objectName references in
+   * navigation items to their fully-qualified names (FQN).
+   *
+   * e.g. `objectName: 'lead'` in namespace 'crm' → `objectName: 'crm__lead'`
+   */
+  private resolveNavObjectNames(app: any, namespace: string): any {
+      if (!app.navigation) return app;
+
+      const resolveItems = (items: any[]): any[] =>
+          items.map((item: any) => {
+              const resolved = { ...item };
+              if (resolved.objectName && !resolved.objectName.includes('__')) {
+                  resolved.objectName = computeFQN(namespace, resolved.objectName);
+              }
+              if (Array.isArray(resolved.children)) {
+                  resolved.children = resolveItems(resolved.children);
+              }
+              return resolved;
+          });
+
+      return { ...app, navigation: resolveItems(app.navigation) };
+  }
+
+  /**
    * Register a nested plugin's metadata (objects, actions, views, etc.)
    *
    * Unlike registerApp(), this does NOT call SchemaRegistry.installPackage()
@@ -499,7 +527,8 @@ export class ObjectQL implements IDataEngine {
       // Register plugin as app if it has navigation (for sidebar display)
       if (plugin.name && plugin.navigation) {
           try {
-              SchemaRegistry.registerApp(plugin, ownerId);
+              const resolved = pluginNamespace ? this.resolveNavObjectNames(plugin, pluginNamespace) : plugin;
+              SchemaRegistry.registerApp(resolved, ownerId);
               this.logger.debug('Registered plugin-as-app', { app: plugin.name, from: pluginName });
           } catch (err: any) {
               this.logger.warn('Failed to register plugin as app', { pluginName, error: err.message });
