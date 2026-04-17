@@ -5,9 +5,14 @@
  *
  * Manages per-tenant TursoDriver instances with TTL-based caching.
  * Uses a URL template with `{tenant}` placeholder that is replaced
- * with the tenantId at runtime.
+ * with the tenantId (UUID) at runtime.
  *
- * Serverless-safe: no global intervals, no leaked state. Expired
+ * **UUID-Based Tenant Naming:**
+ * - Tenant IDs are UUIDs, not organization slugs
+ * - Ensures database URLs remain stable even if organization names change
+ * - Example: `550e8400-e29b-41d4-a716-446655440000.turso.io`
+ *
+ * **Serverless-safe:** no global intervals, no leaked state. Expired
  * entries are evicted lazily on next access.
  */
 
@@ -18,20 +23,32 @@ import { TursoDriver, type TursoDriverConfig } from './turso-driver.js';
 /**
  * Configuration for the multi-tenant router.
  *
+ * **UUID-Based Tenant Naming:**
+ * The `{tenant}` placeholder is replaced with a UUID, not an organization slug.
+ * This ensures database URLs remain stable even if organization names change.
+ *
  * @example
  * ```typescript
  * const router = createMultiTenantRouter({
- *   urlTemplate: 'file:./data/{tenant}.db',
+ *   // UUID-based URL template
+ *   urlTemplate: 'libsql://{tenant}.turso.io',
+ *   groupAuthToken: process.env.TURSO_GROUP_TOKEN,
  *   clientCacheTTL: 300_000, // 5 minutes
  * });
  *
- * const driver = await router.getDriverForTenant('acme');
+ * // Tenant ID is a UUID
+ * const driver = await router.getDriverForTenant('550e8400-e29b-41d4-a716-446655440000');
  * ```
  */
 export interface MultiTenantConfig {
   /**
-   * URL template with `{tenant}` placeholder.
-   * Example: `'file:./data/{tenant}.db'`
+   * URL template with `{tenant}` placeholder (replaced with UUID at runtime).
+   *
+   * Examples:
+   * - Remote: `'libsql://{tenant}.turso.io'`
+   * - Local: `'file:./data/{tenant}.db'`
+   *
+   * **Important:** Use UUID for tenant ID, not organization slug.
    */
   urlTemplate: string;
 

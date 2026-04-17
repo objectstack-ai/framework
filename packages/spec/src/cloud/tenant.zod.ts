@@ -1,0 +1,355 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { z } from 'zod';
+
+/**
+ * Multi-Tenant Architecture Schema
+ *
+ * Defines the schema for managing multi-tenant architecture with:
+ * - Global control plane: Single database for auth, org management, tenant registry
+ * - Tenant data plane: Isolated databases per organization (UUID-based naming)
+ *
+ * Design decisions:
+ * - Database naming: {uuid}.turso.io (not org-slug, since slugs can be modified)
+ * - Each tenant has its own Turso database for complete data isolation
+ * - Global database stores user auth, organizations, and tenant metadata
+ */
+
+/**
+ * Tenant Database Status
+ */
+export const TenantDatabaseStatusSchema = z.enum([
+  'provisioning',  // Database is being created
+  'active',        // Database is active and accepting connections
+  'suspended',     // Database is suspended (read-only or inaccessible)
+  'archived',      // Database is archived (data preserved but not accessible)
+  'failed',        // Provisioning or migration failed
+]);
+
+export type TenantDatabaseStatus = z.infer<typeof TenantDatabaseStatusSchema>;
+
+/**
+ * Tenant Plan Tier
+ */
+export const TenantPlanSchema = z.enum([
+  'free',
+  'starter',
+  'pro',
+  'enterprise',
+  'custom',
+]);
+
+export type TenantPlan = z.infer<typeof TenantPlanSchema>;
+
+/**
+ * Tenant Database Registry Entry
+ *
+ * Tracks each tenant's dedicated database instance.
+ * Stored in the global control plane database.
+ */
+export const TenantDatabaseSchema = z.object({
+  /**
+   * Unique tenant database identifier (UUID)
+   */
+  id: z.string().uuid().describe('Unique tenant database identifier (UUID)'),
+
+  /**
+   * Organization ID (foreign key to sys_organization)
+   */
+  organizationId: z.string().describe('Organization ID (foreign key to sys_organization)'),
+
+  /**
+   * Database name (UUID-based for immutability)
+   * Example: "550e8400-e29b-41d4-a716-446655440000"
+   */
+  databaseName: z.string().describe('Database name (UUID-based)'),
+
+  /**
+   * Full database URL
+   * Example: "libsql://550e8400-e29b-41d4-a716-446655440000.turso.io"
+   */
+  databaseUrl: z.string().url().describe('Full database URL'),
+
+  /**
+   * Encrypted tenant-specific auth token
+   */
+  authToken: z.string().describe('Encrypted tenant-specific auth token'),
+
+  /**
+   * Database provisioning and runtime status
+   */
+  status: TenantDatabaseStatusSchema.default('provisioning').describe('Database status'),
+
+  /**
+   * Deployment region
+   * Example: "us-east-1", "eu-west-1", "ap-southeast-1"
+   */
+  region: z.string().describe('Deployment region'),
+
+  /**
+   * Tenant plan tier
+   */
+  plan: TenantPlanSchema.default('free').describe('Tenant plan tier'),
+
+  /**
+   * Storage limit in megabytes
+   */
+  storageLimitMb: z.number().int().positive().describe('Storage limit in megabytes'),
+
+  /**
+   * Database creation timestamp
+   */
+  createdAt: z.string().datetime().describe('Database creation timestamp'),
+
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.string().datetime().describe('Last update timestamp'),
+
+  /**
+   * Last accessed timestamp (for usage tracking)
+   */
+  lastAccessedAt: z.string().datetime().optional().describe('Last accessed timestamp'),
+
+  /**
+   * Custom tenant configuration
+   * Can store additional metadata like feature flags, quotas, etc.
+   */
+  metadata: z.record(z.string(), z.unknown()).optional().describe('Custom tenant configuration'),
+});
+
+export type TenantDatabase = z.infer<typeof TenantDatabaseSchema>;
+
+/**
+ * Package Installation Status
+ */
+export const PackageInstallationStatusSchema = z.enum([
+  'installing',    // Package is being installed
+  'active',        // Package is active and running
+  'disabled',      // Package is disabled (soft delete)
+  'uninstalling',  // Package is being uninstalled
+  'failed',        // Installation failed
+]);
+
+export type PackageInstallationStatus = z.infer<typeof PackageInstallationStatusSchema>;
+
+/**
+ * Package Installation Record
+ *
+ * Tracks which packages are installed in which tenant.
+ * Stored in the global control plane database.
+ */
+export const PackageInstallationSchema = z.object({
+  /**
+   * Unique installation identifier
+   */
+  id: z.string().uuid().describe('Unique installation identifier'),
+
+  /**
+   * Tenant database ID (foreign key to tenant_database)
+   */
+  tenantId: z.string().uuid().describe('Tenant database ID'),
+
+  /**
+   * Package identifier
+   * Example: "@objectstack/crm", "@acme/custom-plugin"
+   */
+  packageId: z.string().describe('Package identifier'),
+
+  /**
+   * Installed package version (semver)
+   */
+  version: z.string().describe('Installed package version'),
+
+  /**
+   * Installation status
+   */
+  status: PackageInstallationStatusSchema.default('installing').describe('Installation status'),
+
+  /**
+   * Installation timestamp
+   */
+  installedAt: z.string().datetime().describe('Installation timestamp'),
+
+  /**
+   * User ID who installed the package
+   */
+  installedBy: z.string().describe('User ID who installed the package'),
+
+  /**
+   * Package-specific configuration
+   */
+  config: z.record(z.string(), z.unknown()).optional().describe('Package-specific configuration'),
+
+  /**
+   * Last update timestamp
+   */
+  updatedAt: z.string().datetime().describe('Last update timestamp'),
+});
+
+export type PackageInstallation = z.infer<typeof PackageInstallationSchema>;
+
+/**
+ * Tenant Context
+ *
+ * Runtime context containing current tenant information.
+ * Extracted from request (subdomain, header, JWT claim, etc.)
+ */
+export const TenantContextSchema = z.object({
+  /**
+   * Current tenant database ID
+   */
+  tenantId: z.string().uuid().describe('Current tenant database ID'),
+
+  /**
+   * Current organization ID
+   */
+  organizationId: z.string().describe('Current organization ID'),
+
+  /**
+   * Organization slug (for display purposes)
+   */
+  organizationSlug: z.string().optional().describe('Organization slug'),
+
+  /**
+   * Tenant database URL
+   */
+  databaseUrl: z.string().url().describe('Tenant database URL'),
+
+  /**
+   * Tenant plan tier
+   */
+  plan: TenantPlanSchema.describe('Tenant plan tier'),
+
+  /**
+   * Custom tenant metadata
+   */
+  metadata: z.record(z.string(), z.unknown()).optional().describe('Custom tenant metadata'),
+});
+
+export type TenantContext = z.infer<typeof TenantContextSchema>;
+
+/**
+ * Tenant Identification Source
+ *
+ * How the tenant was identified from the request
+ */
+export const TenantIdentificationSourceSchema = z.enum([
+  'subdomain',       // Extracted from subdomain (e.g., acme.objectstack.app)
+  'custom_domain',   // Extracted from custom domain (e.g., app.acme.com)
+  'header',          // Extracted from X-Tenant-ID header
+  'jwt_claim',       // Extracted from JWT organizationId claim
+  'session',         // Extracted from session data
+  'default',         // Default/fallback tenant
+]);
+
+export type TenantIdentificationSource = z.infer<typeof TenantIdentificationSourceSchema>;
+
+/**
+ * Tenant Routing Configuration
+ *
+ * Configuration for tenant identification and routing
+ */
+export const TenantRoutingConfigSchema = z.object({
+  /**
+   * Enable multi-tenant mode
+   */
+  enabled: z.boolean().default(false).describe('Enable multi-tenant mode'),
+
+  /**
+   * Tenant identification strategy (in order of precedence)
+   */
+  identificationSources: z.array(TenantIdentificationSourceSchema)
+    .default(['subdomain', 'header', 'jwt_claim'])
+    .describe('Tenant identification strategy (in order of precedence)'),
+
+  /**
+   * Default tenant ID (for single-tenant deployments or fallback)
+   */
+  defaultTenantId: z.string().uuid().optional().describe('Default tenant ID'),
+
+  /**
+   * Subdomain pattern for tenant extraction
+   * Example: "{tenant}.objectstack.app"
+   */
+  subdomainPattern: z.string().optional().describe('Subdomain pattern for tenant extraction'),
+
+  /**
+   * Custom domain mapping
+   * Maps custom domains to tenant IDs
+   * Example: { "app.acme.com": "550e8400-e29b-41d4-a716-446655440000" }
+   */
+  customDomainMapping: z.record(z.string(), z.string().uuid()).optional()
+    .describe('Custom domain to tenant ID mapping'),
+
+  /**
+   * Header name for tenant ID
+   */
+  tenantHeaderName: z.string().default('X-Tenant-ID').describe('Header name for tenant ID'),
+
+  /**
+   * JWT claim name for organization ID
+   */
+  jwtOrganizationClaim: z.string().default('organizationId')
+    .describe('JWT claim name for organization ID'),
+});
+
+export type TenantRoutingConfig = z.infer<typeof TenantRoutingConfigSchema>;
+
+/**
+ * Tenant Provisioning Request
+ *
+ * Request to provision a new tenant database
+ */
+export const ProvisionTenantRequestSchema = z.object({
+  /**
+   * Organization ID to provision database for
+   */
+  organizationId: z.string().describe('Organization ID'),
+
+  /**
+   * Deployment region preference
+   */
+  region: z.string().optional().describe('Deployment region preference'),
+
+  /**
+   * Tenant plan tier
+   */
+  plan: TenantPlanSchema.default('free').describe('Tenant plan tier'),
+
+  /**
+   * Storage limit in megabytes
+   */
+  storageLimitMb: z.number().int().positive().optional().describe('Storage limit in megabytes'),
+
+  /**
+   * Custom tenant metadata
+   */
+  metadata: z.record(z.string(), z.unknown()).optional().describe('Custom tenant metadata'),
+});
+
+export type ProvisionTenantRequest = z.infer<typeof ProvisionTenantRequestSchema>;
+
+/**
+ * Tenant Provisioning Response
+ *
+ * Result of tenant provisioning operation
+ */
+export const ProvisionTenantResponseSchema = z.object({
+  /**
+   * Provisioned tenant database
+   */
+  tenant: TenantDatabaseSchema.describe('Provisioned tenant database'),
+
+  /**
+   * Provisioning duration in milliseconds
+   */
+  durationMs: z.number().describe('Provisioning duration in milliseconds'),
+
+  /**
+   * Any warnings or notes from provisioning
+   */
+  warnings: z.array(z.string()).optional().describe('Provisioning warnings'),
+});
+
+export type ProvisionTenantResponse = z.infer<typeof ProvisionTenantResponseSchema>;

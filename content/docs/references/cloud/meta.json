@@ -4,6 +4,8 @@
     "app-store",
     "developer-portal",
     "marketplace",
-    "marketplace-admin"
+    "marketplace-admin",
+    "provisioning",
+    "tenant"
   ]
 }
