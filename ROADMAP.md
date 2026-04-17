@@ -606,6 +606,28 @@ Objects now declare `namespace: 'sys'` and a short `name` (e.g., `name: 'user'`)
 - [x] Metadata-driven deploy pipeline — `system/deploy-bundle.zod.ts`: `DeployBundleSchema`, `MigrationPlanSchema`, `DeployDiffSchema`; `contracts/deploy-pipeline-service.ts`: `IDeployPipelineService`
 - [x] App marketplace installation protocol — `system/app-install.zod.ts`: `AppManifestSchema`, `AppInstallResultSchema`, `AppCompatibilityCheckSchema`; `contracts/app-lifecycle-service.ts`: `IAppLifecycleService`
 - [ ] Cross-tenant data sharing policies
+- [x] **Phase 1: Multi-Tenant Protocol & Minimal Prototype (v3.4)** — ✅ Complete (2026-04-17)
+  - [x] UUID-based tenant database naming (not org-slug, for immutability)
+  - [x] Tenant registry schema — `cloud/tenant.zod.ts`: `TenantDatabaseSchema`, `PackageInstallationSchema`, `TenantContextSchema`, `TenantRoutingConfigSchema`, `ProvisionTenantRequestSchema`, `ProvisionTenantResponseSchema`
+  - [x] `@objectstack/service-tenant` package — Tenant context service, multi-tenant router integration, UUID-based naming enforcement
+  - [x] Tenant identification strategies — Subdomain, custom domain, HTTP header, JWT claim, session
+  - [x] TenantContextService — Tenant context resolution with caching and multiple identification sources
+  - [x] TenantProvisioningService skeleton — Minimal prototype for tenant database provisioning (Turso Platform API integration pending)
+  - [x] Multi-tenant router documentation updates — UUID naming conventions and examples
+  - [x] Test coverage — TenantContextService identification and caching tests
+- [ ] **Phase 2: Turso Platform API Integration (v3.5)** — 🔴 Planned
+  - [ ] Turso Platform API client implementation
+  - [ ] Automated tenant database creation
+  - [ ] Tenant-specific auth token generation
+  - [ ] Global control plane database setup (sys_tenant_registry, sys_package_installation)
+  - [ ] Tenant database schema initialization
+  - [ ] Package installation per tenant
+- [ ] **Phase 3: Production Hardening (v4.0)** — 🔴 Planned
+  - [ ] Tenant lifecycle management (suspend, archive, restore)
+  - [ ] Multi-region tenant migration
+  - [ ] Tenant usage tracking and quota enforcement
+  - [ ] Cross-tenant data sharing policies
+  - [ ] Tenant-specific RBAC and permissions
 
 ### 6.3 Observability
 
