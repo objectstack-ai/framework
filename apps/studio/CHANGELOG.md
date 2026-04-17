@@ -4,21 +4,16 @@
 
 ### Patch Changes
 
-- Fix TanStack Router basepath resolution when Studio is mounted under a sub-path
-  (e.g. `/_studio/` via the CLI `--ui` flag). Previously, routes such as
-  `/_studio/packages` or `/_studio/:package/objects/:name` failed to match —
-  the router treated the mount prefix as a `$package` route parameter, producing
-  "Not Found" errors on hard refresh and dropping the prefix on sidebar clicks
-  (`navigate({ to: '/packages' })` → `/packages`).
-
-  The router now resolves its `basepath` from (1) a runtime global
-  `window.__OBJECTSTACK_STUDIO_BASEPATH__` injected by the host server, falling
-  back to (2) Vite's `import.meta.env.BASE_URL`, then (3) `'/'`. The runtime
-  override is required because `import.meta.env.BASE_URL` is a build-time
-  constant — a pre-built dist (shipped via npm and re-hosted by the CLI static
-  plugin under `/_studio/`) would otherwise hard-code basepath as `'/'`
-  regardless of its actual mount path. The CLI's `createStudioStaticPlugin` now
-  injects the appropriate global so the same dist works at any mount point.
+- **Unified Studio mount path to `/_studio/` for all deployments.** The Vite
+  build default is now `base: '/_studio/'` (was `'./'`), baking the correct
+  absolute asset URLs and router basepath into every bundle. This removes the
+  previous build-time/runtime ambiguity that required the host server to
+  rewrite `href="/..."` URLs or inject a `window.__OBJECTSTACK_STUDIO_BASEPATH__`
+  marker.
+- `resolveBasepath()` in `src/router.ts` simplified to rely solely on Vite's
+  `import.meta.env.BASE_URL`, which now always yields `/_studio/` for
+  production bundles and CLI dev (the CLI dev server sets
+  `VITE_BASE=/_studio/`). Runtime `window` injection workaround removed.
 
 ## 4.0.4
 

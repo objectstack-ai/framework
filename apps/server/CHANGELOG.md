@@ -1,5 +1,13 @@
 # @objectstack/example-host
 
+## Unreleased
+
+### Patch Changes
+
+- **Unified Studio mount path to `/_studio/` for all deployments** (CLI embedded, Vercel, self-host).
+  - `vercel.json`: studio SPA now serves under `/_studio/:path*` with a dedicated rewrite to `/_studio/index.html`. Root `/` and bare `/_studio` redirect to `/_studio/`. Asset caching headers scoped to `/_studio/assets/*`. `VITE_BASE=/_studio/` is set in `build.env`.
+  - `scripts/build-vercel.sh`: studio dist is copied to `public/_studio/` (previously `public/`), so Vercel serves it under the same sub-path the CLI uses. This resolves the deep-link / sidebar-click routing failures that occurred when the Studio was mounted at the public root.
+
 ## 4.0.4
 
 ### Patch Changes

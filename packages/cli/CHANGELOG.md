@@ -4,13 +4,11 @@
 
 ### Patch Changes
 
-- `createStudioStaticPlugin` now injects
-  `<script>window.__OBJECTSTACK_STUDIO_BASEPATH__="/_studio";</script>` into the
-  rewritten `index.html`. This allows the Studio's TanStack Router to discover
-  its mount path at runtime — a pre-built Studio `dist/` (whose
-  `import.meta.env.BASE_URL` is baked in as `'./'` at build time) previously
-  hard-coded its router basepath to `'/'`, breaking deep-link refresh and
-  causing sidebar navigation to drop the `/_studio` prefix.
+- `createStudioStaticPlugin` simplified now that the Studio is always built with
+  `base: '/_studio/'`: asset URLs in `index.html` are already absolute and
+  correct, so the HTML is served verbatim (no `href="/..."` rewriting, no
+  runtime basepath script injection). Single source of truth for the mount
+  path: Vite `base`.
 
 ## 4.0.4
 

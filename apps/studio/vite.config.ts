@@ -10,7 +10,7 @@ const hmrConfig = process.env.VITE_HMR_PORT
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: process.env.VITE_BASE || './',  // Relative base for sub-path mounting (e.g. /_studio/)
+  base: process.env.VITE_BASE || '/_studio/',  // Studio is always mounted under /_studio/ (CLI, Vercel, self-host)
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
