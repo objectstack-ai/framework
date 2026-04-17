@@ -4,6 +4,10 @@
 
 ### Patch Changes
 
+- **Fix duplicate sidebar rendering on `/$package/objects/:name` and `/$package/metadata/:type/:name`.** Both the parent `$package.tsx` layout and its children rendered their own `<AppSidebar>` + `<main>` + `<SiteHeader>` shell. With TanStack Router's flat file routing, children render inside the parent's `<Outlet>` — producing a visible copy of the left sidebar in the right content pane instead of the metadata detail.
+  - `$package.tsx` is now a pure layout: `<AppSidebar>` + `<main>` wrapper + `<Outlet>`. No `SiteHeader`.
+  - New `$package.index.tsx` leaf handles the exact `/$package` URL, rendering `<SiteHeader selectedView="overview">` + `<DeveloperOverview>`.
+  - `$package.objects.$name.tsx` and `$package.metadata.$type.$name.tsx` simplified to render only their `<SiteHeader>` + `<PluginHost>`; shell is inherited from the parent layout.
 - **Unified Studio mount path to `/_studio/` for all deployments.** The Vite
   build default is now `base: '/_studio/'` (was `'./'`), baking the correct
   absolute asset URLs and router basepath into every bundle. This removes the

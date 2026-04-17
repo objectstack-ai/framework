@@ -2,10 +2,19 @@
 
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { AppSidebar } from '../components/app-sidebar';
-import { SiteHeader } from '@/components/site-header';
 import { usePackages } from '../hooks/usePackages';
 import { useEffect } from 'react';
 
+/**
+ * Layout for every `/$package/*` route.
+ *
+ * Renders the persistent left `AppSidebar` and the main content frame, and
+ * delegates the `SiteHeader` + body rendering to the child leaf routes via
+ * `<Outlet />`. Keeping the header in the children lets each leaf (index,
+ * object view, metadata view) provide accurate breadcrumbs without prop-
+ * drilling. It also prevents the duplicated-shell bug that occurred when
+ * both this layout and its children each rendered their own `AppSidebar`.
+ */
 function PackageLayoutComponent() {
   const { package: packageId } = Route.useParams();
   const { packages, selectedPackage, setSelectedPackage } = usePackages();
@@ -26,13 +35,7 @@ function PackageLayoutComponent() {
         onSelectPackage={setSelectedPackage}
       />
       <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
-        <SiteHeader
-          selectedView="overview"
-          packageLabel={selectedPackage?.manifest?.name || selectedPackage?.manifest?.id}
-        />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
     </>
   );
