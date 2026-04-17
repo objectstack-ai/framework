@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { Hono } from 'hono';
 
 // Mock dispatcher instance accessible across tests
@@ -945,6 +945,84 @@ describe('createHonoApp', () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.success).toBe(true);
+    });
+  });
+
+  describe('CORS wildcard origin patterns', () => {
+    const ORIG_CORS_ORIGIN = process.env.CORS_ORIGIN;
+    const ORIG_CORS_CREDENTIALS = process.env.CORS_CREDENTIALS;
+
+    beforeEach(() => {
+      delete process.env.CORS_ORIGIN;
+      delete process.env.CORS_CREDENTIALS;
+    });
+
+    afterAll(() => {
+      if (ORIG_CORS_ORIGIN === undefined) delete process.env.CORS_ORIGIN;
+      else process.env.CORS_ORIGIN = ORIG_CORS_ORIGIN;
+      if (ORIG_CORS_CREDENTIALS === undefined) delete process.env.CORS_CREDENTIALS;
+      else process.env.CORS_CREDENTIALS = ORIG_CORS_CREDENTIALS;
+    });
+
+    it('matches subdomain wildcard (https://*.example.com) for real subdomains', async () => {
+      process.env.CORS_ORIGIN = 'https://*.example.com';
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://app.example.com' },
+      });
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
+    });
+
+    it('matches port wildcard (http://localhost:*) for any localhost port', async () => {
+      process.env.CORS_ORIGIN = 'http://localhost:*';
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'http://localhost:5173' },
+      });
+      expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173');
+    });
+
+    it('matches the correct pattern from a comma-separated wildcard list', async () => {
+      process.env.CORS_ORIGIN =
+        'https://*.objectui.org,https://*.objectstack.ai,http://localhost:*';
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://studio.objectstack.ai' },
+      });
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://studio.objectstack.ai');
+    });
+
+    it('rejects origins that do not match any wildcard pattern', async () => {
+      process.env.CORS_ORIGIN = 'https://*.example.com';
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'GET',
+        headers: { Origin: 'https://evil.com' },
+      });
+      // Hono's cors() returns no allow-origin header when the matcher rejects
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    });
+
+    it('responds to preflight OPTIONS with matched wildcard origin', async () => {
+      process.env.CORS_ORIGIN = 'https://*.objectui.org';
+      const app = createHonoApp({ kernel: mockKernel, prefix: '/api/v1' });
+
+      const res = await app.request('/api/v1/meta', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://app.objectui.org',
+          'Access-Control-Request-Method': 'POST',
+        },
+      });
+      expect(res.status).toBe(204);
+      expect(res.headers.get('access-control-allow-origin')).toBe('https://app.objectui.org');
     });
   });
 });
