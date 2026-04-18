@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Polished `examples/app-crm` dashboards** — Rewrote `executive`, `sales`, and `service` dashboards and added a new unified `crm` overview dashboard, modeled after the reference implementation at [objectstack-ai/objectui/examples/crm](https://github.com/objectstack-ai/objectui/tree/main/examples/crm/src/dashboards). The dashboards now use the framework's first-class metadata fields instead of ad-hoc hex strings stuffed into `options.color`:
+  - Semantic `colorVariant` tokens (`success`/`warning`/`danger`/`blue`/`teal`/`purple`/`orange`) replace raw hex codes
+  - Each widget carries a `description`, `chartConfig` (axes, color palette, annotations, interaction), and a header `actionUrl`/`actionType`/`actionIcon` for drill-down
+  - Each dashboard declares a structured `header` with action buttons, a `dateRange` global time filter, `globalFilters` (owner / industry / priority lookups), and a `refreshInterval`
+  - KPI metric widgets carry `icon`, `format`, and `trend` indicators (direction + delta + label) in `options`, mirroring the objectui reference visual style
+  - Chart variety expanded: `area` (revenue trends), `donut` (lead source / industry), `funnel` (pipeline by stage), `gauge` (SLA compliance), `horizontal-bar` (rep ranking), with proper axis titles and value formatters
+  - Table widgets use structured `columns: [{ header, accessorKey, format }]` instead of bare field-name arrays
+  - New `examples/app-crm/test/dashboard.test.ts` validates every dashboard against `DashboardSchema` and enforces these conventions
+
 ### Added
 - **Release-readiness documentation pass (42 packages)** — Aligned every `@objectstack/*` package for the formal v4.x release:
   - Canonical README template and `package.json` publishing checklist committed at `docs/internal/PACKAGE_README_TEMPLATE.md`
