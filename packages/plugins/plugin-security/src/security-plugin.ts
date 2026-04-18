@@ -55,8 +55,8 @@ export class SecurityPlugin implements Plugin {
         setupNav.contribute({
           areaId: 'area_administration',
           items: [
-            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'role', icon: 'shield-check', order: 60 },
-            { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'permission_set', icon: 'lock', order: 70 },
+            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys__role', icon: 'shield-check', order: 60 },
+            { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys__permission_set', icon: 'lock', order: 70 },
           ],
         });
         ctx.logger.info('Security navigation items contributed to Setup App');
