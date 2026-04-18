@@ -15,6 +15,8 @@ export const ServiceDashboard: Dashboard = {
   label: 'Customer Service',
   description: 'Case load, SLA health, and resolution performance',
 
+  columns: 12,
+  gap: 4,
   refreshInterval: 60, // 1 minute — service desks need fresh numbers
 
   header: {
@@ -189,8 +191,8 @@ export const ServiceDashboard: Dashboard = {
         showLegend: false,
         showDataLabels: true,
         colors: ['#8B5CF6'],
-        xAxis: { field: 'origin', title: 'Channel', showGridLines: false },
-        yAxis: [{ field: 'count', title: 'Cases', showGridLines: true }],
+        xAxis: { field: 'origin', title: 'Channel', showGridLines: false, logarithmic: false },
+        yAxis: [{ field: 'count', title: 'Cases', showGridLines: true, logarithmic: false }],
       },
     },
 
@@ -211,9 +213,9 @@ export const ServiceDashboard: Dashboard = {
         showLegend: false,
         showDataLabels: false,
         colors: ['#0EA5E9'],
-        xAxis: { field: 'created_date', title: 'Day', showGridLines: false },
-        yAxis: [{ field: 'count', title: 'Cases opened', showGridLines: true }],
-        interaction: { tooltips: true, brush: true },
+        xAxis: { field: 'created_date', title: 'Day', showGridLines: false, logarithmic: false },
+        yAxis: [{ field: 'count', title: 'Cases opened', showGridLines: true, logarithmic: false }],
+        interaction: { tooltips: true, brush: true, zoom: false },
       },
       options: { dateGranularity: 'day' },
     },

@@ -16,6 +16,8 @@ export const ExecutiveDashboard: Dashboard = {
   label: 'Executive Overview',
   description: 'High-level revenue, customer, and pipeline KPIs for leadership',
 
+  columns: 12,
+  gap: 4,
   refreshInterval: 300, // 5 minutes
 
   header: {
@@ -157,8 +159,8 @@ export const ExecutiveDashboard: Dashboard = {
         showLegend: false,
         showDataLabels: false,
         colors: ['#10B981'],
-        xAxis: { field: 'close_date', title: 'Month', showGridLines: false },
-        yAxis: [{ field: 'amount', title: 'Revenue', format: '$0,0', showGridLines: true }],
+        xAxis: { field: 'close_date', title: 'Month', showGridLines: false, logarithmic: false },
+        yAxis: [{ field: 'amount', title: 'Revenue', format: '$0,0', showGridLines: true, logarithmic: false }],
         interaction: { tooltips: true, zoom: false, brush: true },
       },
       options: { dateGranularity: 'month' },
@@ -219,8 +221,8 @@ export const ExecutiveDashboard: Dashboard = {
         showLegend: false,
         showDataLabels: true,
         colors: ['#8B5CF6'],
-        xAxis: { field: 'created_date', title: 'Month', showGridLines: false },
-        yAxis: [{ field: 'count', title: 'New accounts', showGridLines: true }],
+        xAxis: { field: 'created_date', title: 'Month', showGridLines: false, logarithmic: false },
+        yAxis: [{ field: 'count', title: 'New accounts', showGridLines: true, logarithmic: false }],
       },
       options: { dateGranularity: 'month' },
     },

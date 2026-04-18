@@ -20,6 +20,8 @@ export const CrmOverviewDashboard: Dashboard = {
   label: 'CRM Overview',
   description: 'Revenue metrics, pipeline analytics, and deal insights',
 
+  columns: 12,
+  gap: 4,
   refreshInterval: 300,
 
   header: {
@@ -151,9 +153,9 @@ export const CrmOverviewDashboard: Dashboard = {
         showLegend: false,
         showDataLabels: false,
         colors: ['#10B981'],
-        xAxis: { field: 'close_date', title: 'Month', showGridLines: false },
-        yAxis: [{ field: 'amount', title: 'Revenue', format: '$0,0', showGridLines: true }],
-        interaction: { tooltips: true, brush: true },
+        xAxis: { field: 'close_date', title: 'Month', showGridLines: false, logarithmic: false },
+        yAxis: [{ field: 'amount', title: 'Revenue', format: '$0,0', showGridLines: true, logarithmic: false }],
+        interaction: { tooltips: true, brush: true, zoom: false },
       },
       options: { dateGranularity: 'month' },
     },
@@ -212,8 +214,8 @@ export const CrmOverviewDashboard: Dashboard = {
         showLegend: false,
         showDataLabels: true,
         colors: ['#4F46E5'],
-        xAxis: { field: 'category', title: 'Category', showGridLines: false },
-        yAxis: [{ field: 'price', title: 'Revenue', format: '$0,0', showGridLines: true }],
+        xAxis: { field: 'category', title: 'Category', showGridLines: false, logarithmic: false },
+        yAxis: [{ field: 'price', title: 'Revenue', format: '$0,0', showGridLines: true, logarithmic: false }],
       },
     },
 
