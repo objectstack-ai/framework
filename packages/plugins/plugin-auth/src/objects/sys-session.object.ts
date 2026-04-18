@@ -65,6 +65,16 @@ export const SysSession = ObjectSchema.create({
       label: 'User Agent',
       required: false,
     }),
+
+    active_organization_id: Field.text({
+      label: 'Active Organization ID',
+      required: false,
+    }),
+
+    active_team_id: Field.text({
+      label: 'Active Team ID',
+      required: false,
+    }),
   },
   
   indexes: [

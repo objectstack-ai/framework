@@ -82,6 +82,7 @@ export default defineStack({
     new AuthPlugin({
       secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',
       baseUrl,
+      plugins: { organization: true },
     }),
     new SecurityPlugin(),
     new AuditPlugin(),
