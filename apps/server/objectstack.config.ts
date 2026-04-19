@@ -23,6 +23,7 @@ import { AIServicePlugin } from '@objectstack/service-ai';
 import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { PackageServicePlugin } from '@objectstack/service-package';
+import { createTenantPlugin } from '@objectstack/service-tenant';
 import CrmApp from '../../examples/app-crm/objectstack.config';
 import TodoApp from '../../examples/app-todo/objectstack.config';
 import BiPluginManifest from '../../examples/plugin-bi/objectstack.config';
@@ -75,6 +76,7 @@ export default defineStack({
     new DriverPlugin(new InMemoryDriver(), 'memory'),
     new DriverPlugin(tursoDriver, 'turso'),
     new PackageServicePlugin(), // Package management service
+    createTenantPlugin({ registerSystemObjects: true, registerLegacyTenantDatabase: false }),
     new AppPlugin(CrmApp),
     new AppPlugin(TodoApp),
     new AppPlugin(BiPluginManifest),

@@ -317,6 +317,70 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            // ── Cloud (Environments) ─────────────────────────────────────
+            server.get(`${prefix}/cloud/environments`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud('/environments', 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/cloud/environments`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud('/environments', 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.get(`${prefix}/cloud/environments/:id`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}`, 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.patch(`${prefix}/cloud/environments/:id`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}`, 'PATCH', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.delete(`${prefix}/cloud/environments/:id`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}`, 'DELETE', {}, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/cloud/environments/:id/rotate-credential`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/rotate-credential`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.get(`${prefix}/cloud/environments/:id/members`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/members`, 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Storage ─────────────────────────────────────────────────
             server.post(`${prefix}/storage/upload`, async (req: any, res: any) => {
                 try {

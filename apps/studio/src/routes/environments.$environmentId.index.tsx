@@ -60,7 +60,11 @@ function EnvironmentOverviewComponent() {
     if (!ok) return;
     setRotating(true);
     try {
-      await client?.environments?.rotateCredential?.(env.id);
+      const newToken =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `tok_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+      await client?.environments?.rotateCredential?.(env.id, newToken);
       toast({
         title: 'Credential rotation started',
         description: 'The new credential will propagate to all runtimes.',

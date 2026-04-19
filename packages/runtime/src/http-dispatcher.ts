@@ -936,6 +936,231 @@ export class HttpDispatcher {
         return { handled: false };
     }
 
+    /**
+     * Cloud / Environment Control-Plane routes.
+     *
+     *  - GET    /cloud/environments                            → list
+     *  - POST   /cloud/environments                            → provision
+     *  - GET    /cloud/environments/:id                        → detail (+ db, credential, membership)
+     *  - PATCH  /cloud/environments/:id                        → update displayName / plan / status / isDefault / metadata
+     *  - POST   /cloud/environments/:id/activate               → mark as active for session (stub)
+     *  - POST   /cloud/environments/:id/credentials/rotate     → rotate credential
+     *  - GET    /cloud/environments/:id/members                → list members
+     *
+     * Backed by ObjectQL sys__environment / sys__environment_database /
+     * sys__database_credential / sys__environment_member tables (registered
+     * by `@objectstack/service-tenant`'s `createTenantPlugin`).
+     */
+    async handleCloud(path: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        const m = method.toUpperCase();
+        const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
+
+        const qlService = await this.getObjectQLService();
+        const ql = qlService ?? await this.resolveService('objectql');
+        if (!ql) {
+            return { handled: true, response: this.error('Environment service not available (ObjectQL missing)', 503) };
+        }
+
+        const ENV = 'sys__environment';
+        const DB = 'sys__environment_database';
+        const CRED = 'sys__database_credential';
+        const MEM = 'sys__environment_member';
+
+        const findOne = async (obj: string, where: Record<string, unknown>): Promise<any | undefined> => {
+            let rows = await ql.find(obj, { where } as any);
+            if (rows && (rows as any).value) rows = (rows as any).value;
+            if (!Array.isArray(rows)) return undefined;
+            return rows[0];
+        };
+
+        try {
+            // ----- /cloud/environments collection routes -----
+            if (parts.length === 1 && parts[0] === 'environments' && m === 'GET') {
+                const where: Record<string, unknown> = {};
+                if (query?.organizationId) where.organization_id = query.organizationId;
+                if (query?.envType) where.env_type = query.envType;
+                if (query?.status) where.status = query.status;
+                let rows = await ql.find(ENV, Object.keys(where).length ? ({ where } as any) : undefined);
+                if (rows && (rows as any).value) rows = (rows as any).value;
+                const environments = Array.isArray(rows) ? rows : [];
+                return { handled: true, response: this.success({ environments, total: environments.length }) };
+            }
+
+            if (parts.length === 1 && parts[0] === 'environments' && m === 'POST') {
+                const req = body || {};
+                if (!req.organizationId || !req.slug || !req.displayName || !req.envType) {
+                    return { handled: true, response: this.error('organizationId, slug, displayName, envType are required', 400) };
+                }
+                const environmentId = randomUUID();
+                const environmentDatabaseId = randomUUID();
+                const credentialId = randomUUID();
+                const nowIso = new Date().toISOString();
+                const driver = req.driver ?? 'turso';
+                const region = req.region ?? 'us-east-1';
+                const databaseName = `env-${environmentId}`;
+                const databaseUrl = `libsql://${databaseName}.mock-${driver}.local`;
+                const plaintextSecret = `mock-token-${environmentId}`;
+
+                await ql.insert(ENV, {
+                    id: environmentId,
+                    organization_id: req.organizationId,
+                    slug: req.slug,
+                    display_name: req.displayName,
+                    env_type: req.envType,
+                    is_default: req.isDefault ?? false,
+                    region,
+                    plan: req.plan ?? 'free',
+                    status: 'active',
+                    created_by: req.createdBy ?? 'system',
+                    metadata: req.metadata ? JSON.stringify(req.metadata) : null,
+                    created_at: nowIso,
+                    updated_at: nowIso,
+                });
+
+                await ql.insert(DB, {
+                    id: environmentDatabaseId,
+                    environment_id: environmentId,
+                    database_name: databaseName,
+                    database_url: databaseUrl,
+                    driver,
+                    region,
+                    storage_limit_mb: req.storageLimitMb ?? 1024,
+                    provisioned_at: nowIso,
+                    created_at: nowIso,
+                    updated_at: nowIso,
+                });
+
+                await ql.insert(CRED, {
+                    id: credentialId,
+                    environment_database_id: environmentDatabaseId,
+                    secret_ciphertext: plaintextSecret,
+                    encryption_key_id: 'noop',
+                    authorization: 'full_access',
+                    status: 'active',
+                    created_at: nowIso,
+                    updated_at: nowIso,
+                });
+
+                const environment = await findOne(ENV, { id: environmentId });
+                const database = await findOne(DB, { id: environmentDatabaseId });
+                const res = this.success({ environment, database });
+                res.status = 201;
+                return { handled: true, response: res };
+            }
+
+            // ----- /cloud/environments/:id -----
+            if (parts.length === 2 && parts[0] === 'environments') {
+                const id = decodeURIComponent(parts[1]);
+
+                if (m === 'GET') {
+                    const environment = await findOne(ENV, { id });
+                    if (!environment) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                    const database = await findOne(DB, { environment_id: id });
+                    const credential = database
+                        ? await findOne(CRED, { environment_database_id: database.id, status: 'active' })
+                        : undefined;
+                    const membership = await findOne(MEM, { environment_id: id });
+                    // Omit the ciphertext from responses — metadata only.
+                    const credMeta = credential
+                        ? {
+                              id: credential.id,
+                              status: credential.status,
+                              authorization: credential.authorization,
+                              activatedAt: credential.created_at,
+                              expiresAt: credential.expires_at,
+                          }
+                        : undefined;
+                    return {
+                        handled: true,
+                        response: this.success({ environment, database, credential: credMeta, membership }),
+                    };
+                }
+
+                if (m === 'PATCH') {
+                    const patch: Record<string, unknown> = {};
+                    if (body?.displayName !== undefined) patch.display_name = body.displayName;
+                    if (body?.plan !== undefined) patch.plan = body.plan;
+                    if (body?.status !== undefined) patch.status = body.status;
+                    if (body?.isDefault !== undefined) patch.is_default = body.isDefault;
+                    if (body?.metadata !== undefined) patch.metadata = JSON.stringify(body.metadata);
+                    patch.updated_at = new Date().toISOString();
+                    await ql.update(ENV, patch, { where: { id } } as any);
+                    const environment = await findOne(ENV, { id });
+                    if (!environment) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                    return { handled: true, response: this.success({ environment }) };
+                }
+            }
+
+            // ----- /cloud/environments/:id/activate -----
+            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'activate' && m === 'POST') {
+                const id = decodeURIComponent(parts[1]);
+                const environment = await findOne(ENV, { id });
+                if (!environment) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                // TODO: persist active_environment_id on the session once session service is wired.
+                return { handled: true, response: this.success({ environment, sessionUpdated: false }) };
+            }
+
+            // ----- /cloud/environments/:id/credentials/rotate -----
+            if (parts.length === 4 && parts[0] === 'environments' && parts[2] === 'credentials' && parts[3] === 'rotate' && m === 'POST') {
+                const id = decodeURIComponent(parts[1]);
+                const plaintext = body?.plaintext;
+                if (!plaintext || typeof plaintext !== 'string') {
+                    return { handled: true, response: this.error('plaintext is required', 400) };
+                }
+                const database = await findOne(DB, { environment_id: id });
+                if (!database) return { handled: true, response: this.error(`No database for environment '${id}'`, 404) };
+
+                const nowIso = new Date().toISOString();
+                // Revoke existing active credentials
+                let existing = await ql.find(CRED, { where: { environment_database_id: database.id, status: 'active' } } as any);
+                if (existing && (existing as any).value) existing = (existing as any).value;
+                for (const row of (Array.isArray(existing) ? existing : [])) {
+                    await ql.update(CRED, {
+                        status: 'revoked',
+                        revoked_at: nowIso,
+                        updated_at: nowIso,
+                    }, { where: { id: row.id } } as any);
+                }
+
+                const credentialId = randomUUID();
+                await ql.insert(CRED, {
+                    id: credentialId,
+                    environment_database_id: database.id,
+                    secret_ciphertext: plaintext,
+                    encryption_key_id: 'noop',
+                    authorization: 'full_access',
+                    status: 'active',
+                    created_at: nowIso,
+                    updated_at: nowIso,
+                });
+
+                const credential = await findOne(CRED, { id: credentialId });
+                const credMeta = credential
+                    ? {
+                          id: credential.id,
+                          status: credential.status,
+                          authorization: credential.authorization,
+                          activatedAt: credential.created_at,
+                      }
+                    : undefined;
+                return { handled: true, response: this.success({ credential: credMeta }) };
+            }
+
+            // ----- /cloud/environments/:id/members -----
+            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'members' && m === 'GET') {
+                const id = decodeURIComponent(parts[1]);
+                let rows = await ql.find(MEM, { where: { environment_id: id } } as any);
+                if (rows && (rows as any).value) rows = (rows as any).value;
+                const members = Array.isArray(rows) ? rows : [];
+                return { handled: true, response: this.success({ members }) };
+            }
+        } catch (e: any) {
+            return { handled: true, response: this.error(e.message, e.statusCode || 500) };
+        }
+
+        return { handled: false };
+    }
+
 
 
     /**
@@ -1368,6 +1593,10 @@ export class HttpDispatcher {
 
         if (cleanPath.startsWith('/packages')) {
              return this.handlePackages(cleanPath.substring(9), method, body, query, context);
+        }
+
+        if (cleanPath.startsWith('/cloud')) {
+             return this.handleCloud(cleanPath.substring(6), method, body, query, context);
         }
 
         if (cleanPath.startsWith('/i18n')) {
