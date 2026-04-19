@@ -50,8 +50,11 @@ export function UserMenu() {
   }
 
   const handleLogout = async () => {
-    await logout();
-    navigate({ to: '/login' });
+    try {
+      await logout();
+    } finally {
+      navigate({ to: '/login' });
+    }
   };
 
   return (

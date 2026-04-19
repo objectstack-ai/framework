@@ -58,7 +58,7 @@ function NewOrgPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex flex-1 flex-col">
       <SiteHeader selectedView="overview" />
       <div className="flex-1 px-6 py-8">
         <div className="mx-auto max-w-lg">

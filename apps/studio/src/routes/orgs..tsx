@@ -1,9 +1,15 @@
-import { createFileRoute } from '@tanstack/react-router'
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/orgs/')({
-  component: RouteComponent,
-})
+  component: OrgsLayout,
+});
 
-function RouteComponent() {
-  return <div>Hello "/orgs/"!</div>
+function OrgsLayout() {
+  return (
+    <div className="flex flex-1 flex-col overflow-auto">
+      <Outlet />
+    </div>
+  );
 }
