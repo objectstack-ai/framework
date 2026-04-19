@@ -1,34 +1,16 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { createFileRoute } from '@tanstack/react-router';
-import { AppSidebar } from '../components/app-sidebar';
-import { SiteHeader } from '@/components/site-header';
-import { PackageManager } from '../components/PackageManager';
-import { usePackages } from '../hooks/usePackages';
+/**
+ * Legacy /packages route — redirects to the env-scoped packages page.
+ * Package management is now per-environment: /environments/:envId/packages.
+ */
 
-function PackagesViewComponent() {
-  const { packages, selectedPackage, setSelectedPackage } = usePackages();
-
-  return (
-    <>
-      <AppSidebar
-        packages={packages}
-        selectedPackage={selectedPackage}
-        onSelectPackage={setSelectedPackage}
-      />
-      <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
-        <SiteHeader
-          selectedView="packages"
-          packageLabel={selectedPackage?.manifest?.name || selectedPackage?.manifest?.id}
-        />
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <PackageManager />
-        </div>
-      </main>
-    </>
-  );
-}
+import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/packages')({
-  component: PackagesViewComponent,
+  beforeLoad: () => {
+    // Redirect to environments list so user selects an env first.
+    throw redirect({ to: '/environments' });
+  },
+  component: () => null,
 });

@@ -704,6 +704,71 @@ export class ObjectStackClient {
       const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/drivers`);
       return this.unwrapResponse<{ drivers: Array<{ name: string; driverId: string }>; total: number }>(res);
     },
+
+    /**
+     * Per-environment package installation management (Power Apps "solution" model).
+     * Install records are stored in the environment's own database.
+     */
+    packages: {
+      /** List all packages installed in a specific environment. */
+      list: async (envId: string) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages`);
+        return this.unwrapResponse<{ packages: any[]; total: number }>(res);
+      },
+
+      /** Install a package into the environment. */
+      install: async (envId: string, body: {
+        packageId: string;
+        version?: string;
+        settings?: Record<string, unknown>;
+        enableOnInstall?: boolean;
+      }) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        return this.unwrapResponse<{ package: any }>(res);
+      },
+
+      /** Get a single installation record. */
+      get: async (envId: string, pkgId: string) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}`);
+        return this.unwrapResponse<{ package: any }>(res);
+      },
+
+      /** Enable a previously disabled package. */
+      enable: async (envId: string, pkgId: string) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/enable`, {
+          method: 'PATCH',
+        });
+        return this.unwrapResponse<{ package: any }>(res);
+      },
+
+      /** Disable an installed package (metadata will not be loaded). */
+      disable: async (envId: string, pkgId: string) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/disable`, {
+          method: 'PATCH',
+        });
+        return this.unwrapResponse<{ package: any }>(res);
+      },
+
+      /** Uninstall a package from the environment. Forbidden for scope=platform packages. */
+      uninstall: async (envId: string, pkgId: string) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}`, {
+          method: 'DELETE',
+        });
+        return this.unwrapResponse<{ id: string; success: boolean }>(res);
+      },
+
+      /** Upgrade an installed package to a newer version. */
+      upgrade: async (envId: string, pkgId: string, targetVersion?: string) => {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/upgrade`, {
+          method: 'POST',
+          body: JSON.stringify({ targetVersion }),
+        });
+        return this.unwrapResponse<{ package: any }>(res);
+      },
+    },
   };
 
   /**

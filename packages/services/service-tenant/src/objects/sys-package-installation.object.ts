@@ -3,10 +3,10 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_package_installation — Package Installation Registry
+ * sys_package_installation — Per-environment package installation record.
  *
- * Tracks which packages are installed in which tenant.
- * Stored in the global control plane database.
+ * Tracks which packages (business solutions) are installed in each environment.
+ * Stored in the environment's own data-plane database (Power Apps "solution" model).
  *
  * @namespace sys
  */
@@ -17,9 +17,9 @@ export const SysPackageInstallation = ObjectSchema.create({
   pluralLabel: 'Package Installations',
   icon: 'package',
   isSystem: true,
-  description: 'Per-tenant package installation registry',
-  titleFormat: '{package_id} @ {tenant_id}',
-  compactLayout: ['package_id', 'tenant_id', 'version', 'status'],
+  description: 'Per-environment package installation registry (sys_package_installation)',
+  titleFormat: '{package_id} @ {environment_id}',
+  compactLayout: ['package_id', 'environment_id', 'version', 'status'],
 
   fields: {
     id: Field.text({
@@ -41,17 +41,17 @@ export const SysPackageInstallation = ObjectSchema.create({
       readonly: true,
     }),
 
-    tenant_id: Field.text({
-      label: 'Tenant ID',
+    environment_id: Field.text({
+      label: 'Environment ID',
       required: true,
-      description: 'Foreign key to tenant_database',
+      description: 'Foreign key to sys__environment',
     }),
 
     package_id: Field.text({
       label: 'Package ID',
       required: true,
       maxLength: 255,
-      description: 'Package identifier (e.g., @objectstack/crm)',
+      description: 'Manifest ID of the installed package (reverse-domain, e.g. com.example.crm)',
     }),
 
     version: Field.text({
@@ -65,13 +65,20 @@ export const SysPackageInstallation = ObjectSchema.create({
       label: 'Status',
       required: true,
       options: [
+        { value: 'installed', label: 'Installed' },
         { value: 'installing', label: 'Installing' },
-        { value: 'active', label: 'Active' },
+        { value: 'upgrading', label: 'Upgrading' },
         { value: 'disabled', label: 'Disabled' },
-        { value: 'uninstalling', label: 'Uninstalling' },
-        { value: 'failed', label: 'Failed' },
+        { value: 'error', label: 'Error' },
       ],
-      defaultValue: 'installing',
+      defaultValue: 'installed',
+    }),
+
+    enabled: Field.boolean({
+      label: 'Enabled',
+      required: true,
+      defaultValue: true,
+      description: 'Whether the package is currently active in this environment',
     }),
 
     installed_at: Field.datetime({
@@ -82,30 +89,43 @@ export const SysPackageInstallation = ObjectSchema.create({
 
     installed_by: Field.text({
       label: 'Installed By',
-      required: true,
+      required: false,
       description: 'User ID who installed the package',
     }),
 
-    config: Field.textarea({
-      label: 'Configuration',
+    error_message: Field.textarea({
+      label: 'Error Message',
       required: false,
-      description: 'JSON-serialized package-specific configuration',
+      description: 'Error details when status is error',
+    }),
+
+    settings: Field.textarea({
+      label: 'Settings',
+      required: false,
+      description: 'JSON-serialized per-installation configuration',
+    }),
+
+    upgrade_history: Field.textarea({
+      label: 'Upgrade History',
+      required: false,
+      defaultValue: '[]',
+      description: 'JSON array of version upgrade records',
     }),
   },
 
   indexes: [
-    { fields: ['tenant_id', 'package_id'], unique: true },
-    { fields: ['tenant_id'] },
+    { fields: ['environment_id', 'package_id'], unique: true },
+    { fields: ['environment_id'] },
     { fields: ['package_id'] },
     { fields: ['status'] },
   ],
 
   enable: {
-    trackHistory: true,
+    trackHistory: false,
     searchable: true,
     apiEnabled: true,
     apiMethods: ['get', 'list', 'create', 'update', 'delete'],
-    trash: true,
-    mru: true,
+    trash: false,
+    mru: false,
   },
 });

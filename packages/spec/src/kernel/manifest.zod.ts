@@ -92,17 +92,27 @@ export const ManifestSchema = z.object({
    * - adapter: Host adapter (Express, Fastify)
    */
   type: z.enum([
-    'plugin', 
+    'plugin',
     ...CORE_PLUGIN_TYPES,
-    'module', 
+    'module',
     'gateway',  // Deprecated: use 'server'
     'adapter'
   ]).describe('Type of package'),
-  
-  /** 
+
+  /**
+   * Deployment scope of this package.
+   * - `platform`: Provided by the runtime layer (auth, identity, i18n, etc.).
+   *   Never installed per-environment; always globally available.
+   * - `environment`: A business solution (CRM, project management, custom app).
+   *   Installed independently into each environment (Power Apps "solution" model).
+   */
+  scope: z.enum(['platform', 'environment']).default('environment')
+    .describe('Deployment scope: platform (runtime-global) or environment (per-env install)'),
+
+  /**
    * Human-readable name of the package.
    * Displayed in the UI for users.
-   * 
+   *
    * @example "Project Management"
    */
   name: z.string().describe('Human-readable package name'),

@@ -390,6 +390,70 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            // ── Cloud — Per-env packages ─────────────────────────────────
+            server.get(`${prefix}/cloud/environments/:id/packages`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages`, 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/cloud/environments/:id/packages`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.get(`${prefix}/cloud/environments/:id/packages/:pkgId`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages/${req.params.pkgId}`, 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.delete(`${prefix}/cloud/environments/:id/packages/:pkgId`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages/${req.params.pkgId}`, 'DELETE', {}, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.patch(`${prefix}/cloud/environments/:id/packages/:pkgId/enable`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages/${req.params.pkgId}/enable`, 'PATCH', {}, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.patch(`${prefix}/cloud/environments/:id/packages/:pkgId/disable`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages/${req.params.pkgId}/disable`, 'PATCH', {}, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/cloud/environments/:id/packages/:pkgId/upgrade`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/packages/${req.params.pkgId}/upgrade`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Storage ─────────────────────────────────────────────────
             server.post(`${prefix}/storage/upload`, async (req: any, res: any) => {
                 try {

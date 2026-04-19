@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Trash,
   AlertTriangle,
+  Package,
 } from 'lucide-react';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SiteHeader } from '@/components/site-header';
@@ -114,12 +115,25 @@ function EnvironmentOverviewComponent() {
                       {env.id}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate({ to: '/environments' })}
-                  >
-                    Back to list
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => navigate({
+                        to: '/environments/$environmentId/packages',
+                        params: { environmentId: env.id },
+                      })}
+                    >
+                      <Package className="h-4 w-4" />
+                      Packages
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate({ to: '/environments' })}
+                    >
+                      Back to list
+                    </Button>
+                  </div>
                 </div>
 
                 {env.envType === 'production' && (

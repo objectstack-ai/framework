@@ -576,8 +576,15 @@ export function AppSidebar({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Packages"
-                  isActive={location.pathname === '/packages'}
-                  onClick={() => navigate({ to: '/packages' })}
+                  isActive={location.pathname.endsWith('/packages')}
+                  onClick={() => {
+                    const envId = params.environmentId as string | undefined;
+                    if (envId) {
+                      navigate({ to: '/environments/$environmentId/packages', params: { environmentId: envId } });
+                    } else {
+                      navigate({ to: '/environments' });
+                    }
+                  }}
                 >
                   <Package className="h-4 w-4" />
                   <span>Packages</span>

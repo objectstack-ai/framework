@@ -18,3 +18,4 @@ export * from './marketplace-admin.zod';
 export * from './app-store.zod';
 export * from './tenant.zod';
 export * from './environment.zod';
+export * from './environment-package.zod';

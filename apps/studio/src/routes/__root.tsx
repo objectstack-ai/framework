@@ -16,11 +16,34 @@ import { SessionProvider, useSession } from '../hooks/useSession';
 /** Routes that don't require authentication. */
 const PUBLIC_ROUTES = new Set(['/login', '/register']);
 
+/**
+ * Routes where an environment selection is NOT required.
+ * Everything under /environments (list + detail), org mgmt, auth pages.
+ */
+function isEnvExemptPath(pathname: string): boolean {
+  return (
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/orgs') ||
+    pathname.startsWith('/environments')
+  );
+}
+
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
   const isPublic = PUBLIC_ROUTES.has(location.pathname);
+
+  // Redirect to environment picker when the user hits a route that requires
+  // an environment context (e.g. /$package/*) but isn't already under /environments.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (!isEnvExemptPath(location.pathname)) {
+      navigate({ to: '/environments' });
+    }
+  }, [user, loading, location.pathname, navigate]);
 
   useEffect(() => {
     if (loading) return;

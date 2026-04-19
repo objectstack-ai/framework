@@ -22,6 +22,7 @@ import { Route as OrgsNewRouteImport } from './routes/orgs.new'
 import { Route as OrgsOrgIdRouteImport } from './routes/orgs.$orgId'
 import { Route as EnvironmentsEnvironmentIdRouteImport } from './routes/environments.$environmentId'
 import { Route as EnvironmentsEnvironmentIdIndexRouteImport } from './routes/environments.$environmentId.index'
+import { Route as EnvironmentsEnvironmentIdPackagesRouteImport } from './routes/environments.$environmentId.packages'
 import { Route as PackageObjectsNameRouteImport } from './routes/$package.objects.$name'
 import { Route as PackageMetadataTypeNameRouteImport } from './routes/$package.metadata.$type.$name'
 
@@ -92,6 +93,12 @@ const EnvironmentsEnvironmentIdIndexRoute =
     path: '/',
     getParentRoute: () => EnvironmentsEnvironmentIdRoute,
   } as any)
+const EnvironmentsEnvironmentIdPackagesRoute =
+  EnvironmentsEnvironmentIdPackagesRouteImport.update({
+    id: '/packages',
+    path: '/packages',
+    getParentRoute: () => EnvironmentsEnvironmentIdRoute,
+  } as any)
 const PackageObjectsNameRoute = PackageObjectsNameRouteImport.update({
   id: '/objects/$name',
   path: '/objects/$name',
@@ -117,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/environments/': typeof EnvironmentsIndexRoute
   '/orgs/': typeof OrgsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
+  '/environments/$environmentId/packages': typeof EnvironmentsEnvironmentIdPackagesRoute
   '/environments/$environmentId/': typeof EnvironmentsEnvironmentIdIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesByTo {
   '/environments': typeof EnvironmentsIndexRoute
   '/orgs': typeof OrgsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
+  '/environments/$environmentId/packages': typeof EnvironmentsEnvironmentIdPackagesRoute
   '/environments/$environmentId': typeof EnvironmentsEnvironmentIdIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
@@ -150,6 +159,7 @@ export interface FileRoutesById {
   '/environments/': typeof EnvironmentsIndexRoute
   '/orgs/': typeof OrgsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
+  '/environments/$environmentId/packages': typeof EnvironmentsEnvironmentIdPackagesRoute
   '/environments/$environmentId/': typeof EnvironmentsEnvironmentIdIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/environments/'
     | '/orgs/'
     | '/$package/objects/$name'
+    | '/environments/$environmentId/packages'
     | '/environments/$environmentId/'
     | '/$package/metadata/$type/$name'
   fileRoutesByTo: FileRoutesByTo
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/environments'
     | '/orgs'
     | '/$package/objects/$name'
+    | '/environments/$environmentId/packages'
     | '/environments/$environmentId'
     | '/$package/metadata/$type/$name'
   id:
@@ -201,6 +213,7 @@ export interface FileRouteTypes {
     | '/environments/'
     | '/orgs/'
     | '/$package/objects/$name'
+    | '/environments/$environmentId/packages'
     | '/environments/$environmentId/'
     | '/$package/metadata/$type/$name'
   fileRoutesById: FileRoutesById
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EnvironmentsEnvironmentIdIndexRouteImport
       parentRoute: typeof EnvironmentsEnvironmentIdRoute
     }
+    '/environments/$environmentId/packages': {
+      id: '/environments/$environmentId/packages'
+      path: '/packages'
+      fullPath: '/environments/$environmentId/packages'
+      preLoaderRoute: typeof EnvironmentsEnvironmentIdPackagesRouteImport
+      parentRoute: typeof EnvironmentsEnvironmentIdRoute
+    }
     '/$package/objects/$name': {
       id: '/$package/objects/$name'
       path: '/objects/$name'
@@ -345,11 +365,14 @@ const PackageRouteWithChildren =
   PackageRoute._addFileChildren(PackageRouteChildren)
 
 interface EnvironmentsEnvironmentIdRouteChildren {
+  EnvironmentsEnvironmentIdPackagesRoute: typeof EnvironmentsEnvironmentIdPackagesRoute
   EnvironmentsEnvironmentIdIndexRoute: typeof EnvironmentsEnvironmentIdIndexRoute
 }
 
 const EnvironmentsEnvironmentIdRouteChildren: EnvironmentsEnvironmentIdRouteChildren =
   {
+    EnvironmentsEnvironmentIdPackagesRoute:
+      EnvironmentsEnvironmentIdPackagesRoute,
     EnvironmentsEnvironmentIdIndexRoute: EnvironmentsEnvironmentIdIndexRoute,
   }
 

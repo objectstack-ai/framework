@@ -947,6 +947,13 @@ export class HttpDispatcher {
      *  - POST   /cloud/environments/:id/activate               → mark as active for session (stub)
      *  - POST   /cloud/environments/:id/credentials/rotate     → rotate credential
      *  - GET    /cloud/environments/:id/members                → list members
+     *  - GET    /cloud/environments/:id/packages               → list installed packages
+     *  - POST   /cloud/environments/:id/packages               → install package into env
+     *  - GET    /cloud/environments/:id/packages/:pkgId        → get installation detail
+     *  - PATCH  /cloud/environments/:id/packages/:pkgId/enable  → enable package
+     *  - PATCH  /cloud/environments/:id/packages/:pkgId/disable → disable package
+     *  - DELETE /cloud/environments/:id/packages/:pkgId        → uninstall (scope=platform forbidden)
+     *  - POST   /cloud/environments/:id/packages/:pkgId/upgrade → upgrade to newer version
      *
      * Driver binding
      * --------------
@@ -976,6 +983,7 @@ export class HttpDispatcher {
         const DB = 'sys__environment_database';
         const CRED = 'sys__database_credential';
         const MEM = 'sys__environment_member';
+        const PKG_INSTALL = 'sys__package_installation';
 
         // Enumerate registered ObjectQL drivers. Driver services are registered
         // by `DriverPlugin` under the key `driver.<driver.name>` where
@@ -1261,6 +1269,121 @@ export class HttpDispatcher {
                 const members = Array.isArray(rows) ? rows : [];
                 return { handled: true, response: this.success({ members }) };
             }
+
+            // ----- /cloud/environments/:envId/packages -----
+            // GET  /cloud/environments/:envId/packages
+            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'GET') {
+                const envId = decodeURIComponent(parts[1]);
+                let rows = await ql.find(PKG_INSTALL, { where: { environment_id: envId } } as any);
+                if (rows && (rows as any).value) rows = (rows as any).value;
+                const packages = Array.isArray(rows) ? rows : [];
+                return { handled: true, response: this.success({ packages, total: packages.length }) };
+            }
+
+            // POST /cloud/environments/:envId/packages
+            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'POST') {
+                const envId = decodeURIComponent(parts[1]);
+                const { packageId, version, settings, enableOnInstall } = body ?? {};
+                if (!packageId) return { handled: true, response: this.error('packageId is required', 400) };
+
+                // Prevent installing platform-scope packages per-env
+                const allPkgs = this.kernel.packages?.getAll?.() ?? [];
+                const manifest = allPkgs.find((p: any) => (p.manifest?.id ?? p.id) === packageId)?.manifest ?? allPkgs.find((p: any) => (p.manifest?.id ?? p.id) === packageId);
+                if (manifest?.scope === 'platform') {
+                    return { handled: true, response: this.error(`Package '${packageId}' has scope=platform and cannot be installed per-environment`, 403) };
+                }
+
+                const nowIso = new Date().toISOString();
+                const recordId = randomUUID();
+                await ql.insert(PKG_INSTALL, {
+                    id: recordId,
+                    environment_id: envId,
+                    package_id: packageId,
+                    version: version ?? manifest?.version ?? '1.0.0',
+                    status: 'installed',
+                    enabled: enableOnInstall !== false,
+                    installed_at: nowIso,
+                    updated_at: nowIso,
+                    settings: settings ? JSON.stringify(settings) : null,
+                    upgrade_history: '[]',
+                });
+                const record = await ql.findOne(PKG_INSTALL, { where: { id: recordId } } as any);
+                return { handled: true, response: this.success({ package: record }) };
+            }
+
+            // ----- /cloud/environments/:envId/packages/:pkgId -----
+            // GET /cloud/environments/:envId/packages/:pkgId
+            if (parts.length === 4 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'GET') {
+                const envId = decodeURIComponent(parts[1]);
+                const pkgId = decodeURIComponent(parts[3]);
+                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any);
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                return { handled: true, response: this.success({ package: record }) };
+            }
+
+            // DELETE /cloud/environments/:envId/packages/:pkgId
+            if (parts.length === 4 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'DELETE') {
+                const envId = decodeURIComponent(parts[1]);
+                const pkgId = decodeURIComponent(parts[3]);
+                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                if (record.scope === 'platform') {
+                    return { handled: true, response: this.error(`Platform-scope package '${pkgId}' cannot be uninstalled`, 403) };
+                }
+                await ql.delete(PKG_INSTALL, { where: { id: record.id } } as any);
+                return { handled: true, response: this.success({ id: record.id, success: true }) };
+            }
+
+            // PATCH /cloud/environments/:envId/packages/:pkgId/enable
+            if (parts.length === 5 && parts[0] === 'environments' && parts[2] === 'packages' && parts[4] === 'enable' && m === 'PATCH') {
+                const envId = decodeURIComponent(parts[1]);
+                const pkgId = decodeURIComponent(parts[3]);
+                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const nowIso = new Date().toISOString();
+                await ql.update(PKG_INSTALL, { enabled: true, status: 'installed', updated_at: nowIso }, { where: { id: record.id } } as any);
+                const updated = await ql.findOne(PKG_INSTALL, { where: { id: record.id } } as any);
+                return { handled: true, response: this.success({ package: updated }) };
+            }
+
+            // PATCH /cloud/environments/:envId/packages/:pkgId/disable
+            if (parts.length === 5 && parts[0] === 'environments' && parts[2] === 'packages' && parts[4] === 'disable' && m === 'PATCH') {
+                const envId = decodeURIComponent(parts[1]);
+                const pkgId = decodeURIComponent(parts[3]);
+                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                if (record.scope === 'platform') {
+                    return { handled: true, response: this.error(`Platform-scope package '${pkgId}' cannot be disabled`, 403) };
+                }
+                const nowIso = new Date().toISOString();
+                await ql.update(PKG_INSTALL, { enabled: false, status: 'disabled', updated_at: nowIso }, { where: { id: record.id } } as any);
+                const updated = await ql.findOne(PKG_INSTALL, { where: { id: record.id } } as any);
+                return { handled: true, response: this.success({ package: updated }) };
+            }
+
+            // POST /cloud/environments/:envId/packages/:pkgId/upgrade
+            if (parts.length === 5 && parts[0] === 'environments' && parts[2] === 'packages' && parts[4] === 'upgrade' && m === 'POST') {
+                const envId = decodeURIComponent(parts[1]);
+                const pkgId = decodeURIComponent(parts[3]);
+                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const { targetVersion } = body ?? {};
+                const allPkgs2 = this.kernel.packages?.getAll?.() ?? [];
+                const manifest2 = allPkgs2.find((p: any) => (p.manifest?.id ?? p.id) === pkgId)?.manifest ?? allPkgs2.find((p: any) => (p.manifest?.id ?? p.id) === pkgId);
+                const newVersion = targetVersion ?? manifest2?.version ?? record.version;
+                const nowIso = new Date().toISOString();
+                const history = (() => { try { return JSON.parse(record.upgrade_history || '[]'); } catch { return []; } })();
+                history.push({ fromVersion: record.version, toVersion: newVersion, upgradedAt: nowIso, status: 'success' });
+                await ql.update(PKG_INSTALL, {
+                    version: newVersion,
+                    status: 'installed',
+                    updated_at: nowIso,
+                    upgrade_history: JSON.stringify(history),
+                }, { where: { id: record.id } } as any);
+                const updated = await ql.findOne(PKG_INSTALL, { where: { id: record.id } } as any);
+                return { handled: true, response: this.success({ package: updated }) };
+            }
+
         } catch (e: any) {
             return { handled: true, response: this.error(e.message, e.statusCode || 500) };
         }
