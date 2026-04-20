@@ -965,9 +965,11 @@ export class HttpDispatcher {
      * If `driver` is omitted, the dispatcher auto-selects the first available
      * in preference order: turso → memory → any other registered driver.
      *
-     * Backed by ObjectQL sys__environment / sys__environment_database /
-     * sys__database_credential / sys__environment_member tables (registered
-     * by `@objectstack/service-tenant`'s `createTenantPlugin`).
+     * Backed by ObjectQL sys__environment / sys__database_credential /
+     * sys__environment_member tables (registered by
+     * `@objectstack/service-tenant`'s `createTenantPlugin`).
+     * Physical database addressing (database_url, database_driver, etc.)
+     * is stored directly on the sys__environment row.
      */
     async handleCloud(path: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const m = method.toUpperCase();
@@ -980,7 +982,6 @@ export class HttpDispatcher {
         }
 
         const ENV = 'sys__environment';
-        const DB = 'sys__environment_database';
         const CRED = 'sys__database_credential';
         const MEM = 'sys__environment_member';
         const PKG_INSTALL = 'sys__package_installation';
@@ -1056,6 +1057,10 @@ export class HttpDispatcher {
                 metadata: row.metadata,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
+                databaseUrl: row.database_url,
+                databaseDriver: row.database_driver,
+                storageLimitMb: row.storage_limit_mb,
+                provisionedAt: row.provisioned_at,
             };
         };
 
@@ -1102,7 +1107,6 @@ export class HttpDispatcher {
                     return { handled: true, response: this.error('organizationId, slug, displayName, envType are required', 400) };
                 }
                 const environmentId = randomUUID();
-                const environmentDatabaseId = randomUUID();
                 const credentialId = randomUUID();
                 const nowIso = new Date().toISOString();
 
@@ -1131,7 +1135,6 @@ export class HttpDispatcher {
                 }
                 const driver = resolved.name;
                 const region = req.region ?? 'us-east-1';
-                const databaseName = `env-${environmentId}`;
                 const databaseUrl = buildDatabaseUrl(driver, environmentId);
                 const plaintextSecret = `mock-token-${environmentId}`;
 
@@ -1149,24 +1152,15 @@ export class HttpDispatcher {
                     metadata: req.metadata ? JSON.stringify(req.metadata) : null,
                     created_at: nowIso,
                     updated_at: nowIso,
-                });
-
-                await ql.insert(DB, {
-                    id: environmentDatabaseId,
-                    environment_id: environmentId,
-                    database_name: databaseName,
                     database_url: databaseUrl,
-                    driver,
-                    region,
+                    database_driver: driver,
                     storage_limit_mb: req.storageLimitMb ?? 1024,
                     provisioned_at: nowIso,
-                    created_at: nowIso,
-                    updated_at: nowIso,
                 });
 
                 await ql.insert(CRED, {
                     id: credentialId,
-                    environment_database_id: environmentDatabaseId,
+                    environment_id: environmentId,
                     secret_ciphertext: plaintextSecret,
                     encryption_key_id: 'noop',
                     authorization: 'full_access',
@@ -1176,8 +1170,7 @@ export class HttpDispatcher {
                 });
 
                 const environment = toEnvironmentDto(await findOne(ENV, { id: environmentId }));
-                const database = await findOne(DB, { id: environmentDatabaseId });
-                const res = this.success({ environment, database });
+                const res = this.success({ environment });
                 res.status = 201;
                 return { handled: true, response: res };
             }
@@ -1189,24 +1182,21 @@ export class HttpDispatcher {
                 if (m === 'GET') {
                     const envRow = await findOne(ENV, { id });
                     if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
-                    const database = await findOne(DB, { environment_id: id });
-                    const credential = database
-                        ? await findOne(CRED, { environment_database_id: database.id, status: 'active' })
-                        : undefined;
+                    const credRow = await findOne(CRED, { environment_id: id, status: 'active' });
                     const membership = await findOne(MEM, { environment_id: id });
                     // Omit the ciphertext from responses — metadata only.
-                    const credMeta = credential
+                    const credMeta = credRow
                         ? {
-                              id: credential.id,
-                              status: credential.status,
-                              authorization: credential.authorization,
-                              activatedAt: credential.created_at,
-                              expiresAt: credential.expires_at,
+                              id: credRow.id,
+                              status: credRow.status,
+                              authorization: credRow.authorization,
+                              activatedAt: credRow.created_at,
+                              expiresAt: credRow.expires_at,
                           }
                         : undefined;
                     return {
                         handled: true,
-                        response: this.success({ environment: toEnvironmentDto(envRow), database, credential: credMeta, membership }),
+                        response: this.success({ environment: toEnvironmentDto(envRow), credential: credMeta, membership }),
                     };
                 }
 
@@ -1241,12 +1231,12 @@ export class HttpDispatcher {
                 if (!plaintext || typeof plaintext !== 'string') {
                     return { handled: true, response: this.error('plaintext is required', 400) };
                 }
-                const database = await findOne(DB, { environment_id: id });
-                if (!database) return { handled: true, response: this.error(`No database for environment '${id}'`, 404) };
+                const envRow = await findOne(ENV, { id });
+                if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
 
                 const nowIso = new Date().toISOString();
                 // Revoke existing active credentials
-                let existing = await ql.find(CRED, { where: { environment_database_id: database.id, status: 'active' } } as any);
+                let existing = await ql.find(CRED, { where: { environment_id: id, status: 'active' } } as any);
                 if (existing && (existing as any).value) existing = (existing as any).value;
                 for (const row of (Array.isArray(existing) ? existing : [])) {
                     await ql.update(CRED, {
@@ -1259,7 +1249,7 @@ export class HttpDispatcher {
                 const credentialId = randomUUID();
                 await ql.insert(CRED, {
                     id: credentialId,
-                    environment_database_id: database.id,
+                    environment_id: id,
                     secret_ciphertext: plaintext,
                     encryption_key_id: 'noop',
                     authorization: 'full_access',

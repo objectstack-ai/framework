@@ -96,8 +96,11 @@ export const MetadataRecordSchema = z.object({
   /** State */
   state: MetadataStateSchema.default('active'),
 
-  /** Tenant ID for multi-tenant isolation */
-  tenantId: z.string().optional().describe('Tenant identifier for multi-tenant isolation'),
+  /** Organization ID for multi-tenant isolation */
+  organizationId: z.string().optional().describe('Organization identifier for multi-tenant isolation'),
+
+  /** Environment ID — null means platform-global, set means env-scoped */
+  environmentId: z.string().optional().describe('Environment ID — null = platform-global, set = env-scoped'),
 
   /** Version number for optimistic concurrency */
   version: z.number().default(1).describe('Record version for optimistic concurrency control'),
@@ -110,7 +113,7 @@ export const MetadataRecordSchema = z.object({
 
   /** Classification tags */
   tags: z.array(z.string()).optional().describe('Classification tags for filtering and grouping'),
-  
+
   /** Package Publishing */
   publishedDefinition: z.unknown().optional()
     .describe('Snapshot of the last published definition'),
@@ -449,8 +452,11 @@ export const MetadataHistoryRecordSchema = z.object({
    */
   changeNote: z.string().optional().describe('Description of changes made in this version'),
 
-  /** Tenant ID for multi-tenant isolation */
-  tenantId: z.string().optional().describe('Tenant identifier for multi-tenant isolation'),
+  /** Organization ID for multi-tenant isolation */
+  organizationId: z.string().optional().describe('Organization identifier for multi-tenant isolation'),
+
+  /** Environment ID — scopes this history entry to a specific environment */
+  environmentId: z.string().optional().describe('Environment ID — null = platform-global, set = env-scoped'),
 
   /** Audit: who made this change */
   recordedBy: z.string().optional().describe('User who made this change'),

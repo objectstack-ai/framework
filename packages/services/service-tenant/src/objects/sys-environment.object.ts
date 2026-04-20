@@ -6,12 +6,12 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * sys_environment — Control Plane Environment Registry
  *
  * One row per environment. An organization owns N environments
- * (dev/test/prod/sandbox/preview/…) and each environment is physically
- * backed by its own database — see `sys_environment_database`.
+ * (dev/test/prod/sandbox/preview/…). Physical database connection info
+ * is stored directly on this row (database_url, database_driver, etc.)
+ * so a single JOIN-free lookup gives both logical and physical addressing.
  *
- * **This table lives in the Control Plane only.** Data-plane (per-env)
- * business tables MUST NOT carry an `environment_id` column; the
- * environment is implied by the database connection at runtime.
+ * **This table lives in the Control Plane only.** Environment DBs contain
+ * only business data rows — zero system tables.
  *
  * @namespace sys
  */
@@ -94,7 +94,7 @@ export const SysEnvironment = ObjectSchema.create({
       label: 'Region',
       required: false,
       maxLength: 100,
-      description: 'Preferred region (informational; actual placement lives on sys_environment_database).',
+      description: 'Region where the physical database is deployed (e.g. us-east-1, eu-west-1).',
     }),
 
     plan: Field.select({
@@ -132,6 +132,32 @@ export const SysEnvironment = ObjectSchema.create({
       description: 'User ID that created the environment.',
     }),
 
+    database_url: Field.url({
+      label: 'Database URL',
+      required: false,
+      description: 'Connection URL for the environment database (e.g. libsql://env-uuid.turso.io). Set after provisioning.',
+    }),
+
+    database_driver: Field.text({
+      label: 'Database Driver',
+      required: false,
+      maxLength: 50,
+      description: 'Data-plane driver key (turso, libsql, sqlite, memory, postgres).',
+    }),
+
+    storage_limit_mb: Field.number({
+      label: 'Storage Limit (MB)',
+      required: false,
+      defaultValue: 1024,
+      description: 'Storage quota in megabytes.',
+    }),
+
+    provisioned_at: Field.datetime({
+      label: 'Provisioned At',
+      required: false,
+      description: 'When the physical database was provisioned.',
+    }),
+
     metadata: Field.textarea({
       label: 'Metadata',
       required: false,
@@ -145,6 +171,7 @@ export const SysEnvironment = ObjectSchema.create({
     { fields: ['organization_id', 'is_default'] },
     { fields: ['status'] },
     { fields: ['env_type'] },
+    { fields: ['database_driver'] },
   ],
 
   enable: {

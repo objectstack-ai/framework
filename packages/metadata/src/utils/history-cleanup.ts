@@ -63,7 +63,8 @@ export class HistoryCleanupManager {
   async runCleanup(): Promise<{ deleted: number; errors: number }> {
     const driver = (this.dbLoader as any).driver as IDataDriver;
     const historyTableName = (this.dbLoader as any).historyTableName as string;
-    const tenantId = (this.dbLoader as any).tenantId as string | undefined;
+    const organizationId = (this.dbLoader as any).organizationId as string | undefined;
+    const environmentId = (this.dbLoader as any).environmentId as string | undefined;
 
     let deleted = 0;
     let errors = 0;
@@ -79,8 +80,11 @@ export class HistoryCleanupManager {
           recorded_at: { $lt: cutoffISO },
         };
 
-        if (tenantId) {
-          filter.tenant_id = tenantId;
+        if (organizationId) {
+          filter.organization_id = organizationId;
+        }
+        if (environmentId !== undefined) {
+          filter.env_id = environmentId;
         }
 
         try {
@@ -96,9 +100,13 @@ export class HistoryCleanupManager {
       if (this.policy.maxVersions) {
         try {
           // Get all unique metadata IDs
+          const baseWhere: Record<string, unknown> = {};
+          if (organizationId) baseWhere.organization_id = organizationId;
+          if (environmentId !== undefined) baseWhere.env_id = environmentId;
+
           const metadataIds = await driver.find(historyTableName, {
             object: historyTableName,
-            where: tenantId ? { tenant_id: tenantId } : {},
+            where: baseWhere,
             fields: ['metadata_id'],
           });
 
@@ -111,10 +119,7 @@ export class HistoryCleanupManager {
 
           // For each metadata item, keep only the latest N versions
           for (const metadataId of uniqueIds) {
-            const filter: Record<string, unknown> = { metadata_id: metadataId };
-            if (tenantId) {
-              filter.tenant_id = tenantId;
-            }
+            const filter: Record<string, unknown> = { metadata_id: metadataId, ...baseWhere };
 
             try {
               // Fetch only the IDs of records beyond the retention limit (oldest first)
@@ -212,12 +217,17 @@ export class HistoryCleanupManager {
   }> {
     const driver = (this.dbLoader as any).driver as IDataDriver;
     const historyTableName = (this.dbLoader as any).historyTableName as string;
-    const tenantId = (this.dbLoader as any).tenantId as string | undefined;
+    const organizationId = (this.dbLoader as any).organizationId as string | undefined;
+    const environmentId = (this.dbLoader as any).environmentId as string | undefined;
 
     let recordsByAge = 0;
     let recordsByCount = 0;
 
     try {
+      const baseWhere: Record<string, unknown> = {};
+      if (organizationId) baseWhere.organization_id = organizationId;
+      if (environmentId !== undefined) baseWhere.env_id = environmentId;
+
       // Count records that would be deleted by age
       if (this.policy.maxAgeDays) {
         const cutoffDate = new Date();
@@ -226,11 +236,8 @@ export class HistoryCleanupManager {
 
         const filter: Record<string, unknown> = {
           recorded_at: { $lt: cutoffISO },
+          ...baseWhere,
         };
-
-        if (tenantId) {
-          filter.tenant_id = tenantId;
-        }
 
         recordsByAge = await driver.count(historyTableName, {
           object: historyTableName,
@@ -242,7 +249,7 @@ export class HistoryCleanupManager {
       if (this.policy.maxVersions) {
         const metadataIds = await driver.find(historyTableName, {
           object: historyTableName,
-          where: tenantId ? { tenant_id: tenantId } : {},
+          where: baseWhere,
           fields: ['metadata_id'],
         });
 
@@ -254,10 +261,7 @@ export class HistoryCleanupManager {
         }
 
         for (const metadataId of uniqueIds) {
-          const filter: Record<string, unknown> = { metadata_id: metadataId };
-          if (tenantId) {
-            filter.tenant_id = tenantId;
-          }
+          const filter: Record<string, unknown> = { metadata_id: metadataId, ...baseWhere };
 
           const count = await driver.count(historyTableName, {
             object: historyTableName,

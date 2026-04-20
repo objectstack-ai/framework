@@ -11,7 +11,7 @@ import {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe('EnvironmentProvisioningService.provisionEnvironment', () => {
-  it('returns a fully-formed environment + database + credential in detached mode', async () => {
+  it('returns a fully-formed environment + credential in detached mode', async () => {
     const svc = new EnvironmentProvisioningService({
       defaultRegion: 'eu-west-1',
       defaultStorageLimitMb: 2048,
@@ -32,12 +32,12 @@ describe('EnvironmentProvisioningService.provisionEnvironment', () => {
     expect(result.environment.status).toBe('active');
     expect(result.environment.isDefault).toBe(false);
 
-    expect(result.database.environmentId).toBe(result.environment.id);
-    expect(result.database.storageLimitMb).toBe(2048);
-    expect(result.database.driver).toBe('turso');
-    expect(result.database.databaseUrl).toContain('libsql://');
+    // Database addressing is now on the environment row
+    expect(result.environment.storageLimitMb).toBe(2048);
+    expect(result.environment.databaseDriver).toBe('turso');
+    expect(result.environment.databaseUrl).toContain('libsql://');
 
-    expect(result.credential.environmentDatabaseId).toBe(result.database.id);
+    expect(result.credential.environmentId).toBe(result.environment.id);
     expect(result.credential.status).toBe('active');
     expect(result.credential.authorization).toBe('full_access');
     expect(result.credential.encryptionKeyId).toBe('noop');
@@ -72,12 +72,14 @@ describe('EnvironmentProvisioningService.provisionEnvironment', () => {
     });
 
     const objects = created.map((c) => c.object);
-    expect(objects).toEqual(['environment', 'environment_database', 'database_credential']);
+    expect(objects).toEqual(['environment', 'database_credential']);
 
     const envRow = created.find((c) => c.object === 'environment')!.data;
     expect(envRow.organization_id).toBe('org-42');
     expect(envRow.is_default).toBe(true);
     expect(envRow.slug).toBe('prod');
+    expect(envRow.database_url).toBeTruthy();
+    expect(envRow.database_driver).toBe('turso');
 
     expect(result.warnings).toBeUndefined();
   });
@@ -130,8 +132,8 @@ describe('EnvironmentProvisioningService.provisionEnvironment', () => {
     });
 
     expect(calls).toHaveLength(1);
-    expect(result.database.driver).toBe('postgres');
-    expect(result.database.databaseUrl).toMatch(/^postgres:\/\//);
+    expect(result.environment.databaseDriver).toBe('postgres');
+    expect(result.environment.databaseUrl).toMatch(/^postgres:\/\//);
   });
 
   it('warns and falls back to mock addressing when driver has no adapter', async () => {
@@ -144,7 +146,7 @@ describe('EnvironmentProvisioningService.provisionEnvironment', () => {
       createdBy: 'user-1',
     });
 
-    expect(result.database.driver).toBe('unknown-driver');
+    expect(result.environment.databaseDriver).toBe('unknown-driver');
     expect(result.warnings?.some((w) => w.includes('No adapter registered'))).toBe(true);
   });
 
@@ -224,7 +226,7 @@ describe('EnvironmentProvisioningService.rotateCredential', () => {
       encryptor: new NoopSecretEncryptor(),
     });
 
-    const fresh = await svc.rotateCredential('env-db-1', 'new-plaintext');
+    const fresh = await svc.rotateCredential('env-1', 'new-plaintext');
 
     expect(fresh.status).toBe('active');
     expect(fresh.secretCiphertext).toBe('new-plaintext'); // noop encryptor
@@ -235,7 +237,7 @@ describe('EnvironmentProvisioningService.rotateCredential', () => {
 
   it('throws when no control-plane driver is configured', async () => {
     const svc = new EnvironmentProvisioningService();
-    await expect(svc.rotateCredential('env-db-1', 'pt')).rejects.toThrow(
+    await expect(svc.rotateCredential('env-1', 'pt')).rejects.toThrow(
       /control-plane driver required/i,
     );
   });

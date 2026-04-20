@@ -46,8 +46,11 @@ export interface DatabaseLoaderOptions {
   /** The table name to store history records (default: 'sys_metadata_history') */
   historyTableName?: string;
 
-  /** Tenant ID for multi-tenant isolation */
-  tenantId?: string;
+  /** Organization ID for multi-tenant isolation */
+  organizationId?: string;
+
+  /** Environment ID — null = platform-global, set = env-scoped */
+  environmentId?: string;
 
   /** Enable history tracking (default: true) */
   trackHistory?: boolean;
@@ -76,7 +79,8 @@ export class DatabaseLoader implements MetadataLoader {
   private engine?: IDataEngine;
   private tableName: string;
   private historyTableName: string;
-  private tenantId?: string;
+  private organizationId?: string;
+  private environmentId?: string;
   private trackHistory: boolean;
   private schemaReady = false;
   private historySchemaReady = false;
@@ -89,7 +93,8 @@ export class DatabaseLoader implements MetadataLoader {
     this.engine = options.engine;
     this.tableName = options.tableName ?? 'sys_metadata';
     this.historyTableName = options.historyTableName ?? 'sys_metadata_history';
-    this.tenantId = options.tenantId;
+    this.organizationId = options.organizationId;
+    this.environmentId = options.environmentId;
     this.trackHistory = options.trackHistory !== false; // Default to true
   }
 
@@ -193,16 +198,19 @@ export class DatabaseLoader implements MetadataLoader {
 
   /**
    * Build base filter conditions for queries.
-   * Always includes tenantId when configured.
+   * Filters by organizationId when configured; env_id when environmentId is set,
+   * or null (platform-global) when not set.
    */
   private baseFilter(type: string, name?: string): Record<string, unknown> {
     const filter: Record<string, unknown> = { type };
     if (name !== undefined) {
       filter.name = name;
     }
-    if (this.tenantId) {
-      filter.tenant_id = this.tenantId;
+    if (this.organizationId) {
+      filter.organization_id = this.organizationId;
     }
+    // When environmentId is set, scope to that env; otherwise query platform-global (env_id = null).
+    filter.env_id = this.environmentId ?? null;
     return filter;
   }
 
@@ -258,7 +266,8 @@ export class DatabaseLoader implements MetadataLoader {
       changeNote,
       recordedBy,
       recordedAt: now,
-      ...(this.tenantId ? { tenantId: this.tenantId } : {}),
+      ...(this.organizationId ? { organizationId: this.organizationId } : {}),
+      ...(this.environmentId !== undefined ? { environmentId: this.environmentId } : {}),
     };
 
     try {
@@ -275,7 +284,8 @@ export class DatabaseLoader implements MetadataLoader {
         change_note: historyRecord.changeNote,
         recorded_by: historyRecord.recordedBy,
         recorded_at: historyRecord.recordedAt,
-        ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
+        ...(this.organizationId ? { organization_id: this.organizationId } : {}),
+        ...(this.environmentId !== undefined ? { env_id: this.environmentId } : {}),
       });
     } catch (error) {
       // Log error but don't fail the main operation
@@ -314,7 +324,8 @@ export class DatabaseLoader implements MetadataLoader {
       strategy: (row.strategy as MetadataRecord['strategy']) ?? 'merge',
       owner: row.owner as string | undefined,
       state: (row.state as MetadataRecord['state']) ?? 'active',
-      tenantId: row.tenant_id as string | undefined,
+      organizationId: row.organization_id as string | undefined,
+      environmentId: row.env_id as string | undefined,
       version: (row.version as number) ?? 1,
       checksum: row.checksum as string | undefined,
       source: row.source as MetadataRecord['source'],
@@ -468,9 +479,10 @@ export class DatabaseLoader implements MetadataLoader {
       metadata_id: metadataRow.id,
       version,
     };
-    if (this.tenantId) {
-      filter.tenant_id = this.tenantId;
+    if (this.organizationId) {
+      filter.organization_id = this.organizationId;
     }
+    filter.env_id = this.environmentId ?? null;
 
     const row = await this._findOne(this.historyTableName, {
       where: filter,
@@ -488,7 +500,8 @@ export class DatabaseLoader implements MetadataLoader {
       checksum: row.checksum as string,
       previousChecksum: row.previous_checksum as string | undefined,
       changeNote: row.change_note as string | undefined,
-      tenantId: row.tenant_id as string | undefined,
+      organizationId: row.organization_id as string | undefined,
+      environmentId: row.env_id as string | undefined,
       recordedBy: row.recorded_by as string | undefined,
       recordedAt: row.recorded_at as string,
     };
@@ -520,7 +533,8 @@ export class DatabaseLoader implements MetadataLoader {
 
     // Find the metadata record
     const filter: Record<string, unknown> = { type, name };
-    if (this.tenantId) filter.tenant_id = this.tenantId;
+    if (this.organizationId) filter.organization_id = this.organizationId;
+    filter.env_id = this.environmentId ?? null;
 
     const metadataRecord = await this._findOne(this.tableName, { where: filter });
     if (!metadataRecord) {
@@ -531,7 +545,8 @@ export class DatabaseLoader implements MetadataLoader {
     const historyFilter: Record<string, unknown> = {
       metadata_id: metadataRecord.id,
     };
-    if (this.tenantId) historyFilter.tenant_id = this.tenantId;
+    if (this.organizationId) historyFilter.organization_id = this.organizationId;
+    historyFilter.env_id = this.environmentId ?? null;
     if (options?.operationType) historyFilter.operation_type = options.operationType;
     if (options?.since) historyFilter.recorded_at = { $gte: options.since };
     if (options?.until) {
@@ -574,7 +589,8 @@ export class DatabaseLoader implements MetadataLoader {
         checksum: row.checksum as string,
         previousChecksum: row.previous_checksum as string | undefined,
         changeNote: row.change_note as string | undefined,
-        tenantId: row.tenant_id as string | undefined,
+        organizationId: row.organization_id as string | undefined,
+        environmentId: row.env_id as string | undefined,
         recordedBy: row.recorded_by as string | undefined,
         recordedAt: row.recorded_at as string,
       };
@@ -711,7 +727,8 @@ export class DatabaseLoader implements MetadataLoader {
           state: 'active',
           version: 1,
           source: 'database',
-          ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
+          ...(this.organizationId ? { organization_id: this.organizationId } : {}),
+          ...(this.environmentId !== undefined ? { env_id: this.environmentId } : { env_id: null }),
           created_at: now,
           updated_at: now,
         });

@@ -6,7 +6,9 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * sys_package_installation — Per-environment package installation record.
  *
  * Tracks which packages (business solutions) are installed in each environment.
- * Stored in the environment's own data-plane database (Power Apps "solution" model).
+ * Stored in the **Control Plane** (sys namespace → turso driver) so that all
+ * environment installations are visible from a single query. Environment DBs
+ * contain only business data rows — zero system tables.
  *
  * @namespace sys
  */

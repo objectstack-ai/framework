@@ -11,6 +11,10 @@ export interface MetadataPluginOptions {
     rootDir?: string;
     watch?: boolean;
     config?: Partial<MetadataPluginConfig>;
+    /** Organization ID for multi-tenant metadata isolation (passed to DatabaseLoader). */
+    organizationId?: string;
+    /** Environment ID — undefined = platform-global, set = env-scoped metadata. */
+    environmentId?: string;
 }
 
 export class MetadataPlugin implements Plugin {
@@ -114,7 +118,7 @@ export class MetadataPlugin implements Plugin {
             const ql = ctx.getService<any>('objectql');
             if (ql) {
                 ctx.logger.info('[MetadataPlugin] Bridging ObjectQL engine to MetadataManager');
-                this.manager.setDataEngine(ql);
+                this.manager.setDataEngine(ql, this.options.organizationId, this.options.environmentId);
             }
         } catch {
             ctx.logger.debug('[MetadataPlugin] ObjectQL not available — database persistence disabled');

@@ -123,7 +123,7 @@ describe('DatabaseCredentialSchema', () => {
   it('parses a valid active credential', () => {
     const cred = DatabaseCredentialSchema.parse({
       id: '550e8400-e29b-41d4-a716-446655440000',
-      environmentDatabaseId: '550e8400-e29b-41d4-a716-446655440001',
+      environmentId: '550e8400-e29b-41d4-a716-446655440001',
       secretCiphertext: 'ciphertext',
       encryptionKeyId: 'kms-key-1',
       createdAt: '2026-04-19T00:00:00.000Z',
@@ -136,7 +136,7 @@ describe('DatabaseCredentialSchema', () => {
     expect(() =>
       DatabaseCredentialSchema.parse({
         id: '550e8400-e29b-41d4-a716-446655440000',
-        environmentDatabaseId: '550e8400-e29b-41d4-a716-446655440001',
+        environmentId: '550e8400-e29b-41d4-a716-446655440001',
         secretCiphertext: 'ciphertext',
         encryptionKeyId: 'kms-key-1',
         createdAt: '2026-04-19T00:00:00.000Z',

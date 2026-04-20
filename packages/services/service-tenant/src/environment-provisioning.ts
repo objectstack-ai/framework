@@ -6,7 +6,6 @@ import type {
   DatabaseCredential,
   DatabaseDriver,
   Environment,
-  EnvironmentDatabase,
   ProvisionEnvironmentRequest,
   ProvisionEnvironmentResponse,
   ProvisionOrganizationRequest,
@@ -91,8 +90,8 @@ export class MockEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapte
  */
 export interface EnvironmentProvisioningConfig {
   /**
-   * Control-plane data driver used to persist `sys_environment`,
-   * `sys_environment_database`, and `sys_database_credential` rows.
+   * Control-plane data driver used to persist `sys_environment` and
+   * `sys_database_credential` rows.
    *
    * Optional: when omitted, the service runs in **detached** mode —
    * useful for tests that only exercise the orchestration logic.
@@ -206,7 +205,6 @@ export class EnvironmentProvisioningService {
     const warnings: string[] = [];
 
     const environmentId = randomUUID();
-    const environmentDatabaseId = randomUUID();
     const credentialId = randomUUID();
 
     const driver: DatabaseDriver = parsed.driver ?? this.config.defaultDriver;
@@ -277,23 +275,16 @@ export class EnvironmentProvisioningService {
       createdAt: nowIso,
       updatedAt: nowIso,
       metadata: parsed.metadata,
-    };
-
-    const database: EnvironmentDatabase = {
-      id: environmentDatabaseId,
-      environmentId,
-      databaseName,
+      // Physical database addressing (embedded on the environment row)
       databaseUrl,
-      driver,
-      region,
+      databaseDriver: driver,
       storageLimitMb,
       provisionedAt: nowIso,
-      metadata: undefined,
     };
 
     const credential: DatabaseCredential = {
       id: credentialId,
-      environmentDatabaseId,
+      environmentId,
       secretCiphertext: await Promise.resolve(this.encryptor.encrypt(plaintextSecret)),
       encryptionKeyId: this.encryptor.keyId,
       authorization: 'full_access',
@@ -318,25 +309,16 @@ export class EnvironmentProvisioningService {
           created_by: environment.createdBy,
           created_at: environment.createdAt,
           updated_at: environment.updatedAt,
+          database_url: environment.databaseUrl,
+          database_driver: environment.databaseDriver,
+          storage_limit_mb: environment.storageLimitMb,
+          provisioned_at: environment.provisionedAt,
           metadata: environment.metadata ? JSON.stringify(environment.metadata) : null,
-        });
-
-        await this.config.controlPlaneDriver.create('environment_database', {
-          id: database.id,
-          environment_id: database.environmentId,
-          database_name: database.databaseName,
-          database_url: database.databaseUrl,
-          driver: database.driver,
-          region: database.region,
-          storage_limit_mb: database.storageLimitMb,
-          provisioned_at: database.provisionedAt,
-          created_at: nowIso,
-          updated_at: nowIso,
         });
 
         await this.config.controlPlaneDriver.create('database_credential', {
           id: credential.id,
-          environment_database_id: credential.environmentDatabaseId,
+          environment_id: credential.environmentId,
           secret_ciphertext: credential.secretCiphertext,
           encryption_key_id: credential.encryptionKeyId,
           authorization: credential.authorization,
@@ -357,7 +339,6 @@ export class EnvironmentProvisioningService {
 
     return {
       environment,
-      database,
       credential,
       durationMs: Date.now() - startedAt,
       warnings: warnings.length > 0 ? warnings : undefined,
@@ -365,11 +346,11 @@ export class EnvironmentProvisioningService {
   }
 
   /**
-   * Rotate the credential for an environment's database. Creates a new
-   * `active` credential row and flips the previous one to `revoked`.
+   * Rotate the credential for an environment. Creates a new `active`
+   * credential row and flips the previous one to `revoked`.
    */
   async rotateCredential(
-    environmentDatabaseId: string,
+    environmentId: string,
     plaintextSecret: string,
   ): Promise<DatabaseCredential> {
     if (!this.config.controlPlaneDriver) {
@@ -381,7 +362,7 @@ export class EnvironmentProvisioningService {
 
     const credential: DatabaseCredential = {
       id: newCredentialId,
-      environmentDatabaseId,
+      environmentId,
       secretCiphertext: await Promise.resolve(this.encryptor.encrypt(plaintextSecret)),
       encryptionKeyId: this.encryptor.keyId,
       authorization: 'full_access',
@@ -391,7 +372,7 @@ export class EnvironmentProvisioningService {
 
     // Find existing active credential(s) and revoke them.
     const existing = (await this.config.controlPlaneDriver.find('database_credential', {
-      where: { environment_database_id: environmentDatabaseId, status: 'active' },
+      where: { environment_id: environmentId, status: 'active' },
     } as any)) as Array<{ id: string }>;
 
     for (const row of existing ?? []) {
@@ -404,7 +385,7 @@ export class EnvironmentProvisioningService {
 
     await this.config.controlPlaneDriver.create('database_credential', {
       id: credential.id,
-      environment_database_id: credential.environmentDatabaseId,
+      environment_id: credential.environmentId,
       secret_ciphertext: credential.secretCiphertext,
       encryption_key_id: credential.encryptionKeyId,
       authorization: credential.authorization,

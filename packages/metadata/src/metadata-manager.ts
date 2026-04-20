@@ -133,12 +133,16 @@ export class MetadataManager implements IMetadataService {
    * Can be called at any time to enable database storage (e.g. after kernel resolves the driver).
    *
    * @param driver - An IDataDriver instance for database operations
+   * @param organizationId - Organization ID for multi-tenant isolation
+   * @param environmentId - Environment ID (undefined = platform-global)
    */
-  setDatabaseDriver(driver: IDataDriver): void {
+  setDatabaseDriver(driver: IDataDriver, organizationId?: string, environmentId?: string): void {
     const tableName = this.config.tableName ?? 'sys_metadata';
     const dbLoader = new DatabaseLoader({
       driver,
       tableName,
+      organizationId,
+      environmentId,
     });
     this.registerLoader(dbLoader);
     this.logger.info('DatabaseLoader configured', { datasource: this.config.datasource, tableName });
@@ -151,12 +155,16 @@ export class MetadataManager implements IMetadataService {
    * No manual driver resolution needed.
    *
    * @param engine - An IDataEngine instance (typically the ObjectQL service)
+   * @param organizationId - Organization ID for multi-tenant isolation
+   * @param environmentId - Environment ID (undefined = platform-global)
    */
-  setDataEngine(engine: IDataEngine): void {
+  setDataEngine(engine: IDataEngine, organizationId?: string, environmentId?: string): void {
     const tableName = this.config.tableName ?? 'sys_metadata';
     const dbLoader = new DatabaseLoader({
       engine,
       tableName,
+      organizationId,
+      environmentId,
     });
     this.registerLoader(dbLoader);
     this.logger.info('DatabaseLoader configured via DataEngine', { tableName });

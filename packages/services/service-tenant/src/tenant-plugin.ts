@@ -7,7 +7,6 @@ import {
   SysTenantDatabase,
   SysPackageInstallation,
   SysEnvironment,
-  SysEnvironmentDatabase,
   SysDatabaseCredential,
   SysEnvironmentMember,
 } from './objects';
@@ -56,9 +55,8 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
 
     objects: config.registerSystemObjects !== false
       ? [
-          // v4.1+ canonical control-plane objects (environment-per-database model).
+          // Control-plane objects (environment-per-database model).
           SysEnvironment,
-          SysEnvironmentDatabase,
           SysDatabaseCredential,
           SysEnvironmentMember,
           SysPackageInstallation,
@@ -87,7 +85,6 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
       if (config.registerSystemObjects !== false) {
         const registered = [
           'sys_environment',
-          'sys_environment_database',
           'sys_database_credential',
           'sys_environment_member',
           'sys_package_installation',

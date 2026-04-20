@@ -34,20 +34,28 @@ We upgrade the multi-tenant architecture from **per-organization database** to *
 
 Registers environments and how to reach them — **never** stores business data:
 
-| Table                     | Purpose                                                    |
-|---------------------------|------------------------------------------------------------|
-| `sys_environment`         | One row per environment — `(organization_id, slug)` UNIQUE |
-| `sys_environment_database`| Physical DB addressing (1:1 with `sys_environment`)        |
-| `sys_database_credential` | Rotatable encrypted secrets (N:1 with `sys_environment_database`) |
-| `sys_environment_member`  | Per-environment RBAC (`(environment_id, user_id)` UNIQUE)  |
+| Table                       | Purpose                                                                          |
+|-----------------------------|----------------------------------------------------------------------------------|
+| `sys_environment`           | One row per environment — `(organization_id, slug)` UNIQUE. **Includes** physical DB addressing fields (`database_url`, `database_driver`, `storage_limit_mb`, `provisioned_at`). |
+| `sys_database_credential`   | Rotatable encrypted secrets (N:1 with `sys_environment`)                         |
+| `sys_environment_member`    | Per-environment RBAC (`(environment_id, user_id)` UNIQUE)                        |
+| `sys_package_installation`  | Which packages are installed in which environment (includes `environment_id`)     |
+| `sys_metadata`              | Schema metadata for all environments (includes `organization_id` + `env_id`)     |
+
+> **Design note:** `sys_environment_database` has been merged into `sys_environment`.
+> Physical DB addressing is a 1:1 relationship — a dedicated table was unnecessary.
+> This reduces joins and simplifies the provisioning flow.
+
+> **Design note:** `sys_metadata` and `sys_package_installation` live in the **Control Plane**,
+> not in environment DBs. Metadata is environment-scoped via `env_id` (NULL = platform-global).
+> This follows the Power Apps model where the management plane tracks all schema and packages.
 
 ### Data Plane (one database per environment)
 
 Each environment owns its own physical database containing:
 
-- All `sys_` data-plane objects — `sys_package_installation`, `sys_solution_history`, …
 - All business objects — `account`, `contact`, user tables, …
-- **Zero** `environment_id` columns. The environment is **implicit** in the connection.
+- **Zero** system tables or `environment_id` columns. The environment is **implicit** in the connection.
 
 ### Session → Routing
 
@@ -55,8 +63,7 @@ Each environment owns its own physical database containing:
 
 ```
 session.active_environment_id
-    → sys_environment (→ organization_id)
-    → sys_environment_database (url, driver, region)
+    → sys_environment (url, driver, region — single row lookup)
     → sys_database_credential (active secret, decrypted)
     → data-plane driver
 ```
@@ -68,8 +75,8 @@ Switching environments ⇒ swapping DB connections. There is no in-process filte
 `EnvironmentProvisioningService` (new) exposes:
 
 - `provisionOrganization(req)` — atomically creates the org's **default** environment and its physical DB (replaces `provisionTenant`).
-- `provisionEnvironment(req)` — allocates any subsequent `dev` / `test` / `sandbox` / `preview` environment, each with its own DB and credential row.
-- `rotateCredential(envDbId, plaintext)` — issues a new `active` credential and revokes the previous one.
+- `provisionEnvironment(req)` — allocates any subsequent `dev` / `test` / `sandbox` / `preview` environment, each with its own DB and credential row. DB addressing fields are written directly onto the `sys_environment` row.
+- `rotateCredential(environmentId, plaintext)` — issues a new `active` credential and revokes the previous one.
 
 Physical-DB allocation is delegated to pluggable `EnvironmentDatabaseAdapter` implementations (initially `turso`; `libsql` / `sqlite` / `postgres` drop in without core changes).
 
@@ -117,7 +124,7 @@ The migration is **non-destructive** and **idempotent**: each legacy org's datab
 ## References
 
 - `packages/spec/src/cloud/environment.zod.ts` — protocol schemas
-- `packages/services/service-tenant/src/objects/sys-environment*.object.ts` — control-plane objects
+- `packages/services/service-tenant/src/objects/sys-environment.object.ts` — merged control-plane environment object (includes DB addressing)
 - `packages/services/service-tenant/src/environment-provisioning.ts` — provisioning service
 - `packages/services/service-tenant/migrations/v4-to-v5-env-migration.ts` — migration skeleton
 - Power Platform environments: <https://learn.microsoft.com/power-platform/admin/environments-overview>

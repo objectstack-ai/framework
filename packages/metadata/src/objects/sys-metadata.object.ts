@@ -110,11 +110,20 @@ export const SysMetadataObject = ObjectSchema.create({
       defaultValue: 'active',
     }),
 
-    /** Tenant ID for multi-tenant isolation */
-    tenant_id: Field.text({
-      label: 'Tenant ID',
+    /** Organization ID for multi-tenant isolation */
+    organization_id: Field.text({
+      label: 'Organization ID',
       required: false,
       maxLength: 255,
+      description: 'Organization identifier for multi-tenant isolation.',
+    }),
+
+    /** Environment ID — null = platform-global, set = env-scoped */
+    env_id: Field.text({
+      label: 'Environment ID',
+      required: false,
+      maxLength: 255,
+      description: 'Scopes this metadata to a specific environment. Null = platform-global.',
     }),
 
     /** Version number for optimistic concurrency */
@@ -171,9 +180,10 @@ export const SysMetadataObject = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['type', 'name'], unique: true },
+    { fields: ['type', 'name', 'env_id'], unique: true },
     { fields: ['type', 'scope'] },
-    { fields: ['tenant_id'] },
+    { fields: ['organization_id'] },
+    { fields: ['env_id'] },
     { fields: ['state'] },
     { fields: ['namespace'] },
   ],

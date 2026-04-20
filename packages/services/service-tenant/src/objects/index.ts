@@ -1,8 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-// v4.1+ canonical Control-Plane objects (environment-per-database model)
+// Control-Plane objects (environment-per-database model)
 export * from './sys-environment.object';
-export * from './sys-environment-database.object';
 export * from './sys-database-credential.object';
 export * from './sys-environment-member.object';
 

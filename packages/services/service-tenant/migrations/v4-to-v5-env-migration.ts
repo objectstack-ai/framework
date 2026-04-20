@@ -4,8 +4,9 @@
  * v4 → v5 Environment-Per-Database Migration
  *
  * Migrates deployments from the legacy `sys_tenant_database` (per-org DB)
- * model to the v5.0 `sys_environment` + `sys_environment_database` +
- * `sys_database_credential` (per-environment DB) model.
+ * model to the v5.0 `sys_environment` + `sys_database_credential`
+ * (per-environment DB) model. Physical database addressing is now
+ * embedded directly on the `sys_environment` row.
  *
  * See `docs/adr/0002-environment-database-isolation.md` for the rationale.
  *
@@ -107,7 +108,6 @@ export interface V4ToV5MigrationOrgResult {
   legacyTenantId: string;
   organizationId: string;
   environmentId: string;
-  environmentDatabaseId: string;
   credentialId: string;
   skipped: boolean;
   reason?: string;
@@ -162,7 +162,6 @@ export async function migrateV4ToV5Environments(
           legacyTenantId: legacy.id,
           organizationId: legacy.organization_id,
           environmentId: existingDefault[0].id,
-          environmentDatabaseId: '(pre-existing)',
           credentialId: '(pre-existing)',
           skipped: true,
           reason: 'Default environment already exists for org',
@@ -172,7 +171,6 @@ export async function migrateV4ToV5Environments(
 
       const nowIso = new Date().toISOString();
       const environmentId = randomUUID();
-      const environmentDatabaseId = randomUUID();
       const credentialId = randomUUID();
 
       const plaintext = await Promise.resolve(options.decryptLegacy(legacy.auth_token));
@@ -192,24 +190,15 @@ export async function migrateV4ToV5Environments(
           created_by: options.systemUserId,
           created_at: nowIso,
           updated_at: nowIso,
-        });
-
-        await options.controlPlaneDriver.create('environment_database', {
-          id: environmentDatabaseId,
-          environment_id: environmentId,
-          database_name: legacy.database_name,
           database_url: legacy.database_url,
-          driver: 'turso',
-          region: legacy.region,
+          database_driver: 'turso',
           storage_limit_mb: legacy.storage_limit_mb ?? 1024,
           provisioned_at: nowIso,
-          created_at: nowIso,
-          updated_at: nowIso,
         });
 
         await options.controlPlaneDriver.create('database_credential', {
           id: credentialId,
-          environment_database_id: environmentDatabaseId,
+          environment_id: environmentId,
           secret_ciphertext: secretCiphertext,
           encryption_key_id: options.encryptionKeyId,
           authorization: 'full_access',
@@ -228,7 +217,6 @@ export async function migrateV4ToV5Environments(
         legacyTenantId: legacy.id,
         organizationId: legacy.organization_id,
         environmentId,
-        environmentDatabaseId,
         credentialId,
         skipped: false,
       });
@@ -241,7 +229,6 @@ export async function migrateV4ToV5Environments(
         legacyTenantId: legacy.id,
         organizationId: legacy.organization_id,
         environmentId: '',
-        environmentDatabaseId: '',
         credentialId: '',
         skipped: true,
         reason: `Error: ${error instanceof Error ? error.message : String(error)}`,

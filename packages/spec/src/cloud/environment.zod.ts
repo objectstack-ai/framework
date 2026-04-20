@@ -6,20 +6,16 @@ import { TenantPlanSchema } from './tenant.zod';
 /**
  * Environment-Per-Database Isolation Protocol
  *
- * Defines the schema for the v4.x → v5.0 multi-tenant architecture upgrade,
- * where each **environment** (dev/test/prod/sandbox) owns a physically isolated
- * database, rather than each organization owning a single database shared
- * across environments.
+ * Each **environment** (dev/test/prod/sandbox) owns a physically isolated
+ * database. The Control Plane stores all environment metadata; environment
+ * DBs contain only business data rows.
  *
  * Split of concerns:
- * - **Control Plane**: `sys_environment`, `sys_environment_database`,
- *   `sys_database_credential`, `sys_environment_member` — stores the
- *   environment registry, physical addressing, credentials (rotatable),
- *   and per-environment RBAC.
- * - **Data Plane**: each environment has its own DB containing `sys_`
- *   objects (`sys_package_installation`, `sys_solution_history`, …) and
- *   business objects. No `environment_id` column is ever required on
- *   business rows — environment is implicit in the connection.
+ * - **Control Plane**: `sys_environment` (includes physical DB addressing),
+ *   `sys_package_installation` (with env_id), `sys_metadata` (with env_id),
+ *   `sys_database_credential`, `sys_environment_member`.
+ * - **Data Plane**: each environment DB contains only business objects
+ *   (account, task, …). No system tables, no `environment_id` columns.
  *
  * See `docs/adr/0002-environment-database-isolation.md` for the full
  * rationale.
@@ -49,12 +45,25 @@ export const EnvironmentStatusSchema = z
 export type EnvironmentStatus = z.infer<typeof EnvironmentStatusSchema>;
 
 /**
+ * Backend driver registry — keys used by the data-plane driver factory.
+ * Kept open-ended (`z.string()`) so third-party drivers can register new
+ * backends without a core release.
+ */
+export const DatabaseDriverSchema = z
+  .string()
+  .min(1)
+  .describe('Data-plane driver key (e.g. `turso`, `libsql`, `sqlite`, `postgres`)');
+
+export type DatabaseDriver = z.infer<typeof DatabaseDriverSchema>;
+
+/**
  * Environment — one logical runtime of an organization's data.
  *
  * An organization may own many environments (e.g. `prod`, `staging`,
- * `dev-alice`, `sandbox-demo`). Each environment is physically backed by a
- * distinct database (see {@link EnvironmentDatabaseSchema}). Environments
- * are addressable by `(organizationId, slug)`.
+ * `dev-alice`, `sandbox-demo`). Physical database connection info is
+ * stored directly on this row so a single lookup gives both logical
+ * and physical addressing. Environments are addressable by
+ * `(organizationId, slug)`.
  */
 export const EnvironmentSchema = z.object({
   /** UUID of the environment (stable, never reused). */
@@ -78,8 +87,8 @@ export const EnvironmentSchema = z.object({
   /** Whether this is the organization's **default** environment. Exactly one per org. */
   isDefault: z.boolean().default(false).describe('Whether this is the default environment for the organization'),
 
-  /** Preferred region (informational; actual placement lives on the database row). */
-  region: z.string().optional().describe('Preferred region (informational)'),
+  /** Region where the physical database is deployed. */
+  region: z.string().optional().describe('Region where the physical database is deployed (e.g. us-east-1)'),
 
   /** Plan tier applied to this environment for quota/billing enforcement. */
   plan: TenantPlanSchema.default('free').describe('Plan tier for this environment'),
@@ -96,6 +105,20 @@ export const EnvironmentSchema = z.object({
   /** Last update timestamp (ISO-8601). */
   updatedAt: z.string().datetime().describe('Last update timestamp (ISO-8601)'),
 
+  // ── Physical database addressing (merged from sys_environment_database) ──
+
+  /** Full connection URL (e.g. `libsql://env-<uuid>.turso.io`, `postgres://…`). Set after provisioning. */
+  databaseUrl: z.string().url().optional().describe('Full connection URL for the environment database'),
+
+  /** Data-plane driver key. */
+  databaseDriver: DatabaseDriverSchema.optional().describe('Data-plane driver key (turso, libsql, sqlite, memory, postgres)'),
+
+  /** Storage quota in megabytes. */
+  storageLimitMb: z.number().int().positive().optional().describe('Storage quota in megabytes'),
+
+  /** When the physical database was provisioned. */
+  provisionedAt: z.string().datetime().optional().describe('Provisioning timestamp (ISO-8601)'),
+
   /** Free-form metadata (feature flags, tags, …). */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Free-form metadata'),
 });
@@ -103,27 +126,14 @@ export const EnvironmentSchema = z.object({
 export type Environment = z.infer<typeof EnvironmentSchema>;
 
 // ---------------------------------------------------------------------------
-// Environment → Database mapping
+// Driver registry
 // ---------------------------------------------------------------------------
 
 /**
- * Backend driver registry — keys used by the data-plane driver factory.
- * Kept open-ended (`z.string()`) so third-party drivers can register new
- * backends without a core release.
- */
-export const DatabaseDriverSchema = z
-  .string()
-  .min(1)
-  .describe('Data-plane driver key (e.g. `turso`, `libsql`, `sqlite`, `postgres`)');
-
-export type DatabaseDriver = z.infer<typeof DatabaseDriverSchema>;
-
-/**
- * Physical database backing a single environment.
- *
- * The `environmentId` is **unique** — there is always exactly one DB per
- * environment. Credentials live in a separate {@link DatabaseCredentialSchema}
- * row so they can be rotated without touching the addressing record.
+ * @deprecated Physical database fields are now embedded directly on
+ * {@link EnvironmentSchema} (`databaseUrl`, `databaseDriver`, `storageLimitMb`,
+ * `provisionedAt`). This schema is retained for migration compatibility only
+ * and will be removed in a future release.
  */
 export const EnvironmentDatabaseSchema = z.object({
   /** UUID of the mapping. */
@@ -186,8 +196,8 @@ export const DatabaseCredentialSchema = z.object({
   /** UUID of the credential. */
   id: z.string().uuid().describe('UUID of the credential'),
 
-  /** Database this credential authorizes. */
-  environmentDatabaseId: z.string().uuid().describe('Database this credential authorizes'),
+  /** Environment this credential authorizes. */
+  environmentId: z.string().uuid().describe('Environment this credential authorizes'),
 
   /** Encrypted auth token or secret (ciphertext). */
   secretCiphertext: z.string().describe('Encrypted auth token or secret (ciphertext)'),
@@ -293,12 +303,10 @@ export type ProvisionEnvironmentRequest = z.infer<typeof ProvisionEnvironmentReq
 
 /**
  * Response of a successful environment provisioning call.
- * Includes the environment record, its physical database mapping, and the
- * freshly-minted credential.
+ * The environment record now includes database addressing fields directly.
  */
 export const ProvisionEnvironmentResponseSchema = z.object({
-  environment: EnvironmentSchema.describe('Provisioned environment'),
-  database: EnvironmentDatabaseSchema.describe('Physical database backing the environment'),
+  environment: EnvironmentSchema.describe('Provisioned environment (includes database addressing)'),
   credential: DatabaseCredentialSchema.describe('Freshly-minted credential for the environment DB'),
   durationMs: z.number().describe('Total provisioning duration in milliseconds'),
   warnings: z.array(z.string()).optional().describe('Non-fatal warnings emitted during provisioning'),

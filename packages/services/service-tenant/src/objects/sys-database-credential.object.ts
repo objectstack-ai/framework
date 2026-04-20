@@ -6,10 +6,10 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * sys_database_credential — Rotatable Database Credentials
  *
  * Stores encrypted credentials for environment databases separately from
- * the addressing record (`sys_environment_database`) so that secrets can
+ * the environment record (`sys_environment`) so that secrets can
  * be rotated, revoked, and audited independently.
  *
- * During rotation, multiple rows can exist per `environment_database_id`:
+ * During rotation, multiple rows can exist per `environment_id`:
  * the previous credential stays `active` until the new one has been
  * propagated to all runtimes, then flips to `revoked`.
  *
@@ -24,7 +24,7 @@ export const SysDatabaseCredential = ObjectSchema.create({
   isSystem: true,
   description: 'Rotatable encrypted credentials for environment databases.',
   titleFormat: '{id}',
-  compactLayout: ['environment_database_id', 'status', 'authorization', 'expires_at'],
+  compactLayout: ['environment_id', 'status', 'authorization', 'expires_at'],
 
   fields: {
     id: Field.text({
@@ -48,10 +48,10 @@ export const SysDatabaseCredential = ObjectSchema.create({
       description: 'Last update timestamp.',
     }),
 
-    environment_database_id: Field.text({
-      label: 'Environment Database ID',
+    environment_id: Field.text({
+      label: 'Environment ID',
       required: true,
-      description: 'Foreign key to sys_environment_database.',
+      description: 'Foreign key to sys_environment.',
     }),
 
     secret_ciphertext: Field.textarea({
@@ -104,8 +104,8 @@ export const SysDatabaseCredential = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['environment_database_id'] },
-    { fields: ['environment_database_id', 'status'] },
+    { fields: ['environment_id'] },
+    { fields: ['environment_id', 'status'] },
     { fields: ['status'] },
     { fields: ['expires_at'] },
   ],

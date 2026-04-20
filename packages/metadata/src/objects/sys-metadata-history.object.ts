@@ -105,12 +105,22 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
       description: 'Description of what changed in this version',
     }),
 
-    /** Tenant ID for multi-tenant isolation */
-    tenant_id: Field.text({
-      label: 'Tenant ID',
+    /** Organization ID for multi-tenant isolation */
+    organization_id: Field.text({
+      label: 'Organization ID',
       required: false,
       readonly: true,
       maxLength: 255,
+      description: 'Organization identifier for multi-tenant isolation.',
+    }),
+
+    /** Environment ID — null = platform-global, set = env-scoped */
+    env_id: Field.text({
+      label: 'Environment ID',
+      required: false,
+      readonly: true,
+      maxLength: 255,
+      description: 'Scopes this history entry to a specific environment.',
     }),
 
     /** User who made this change */
@@ -135,7 +145,8 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
     { fields: ['type', 'name'] },
     { fields: ['recorded_at'] },
     { fields: ['operation_type'] },
-    { fields: ['tenant_id'] },
+    { fields: ['organization_id'] },
+    { fields: ['env_id'] },
   ],
 
   enable: {
