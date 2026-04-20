@@ -5,6 +5,8 @@ import type { TenantRoutingConfig } from '@objectstack/spec/cloud';
 import { TenantContextService } from './tenant-context';
 import {
   SysTenantDatabase,
+  SysPackage,
+  SysPackageVersion,
   SysPackageInstallation,
   SysEnvironment,
   SysDatabaseCredential,
@@ -59,6 +61,9 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
           SysEnvironment,
           SysDatabaseCredential,
           SysEnvironmentMember,
+          // Package registry (ADR-0003).
+          SysPackage,
+          SysPackageVersion,
           SysPackageInstallation,
           // v4.x deprecation shim — opt out via `registerLegacyTenantDatabase: false`.
           ...(config.registerLegacyTenantDatabase !== false ? [SysTenantDatabase] : []),
@@ -87,6 +92,8 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
           'sys_environment',
           'sys_database_credential',
           'sys_environment_member',
+          'sys_package',
+          'sys_package_version',
           'sys_package_installation',
         ];
         if (config.registerLegacyTenantDatabase !== false) {

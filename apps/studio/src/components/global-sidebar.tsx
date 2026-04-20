@@ -28,6 +28,7 @@ import {
   ChevronsUpDown,
   Plus,
   Boxes,
+  Globe,
   Package as PackageIcon,
   Settings,
 } from 'lucide-react';
@@ -179,6 +180,7 @@ export function GlobalSidebar() {
   const envsActive = pathname === '/environments';
   const packagesHref = envId ? `/environments/${envId}/packages` : undefined;
   const packagesActive = !!packagesHref && pathname === packagesHref;
+  const apiConsoleActive = pathname === '/api-console';
 
   return (
     <Sidebar collapsible="icon">
@@ -225,6 +227,17 @@ export function GlobalSidebar() {
                     <span>Packages</span>
                   </SidebarMenuButton>
                 )}
+              </SidebarMenuItem>
+
+              {/* API Console — always available; the console discovers
+                  endpoints dynamically from the active client/environment. */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={apiConsoleActive} tooltip="API Console">
+                  <Link to="/api-console">
+                    <Globe className="size-4" />
+                    <span>API Console</span>
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
