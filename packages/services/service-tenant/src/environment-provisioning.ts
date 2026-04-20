@@ -12,6 +12,7 @@ import type {
   ProvisionOrganizationResponse,
 } from '@objectstack/spec/cloud';
 import { ProvisionEnvironmentRequestSchema, ProvisionOrganizationRequestSchema } from '@objectstack/spec/cloud';
+import { TursoPlatformClient } from './turso-platform-client.js';
 
 /**
  * Backend-agnostic physical DB provisioning adapter.
@@ -60,6 +61,66 @@ export class NoopSecretEncryptor implements SecretEncryptor {
   }
   decrypt(ciphertext: string): string {
     return ciphertext;
+  }
+}
+
+/**
+ * Turso Platform adapter — calls the Turso Platform API to provision a new
+ * cloud database for each environment, then mints a per-database auth token.
+ *
+ * Required env vars: `TURSO_ORG_NAME`, `TURSO_API_TOKEN`.
+ */
+export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
+  readonly driver: DatabaseDriver = 'turso';
+
+  private readonly client: TursoPlatformClient;
+
+  constructor(config: { apiToken: string; organization: string; apiBaseUrl?: string }) {
+    this.client = new TursoPlatformClient(config);
+  }
+
+  async createDatabase(params: {
+    environmentId: string;
+    databaseName: string;
+    region: string;
+    storageLimitMb: number;
+  }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
+    await this.client.createDatabase({ name: params.databaseName });
+    const { jwt } = await this.client.createDatabaseToken(params.databaseName, {
+      authorization: 'full-access',
+    });
+    const db = await this.client.getDatabase(params.databaseName);
+    return {
+      databaseUrl: `libsql://${db.Hostname}`,
+      plaintextSecret: jwt,
+    };
+  }
+}
+
+/**
+ * Local SQLite adapter for development environments. Creates one `.db` file
+ * per environment under `baseDir`, named after the stable `databaseName`
+ * (e.g. `env-{uuid}.db`) so the file survives slug renames.
+ */
+export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
+  readonly driver: DatabaseDriver = 'sqlite';
+
+  constructor(private readonly baseDir: string = '.objectstack/data/environments') {}
+
+  async createDatabase(params: {
+    environmentId: string;
+    databaseName: string;
+    region: string;
+    storageLimitMb: number;
+  }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
+    const { mkdirSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const dbPath = resolve(this.baseDir, `${params.databaseName}.db`);
+    mkdirSync(this.baseDir, { recursive: true });
+    return {
+      databaseUrl: `file:${dbPath}`,
+      plaintextSecret: '',
+    };
   }
 }
 
@@ -420,4 +481,25 @@ export class EnvironmentProvisioningService {
       return null;
     }
   }
+}
+
+/**
+ * Build the default adapter list from environment variables.
+ *
+ * - `TURSO_ORG_NAME` + `TURSO_API_TOKEN` present → `TursoEnvironmentDatabaseAdapter`
+ *   (provisions real cloud databases via the Turso Platform API).
+ * - Otherwise → `LocalSQLiteEnvironmentDatabaseAdapter`
+ *   (creates one `.db` file per environment under `.objectstack/data/environments/`).
+ */
+export function createDefaultEnvironmentAdapters(
+  env: Record<string, string | undefined> = process.env,
+): EnvironmentDatabaseAdapter[] {
+  const orgName = env.TURSO_ORG_NAME;
+  const apiToken = env.TURSO_API_TOKEN;
+
+  if (orgName && apiToken) {
+    return [new TursoEnvironmentDatabaseAdapter({ organization: orgName, apiToken })];
+  }
+
+  return [new LocalSQLiteEnvironmentDatabaseAdapter()];
 }
