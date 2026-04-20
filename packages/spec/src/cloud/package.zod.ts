@@ -1,0 +1,158 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { z } from 'zod';
+
+/**
+ * Package Identity Protocol
+ *
+ * A **package** (also called a Solution in Power Platform, an Unlocked Package
+ * in Salesforce, or an Application in ServiceNow) is the first-class unit of
+ * distribution in ObjectStack. It groups related metadata — objects, views,
+ * flows, translations, agents — into a named, versioned artifact.
+ *
+ * Architecture:
+ * - `sys_package`         — identity (one row per logical package)
+ * - `sys_package_version` — immutable release snapshots (see package-version.zod.ts)
+ * - `sys_package_installation` — env ↔ version pairing (see environment-package.zod.ts)
+ *
+ * See `docs/adr/0003-package-as-first-class-citizen.md` for the full rationale.
+ */
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/**
+ * Package visibility — controls who can discover and install the package.
+ */
+export const PackageVisibilitySchema = z
+  .enum(['private', 'org', 'marketplace'])
+  .describe(
+    'Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry'
+  );
+
+export type PackageVisibility = z.infer<typeof PackageVisibilitySchema>;
+
+/**
+ * Category hint for marketplace discovery and filtering.
+ * Kept open-ended (z.string()) so third-party packages can declare custom categories.
+ */
+export const PackageCategorySchema = z
+  .string()
+  .min(1)
+  .describe('Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools")');
+
+export type PackageCategory = z.infer<typeof PackageCategorySchema>;
+
+// ---------------------------------------------------------------------------
+// sys_package — Package identity
+// ---------------------------------------------------------------------------
+
+/**
+ * One row per logical package in the Control Plane.
+ *
+ * The package itself carries only identity and publishing metadata.
+ * Actual content (objects, views, flows…) lives in {@link PackageVersion}.
+ *
+ * Addressable by `manifest_id` (globally unique reverse-domain string).
+ */
+export const PackageSchema = z.object({
+  /** UUID of the package (stable, never reused). */
+  id: z.string().uuid().describe('UUID of the package (stable, never reused)'),
+
+  /**
+   * Globally unique reverse-domain identifier (e.g. `com.acme.crm`).
+   * Immutable once set — renaming a package requires creating a new package.
+   */
+  manifestId: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/)
+    .describe('Globally unique reverse-domain package identifier (e.g. com.acme.crm)'),
+
+  /** Organization that owns and publishes this package. */
+  ownerOrgId: z.string().describe('Organization ID of the package owner/publisher'),
+
+  /** Human-readable name shown in Studio and Marketplace. */
+  displayName: z.string().min(1).max(128).describe('Display name shown in Studio and Marketplace'),
+
+  /** Short description shown in search results and install dialogs. */
+  description: z.string().max(512).optional().describe('Short package description'),
+
+  /** Long-form documentation (markdown). */
+  readme: z.string().optional().describe('Long-form package documentation (markdown)'),
+
+  /**
+   * Package visibility.
+   * - `private`     — only the owner org can see and install it
+   * - `org`         — all environments within the owner org
+   * - `marketplace` — publicly discoverable in the ObjectStack Marketplace
+   */
+  visibility: PackageVisibilitySchema.default('private'),
+
+  /** Primary category for marketplace filtering. */
+  category: PackageCategorySchema.optional(),
+
+  /** Additional tags for search and filtering (e.g. ["salesforce", "sync", "crm"]). */
+  tags: z.array(z.string()).optional().describe('Search and filter tags'),
+
+  /** URL to the package icon image. */
+  iconUrl: z.string().url().optional().describe('Package icon URL'),
+
+  /** URL to the package homepage or documentation site. */
+  homepageUrl: z.string().url().optional().describe('Package homepage URL'),
+
+  /** SPDX license identifier (e.g. "MIT", "Apache-2.0"). */
+  license: z.string().optional().describe('SPDX license identifier (e.g. MIT, Apache-2.0)'),
+
+  /** Creation timestamp (ISO-8601). */
+  createdAt: z.string().datetime().describe('Creation timestamp (ISO-8601)'),
+
+  /** Last update timestamp (ISO-8601). */
+  updatedAt: z.string().datetime().describe('Last update timestamp (ISO-8601)'),
+
+  /** User ID that created the package entry. */
+  createdBy: z.string().describe('User ID that created the package'),
+});
+
+export type Package = z.infer<typeof PackageSchema>;
+
+// ---------------------------------------------------------------------------
+// Request / Response
+// ---------------------------------------------------------------------------
+
+/**
+ * Request to register a new package in the Control Plane.
+ */
+export const CreatePackageRequestSchema = z.object({
+  manifestId: PackageSchema.shape.manifestId,
+  ownerOrgId: z.string().describe('Owner organization ID'),
+  displayName: PackageSchema.shape.displayName,
+  description: PackageSchema.shape.description,
+  visibility: PackageVisibilitySchema.optional(),
+  category: PackageCategorySchema.optional(),
+  tags: z.array(z.string()).optional(),
+  iconUrl: z.string().url().optional(),
+  homepageUrl: z.string().url().optional(),
+  license: z.string().optional(),
+  createdBy: z.string().describe('User ID creating the package'),
+}).describe('Register a new package in the Control Plane');
+
+export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
+
+/**
+ * Request to update mutable package metadata (visibility, description, tags…).
+ * `manifestId` and `ownerOrgId` are immutable once set.
+ */
+export const UpdatePackageRequestSchema = z.object({
+  displayName: PackageSchema.shape.displayName.optional(),
+  description: PackageSchema.shape.description,
+  readme: PackageSchema.shape.readme,
+  visibility: PackageVisibilitySchema.optional(),
+  category: PackageCategorySchema.optional(),
+  tags: z.array(z.string()).optional(),
+  iconUrl: z.string().url().optional(),
+  homepageUrl: z.string().url().optional(),
+  license: z.string().optional(),
+}).describe('Update mutable package metadata');
+
+export type UpdatePackageRequest = z.infer<typeof UpdatePackageRequestSchema>;
