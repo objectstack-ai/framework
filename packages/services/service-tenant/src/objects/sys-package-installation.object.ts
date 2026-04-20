@@ -5,10 +5,20 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
 /**
  * sys_package_installation — Per-environment package installation record.
  *
- * Tracks which packages (business solutions) are installed in each environment.
- * Stored in the **Control Plane** (sys namespace → turso driver) so that all
- * environment installations are visible from a single query. Environment DBs
- * contain only business data rows — zero system tables.
+ * Models the pairing between an environment and a specific, immutable package
+ * version snapshot (`sys_package_version`). Only one version of a given package
+ * may be active per environment at a time (enforced by UNIQUE on
+ * `(environment_id, package_id)`).
+ *
+ * **Upgrade** = atomic UPDATE of `package_version_id` to a newer version UUID.
+ * **Rollback** = atomic UPDATE of `package_version_id` to an older version UUID.
+ * Version history is tracked via the sequence of `package_version_id` changes
+ * on this row (and an optional sys_package_installation_history audit table).
+ *
+ * **Stored in the Control Plane DB (not in environment DBs).**
+ * Environment DBs contain only business data rows — zero system tables.
+ *
+ * See `docs/adr/0003-package-as-first-class-citizen.md` for the full rationale.
  *
  * @namespace sys
  */
@@ -19,53 +29,60 @@ export const SysPackageInstallation = ObjectSchema.create({
   pluralLabel: 'Package Installations',
   icon: 'package',
   isSystem: true,
-  description: 'Per-environment package installation registry (sys_package_installation)',
+  description: 'Per-environment package installation registry (sys_package_installation).',
   titleFormat: '{package_id} @ {environment_id}',
-  compactLayout: ['package_id', 'environment_id', 'version', 'status'],
+  compactLayout: ['package_version_id', 'environment_id', 'status', 'installed_at'],
 
   fields: {
     id: Field.text({
       label: 'Installation ID',
       required: true,
       readonly: true,
-      description: 'UUID-based installation identifier',
+      description: 'UUID of this installation record (stable, never reused).',
     }),
 
     created_at: Field.datetime({
       label: 'Created At',
       defaultValue: 'NOW()',
       readonly: true,
+      description: 'Creation timestamp (ISO-8601).',
     }),
 
     updated_at: Field.datetime({
       label: 'Updated At',
       defaultValue: 'NOW()',
       readonly: true,
+      description: 'Last update timestamp — changes on upgrade, rollback, enable/disable (ISO-8601).',
     }),
 
     environment_id: Field.text({
       label: 'Environment ID',
       required: true,
-      description: 'Foreign key to sys__environment',
+      description: 'Foreign key to sys_environment (UUID). The environment that owns this installation.',
+    }),
+
+    package_version_id: Field.text({
+      label: 'Package Version ID',
+      required: true,
+      description:
+        'Foreign key to sys_package_version (UUID). The specific, immutable release snapshot ' +
+        'currently installed in this environment. Upgrading = swapping this field to a newer ' +
+        'version UUID. Rollback = swapping to an older version UUID.',
     }),
 
     package_id: Field.text({
       label: 'Package ID',
       required: true,
-      maxLength: 255,
-      description: 'Manifest ID of the installed package (reverse-domain, e.g. com.example.crm)',
-    }),
-
-    version: Field.text({
-      label: 'Version',
-      required: true,
-      maxLength: 50,
-      description: 'Installed package version (semver)',
+      description:
+        'Foreign key to sys_package (UUID). Denormalized from the linked package_version row ' +
+        'at install time to enforce the UNIQUE (environment_id, package_id) constraint without a JOIN.',
     }),
 
     status: Field.select({
       label: 'Status',
       required: true,
+      defaultValue: 'installed',
+      description: 'Current lifecycle status of this installation within the environment.',
       options: [
         { value: 'installed', label: 'Installed' },
         { value: 'installing', label: 'Installing' },
@@ -73,45 +90,42 @@ export const SysPackageInstallation = ObjectSchema.create({
         { value: 'disabled', label: 'Disabled' },
         { value: 'error', label: 'Error' },
       ],
-      defaultValue: 'installed',
     }),
 
     enabled: Field.boolean({
       label: 'Enabled',
       required: true,
       defaultValue: true,
-      description: 'Whether the package is currently active in this environment',
+      description:
+        'Whether the package metadata is actively loaded into this environment. ' +
+        'Disabled packages are installed but their schema is not visible to the runtime.',
+    }),
+
+    settings: Field.textarea({
+      label: 'Settings',
+      required: false,
+      description:
+        'JSON-serialized per-installation configuration overrides. ' +
+        'Keys mirror the package manifest configurationSchema.properties.',
     }),
 
     installed_at: Field.datetime({
       label: 'Installed At',
       required: true,
       defaultValue: 'NOW()',
+      description: 'Timestamp when this installation was first created (ISO-8601).',
     }),
 
     installed_by: Field.text({
       label: 'Installed By',
       required: false,
-      description: 'User ID who installed the package',
+      description: 'User ID who performed the initial install. Null for system-automated installs.',
     }),
 
     error_message: Field.textarea({
       label: 'Error Message',
       required: false,
-      description: 'Error details when status is error',
-    }),
-
-    settings: Field.textarea({
-      label: 'Settings',
-      required: false,
-      description: 'JSON-serialized per-installation configuration',
-    }),
-
-    upgrade_history: Field.textarea({
-      label: 'Upgrade History',
-      required: false,
-      defaultValue: '[]',
-      description: 'JSON array of version upgrade records',
+      description: 'Error details when status is error. Cleared on next successful install/upgrade.',
     }),
   },
 
@@ -119,6 +133,7 @@ export const SysPackageInstallation = ObjectSchema.create({
     { fields: ['environment_id', 'package_id'], unique: true },
     { fields: ['environment_id'] },
     { fields: ['package_id'] },
+    { fields: ['package_version_id'] },
     { fields: ['status'] },
   ],
 

@@ -55,11 +55,24 @@ export const SysMetadataObject = ObjectSchema.create({
       maxLength: 100,
     }),
 
-    /** Package that owns/delivered this metadata */
+    /** Package that owns/delivered this metadata (legacy string identifier, kept for compat) */
     package_id: Field.text({
       label: 'Package ID',
       required: false,
       maxLength: 255,
+      description: 'Legacy package manifest ID string. Use package_version_id for new records.',
+    }),
+
+    /**
+     * FK → sys_package_version (UUID). Set for metadata that belongs to a specific
+     * package release snapshot. NULL = platform-built-in or environment override.
+     */
+    package_version_id: Field.text({
+      label: 'Package Version ID',
+      required: false,
+      maxLength: 255,
+      description:
+        'Foreign key to sys_package_version (UUID). Null = platform-built-in or env-level override.',
     }),
 
     /** Who manages this record: package, platform, or user */
@@ -184,6 +197,7 @@ export const SysMetadataObject = ObjectSchema.create({
     { fields: ['type', 'scope'] },
     { fields: ['organization_id'] },
     { fields: ['env_id'] },
+    { fields: ['package_version_id'] },
     { fields: ['state'] },
     { fields: ['namespace'] },
   ],

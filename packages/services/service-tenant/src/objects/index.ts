@@ -9,6 +9,7 @@ export * from './sys-environment-member.object';
 // docs/adr/0002-environment-database-isolation.md for the migration path.
 export * from './sys-tenant-database.object';
 
-// Package installation registry (lives in control plane for now; will move
-// into each environment's data plane in v5.0 per ADR-0002).
+// Package registry (Control Plane, permanent — see ADR-0003).
+export * from './sys-package.object';
+export * from './sys-package-version.object';
 export * from './sys-package-installation.object';

@@ -5,6 +5,9 @@ import {
   SysEnvironment,
   SysDatabaseCredential,
   SysEnvironmentMember,
+  SysPackage,
+  SysPackageVersion,
+  SysPackageInstallation,
 } from './index';
 
 describe('control-plane environment objects', () => {
@@ -49,5 +52,70 @@ describe('control-plane environment objects', () => {
     expect(SysEnvironment.isSystem).toBe(true);
     expect(SysDatabaseCredential.isSystem).toBe(true);
     expect(SysEnvironmentMember.isSystem).toBe(true);
+  });
+});
+
+describe('control-plane package objects (ADR-0003)', () => {
+  it('registers sys_package and sys_package_version with correct namespaced names', () => {
+    expect(`${SysPackage.namespace}_${SysPackage.name}`).toBe('sys_package');
+    expect(`${SysPackageVersion.namespace}_${SysPackageVersion.name}`).toBe('sys_package_version');
+    expect(`${SysPackageInstallation.namespace}_${SysPackageInstallation.name}`).toBe('sys_package_installation');
+  });
+
+  it('marks all package objects as system objects', () => {
+    expect(SysPackage.isSystem).toBe(true);
+    expect(SysPackageVersion.isSystem).toBe(true);
+    expect(SysPackageInstallation.isSystem).toBe(true);
+  });
+
+  it('sys_package has UNIQUE manifest_id index', () => {
+    const idx = SysPackage.indexes ?? [];
+    expect(
+      idx.some((i: any) => i.unique && i.fields.join(',') === 'manifest_id'),
+    ).toBe(true);
+  });
+
+  it('sys_package_version has UNIQUE (package_id, version) index', () => {
+    const idx = SysPackageVersion.indexes ?? [];
+    expect(
+      idx.some((i: any) => i.unique && i.fields.join(',') === 'package_id,version'),
+    ).toBe(true);
+  });
+
+  it('sys_package_installation has UNIQUE (environment_id, package_id) index', () => {
+    const idx = SysPackageInstallation.indexes ?? [];
+    expect(
+      idx.some((i: any) => i.unique && i.fields.join(',') === 'environment_id,package_id'),
+    ).toBe(true);
+  });
+
+  it('sys_package_installation has package_version_id field (not a version string)', () => {
+    expect(SysPackageInstallation.fields).toHaveProperty('package_version_id');
+    expect(SysPackageInstallation.fields).not.toHaveProperty('upgrade_history');
+  });
+
+  it('sys_package_installation has package_version_id index', () => {
+    const idx = SysPackageInstallation.indexes ?? [];
+    expect(
+      idx.some((i: any) => i.fields.join(',') === 'package_version_id'),
+    ).toBe(true);
+  });
+
+  it('gives every field on sys_package a .description', () => {
+    for (const [name, field] of Object.entries(SysPackage.fields)) {
+      expect((field as any).description, `sys_package.${name} missing description`).toBeTruthy();
+    }
+  });
+
+  it('gives every field on sys_package_version a .description', () => {
+    for (const [name, field] of Object.entries(SysPackageVersion.fields)) {
+      expect((field as any).description, `sys_package_version.${name} missing description`).toBeTruthy();
+    }
+  });
+
+  it('gives every field on sys_package_installation a .description', () => {
+    for (const [name, field] of Object.entries(SysPackageInstallation.fields)) {
+      expect((field as any).description, `sys_package_installation.${name} missing description`).toBeTruthy();
+    }
   });
 });
