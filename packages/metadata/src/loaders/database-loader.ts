@@ -24,6 +24,7 @@ import { SysMetadataHistoryObject } from '../objects/sys-metadata-history.object
 import type { IDataDriver, IDataEngine } from '@objectstack/spec/contracts';
 import type { MetadataLoader } from './loader-interface.js';
 import { calculateChecksum } from '../utils/metadata-history-utils.js';
+import { MetadataProjector } from '../projection/metadata-projector.js';
 
 /**
  * Configuration for the DatabaseLoader.
@@ -54,6 +55,9 @@ export interface DatabaseLoaderOptions {
 
   /** Enable history tracking (default: true) */
   trackHistory?: boolean;
+
+  /** Enable metadata projection to type-specific tables (default: true) */
+  enableProjection?: boolean;
 }
 
 /**
@@ -84,6 +88,8 @@ export class DatabaseLoader implements MetadataLoader {
   private trackHistory: boolean;
   private schemaReady = false;
   private historySchemaReady = false;
+  private enableProjection: boolean;
+  private projector?: MetadataProjector;
 
   constructor(options: DatabaseLoaderOptions) {
     if (!options.driver && !options.engine) {
@@ -96,6 +102,17 @@ export class DatabaseLoader implements MetadataLoader {
     this.organizationId = options.organizationId;
     this.environmentId = options.environmentId;
     this.trackHistory = options.trackHistory !== false; // Default to true
+    this.enableProjection = options.enableProjection !== false; // Default to true
+
+    // Initialize projector if projection is enabled
+    if (this.enableProjection) {
+      this.projector = new MetadataProjector({
+        driver: this.driver,
+        engine: this.engine,
+        organizationId: this.organizationId,
+        environmentId: this.environmentId,
+      });
+    }
   }
 
   // ==========================================
@@ -709,6 +726,11 @@ export class DatabaseLoader implements MetadataLoader {
           previousChecksum
         );
 
+        // Project to type-specific table
+        if (this.projector) {
+          await this.projector.project(type, name, data);
+        }
+
         return {
           success: true,
           path: `datasource://${this.tableName}/${type}/${name}`,
@@ -746,6 +768,11 @@ export class DatabaseLoader implements MetadataLoader {
           'create'
         );
 
+        // Project to type-specific table
+        if (this.projector) {
+          await this.projector.project(type, name, data);
+        }
+
         return {
           success: true,
           path: `datasource://${this.tableName}/${type}/${name}`,
@@ -780,6 +807,11 @@ export class DatabaseLoader implements MetadataLoader {
 
     // Delete from the main metadata table using the record's ID
     await this._delete(this.tableName, existing.id as string);
+
+    // Delete projection from type-specific table
+    if (this.projector) {
+      await this.projector.deleteProjection(type, name);
+    }
   }
 }
 

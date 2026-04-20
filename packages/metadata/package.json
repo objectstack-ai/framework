@@ -39,6 +39,7 @@
   ],
   "dependencies": {
     "@objectstack/core": "workspace:*",
+    "@objectstack/objectos": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "chokidar": "^5.0.0",

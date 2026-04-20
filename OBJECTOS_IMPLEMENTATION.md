@@ -106,10 +106,17 @@ packages/objectos/
 
 ## Next Steps
 
-### Phase 1: Integration (Immediate)
-- [ ] Update `packages/metadata` service to support projection
-- [ ] Implement dual-table sync logic
-- [ ] Register system objects in runtime bootstrap
+### Phase 1: Integration (Immediate) ✅ COMPLETED
+- [x] Update `packages/metadata` service to support projection
+- [x] Implement dual-table sync logic
+- [x] Register system objects in runtime bootstrap
+
+**Implementation Details:**
+- Created `MetadataProjector` service in `packages/metadata/src/projection/`
+- Integrated projection into `DatabaseLoader.save()` and `DatabaseLoader.delete()`
+- Added projection functions for each metadata type: object, view, agent, tool, flow
+- Updated `MetadataPlugin` to register all system objects from `@objectstack/objectos`
+- Projection is enabled by default, can be disabled via `enableProjection: false` option
 
 ### Phase 2: Studio Integration (Next)
 - [ ] Update Studio to query type-specific tables

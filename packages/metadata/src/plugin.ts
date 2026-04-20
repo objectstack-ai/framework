@@ -6,6 +6,7 @@ import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
 import type { MetadataPluginConfig } from '@objectstack/spec/kernel';
 import { SysMetadataObject } from './objects/sys-metadata.object.js';
 import { SysMetadataHistoryObject } from './objects/sys-metadata-history.object.js';
+import { SystemObjects } from '@objectstack/objectos';
 
 export interface MetadataPluginOptions {
     rootDir?: string;
@@ -56,7 +57,10 @@ export class MetadataPlugin implements Plugin {
         // Register metadata system objects via the manifest service (if available).
         // MetadataPlugin may init before ObjectQLPlugin, so wrap in try/catch.
         try {
-            ctx.getService<{ register(m: any): void }>('manifest').register({
+            const manifestService = ctx.getService<{ register(m: any): void }>('manifest');
+
+            // Register the metadata envelope tables
+            manifestService.register({
                 id: 'com.objectstack.metadata',
                 name: 'Metadata',
                 version: '1.0.0',
@@ -64,6 +68,22 @@ export class MetadataPlugin implements Plugin {
                 scope: 'platform',
                 namespace: 'sys',
                 objects: [SysMetadataObject, SysMetadataHistoryObject],
+            });
+
+            // Register the queryable system objects from @objectstack/objectos
+            manifestService.register({
+                id: 'com.objectstack.objectos',
+                name: 'ObjectOS System Objects',
+                version: '1.0.0',
+                type: 'plugin',
+                scope: 'platform',
+                namespace: 'sys',
+                objects: Object.values(SystemObjects),
+            });
+
+            ctx.logger.info('Registered system metadata objects', {
+                metadata: ['sys_metadata', 'sys_metadata_history'],
+                objectos: Object.keys(SystemObjects),
             });
         } catch {
             // ObjectQL not loaded yet — objects will be discovered via legacy fallback
