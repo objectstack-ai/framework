@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { randomUUID } from 'node:crypto';
-import type { IDataDriver } from '@objectstack/spec';
+import type { Contracts } from '@objectstack/spec';
+type IDataDriver = Contracts.IDataDriver;
 import type {
   DatabaseCredential,
   DatabaseDriver,
@@ -74,9 +75,11 @@ export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapt
   readonly driver: DatabaseDriver = 'turso';
 
   private readonly client: TursoPlatformClient;
+  private readonly group: string;
 
-  constructor(config: { apiToken: string; organization: string; apiBaseUrl?: string }) {
+  constructor(config: { apiToken: string; organization: string; group?: string; apiBaseUrl?: string }) {
     this.client = new TursoPlatformClient(config);
+    this.group = config.group ?? 'default';
   }
 
   async createDatabase(params: {
@@ -85,7 +88,7 @@ export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapt
     region: string;
     storageLimitMb: number;
   }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
-    await this.client.createDatabase({ name: params.databaseName });
+    await this.client.createDatabase({ name: params.databaseName, group: this.group });
     const { jwt } = await this.client.createDatabaseToken(params.databaseName, {
       authorization: 'full-access',
     });

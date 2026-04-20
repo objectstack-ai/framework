@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",
     "test:e2e": "tsx test/e2e.test.ts",
+    "test:provisioning": "tsx test/provisioning.test.ts",
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {
