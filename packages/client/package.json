@@ -29,7 +29,7 @@
     "@objectstack/plugin-hono-server": "workspace:*",
     "@objectstack/plugin-msw": "workspace:*",
     "@objectstack/runtime": "workspace:*",
-    "msw": "^2.13.2",
+    "msw": "^2.13.4",
     "typescript": "^6.0.2",
     "vitest": "^4.1.4"
   },

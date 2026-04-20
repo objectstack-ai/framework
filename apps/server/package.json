@@ -19,7 +19,7 @@
     "@example/app-todo": "workspace:*",
     "@example/plugin-bi": "workspace:*",
     "@hono/node-server": "^1.19.14",
-    "@libsql/client": "^0.14.0",
+    "@libsql/client": "^0.17.2",
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/driver-turso": "workspace:*",
     "@objectstack/hono": "workspace:*",
@@ -38,7 +38,7 @@
     "@objectstack/service-package": "workspace:*",
     "@objectstack/service-tenant": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "hono": "^4.12.12",
+    "hono": "^4.12.14",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3"
   },
