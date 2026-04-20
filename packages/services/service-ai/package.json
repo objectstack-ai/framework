@@ -21,7 +21,7 @@
     "@ai-sdk/provider": "^3.0.8",
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "ai": "^6.0.158"
+    "ai": "^6.0.168"
   },
   "peerDependencies": {
     "@ai-sdk/anthropic": "^3.0.0",
