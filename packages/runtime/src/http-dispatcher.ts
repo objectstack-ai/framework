@@ -1040,6 +1040,25 @@ export class HttpDispatcher {
             return rows[0];
         };
 
+        const toEnvironmentDto = (row: any): any => {
+            if (!row) return row;
+            return {
+                id: row.id,
+                organizationId: row.organization_id,
+                slug: row.slug,
+                displayName: row.display_name,
+                envType: row.env_type,
+                isDefault: row.is_default ?? false,
+                region: row.region,
+                plan: row.plan,
+                status: row.status,
+                createdBy: row.created_by,
+                metadata: row.metadata,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+            };
+        };
+
         try {
             // ----- /cloud/drivers ------------------------------------------
             if (parts.length === 1 && parts[0] === 'drivers' && m === 'GET') {
@@ -1055,7 +1074,7 @@ export class HttpDispatcher {
                 if (query?.status) where.status = query.status;
                 let rows = await ql.find(ENV, Object.keys(where).length ? ({ where } as any) : undefined);
                 if (rows && (rows as any).value) rows = (rows as any).value;
-                const environments = Array.isArray(rows) ? rows : [];
+                const environments = (Array.isArray(rows) ? rows : []).map(toEnvironmentDto);
                 return { handled: true, response: this.success({ environments, total: environments.length }) };
             }
 
@@ -1156,7 +1175,7 @@ export class HttpDispatcher {
                     updated_at: nowIso,
                 });
 
-                const environment = await findOne(ENV, { id: environmentId });
+                const environment = toEnvironmentDto(await findOne(ENV, { id: environmentId }));
                 const database = await findOne(DB, { id: environmentDatabaseId });
                 const res = this.success({ environment, database });
                 res.status = 201;
@@ -1168,8 +1187,8 @@ export class HttpDispatcher {
                 const id = decodeURIComponent(parts[1]);
 
                 if (m === 'GET') {
-                    const environment = await findOne(ENV, { id });
-                    if (!environment) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                    const envRow = await findOne(ENV, { id });
+                    if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
                     const database = await findOne(DB, { environment_id: id });
                     const credential = database
                         ? await findOne(CRED, { environment_database_id: database.id, status: 'active' })
@@ -1187,7 +1206,7 @@ export class HttpDispatcher {
                         : undefined;
                     return {
                         handled: true,
-                        response: this.success({ environment, database, credential: credMeta, membership }),
+                        response: this.success({ environment: toEnvironmentDto(envRow), database, credential: credMeta, membership }),
                     };
                 }
 
@@ -1200,19 +1219,19 @@ export class HttpDispatcher {
                     if (body?.metadata !== undefined) patch.metadata = JSON.stringify(body.metadata);
                     patch.updated_at = new Date().toISOString();
                     await ql.update(ENV, patch, { where: { id } } as any);
-                    const environment = await findOne(ENV, { id });
-                    if (!environment) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
-                    return { handled: true, response: this.success({ environment }) };
+                    const envRow = await findOne(ENV, { id });
+                    if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                    return { handled: true, response: this.success({ environment: toEnvironmentDto(envRow) }) };
                 }
             }
 
             // ----- /cloud/environments/:id/activate -----
             if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'activate' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
-                const environment = await findOne(ENV, { id });
-                if (!environment) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                const envRow = await findOne(ENV, { id });
+                if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
                 // TODO: persist active_environment_id on the session once session service is wired.
-                return { handled: true, response: this.success({ environment, sessionUpdated: false }) };
+                return { handled: true, response: this.success({ environment: toEnvironmentDto(envRow), sessionUpdated: false }) };
             }
 
             // ----- /cloud/environments/:id/credentials/rotate -----

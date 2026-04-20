@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useClient } from '@objectstack/client-react';
 import type { Environment, EnvironmentDatabase, EnvironmentMember } from '@objectstack/spec/cloud';
+import { useActiveOrganizationId } from '@/hooks/useSession';
 
 export interface EnvironmentDetail {
   environment: Environment;
@@ -49,16 +50,21 @@ export function recallActiveEnvironment(): string | null {
  */
 export function useEnvironments() {
   const client = useClient() as any; // ObjectStackClient — typed as any to avoid export shape coupling.
+  const activeOrgId = useActiveOrganizationId();
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const load = useCallback(async () => {
     if (!client?.environments) return;
+    if (!activeOrgId) {
+      setEnvironments([]);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const result = await client.environments.list();
+      const result = await client.environments.list({ organizationId: activeOrgId });
       setEnvironments((result?.environments as Environment[]) ?? []);
     } catch (err) {
       setError(err as Error);
@@ -66,7 +72,7 @@ export function useEnvironments() {
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, [client, activeOrgId]);
 
   useEffect(() => {
     let alive = true;
