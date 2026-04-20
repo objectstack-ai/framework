@@ -22,7 +22,6 @@ export const SysObject = ObjectSchema.create({
       label: 'Object Name',
       required: true,
       maxLength: 255,
-      pattern: '^[a-z_][a-z0-9_]*$',
       description: 'Machine name (snake_case)',
     }),
 
@@ -50,7 +49,6 @@ export const SysObject = ObjectSchema.create({
     namespace: Field.text({
       label: 'Namespace',
       maxLength: 100,
-      pattern: '^[a-z][a-z0-9]*$',
       description: 'Logical domain namespace',
     }),
 

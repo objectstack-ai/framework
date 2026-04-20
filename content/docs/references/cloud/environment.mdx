@@ -1,0 +1,261 @@
+---
+title: Environment
+description: Environment protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Environment-Per-Database Isolation Protocol
+
+Each **environment** (dev/test/prod/sandbox) owns a physically isolated
+
+database. The Control Plane stores all environment metadata; environment
+
+DBs contain only business data rows.
+
+Split of concerns:
+
+- **Control Plane**: `sys_environment` (includes physical DB addressing),
+
+`sys_package_installation` (with env_id), `sys_metadata` (with env_id),
+
+`sys_database_credential`, `sys_environment_member`.
+
+- **Data Plane**: each environment DB contains only business objects
+
+(account, task, …). No system tables, no `environment_id` columns.
+
+See `docs/adr/0002-environment-database-isolation.md` for the full
+
+rationale.
+
+<Callout type="info">
+**Source:** `packages/spec/src/cloud/environment.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { DatabaseCredential, DatabaseCredentialStatus, DatabaseDriver, Environment, EnvironmentDatabase, EnvironmentMember, EnvironmentRole, EnvironmentStatus, EnvironmentType, ProvisionEnvironmentRequest, ProvisionEnvironmentResponse, ProvisionOrganizationRequest, ProvisionOrganizationResponse } from '@objectstack/spec/cloud';
+import type { DatabaseCredential, DatabaseCredentialStatus, DatabaseDriver, Environment, EnvironmentDatabase, EnvironmentMember, EnvironmentRole, EnvironmentStatus, EnvironmentType, ProvisionEnvironmentRequest, ProvisionEnvironmentResponse, ProvisionOrganizationRequest, ProvisionOrganizationResponse } from '@objectstack/spec/cloud';
+
+// Validate data
+const result = DatabaseCredential.parse(data);
+```
+
+---
+
+## DatabaseCredential
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the credential |
+| **environmentId** | `string` | ✅ | Environment this credential authorizes |
+| **secretCiphertext** | `string` | ✅ | Encrypted auth token or secret (ciphertext) |
+| **encryptionKeyId** | `string` | ✅ | Encryption key ID used to encrypt the secret |
+| **authorization** | `Enum<'full_access' \| 'read_only'>` | ✅ | Authorization scope for this credential |
+| **status** | `Enum<'active' \| 'rotating' \| 'revoked'>` | ✅ | Credential lifecycle status |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **expiresAt** | `string` | optional | Optional expiry timestamp |
+| **revokedAt** | `string` | optional | Revocation timestamp (if revoked) |
+
+
+---
+
+## DatabaseCredentialStatus
+
+Credential lifecycle status
+
+### Allowed Values
+
+* `active`
+* `rotating`
+* `revoked`
+
+
+---
+
+
+---
+
+## Environment
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the environment (stable, never reused) |
+| **organizationId** | `string` | ✅ | Organization that owns this environment |
+| **slug** | `string` | ✅ | Slug unique per organization (snake_case/kebab-case allowed) |
+| **displayName** | `string` | ✅ | Display name shown in Studio and APIs |
+| **envType** | `Enum<'production' \| 'sandbox' \| 'development' \| 'test' \| 'staging' \| 'preview' \| 'trial'>` | ✅ | Environment classification |
+| **isDefault** | `boolean` | ✅ | Whether this is the default environment for the organization |
+| **region** | `string` | optional | Region where the physical database is deployed (e.g. us-east-1) |
+| **plan** | `Enum<'free' \| 'starter' \| 'pro' \| 'enterprise' \| 'custom'>` | ✅ | Plan tier for this environment |
+| **status** | `Enum<'provisioning' \| 'active' \| 'suspended' \| 'archived' \| 'failed' \| 'migrating'>` | ✅ | Environment lifecycle status |
+| **createdBy** | `string` | ✅ | User ID that created the environment |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **updatedAt** | `string` | ✅ | Last update timestamp (ISO-8601) |
+| **databaseUrl** | `string` | optional | Full connection URL for the environment database |
+| **databaseDriver** | `string` | optional | Data-plane driver key (turso, libsql, sqlite, memory, postgres) |
+| **storageLimitMb** | `integer` | optional | Storage quota in megabytes |
+| **provisionedAt** | `string` | optional | Provisioning timestamp (ISO-8601) |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+
+
+---
+
+## EnvironmentDatabase
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the environment-database mapping |
+| **environmentId** | `string` | ✅ | Environment this database backs (UNIQUE) |
+| **databaseName** | `string` | ✅ | Physical database name (immutable) |
+| **databaseUrl** | `string` | ✅ | Full connection URL |
+| **driver** | `string` | ✅ | Data-plane driver key (e.g. `turso`, `libsql`, `sqlite`, `postgres`) |
+| **region** | `string` | ✅ | Region of the physical database |
+| **storageLimitMb** | `integer` | ✅ | Storage quota in megabytes |
+| **provisionedAt** | `string` | ✅ | Provisioning timestamp (ISO-8601) |
+| **lastAccessedAt** | `string` | optional | Last successful access timestamp |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+
+
+---
+
+## EnvironmentMember
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the membership |
+| **environmentId** | `string` | ✅ | Environment this membership grants access to |
+| **userId** | `string` | ✅ | User ID |
+| **role** | `Enum<'owner' \| 'admin' \| 'maker' \| 'reader' \| 'guest'>` | ✅ | Per-environment role |
+| **invitedBy** | `string` | ✅ | User ID that granted this membership |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **updatedAt** | `string` | ✅ | Last update timestamp (ISO-8601) |
+
+
+---
+
+## EnvironmentRole
+
+Per-environment role
+
+### Allowed Values
+
+* `owner`
+* `admin`
+* `maker`
+* `reader`
+* `guest`
+
+
+---
+
+## EnvironmentStatus
+
+Environment lifecycle status
+
+### Allowed Values
+
+* `provisioning`
+* `active`
+* `suspended`
+* `archived`
+* `failed`
+* `migrating`
+
+
+---
+
+## EnvironmentType
+
+Environment type (prod/sandbox/dev/test/…)
+
+### Allowed Values
+
+* `production`
+* `sandbox`
+* `development`
+* `test`
+* `staging`
+* `preview`
+* `trial`
+
+
+---
+
+## ProvisionEnvironmentRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **organizationId** | `string` | ✅ | Organization that will own the new environment |
+| **slug** | `string` | ✅ | Slug unique per organization |
+| **displayName** | `string` | optional | Display name (defaults to slug) |
+| **envType** | `Enum<'production' \| 'sandbox' \| 'development' \| 'test' \| 'staging' \| 'preview' \| 'trial'>` | ✅ | Environment type |
+| **region** | `string` | optional | Region preference for the physical DB |
+| **driver** | `string` | optional | Driver key (defaults to provisioning service config) |
+| **plan** | `Enum<'free' \| 'starter' \| 'pro' \| 'enterprise' \| 'custom'>` | optional | Plan tier |
+| **storageLimitMb** | `integer` | optional | Storage quota in megabytes |
+| **isDefault** | `boolean` | optional | Mark as the organization default environment |
+| **createdBy** | `string` | ✅ | User ID that initiated the provisioning |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+
+
+---
+
+## ProvisionEnvironmentResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **environment** | `Object` | ✅ | Provisioned environment (includes database addressing) |
+| **credential** | `Object` | ✅ | Freshly-minted credential for the environment DB |
+| **durationMs** | `number` | ✅ | Total provisioning duration in milliseconds |
+| **warnings** | `string[]` | optional | Non-fatal warnings emitted during provisioning |
+
+
+---
+
+## ProvisionOrganizationRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **organizationId** | `string` | ✅ | Organization being bootstrapped |
+| **defaultEnvType** | `Enum<'production' \| 'sandbox' \| 'development' \| 'test' \| 'staging' \| 'preview' \| 'trial'>` | ✅ | Env type for the default environment |
+| **defaultEnvSlug** | `string` | ✅ | Slug for the default environment |
+| **region** | `string` | optional | Region preference |
+| **driver** | `string` | optional | Driver key |
+| **plan** | `Enum<'free' \| 'starter' \| 'pro' \| 'enterprise' \| 'custom'>` | optional | Plan tier |
+| **storageLimitMb** | `integer` | optional | Storage quota in megabytes |
+| **createdBy** | `string` | ✅ | User ID that initiated provisioning |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+
+
+---
+
+## ProvisionOrganizationResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **defaultEnvironment** | `Object` | ✅ | Default environment that was created |
+| **durationMs** | `number` | ✅ | Total bootstrap duration in milliseconds |
+| **warnings** | `string[]` | optional | Non-fatal warnings |
+
+
+---
+

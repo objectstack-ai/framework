@@ -1,0 +1,167 @@
+---
+title: Environment Package
+description: Environment Package protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Environment Package Installation Protocol
+
+Models `sys_package_installation` — the pairing between an environment and a
+
+specific, immutable package version snapshot (`sys_package_version`).
+
+Key invariants (per ADR-0003):
+
+- One active version per package per environment at any time.
+
+- **Upgrade** = atomic `UPDATE package_version_id` to a newer version UUID.
+
+- **Rollback** = atomic `UPDATE package_version_id` to an older version UUID.
+
+- The `upgradeHistory` field is removed; history is tracked via the
+
+sequence of `package_version_id` changes on this row (and an optional
+
+`sys_package_installation_history` audit table).
+
+- Only `status = 'published'` versions may be installed in production
+
+environments (draft/pre-release allowed in dev/sandbox with `allowDraft`).
+
+Stored in the **Control Plane DB** (not in environment DBs).
+
+See `docs/adr/0003-package-as-first-class-citizen.md` for the full rationale.
+
+<Callout type="info">
+**Source:** `packages/spec/src/cloud/environment-package.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { EnvPackageStatus, EnvPackageStatusEnum, EnvironmentPackageInstallation, InstallPackageToEnvRequest, ListEnvPackagesResponse, RollbackEnvPackageRequest, UpgradeEnvPackageRequest } from '@objectstack/spec/cloud';
+import type { EnvPackageStatus, EnvPackageStatusEnum, EnvironmentPackageInstallation, InstallPackageToEnvRequest, ListEnvPackagesResponse, RollbackEnvPackageRequest, UpgradeEnvPackageRequest } from '@objectstack/spec/cloud';
+
+// Validate data
+const result = EnvPackageStatus.parse(data);
+```
+
+---
+
+## EnvPackageStatus
+
+Package installation status within an environment
+
+### Allowed Values
+
+* `installed`
+* `installing`
+* `upgrading`
+* `disabled`
+* `error`
+
+
+---
+
+## EnvPackageStatusEnum
+
+Package installation status within an environment
+
+### Allowed Values
+
+* `installed`
+* `installing`
+* `upgrading`
+* `disabled`
+* `error`
+
+
+---
+
+## EnvironmentPackageInstallation
+
+Package installation record in an environment (sys_package_installation)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Unique installation record ID |
+| **environmentId** | `string` | ✅ | Environment this installation belongs to |
+| **packageVersionId** | `string` | ✅ | UUID of the installed sys_package_version row |
+| **packageId** | `string` | ✅ | UUID of the parent sys_package row (denormalized for constraint enforcement) |
+| **status** | `Enum<'installed' \| 'installing' \| 'upgrading' \| 'disabled' \| 'error'>` | ✅ | Package installation status within an environment |
+| **enabled** | `boolean` | ✅ | Whether the package metadata is loaded |
+| **settings** | `Record<string, any>` | optional | Per-installation configuration settings |
+| **installedAt** | `string` | ✅ | Installation timestamp (ISO-8601) |
+| **installedBy** | `string` | optional | User ID of the installer |
+| **updatedAt** | `string` | optional | Last update timestamp (ISO-8601) |
+| **errorMessage** | `string` | optional | Error message when status is error |
+
+
+---
+
+## InstallPackageToEnvRequest
+
+Install a package version into a specific environment
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageVersionId** | `string` | optional | Exact package version UUID to install (preferred) |
+| **packageManifestId** | `string` | optional | Package manifest ID (reverse-domain, e.g. com.acme.crm) — resolved to version UUID |
+| **version** | `string` | optional | Version string (defaults to latest published) |
+| **allowDraft** | `boolean` | ✅ | Allow installing a draft version (dev/sandbox envs only) |
+| **settings** | `Record<string, any>` | optional | Installation-time configuration settings |
+| **enableOnInstall** | `boolean` | ✅ | Activate the package immediately after install |
+| **installedBy** | `string` | optional | User ID of the installer |
+
+
+---
+
+## ListEnvPackagesResponse
+
+List of packages installed in an environment
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packages** | `Object[]` | ✅ | Packages installed in this environment |
+| **total** | `number` | ✅ | Total count |
+
+
+---
+
+## RollbackEnvPackageRequest
+
+Roll back a package installation to a specific older version
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **targetPackageVersionId** | `string` | ✅ | Package version UUID to roll back to |
+| **rolledBackBy** | `string` | optional | User ID performing the rollback |
+
+
+---
+
+## UpgradeEnvPackageRequest
+
+Upgrade a package installation to a newer version
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **targetPackageVersionId** | `string` | optional | Target package version UUID (preferred) |
+| **targetVersion** | `string` | optional | Target version string (defaults to latest published) |
+| **allowDraft** | `boolean` | ✅ | Allow upgrading to a draft version |
+| **upgradedBy** | `string` | optional | User ID performing the upgrade |
+
+
+---
+

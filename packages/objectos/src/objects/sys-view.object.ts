@@ -21,7 +21,6 @@ export const SysView = ObjectSchema.create({
       label: 'View Name',
       required: true,
       maxLength: 255,
-      pattern: '^[a-z_][a-z0-9_]*$',
     }),
 
     label: Field.text({

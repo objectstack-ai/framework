@@ -21,7 +21,6 @@ export const SysFlow = ObjectSchema.create({
       label: 'Flow Name',
       required: true,
       maxLength: 255,
-      pattern: '^[a-z_][a-z0-9_]*$',
     }),
 
     label: Field.text({

@@ -64,6 +64,7 @@ const result = Manifest.parse(data);
 | **defaultDatasource** | `string` | ✅ | Default datasource for all objects in this package |
 | **version** | `string` | ✅ | Package version (semantic versioning) |
 | **type** | `Enum<'plugin' \| 'ui' \| 'driver' \| 'server' \| 'app' \| 'theme' \| 'agent' \| 'objectql' \| 'module' \| 'gateway' \| 'adapter'>` | ✅ | Type of package |
+| **scope** | `Enum<'platform' \| 'environment'>` | ✅ | Deployment scope: platform (runtime-global) or environment (per-env install) |
 | **name** | `string` | ✅ | Human-readable package name |
 | **description** | `string` | optional | Package description |
 | **permissions** | `string[]` | optional | Array of required permission strings |

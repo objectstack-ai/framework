@@ -40,20 +40,20 @@ import {
  */
 export const SystemObjects: Record<string, ServiceObject> = {
   // Metadata envelope (source of truth)
-  sys_metadata: SysMetadata,
+  sys_metadata: SysMetadata as unknown as ServiceObject,
 
   // Data Protocol
-  sys_object: SysObject,
+  sys_object: SysObject as unknown as ServiceObject,
 
   // UI Protocol
-  sys_view: SysView,
+  sys_view: SysView as unknown as ServiceObject,
 
   // Automation Protocol
-  sys_flow: SysFlow,
+  sys_flow: SysFlow as unknown as ServiceObject,
 
   // AI Protocol
-  sys_agent: SysAgent,
-  sys_tool: SysTool,
+  sys_agent: SysAgent as unknown as ServiceObject,
+  sys_tool: SysTool as unknown as ServiceObject,
 };
 
 /**

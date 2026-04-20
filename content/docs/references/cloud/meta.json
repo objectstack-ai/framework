@@ -3,8 +3,13 @@
   "pages": [
     "app-store",
     "developer-portal",
+    "environment",
+    "environment-package",
     "marketplace",
     "marketplace-admin",
+    "package",
+    "package-version",
+    "plugin-security",
     "provisioning",
     "tenant"
   ]

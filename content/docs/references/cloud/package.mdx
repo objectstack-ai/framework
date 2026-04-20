@@ -1,0 +1,128 @@
+---
+title: Package
+description: Package protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Package Identity Protocol
+
+A **package** (also called a Solution in Power Platform, an Unlocked Package
+
+in Salesforce, or an Application in ServiceNow) is the first-class unit of
+
+distribution in ObjectStack. It groups related metadata — objects, views,
+
+flows, translations, agents — into a named, versioned artifact.
+
+Architecture:
+
+- `sys_package`         — identity (one row per logical package)
+
+- `sys_package_version` — immutable release snapshots (see package-version.zod.ts)
+
+- `sys_package_installation` — env ↔ version pairing (see environment-package.zod.ts)
+
+See `docs/adr/0003-package-as-first-class-citizen.md` for the full rationale.
+
+<Callout type="info">
+**Source:** `packages/spec/src/cloud/package.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { CreatePackageRequest, Package, PackageCategory, PackageVisibility, UpdatePackageRequest } from '@objectstack/spec/cloud';
+import type { CreatePackageRequest, Package, PackageCategory, PackageVisibility, UpdatePackageRequest } from '@objectstack/spec/cloud';
+
+// Validate data
+const result = CreatePackageRequest.parse(data);
+```
+
+---
+
+## CreatePackageRequest
+
+Register a new package in the Control Plane
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifestId** | `string` | ✅ | Globally unique reverse-domain package identifier (e.g. com.acme.crm) |
+| **ownerOrgId** | `string` | ✅ | Owner organization ID |
+| **displayName** | `string` | ✅ | Display name shown in Studio and Marketplace |
+| **description** | `string` | optional | Short package description |
+| **visibility** | `Enum<'private' \| 'org' \| 'marketplace'>` | optional | Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry |
+| **category** | `string` | optional | Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools") |
+| **tags** | `string[]` | optional |  |
+| **iconUrl** | `string` | optional |  |
+| **homepageUrl** | `string` | optional |  |
+| **license** | `string` | optional |  |
+| **createdBy** | `string` | ✅ | User ID creating the package |
+
+
+---
+
+## Package
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the package (stable, never reused) |
+| **manifestId** | `string` | ✅ | Globally unique reverse-domain package identifier (e.g. com.acme.crm) |
+| **ownerOrgId** | `string` | ✅ | Organization ID of the package owner/publisher |
+| **displayName** | `string` | ✅ | Display name shown in Studio and Marketplace |
+| **description** | `string` | optional | Short package description |
+| **readme** | `string` | optional | Long-form package documentation (markdown) |
+| **visibility** | `Enum<'private' \| 'org' \| 'marketplace'>` | ✅ | Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry |
+| **category** | `string` | optional | Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools") |
+| **tags** | `string[]` | optional | Search and filter tags |
+| **iconUrl** | `string` | optional | Package icon URL |
+| **homepageUrl** | `string` | optional | Package homepage URL |
+| **license** | `string` | optional | SPDX license identifier (e.g. MIT, Apache-2.0) |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **updatedAt** | `string` | ✅ | Last update timestamp (ISO-8601) |
+| **createdBy** | `string` | ✅ | User ID that created the package |
+
+
+---
+
+
+---
+
+## PackageVisibility
+
+Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry
+
+### Allowed Values
+
+* `private`
+* `org`
+* `marketplace`
+
+
+---
+
+## UpdatePackageRequest
+
+Update mutable package metadata
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **displayName** | `string` | optional | Display name shown in Studio and Marketplace |
+| **description** | `string` | optional | Short package description |
+| **readme** | `string` | optional | Long-form package documentation (markdown) |
+| **visibility** | `Enum<'private' \| 'org' \| 'marketplace'>` | optional | Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry |
+| **category** | `string` | optional | Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools") |
+| **tags** | `string[]` | optional |  |
+| **iconUrl** | `string` | optional |  |
+| **homepageUrl** | `string` | optional |  |
+| **license** | `string` | optional |  |
+
+
+---
+

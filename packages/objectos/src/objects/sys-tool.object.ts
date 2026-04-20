@@ -21,7 +21,6 @@ export const SysTool = ObjectSchema.create({
       label: 'Tool Name',
       required: true,
       maxLength: 255,
-      pattern: '^[a-z_][a-z0-9_]*$',
     }),
 
     label: Field.text({

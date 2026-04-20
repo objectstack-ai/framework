@@ -1,0 +1,38 @@
+---
+title: Plugin Security
+description: Plugin Security protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+<Callout type="info">
+**Source:** `packages/spec/src/cloud/plugin-security.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { PackageDependency } from '@objectstack/spec/cloud';
+import type { PackageDependency } from '@objectstack/spec/cloud';
+
+// Validate data
+const result = PackageDependency.parse(data);
+```
+
+---
+
+## PackageDependency
+
+Package dependency declaration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **packageId** | `string` | ✅ | Manifest ID of the dependency |
+| **versionRange** | `string` | ✅ | Semver version range (e.g. ^1.0.0) |
+| **optional** | `boolean` | ✅ | Whether this dependency is optional |
+
+
+---
+
