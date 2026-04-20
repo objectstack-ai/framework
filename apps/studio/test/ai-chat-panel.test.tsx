@@ -97,10 +97,10 @@ describe('use-ai-chat-panel', () => {
     });
 
     it('does not throw when localStorage is unavailable', () => {
-      const originalSetItem = Storage.prototype.setItem;
-      Storage.prototype.setItem = () => { throw new Error('QuotaExceeded'); };
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = () => { throw new Error('QuotaExceeded'); };
       expect(() => saveMessages([makeMsg({ id: '1', role: 'user', content: 'A' })])).not.toThrow();
-      Storage.prototype.setItem = originalSetItem;
+      localStorage.setItem = originalSetItem;
     });
   });
 });
@@ -260,10 +260,10 @@ describe('Agent Selector', () => {
     });
 
     it('should not throw when localStorage is unavailable', () => {
-      const originalSetItem = Storage.prototype.setItem;
-      Storage.prototype.setItem = () => { throw new Error('QuotaExceeded'); };
+      const originalSetItem = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = () => { throw new Error('QuotaExceeded'); };
       expect(() => saveSelectedAgent('metadata_assistant')).not.toThrow();
-      Storage.prototype.setItem = originalSetItem;
+      localStorage.setItem = originalSetItem;
     });
   });
 

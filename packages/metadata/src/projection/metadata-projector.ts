@@ -38,8 +38,8 @@ export interface MetadataProjectorOptions {
 export class MetadataProjector {
   private driver?: IDataDriver;
   private engine?: IDataEngine;
-  private organizationId?: string;
-  private environmentId?: string;
+  /** Reserved for future multi-tenant projection scoping */
+  readonly scope: { organizationId?: string; environmentId?: string };
 
   // Map of metadata types to their target table names
   private readonly typeTableMap: Record<string, string> = {
@@ -57,8 +57,10 @@ export class MetadataProjector {
     }
     this.driver = options.driver;
     this.engine = options.engine;
-    this.organizationId = options.organizationId;
-    this.environmentId = options.environmentId;
+    this.scope = {
+      organizationId: options.organizationId,
+      environmentId: options.environmentId,
+    };
   }
 
   /**
