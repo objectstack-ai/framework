@@ -157,7 +157,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return <div className="flex min-h-screen w-full">{children}</div>;
 }
 
 function AuthedAiChatPanel() {
