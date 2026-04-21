@@ -72,6 +72,7 @@ database table and exposes automatic CRUD APIs.
 | `datasource` | `'default'` | Target datasource ID for virtualized data |
 | `displayNameField` | `'name'` | Field used as record display name |
 | `enable` | — | Capability flags (trackHistory, searchable, apiEnabled, etc.) |
+| `fieldGroups` | — | Ordered list of logical field groups for forms/detail pages (see [Field Groups](#field-groups-mvp)) |
 
 ### Object Capabilities (`enable`)
 
@@ -89,6 +90,48 @@ Toggle system behaviours per object:
 | `trash` | `true` | Soft-delete with restore |
 | `mru` | `true` | Most Recently Used tracking |
 | `clone` | `true` | Record deep cloning |
+
+---
+
+## Field Groups (MVP)
+
+Organize fields into logical groups (e.g., "Contact Information", "Billing",
+"System") for forms, detail pages, and editors.
+
+- Declare groups on `ObjectSchema.fieldGroups` — **array order is the display order**.
+- Assign each field to a group via `Field.group`, which references an
+  `ObjectFieldGroup.key`. In-group display order equals the traversal order
+  of `fields`.
+- Group keys must be `snake_case`; group labels are human-readable.
+
+```typescript
+import { ObjectSchema } from '@objectstack/spec';
+
+export default ObjectSchema.create({
+  name: 'account',
+  label: 'Account',
+
+  fieldGroups: [
+    { key: 'contact_info', label: 'Contact Information', icon: 'user' },
+    { key: 'billing',      label: 'Billing', defaultExpanded: false },
+    { key: 'system',       label: 'System',  visibleOn: '$user.isAdmin' },
+  ],
+
+  fields: {
+    name:       { type: 'text',  required: true, group: 'contact_info' },
+    email:      { type: 'email',                  group: 'contact_info' },
+    phone:      { type: 'phone',                  group: 'contact_info' },
+    vat_id:     { type: 'text',                   group: 'billing' },
+    billing_address: { type: 'address',           group: 'billing' },
+    created_at: { type: 'datetime', readonly: true, group: 'system' },
+    created_by: { type: 'lookup', reference: 'user', readonly: true, group: 'system' },
+  },
+});
+```
+
+**Supported migrations at this layer:** add / rename / delete / reorder groups
+(edit the `fieldGroups` array), assign a field to a group (edit `Field.group`).
+Explicit per-field in-group ordering is deferred to a future iteration.
 
 ---
 
@@ -299,7 +342,7 @@ When extending an object you do not own:
 - [rules/indexing.md](./rules/indexing.md) — Index types, composite/partial strategies
 - [rules/hooks.md](./rules/hooks.md) — Data lifecycle hooks quick reference (→ [objectstack-hooks](../objectstack-hooks/references/data-hooks.md))
 - [references/data/field.zod.ts](./references/data/field.zod.ts) — FieldType enum, FieldSchema
-- [references/data/object.zod.ts](./references/data/object.zod.ts) — ObjectSchema, capabilities
+- [references/data/object.zod.ts](./references/data/object.zod.ts) — ObjectSchema, capabilities, `ObjectFieldGroupSchema`
 - [references/data/validation.zod.ts](./references/data/validation.zod.ts) — Validation rule types
 - [references/data/hook.zod.ts](./references/data/hook.zod.ts) — Hook schema, HookContext
 - [Schema index](./references/_index.md) — All bundled schemas with dependency tree

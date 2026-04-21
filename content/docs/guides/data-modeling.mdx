@@ -14,8 +14,9 @@ Complete guide to designing robust data models in ObjectStack following enterpri
 3. [Relationships & Lookups](#relationships--lookups)
 4. [Validation Rules](#validation-rules)
 5. [Formula Fields](#formula-fields)
-6. [Database Indexing](#database-indexing)
-7. [Best Practices](#best-practices)
+6. [Field Groups](#field-groups)
+7. [Database Indexing](#database-indexing)
+8. [Best Practices](#best-practices)
 
 ---
 
@@ -479,6 +480,65 @@ Field.formula({
 | `TODAY()` | Current date | `TODAY()` |
 | `NOW()` | Current datetime | `NOW()` |
 | `DAYS_DIFF(date1, date2)` | Days between dates | `DAYS_DIFF(end_date, start_date)` |
+
+---
+
+## Field Groups
+
+Organize related fields into logical groups for forms, detail pages, and
+editors. The group protocol is intentionally minimal (MVP):
+
+- `ObjectSchema.fieldGroups` declares the groups; **array order is the
+  display order** (no separate `order` property).
+- `Field.group` assigns a field to a group by referencing an
+  `ObjectFieldGroup.key`. In-group display order equals the traversal
+  order of `fields`.
+- Fields whose `group` is unset (or references an undeclared key) render
+  in a default bucket after the declared groups.
+
+```typescript
+import { ObjectSchema } from '@objectstack/spec/data';
+
+export const Account = ObjectSchema.create({
+  name: 'account',
+  label: 'Account',
+
+  fieldGroups: [
+    { key: 'contact_info', label: 'Contact Information', icon: 'user' },
+    { key: 'billing',      label: 'Billing', defaultExpanded: false },
+    { key: 'system',       label: 'System',  visibleOn: '$user.isAdmin' },
+  ],
+
+  fields: {
+    name:            { type: 'text',  required: true, group: 'contact_info' },
+    email:           { type: 'email',                  group: 'contact_info' },
+    phone:           { type: 'phone',                  group: 'contact_info' },
+    vat_id:          { type: 'text',                   group: 'billing' },
+    billing_address: { type: 'address',                group: 'billing' },
+    created_at:      { type: 'datetime', readonly: true, group: 'system' },
+    created_by:      { type: 'lookup', reference: 'user', readonly: true, group: 'system' },
+  },
+});
+```
+
+### `ObjectFieldGroup` Properties
+
+| Property | Type | Description |
+|:---------|:-----|:------------|
+| `key` | `string` (snake_case) | Group machine key; referenced by `Field.group` |
+| `label` | `string` | Human-readable group header |
+| `icon` | `string?` | Lucide/Material icon name for the group header |
+| `description` | `string?` | Optional description under the header |
+| `defaultExpanded` | `boolean` (default `true`) | Whether the group is expanded initially |
+| `visibleOn` | `string?` | Expression controlling group-level visibility |
+
+### Supported Migrations (MVP)
+
+✅ Add / rename / delete / reorder groups — edit the `fieldGroups` array.
+✅ Assign an existing field to a group — set `Field.group`.
+
+⏳ Deferred (future iterations): explicit per-field in-group ordering, nested
+groups, permission-scoped group visibility beyond `visibleOn`.
 
 ---
 

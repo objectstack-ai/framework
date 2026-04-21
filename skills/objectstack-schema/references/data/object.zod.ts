@@ -212,6 +212,68 @@ export const CDCConfigSchema = z.object({
 });
 
 /**
+ * Object Field Group Schema — MVP (data-layer protocol)
+ * 
+ * Declares the set of logical field groups for an object. A group bundles
+ * related fields together for presentation in forms, detail pages, and
+ * editors (e.g., "Contact Info", "Billing", "System").
+ * 
+ * Design rules (MVP):
+ * - Group **order** is the declaration order of this array — no `order` property.
+ * - Field → group mapping is derived automatically from `Field.group`
+ *   matching `ObjectFieldGroup.key`; the **in-group display order** equals
+ *   the traversal order of `ObjectSchema.fields`.
+ * - Fields whose `group` is unset (or references an undeclared key) are
+ *   considered ungrouped and must be rendered by consumers in a default
+ *   bucket after the declared groups, preserving their field declaration order.
+ * - Extension packages and runtime code use `Field.group` to assign fields
+ *   to an existing group — no per-field order property is introduced at this
+ *   layer.
+ * 
+ * Migration operations supported by this MVP:
+ *   - add / rename / delete / reorder groups (via the array)
+ *   - assign an existing field to a group (via `Field.group`)
+ * 
+ * Deferred (not part of MVP):
+ *   - explicit per-field in-group ordering
+ *   - nested groups / sub-groups
+ *   - permission-scoped group visibility beyond `visibleOn`
+ * 
+ * @example
+ * ```ts
+ * fieldGroups: [
+ *   { key: 'contact_info', label: 'Contact Information', icon: 'user' },
+ *   { key: 'billing',      label: 'Billing',             defaultExpanded: false },
+ *   { key: 'system',       label: 'System',              visibleOn: '$user.isAdmin' },
+ * ]
+ * ```
+ */
+export const ObjectFieldGroupSchema = z.object({
+  /** Group key — referenced by `Field.group` to assign a field to this group. Must be snake_case. */
+  key: z.string().regex(/^[a-z_][a-z0-9_]*$/, {
+    message: 'Field group key must be lowercase snake_case (e.g., "contact_info", "billing", "system")',
+  }).describe('Group machine key (snake_case). Referenced by Field.group.'),
+
+  /** Human-readable label displayed as the group header. */
+  label: z.string().describe('Group display label'),
+
+  /** Optional Lucide/Material icon name for the group header. */
+  icon: z.string().optional().describe('Icon name (Lucide/Material) for the group header'),
+
+  /** Optional description / help text shown under the group header. */
+  description: z.string().optional().describe('Optional description shown under the group header'),
+
+  /** Whether the group is expanded by default. Defaults to `true`. */
+  defaultExpanded: z.boolean().optional().default(true).describe('Whether the group is expanded by default'),
+
+  /** Optional visibility expression — when false, the entire group is hidden (e.g., "$user.isAdmin", "status == \'closed\'"). */
+  visibleOn: z.string().optional().describe('Visibility condition expression; when false the group is hidden'),
+});
+
+export type ObjectFieldGroup = z.infer<typeof ObjectFieldGroupSchema>;
+export type ObjectFieldGroupInput = z.input<typeof ObjectFieldGroupSchema>;
+
+/**
  * Base Object Schema Definition
  * 
  * The Blueprint of a Business Object.
@@ -282,6 +344,23 @@ const ObjectSchemaBase = z.object({
     message: 'Field names must be lowercase snake_case (e.g., "first_name", "company", "annual_revenue")',
   }), FieldSchema).describe('Field definitions map. Keys must be snake_case identifiers.'),
   indexes: z.array(IndexSchema).optional().describe('Database performance indexes'),
+
+  /**
+   * Field Groups (MVP)
+   * 
+   * Declares logical groups for presenting fields in forms and detail
+   * pages. The **array order is the group display order**. Each field's
+   * `Field.group` references an entry's `key` to assign it to a group;
+   * within a group, fields are displayed in their `ObjectSchema.fields`
+   * declaration order.
+   * 
+   * See {@link ObjectFieldGroupSchema} for the full MVP contract and
+   * deferred features.
+   */
+  fieldGroups: z.array(ObjectFieldGroupSchema).refine(
+    (groups) => new Set(groups.map(g => g.key)).size === groups.length,
+    { message: 'fieldGroups[].key must be unique within an object' },
+  ).optional().describe('Ordered list of field groups (array order = display order). See ObjectFieldGroupSchema.'),
   
   /**
    * Advanced Data Management
