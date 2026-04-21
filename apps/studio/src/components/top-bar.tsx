@@ -5,7 +5,7 @@
  *
  * Global chrome component in Supabase style.
  * Renders at the top of authenticated Studio layouts with:
- * - Left segment: OrganizationSwitcher + EnvironmentSwitcher + PackageSwitcher
+ * - Left segment: OrganizationSwitcher + ProjectSwitcher + PackageSwitcher
  * - Center segment: SidebarTrigger + dynamic breadcrumbs (inferred from URL)
  * - Right segment: Global search placeholder, mode badge, ThemeToggle, UserMenu
  */
@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Cpu, Search } from 'lucide-react';
 import { config } from '@/lib/config';
-import { EnvironmentSwitcher } from '@/components/environment-switcher';
+import { ProjectSwitcher } from '@/components/project-switcher';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { UserMenu } from '@/components/user-menu';
 import { PackageSwitcher } from '@/components/package-switcher';
@@ -78,7 +78,7 @@ export function TopBar({
   const location = useLocation();
   const params = useParams({ strict: false }) as {
     package?: string;
-    environmentId?: string;
+    projectId?: string;
     name?: string;
     type?: string;
     orgId?: string;
@@ -90,10 +90,10 @@ export function TopBar({
 
     if (pathname === '/') return 'home';
     if (pathname === '/api-console' || pathname.startsWith('/api-console/')) return 'api-console';
-    if (pathname === '/environments') return 'environments';
+    if (pathname === '/projects') return 'projects';
     if (pathname === '/orgs' || pathname === '/orgs/new' || params.orgId) return 'orgs';
-    if (params.environmentId && pathname.includes('/packages')) return 'packages';
-    if (params.environmentId && !params.package) return 'environment-overview';
+    if (params.projectId && pathname.includes('/packages')) return 'packages';
+    if (params.projectId && !params.package) return 'project-overview';
     if (params.package && params.name && !params.type) return 'object';
     if (params.package && params.type && params.name) return 'metadata';
     if (params.package && !params.name && !params.type) return 'package-overview';
@@ -112,8 +112,8 @@ export function TopBar({
       case 'api-console':
         items.push({ label: 'API Console' });
         break;
-      case 'environments':
-        items.push({ label: 'Environments' });
+      case 'projects':
+        items.push({ label: 'Projects' });
         break;
       case 'orgs':
         if (params.orgId) {
@@ -126,7 +126,7 @@ export function TopBar({
       case 'packages':
         items.push({ label: 'Package Manager' });
         break;
-      case 'environment-overview':
+      case 'project-overview':
         items.push({ label: 'Overview' });
         break;
       case 'package-overview':
@@ -182,7 +182,7 @@ export function TopBar({
       <div className="flex items-center gap-2">
         <OrganizationSwitcher />
         <Separator orientation="vertical" className="mx-1 h-4" />
-        <EnvironmentSwitcher />
+        <ProjectSwitcher />
         {showPackageSwitcher && (
           <>
             <Separator orientation="vertical" className="mx-1 h-4" />

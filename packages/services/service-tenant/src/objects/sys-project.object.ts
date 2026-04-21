@@ -3,35 +3,35 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_environment — Control Plane Environment Registry
+ * sys_project — Control Plane Project Registry
  *
- * One row per environment. An organization owns N environments
+ * One row per project. An organization owns N projects
  * (dev/test/prod/sandbox/preview/…). Physical database connection info
  * is stored directly on this row (database_url, database_driver, etc.)
  * so a single JOIN-free lookup gives both logical and physical addressing.
  *
- * **This table lives in the Control Plane only.** Environment DBs contain
+ * **This table lives in the Control Plane only.** Project DBs contain
  * only business data rows — zero system tables.
  *
  * @namespace sys
  */
-export const SysEnvironment = ObjectSchema.create({
+export const SysProject = ObjectSchema.create({
   namespace: 'sys',
-  name: 'environment',
-  label: 'Environment',
-  pluralLabel: 'Environments',
+  name: 'project',
+  label: 'Project',
+  pluralLabel: 'Projects',
   icon: 'layers',
   isSystem: true,
-  description: 'Control-plane registry of tenant environments (prod/test/dev/sandbox).',
+  description: 'Control-plane registry of tenant projects (prod/test/dev/sandbox).',
   titleFormat: '{display_name}',
-  compactLayout: ['display_name', 'slug', 'env_type', 'status', 'is_default'],
+  compactLayout: ['display_name', 'slug', 'project_type', 'status', 'is_default'],
 
   fields: {
     id: Field.text({
-      label: 'Environment ID',
+      label: 'Project ID',
       required: true,
       readonly: true,
-      description: 'UUID of the environment (stable, never reused).',
+      description: 'UUID of the project (stable, never reused).',
     }),
 
     created_at: Field.datetime({
@@ -68,10 +68,10 @@ export const SysEnvironment = ObjectSchema.create({
       description: 'Display name shown in Studio and APIs.',
     }),
 
-    env_type: Field.select({
-      label: 'Environment Type',
+    project_type: Field.select({
+      label: 'Project Type',
       required: true,
-      description: 'Environment classification (prod/sandbox/dev/test/staging/preview/trial).',
+      description: 'Project classification (prod/sandbox/dev/test/staging/preview/trial).',
       options: [
         { value: 'production', label: 'Production' },
         { value: 'sandbox', label: 'Sandbox' },
@@ -87,7 +87,7 @@ export const SysEnvironment = ObjectSchema.create({
       label: 'Is Default',
       required: true,
       defaultValue: false,
-      description: 'Whether this is the default environment for the organization. Exactly one per org.',
+      description: 'Whether this is the default project for the organization. Exactly one per org.',
     }),
 
     region: Field.text({
@@ -101,7 +101,7 @@ export const SysEnvironment = ObjectSchema.create({
       label: 'Plan',
       required: true,
       defaultValue: 'free',
-      description: 'Plan tier applied to this environment for quota and billing.',
+      description: 'Plan tier applied to this project for quota and billing.',
       options: [
         { value: 'free', label: 'Free' },
         { value: 'starter', label: 'Starter' },
@@ -115,7 +115,7 @@ export const SysEnvironment = ObjectSchema.create({
       label: 'Status',
       required: true,
       defaultValue: 'provisioning',
-      description: 'Environment lifecycle status.',
+      description: 'Project lifecycle status.',
       options: [
         { value: 'provisioning', label: 'Provisioning' },
         { value: 'active', label: 'Active' },
@@ -129,13 +129,13 @@ export const SysEnvironment = ObjectSchema.create({
     created_by: Field.text({
       label: 'Created By',
       required: true,
-      description: 'User ID that created the environment.',
+      description: 'User ID that created the project.',
     }),
 
     database_url: Field.url({
       label: 'Database URL',
       required: false,
-      description: 'Connection URL for the environment database (e.g. libsql://env-uuid.turso.io). Set after provisioning.',
+      description: 'Connection URL for the project database (e.g. libsql://proj-uuid.turso.io). Set after provisioning.',
     }),
 
     database_driver: Field.text({
@@ -169,7 +169,7 @@ export const SysEnvironment = ObjectSchema.create({
       required: false,
       maxLength: 255,
       unique: true,
-      description: 'Canonical hostname for this environment (e.g. acme-dev.objectstack.app or api.acme.com). UNIQUE. Auto-set on creation; can be overridden for custom domains.',
+      description: 'Canonical hostname for this project (e.g. acme-dev.objectstack.app or api.acme.com). UNIQUE. Auto-set on creation; can be overridden for custom domains.',
     }),
   },
 
@@ -178,7 +178,7 @@ export const SysEnvironment = ObjectSchema.create({
     { fields: ['organization_id'] },
     { fields: ['organization_id', 'is_default'] },
     { fields: ['status'] },
-    { fields: ['env_type'] },
+    { fields: ['project_type'] },
     { fields: ['database_driver'] },
     { fields: ['hostname'], unique: true },
   ],

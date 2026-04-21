@@ -3,7 +3,7 @@
 /**
  * OrganizationSwitcher
  *
- * Sits immediately left of the EnvironmentSwitcher in the site header.
+ * Sits immediately left of the ProjectSwitcher in the site header.
  * Reads org list + active org from `useOrganizations()` / `useSession()`.
  * Selecting an org calls `organizations.setActive()` and refreshes the
  * session (so the rest of the app picks up the new `activeOrganizationId`).

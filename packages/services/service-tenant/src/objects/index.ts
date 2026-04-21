@@ -1,9 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-// Control-Plane objects (environment-per-database model)
-export * from './sys-environment.object';
-export * from './sys-database-credential.object';
-export * from './sys-environment-member.object';
+// Control-Plane objects (project-per-database model)
+export * from './sys-project.object';
+export * from './sys-project-credential.object';
+export * from './sys-project-member.object';
 
 // v4.x deprecation shim — removed in v5.0. See
 // docs/adr/0002-environment-database-isolation.md for the migration path.

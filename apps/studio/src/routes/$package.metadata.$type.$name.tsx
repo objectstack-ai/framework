@@ -4,16 +4,16 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/$package/metadata/$type/$name')({
   beforeLoad: ({ params }) => {
-    const lastEnvId =
+    const lastProjectId =
       typeof localStorage !== 'undefined'
-        ? localStorage.getItem('objectstack.lastEnvId')
+        ? localStorage.getItem('objectstack.lastProjectId')
         : null;
 
-    if (lastEnvId) {
+    if (lastProjectId) {
       throw redirect({
-        to: '/environments/$environmentId/$package/metadata/$type/$name',
+        to: '/projects/$projectId/$package/metadata/$type/$name',
         params: {
-          environmentId: lastEnvId,
+          projectId: lastProjectId,
           package: params.package,
           type: params.type,
           name: params.name,
@@ -21,7 +21,7 @@ export const Route = createFileRoute('/$package/metadata/$type/$name')({
         replace: true,
       });
     }
-    throw redirect({ to: '/environments', replace: true });
+    throw redirect({ to: '/projects', replace: true });
   },
   component: () => null,
 });

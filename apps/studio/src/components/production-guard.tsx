@@ -3,9 +3,9 @@
 /**
  * Production-write guard.
  *
- * Studio talks to real, live databases. When the active environment is
+ * Studio talks to real, live databases. When the active project is
  * `production`, any mutating action — deleting metadata, archiving an
- * environment, rotating credentials, running a write-mode flow — should
+ * project, rotating credentials, running a write-mode flow — should
  * prompt the user to confirm before the request leaves the browser. This
  * mirrors Salesforce/Power Platform behaviour where destructive actions in
  * prod require an explicit extra tap.
@@ -13,7 +13,7 @@
  * The guard is exposed as a hook (`useProductionGuard`) that returns a
  * `confirm(action)` function. It is a no-op for non-production envs, which
  * lets callers treat it as a uniform pre-commit step regardless of the
- * currently-selected environment.
+ * currently-selected project.
  *
  *     const guard = useProductionGuard();
  *     async function onDelete() {
@@ -41,7 +41,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import type { EnvironmentType } from '@objectstack/spec/cloud';
+import type { ProjectType } from '@objectstack/spec/cloud';
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EnvironmentBadge } from '@/components/environment-badge';
+import { ProjectBadge } from '@/components/project-badge';
 
 export interface GuardOptions {
   /** Short imperative title, e.g. "Delete customer record?" */
@@ -65,7 +65,7 @@ export interface GuardOptions {
   /** Visual variant of the confirm button. Defaults to "destructive". */
   confirmVariant?: 'default' | 'destructive';
   /**
-   * If true, the user must type the environment's displayName (or slug) to
+   * If true, the user must type the project's displayName (or slug) to
    * enable the confirm button. Use for the most destructive operations.
    */
   requireTypedConfirmation?: boolean;
@@ -73,8 +73,8 @@ export interface GuardOptions {
   typedConfirmationValue?: string;
 }
 
-interface ActiveEnvironmentSnapshot {
-  envType: EnvironmentType | undefined;
+interface ActiveProjectSnapshot {
+  projectType: ProjectType | undefined;
   displayName?: string;
 }
 
@@ -82,20 +82,20 @@ interface ProductionGuardContextValue {
   /** Confirm a mutating action; resolves `true` if the user proceeds. */
   confirm: (opts: GuardOptions) => Promise<boolean>;
   /**
-   * Called by environment-aware routes (e.g. useEnvironmentDetail) to
-   * register the currently-selected environment so the guard knows whether
+   * Called by project-aware routes (e.g. useProjectDetail) to
+   * register the currently-selected project so the guard knows whether
    * to engage.
    */
-  setActiveEnvironment: (snap: ActiveEnvironmentSnapshot) => void;
-  activeEnvType: EnvironmentType | undefined;
+  setActiveProject: (snap: ActiveProjectSnapshot) => void;
+  activeProjectType: ProjectType | undefined;
 }
 
 const ProductionGuardContext =
   createContext<ProductionGuardContextValue | null>(null);
 
 export function ProductionGuardProvider({ children }: { children: ReactNode }) {
-  const [active, setActive] = useState<ActiveEnvironmentSnapshot>({
-    envType: undefined,
+  const [active, setActive] = useState<ActiveProjectSnapshot>({
+    projectType: undefined,
   });
   const [open, setOpen] = useState(false);
   const [opts, setOpts] = useState<GuardOptions | null>(null);
@@ -106,7 +106,7 @@ export function ProductionGuardProvider({ children }: { children: ReactNode }) {
     (next: GuardOptions): Promise<boolean> => {
       // Guard only engages in production. For everything else, treat the
       // action as pre-approved.
-      if (active.envType !== 'production') return Promise.resolve(true);
+      if (active.projectType !== 'production') return Promise.resolve(true);
       setOpts(next);
       setTyped('');
       setOpen(true);
@@ -114,7 +114,7 @@ export function ProductionGuardProvider({ children }: { children: ReactNode }) {
         resolverRef.current = resolve;
       });
     },
-    [active.envType],
+    [active.projectType],
   );
 
   const settle = useCallback((result: boolean) => {
@@ -128,10 +128,10 @@ export function ProductionGuardProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ProductionGuardContextValue>(
     () => ({
       confirm,
-      setActiveEnvironment: setActive,
-      activeEnvType: active.envType,
+      setActiveProject: setActive,
+      activeProjectType: active.projectType,
     }),
-    [confirm, active.envType],
+    [confirm, active.projectType],
   );
 
   const expectedPhrase =
@@ -161,9 +161,9 @@ export function ProductionGuardProvider({ children }: { children: ReactNode }) {
           </DialogHeader>
 
           <div className="my-2 flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/5 p-3 text-sm">
-            <EnvironmentBadge envType="production" />
+            <ProjectBadge projectType="production" />
             <span className="font-medium">
-              {active.displayName ?? 'Production environment'}
+              {active.displayName ?? 'Production project'}
             </span>
           </div>
 
@@ -215,11 +215,11 @@ export function useProductionGuard(): {
   if (!ctx) {
     return { confirm: async () => true, isProduction: false };
   }
-  return { confirm: ctx.confirm, isProduction: ctx.activeEnvType === 'production' };
+  return { confirm: ctx.confirm, isProduction: ctx.activeProjectType === 'production' };
 }
 
-/** Internal hook for env-detail routes to register the active environment. */
-export function useRegisterActiveEnvironment() {
+/** Internal hook for project-detail routes to register the active project. */
+export function useRegisterActiveProject() {
   const ctx = useContext(ProductionGuardContext);
-  return ctx?.setActiveEnvironment ?? (() => {});
+  return ctx?.setActiveProject ?? (() => {});
 }

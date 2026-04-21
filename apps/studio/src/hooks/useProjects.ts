@@ -1,74 +1,73 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Environment state hooks.
+ * Project state hooks.
  *
- * Studio treats the environment as a first-class, URL-owned primitive
- * (`/environments/:environmentId/...`) in the spirit of Power Platform.
- * These hooks wrap the new `@objectstack/client` environments API added in
- * the v4.1 environment-per-database migration (PR #1186).
+ * Studio treats the project as a first-class, URL-owned primitive
+ * (`/projects/:projectId/...`) in the spirit of Power Platform / Supabase.
+ * Each project owns an isolated Turso database and its own credentials.
  *
- * @see docs/adr/0002-environment-database-isolation.md
+ * @see docs/adr/0002-project-database-isolation.md
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { useClient } from '@objectstack/client-react';
-import type { Environment, EnvironmentDatabase, EnvironmentMember } from '@objectstack/spec/cloud';
+import type { Project, ProjectDatabase, ProjectMember } from '@objectstack/spec/cloud';
 import { useActiveOrganizationId } from '@/hooks/useSession';
 
-export interface EnvironmentDetail {
-  environment: Environment;
-  database?: EnvironmentDatabase;
-  membership?: EnvironmentMember;
+export interface ProjectDetail {
+  project: Project;
+  database?: ProjectDatabase;
+  membership?: ProjectMember;
   credential?: { id: string; status: string; activatedAt?: string };
   organization?: { id: string; name: string; displayName?: string };
 }
 
-const ACTIVE_ENV_STORAGE_KEY = 'objectstack.studio.activeEnvironmentId';
+const ACTIVE_PROJECT_STORAGE_KEY = 'objectstack.studio.activeProjectId';
 
-export function rememberActiveEnvironment(id: string | null | undefined): void {
+export function rememberActiveProject(id: string | null | undefined): void {
   if (typeof window === 'undefined') return;
   try {
-    if (id) window.localStorage.setItem(ACTIVE_ENV_STORAGE_KEY, id);
-    else window.localStorage.removeItem(ACTIVE_ENV_STORAGE_KEY);
+    if (id) window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, id);
+    else window.localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
   } catch {
     // localStorage unavailable (e.g. SSR, privacy mode) — silently ignore.
   }
 }
 
-export function recallActiveEnvironment(): string | null {
+export function recallActiveProject(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem(ACTIVE_ENV_STORAGE_KEY);
+    return window.localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY);
   } catch {
     return null;
   }
 }
 
 /**
- * Hook: list all environments visible to the current session.
+ * Hook: list all projects visible to the current session.
  */
-export function useEnvironments() {
-  const client = useClient() as any; // ObjectStackClient — typed as any to avoid export shape coupling.
+export function useProjects() {
+  const client = useClient() as any;
   const activeOrgId = useActiveOrganizationId();
-  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const load = useCallback(async () => {
-    if (!client?.environments) return;
+    if (!client?.projects) return;
     if (!activeOrgId) {
-      setEnvironments([]);
+      setProjects([]);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const result = await client.environments.list({ organizationId: activeOrgId });
-      setEnvironments((result?.environments as Environment[]) ?? []);
+      const result = await client.projects.list({ organizationId: activeOrgId });
+      setProjects((result?.projects as Project[]) ?? []);
     } catch (err) {
       setError(err as Error);
-      setEnvironments([]);
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -85,41 +84,41 @@ export function useEnvironments() {
     };
   }, [load]);
 
-  return { environments, loading, error, reload: load };
+  return { projects, loading, error, reload: load };
 }
 
 /**
- * Hook: load a single environment detail by id.
+ * Hook: load a single project detail by id.
  *
  * Side-effect: once loaded, propagate the id to the ObjectStackClient so
- * every subsequent HTTP call attaches the `X-Environment-Id` header.
+ * every subsequent HTTP call attaches the `X-Project-Id` header.
  */
-export function useEnvironmentDetail(environmentId: string | undefined) {
+export function useProjectDetail(projectId: string | undefined) {
   const client = useClient() as any;
-  const [detail, setDetail] = useState<EnvironmentDetail | null>(null);
+  const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const load = useCallback(async () => {
-    if (!environmentId || !client?.environments) {
+    if (!projectId || !client?.projects) {
       setDetail(null);
-      client?.setEnvironmentId?.(undefined);
+      client?.setProjectId?.(undefined);
       return;
     }
     setLoading(true);
     setError(null);
-    client.setEnvironmentId(environmentId);
-    rememberActiveEnvironment(environmentId);
+    client.setProjectId(projectId);
+    rememberActiveProject(projectId);
     try {
-      const result = await client.environments.get(environmentId);
-      setDetail(result as EnvironmentDetail);
+      const result = await client.projects.get(projectId);
+      setDetail(result as ProjectDetail);
     } catch (err) {
       setError(err as Error);
       setDetail(null);
     } finally {
       setLoading(false);
     }
-  }, [client, environmentId]);
+  }, [client, projectId]);
 
   useEffect(() => {
     let alive = true;
@@ -138,7 +137,7 @@ export function useEnvironmentDetail(environmentId: string | undefined) {
 /**
  * Hook: list ObjectQL drivers registered on the server.
  *
- * Used by the NewEnvironmentDialog to populate the "Driver" selector. The
+ * Used by the NewProjectDialog to populate the "Driver" selector. The
  * server exposes whatever drivers are registered via `DriverPlugin`
  * (`memory`, `turso`, or future `sql` drivers) — Studio does not hardcode
  * any particular driver.
@@ -150,12 +149,12 @@ export function useDrivers() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!client?.environments?.listDrivers) return;
+    if (!client?.projects?.listDrivers) return;
     let alive = true;
     setLoading(true);
     (async () => {
       try {
-        const result = await client.environments.listDrivers();
+        const result = await client.projects.listDrivers();
         if (!alive) return;
         setDrivers(result?.drivers ?? []);
       } catch (err) {
@@ -175,20 +174,20 @@ export function useDrivers() {
 }
 
 /**
- * Hook: provision a new environment via the control-plane API.
+ * Hook: provision a new project via the control-plane API.
  */
-export function useProvisionEnvironment() {
+export function useProvisionProject() {
   const client = useClient() as any;
   const [provisioning, setProvisioning] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const provision = useCallback(
-    async (req: Parameters<NonNullable<typeof client.environments>['create']>[0]) => {
-      if (!client?.environments) throw new Error('Client not ready');
+    async (req: Parameters<NonNullable<typeof client.projects>['create']>[0]) => {
+      if (!client?.projects) throw new Error('Client not ready');
       setProvisioning(true);
       setError(null);
       try {
-        return await client.environments.create(req);
+        return await client.projects.create(req);
       } catch (err) {
         setError(err as Error);
         throw err;
@@ -203,9 +202,9 @@ export function useProvisionEnvironment() {
 }
 
 /**
- * Hook: retry provisioning for an environment stuck in `failed` state.
+ * Hook: retry provisioning for a project stuck in `failed` state.
  *
- * Wraps `client.environments.retryProvisioning(id)`. Exposes `retrying`
+ * Wraps `client.projects.retryProvisioning(id)`. Exposes `retrying`
  * state so callers can disable the button and show a spinner while the
  * server re-runs the driver handshake.
  */
@@ -215,14 +214,14 @@ export function useRetryProvisioning() {
   const [error, setError] = useState<Error | null>(null);
 
   const retry = useCallback(
-    async (environmentId: string) => {
-      if (!client?.environments?.retryProvisioning) {
+    async (projectId: string) => {
+      if (!client?.projects?.retryProvisioning) {
         throw new Error('Client not ready');
       }
       setRetrying(true);
       setError(null);
       try {
-        return await client.environments.retryProvisioning(environmentId);
+        return await client.projects.retryProvisioning(projectId);
       } catch (err) {
         setError(err as Error);
         throw err;

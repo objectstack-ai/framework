@@ -1,10 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * /environments/$environmentId/packages — per-environment package management.
+ * /projects/$projectId/packages — per-project package management.
  *
- * Lists packages installed in this environment and provides install/
- * enable/disable/uninstall actions. Only packages with scope=environment
+ * Lists packages installed in this project and provides install/
+ * enable/disable/uninstall actions. Only packages with scope=project
  * from the global registry can be installed here.
  */
 
@@ -17,16 +17,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
-import { useEnvironmentPackages } from '@/hooks/useEnvironmentPackages';
+import { useProjectPackages } from '@/hooks/useProjectPackages';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
-function EnvironmentPackagesComponent() {
-  const { environmentId } = useParams({ from: '/environments/$environmentId' });
+function ProjectPackagesComponent() {
+  const { projectId } = useParams({ from: '/projects/$projectId' });
   const client = useClient() as any;
   const navigate = useNavigate();
 
   const { packages: installedPkgs, loading, error, install, uninstall, enable, disable, reload } =
-    useEnvironmentPackages(environmentId);
+    useProjectPackages(projectId);
 
   // Global registry — packages available to install
   const [availablePkgs, setAvailablePkgs] = useState<InstalledPackage[]>([]);
@@ -106,7 +106,7 @@ function EnvironmentPackagesComponent() {
             {/* Installed packages */}
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Installed in this environment</h2>
+                <h2 className="text-lg font-semibold">Installed in this project</h2>
                 <Button variant="outline" size="sm" onClick={reload} disabled={loading} className="gap-1.5">
                   <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                   Refresh
@@ -151,8 +151,8 @@ function EnvironmentPackagesComponent() {
                             title="Open package workspace"
                             onClick={() =>
                               navigate({
-                                to: '/environments/$environmentId/$package',
-                                params: { environmentId, package: pkg.packageId },
+                                to: '/projects/$projectId/$package',
+                                params: { projectId, package: pkg.packageId },
                               })
                             }
                           >
@@ -242,6 +242,6 @@ function EnvironmentPackagesComponent() {
   );
 }
 
-export const Route = createFileRoute('/environments/$environmentId/packages')({
-  component: EnvironmentPackagesComponent,
+export const Route = createFileRoute('/projects/$projectId/packages')({
+  component: ProjectPackagesComponent,
 });

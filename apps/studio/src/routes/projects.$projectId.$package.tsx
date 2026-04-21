@@ -1,10 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * /environments/$environmentId/$package — env-scoped package workspace.
+ * /projects/$projectId/$package — env-scoped package workspace.
  *
  * The {@link AppSidebar} (metadata tree) is rendered by the parent
- * `/environments/$environmentId` layout for ALL env-scoped routes, so this
+ * `/projects/$projectId` layout for ALL env-scoped routes, so this
  * layout only needs to provide the `<main>` content frame. The parent
  * layout watches `location.pathname` and keeps `selectedPackage` in sync
  * with the `$package` URL segment.
@@ -20,6 +20,6 @@ function EnvPackageLayoutComponent() {
   );
 }
 
-export const Route = createFileRoute('/environments/$environmentId/$package')({
+export const Route = createFileRoute('/projects/$projectId/$package')({
   component: EnvPackageLayoutComponent,
 });

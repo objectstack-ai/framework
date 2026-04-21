@@ -158,12 +158,12 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   packages: InstalledPackage[];
   selectedPackage: InstalledPackage | null;
   onSelectPackage: (pkg: InstalledPackage) => void;
-  /** When set, all package-content URLs are rooted at /environments/:envId/:pkg/* */
-  environmentId?: string;
+  /** When set, all package-content URLs are rooted at /projects/:projectId/:pkg/* */
+  projectId?: string;
 }
 
 export function AppSidebar({
-  packages, selectedPackage, onSelectPackage, environmentId,
+  packages, selectedPackage, onSelectPackage, projectId,
   ...props
 }: AppSidebarProps) {
   const client = useClient();
@@ -311,8 +311,8 @@ export function AppSidebar({
                   isActive={!!params.package && !params.name && !params.type}
                   onClick={() => {
                     const pkgId = selectedPackage?.manifest?.id || 'default';
-                    if (environmentId) {
-                      navigate({ to: `/environments/${environmentId}/${pkgId}/` });
+                    if (projectId) {
+                      navigate({ to: `/projects/${projectId}/${pkgId}/` });
                     } else {
                       navigate({ to: `/${pkgId}` });
                     }
@@ -412,11 +412,11 @@ export function AppSidebar({
 
                                 const packagePath = selectedPackage?.manifest?.id || 'default';
                                 const handleClick = isObjectType
-                                  ? () => environmentId
-                                      ? navigate({ to: `/environments/${environmentId}/${packagePath}/objects/${itemName}` })
+                                  ? () => projectId
+                                      ? navigate({ to: `/projects/${projectId}/${packagePath}/objects/${itemName}` })
                                       : navigate({ to: `/${packagePath}/objects/${itemName}` })
-                                  : () => environmentId
-                                      ? navigate({ to: `/environments/${environmentId}/${packagePath}/metadata/${type}/${itemName}` })
+                                  : () => projectId
+                                      ? navigate({ to: `/projects/${projectId}/${packagePath}/metadata/${type}/${itemName}` })
                                       : navigate({ to: `/${packagePath}/metadata/${type}/${itemName}` });
 
                                 return (
@@ -533,11 +533,11 @@ export function AppSidebar({
                   tooltip="Packages"
                   isActive={location.pathname.endsWith('/packages')}
                   onClick={() => {
-                    const envId = params.environmentId as string | undefined;
+                    const projectId = params.projectId as string | undefined;
                     if (envId) {
-                      navigate({ to: '/environments/$environmentId/packages', params: { environmentId: envId } });
+                      navigate({ to: '/projects/$projectId/packages', params: { projectId: envId } });
                     } else {
-                      navigate({ to: '/environments' });
+                      navigate({ to: '/projects' });
                     }
                   }}
                 >

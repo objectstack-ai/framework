@@ -1,12 +1,12 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * EnvironmentStatusBadge — color-coded pill for the environment lifecycle
+ * ProjectStatusBadge — color-coded pill for the project lifecycle
  * status (provisioning / active / failed / suspended / archived / migrating).
  *
- * Rendered alongside {@link EnvironmentBadge} (which encodes envType) on the
- * environment list and detail pages so operators can tell at a glance whether
- * a given environment is ready, still coming up, or broken.
+ * Rendered alongside {@link ProjectBadge} (which encodes projectType) on the
+ * project list and detail pages so operators can tell at a glance whether
+ * a given project is ready, still coming up, or broken.
  *
  * Keep this component purely presentational — no data fetching or navigation
  * side-effects — so it can be rendered in tables, badges, and dialogs
@@ -15,9 +15,9 @@
 
 import { Loader2, AlertTriangle, CheckCircle2, PauseCircle, Archive, MoveRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { EnvironmentStatus } from '@objectstack/spec/cloud';
+import type { ProjectStatus } from '@objectstack/spec/cloud';
 
-const VARIANT: Record<EnvironmentStatus, string> = {
+const VARIANT: Record<ProjectStatus, string> = {
   provisioning:
     'border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300',
   active:
@@ -32,7 +32,7 @@ const VARIANT: Record<EnvironmentStatus, string> = {
     'border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300',
 };
 
-const LABEL: Record<EnvironmentStatus, string> = {
+const LABEL: Record<ProjectStatus, string> = {
   provisioning: 'Provisioning',
   active: 'Active',
   failed: 'Provisioning failed',
@@ -41,7 +41,7 @@ const LABEL: Record<EnvironmentStatus, string> = {
   migrating: 'Migrating',
 };
 
-function StatusIcon({ status, className }: { status: EnvironmentStatus; className?: string }) {
+function StatusIcon({ status, className }: { status: ProjectStatus; className?: string }) {
   switch (status) {
     case 'provisioning':
       return <Loader2 className={cn('h-3 w-3 animate-spin', className)} />;
@@ -60,14 +60,14 @@ function StatusIcon({ status, className }: { status: EnvironmentStatus; classNam
   }
 }
 
-export interface EnvironmentStatusBadgeProps {
-  status: EnvironmentStatus;
+export interface ProjectStatusBadgeProps {
+  status: ProjectStatus;
   /** Omit the label and show just the icon chip. Useful in dense lists. */
   iconOnly?: boolean;
   className?: string;
 }
 
-export function EnvironmentStatusBadge({ status, iconOnly, className }: EnvironmentStatusBadgeProps) {
+export function ProjectStatusBadge({ status, iconOnly, className }: ProjectStatusBadgeProps) {
   return (
     <span
       className={cn(

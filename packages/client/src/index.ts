@@ -113,13 +113,13 @@ export interface ClientConfig {
    */
   debug?: boolean;
   /**
-   * Active environment id (UUID of `sys_environment`). When present, the
-   * client injects an `X-Environment-Id` header on every request so the
+   * Active project id (UUID of `sys_project`). When present, the
+   * client injects an `X-Project-Id` header on every request so the
    * server's tenant router can resolve the physical data-plane database.
    *
-   * @see docs/adr/0002-environment-database-isolation.md
+   * @see docs/adr/0002-project-database-isolation.md
    */
-  environmentId?: string;
+  projectId?: string;
 }
 
 /**
@@ -234,7 +234,7 @@ export interface StandardError {
 export class ObjectStackClient {
   private baseUrl: string;
   private token?: string;
-  private environmentId?: string;
+  private projectId?: string;
   private fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   private discoveryInfo?: DiscoveryResult;
   private logger: Logger;
@@ -243,7 +243,7 @@ export class ObjectStackClient {
   constructor(config: ClientConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, ''); // Remove trailing slash
     this.token = config.token;
-    this.environmentId = config.environmentId;
+    this.projectId = config.projectId;
     this.fetchImpl = config.fetch || globalThis.fetch.bind(globalThis);
 
     // Initialize logger
@@ -587,21 +587,21 @@ export class ObjectStackClient {
   /**
    * Environment Management Services
    *
-   * Environments are the v4.1+ isolation primitive — each environment owns a
+   * Environments are the v4.1+ isolation primitive — each project owns a
    * physically separate data-plane database. All Studio-level switching goes
    * through this API.
    *
    * Endpoints:
-   * - GET    /api/v1/cloud/environments            → list environments
-   * - GET    /api/v1/cloud/environments/:id        → get one (with database info)
-   * - POST   /api/v1/cloud/environments            → provision a new environment
-   * - PATCH  /api/v1/cloud/environments/:id        → update (displayName, plan, status, …)
-   * - POST   /api/v1/cloud/environments/:id/activate → set as session's active environment
-   * - POST   /api/v1/cloud/environments/:id/credentials/rotate → rotate credential
+   * - GET    /api/v1/cloud/projects            → list environments
+   * - GET    /api/v1/cloud/projects/:id        → get one (with database info)
+   * - POST   /api/v1/cloud/projects            → provision a new project
+   * - PATCH  /api/v1/cloud/projects/:id        → update (displayName, plan, status, …)
+   * - POST   /api/v1/cloud/projects/:id/activate → set as session's active project
+   * - POST   /api/v1/cloud/projects/:id/credentials/rotate → rotate credential
    *
-   * @see docs/adr/0002-environment-database-isolation.md
+   * @see docs/adr/0002-project-database-isolation.md
    */
-  environments = {
+  projects = {
     /**
      * List environments visible to the current session. Optionally filter
      * by organization (control-plane query — not routed through a data-plane DB).
@@ -612,18 +612,18 @@ export class ObjectStackClient {
       if (filters?.envType) params.set('envType', filters.envType);
       if (filters?.status) params.set('status', filters.status);
       const qs = params.toString();
-      const url = `${this.baseUrl}/api/v1/cloud/environments${qs ? '?' + qs : ''}`;
+      const url = `${this.baseUrl}/api/v1/cloud/projects${qs ? '?' + qs : ''}`;
       const res = await this.fetch(url);
-      return this.unwrapResponse<{ environments: any[]; total: number }>(res);
+      return this.unwrapResponse<{ projects: any[]; total: number }>(res);
     },
 
     /**
-     * Get a single environment (joined with its database and membership row).
+     * Get a single project (joined with its database and membership row).
      */
     get: async (id: string) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}`);
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}`);
       return this.unwrapResponse<{
-        environment: any;
+        project: any;
         database?: any;
         credential?: any;
         membership?: any;
@@ -632,8 +632,8 @@ export class ObjectStackClient {
     },
 
     /**
-     * Provision a new environment. Delegates to
-     * `EnvironmentProvisioningService.provisionEnvironment` on the server.
+     * Provision a new project. Delegates to
+     * `ProjectProvisioningService.provisionProject` on the server.
      */
     create: async (req: {
       organizationId: string;
@@ -643,43 +643,43 @@ export class ObjectStackClient {
       plan?: string;
       region?: string;
       driver?: string;
-      cloneFromEnvironmentId?: string;
+      cloneFromProjectId?: string;
     }) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments`, {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects`, {
         method: 'POST',
         body: JSON.stringify(req),
       });
-      return this.unwrapResponse<{ environment: any; database: any }>(res);
+      return this.unwrapResponse<{ project: any; database: any }>(res);
     },
 
     /**
-     * Update an environment (displayName, plan, status, isDefault, metadata).
+     * Update a project (displayName, plan, status, isDefault, metadata).
      */
     update: async (id: string, patch: Record<string, unknown>) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}`, {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
-      return this.unwrapResponse<{ environment: any }>(res);
+      return this.unwrapResponse<{ project: any }>(res);
     },
 
     /**
-     * Activate this environment for the current session. The server writes
+     * Activate this project for the current session. The server writes
      * `active_environment_id` on the better-auth session; subsequent requests
-     * are routed to this environment's database.
+     * are routed to this project's database.
      */
     activate: async (id: string) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/activate`, {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}/activate`, {
         method: 'POST',
       });
-      return this.unwrapResponse<{ environment: any; sessionUpdated: boolean }>(res);
+      return this.unwrapResponse<{ project: any; sessionUpdated: boolean }>(res);
     },
 
     /**
-     * Rotate the active database credential for this environment.
+     * Rotate the active database credential for this project.
      */
     rotateCredential: async (id: string, plaintext: string) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/credentials/rotate`, {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}/credentials/rotate`, {
         method: 'POST',
         body: JSON.stringify({ plaintext }),
       });
@@ -687,29 +687,29 @@ export class ObjectStackClient {
     },
 
     /**
-     * Retry provisioning for an environment stuck in `failed` (or
+     * Retry provisioning for a project stuck in `failed` (or
      * `provisioning`) state. The server re-runs the driver handshake; on
-     * success the environment flips to `active`, on failure it stays
+     * success the project flips to `active`, on failure it stays
      * `failed` with `metadata.provisioningError` updated.
      */
     retryProvisioning: async (id: string) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/retry`, {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}/retry`, {
         method: 'POST',
       });
-      return this.unwrapResponse<{ environment: any }>(res);
+      return this.unwrapResponse<{ project: any }>(res);
     },
 
     /**
-     * List members of an environment (per-environment RBAC).
+     * List members of a project (per-project RBAC).
      */
     listMembers: async (id: string) => {
-      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/members`);
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}/members`);
       return this.unwrapResponse<{ members: any[] }>(res);
     },
 
     /**
      * List ObjectQL drivers registered on the server. Useful for populating a
-     * driver selector when provisioning a new environment (memory / turso /
+     * driver selector when provisioning a new project (memory / turso /
      * future sql drivers). Returned `name` is the short alias (e.g. `memory`,
      * `turso`); `driverId` is the full FQN (e.g. `com.objectstack.driver.memory`).
      */
@@ -719,24 +719,24 @@ export class ObjectStackClient {
     },
 
     /**
-     * Per-environment package installation management (Power Apps "solution" model).
+     * Per-project package installation management (Power Apps "solution" model).
      * Install records are stored in the environment's own database.
      */
     packages: {
-      /** List all packages installed in a specific environment. */
+      /** List all packages installed in a specific project. */
       list: async (envId: string) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages`);
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages`);
         return this.unwrapResponse<{ packages: any[]; total: number }>(res);
       },
 
-      /** Install a package into the environment. */
+      /** Install a package into the project. */
       install: async (envId: string, body: {
         packageId: string;
         version?: string;
         settings?: Record<string, unknown>;
         enableOnInstall?: boolean;
       }) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages`, {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages`, {
           method: 'POST',
           body: JSON.stringify(body),
         });
@@ -745,13 +745,13 @@ export class ObjectStackClient {
 
       /** Get a single installation record. */
       get: async (envId: string, pkgId: string) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}`);
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}`);
         return this.unwrapResponse<{ package: any }>(res);
       },
 
       /** Enable a previously disabled package. */
       enable: async (envId: string, pkgId: string) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/enable`, {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/enable`, {
           method: 'PATCH',
         });
         return this.unwrapResponse<{ package: any }>(res);
@@ -759,15 +759,15 @@ export class ObjectStackClient {
 
       /** Disable an installed package (metadata will not be loaded). */
       disable: async (envId: string, pkgId: string) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/disable`, {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/disable`, {
           method: 'PATCH',
         });
         return this.unwrapResponse<{ package: any }>(res);
       },
 
-      /** Uninstall a package from the environment. Forbidden for scope=platform packages. */
+      /** Uninstall a package from the project. Forbidden for scope=platform packages. */
       uninstall: async (envId: string, pkgId: string) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}`, {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}`, {
           method: 'DELETE',
         });
         return this.unwrapResponse<{ id: string; success: boolean }>(res);
@@ -775,7 +775,7 @@ export class ObjectStackClient {
 
       /** Upgrade an installed package to a newer version. */
       upgrade: async (envId: string, pkgId: string, targetVersion?: string) => {
-        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/upgrade`, {
+        const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(envId)}/packages/${encodeURIComponent(pkgId)}/upgrade`, {
           method: 'POST',
           body: JSON.stringify({ targetVersion }),
         });
@@ -883,19 +883,19 @@ export class ObjectStackClient {
   };
 
   /**
-   * Update the active environment id used for subsequent requests.
+   * Update the active project id used for subsequent requests.
    * Pass `undefined` to clear (falls back to the session default).
    */
-  setEnvironmentId(environmentId: string | undefined): void {
-    this.environmentId = environmentId;
-    this.logger.debug('Active environment changed', { environmentId });
+  setProjectId(projectId: string | undefined): void {
+    this.projectId = projectId;
+    this.logger.debug('Active project changed', { projectId });
   }
 
   /**
-   * Current active environment id (if set).
+   * Current active project id (if set).
    */
-  getEnvironmentId(): string | undefined {
-    return this.environmentId;
+  getProjectId(): string | undefined {
+    return this.projectId;
   }
 
   /**
@@ -2056,8 +2056,8 @@ export class ObjectStackClient {
         headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    if (this.environmentId) {
-        headers['X-Environment-Id'] = this.environmentId;
+    if (this.projectId) {
+        headers['X-Project-Id'] = this.projectId;
     }
 
     const res = await this.fetchImpl(url, { ...options, headers });

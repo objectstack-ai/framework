@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
-import { useEnvironments } from '@/hooks/useEnvironments';
+import { useProjects } from '@/hooks/useProjects';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -19,7 +19,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const client = useClient() as any;
   const { session, user, refresh } = useSession();
-  const { environments, loading: envsLoading } = useEnvironments();
+  const { projects, loading: projectsLoading } = useProjects();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -30,23 +30,23 @@ function LoginPage() {
       navigate({ to: '/orgs' });
       return;
     }
-    if (envsLoading) return;
+    if (projectsLoading) return;
 
-    const lastEnvId = localStorage.getItem('objectstack.lastEnvId');
-    const targetEnv =
-      (lastEnvId && environments.find((e) => e.id === lastEnvId)) ||
-      environments.find((e) => e.isDefault) ||
-      environments[0];
+    const lastProjectId = localStorage.getItem('objectstack.lastProjectId');
+    const targetProject =
+      (lastProjectId && projects.find((p) => p.id === lastProjectId)) ||
+      projects.find((p) => p.isDefault) ||
+      projects[0];
 
-    if (targetEnv) {
+    if (targetProject) {
       navigate({
-        to: '/environments/$environmentId',
-        params: { environmentId: targetEnv.id },
+        to: '/projects/$projectId',
+        params: { projectId: targetProject.id },
       });
     } else {
-      navigate({ to: '/environments' });
+      navigate({ to: '/projects' });
     }
-  }, [user, session, environments, envsLoading, navigate]);
+  }, [user, session, projects, projectsLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

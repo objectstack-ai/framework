@@ -1,15 +1,15 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * /environments — environment list & management page.
+ * /projects — project list & management page.
  *
- * Entry point for the environment administration flows: lists every
- * environment visible to the current session, groups them by envType,
- * and surfaces one-click navigation into each environment's overview
- * (`/environments/:environmentId`).
+ * Entry point for the project administration flows: lists every
+ * project visible to the current session, groups them by projectType,
+ * and surfaces one-click navigation into each project's overview
+ * (`/projects/:projectId`).
  *
- * Provisioning new environments is handled by {@link NewEnvironmentDialog}
- * exposed via the "New environment" button.
+ * Provisioning new projects is handled by {@link NewProjectDialog}
+ * exposed via the "New project" button.
  */
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
@@ -18,14 +18,14 @@ import { Plus, Database, MapPin, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { EnvironmentBadge } from '@/components/environment-badge';
-import { EnvironmentStatusBadge } from '@/components/environment-status-badge';
-import { NewEnvironmentDialog } from '@/components/new-environment-dialog';
-import { useEnvironments } from '@/hooks/useEnvironments';
+import { ProjectBadge } from '@/components/project-badge';
+import { ProjectStatusBadge } from '@/components/project-status-badge';
+import { NewProjectDialog } from '@/components/new-project-dialog';
+import { useProjects } from '@/hooks/useProjects';
 
-function EnvironmentsListComponent() {
+function ProjectsListComponent() {
   const navigate = useNavigate();
-  const { environments, loading, reload } = useEnvironments();
+  const { projects, loading, reload } = useProjects();
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -34,15 +34,15 @@ function EnvironmentsListComponent() {
         <div className="mx-auto max-w-5xl">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-semibold">Environments</h1>
+              <h1 className="text-2xl font-semibold">Projects</h1>
               <p className="text-sm text-muted-foreground">
-                Each environment has a physically isolated database. Switch
+                Each project has a physically isolated database. Switch
                 between them from the header at any time.
               </p>
             </div>
             <Button onClick={() => setCreateOpen(true)} className="gap-2">
               <Plus className="h-4 w-4" />
-              New environment
+              New project
             </Button>
           </div>
 
@@ -53,7 +53,7 @@ function EnvironmentsListComponent() {
               onClick={() => reload()}
               disabled={loading}
               className="gap-2"
-              title="Refresh the environment list (does not auto-poll)"
+              title="Refresh the project list (does not auto-poll)"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -64,30 +64,30 @@ function EnvironmentsListComponent() {
             <div className="text-sm text-muted-foreground">Loading…</div>
           )}
 
-          {!loading && environments.length === 0 && (
+          {!loading && projects.length === 0 && (
             <Card className="p-10 text-center">
               <Database className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <h3 className="text-base font-medium">No environments yet</h3>
+              <h3 className="text-base font-medium">No projects yet</h3>
               <p className="mb-4 text-sm text-muted-foreground">
-                Create your first environment to start building.
+                Create your first project to start building.
               </p>
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
-                Create environment
+                Create project
               </Button>
             </Card>
           )}
 
           <div className="grid gap-3">
-            {environments.map((env) => (
+            {projects.map((project) => (
               <Card
-                key={env.id}
+                key={project.id}
                 role="button"
                 tabIndex={0}
                 onClick={() =>
                   navigate({
-                    to: '/environments/$environmentId',
-                    params: { environmentId: env.id },
+                    to: '/projects/$projectId',
+                    params: { projectId: project.id },
                   })
                 }
                 className="cursor-pointer p-4 transition-colors hover:bg-accent"
@@ -96,25 +96,25 @@ function EnvironmentsListComponent() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="truncate text-base font-medium">
-                        {env.displayName}
+                        {project.displayName}
                       </h3>
-                      <EnvironmentBadge envType={env.envType} />
-                      {env.isDefault && (
+                      <ProjectBadge projectType={project.projectType} />
+                      {project.isDefault && (
                         <Badge variant="outline" className="text-[10px]">
                           default
                         </Badge>
                       )}
-                      <EnvironmentStatusBadge status={env.status} />
+                      <ProjectStatusBadge status={project.status} />
                     </div>
                     <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      <code className="font-mono">{env.slug}</code>
-                      {env.region && (
+                      <code className="font-mono">{project.slug}</code>
+                      {project.region && (
                         <span className="inline-flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
-                          {env.region}
+                          {project.region}
                         </span>
                       )}
-                      <code className="font-mono opacity-60">{env.id}</code>
+                      <code className="font-mono opacity-60">{project.id}</code>
                     </div>
                   </div>
                 </div>
@@ -124,14 +124,14 @@ function EnvironmentsListComponent() {
         </div>
       </div>
 
-      <NewEnvironmentDialog
+      <NewProjectDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={async (env) => {
+        onCreated={async (project) => {
           await reload();
           navigate({
-            to: '/environments/$environmentId',
-            params: { environmentId: env.id },
+            to: '/projects/$projectId',
+            params: { projectId: project.id },
           });
         }}
       />
@@ -139,6 +139,6 @@ function EnvironmentsListComponent() {
   );
 }
 
-export const Route = createFileRoute('/environments/')({
-  component: EnvironmentsListComponent,
+export const Route = createFileRoute('/projects/')({
+  component: ProjectsListComponent,
 });

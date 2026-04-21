@@ -3,28 +3,27 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_environment_member — Per-Environment RBAC
+ * sys_project_member — Per-Project RBAC
  *
- * Grants a user access to a specific environment with a specific role.
- * Scoped narrowly to environment boundaries so that `prod` can have a
+ * Grants a user access to a specific project with a specific role.
+ * Scoped narrowly to project boundaries so that `prod` can have a
  * different cast of admins than `dev`.
  *
- * A user may be a member of multiple environments within the same
- * organization with different roles. Uniqueness is
- * `(environment_id, user_id)`.
+ * A user may be a member of multiple projects within the same
+ * organization with different roles. Uniqueness is `(project_id, user_id)`.
  *
  * @namespace sys
  */
-export const SysEnvironmentMember = ObjectSchema.create({
+export const SysProjectMember = ObjectSchema.create({
   namespace: 'sys',
-  name: 'environment_member',
-  label: 'Environment Member',
-  pluralLabel: 'Environment Members',
+  name: 'project_member',
+  label: 'Project Member',
+  pluralLabel: 'Project Members',
   icon: 'users',
   isSystem: true,
-  description: 'Per-environment user/role assignments.',
-  titleFormat: '{user_id} @ {environment_id}',
-  compactLayout: ['user_id', 'environment_id', 'role'],
+  description: 'Per-project user/role assignments.',
+  titleFormat: '{user_id} @ {project_id}',
+  compactLayout: ['user_id', 'project_id', 'role'],
 
   fields: {
     id: Field.text({
@@ -48,10 +47,10 @@ export const SysEnvironmentMember = ObjectSchema.create({
       description: 'Last update timestamp.',
     }),
 
-    environment_id: Field.text({
-      label: 'Environment ID',
+    project_id: Field.text({
+      label: 'Project ID',
       required: true,
-      description: 'Foreign key to sys_environment.',
+      description: 'Foreign key to sys_project.',
     }),
 
     user_id: Field.text({
@@ -63,7 +62,7 @@ export const SysEnvironmentMember = ObjectSchema.create({
     role: Field.select({
       label: 'Role',
       required: true,
-      description: 'Per-environment role (owner/admin/maker/reader/guest).',
+      description: 'Per-project role (owner/admin/maker/reader/guest).',
       options: [
         { value: 'owner', label: 'Owner' },
         { value: 'admin', label: 'Administrator' },
@@ -81,8 +80,8 @@ export const SysEnvironmentMember = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['environment_id', 'user_id'], unique: true },
-    { fields: ['environment_id'] },
+    { fields: ['project_id', 'user_id'], unique: true },
+    { fields: ['project_id'] },
     { fields: ['user_id'] },
     { fields: ['role'] },
   ],

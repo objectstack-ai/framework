@@ -13,7 +13,7 @@ import { PluginRegistryProvider } from '../plugins';
 import { builtInPlugins } from '../plugins/built-in';
 import { useObjectStackClient } from '../hooks/useObjectStackClient';
 import { SessionProvider, useSession } from '../hooks/useSession';
-import { useEnvAwarePackages } from '../hooks/useEnvAwarePackages';
+import { useEnvAwarePackages } from '../hooks/useProjectAwarePackages';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 /** Routes that don't require authentication. */
@@ -21,7 +21,7 @@ const PUBLIC_ROUTES = new Set(['/login', '/register']);
 
 /**
  * Routes where an environment selection is NOT required.
- * Everything under /environments (list + detail), org mgmt, auth pages.
+ * Everything under /projects (list + detail), org mgmt, auth pages.
  */
 function isEnvExemptPath(pathname: string): boolean {
   return (
@@ -29,7 +29,7 @@ function isEnvExemptPath(pathname: string): boolean {
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/orgs') ||
-    pathname.startsWith('/environments') ||
+    pathname.startsWith('/projects') ||
     pathname === '/api-console' ||
     pathname.startsWith('/api-console/')
   );
@@ -39,12 +39,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const params = useParams({ strict: false }) as { environmentId?: string; package?: string };
+  const params = useParams({ strict: false }) as { projectId?: string; package?: string };
   const isPublic = PUBLIC_ROUTES.has(location.pathname);
 
   // Get packages for TopBar PackageSwitcher
   const { packages, selectedPackage, setSelectedPackage } =
-    useEnvAwarePackages(params.environmentId);
+    useEnvAwarePackages(params.projectId);
 
   // Extract the $package segment from the URL
   const activePackageId = useMemo(() => {
@@ -72,20 +72,20 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const handleSelectPackage = (pkg: InstalledPackage) => {
     const nextId = pkg.manifest?.id;
     if (!nextId) return;
-    if (params.environmentId) {
+    if (params.projectId) {
       navigate({
-        to: '/environments/$environmentId/$package',
-        params: { environmentId: params.environmentId, package: nextId },
+        to: '/projects/$projectId/$package',
+        params: { projectId: params.projectId, package: nextId },
       });
     }
   };
 
   // Redirect to environment picker when the user hits a route that requires
-  // an environment context (e.g. /$package/*) but isn't already under /environments.
+  // an environment context (e.g. /$package/*) but isn't already under /projects.
   useEffect(() => {
     if (loading || !user) return;
     if (!isEnvExemptPath(location.pathname)) {
-      navigate({ to: '/environments' });
+      navigate({ to: '/projects' });
     }
   }, [user, loading, location.pathname, navigate]);
 

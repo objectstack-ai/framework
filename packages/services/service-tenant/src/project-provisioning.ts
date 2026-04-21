@@ -4,15 +4,15 @@ import { randomUUID } from 'node:crypto';
 import type { Contracts } from '@objectstack/spec';
 type IDataDriver = Contracts.IDataDriver;
 import type {
-  DatabaseCredential,
-  DatabaseDriver,
-  Environment,
-  ProvisionEnvironmentRequest,
-  ProvisionEnvironmentResponse,
+  ProjectCredential,
+  ProjectDriver,
+  Project,
+  ProvisionProjectRequest,
+  ProvisionProjectResponse,
   ProvisionOrganizationRequest,
   ProvisionOrganizationResponse,
 } from '@objectstack/spec/cloud';
-import { ProvisionEnvironmentRequestSchema, ProvisionOrganizationRequestSchema } from '@objectstack/spec/cloud';
+import { ProvisionProjectRequestSchema, ProvisionOrganizationRequestSchema } from '@objectstack/spec/cloud';
 import { TursoPlatformClient } from './turso-platform-client.js';
 
 /**
@@ -23,17 +23,17 @@ import { TursoPlatformClient } from './turso-platform-client.js';
  * interface, so new drivers can be plugged in without touching the
  * higher-level orchestration logic.
  */
-export interface EnvironmentDatabaseAdapter {
+export interface ProjectDatabaseAdapter {
   /** Driver key this adapter answers to (e.g. `turso`, `libsql`, `sqlite`, `postgres`). */
-  readonly driver: DatabaseDriver;
+  readonly driver: ProjectDriver;
 
   /**
-   * Allocate a fresh physical database for the given environment.
+   * Allocate a fresh physical database for the given project.
    * Must return the public `databaseUrl` and the plaintext credential
    * secret; the orchestrator will encrypt the secret before storing it.
    */
   createDatabase(params: {
-    environmentId: string;
+    projectId: string;
     databaseName: string;
     region: string;
     storageLimitMb: number;
@@ -67,12 +67,12 @@ export class NoopSecretEncryptor implements SecretEncryptor {
 
 /**
  * Turso Platform adapter — calls the Turso Platform API to provision a new
- * cloud database for each environment, then mints a per-database auth token.
+ * cloud database for each project, then mints a per-database auth token.
  *
  * Required env vars: `TURSO_ORG_NAME`, `TURSO_API_TOKEN`.
  */
-export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
-  readonly driver: DatabaseDriver = 'turso';
+export class TursoProjectDatabaseAdapter implements ProjectDatabaseAdapter {
+  readonly driver: ProjectDriver = 'turso';
 
   private readonly client: TursoPlatformClient;
   private readonly group: string;
@@ -83,7 +83,7 @@ export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapt
   }
 
   async createDatabase(params: {
-    environmentId: string;
+    projectId: string;
     databaseName: string;
     region: string;
     storageLimitMb: number;
@@ -101,26 +101,22 @@ export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapt
 }
 
 /**
- * Local SQLite adapter for development environments. Creates one `.db` file
- * per environment under `baseDir`, named after the stable `databaseName`
- * (e.g. `env-{uuid}.db`) so the file survives slug renames.
- *
- * The `driver` key defaults to `sqlite` but callers can override it so the
- * same adapter can be registered under other keys (e.g. `turso` in local
- * dev when no Turso platform credentials are configured).
+ * Local SQLite adapter for development projects. Creates one `.db` file
+ * per project under `baseDir`, named after the stable `databaseName`
+ * (e.g. `proj-{uuid}.db`) so the file survives slug renames.
  */
-export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
-  readonly driver: DatabaseDriver;
+export class LocalSQLiteProjectDatabaseAdapter implements ProjectDatabaseAdapter {
+  readonly driver: ProjectDriver;
 
   constructor(
-    private readonly baseDir: string = '.objectstack/data/environments',
-    driver: DatabaseDriver = 'sqlite',
+    private readonly baseDir: string = '.objectstack/data/projects',
+    driver: ProjectDriver = 'sqlite',
   ) {
     this.driver = driver;
   }
 
   async createDatabase(params: {
-    environmentId: string;
+    projectId: string;
     databaseName: string;
     region: string;
     storageLimitMb: number;
@@ -129,8 +125,6 @@ export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabas
     const { resolve } = await import('node:path');
     const dbPath = resolve(this.baseDir, `${params.databaseName}.db`);
     mkdirSync(this.baseDir, { recursive: true });
-    // Touch an empty file so operators can see the provisioned DB on disk
-    // right away (before any connection opens and creates it lazily).
     if (!existsSync(dbPath)) writeFileSync(dbPath, '');
     return {
       databaseUrl: `file:${dbPath}`,
@@ -140,17 +134,13 @@ export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabas
 }
 
 /**
- * In-memory environment adapter. Storage is ephemeral by design — the
- * control-plane ObjectQL driver (which IS the memory driver) already
- * persists the `sys__environment` record into `memory-driver.json` in
- * its own format. This adapter only needs to return a stable URL; it must
- * not write any separate marker files.
+ * In-memory project adapter. Storage is ephemeral by design.
  */
-export class MemoryEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
-  readonly driver: DatabaseDriver = 'memory';
+export class MemoryProjectDatabaseAdapter implements ProjectDatabaseAdapter {
+  readonly driver: ProjectDriver = 'memory';
 
   async createDatabase(params: {
-    environmentId: string;
+    projectId: string;
     databaseName: string;
     region: string;
     storageLimitMb: number;
@@ -166,31 +156,31 @@ export class MemoryEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdap
  * Mock adapter used by dev/test environments when no real provider is
  * configured. Returns stable synthetic URLs / tokens.
  */
-export class MockEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
-  readonly driver: DatabaseDriver;
-  constructor(driver: DatabaseDriver = 'turso') {
+export class MockProjectDatabaseAdapter implements ProjectDatabaseAdapter {
+  readonly driver: ProjectDriver;
+  constructor(driver: ProjectDriver = 'turso') {
     this.driver = driver;
   }
   async createDatabase(params: {
-    environmentId: string;
+    projectId: string;
     databaseName: string;
     region: string;
     storageLimitMb: number;
   }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
     return {
       databaseUrl: `libsql://${params.databaseName}.mock-${this.driver}.local`,
-      plaintextSecret: `mock-token-${params.environmentId}`,
+      plaintextSecret: `mock-token-${params.projectId}`,
     };
   }
 }
 
 /**
- * Configuration for {@link EnvironmentProvisioningService}.
+ * Configuration for {@link ProjectProvisioningService}.
  */
-export interface EnvironmentProvisioningConfig {
+export interface ProjectProvisioningConfig {
   /**
-   * Control-plane data driver used to persist `sys_environment` and
-   * `sys_database_credential` rows.
+   * Control-plane data driver used to persist `sys_project` and
+   * `sys_project_credential` rows.
    *
    * Optional: when omitted, the service runs in **detached** mode —
    * useful for tests that only exercise the orchestration logic.
@@ -202,10 +192,10 @@ export interface EnvironmentProvisioningConfig {
    * picks an adapter by matching `request.driver` (falling back to
    * `defaultDriver`).
    */
-  adapters?: EnvironmentDatabaseAdapter[];
+  adapters?: ProjectDatabaseAdapter[];
 
   /** Driver used when the request does not specify one. Default `turso`. */
-  defaultDriver?: DatabaseDriver;
+  defaultDriver?: ProjectDriver;
 
   /** Default region when the request does not specify one. */
   defaultRegion?: string;
@@ -218,32 +208,30 @@ export interface EnvironmentProvisioningConfig {
 }
 
 /**
- * Environment Provisioning Service
+ * Project Provisioning Service
  *
- * Orchestrates the v4.1+ "environment per database" model:
+ * Orchestrates the "project per database" model:
  *
  *   1. `provisionOrganization(req)`
- *        → creates the organization's default environment + its dedicated DB.
- *   2. `provisionEnvironment(req)`
- *        → allocates a new environment (prod / test / dev / sandbox / …)
+ *        → creates the organization's default project + its dedicated DB.
+ *   2. `provisionProject(req)`
+ *        → allocates a new project (prod / test / dev / sandbox / …)
  *          with its own physical DB and credential row.
  *
- * The Control Plane's responsibilities end at "environment connection
+ * The Control Plane's responsibilities end at "project connection
  * metadata and authentication". It never touches data-plane rows.
- *
- * See ADR-0002 (`docs/adr/0002-environment-database-isolation.md`).
  */
-export class EnvironmentProvisioningService {
+export class ProjectProvisioningService {
   private readonly config: Required<
-    Pick<EnvironmentProvisioningConfig, 'defaultDriver' | 'defaultRegion' | 'defaultStorageLimitMb'>
+    Pick<ProjectProvisioningConfig, 'defaultDriver' | 'defaultRegion' | 'defaultStorageLimitMb'>
   > &
-    Omit<EnvironmentProvisioningConfig, 'defaultDriver' | 'defaultRegion' | 'defaultStorageLimitMb'>;
+    Omit<ProjectProvisioningConfig, 'defaultDriver' | 'defaultRegion' | 'defaultStorageLimitMb'>;
 
-  private readonly adapters = new Map<DatabaseDriver, EnvironmentDatabaseAdapter>();
+  private readonly adapters = new Map<ProjectDriver, ProjectDatabaseAdapter>();
 
   private readonly encryptor: SecretEncryptor;
 
-  constructor(config: EnvironmentProvisioningConfig = {}) {
+  constructor(config: ProjectProvisioningConfig = {}) {
     this.config = {
       controlPlaneDriver: config.controlPlaneDriver,
       adapters: config.adapters,
@@ -261,7 +249,7 @@ export class EnvironmentProvisioningService {
   }
 
   /**
-   * Bootstrap a brand-new organization — creates the default environment
+   * Bootstrap a brand-new organization — creates the default project
    * (by default `prod`) and its physical database in one atomic call.
    */
   async provisionOrganization(
@@ -270,11 +258,11 @@ export class EnvironmentProvisioningService {
     const parsed = ProvisionOrganizationRequestSchema.parse(request);
     const startedAt = Date.now();
 
-    const defaultEnv = await this.provisionEnvironment({
+    const defaultProject = await this.provisionProject({
       organizationId: parsed.organizationId,
-      slug: parsed.defaultEnvSlug,
-      displayName: parsed.defaultEnvSlug === 'prod' ? 'Production' : parsed.defaultEnvSlug,
-      envType: parsed.defaultEnvType,
+      slug: parsed.defaultProjectSlug,
+      displayName: parsed.defaultProjectSlug === 'prod' ? 'Production' : parsed.defaultProjectSlug,
+      projectType: parsed.defaultProjectType,
       region: parsed.region,
       driver: parsed.driver,
       plan: parsed.plan,
@@ -285,53 +273,50 @@ export class EnvironmentProvisioningService {
     });
 
     return {
-      defaultEnvironment: defaultEnv,
+      defaultProject,
       durationMs: Date.now() - startedAt,
-      warnings: defaultEnv.warnings,
+      warnings: defaultProject.warnings,
     };
   }
 
   /**
-   * Provision a new environment (dev/test/prod/sandbox/…) for an
+   * Provision a new project (dev/test/prod/sandbox/…) for an
    * existing organization. Allocates a fresh physical database and mints
    * an encrypted credential row.
    */
-  async provisionEnvironment(
-    request: ProvisionEnvironmentRequest,
-  ): Promise<ProvisionEnvironmentResponse> {
-    const parsed = ProvisionEnvironmentRequestSchema.parse(request);
+  async provisionProject(
+    request: ProvisionProjectRequest,
+  ): Promise<ProvisionProjectResponse> {
+    const parsed = ProvisionProjectRequestSchema.parse(request);
     const startedAt = Date.now();
     const warnings: string[] = [];
 
-    const environmentId = randomUUID();
+    const projectId = randomUUID();
     const credentialId = randomUUID();
 
-    const driver: DatabaseDriver = parsed.driver ?? this.config.defaultDriver;
+    const driver: ProjectDriver = parsed.driver ?? this.config.defaultDriver;
     const region = parsed.region ?? this.config.defaultRegion;
     const storageLimitMb = parsed.storageLimitMb ?? this.config.defaultStorageLimitMb;
-    const databaseName = `env-${environmentId}`;
+    const databaseName = `proj-${projectId}`;
 
-    // 1. Enforce the "exactly one default environment per org" invariant
-    //    before minting the new row. If the caller asked for isDefault:true
-    //    and one already exists, fail fast — the caller should demote the
-    //    existing default first (out of scope for v4.1 API).
+    // Enforce "exactly one default project per org" invariant.
     if (parsed.isDefault && this.config.controlPlaneDriver) {
-      const existingDefault = await this.findDefaultEnvironment(parsed.organizationId);
+      const existingDefault = await this.findDefaultProject(parsed.organizationId);
       if (existingDefault) {
         throw new Error(
-          `Organization ${parsed.organizationId} already has a default environment (${existingDefault.id}). Demote it first.`,
+          `Organization ${parsed.organizationId} already has a default project (${existingDefault.id}). Demote it first.`,
         );
       }
     }
 
-    // 2. Allocate physical DB via the adapter.
+    // Allocate physical DB via the adapter.
     const adapter = this.resolveAdapter(driver);
     let databaseUrl: string;
     let plaintextSecret: string;
     if (adapter) {
       try {
         const created = await adapter.createDatabase({
-          environmentId,
+          projectId,
           databaseName,
           region,
           storageLimitMb,
@@ -340,14 +325,14 @@ export class EnvironmentProvisioningService {
         plaintextSecret = created.plaintextSecret;
       } catch (error) {
         throw new Error(
-          `Failed to provision physical database for environment ${environmentId}: ${
+          `Failed to provision physical database for project ${projectId}: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
       }
     } else {
-      const fallback = await new MockEnvironmentDatabaseAdapter(driver).createDatabase({
-        environmentId,
+      const fallback = await new MockProjectDatabaseAdapter(driver).createDatabase({
+        projectId,
         databaseName,
         region,
         storageLimitMb,
@@ -355,17 +340,17 @@ export class EnvironmentProvisioningService {
       databaseUrl = fallback.databaseUrl;
       plaintextSecret = fallback.plaintextSecret;
       warnings.push(
-        `No adapter registered for driver "${driver}"; environment provisioned with mock addressing.`,
+        `No adapter registered for driver "${driver}"; project provisioned with mock addressing.`,
       );
     }
 
     const nowIso = new Date().toISOString();
-    const environment: Environment = {
-      id: environmentId,
+    const project: Project = {
+      id: projectId,
       organizationId: parsed.organizationId,
       slug: parsed.slug,
       displayName: parsed.displayName ?? parsed.slug,
-      envType: parsed.envType,
+      projectType: parsed.projectType,
       isDefault: parsed.isDefault ?? false,
       region,
       plan: parsed.plan ?? 'free',
@@ -374,7 +359,6 @@ export class EnvironmentProvisioningService {
       createdAt: nowIso,
       updatedAt: nowIso,
       metadata: parsed.metadata,
-      // Physical database addressing (embedded on the environment row)
       databaseUrl,
       databaseDriver: driver,
       storageLimitMb,
@@ -382,9 +366,9 @@ export class EnvironmentProvisioningService {
       hostname: parsed.hostname,
     };
 
-    const credential: DatabaseCredential = {
+    const credential: ProjectCredential = {
       id: credentialId,
-      environmentId,
+      projectId,
       secretCiphertext: await Promise.resolve(this.encryptor.encrypt(plaintextSecret)),
       encryptionKeyId: this.encryptor.keyId,
       authorization: 'full_access',
@@ -392,34 +376,33 @@ export class EnvironmentProvisioningService {
       createdAt: nowIso,
     };
 
-    // 3. Persist to the control plane (best-effort — callers in detached
-    //    mode just get the in-memory payload).
+    // Persist to the control plane.
     if (this.config.controlPlaneDriver) {
       try {
-        await this.config.controlPlaneDriver.create('environment', {
-          id: environment.id,
-          organization_id: environment.organizationId,
-          slug: environment.slug,
-          display_name: environment.displayName,
-          env_type: environment.envType,
-          is_default: environment.isDefault,
-          region: environment.region,
-          plan: environment.plan,
-          status: environment.status,
-          created_by: environment.createdBy,
-          created_at: environment.createdAt,
-          updated_at: environment.updatedAt,
-          database_url: environment.databaseUrl,
-          database_driver: environment.databaseDriver,
-          storage_limit_mb: environment.storageLimitMb,
-          provisioned_at: environment.provisionedAt,
-          metadata: environment.metadata ? JSON.stringify(environment.metadata) : null,
-          hostname: environment.hostname,
+        await this.config.controlPlaneDriver.create('project', {
+          id: project.id,
+          organization_id: project.organizationId,
+          slug: project.slug,
+          display_name: project.displayName,
+          project_type: project.projectType,
+          is_default: project.isDefault,
+          region: project.region,
+          plan: project.plan,
+          status: project.status,
+          created_by: project.createdBy,
+          created_at: project.createdAt,
+          updated_at: project.updatedAt,
+          database_url: project.databaseUrl,
+          database_driver: project.databaseDriver,
+          storage_limit_mb: project.storageLimitMb,
+          provisioned_at: project.provisionedAt,
+          metadata: project.metadata ? JSON.stringify(project.metadata) : null,
+          hostname: project.hostname,
         });
 
-        await this.config.controlPlaneDriver.create('database_credential', {
+        await this.config.controlPlaneDriver.create('project_credential', {
           id: credential.id,
-          environment_id: credential.environmentId,
+          project_id: credential.projectId,
           secret_ciphertext: credential.secretCiphertext,
           encryption_key_id: credential.encryptionKeyId,
           authorization: credential.authorization,
@@ -435,11 +418,11 @@ export class EnvironmentProvisioningService {
         );
       }
     } else {
-      warnings.push('Control-plane driver not configured — environment records not persisted.');
+      warnings.push('Control-plane driver not configured — project records not persisted.');
     }
 
     return {
-      environment,
+      project,
       credential,
       durationMs: Date.now() - startedAt,
       warnings: warnings.length > 0 ? warnings : undefined,
@@ -447,13 +430,12 @@ export class EnvironmentProvisioningService {
   }
 
   /**
-   * Rotate the credential for an environment. Creates a new `active`
-   * credential row and flips the previous one to `revoked`.
+   * Rotate the credential for a project.
    */
   async rotateCredential(
-    environmentId: string,
+    projectId: string,
     plaintextSecret: string,
-  ): Promise<DatabaseCredential> {
+  ): Promise<ProjectCredential> {
     if (!this.config.controlPlaneDriver) {
       throw new Error('Control-plane driver required for credential rotation.');
     }
@@ -461,9 +443,9 @@ export class EnvironmentProvisioningService {
     const nowIso = new Date().toISOString();
     const newCredentialId = randomUUID();
 
-    const credential: DatabaseCredential = {
+    const credential: ProjectCredential = {
       id: newCredentialId,
-      environmentId,
+      projectId,
       secretCiphertext: await Promise.resolve(this.encryptor.encrypt(plaintextSecret)),
       encryptionKeyId: this.encryptor.keyId,
       authorization: 'full_access',
@@ -471,22 +453,22 @@ export class EnvironmentProvisioningService {
       createdAt: nowIso,
     };
 
-    // Find existing active credential(s) and revoke them.
-    const existing = (await this.config.controlPlaneDriver.find('database_credential', {
-      where: { environment_id: environmentId, status: 'active' },
+    // Revoke existing active credentials.
+    const existing = (await this.config.controlPlaneDriver.find('project_credential', {
+      where: { project_id: projectId, status: 'active' },
     } as any)) as Array<{ id: string }>;
 
     for (const row of existing ?? []) {
-      await this.config.controlPlaneDriver.update('database_credential', row.id, {
+      await this.config.controlPlaneDriver.update('project_credential', row.id, {
         status: 'revoked',
         revoked_at: nowIso,
         updated_at: nowIso,
       });
     }
 
-    await this.config.controlPlaneDriver.create('database_credential', {
+    await this.config.controlPlaneDriver.create('project_credential', {
       id: credential.id,
-      environment_id: credential.environmentId,
+      project_id: credential.projectId,
       secret_ciphertext: credential.secretCiphertext,
       encryption_key_id: credential.encryptionKeyId,
       authorization: credential.authorization,
@@ -498,22 +480,18 @@ export class EnvironmentProvisioningService {
     return credential;
   }
 
-  /**
-   * Register/replace a physical-DB adapter at runtime (useful for tests
-   * and for plugins that ship their own driver).
-   */
-  registerAdapter(adapter: EnvironmentDatabaseAdapter): void {
+  registerAdapter(adapter: ProjectDatabaseAdapter): void {
     this.adapters.set(adapter.driver, adapter);
   }
 
-  private resolveAdapter(driver: DatabaseDriver): EnvironmentDatabaseAdapter | undefined {
+  private resolveAdapter(driver: ProjectDriver): ProjectDatabaseAdapter | undefined {
     return this.adapters.get(driver);
   }
 
-  private async findDefaultEnvironment(organizationId: string): Promise<{ id: string } | null> {
+  private async findDefaultProject(organizationId: string): Promise<{ id: string } | null> {
     if (!this.config.controlPlaneDriver) return null;
     try {
-      const rows = (await this.config.controlPlaneDriver.find('environment', {
+      const rows = (await this.config.controlPlaneDriver.find('project', {
         where: { organization_id: organizationId, is_default: true },
       } as any)) as Array<{ id: string }>;
       return rows && rows.length > 0 ? rows[0] : null;
@@ -525,48 +503,20 @@ export class EnvironmentProvisioningService {
 
 /**
  * Build the default adapter list from environment variables.
- *
- * Adapters are keyed by the **ObjectQL driver name** users see in Studio
- * (`memory`, `turso`, `sqlite`, …) so the dispatcher can look them up
- * directly when a caller picks a driver.
- *
- * Selection rules:
- *  - Always register the `memory` adapter (returns a `memory://` URL;
- *    the control-plane ObjectQL driver handles persisting the record into
- *    `memory-driver.json` in its native format).
- *  - Always register the `sqlite` adapter (writes a `.db` file per env
- *    under `.objectstack/data/environments/` in local dev, or `/tmp/.objectstack/data/environments/`
- *    in serverless environments like Vercel where only /tmp is writable).
- *  - For the `turso` key:
- *      - if `TURSO_ORG_NAME` + `TURSO_API_TOKEN` are both set → use the
- *        real Turso Platform adapter (creates cloud databases);
- *      - otherwise → fall back to the local sqlite adapter so users on
- *        machines without Turso creds still get a real `.db` file.
  */
-export function createDefaultEnvironmentAdapters(
+export function createDefaultProjectAdapters(
   env: Record<string, string | undefined> = process.env,
-): EnvironmentDatabaseAdapter[] {
-  const adapters: EnvironmentDatabaseAdapter[] = [];
-  adapters.push(new MemoryEnvironmentDatabaseAdapter());
-
-  // Use /tmp for serverless environments (Vercel, AWS Lambda, etc.)
-  // These platforms only have /tmp as writable filesystem
-  const isServerless = env.VERCEL === '1' || env.AWS_LAMBDA_FUNCTION_NAME || env.FUNCTION_NAME;
-  const sqliteBaseDir = isServerless
-    ? '/tmp/.objectstack/data/environments'
-    : '.objectstack/data/environments';
-
-  adapters.push(new LocalSQLiteEnvironmentDatabaseAdapter(sqliteBaseDir));
+): ProjectDatabaseAdapter[] {
+  const adapters: ProjectDatabaseAdapter[] = [];
+  adapters.push(new MemoryProjectDatabaseAdapter());
+  adapters.push(new LocalSQLiteProjectDatabaseAdapter());
 
   const orgName = env.TURSO_ORG_NAME;
   const apiToken = env.TURSO_API_TOKEN;
   if (orgName && apiToken && orgName !== 'your-org-slug' && apiToken !== 'your-platform-api-token') {
-    adapters.push(new TursoEnvironmentDatabaseAdapter({ organization: orgName, apiToken }));
+    adapters.push(new TursoProjectDatabaseAdapter({ organization: orgName, apiToken }));
   } else {
-    // Local-dev fallback: when the user picks `turso` in Studio but no
-    // platform creds are configured, still create a real file on disk so
-    // the UX is "I created an env and I can see it".
-    adapters.push(new LocalSQLiteEnvironmentDatabaseAdapter(sqliteBaseDir, 'turso'));
+    adapters.push(new LocalSQLiteProjectDatabaseAdapter(undefined, 'turso'));
   }
   return adapters;
 }

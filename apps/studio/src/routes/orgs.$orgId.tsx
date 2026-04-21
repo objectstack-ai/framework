@@ -367,9 +367,9 @@ function OrgDetailPage() {
           </Tabs>
 
           <p className="text-xs text-muted-foreground">
-            Need to manage environments?{' '}
-            <Link to="/environments" className="text-primary hover:underline">
-              Go to environments
+            Need to manage projects?{' '}
+            <Link to="/projects" className="text-primary hover:underline">
+              Go to projects
             </Link>
           </p>
         </div>

@@ -1,27 +1,27 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * EnvironmentSwitcher
+ * ProjectSwitcher
  *
- * Power Platform-style environment picker, anchored on the left of the
- * site header. Lists every environment visible to the current session,
- * grouped by `envType`, and navigates to `/environments/:id/overview`
- * when one is selected. Also exposes a "+ New environment…" footer that
- * opens {@link NewEnvironmentDialog}.
+ * Power Platform-style project picker, anchored on the left of the
+ * site header. Lists every project visible to the current session,
+ * grouped by `projectType`, and navigates to `/projects/:id/overview`
+ * when one is selected. Also exposes a "+ New project…" footer that
+ * opens {@link NewProjectDialog}.
  *
  * The switcher is intentionally stateless with respect to the active
- * environment — the URL is the source of truth, read via
+ * project — the URL is the source of truth, read via
  * `useParams({ strict: false })`. Persistence across reloads is handled
- * by `rememberActiveEnvironment()` in `useEnvironments` and is replayed
+ * by `rememberActiveProject()` in `useProjects` and is replayed
  * by `useObjectStackClient` during initial client construction.
  *
- * @see docs/adr/0002-environment-database-isolation.md
+ * @see docs/adr/0002-project-database-isolation.md
  */
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { ChevronsUpDown, Layers, Plus, Search, Check } from 'lucide-react';
-import type { Environment, EnvironmentType } from '@objectstack/spec/cloud';
+import type { Project, ProjectType } from '@objectstack/spec/cloud';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,11 +33,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useEnvironments } from '@/hooks/useEnvironments';
-import { NewEnvironmentDialog } from '@/components/new-environment-dialog';
-import { EnvironmentBadge } from '@/components/environment-badge';
+import { useProjects } from '@/hooks/useProjects';
+import { NewProjectDialog } from '@/components/new-project-dialog';
+import { ProjectBadge } from '@/components/project-badge';
 
-const ENV_TYPE_ORDER: EnvironmentType[] = [
+const ENV_TYPE_ORDER: ProjectType[] = [
   'production',
   'staging',
   'sandbox',
@@ -47,7 +47,7 @@ const ENV_TYPE_ORDER: EnvironmentType[] = [
   'trial',
 ];
 
-const ENV_TYPE_LABEL: Record<EnvironmentType, string> = {
+const ENV_TYPE_LABEL: Record<ProjectType, string> = {
   production: 'Production',
   staging: 'Staging',
   sandbox: 'Sandbox',
@@ -57,47 +57,47 @@ const ENV_TYPE_LABEL: Record<EnvironmentType, string> = {
   trial: 'Trial',
 };
 
-export function EnvironmentSwitcher() {
+export function ProjectSwitcher() {
   const navigate = useNavigate();
-  const params = useParams({ strict: false }) as { environmentId?: string };
-  const activeId = params.environmentId;
-  const { environments, loading, reload } = useEnvironments();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const activeId = params.projectId;
+  const { projects, loading, reload } = useProjects();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
 
   const active = useMemo(
-    () => environments.find((e) => e.id === activeId) ?? null,
-    [environments, activeId],
+    () => projects.find((e) => e.id === activeId) ?? null,
+    [projects, activeId],
   );
 
   const grouped = useMemo(() => {
     const q = search.trim().toLowerCase();
     const filtered = q
-      ? environments.filter(
+      ? projects.filter(
           (e) =>
             e.slug.toLowerCase().includes(q) ||
             e.displayName.toLowerCase().includes(q) ||
             e.id.toLowerCase().includes(q),
         )
-      : environments;
-    const map = new Map<EnvironmentType, Environment[]>();
+      : projects;
+    const map = new Map<ProjectType, Project[]>();
     for (const e of filtered) {
-      const arr = map.get(e.envType) ?? [];
+      const arr = map.get(e.projectType) ?? [];
       arr.push(e);
-      map.set(e.envType, arr);
+      map.set(e.projectType, arr);
     }
     return ENV_TYPE_ORDER.filter((t) => map.has(t)).map(
       (t) => [t, map.get(t)!] as const,
     );
-  }, [environments, search]);
+  }, [projects, search]);
 
   const handleSelect = (id: string) => {
     setOpen(false);
     setSearch('');
     navigate({
-      to: '/environments/$environmentId',
-      params: { environmentId: id },
+      to: '/projects/$projectId',
+      params: { projectId: id },
     });
   };
 
@@ -116,11 +116,11 @@ export function EnvironmentSwitcher() {
                 <span className="max-w-[160px] truncate">
                   {active.displayName}
                 </span>
-                <EnvironmentBadge envType={active.envType} />
+                <ProjectBadge projectType={active.projectType} />
               </>
             ) : (
               <span className="text-muted-foreground">
-                {loading ? 'Loading environments…' : 'Select environment'}
+                {loading ? 'Loading projects…' : 'Select project'}
               </span>
             )}
             <ChevronsUpDown className="h-3.5 w-3.5 opacity-60" />
@@ -136,7 +136,7 @@ export function EnvironmentSwitcher() {
               <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 autoFocus
-                placeholder="Search environments…"
+                placeholder="Search projects…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-8 pl-7 text-sm"
@@ -145,15 +145,15 @@ export function EnvironmentSwitcher() {
           </div>
 
           <div className="max-h-[340px] overflow-y-auto py-1">
-            {environments.length === 0 && !loading && (
+            {projects.length === 0 && !loading && (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                No environments yet.
+                No projects yet.
               </div>
             )}
-            {grouped.map(([envType, list]) => (
-              <div key={envType}>
+            {grouped.map(([projectType, list]) => (
+              <div key={projectType}>
                 <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {ENV_TYPE_LABEL[envType]}
+                  {ENV_TYPE_LABEL[projectType]}
                 </DropdownMenuLabel>
                 {list.map((env) => (
                   <DropdownMenuItem
@@ -184,7 +184,7 @@ export function EnvironmentSwitcher() {
                         <span>· {env.status}</span>
                       </div>
                     </div>
-                    <EnvironmentBadge envType={env.envType} />
+                    <ProjectBadge projectType={env.projectType} />
                     {env.id === activeId && (
                       <Check className="h-3.5 w-3.5 text-primary" />
                     )}
@@ -204,29 +204,29 @@ export function EnvironmentSwitcher() {
             className="gap-2 text-sm"
           >
             <Plus className="h-3.5 w-3.5" />
-            New environment…
+            New project…
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={(e) => {
               e.preventDefault();
               setOpen(false);
-              navigate({ to: '/environments' });
+              navigate({ to: '/projects' });
             }}
             className="gap-2 text-sm text-muted-foreground"
           >
-            Manage all environments
+            Manage all projects
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <NewEnvironmentDialog
+      <NewProjectDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={async (env) => {
+        onCreated={async (project) => {
           await reload();
           navigate({
-            to: '/environments/$environmentId',
-            params: { environmentId: env.id },
+            to: '/projects/$projectId',
+            params: { projectId: project.id },
           });
         }}
       />

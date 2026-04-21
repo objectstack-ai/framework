@@ -2,11 +2,11 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 import { DeveloperOverview } from '../components/DeveloperOverview';
-import { useEnvAwarePackages } from '../hooks/useEnvAwarePackages';
+import { useEnvAwarePackages } from '../hooks/useProjectAwarePackages';
 
 function EnvPackageIndexComponent() {
-  const { environmentId } = Route.useParams();
-  const { packages, selectedPackage } = useEnvAwarePackages(environmentId);
+  const { projectId } = Route.useParams();
+  const { packages, selectedPackage } = useEnvAwarePackages(projectId);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -15,6 +15,6 @@ function EnvPackageIndexComponent() {
   );
 }
 
-export const Route = createFileRoute('/environments/$environmentId/$package/')({
+export const Route = createFileRoute('/projects/$projectId/$package/')({
   component: EnvPackageIndexComponent,
 });

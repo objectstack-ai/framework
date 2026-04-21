@@ -3,28 +3,28 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_database_credential — Rotatable Database Credentials
+ * sys_project_credential — Rotatable Project Database Credentials
  *
- * Stores encrypted credentials for environment databases separately from
- * the environment record (`sys_environment`) so that secrets can
+ * Stores encrypted credentials for project databases separately from
+ * the project record (`sys_project`) so that secrets can
  * be rotated, revoked, and audited independently.
  *
- * During rotation, multiple rows can exist per `environment_id`:
+ * During rotation, multiple rows can exist per `project_id`:
  * the previous credential stays `active` until the new one has been
  * propagated to all runtimes, then flips to `revoked`.
  *
  * @namespace sys
  */
-export const SysDatabaseCredential = ObjectSchema.create({
+export const SysProjectCredential = ObjectSchema.create({
   namespace: 'sys',
-  name: 'database_credential',
-  label: 'Database Credential',
-  pluralLabel: 'Database Credentials',
+  name: 'project_credential',
+  label: 'Project Credential',
+  pluralLabel: 'Project Credentials',
   icon: 'key',
   isSystem: true,
-  description: 'Rotatable encrypted credentials for environment databases.',
+  description: 'Rotatable encrypted credentials for project databases.',
   titleFormat: '{id}',
-  compactLayout: ['environment_id', 'status', 'authorization', 'expires_at'],
+  compactLayout: ['project_id', 'status', 'authorization', 'expires_at'],
 
   fields: {
     id: Field.text({
@@ -48,10 +48,10 @@ export const SysDatabaseCredential = ObjectSchema.create({
       description: 'Last update timestamp.',
     }),
 
-    environment_id: Field.text({
-      label: 'Environment ID',
+    project_id: Field.text({
+      label: 'Project ID',
       required: true,
-      description: 'Foreign key to sys_environment.',
+      description: 'Foreign key to sys_project.',
     }),
 
     secret_ciphertext: Field.textarea({
@@ -104,8 +104,8 @@ export const SysDatabaseCredential = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['environment_id'] },
-    { fields: ['environment_id', 'status'] },
+    { fields: ['project_id'] },
+    { fields: ['project_id', 'status'] },
     { fields: ['status'] },
     { fields: ['expires_at'] },
   ],

@@ -1,30 +1,30 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Legacy `/$package` layout — redirects to the env-scoped equivalent.
+ * Legacy `/$package` layout — redirects to the project-scoped equivalent.
  *
- * Package browsing is now per-environment: `/environments/:envId/:package/*`.
- * If the user's last-used environment is known (localStorage), we redirect
- * directly there. Otherwise we send them to the environment selection page.
+ * Package browsing is now per-project: `/projects/:projectId/:package/*`.
+ * If the user's last-used project is known (localStorage), we redirect
+ * directly there. Otherwise we send them to the project selection page.
  */
 
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/$package')({
   beforeLoad: ({ params }) => {
-    const lastEnvId =
+    const lastProjectId =
       typeof localStorage !== 'undefined'
-        ? localStorage.getItem('objectstack.lastEnvId')
+        ? localStorage.getItem('objectstack.lastProjectId')
         : null;
 
-    if (lastEnvId) {
+    if (lastProjectId) {
       throw redirect({
-        to: '/environments/$environmentId/$package',
-        params: { environmentId: lastEnvId, package: params.package },
+        to: '/projects/$projectId/$package',
+        params: { projectId: lastProjectId, package: params.package },
         replace: true,
       });
     }
-    throw redirect({ to: '/environments', replace: true });
+    throw redirect({ to: '/projects', replace: true });
   },
   component: () => null,
 });

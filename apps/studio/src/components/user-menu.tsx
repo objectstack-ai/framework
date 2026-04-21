@@ -87,9 +87,9 @@ export function UserMenu() {
           <Building2 className="mr-2 h-3.5 w-3.5" />
           Organizations
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate({ to: '/environments' })}>
+        <DropdownMenuItem onSelect={() => navigate({ to: '/projects' })}>
           <Settings className="mr-2 h-3.5 w-3.5" />
-          Environments
+          Projects
         </DropdownMenuItem>
         <DropdownMenuItem disabled>
           <UserIcon className="mr-2 h-3.5 w-3.5" />

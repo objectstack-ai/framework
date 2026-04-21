@@ -10,19 +10,19 @@ import { createFileRoute, redirect } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/$package/')({
   beforeLoad: ({ params }) => {
-    const lastEnvId =
+    const lastProjectId =
       typeof localStorage !== 'undefined'
-        ? localStorage.getItem('objectstack.lastEnvId')
+        ? localStorage.getItem('objectstack.lastProjectId')
         : null;
 
-    if (lastEnvId) {
+    if (lastProjectId) {
       throw redirect({
-        to: '/environments/$environmentId/$package/',
-        params: { environmentId: lastEnvId, package: params.package },
+        to: '/projects/$projectId/$package/',
+        params: { projectId: lastProjectId, package: params.package },
         replace: true,
       });
     }
-    throw redirect({ to: '/environments', replace: true });
+    throw redirect({ to: '/projects', replace: true });
   },
   component: () => null,
 });

@@ -19,7 +19,7 @@ function randomUUID(): string {
 export interface HttpProtocolContext {
     request: any;
     response?: any;
-    environmentId?: string;   // Resolved environment ID
+    projectId?: string;   // Resolved environment ID
     dataDriver?: any; // IDataDriver - Resolved environment-scoped driver
 }
 
@@ -168,9 +168,9 @@ export class HttpDispatcher {
      *
      * Precedence:
      * 1. request.headers.host → envRegistry.resolveByHostname(host)
-     * 2. request.headers['x-environment-id'] → envRegistry.resolveById(id)
+     * 2. request.headers['x-project-id'] → envRegistry.resolveById(id)
      * 3. session.activeEnvironmentId → envRegistry.resolveById(id)
-     * 4. session.activeOrganizationId → find default environment → envRegistry.resolveById(id)
+     * 4. session.activeOrganizationId → find default project → envRegistry.resolveById(id)
      *
      * Skip for paths: /auth, /cloud, /health, /discovery, /meta
      */
@@ -194,35 +194,35 @@ export class HttpDispatcher {
                 const hostname = host.split(':')[0];
                 const result = await this.envRegistry.resolveByHostname(hostname);
                 if (result) {
-                    context.environmentId = result.environmentId;
+                    context.projectId = result.projectId;
                     context.dataDriver = result.driver;
                     return;
                 }
             }
 
-            // 2. Try X-Environment-Id header
-            const envIdHeader = context.request?.headers?.['x-environment-id'] || context.request?.headers?.['X-Environment-Id'];
+            // 2. Try X-Project-Id header
+            const envIdHeader = context.request?.headers?.['x-project-id'] || context.request?.headers?.['X-Project-Id'];
             if (envIdHeader) {
                 const driver = await this.envRegistry.resolveById(envIdHeader);
                 if (driver) {
-                    context.environmentId = envIdHeader;
+                    context.projectId = envIdHeader;
                     context.dataDriver = driver;
                     return;
                 }
             }
 
-            // 3. Try session.activeEnvironmentId
+            // 3. Try session.activeProjectId
             try {
                 const authService: any = await this.getService(CoreServiceName.enum.auth);
                 const sessionData = await authService?.api?.getSession?.({
                     headers: context.request?.headers,
                 });
 
-                const activeEnvironmentId = sessionData?.session?.activeEnvironmentId;
-                if (activeEnvironmentId) {
-                    const driver = await this.envRegistry.resolveById(activeEnvironmentId);
+                const activeProjectId = sessionData?.session?.activeProjectId ?? sessionData?.session?.activeEnvironmentId;
+                if (activeProjectId) {
+                    const driver = await this.envRegistry.resolveById(activeProjectId);
                     if (driver) {
-                        context.environmentId = activeEnvironmentId;
+                        context.projectId = activeProjectId;
                         context.dataDriver = driver;
                         return;
                     }
@@ -235,7 +235,7 @@ export class HttpDispatcher {
                     const qlService = await this.getObjectQLService();
                     const ql = qlService ?? await this.resolveService('objectql');
                     if (ql) {
-                        let rows = await ql.find('sys__environment', {
+                        let rows = await ql.find('sys__project', {
                             where: {
                                 organization_id: activeOrganizationId,
                                 is_default: true
@@ -247,7 +247,7 @@ export class HttpDispatcher {
                             const defaultEnv = rows[0];
                             const driver = await this.envRegistry.resolveById(defaultEnv.id);
                             if (driver) {
-                                context.environmentId = defaultEnv.id;
+                                context.projectId = defaultEnv.id;
                                 context.dataDriver = driver;
                                 return;
                             }
@@ -714,7 +714,7 @@ export class HttpDispatcher {
         if (!_context.dataDriver && this.envRegistry) {
             return {
                 handled: true,
-                response: this.error('Environment not resolved. Please specify X-Environment-Id header or ensure hostname maps to an environment.', 428)
+                response: this.error('Project not resolved. Please specify X-Project-Id header or ensure hostname maps to a project.', 428)
             };
         }
 
@@ -1054,21 +1054,21 @@ export class HttpDispatcher {
      * Cloud / Environment Control-Plane routes.
      *
      *  - GET    /cloud/drivers                                 → list registered ObjectQL drivers (for env provisioning)
-     *  - GET    /cloud/environments                            → list
-     *  - POST   /cloud/environments                            → provision (driver: memory | turso | <any registered driver>)
-     *  - GET    /cloud/environments/:id                        → detail (+ db, credential, membership)
-     *  - PATCH  /cloud/environments/:id                        → update displayName / plan / status / isDefault / metadata
-     *  - POST   /cloud/environments/:id/retry                  → re-run provisioning for a failed environment
-     *  - POST   /cloud/environments/:id/activate               → mark as active for session (stub)
-     *  - POST   /cloud/environments/:id/credentials/rotate     → rotate credential
-     *  - GET    /cloud/environments/:id/members                → list members
-     *  - GET    /cloud/environments/:id/packages               → list installed packages
-     *  - POST   /cloud/environments/:id/packages               → install package into env
-     *  - GET    /cloud/environments/:id/packages/:pkgId        → get installation detail
-     *  - PATCH  /cloud/environments/:id/packages/:pkgId/enable  → enable package
-     *  - PATCH  /cloud/environments/:id/packages/:pkgId/disable → disable package
-     *  - DELETE /cloud/environments/:id/packages/:pkgId        → uninstall (scope=platform forbidden)
-     *  - POST   /cloud/environments/:id/packages/:pkgId/upgrade → upgrade to newer version
+     *  - GET    /cloud/projects                            → list
+     *  - POST   /cloud/projects                            → provision (driver: memory | turso | <any registered driver>)
+     *  - GET    /cloud/projects/:id                        → detail (+ db, credential, membership)
+     *  - PATCH  /cloud/projects/:id                        → update displayName / plan / status / isDefault / metadata
+     *  - POST   /cloud/projects/:id/retry                  → re-run provisioning for a failed environment
+     *  - POST   /cloud/projects/:id/activate               → mark as active for session (stub)
+     *  - POST   /cloud/projects/:id/credentials/rotate     → rotate credential
+     *  - GET    /cloud/projects/:id/members                → list members
+     *  - GET    /cloud/projects/:id/packages               → list installed packages
+     *  - POST   /cloud/projects/:id/packages               → install package into env
+     *  - GET    /cloud/projects/:id/packages/:pkgId        → get installation detail
+     *  - PATCH  /cloud/projects/:id/packages/:pkgId/enable  → enable package
+     *  - PATCH  /cloud/projects/:id/packages/:pkgId/disable → disable package
+     *  - DELETE /cloud/projects/:id/packages/:pkgId        → uninstall (scope=platform forbidden)
+     *  - POST   /cloud/projects/:id/packages/:pkgId/upgrade → upgrade to newer version
      *
      * Driver binding
      * --------------
@@ -1080,11 +1080,11 @@ export class HttpDispatcher {
      * If `driver` is omitted, the dispatcher auto-selects the first available
      * in preference order: turso → memory → any other registered driver.
      *
-     * Backed by ObjectQL sys__environment / sys__database_credential /
-     * sys__environment_member tables (registered by
+     * Backed by ObjectQL sys__project / sys__project_credential /
+     * sys__project_member tables (registered by
      * `@objectstack/service-tenant`'s `createTenantPlugin`).
      * Physical database addressing (database_url, database_driver, etc.)
-     * is stored directly on the sys__environment row.
+     * is stored directly on the sys__project row.
      */
     async handleCloud(path: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const m = method.toUpperCase();
@@ -1093,12 +1093,12 @@ export class HttpDispatcher {
         const qlService = await this.getObjectQLService();
         const ql = qlService ?? await this.resolveService('objectql');
         if (!ql) {
-            return { handled: true, response: this.error('Environment service not available (ObjectQL missing)', 503) };
+            return { handled: true, response: this.error('Project service not available (ObjectQL missing)', 503) };
         }
 
-        const ENV = 'sys__environment';
-        const CRED = 'sys__database_credential';
-        const MEM = 'sys__environment_member';
+        const ENV = 'sys__project';
+        const CRED = 'sys__project_credential';
+        const MEM = 'sys__project_member';
         const PKG_INSTALL = 'sys__package_installation';
 
         // Enumerate registered ObjectQL drivers. Driver services are registered
@@ -1136,8 +1136,8 @@ export class HttpDispatcher {
             );
         };
 
-        const buildDatabaseUrl = (driverName: string, environmentId: string): string => {
-            const dbName = `env-${environmentId}`;
+        const buildDatabaseUrl = (driverName: string, projectId: string): string => {
+            const dbName = `env-${projectId}`;
             switch (driverName) {
                 case 'memory':
                     return `memory://${dbName}`;
@@ -1164,14 +1164,14 @@ export class HttpDispatcher {
             driverName: string,
         ): Promise<{
             createDatabase(params: {
-                environmentId: string;
+                projectId: string;
                 databaseName: string;
                 region: string;
                 storageLimitMb: number;
             }): Promise<{ databaseUrl: string; plaintextSecret: string }>;
         } | undefined> => {
             try {
-                const registry: any = await this.resolveService('environment-provisioning-adapters');
+                const registry: any = await this.resolveService('project-provisioning-adapters');
                 return registry?.get?.(driverName);
             } catch {
                 return undefined;
@@ -1185,7 +1185,7 @@ export class HttpDispatcher {
             return rows[0];
         };
 
-        const toEnvironmentDto = (row: any): any => {
+        const toProjectDto = (row: any): any => {
             if (!row) return row;
             let metadata: any = row.metadata;
             if (typeof metadata === 'string') {
@@ -1196,7 +1196,7 @@ export class HttpDispatcher {
                 organizationId: row.organization_id,
                 slug: row.slug,
                 displayName: row.display_name,
-                envType: row.env_type,
+                projectType: row.project_type,
                 isDefault: row.is_default ?? false,
                 region: row.region,
                 plan: row.plan,
@@ -1220,19 +1220,19 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ drivers, total: drivers.length }) };
             }
 
-            // ----- /cloud/environments collection routes -----
-            if (parts.length === 1 && parts[0] === 'environments' && m === 'GET') {
+            // ----- /cloud/projects collection routes -----
+            if (parts.length === 1 && parts[0] === 'projects' && m === 'GET') {
                 const where: Record<string, unknown> = {};
                 if (query?.organizationId) where.organization_id = query.organizationId;
-                if (query?.envType) where.env_type = query.envType;
+                if (query?.projectType) where.project_type = query.projectType;
                 if (query?.status) where.status = query.status;
                 let rows = await ql.find(ENV, Object.keys(where).length ? ({ where } as any) : undefined);
                 if (rows && (rows as any).value) rows = (rows as any).value;
-                const environments = (Array.isArray(rows) ? rows : []).map(toEnvironmentDto);
-                return { handled: true, response: this.success({ environments, total: environments.length }) };
+                const projects = (Array.isArray(rows) ? rows : []).map(toProjectDto);
+                return { handled: true, response: this.success({ projects, total: projects.length }) };
             }
 
-            if (parts.length === 1 && parts[0] === 'environments' && m === 'POST') {
+            if (parts.length === 1 && parts[0] === 'projects' && m === 'POST') {
                 const req = body || {};
                 // Resolve `__session__` placeholders from the active session so clients
                 // can omit these fields and let the server infer them.
@@ -1252,10 +1252,10 @@ export class HttpDispatcher {
                         // Fall through — validation below will reject missing fields.
                     }
                 }
-                if (!req.organizationId || !req.slug || !req.displayName || !req.envType) {
-                    return { handled: true, response: this.error('organizationId, slug, displayName, envType are required', 400) };
+                if (!req.organizationId || !req.slug || !req.displayName || !req.projectType) {
+                    return { handled: true, response: this.error('organizationId, slug, displayName, projectType are required', 400) };
                 }
-                const environmentId = randomUUID();
+                const projectId = randomUUID();
                 const credentialId = randomUUID();
                 const nowIso = new Date().toISOString();
 
@@ -1284,7 +1284,7 @@ export class HttpDispatcher {
                 }
                 const driver = resolved.name;
                 const region = req.region ?? 'us-east-1';
-                let plaintextSecret = `mock-token-${environmentId}`;
+                let plaintextSecret = `mock-token-${projectId}`;
 
                 // Compute hostname if not provided
                 // Format: {org-slug}-{env-slug}.{rootDomain}
@@ -1315,11 +1315,11 @@ export class HttpDispatcher {
                 const simulateFailure = Boolean((baseMetadata as any).__simulateFailure);
                 const simulateDelayMs = Number((baseMetadata as any).__simulateDelayMs ?? 1500);
                 await ql.insert(ENV, {
-                    id: environmentId,
+                    id: projectId,
                     organization_id: req.organizationId,
                     slug: req.slug,
                     display_name: req.displayName,
-                    env_type: req.envType,
+                    project_type: req.projectType,
                     is_default: req.isDefault ?? false,
                     region,
                     plan: req.plan ?? 'free',
@@ -1354,15 +1354,15 @@ export class HttpDispatcher {
                             const adapter = await getRealAdapter(driver);
                             if (adapter) {
                                 const result = await adapter.createDatabase({
-                                    environmentId,
-                                    databaseName: `env-${environmentId}`,
+                                    projectId,
+                                    databaseName: `proj-${projectId}`,
                                     region,
                                     storageLimitMb: req.storageLimitMb ?? 1024,
                                 });
                                 databaseUrl = result.databaseUrl;
                                 if (result.plaintextSecret) plaintextSecret = result.plaintextSecret;
                             } else {
-                                databaseUrl = buildDatabaseUrl(driver, environmentId);
+                                databaseUrl = buildDatabaseUrl(driver, projectId);
                             }
                         } catch (adapterErr) {
                             // Adapter call failed (e.g. Turso API down). Surface
@@ -1381,11 +1381,11 @@ export class HttpDispatcher {
                                 provisioned_at: finishedAt,
                                 updated_at: finishedAt,
                             },
-                            { where: { id: environmentId } } as any,
+                            { where: { id: projectId } } as any,
                         );
                         await ql.insert(CRED, {
                             id: credentialId,
-                            environment_id: environmentId,
+                            project_id: projectId,
                             secret_ciphertext: plaintextSecret,
                             encryption_key_id: 'noop',
                             authorization: 'full_access',
@@ -1406,28 +1406,28 @@ export class HttpDispatcher {
                                 }),
                                 updated_at: failedAt,
                             },
-                            { where: { id: environmentId } } as any,
+                            { where: { id: projectId } } as any,
                         );
                     }
                 };
                 // Don't await — respond immediately with the provisioning row.
                 void runProvisioning();
 
-                const environment = toEnvironmentDto(await findOne(ENV, { id: environmentId }));
-                const res = this.success({ environment });
+                const project = toProjectDto(await findOne(ENV, { id: projectId }));
+                const res = this.success({ project });
                 res.status = 202; // Accepted — provisioning continues async.
                 return { handled: true, response: res };
             }
 
-            // ----- /cloud/environments/:id -----
-            if (parts.length === 2 && parts[0] === 'environments') {
+            // ----- /cloud/projects/:id -----
+            if (parts.length === 2 && parts[0] === 'projects') {
                 const id = decodeURIComponent(parts[1]);
 
                 if (m === 'GET') {
                     const envRow = await findOne(ENV, { id });
-                    if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
-                    const credRow = await findOne(CRED, { environment_id: id, status: 'active' });
-                    const membership = await findOne(MEM, { environment_id: id });
+                    if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
+                    const credRow = await findOne(CRED, { project_id: id, status: 'active' });
+                    const membership = await findOne(MEM, { project_id: id });
                     // Omit the ciphertext from responses — metadata only.
                     const credMeta = credRow
                         ? {
@@ -1440,7 +1440,7 @@ export class HttpDispatcher {
                         : undefined;
                     // Expose a `database` block so Studio can show physical DB
                     // addressing directly (mirrors the legacy sys_environment_database shape).
-                    const envDto = toEnvironmentDto(envRow);
+                    const envDto = toProjectDto(envRow);
                     const database = envDto.databaseUrl
                         ? {
                               driver: envDto.databaseDriver,
@@ -1453,7 +1453,7 @@ export class HttpDispatcher {
                         : undefined;
                     return {
                         handled: true,
-                        response: this.success({ environment: envDto, database, credential: credMeta, membership }),
+                        response: this.success({ project: envDto, database, credential: credMeta, membership }),
                     };
                 }
 
@@ -1467,21 +1467,21 @@ export class HttpDispatcher {
                     patch.updated_at = new Date().toISOString();
                     await ql.update(ENV, patch, { where: { id } } as any);
                     const envRow = await findOne(ENV, { id });
-                    if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
-                    return { handled: true, response: this.success({ environment: toEnvironmentDto(envRow) }) };
+                    if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
+                    return { handled: true, response: this.success({ project: toProjectDto(envRow) }) };
                 }
             }
 
-            // ----- /cloud/environments/:id/retry -----
-            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'retry' && m === 'POST') {
+            // ----- /cloud/projects/:id/retry -----
+            if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'retry' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
                 const envRow = await findOne(ENV, { id });
-                if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
                 if (envRow.status !== 'failed' && envRow.status !== 'provisioning') {
                     return {
                         handled: true,
                         response: this.error(
-                            `Environment '${id}' is '${envRow.status}'; only failed or provisioning environments can be retried.`,
+                            `Project '${id}' is '${envRow.status}'; only failed or provisioning projects can be retried.`,
                             409,
                         ),
                     };
@@ -1524,7 +1524,7 @@ export class HttpDispatcher {
                     { where: { id } } as any,
                 );
 
-                // Same dev-only knobs as POST /environments: if the caller
+                // Same dev-only knobs as POST /projects: if the caller
                 // originally asked to simulate a failure they must clear the
                 // flag in metadata before retry — otherwise retry fails again.
                 const simulateRetryFailure = Boolean((metadata as any).__simulateFailure);
@@ -1544,8 +1544,8 @@ export class HttpDispatcher {
                             const adapter = await getRealAdapter(resolved.name);
                             if (adapter) {
                                 const result = await adapter.createDatabase({
-                                    environmentId: id,
-                                    databaseName: `env-${id}`,
+                                    projectId: id,
+                                    databaseName: `proj-${id}`,
                                     region: envRow.region ?? 'us-east-1',
                                     storageLimitMb: envRow.storage_limit_mb ?? 1024,
                                 });
@@ -1571,11 +1571,11 @@ export class HttpDispatcher {
                             },
                             { where: { id } } as any,
                         );
-                        const existingCred = await findOne(CRED, { environment_id: id, status: 'active' });
+                        const existingCred = await findOne(CRED, { project_id: id, status: 'active' });
                         if (!existingCred) {
                             await ql.insert(CRED, {
                                 id: randomUUID(),
-                                environment_id: id,
+                                project_id: id,
                                 secret_ciphertext: retrySecret,
                                 encryption_key_id: 'noop',
                                 authorization: 'full_access',
@@ -1603,34 +1603,34 @@ export class HttpDispatcher {
                 };
                 void runRetry();
 
-                const envAfter = toEnvironmentDto(await findOne(ENV, { id }));
-                const retryRes = this.success({ environment: envAfter });
+                const envAfter = toProjectDto(await findOne(ENV, { id }));
+                const retryRes = this.success({ project: envAfter });
                 retryRes.status = 202;
                 return { handled: true, response: retryRes };
             }
 
-            // ----- /cloud/environments/:id/activate -----
-            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'activate' && m === 'POST') {
+            // ----- /cloud/projects/:id/activate -----
+            if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'activate' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
                 const envRow = await findOne(ENV, { id });
-                if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
-                // TODO: persist active_environment_id on the session once session service is wired.
-                return { handled: true, response: this.success({ environment: toEnvironmentDto(envRow), sessionUpdated: false }) };
+                if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
+                // TODO: persist active_project_id on the session once session service is wired.
+                return { handled: true, response: this.success({ project: toProjectDto(envRow), sessionUpdated: false }) };
             }
 
-            // ----- /cloud/environments/:id/credentials/rotate -----
-            if (parts.length === 4 && parts[0] === 'environments' && parts[2] === 'credentials' && parts[3] === 'rotate' && m === 'POST') {
+            // ----- /cloud/projects/:id/credentials/rotate -----
+            if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'credentials' && parts[3] === 'rotate' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
                 const plaintext = body?.plaintext;
                 if (!plaintext || typeof plaintext !== 'string') {
                     return { handled: true, response: this.error('plaintext is required', 400) };
                 }
                 const envRow = await findOne(ENV, { id });
-                if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
 
                 const nowIso = new Date().toISOString();
                 // Revoke existing active credentials
-                let existing = await ql.find(CRED, { where: { environment_id: id, status: 'active' } } as any);
+                let existing = await ql.find(CRED, { where: { project_id: id, status: 'active' } } as any);
                 if (existing && (existing as any).value) existing = (existing as any).value;
                 for (const row of (Array.isArray(existing) ? existing : [])) {
                     await ql.update(CRED, {
@@ -1643,7 +1643,7 @@ export class HttpDispatcher {
                 const credentialId = randomUUID();
                 await ql.insert(CRED, {
                     id: credentialId,
-                    environment_id: id,
+                    project_id: id,
                     secret_ciphertext: plaintext,
                     encryption_key_id: 'noop',
                     authorization: 'full_access',
@@ -1664,27 +1664,27 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ credential: credMeta }) };
             }
 
-            // ----- /cloud/environments/:id/members -----
-            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'members' && m === 'GET') {
+            // ----- /cloud/projects/:id/members -----
+            if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'members' && m === 'GET') {
                 const id = decodeURIComponent(parts[1]);
-                let rows = await ql.find(MEM, { where: { environment_id: id } } as any);
+                let rows = await ql.find(MEM, { where: { project_id: id } } as any);
                 if (rows && (rows as any).value) rows = (rows as any).value;
                 const members = Array.isArray(rows) ? rows : [];
                 return { handled: true, response: this.success({ members }) };
             }
 
-            // ----- /cloud/environments/:envId/packages -----
-            // GET  /cloud/environments/:envId/packages
-            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'GET') {
+            // ----- /cloud/projects/:envId/packages -----
+            // GET  /cloud/projects/:envId/packages
+            if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'GET') {
                 const envId = decodeURIComponent(parts[1]);
-                let rows = await ql.find(PKG_INSTALL, { where: { environment_id: envId } } as any);
+                let rows = await ql.find(PKG_INSTALL, { where: { project_id: envId } } as any);
                 if (rows && (rows as any).value) rows = (rows as any).value;
                 const packages = Array.isArray(rows) ? rows : [];
                 return { handled: true, response: this.success({ packages, total: packages.length }) };
             }
 
-            // POST /cloud/environments/:envId/packages
-            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'POST') {
+            // POST /cloud/projects/:envId/packages
+            if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'POST') {
                 const envId = decodeURIComponent(parts[1]);
                 const { packageId, version, settings, enableOnInstall } = body ?? {};
                 if (!packageId) return { handled: true, response: this.error('packageId is required', 400) };
@@ -1693,14 +1693,14 @@ export class HttpDispatcher {
                 const allPkgs = this.kernel.packages?.getAll?.() ?? [];
                 const manifest = allPkgs.find((p: any) => (p.manifest?.id ?? p.id) === packageId)?.manifest ?? allPkgs.find((p: any) => (p.manifest?.id ?? p.id) === packageId);
                 if (manifest?.scope === 'platform') {
-                    return { handled: true, response: this.error(`Package '${packageId}' has scope=platform and cannot be installed per-environment`, 403) };
+                    return { handled: true, response: this.error(`Package '${packageId}' has scope=platform and cannot be installed per-project`, 403) };
                 }
 
                 const nowIso = new Date().toISOString();
                 const recordId = randomUUID();
                 await ql.insert(PKG_INSTALL, {
                     id: recordId,
-                    environment_id: envId,
+                    project_id: envId,
                     package_id: packageId,
                     version: version ?? manifest?.version ?? '1.0.0',
                     status: 'installed',
@@ -1714,22 +1714,22 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ package: record }) };
             }
 
-            // ----- /cloud/environments/:envId/packages/:pkgId -----
-            // GET /cloud/environments/:envId/packages/:pkgId
-            if (parts.length === 4 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'GET') {
+            // ----- /cloud/projects/:envId/packages/:pkgId -----
+            // GET /cloud/projects/:envId/packages/:pkgId
+            if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'GET') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
-                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any);
-                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const record = await ql.findOne(PKG_INSTALL, { where: { project_id: envId, package_id: pkgId } } as any);
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this project`, 404) };
                 return { handled: true, response: this.success({ package: record }) };
             }
 
-            // DELETE /cloud/environments/:envId/packages/:pkgId
-            if (parts.length === 4 && parts[0] === 'environments' && parts[2] === 'packages' && m === 'DELETE') {
+            // DELETE /cloud/projects/:envId/packages/:pkgId
+            if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'DELETE') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
-                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
-                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const record = await ql.findOne(PKG_INSTALL, { where: { project_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this project`, 404) };
                 if (record.scope === 'platform') {
                     return { handled: true, response: this.error(`Platform-scope package '${pkgId}' cannot be uninstalled`, 403) };
                 }
@@ -1737,24 +1737,24 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ id: record.id, success: true }) };
             }
 
-            // PATCH /cloud/environments/:envId/packages/:pkgId/enable
-            if (parts.length === 5 && parts[0] === 'environments' && parts[2] === 'packages' && parts[4] === 'enable' && m === 'PATCH') {
+            // PATCH /cloud/projects/:envId/packages/:pkgId/enable
+            if (parts.length === 5 && parts[0] === 'projects' && parts[2] === 'packages' && parts[4] === 'enable' && m === 'PATCH') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
-                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
-                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const record = await ql.findOne(PKG_INSTALL, { where: { project_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this project`, 404) };
                 const nowIso = new Date().toISOString();
                 await ql.update(PKG_INSTALL, { enabled: true, status: 'installed', updated_at: nowIso }, { where: { id: record.id } } as any);
                 const updated = await ql.findOne(PKG_INSTALL, { where: { id: record.id } } as any);
                 return { handled: true, response: this.success({ package: updated }) };
             }
 
-            // PATCH /cloud/environments/:envId/packages/:pkgId/disable
-            if (parts.length === 5 && parts[0] === 'environments' && parts[2] === 'packages' && parts[4] === 'disable' && m === 'PATCH') {
+            // PATCH /cloud/projects/:envId/packages/:pkgId/disable
+            if (parts.length === 5 && parts[0] === 'projects' && parts[2] === 'packages' && parts[4] === 'disable' && m === 'PATCH') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
-                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
-                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const record = await ql.findOne(PKG_INSTALL, { where: { project_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this project`, 404) };
                 if (record.scope === 'platform') {
                     return { handled: true, response: this.error(`Platform-scope package '${pkgId}' cannot be disabled`, 403) };
                 }
@@ -1764,12 +1764,12 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ package: updated }) };
             }
 
-            // POST /cloud/environments/:envId/packages/:pkgId/upgrade
-            if (parts.length === 5 && parts[0] === 'environments' && parts[2] === 'packages' && parts[4] === 'upgrade' && m === 'POST') {
+            // POST /cloud/projects/:envId/packages/:pkgId/upgrade
+            if (parts.length === 5 && parts[0] === 'projects' && parts[2] === 'packages' && parts[4] === 'upgrade' && m === 'POST') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
-                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any) as any;
-                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this environment`, 404) };
+                const record = await ql.findOne(PKG_INSTALL, { where: { project_id: envId, package_id: pkgId } } as any) as any;
+                if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this project`, 404) };
                 const { targetVersion } = body ?? {};
                 const allPkgs2 = this.kernel.packages?.getAll?.() ?? [];
                 const manifest2 = allPkgs2.find((p: any) => (p.manifest?.id ?? p.id) === pkgId)?.manifest ?? allPkgs2.find((p: any) => (p.manifest?.id ?? p.id) === pkgId);

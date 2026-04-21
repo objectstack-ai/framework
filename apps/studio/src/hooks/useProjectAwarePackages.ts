@@ -3,12 +3,12 @@
 import { useState, useMemo } from 'react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { usePackages } from './usePackages';
-import { useEnvironmentPackages } from './useEnvironmentPackages';
+import { useProjectPackages } from './useProjectPackages';
 
 /**
  * Returns the subset of the global package registry that is installed in the
  * given environment. Combines:
- *  - `useEnvironmentPackages(envId)` — per-env DB records (have short packageId)
+ *  - `useProjectPackages(envId)` — per-env DB records (have short packageId)
  *  - `usePackages()` — global runtime registry (have full manifest.id)
  *
  * The cross-reference is fuzzy: a record with `packageId = "crm"` matches a
@@ -16,7 +16,7 @@ import { useEnvironmentPackages } from './useEnvironmentPackages';
  */
 export function useEnvAwarePackages(envId: string | undefined) {
   const { packages: globalPkgs } = usePackages();
-  const { packages: installedRecords } = useEnvironmentPackages(envId);
+  const { packages: installedRecords } = useProjectPackages(envId);
 
   const [selectedPackage, setSelectedPackage] = useState<InstalledPackage | null>(null);
 

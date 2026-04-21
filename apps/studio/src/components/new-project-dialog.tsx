@@ -1,20 +1,20 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * NewEnvironmentDialog — provisions a new environment for the current
- * organization via `client.environments.create()`.
+ * NewProjectDialog — provisions a new project for the current
+ * organization via `client.projects.create()`.
  *
- * Form fields mirror {@link ProvisionEnvironmentRequestSchema}:
- * slug, displayName, envType, region, plan. The `organizationId` and
+ * Form fields mirror {@link ProvisionProjectRequestSchema}:
+ * slug, displayName, projectType, region, plan. The `organizationId` and
  * `createdBy` fields are injected by the backend from the session.
  *
  * On success, the dialog invokes `onCreated(env)` and closes; the parent
- * (EnvironmentSwitcher) is responsible for reloading the environment list
- * and navigating into the new environment.
+ * (ProjectSwitcher) is responsible for reloading the project list
+ * and navigating into the new project.
  */
 
 import { useEffect, useState } from 'react';
-import type { Environment, EnvironmentType } from '@objectstack/spec/cloud';
+import type { Project, ProjectType } from '@objectstack/spec/cloud';
 import {
   Dialog,
   DialogContent,
@@ -33,11 +33,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDrivers, useProvisionEnvironment } from '@/hooks/useEnvironments';
+import { useDrivers, useProvisionProject } from '@/hooks/useProjects';
 import { toast } from '@/hooks/use-toast';
 import { useActiveOrganizationId, useSession } from '@/hooks/useSession';
 
-const ENV_TYPES: { value: EnvironmentType; label: string; hint: string }[] = [
+const PROJECT_TYPES: { value: ProjectType; label: string; hint: string }[] = [
   { value: 'development', label: 'Development', hint: 'For makers building and iterating' },
   { value: 'test', label: 'Test', hint: 'Automated test runs, throwaway data' },
   { value: 'sandbox', label: 'Sandbox', hint: 'Isolated clone of production' },
@@ -47,24 +47,24 @@ const ENV_TYPES: { value: EnvironmentType; label: string; hint: string }[] = [
   { value: 'trial', label: 'Trial', hint: 'Time-boxed demo workspace' },
 ];
 
-export interface NewEnvironmentDialogProps {
+export interface NewProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated?: (env: Environment) => void;
+  onCreated?: (env: Project) => void;
 }
 
-export function NewEnvironmentDialog({
+export function NewProjectDialog({
   open,
   onOpenChange,
   onCreated,
-}: NewEnvironmentDialogProps) {
-  const { provision, provisioning } = useProvisionEnvironment();
+}: NewProjectDialogProps) {
+  const { provision, provisioning } = useProvisionProject();
   const { drivers, loading: driversLoading } = useDrivers();
   const activeOrgId = useActiveOrganizationId();
   const { user } = useSession();
   const [slug, setSlug] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [envType, setEnvType] = useState<EnvironmentType>('development');
+  const [projectType, setProjectType] = useState<ProjectType>('development');
   const [region, setRegion] = useState('');
   const [driver, setDriver] = useState<string>('');
 
@@ -82,7 +82,7 @@ export function NewEnvironmentDialog({
   const reset = () => {
     setSlug('');
     setDisplayName('');
-    setEnvType('development');
+    setProjectType('development');
     setRegion('');
     setDriver('');
   };
@@ -104,18 +104,18 @@ export function NewEnvironmentDialog({
         createdBy: user?.id ?? '__session__',
         slug: slug.trim(),
         displayName: displayName.trim() || undefined,
-        envType,
+        projectType,
         region: region.trim() || undefined,
         driver: driver || undefined,
       } as any);
-      const env = (res?.environment ?? res) as Environment;
+      const project = (res?.project ?? res) as Project;
       toast({
-        title: 'Environment provisioned',
-        description: `${env.displayName} (${env.slug}) is ready.`,
+        title: 'Project provisioned',
+        description: `${project.displayName} (${project.slug}) is ready.`,
       });
       reset();
       onOpenChange(false);
-      onCreated?.(env);
+      onCreated?.(project);
     } catch (err) {
       toast({
         title: 'Provisioning failed',
@@ -130,10 +130,10 @@ export function NewEnvironmentDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>New environment</DialogTitle>
+            <DialogTitle>New project</DialogTitle>
             <DialogDescription>
-              Provisions a physically isolated database for this environment.
-              Data in different environments is never shared.
+              Provisions a physically isolated database for this project.
+              Data in different projects is never shared.
             </DialogDescription>
           </DialogHeader>
 
@@ -168,14 +168,14 @@ export function NewEnvironmentDialog({
             <div className="grid gap-1.5">
               <Label>Type</Label>
               <Select
-                value={envType}
-                onValueChange={(v) => setEnvType(v as EnvironmentType)}
+                value={projectType}
+                onValueChange={(v) => setProjectType(v as ProjectType)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ENV_TYPES.map((t) => (
+                  {PROJECT_TYPES.map((t) => (
                     <SelectItem key={t.value} value={t.value}>
                       <div className="flex flex-col">
                         <span>{t.label}</span>
@@ -221,7 +221,7 @@ export function NewEnvironmentDialog({
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Where this environment's data will be stored. `memory` is ideal
+                Where this project's data will be stored. `memory` is ideal
                 for tests; `turso` persists to libSQL.
               </p>
             </div>
@@ -247,7 +247,7 @@ export function NewEnvironmentDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={provisioning || !slug.trim()}>
-              {provisioning ? 'Provisioning…' : 'Create environment'}
+              {provisioning ? 'Provisioning…' : 'Create project'}
             </Button>
           </DialogFooter>
         </form>

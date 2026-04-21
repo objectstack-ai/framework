@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * EnvironmentBadge — color-coded pill indicating the environment type.
+ * ProjectBadge — color-coded pill indicating the project type.
  *
  * Color grammar follows industry convention (Salesforce/Power Platform):
  * - `production` → red/destructive (danger zone)
@@ -15,9 +15,9 @@
  */
 
 import { cn } from '@/lib/utils';
-import type { EnvironmentType } from '@objectstack/spec/cloud';
+import type { ProjectType } from '@objectstack/spec/cloud';
 
-const VARIANT: Record<EnvironmentType, string> = {
+const VARIANT: Record<ProjectType, string> = {
   production:
     'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300',
   staging:
@@ -31,7 +31,7 @@ const VARIANT: Record<EnvironmentType, string> = {
   trial: 'border-muted bg-muted text-muted-foreground',
 };
 
-const SHORT: Record<EnvironmentType, string> = {
+const SHORT: Record<ProjectType, string> = {
   production: 'PROD',
   staging: 'STG',
   sandbox: 'SBX',
@@ -41,28 +41,28 @@ const SHORT: Record<EnvironmentType, string> = {
   trial: 'TRIAL',
 };
 
-export interface EnvironmentBadgeProps {
-  envType: EnvironmentType;
+export interface ProjectBadgeProps {
+  projectType: ProjectType;
   /** Use the full label instead of the 3–4 char short form. */
   full?: boolean;
   className?: string;
 }
 
-export function EnvironmentBadge({
-  envType,
+export function ProjectBadge({
+  projectType,
   full,
   className,
-}: EnvironmentBadgeProps) {
+}: ProjectBadgeProps) {
   return (
     <span
       className={cn(
         'inline-flex h-4 items-center rounded border px-1.5 text-[10px] font-mono font-semibold uppercase tracking-wider',
-        VARIANT[envType],
+        VARIANT[projectType],
         className,
       )}
-      title={envType}
+      title={projectType}
     >
-      {full ? envType : SHORT[envType]}
+      {full ? projectType : SHORT[projectType]}
     </span>
   );
 }

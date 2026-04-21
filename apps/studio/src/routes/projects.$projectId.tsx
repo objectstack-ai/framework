@@ -1,22 +1,19 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * /environments/$environmentId — environment-scoped layout.
- *
- * Mirrors Power Platform's URL structure:
- *   https://make.powerapps.com/environments/<env-uuid>/apps
+ * /projects/$projectId — project-scoped layout.
  *
  * Responsibilities:
- *  - Bind the URL `environmentId` to the ObjectStackClient via
- *    {@link useEnvironmentDetail}, causing every downstream API request to
- *    carry the `X-Environment-Id` header.
+ *  - Bind the URL `projectId` to the ObjectStackClient via
+ *    {@link useProjectDetail}, causing every downstream API request to
+ *    carry the `X-Project-Id` header.
  *  - Render the package-scoped {@link AppSidebar} (metadata tree) for ALL
- *    routes under `/environments/:envId/*` EXCEPT `/packages` (the package
+ *    routes under `/projects/:projectId/*` EXCEPT `/packages` (the package
  *    management page), where the sidebar would compete with the page content.
  *  - When no package is selected (URL has no `:package` segment), AppSidebar
- *    renders environment-wide metadata by passing `packageId: undefined` to
+ *    renders project-wide metadata by passing `packageId: undefined` to
  *    `client.meta.getItems`.
- *  - Redirect back to `/environments` when the environment cannot be loaded.
+ *  - Redirect back to `/projects` when the project cannot be loaded.
  */
 
 import {
@@ -28,30 +25,30 @@ import {
 } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo } from 'react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
-import { useEnvironmentDetail } from '@/hooks/useEnvironments';
-import { useRegisterActiveEnvironment } from '@/components/production-guard';
+import { useProjectDetail } from '@/hooks/useProjects';
+import { useRegisterActiveProject } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
 import { AppSidebar } from '@/components/app-sidebar';
-import { useEnvAwarePackages } from '@/hooks/useEnvAwarePackages';
+import { useEnvAwarePackages } from '@/hooks/useProjectAwarePackages';
 
-function EnvironmentLayoutComponent() {
-  const { environmentId } = useParams({
-    from: '/environments/$environmentId',
+function ProjectLayoutComponent() {
+  const { projectId } = useParams({
+    from: '/projects/$projectId',
   });
-  const { detail, error } = useEnvironmentDetail(environmentId);
-  const registerActiveEnv = useRegisterActiveEnvironment();
+  const { detail, error } = useProjectDetail(projectId);
+  const registerActiveProject = useRegisterActiveProject();
   const navigate = useNavigate();
   const location = useLocation();
 
   const { packages, selectedPackage, setSelectedPackage } =
-    useEnvAwarePackages(environmentId);
+    useEnvAwarePackages(projectId);
 
   // Extract the $package segment from the URL when the user is on a
   // package-scoped child route. This lets the sidebar highlight the
   // current package without requiring the child route to own the sidebar.
   const activePackageId = useMemo(() => {
     const m = location.pathname.match(
-      /^\/environments\/[^/]+\/([^/]+)(?:\/|$)/,
+      /^\/projects\/[^/]+\/([^/]+)(?:\/|$)/,
     );
     if (!m) return undefined;
     const seg = m[1];
@@ -80,37 +77,37 @@ function EnvironmentLayoutComponent() {
       const nextId = pkg.manifest?.id;
       if (!nextId) return;
       navigate({
-        to: '/environments/$environmentId/$package',
-        params: { environmentId, package: nextId },
+        to: '/projects/$projectId/$package',
+        params: { projectId, package: nextId },
       });
     },
-    [navigate, environmentId],
+    [navigate, projectId],
   );
 
-  // Publish the active environment to the production guard so that any
+  // Publish the active project to the production guard so that any
   // descendant component can call useProductionGuard().confirm() and have
-  // the dialog know which env it's protecting.
+  // the dialog know which project it's protecting.
   useEffect(() => {
-    registerActiveEnv({
-      envType: detail?.environment?.envType,
-      displayName: detail?.environment?.displayName,
+    registerActiveProject({
+      projectType: detail?.project?.projectType,
+      displayName: detail?.project?.displayName,
     });
-    return () => registerActiveEnv({ envType: undefined });
-  }, [detail, registerActiveEnv]);
+    return () => registerActiveProject({ projectType: undefined });
+  }, [detail, registerActiveProject]);
 
-  // Persist last-used environment so legacy /$package/* redirects can restore context.
+  // Persist last-used project so legacy /$package/* redirects can restore context.
   useEffect(() => {
-    if (environmentId) localStorage.setItem('objectstack.lastEnvId', environmentId);
-  }, [environmentId]);
+    if (projectId) localStorage.setItem('objectstack.lastProjectId', projectId);
+  }, [projectId]);
 
   useEffect(() => {
     if (error) {
       toast({
-        title: 'Environment not available',
+        title: 'Project not available',
         description: error.message,
         variant: 'destructive',
       });
-      navigate({ to: '/environments' });
+      navigate({ to: '/projects' });
     }
   }, [error, navigate]);
 
@@ -118,16 +115,16 @@ function EnvironmentLayoutComponent() {
   // /packages is the package-management surface; rendering the tree there
   // would compete with the page's own content. Everything else — overview
   // and the package workspace — shows the sidebar.
-  const hideSidebar = location.pathname.endsWith(`/environments/${environmentId}/packages`);
+  const hideSidebar = location.pathname.endsWith(`/projects/${projectId}/packages`);
 
   return (
     <>
       {!hideSidebar && (
         <AppSidebar
           packages={packages}
-          selectedPackage={selectedPackage}   // null when no package chosen → env-wide metadata
+          selectedPackage={selectedPackage}
           onSelectPackage={handleSelectPackage}
-          environmentId={environmentId}
+          projectId={projectId}
         />
       )}
       <Outlet />
@@ -135,6 +132,6 @@ function EnvironmentLayoutComponent() {
   );
 }
 
-export const Route = createFileRoute('/environments/$environmentId')({
-  component: EnvironmentLayoutComponent,
+export const Route = createFileRoute('/projects/$projectId')({
+  component: ProjectLayoutComponent,
 });

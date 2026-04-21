@@ -3,20 +3,20 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_package_installation — Per-environment package installation record.
+ * sys_package_installation — Per-project package installation record.
  *
- * Models the pairing between an environment and a specific, immutable package
+ * Models the pairing between a project and a specific, immutable package
  * version snapshot (`sys_package_version`). Only one version of a given package
- * may be active per environment at a time (enforced by UNIQUE on
- * `(environment_id, package_id)`).
+ * may be active per project at a time (enforced by UNIQUE on
+ * `(project_id, package_id)`).
  *
  * **Upgrade** = atomic UPDATE of `package_version_id` to a newer version UUID.
  * **Rollback** = atomic UPDATE of `package_version_id` to an older version UUID.
  * Version history is tracked via the sequence of `package_version_id` changes
  * on this row (and an optional sys_package_installation_history audit table).
  *
- * **Stored in the Control Plane DB (not in environment DBs).**
- * Environment DBs contain only business data rows — zero system tables.
+ * **Stored in the Control Plane DB (not in project DBs).**
+ * Project DBs contain only business data rows — zero system tables.
  *
  * See `docs/adr/0003-package-as-first-class-citizen.md` for the full rationale.
  *
@@ -29,9 +29,9 @@ export const SysPackageInstallation = ObjectSchema.create({
   pluralLabel: 'Package Installations',
   icon: 'package',
   isSystem: true,
-  description: 'Per-environment package installation registry (sys_package_installation).',
-  titleFormat: '{package_id} @ {environment_id}',
-  compactLayout: ['package_version_id', 'environment_id', 'status', 'installed_at'],
+  description: 'Per-project package installation registry (sys_package_installation).',
+  titleFormat: '{package_id} @ {project_id}',
+  compactLayout: ['package_version_id', 'project_id', 'status', 'installed_at'],
 
   fields: {
     id: Field.text({
@@ -55,10 +55,10 @@ export const SysPackageInstallation = ObjectSchema.create({
       description: 'Last update timestamp — changes on upgrade, rollback, enable/disable (ISO-8601).',
     }),
 
-    environment_id: Field.text({
-      label: 'Environment ID',
+    project_id: Field.text({
+      label: 'Project ID',
       required: true,
-      description: 'Foreign key to sys_environment (UUID). The environment that owns this installation.',
+      description: 'Foreign key to sys_project (UUID). The project that owns this installation.',
     }),
 
     package_version_id: Field.text({
@@ -66,7 +66,7 @@ export const SysPackageInstallation = ObjectSchema.create({
       required: true,
       description:
         'Foreign key to sys_package_version (UUID). The specific, immutable release snapshot ' +
-        'currently installed in this environment. Upgrading = swapping this field to a newer ' +
+        'currently installed in this project. Upgrading = swapping this field to a newer ' +
         'version UUID. Rollback = swapping to an older version UUID.',
     }),
 
@@ -75,14 +75,14 @@ export const SysPackageInstallation = ObjectSchema.create({
       required: true,
       description:
         'Foreign key to sys_package (UUID). Denormalized from the linked package_version row ' +
-        'at install time to enforce the UNIQUE (environment_id, package_id) constraint without a JOIN.',
+        'at install time to enforce the UNIQUE (project_id, package_id) constraint without a JOIN.',
     }),
 
     status: Field.select({
       label: 'Status',
       required: true,
       defaultValue: 'installed',
-      description: 'Current lifecycle status of this installation within the environment.',
+      description: 'Current lifecycle status of this installation within the project.',
       options: [
         { value: 'installed', label: 'Installed' },
         { value: 'installing', label: 'Installing' },
@@ -97,7 +97,7 @@ export const SysPackageInstallation = ObjectSchema.create({
       required: true,
       defaultValue: true,
       description:
-        'Whether the package metadata is actively loaded into this environment. ' +
+        'Whether the package metadata is actively loaded into this project. ' +
         'Disabled packages are installed but their schema is not visible to the runtime.',
     }),
 
@@ -130,8 +130,8 @@ export const SysPackageInstallation = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['environment_id', 'package_id'], unique: true },
-    { fields: ['environment_id'] },
+    { fields: ['project_id', 'package_id'], unique: true },
+    { fields: ['project_id'] },
     { fields: ['package_id'] },
     { fields: ['package_version_id'] },
     { fields: ['status'] },

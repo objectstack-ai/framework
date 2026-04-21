@@ -5,17 +5,17 @@
  *
  * Top-level navigation shell rendered on routes that are NOT scoped to a
  * specific package — i.e. the home page, organization management, the
- * environments list, an environment's overview page, and the per-environment
+ * projects list, a project's overview page, and the per-project
  * packages management page.
  *
  * The sidebar deliberately exposes only two navigation entries:
  *
- *   1. **Environments** — links to `/environments` (browse / pick an env).
- *   2. **Packages** — links to `/environments/:envId/packages`. Disabled
- *      until the user has selected an environment.
+ *   1. **Projects** — links to `/projects` (browse / pick a project).
+ *   2. **Packages** — links to `/projects/:projectId/packages`. Disabled
+ *      until the user has selected a project.
  *
  * Once the user drills into a specific package
- * (`/environments/:envId/:package/*`), the package-scoped {@link AppSidebar}
+ * (`/projects/:projectId/:package/*`), the package-scoped {@link AppSidebar}
  * takes over instead. The two sidebars are mutually exclusive and share the
  * same `SidebarProvider` in `routes/__root.tsx`.
  *
@@ -47,14 +47,14 @@ import {
 import { useSession } from '@/hooks/useSession';
 
 /**
- * Extract the `:envId` segment from the current pathname when the user is
- * anywhere under `/environments/:envId(...)`. Returns undefined on the
- * environments list page (`/environments`) or any non-environment route.
+ * Extract the `:projectId` segment from the current pathname when the user is
+ * anywhere under `/projects/:projectId(...)`. Returns undefined on the
+ * projects list page (`/projects`) or any non-project route.
  */
-function useActiveEnvironmentId(): string | undefined {
+function useActiveProjectId(): string | undefined {
   const location = useLocation();
   return useMemo(() => {
-    const m = location.pathname.match(/^\/environments\/([^/]+)/);
+    const m = location.pathname.match(/^\/projects\/([^/]+)/);
     return m?.[1];
   }, [location.pathname]);
 }
@@ -64,10 +64,10 @@ export function GlobalSidebar() {
   const pathname = location.pathname;
   const { session } = useSession();
   const activeOrgId = session?.activeOrganizationId ?? undefined;
-  const envId = useActiveEnvironmentId();
+  const projectId = useActiveProjectId();
 
-  const envsActive = pathname === '/environments';
-  const packagesHref = envId ? `/environments/${envId}/packages` : undefined;
+  const projectsActive = pathname === '/projects';
+  const packagesHref = projectId ? `/projects/${projectId}/packages` : undefined;
   const packagesActive = !!packagesHref && pathname === packagesHref;
   const apiConsoleActive = pathname === '/api-console';
 
@@ -77,28 +77,28 @@ export function GlobalSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* Environments — single-row entry, no expansion. */}
+              {/* Projects — single-row entry, no expansion. */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={envsActive} tooltip="Environments">
-                  <Link to="/environments">
+                <SidebarMenuButton asChild isActive={projectsActive} tooltip="Projects">
+                  <Link to="/projects">
                     <Boxes className="size-4" />
-                    <span>Environments</span>
+                    <span>Projects</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Packages — single-row entry. Depends on a selected environment;
+              {/* Packages — single-row entry. Depends on a selected project;
                   disabled and tooltipped when none is selected. */}
               <SidebarMenuItem>
-                {envId ? (
+                {projectId ? (
                   <SidebarMenuButton
                     asChild
                     isActive={packagesActive}
                     tooltip="Packages"
                   >
                     <Link
-                      to="/environments/$environmentId/packages"
-                      params={{ environmentId: envId }}
+                      to="/projects/$projectId/packages"
+                      params={{ projectId }}
                     >
                       <PackageIcon className="size-4" />
                       <span>Packages</span>
@@ -108,7 +108,7 @@ export function GlobalSidebar() {
                   <SidebarMenuButton
                     disabled
                     aria-disabled="true"
-                    tooltip="Select an environment first"
+                    tooltip="Select a project first"
                     className="cursor-not-allowed opacity-50"
                   >
                     <PackageIcon className="size-4" />
@@ -118,7 +118,7 @@ export function GlobalSidebar() {
               </SidebarMenuItem>
 
               {/* API Console — always available; the console discovers
-                  endpoints dynamically from the active client/environment. */}
+                  endpoints dynamically from the active client/project. */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={apiConsoleActive} tooltip="API Console">
                   <Link to="/api-console">

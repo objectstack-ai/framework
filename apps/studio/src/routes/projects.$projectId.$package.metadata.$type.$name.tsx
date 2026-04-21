@@ -2,19 +2,18 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 import { PluginHost } from '../plugins';
-import { useEnvAwarePackages } from '../hooks/useEnvAwarePackages';
+import { useEnvAwarePackages } from '../hooks/useProjectAwarePackages';
 
-function EnvObjectViewComponent() {
-  const { environmentId, package: packageId, name } = Route.useParams();
-  const { selectedPackage } = useEnvAwarePackages(environmentId);
+function EnvMetadataViewComponent() {
+  const { projectId, package: packageId, type, name } = Route.useParams();
+  const { selectedPackage } = useEnvAwarePackages(projectId);
 
-  // Use selectedPackage?.manifest?.id (full ID) for PluginHost; fall back to URL param.
   const resolvedPkgId = selectedPackage?.manifest?.id ?? packageId;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <PluginHost
-        metadataType="object"
+        metadataType={type}
         metadataName={name}
         packageId={resolvedPkgId}
       />
@@ -23,7 +22,7 @@ function EnvObjectViewComponent() {
 }
 
 export const Route = createFileRoute(
-  '/environments/$environmentId/$package/objects/$name',
+  '/projects/$projectId/$package/metadata/$type/$name',
 )({
-  component: EnvObjectViewComponent,
+  component: EnvMetadataViewComponent,
 });

@@ -3,12 +3,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useSession } from '@/hooks/useSession';
-import { useEnvironments } from '@/hooks/useEnvironments';
+import { useProjects } from '@/hooks/useProjects';
 
 function IndexRedirect() {
   const navigate = useNavigate();
   const { user, session, loading: sessionLoading } = useSession();
-  const { environments, loading: envsLoading } = useEnvironments();
+  const { projects, loading: projectsLoading } = useProjects();
 
   useEffect(() => {
     if (sessionLoading || !user) return; // RequireAuth sends to /login
@@ -17,23 +17,23 @@ function IndexRedirect() {
       navigate({ to: '/orgs' });
       return;
     }
-    if (envsLoading) return;
+    if (projectsLoading) return;
 
-    const lastEnvId = localStorage.getItem('objectstack.lastEnvId');
-    const targetEnv =
-      (lastEnvId && environments.find((e) => e.id === lastEnvId)) ||
-      environments.find((e) => e.isDefault) ||
-      environments[0];
+    const lastProjectId = localStorage.getItem('objectstack.lastProjectId');
+    const targetProject =
+      (lastProjectId && projects.find((p) => p.id === lastProjectId)) ||
+      projects.find((p) => p.isDefault) ||
+      projects[0];
 
-    if (targetEnv) {
+    if (targetProject) {
       navigate({
-        to: '/environments/$environmentId',
-        params: { environmentId: targetEnv.id },
+        to: '/projects/$projectId',
+        params: { projectId: targetProject.id },
       });
     } else {
-      navigate({ to: '/environments' });
+      navigate({ to: '/projects' });
     }
-  }, [user, session, sessionLoading, environments, envsLoading, navigate]);
+  }, [user, session, sessionLoading, projects, projectsLoading, navigate]);
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background">

@@ -4,17 +4,17 @@ import type { Plugin, PluginContext } from '@objectstack/spec';
 import type { TenantRoutingConfig } from '@objectstack/spec/cloud';
 import { TenantContextService } from './tenant-context';
 import {
-  createDefaultEnvironmentAdapters,
-  type EnvironmentDatabaseAdapter,
-} from './environment-provisioning.js';
+  createDefaultProjectAdapters,
+  type ProjectDatabaseAdapter,
+} from './project-provisioning.js';
 import {
   SysTenantDatabase,
   SysPackage,
   SysPackageVersion,
   SysPackageInstallation,
-  SysEnvironment,
-  SysDatabaseCredential,
-  SysEnvironmentMember,
+  SysProject,
+  SysProjectCredential,
+  SysProjectMember,
 } from './objects';
 
 /**
@@ -33,14 +33,10 @@ export interface TenantPluginConfig {
   registerSystemObjects?: boolean;
 
   /**
-   * Register the v4.x deprecated `sys_tenant_database` shim alongside the
-   * v4.1+ environment objects. Default: true (for backwards compatibility).
+   * Register the v4.x deprecated `sys_tenant_database` shim.
+   * Default: true (for backwards compatibility).
    *
-   * Set to false in greenfield deployments that never stored data under
-   * the legacy per-organization model. Will default to `false` in v5.0
-   * and be removed entirely thereafter.
-   *
-   * @see docs/adr/0002-environment-database-isolation.md
+   * Set to false in greenfield deployments.
    */
   registerLegacyTenantDatabase?: boolean;
 }
@@ -61,10 +57,10 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
 
     objects: config.registerSystemObjects !== false
       ? [
-          // Control-plane objects (environment-per-database model).
-          SysEnvironment,
-          SysDatabaseCredential,
-          SysEnvironmentMember,
+          // Control-plane objects (project-per-database model).
+          SysProject,
+          SysProjectCredential,
+          SysProjectMember,
           // Package registry (ADR-0003).
           SysPackage,
           SysPackageVersion,
@@ -76,27 +72,25 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
 
     async init(ctx: PluginContext) {
       // Register the physical-DB adapter registry so HTTP dispatcher can
-      // actually allocate real databases (local sqlite file or Turso cloud)
-      // when a client calls POST /cloud/environments. Without this, the
-      // dispatcher falls back to mock URLs and no files get created.
+      // actually allocate real databases when a client calls POST /cloud/projects.
       const anyCtx = ctx as any;
-      const adapters: EnvironmentDatabaseAdapter[] = createDefaultEnvironmentAdapters(process.env);
+      const adapters: ProjectDatabaseAdapter[] = createDefaultProjectAdapters(process.env);
       const adapterRegistry = {
-        get(driverName: string): EnvironmentDatabaseAdapter | undefined {
+        get(driverName: string): ProjectDatabaseAdapter | undefined {
           return adapters.find((a) => a.driver === driverName);
         },
-        list(): EnvironmentDatabaseAdapter[] {
+        list(): ProjectDatabaseAdapter[] {
           return [...adapters];
         },
       };
       if (typeof anyCtx.registerService === 'function') {
-        anyCtx.registerService('environment-provisioning-adapters', adapterRegistry);
+        anyCtx.registerService('project-provisioning-adapters', adapterRegistry);
       } else if (anyCtx.kernel?.registerService) {
-        anyCtx.kernel.registerService('environment-provisioning-adapters', adapterRegistry);
+        anyCtx.kernel.registerService('project-provisioning-adapters', adapterRegistry);
       } else {
         console.warn('[TenantPlugin] No registerService on context; adapter registry NOT installed');
       }
-      console.log('[TenantPlugin] Environment provisioning adapters registered', {
+      console.log('[TenantPlugin] Project provisioning adapters registered', {
         drivers: adapters.map((a) => a.driver),
       });
 
@@ -104,7 +98,6 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
       if (config.routing) {
         service = new TenantContextService(config.routing);
 
-        // Register service
         ctx.kernel.registerService('tenant', service, {
           lifecycle: 'SINGLETON',
         });
@@ -115,12 +108,11 @@ export function createTenantPlugin(config: TenantPluginConfig = {}): Plugin {
         });
       }
 
-      // Register system objects if enabled
       if (config.registerSystemObjects !== false) {
         const registered = [
-          'sys_environment',
-          'sys_database_credential',
-          'sys_environment_member',
+          'sys_project',
+          'sys_project_credential',
+          'sys_project_member',
           'sys_package',
           'sys_package_version',
           'sys_package_installation',

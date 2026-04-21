@@ -1,11 +1,11 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * /environments/$environmentId — environment overview (index).
+ * /projects/$projectId — project overview (index).
  *
- * Default landing surface when the user selects an environment. Shows a
- * snapshot of the environment record: identity, database addressing,
- * membership list, and the current active credential (metadata only, never
+ * Default landing surface when the user selects a project. Shows a
+ * snapshot of the project record: identity, database addressing,
+ * membership, and the current active credential (metadata only, never
  * the ciphertext).
  */
 
@@ -23,49 +23,49 @@ import {
   Loader2,
   Package,
 } from 'lucide-react';
-import { EnvironmentBadge } from '@/components/environment-badge';
-import { EnvironmentStatusBadge } from '@/components/environment-status-badge';
+import { ProjectBadge } from '@/components/project-badge';
+import { ProjectStatusBadge } from '@/components/project-status-badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useEnvironmentDetail, useRetryProvisioning } from '@/hooks/useEnvironments';
+import { useProjectDetail, useRetryProvisioning } from '@/hooks/useProjects';
 import { useClient } from '@objectstack/client-react';
 import { useProductionGuard } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
 
-function EnvironmentOverviewComponent() {
-  const { environmentId } = useParams({
-    from: '/environments/$environmentId',
+function ProjectOverviewComponent() {
+  const { projectId } = useParams({
+    from: '/projects/$projectId',
   });
-  const { detail, loading, reload } = useEnvironmentDetail(environmentId);
+  const { detail, loading, reload } = useProjectDetail(projectId);
   const client = useClient() as any;
   const navigate = useNavigate();
   const guard = useProductionGuard();
   const [rotating, setRotating] = useState(false);
   const { retry, retrying } = useRetryProvisioning();
 
-  const env = detail?.environment;
+  const project = detail?.project;
   const provisioningError =
-    (env?.metadata as Record<string, any> | undefined)?.provisioningError as
+    (project?.metadata as Record<string, any> | undefined)?.provisioningError as
       | { message?: string; failedAt?: string }
       | undefined;
 
   const handleRetry = async () => {
-    if (!env) return;
+    if (!project) return;
     try {
-      const result = await retry(env.id);
-      const nextStatus = (result as any)?.environment?.status;
+      const result = await retry(project.id);
+      const nextStatus = (result as any)?.project?.status;
       if (nextStatus === 'active') {
         toast({
           title: 'Provisioning complete',
-          description: 'The environment is now active and ready to use.',
+          description: 'The project is now active and ready to use.',
         });
       } else if (nextStatus === 'failed') {
         toast({
           title: 'Retry failed',
           description:
-            (result as any)?.environment?.metadata?.provisioningError?.message ??
+            (result as any)?.project?.metadata?.provisioningError?.message ??
             'Provisioning failed again. Check server logs.',
           variant: 'destructive',
         });
@@ -81,7 +81,7 @@ function EnvironmentOverviewComponent() {
   };
 
   const handleRotate = async () => {
-    if (!env) return;
+    if (!project) return;
     const ok = await guard.confirm({
       title: 'Rotate production credential?',
       description:
@@ -89,7 +89,7 @@ function EnvironmentOverviewComponent() {
       confirmLabel: 'Rotate credential',
       confirmVariant: 'destructive',
       requireTypedConfirmation: true,
-      typedConfirmationValue: env.displayName,
+      typedConfirmationValue: project.displayName,
     });
     if (!ok) return;
     setRotating(true);
@@ -98,7 +98,7 @@ function EnvironmentOverviewComponent() {
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `tok_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
-      await client?.environments?.rotateCredential?.(env.id, newToken);
+      await client?.projects?.rotateCredential?.(project.id, newToken);
       toast({
         title: 'Credential rotation started',
         description: 'The new credential will propagate to all runtimes.',
@@ -118,26 +118,26 @@ function EnvironmentOverviewComponent() {
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
-            {loading && !env && (
+            {loading && !project && (
               <div className="text-sm text-muted-foreground">Loading…</div>
             )}
 
-            {env && (
+            {project && (
               <>
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <div className="flex items-center gap-3">
                       <h1 className="text-2xl font-semibold">
-                        {env.displayName}
+                        {project.displayName}
                       </h1>
-                      <EnvironmentBadge envType={env.envType} />
-                      {env.isDefault && (
+                      <ProjectBadge projectType={project.projectType} />
+                      {project.isDefault && (
                         <Badge variant="outline">default</Badge>
                       )}
-                      <EnvironmentStatusBadge status={env.status} />
+                      <ProjectStatusBadge status={project.status} />
                     </div>
                     <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {env.id}
+                      {project.id}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -147,7 +147,7 @@ function EnvironmentOverviewComponent() {
                       onClick={() => reload()}
                       disabled={loading}
                       className="gap-2"
-                      title="Refresh environment status"
+                      title="Refresh project status"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                       Refresh
@@ -156,24 +156,24 @@ function EnvironmentOverviewComponent() {
                       variant="outline"
                       className="gap-2"
                       onClick={() => navigate({
-                        to: '/environments/$environmentId/packages',
-                        params: { environmentId: env.id },
+                        to: '/projects/$projectId/packages',
+                        params: { projectId: project.id },
                       })}
-                      disabled={env.status !== 'active'}
+                      disabled={project.status !== 'active'}
                     >
                       <Package className="h-4 w-4" />
                       Packages
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => navigate({ to: '/environments' })}
+                      onClick={() => navigate({ to: '/projects' })}
                     >
                       Back to list
                     </Button>
                   </div>
                 </div>
 
-                {env.status === 'provisioning' && (
+                {project.status === 'provisioning' && (
                   <Card className="flex items-start gap-3 border-sky-500/40 bg-sky-500/5 p-4">
                     <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-sky-600" />
                     <div className="flex-1 text-sm">
@@ -182,7 +182,7 @@ function EnvironmentOverviewComponent() {
                       </p>
                       <p className="text-muted-foreground">
                         We&rsquo;re allocating the physical database and
-                        minting credentials for this environment. This
+                        minting credentials for this project. This
                         normally takes a few seconds — click Refresh to
                         check the latest status.
                       </p>
@@ -190,7 +190,7 @@ function EnvironmentOverviewComponent() {
                   </Card>
                 )}
 
-                {env.status === 'failed' && (
+                {project.status === 'failed' && (
                   <Card className="flex items-start gap-3 border-red-500/40 bg-red-500/5 p-4">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
                     <div className="flex-1 text-sm">
@@ -199,7 +199,7 @@ function EnvironmentOverviewComponent() {
                       </p>
                       <p className="text-muted-foreground">
                         {provisioningError?.message ??
-                          'The environment could not be provisioned. Retry to run the driver handshake again.'}
+                          'The project could not be provisioned. Retry to run the driver handshake again.'}
                       </p>
                       {provisioningError?.failedAt && (
                         <p className="mt-1 text-xs text-muted-foreground">
@@ -222,15 +222,15 @@ function EnvironmentOverviewComponent() {
                   </Card>
                 )}
 
-                {env.envType === 'production' && env.status === 'active' && (
+                {project.projectType === 'production' && project.status === 'active' && (
                   <Card className="flex items-start gap-3 border-red-500/40 bg-red-500/5 p-4">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
                     <div className="text-sm">
                       <p className="font-medium text-red-700 dark:text-red-300">
-                        Live production environment
+                        Live production project
                       </p>
                       <p className="text-muted-foreground">
-                        Writes in this environment affect real customer data.
+                        Writes in this project affect real customer data.
                         Studio will prompt for confirmation before destructive
                         actions.
                       </p>
@@ -288,7 +288,7 @@ function EnvironmentOverviewComponent() {
                       size="sm"
                       variant="outline"
                       onClick={handleRotate}
-                      disabled={rotating || env.status !== 'active'}
+                      disabled={rotating || project.status !== 'active'}
                       className="gap-2"
                     >
                       <RefreshCw
@@ -355,7 +355,7 @@ function EnvironmentOverviewComponent() {
                 <div className="flex justify-end">
                   <Button variant="destructive" size="sm" className="gap-2" disabled>
                     <Trash className="h-3.5 w-3.5" />
-                    Archive environment
+                    Archive project
                   </Button>
                 </div>
               </>
@@ -366,6 +366,6 @@ function EnvironmentOverviewComponent() {
   );
 }
 
-export const Route = createFileRoute('/environments/$environmentId/')({
-  component: EnvironmentOverviewComponent,
+export const Route = createFileRoute('/projects/$projectId/')({
+  component: ProjectOverviewComponent,
 });

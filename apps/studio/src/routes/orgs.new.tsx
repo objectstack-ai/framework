@@ -64,7 +64,7 @@ function NewOrgPage() {
             <CardHeader>
               <CardTitle>New organization</CardTitle>
               <CardDescription>
-                Organizations group environments, metadata and members together.
+                Organizations group projects, metadata and members together.
               </CardDescription>
             </CardHeader>
             <form onSubmit={handleSubmit}>
