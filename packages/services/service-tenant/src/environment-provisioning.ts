@@ -140,14 +140,14 @@ export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabas
 }
 
 /**
- * In-memory environment adapter. Writes a small JSON marker file per
- * environment under `baseDir` so operators can at least see evidence on
- * disk that the env was provisioned (the real storage is ephemeral memory).
+ * In-memory environment adapter. Storage is ephemeral by design — the
+ * control-plane ObjectQL driver (which IS the memory driver) already
+ * persists the `sys__environment` record into `memory-driver.json` in
+ * its own format. This adapter only needs to return a stable URL; it must
+ * not write any separate marker files.
  */
 export class MemoryEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
   readonly driver: DatabaseDriver = 'memory';
-
-  constructor(private readonly baseDir: string = '.objectstack/data/environments') {}
 
   async createDatabase(params: {
     environmentId: string;
@@ -155,25 +155,6 @@ export class MemoryEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdap
     region: string;
     storageLimitMb: number;
   }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
-    const { mkdirSync, writeFileSync } = await import('node:fs');
-    const { resolve } = await import('node:path');
-    const markerPath = resolve(this.baseDir, `${params.databaseName}.memory.json`);
-    mkdirSync(this.baseDir, { recursive: true });
-    writeFileSync(
-      markerPath,
-      JSON.stringify(
-        {
-          driver: 'memory',
-          environmentId: params.environmentId,
-          databaseName: params.databaseName,
-          region: params.region,
-          storageLimitMb: params.storageLimitMb,
-          provisionedAt: new Date().toISOString(),
-        },
-        null,
-        2,
-      ),
-    );
     return {
       databaseUrl: `memory://${params.databaseName}`,
       plaintextSecret: '',
@@ -548,8 +529,9 @@ export class EnvironmentProvisioningService {
  * directly when a caller picks a driver.
  *
  * Selection rules:
- *  - Always register the `memory` adapter (writes a `.memory.json` marker
- *    file per environment so operators can see what was provisioned).
+ *  - Always register the `memory` adapter (returns a `memory://` URL;
+ *    the control-plane ObjectQL driver handles persisting the record into
+ *    `memory-driver.json` in its native format).
  *  - Always register the `sqlite` adapter (writes a `.db` file per env
  *    under `.objectstack/data/environments/`).
  *  - For the `turso` key:
