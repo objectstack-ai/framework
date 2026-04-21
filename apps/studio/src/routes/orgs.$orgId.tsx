@@ -1,9 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Mail, MoreVertical, Trash2, UserPlus, Users } from 'lucide-react';
-import { useClient } from '@objectstack/client-react';
+import { useState } from 'react';
+import { ArrowLeft, Clock, Mail, MoreVertical, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -33,6 +32,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { useOrganizations, useSession } from '@/hooks/useSession';
+import {
+  useOrganizationMembers,
+  useOrganizationInvitations,
+} from '@/hooks/useOrganizationMembers';
 
 export const Route = createFileRoute('/orgs/$orgId')({
   component: OrgDetailPage,
@@ -41,35 +44,27 @@ export const Route = createFileRoute('/orgs/$orgId')({
 function OrgDetailPage() {
   const { orgId } = Route.useParams();
   const navigate = useNavigate();
-  const client = useClient() as any;
   const { organizations } = useOrganizations();
   const { session, setActiveOrganization } = useSession();
   const org = organizations.find((o) => o.id === orgId);
-  const [members, setMembers] = useState<any[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  
+  const {
+    members,
+    loading: loadingMembers,
+    inviteMember,
+    removeMember,
+  } = useOrganizationMembers(orgId);
 
-  // Invitation form state
+  const {
+    invitations,
+    loading: loadingInvitations,
+    cancelInvitation,
+  } = useOrganizationInvitations(orgId);
+
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [inviting, setInviting] = useState(false);
-
-  useEffect(() => {
-    loadMembers();
-  }, [orgId]);
-
-  async function loadMembers() {
-    if (!client?.organizations) return;
-    setLoadingMembers(true);
-    try {
-      const res = await client.organizations.listMembers(orgId);
-      setMembers(res?.members ?? res?.data?.members ?? res ?? []);
-    } catch {
-      setMembers([]);
-    } finally {
-      setLoadingMembers(false);
-    }
-  }
 
   const handleSetActive = async () => {
     try {
@@ -96,16 +91,11 @@ function OrgDetailPage() {
 
     setInviting(true);
     try {
-      await client.organizations.invite({
-        email: inviteEmail,
-        role: inviteRole,
-        organizationId: orgId,
-      });
+      await inviteMember(inviteEmail, inviteRole);
       toast({ title: 'Invitation sent successfully' });
       setInviteDialogOpen(false);
       setInviteEmail('');
       setInviteRole('member');
-      loadMembers();
     } catch (err) {
       toast({
         title: 'Failed to send invitation',
@@ -117,7 +107,42 @@ function OrgDetailPage() {
     }
   };
 
+  const handleRemoveMember = async (userId: string, memberName: string) => {
+    if (!confirm(`Are you sure you want to remove ${memberName} from this organization?`)) {
+      return;
+    }
+
+    try {
+      await removeMember(userId);
+      toast({ title: 'Member removed successfully' });
+    } catch (err) {
+      toast({
+        title: 'Failed to remove member',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: string, email: string) => {
+    if (!confirm(`Cancel invitation for ${email}?`)) {
+      return;
+    }
+
+    try {
+      await cancelInvitation(invitationId);
+      toast({ title: 'Invitation canceled' });
+    } catch (err) {
+      toast({
+        title: 'Failed to cancel invitation',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const isActive = session?.activeOrganizationId === orgId;
+  const pendingInvitations = invitations.filter((i) => i.status === 'pending');
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -162,6 +187,10 @@ function OrgDetailPage() {
                 <span className="text-muted-foreground">Members</span>
                 <span>{members.length}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Pending Invitations</span>
+                <span>{pendingInvitations.length}</span>
+              </div>
             </CardContent>
           </Card>
 
@@ -170,11 +199,11 @@ function OrgDetailPage() {
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="members">
                 <Users className="mr-2 h-4 w-4" />
-                Members
+                Members ({members.length})
               </TabsTrigger>
               <TabsTrigger value="invitations">
                 <Mail className="mr-2 h-4 w-4" />
-                Invitations
+                Invitations ({pendingInvitations.length})
               </TabsTrigger>
             </TabsList>
 
@@ -218,14 +247,14 @@ function OrgDetailPage() {
                   )}
                   {!loadingMembers && members.length > 0 && (
                     <div className="divide-y">
-                      {members.map((m, i) => (
+                      {members.map((m) => (
                         <div
-                          key={m.id ?? i}
+                          key={m.id}
                           className="flex items-center justify-between py-3"
                         >
                           <div className="flex-1">
                             <div className="font-medium text-sm">
-                              {m.user?.name || m.name || m.userId}
+                              {m.user?.name || m.userId}
                             </div>
                             {m.user?.email && (
                               <div className="text-xs text-muted-foreground">
@@ -237,19 +266,29 @@ function OrgDetailPage() {
                             <Badge variant="secondary" className="text-xs">
                               {m.role ?? 'member'}
                             </Badge>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem className="text-destructive">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Remove member
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            {m.role !== 'owner' && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() =>
+                                      handleRemoveMember(
+                                        m.userId,
+                                        m.user?.name || m.user?.email || m.userId
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Remove member
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -277,15 +316,51 @@ function OrgDetailPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-8">
-                    <Mail className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                    <p className="mt-4 text-sm text-muted-foreground">
-                      No pending invitations
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Invitations will appear here once sent
-                    </p>
-                  </div>
+                  {loadingInvitations && (
+                    <p className="text-xs text-muted-foreground">Loading invitations...</p>
+                  )}
+                  {!loadingInvitations && pendingInvitations.length === 0 && (
+                    <div className="text-center py-8">
+                      <Mail className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        No pending invitations
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Invitations will appear here once sent
+                      </p>
+                    </div>
+                  )}
+                  {!loadingInvitations && pendingInvitations.length > 0 && (
+                    <div className="divide-y">
+                      {pendingInvitations.map((inv) => (
+                        <div
+                          key={inv.id}
+                          className="flex items-center justify-between py-3"
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{inv.email}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">
+                                {inv.role}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleCancelInvitation(inv.id, inv.email)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
