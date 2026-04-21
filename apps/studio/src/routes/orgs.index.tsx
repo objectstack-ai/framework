@@ -4,7 +4,6 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Building2, Check, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SiteHeader } from '@/components/site-header';
 import { toast } from '@/hooks/use-toast';
 import { useOrganizations, useSession } from '@/hooks/useSession';
 
@@ -33,9 +32,8 @@ function OrgsListPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col">
-      <SiteHeader selectedView="overview" />
-      <div className="flex-1 px-6 py-8">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex-1 px-6 py-8 overflow-auto">
         <div className="mx-auto max-w-3xl space-y-6">
           <div className="flex items-center justify-between">
             <div>

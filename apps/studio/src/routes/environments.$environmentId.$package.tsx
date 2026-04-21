@@ -14,7 +14,7 @@ import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 function EnvPackageLayoutComponent() {
   return (
-    <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
+    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <Outlet />
     </main>
   );

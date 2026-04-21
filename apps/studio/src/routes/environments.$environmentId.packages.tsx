@@ -12,8 +12,7 @@ import { createFileRoute, useParams, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react';
 import { useClient } from '@objectstack/client-react';
 import { Package, Power, PowerOff, Trash2, Plus, RefreshCw, ArrowRight } from 'lucide-react';
-import { SiteHeader } from '@/components/site-header';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -100,9 +99,7 @@ function EnvironmentPackagesComponent() {
   };
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
-      <SiteHeader selectedView="packages" />
-
+    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-8">
 

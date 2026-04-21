@@ -23,7 +23,6 @@ import {
   Loader2,
   Package,
 } from 'lucide-react';
-import { SiteHeader } from '@/components/site-header';
 import { EnvironmentBadge } from '@/components/environment-badge';
 import { EnvironmentStatusBadge } from '@/components/environment-status-badge';
 import { Card } from '@/components/ui/card';
@@ -116,9 +115,7 @@ function EnvironmentOverviewComponent() {
   };
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
-      <SiteHeader selectedView="environments" />
-
+    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
             {loading && !env && (

@@ -15,7 +15,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Plus, Database, MapPin, RefreshCw } from 'lucide-react';
-import { SiteHeader } from '@/components/site-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,9 +29,7 @@ function EnvironmentsListComponent() {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col h-svh overflow-hidden bg-background">
-      <SiteHeader selectedView="environments" />
-
+    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-5xl">
           <div className="mb-6 flex items-center justify-between">
