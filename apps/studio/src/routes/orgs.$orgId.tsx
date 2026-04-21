@@ -2,10 +2,35 @@
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Mail, MoreVertical, Trash2, UserPlus, Users } from 'lucide-react';
 import { useClient } from '@objectstack/client-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { useOrganizations, useSession } from '@/hooks/useSession';
 
@@ -22,27 +47,29 @@ function OrgDetailPage() {
   const org = organizations.find((o) => o.id === orgId);
   const [members, setMembers] = useState<any[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+
+  // Invitation form state
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member');
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadMembers() {
-      if (!client?.organizations) return;
-      setLoadingMembers(true);
-      try {
-        const res = await client.organizations.listMembers(orgId);
-        if (cancelled) return;
-        setMembers(res?.members ?? res?.data?.members ?? res ?? []);
-      } catch {
-        if (!cancelled) setMembers([]);
-      } finally {
-        if (!cancelled) setLoadingMembers(false);
-      }
-    }
     loadMembers();
-    return () => {
-      cancelled = true;
-    };
-  }, [client, orgId]);
+  }, [orgId]);
+
+  async function loadMembers() {
+    if (!client?.organizations) return;
+    setLoadingMembers(true);
+    try {
+      const res = await client.organizations.listMembers(orgId);
+      setMembers(res?.members ?? res?.data?.members ?? res ?? []);
+    } catch {
+      setMembers([]);
+    } finally {
+      setLoadingMembers(false);
+    }
+  }
 
   const handleSetActive = async () => {
     try {
@@ -57,12 +84,45 @@ function OrgDetailPage() {
     }
   };
 
+  const handleInviteMember = async () => {
+    if (!inviteEmail) {
+      toast({
+        title: 'Email required',
+        description: 'Please enter an email address',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setInviting(true);
+    try {
+      await client.organizations.invite({
+        email: inviteEmail,
+        role: inviteRole,
+        organizationId: orgId,
+      });
+      toast({ title: 'Invitation sent successfully' });
+      setInviteDialogOpen(false);
+      setInviteEmail('');
+      setInviteRole('member');
+      loadMembers();
+    } catch (err) {
+      toast({
+        title: 'Failed to send invitation',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const isActive = session?.activeOrganizationId === orgId;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 px-6 py-8 overflow-auto">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="mx-auto max-w-4xl space-y-6">
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/orgs' })}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
@@ -73,12 +133,25 @@ function OrgDetailPage() {
               </Button>
             )}
           </div>
+
+          {/* Organization Overview Card */}
           <Card>
             <CardHeader>
-              <CardTitle>{org?.name ?? 'Organization'}</CardTitle>
-              {org?.slug && (
-                <CardDescription className="font-mono text-xs">{org.slug}</CardDescription>
-              )}
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>{org?.name ?? 'Organization'}</CardTitle>
+                  {org?.slug && (
+                    <CardDescription className="font-mono text-xs mt-1">
+                      {org.slug}
+                    </CardDescription>
+                  )}
+                </div>
+                {isActive && (
+                  <Badge variant="outline" className="ml-2">
+                    Active
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
@@ -86,36 +159,138 @@ function OrgDetailPage() {
                 <code className="text-xs">{orgId}</code>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
-                <span>{isActive ? 'Active' : 'Inactive'}</span>
+                <span className="text-muted-foreground">Members</span>
+                <span>{members.length}</span>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Members</CardTitle>
-              <CardDescription>People with access to this organization.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingMembers && <p className="text-xs text-muted-foreground">Loading…</p>}
-              {!loadingMembers && members.length === 0 && (
-                <p className="text-xs text-muted-foreground">No members found.</p>
-              )}
-              <ul className="divide-y">
-                {members.map((m, i) => (
-                  <li key={m.id ?? i} className="flex items-center justify-between py-2 text-sm">
+
+          {/* Tabs for Members and Invitations */}
+          <Tabs defaultValue="members" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="members">
+                <Users className="mr-2 h-4 w-4" />
+                Members
+              </TabsTrigger>
+              <TabsTrigger value="invitations">
+                <Mail className="mr-2 h-4 w-4" />
+                Invitations
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Members Tab */}
+            <TabsContent value="members" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-medium">{m.user?.name || m.name || m.userId}</div>
-                      {m.user?.email && (
-                        <div className="text-[11px] text-muted-foreground">{m.user.email}</div>
-                      )}
+                      <CardTitle className="text-base">Members</CardTitle>
+                      <CardDescription>
+                        People with access to this organization
+                      </CardDescription>
                     </div>
-                    <code className="text-[10px] text-muted-foreground">{m.role ?? 'member'}</code>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+                    <Button size="sm" onClick={() => setInviteDialogOpen(true)}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Invite
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingMembers && (
+                    <p className="text-xs text-muted-foreground">Loading members...</p>
+                  )}
+                  {!loadingMembers && members.length === 0 && (
+                    <div className="text-center py-8">
+                      <Users className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        No members yet. Invite someone to get started.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-4"
+                        onClick={() => setInviteDialogOpen(true)}
+                      >
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Invite member
+                      </Button>
+                    </div>
+                  )}
+                  {!loadingMembers && members.length > 0 && (
+                    <div className="divide-y">
+                      {members.map((m, i) => (
+                        <div
+                          key={m.id ?? i}
+                          className="flex items-center justify-between py-3"
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">
+                              {m.user?.name || m.name || m.userId}
+                            </div>
+                            {m.user?.email && (
+                              <div className="text-xs text-muted-foreground">
+                                {m.user.email}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {m.role ?? 'member'}
+                            </Badge>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem className="text-destructive">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove member
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Invitations Tab */}
+            <TabsContent value="invitations" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Pending Invitations</CardTitle>
+                      <CardDescription>
+                        Invitations sent to join this organization
+                      </CardDescription>
+                    </div>
+                    <Button size="sm" onClick={() => setInviteDialogOpen(true)}>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Send invitation
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center py-8">
+                    <Mail className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                    <p className="mt-4 text-sm text-muted-foreground">
+                      No pending invitations
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Invitations will appear here once sent
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
           <p className="text-xs text-muted-foreground">
             Need to manage environments?{' '}
             <Link to="/environments" className="text-primary hover:underline">
@@ -124,6 +299,61 @@ function OrgDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Invite Member Dialog */}
+      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Invite member</DialogTitle>
+            <DialogDescription>
+              Send an invitation to join {org?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email address</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="colleague@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={inviteRole} onValueChange={setInviteRole}>
+                <SelectTrigger id="role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {inviteRole === 'owner' && 'Full access to manage the organization'}
+                {inviteRole === 'admin' &&
+                  'Can manage members and settings, but cannot delete the organization'}
+                {inviteRole === 'member' && 'Can view and use organization resources'}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setInviteDialogOpen(false)}
+              disabled={inviting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleInviteMember} disabled={inviting}>
+              {inviting ? 'Sending...' : 'Send invitation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
