@@ -10,25 +10,39 @@ export const Account = ObjectSchema.create({
   description: 'Companies and organizations doing business with us',
   titleFormat: '{account_number} - {name}',
   compactLayout: ['account_number', 'name', 'type', 'owner'],
-  
+
+  // Field groups organize the form layout. Array order == display order.
+  // Each field below opts in via `group: '<key>'`.
+  fieldGroups: [
+    { key: 'basic',        label: 'Basic Information',  icon: 'building' },
+    { key: 'financials',   label: 'Financials',         icon: 'dollar-sign' },
+    { key: 'contact_info', label: 'Contact Information', icon: 'phone' },
+    { key: 'ownership',    label: 'Ownership & Status', icon: 'users' },
+    { key: 'branding',     label: 'Branding',           icon: 'palette', defaultExpanded: false },
+    { key: 'system',       label: 'System',             icon: 'settings', defaultExpanded: false },
+  ],
+
   fields: {
     // AutoNumber field - Unique account identifier
     account_number: Field.autonumber({
       label: 'Account Number',
       format: 'ACC-{0000}',
+      group: 'basic',
     }),
-    
+
     // Basic Information
-    name: Field.text({ 
-      label: 'Account Name', 
-      required: true, 
+    name: Field.text({
+      label: 'Account Name',
+      required: true,
       searchable: true,
       maxLength: 255,
+      group: 'basic',
     }),
-    
+
     // Select fields with custom options
     type: Field.select({
       label: 'Account Type',
+      group: 'basic',
       options: [
         { label: 'Prospect', value: 'prospect', color: '#FFA500', default: true },
         { label: 'Customer', value: 'customer', color: '#00AA00' },
@@ -36,9 +50,10 @@ export const Account = ObjectSchema.create({
         { label: 'Former Customer', value: 'former', color: '#999999' },
       ]
     }),
-    
+
     industry: Field.select({
       label: 'Industry',
+      group: 'basic',
       options: [
         { label: 'Technology', value: 'technology' },
         { label: 'Finance', value: 'finance' },
@@ -48,75 +63,86 @@ export const Account = ObjectSchema.create({
         { label: 'Education', value: 'education' },
       ]
     }),
-    
+
+    description: Field.markdown({
+      label: 'Description',
+      group: 'basic',
+    }),
+
     // Number fields
-    annual_revenue: Field.currency({ 
+    annual_revenue: Field.currency({
       label: 'Annual Revenue',
       scale: 2,
       min: 0,
+      group: 'financials',
     }),
-    
+
     number_of_employees: Field.number({
       label: 'Employees',
       min: 0,
+      group: 'financials',
     }),
-    
+
     // Contact Information
-    phone: Field.text({ 
+    phone: Field.text({
       label: 'Phone',
       format: 'phone',
+      group: 'contact_info',
     }),
-    
+
     website: Field.url({
       label: 'Website',
+      group: 'contact_info',
     }),
-    
+
     // Structured Address field (new field type)
     billing_address: Field.address({
       label: 'Billing Address',
       addressFormat: 'international',
+      group: 'contact_info',
     }),
-    
+
     // Office Location (new field type)
     office_location: Field.location({
       label: 'Office Location',
       displayMap: true,
       allowGeocoding: true,
+      group: 'contact_info',
     }),
-    
+
     // Relationship fields
     owner: Field.lookup('user', {
       label: 'Account Owner',
       required: true,
+      group: 'ownership',
     }),
-    
+
     parent_account: Field.lookup('account', {
       label: 'Parent Account',
       description: 'Parent company in hierarchy',
+      group: 'ownership',
     }),
-    
-    // Rich text field
-    description: Field.markdown({
-      label: 'Description',
-    }),
-    
+
     // Boolean field
     is_active: Field.boolean({
       label: 'Active',
       defaultValue: true,
+      group: 'ownership',
     }),
-    
-    // Date field
-    last_activity_date: Field.date({
-      label: 'Last Activity Date',
-      readonly: true,
-    }),
-    
+
     // Brand color (new field type)
     brand_color: Field.color({
       label: 'Brand Color',
       colorFormat: 'hex',
       presetColors: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
+      group: 'branding',
+    }),
+
+    // Date field
+    last_activity_date: Field.date({
+      label: 'Last Activity Date',
+      readonly: true,
+      group: 'system',
     }),
   },
   

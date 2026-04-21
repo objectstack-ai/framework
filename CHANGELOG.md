@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`examples/app-crm` — showcase `fieldGroups` MVP** — The CRM reference example (`Account`, `Contact`, `Opportunity`, `Lead`) now demonstrates the new `fieldGroups` protocol end to end. Each object declares logical groups (e.g., *Basic Information*, *Financials*, *Contact Information*, *Ownership & Status*, *System*) and every field opts in via `group: '<key>'`. No business logic changed — only field-layout metadata — so existing validations, workflows, indexes, and state machines are unaffected. Useful as a reference when designing multi-group forms and detail pages.
+
+### Added
+- **Field Groups (`fieldGroups`) — simplified MVP protocol** — Introduced a data-layer protocol for grouping fields on an object in forms, detail pages, and editors. Designed to be AI-generation- and extension-friendly by intentionally minimizing surface area:
+  - New `ObjectFieldGroupSchema` in `packages/spec/src/data/object.zod.ts` with `key` (snake_case machine key), `label`, optional `icon`, `description`, `defaultExpanded` (default `true`), and `visibleOn` (expression for conditional visibility). No `order` property — **array declaration order is the display order**.
+  - `ObjectSchema` gains an optional `fieldGroups: ObjectFieldGroup[]`. Group keys are validated to be unique within an object.
+  - The existing `Field.group: string` property on `FieldSchema` is the sole field→group assignment mechanism. Field → group mapping is derived automatically from metadata registration; in-group display order equals the traversal order of `ObjectSchema.fields`. Extension packages and runtime code use `Field.group` uniformly.
+  - Supported migrations at this layer: add / rename / delete / reorder groups (by editing the `fieldGroups` array) and assigning an existing field to a group (by editing `Field.group`). Explicit per-field in-group ordering is deferred to a future iteration.
+  - New `ObjectFieldGroup` / `ObjectFieldGroupInput` type exports alongside the schema.
+  - Tests: 12 new round-trip cases in `packages/spec/src/data/object.test.ts` covering minimal/full-group parsing, required fields, snake_case key validation, declaration-order preservation, duplicate-key rejection, `Field.group` referencing, and `ObjectSchema.create()` integration.
 ### Fixed
 - **Doubly-prefixed FQN for `@objectstack/objectos` system objects** — The ObjectOS-layer object definitions (`SysObject`, `SysView`, `SysAgent`, `SysTool`, `SysFlow`, `SysMetadata`) were being registered with fully-qualified names like `sys__sys_object`, `sys__sys_view`, `sys__sys_metadata`, because each object hard-coded a `sys_` prefix into its `name` **and** its manifest was registered under `namespace: 'sys'`, causing `SchemaRegistry.computeFQN(namespace, name)` to apply the prefix twice. The object `name` values are now the unprefixed short form (`object`, `view`, `agent`, `tool`, `flow`, `metadata`), producing the correct FQNs (`sys__object`, `sys__view`, `sys__agent`, `sys__tool`, `sys__flow`). `SysMetadata` (which would collide with the canonical `sys__metadata` owned by `@objectstack/metadata`) is now exported separately and excluded from the auto-registered `SystemObjects` catalog to avoid ownership conflicts; consumers that need it can still import it directly. See `packages/objectos/src/objects/*.ts` and `packages/objectos/src/registry.ts`.
 

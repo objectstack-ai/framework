@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ObjectSchema, ObjectCapabilities, IndexSchema, type ServiceObject } from './object.zod';
+import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, type ServiceObject } from './object.zod';
 
 describe('ObjectCapabilities', () => {
   it('should apply default values correctly', () => {
@@ -845,5 +845,122 @@ describe('ObjectSchema.create() namespace auto-derivation', () => {
       fields: {},
     });
     expect(obj.tableName).toBe('crm_deal');
+  });
+});
+
+// =================================================================
+// Field Groups (MVP) — metadata-layer protocol
+// =================================================================
+
+describe('ObjectFieldGroupSchema', () => {
+  it('should accept a minimal group (key + label)', () => {
+    const group = { key: 'contact_info', label: 'Contact Information' };
+    const result = ObjectFieldGroupSchema.parse(group);
+    expect(result.key).toBe('contact_info');
+    expect(result.label).toBe('Contact Information');
+    // defaultExpanded defaults to true
+    expect(result.defaultExpanded).toBe(true);
+    expect(result.icon).toBeUndefined();
+    expect(result.description).toBeUndefined();
+    expect(result.visibleOn).toBeUndefined();
+  });
+
+  it('should accept a fully-specified group', () => {
+    const group = {
+      key: 'billing',
+      label: 'Billing',
+      icon: 'credit-card',
+      description: 'Billing and payment details',
+      defaultExpanded: false,
+      visibleOn: '$user.isAdmin',
+    };
+    const result = ObjectFieldGroupSchema.parse(group);
+    expect(result).toEqual(group);
+  });
+
+  it('should reject missing key or label', () => {
+    expect(() => ObjectFieldGroupSchema.parse({})).toThrow();
+    expect(() => ObjectFieldGroupSchema.parse({ key: 'billing' })).toThrow();
+    expect(() => ObjectFieldGroupSchema.parse({ label: 'Billing' })).toThrow();
+  });
+
+  it('should reject non-snake_case keys', () => {
+    expect(() => ObjectFieldGroupSchema.parse({ key: 'Contact Info', label: 'x' })).toThrow();
+    expect(() => ObjectFieldGroupSchema.parse({ key: 'contact-info', label: 'x' })).toThrow();
+    expect(() => ObjectFieldGroupSchema.parse({ key: 'ContactInfo',  label: 'x' })).toThrow();
+  });
+});
+
+describe('ObjectSchema.fieldGroups', () => {
+  it('should accept an object without fieldGroups (fully optional)', () => {
+    const result = ObjectSchema.safeParse({
+      name: 'account',
+      fields: {},
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fieldGroups).toBeUndefined();
+    }
+  });
+
+  it('should preserve declaration order of fieldGroups (array order = display order)', () => {
+    const result = ObjectSchema.parse({
+      name: 'account',
+      fields: {},
+      fieldGroups: [
+        { key: 'contact_info', label: 'Contact' },
+        { key: 'billing',      label: 'Billing' },
+        { key: 'system',       label: 'System'  },
+      ],
+    });
+    expect(result.fieldGroups?.map(g => g.key)).toEqual([
+      'contact_info', 'billing', 'system',
+    ]);
+  });
+
+  it('should reject duplicate fieldGroup keys', () => {
+    const result = ObjectSchema.safeParse({
+      name: 'account',
+      fields: {},
+      fieldGroups: [
+        { key: 'billing', label: 'Billing' },
+        { key: 'billing', label: 'Billing Details' },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should allow Field.group to reference a declared group key', () => {
+    const result = ObjectSchema.safeParse({
+      name: 'account',
+      fields: {
+        email:   { type: 'email', group: 'contact_info' },
+        phone:   { type: 'phone', group: 'contact_info' },
+        vat_id:  { type: 'text',  group: 'billing'       },
+        created: { type: 'datetime', group: 'system'     },
+      },
+      fieldGroups: [
+        { key: 'contact_info', label: 'Contact Information' },
+        { key: 'billing',      label: 'Billing'             },
+        { key: 'system',       label: 'System'              },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('ObjectSchema.create() should accept fieldGroups and preserve them', () => {
+    const obj = ObjectSchema.create({
+      name: 'project_task',
+      fields: {
+        title:  { type: 'text' },
+        status: { type: 'text', group: 'workflow' },
+      },
+      fieldGroups: [
+        { key: 'workflow', label: 'Workflow', icon: 'workflow' },
+      ],
+    });
+    expect(obj.fieldGroups).toEqual([
+      { key: 'workflow', label: 'Workflow', icon: 'workflow', defaultExpanded: true },
+    ]);
   });
 });

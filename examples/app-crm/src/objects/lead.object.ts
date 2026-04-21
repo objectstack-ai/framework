@@ -10,10 +10,23 @@ export const Lead = ObjectSchema.create({
   icon: 'user-plus',
   description: 'Potential customers not yet qualified',
   
+  fieldGroups: [
+    { key: 'identity',     label: 'Identity',           icon: 'user-plus' },
+    { key: 'company_info', label: 'Company Information', icon: 'building' },
+    { key: 'contact_info', label: 'Contact Information', icon: 'phone' },
+    { key: 'qualification', label: 'Qualification',     icon: 'star' },
+    { key: 'assignment',   label: 'Assignment',         icon: 'user' },
+    { key: 'address',      label: 'Address',            icon: 'map-pin', defaultExpanded: false },
+    { key: 'additional',   label: 'Additional Info',    icon: 'info', defaultExpanded: false },
+    { key: 'preferences',  label: 'Communication Preferences', icon: 'bell-off', defaultExpanded: false },
+    { key: 'conversion',   label: 'Conversion',         icon: 'check-circle', defaultExpanded: false },
+  ],
+
   fields: {
     // Personal Information
     salutation: Field.select({
       label: 'Salutation',
+      group: 'identity',
       options: [
         { label: 'Mr.', value: 'mr' },
         { label: 'Ms.', value: 'ms' },
@@ -21,37 +34,43 @@ export const Lead = ObjectSchema.create({
         { label: 'Dr.', value: 'dr' },
       ]
     }),
-    
+
     first_name: Field.text({
       label: 'First Name',
       required: true,
       searchable: true,
+      group: 'identity',
     }),
-    
+
     last_name: Field.text({
       label: 'Last Name',
       required: true,
       searchable: true,
+      group: 'identity',
     }),
-    
+
     full_name: Field.formula({
       label: 'Full Name',
       expression: 'CONCAT(salutation, " ", first_name, " ", last_name)',
+      group: 'identity',
     }),
-    
+
     // Company Information
     company: Field.text({
       label: 'Company',
       required: true,
       searchable: true,
+      group: 'company_info',
     }),
-    
+
     title: Field.text({
       label: 'Job Title',
+      group: 'company_info',
     }),
-    
+
     industry: Field.select({
       label: 'Industry',
+      group: 'company_info',
       options: [
         { label: 'Technology', value: 'technology' },
         { label: 'Finance', value: 'finance' },
@@ -61,32 +80,37 @@ export const Lead = ObjectSchema.create({
         { label: 'Education', value: 'education' },
       ]
     }),
-    
+
     // Contact Information
     email: Field.email({
       label: 'Email',
       required: true,
       unique: true,
+      group: 'contact_info',
     }),
-    
+
     phone: Field.text({
       label: 'Phone',
       format: 'phone',
+      group: 'contact_info',
     }),
-    
+
     mobile: Field.text({
       label: 'Mobile',
       format: 'phone',
+      group: 'contact_info',
     }),
-    
+
     website: Field.url({
       label: 'Website',
+      group: 'contact_info',
     }),
-    
+
     // Lead Qualification
     status: Field.select({
       label: 'Lead Status',
       required: true,
+      group: 'qualification',
       options: [
         { label: 'New', value: 'new', color: '#808080', default: true },
         { label: 'Contacted', value: 'contacted', color: '#FFA500' },
@@ -95,15 +119,17 @@ export const Lead = ObjectSchema.create({
         { label: 'Converted', value: 'converted', color: '#00AA00' },
       ]
     }),
-    
+
     rating: Field.rating(5, {
       label: 'Lead Score',
       description: 'Lead quality score (1-5 stars)',
       allowHalf: true,
+      group: 'qualification',
     }),
-    
+
     lead_source: Field.select({
       label: 'Lead Source',
+      group: 'qualification',
       options: [
         { label: 'Web', value: 'web' },
         { label: 'Referral', value: 'referral' },
@@ -113,75 +139,88 @@ export const Lead = ObjectSchema.create({
         { label: 'Cold Call', value: 'cold_call' },
       ]
     }),
-    
+
     // Assignment
     owner: Field.lookup('user', {
       label: 'Lead Owner',
       required: true,
+      group: 'assignment',
     }),
-    
+
     // Conversion tracking
     is_converted: Field.boolean({
       label: 'Converted',
       defaultValue: false,
       readonly: true,
+      group: 'conversion',
     }),
-    
+
     converted_account: Field.lookup('account', {
       label: 'Converted Account',
       readonly: true,
+      group: 'conversion',
     }),
-    
+
     converted_contact: Field.lookup('contact', {
       label: 'Converted Contact',
       readonly: true,
+      group: 'conversion',
     }),
-    
+
     converted_opportunity: Field.lookup('opportunity', {
       label: 'Converted Opportunity',
       readonly: true,
+      group: 'conversion',
     }),
-    
+
     converted_date: Field.datetime({
       label: 'Converted Date',
       readonly: true,
+      group: 'conversion',
     }),
-    
+
     // Address (using new address field type)
     address: Field.address({
       label: 'Address',
       addressFormat: 'international',
+      group: 'address',
     }),
-    
+
     // Additional Info
     annual_revenue: Field.currency({
       label: 'Annual Revenue',
       scale: 2,
+      group: 'additional',
     }),
-    
+
     number_of_employees: Field.number({
       label: 'Number of Employees',
+      group: 'additional',
     }),
-    
+
     description: Field.markdown({
       label: 'Description',
+      group: 'additional',
     }),
-    
+
     // Custom notes with rich text formatting
     notes: Field.richtext({
       label: 'Notes',
       description: 'Rich text notes with formatting',
+      group: 'additional',
     }),
-    
+
     // Flags
     do_not_call: Field.boolean({
       label: 'Do Not Call',
       defaultValue: false,
+      group: 'preferences',
     }),
-    
+
     email_opt_out: Field.boolean({
       label: 'Email Opt Out',
       defaultValue: false,
+      group: 'preferences',
     }),
   },
 

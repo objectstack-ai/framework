@@ -9,10 +9,20 @@ export const Contact = ObjectSchema.create({
   icon: 'user',
   description: 'People associated with accounts',
   
+  fieldGroups: [
+    { key: 'identity',        label: 'Identity',             icon: 'user' },
+    { key: 'account_info',    label: 'Account & Role',       icon: 'briefcase' },
+    { key: 'contact_info',    label: 'Contact Information',  icon: 'phone' },
+    { key: 'mailing_address', label: 'Mailing Address',      icon: 'map-pin', defaultExpanded: false },
+    { key: 'additional',      label: 'Additional Info',      icon: 'info', defaultExpanded: false },
+    { key: 'preferences',     label: 'Communication Preferences', icon: 'bell-off', defaultExpanded: false },
+  ],
+
   fields: {
     // Name fields
     salutation: Field.select({
       label: 'Salutation',
+      group: 'identity',
       options: [
         { label: 'Mr.', value: 'mr' },
         { label: 'Ms.', value: 'ms' },
@@ -21,55 +31,50 @@ export const Contact = ObjectSchema.create({
         { label: 'Prof.', value: 'prof' },
       ]
     }),
-    first_name: Field.text({ 
+    first_name: Field.text({
       label: 'First Name',
       required: true,
       searchable: true,
+      group: 'identity',
     }),
-    last_name: Field.text({ 
+    last_name: Field.text({
       label: 'Last Name',
       required: true,
       searchable: true,
+      group: 'identity',
     }),
-    
+
     // Formula field - Full name
     full_name: Field.formula({
       label: 'Full Name',
       expression: 'CONCAT(salutation, " ", first_name, " ", last_name)',
+      group: 'identity',
     }),
-    
+
+    // Avatar field
+    avatar: Field.avatar({
+      label: 'Profile Picture',
+      group: 'identity',
+    }),
+
     // Relationship: Link to Account (Master-Detail)
     account: Field.masterDetail('account', {
       label: 'Account',
       required: true,
       writeRequiresMasterRead: true,
       deleteBehavior: 'cascade',  // Delete contacts when account is deleted
+      group: 'account_info',
     }),
-    
-    // Contact Information
-    email: Field.email({ 
-      label: 'Email',
-      required: true,
-      unique: true,
-    }),
-    
-    phone: Field.text({ 
-      label: 'Phone',
-      format: 'phone',
-    }),
-    
-    mobile: Field.text({
-      label: 'Mobile',
-      format: 'phone',
-    }),
-    
+
     // Professional Information
     title: Field.text({
       label: 'Job Title',
+      group: 'account_info',
     }),
-    
+
     department: Field.select({
       label: 'Department',
+      group: 'account_info',
       options: [
         { label: 'Executive', value: 'executive' },
         { label: 'Sales', value: 'sales' },
@@ -81,32 +86,56 @@ export const Contact = ObjectSchema.create({
         { label: 'Operations', value: 'operations' },
       ]
     }),
-    
+
     // Relationship fields
     reports_to: Field.lookup('contact', {
       label: 'Reports To',
       description: 'Direct manager/supervisor',
+      group: 'account_info',
     }),
-    
+
     owner: Field.lookup('user', {
       label: 'Contact Owner',
       required: true,
+      group: 'account_info',
     }),
-    
+
+    // Contact Information
+    email: Field.email({
+      label: 'Email',
+      required: true,
+      unique: true,
+      group: 'contact_info',
+    }),
+
+    phone: Field.text({
+      label: 'Phone',
+      format: 'phone',
+      group: 'contact_info',
+    }),
+
+    mobile: Field.text({
+      label: 'Mobile',
+      format: 'phone',
+      group: 'contact_info',
+    }),
+
     // Mailing Address
-    mailing_street: Field.textarea({ label: 'Mailing Street' }),
-    mailing_city: Field.text({ label: 'Mailing City' }),
-    mailing_state: Field.text({ label: 'Mailing State/Province' }),
-    mailing_postal_code: Field.text({ label: 'Mailing Postal Code' }),
-    mailing_country: Field.text({ label: 'Mailing Country' }),
-    
+    mailing_street: Field.textarea({ label: 'Mailing Street', group: 'mailing_address' }),
+    mailing_city: Field.text({ label: 'Mailing City', group: 'mailing_address' }),
+    mailing_state: Field.text({ label: 'Mailing State/Province', group: 'mailing_address' }),
+    mailing_postal_code: Field.text({ label: 'Mailing Postal Code', group: 'mailing_address' }),
+    mailing_country: Field.text({ label: 'Mailing Country', group: 'mailing_address' }),
+
     // Additional Information
     birthdate: Field.date({
       label: 'Birthdate',
+      group: 'additional',
     }),
-    
+
     lead_source: Field.select({
       label: 'Lead Source',
+      group: 'additional',
       options: [
         { label: 'Web', value: 'web' },
         { label: 'Referral', value: 'referral' },
@@ -115,31 +144,30 @@ export const Contact = ObjectSchema.create({
         { label: 'Advertisement', value: 'advertisement' },
       ]
     }),
-    
+
     description: Field.markdown({
       label: 'Description',
+      group: 'additional',
     }),
-    
+
     // Flags
     is_primary: Field.boolean({
       label: 'Primary Contact',
       defaultValue: false,
       description: 'Is this the main contact for the account?',
+      group: 'preferences',
     }),
-    
+
     do_not_call: Field.boolean({
       label: 'Do Not Call',
       defaultValue: false,
+      group: 'preferences',
     }),
-    
+
     email_opt_out: Field.boolean({
       label: 'Email Opt Out',
       defaultValue: false,
-    }),
-    
-    // Avatar field
-    avatar: Field.avatar({
-      label: 'Profile Picture',
+      group: 'preferences',
     }),
   },
   

@@ -6,7 +6,5 @@
 
 ## Core Schemas
 
-- [`data/query.zod.ts`](./data/query.zod.ts) — QueryAST, SortNode, AggregationNode, JoinNode, WindowFunction
-- [`data/filter.zod.ts`](./data/filter.zod.ts) — FilterCondition, FieldOperators, Comparison/Set/String operators
-
-## Dependencies (auto-resolved)
+- [`data/filter.zod.ts`](./data/filter.zod.ts) — Unified Query DSL Specification
+- [`data/query.zod.ts`](./data/query.zod.ts) — Sort Node
