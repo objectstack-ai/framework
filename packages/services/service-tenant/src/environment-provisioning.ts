@@ -104,9 +104,48 @@ export class TursoEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapt
  * Local SQLite adapter for development environments. Creates one `.db` file
  * per environment under `baseDir`, named after the stable `databaseName`
  * (e.g. `env-{uuid}.db`) so the file survives slug renames.
+ *
+ * The `driver` key defaults to `sqlite` but callers can override it so the
+ * same adapter can be registered under other keys (e.g. `turso` in local
+ * dev when no Turso platform credentials are configured).
  */
 export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
-  readonly driver: DatabaseDriver = 'sqlite';
+  readonly driver: DatabaseDriver;
+
+  constructor(
+    private readonly baseDir: string = '.objectstack/data/environments',
+    driver: DatabaseDriver = 'sqlite',
+  ) {
+    this.driver = driver;
+  }
+
+  async createDatabase(params: {
+    environmentId: string;
+    databaseName: string;
+    region: string;
+    storageLimitMb: number;
+  }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
+    const { mkdirSync, writeFileSync, existsSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const dbPath = resolve(this.baseDir, `${params.databaseName}.db`);
+    mkdirSync(this.baseDir, { recursive: true });
+    // Touch an empty file so operators can see the provisioned DB on disk
+    // right away (before any connection opens and creates it lazily).
+    if (!existsSync(dbPath)) writeFileSync(dbPath, '');
+    return {
+      databaseUrl: `file:${dbPath}`,
+      plaintextSecret: '',
+    };
+  }
+}
+
+/**
+ * In-memory environment adapter. Writes a small JSON marker file per
+ * environment under `baseDir` so operators can at least see evidence on
+ * disk that the env was provisioned (the real storage is ephemeral memory).
+ */
+export class MemoryEnvironmentDatabaseAdapter implements EnvironmentDatabaseAdapter {
+  readonly driver: DatabaseDriver = 'memory';
 
   constructor(private readonly baseDir: string = '.objectstack/data/environments') {}
 
@@ -116,12 +155,27 @@ export class LocalSQLiteEnvironmentDatabaseAdapter implements EnvironmentDatabas
     region: string;
     storageLimitMb: number;
   }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
-    const { mkdirSync } = await import('node:fs');
+    const { mkdirSync, writeFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const dbPath = resolve(this.baseDir, `${params.databaseName}.db`);
+    const markerPath = resolve(this.baseDir, `${params.databaseName}.memory.json`);
     mkdirSync(this.baseDir, { recursive: true });
+    writeFileSync(
+      markerPath,
+      JSON.stringify(
+        {
+          driver: 'memory',
+          environmentId: params.environmentId,
+          databaseName: params.databaseName,
+          region: params.region,
+          storageLimitMb: params.storageLimitMb,
+          provisionedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    );
     return {
-      databaseUrl: `file:${dbPath}`,
+      databaseUrl: `memory://${params.databaseName}`,
       plaintextSecret: '',
     };
   }
@@ -489,20 +543,37 @@ export class EnvironmentProvisioningService {
 /**
  * Build the default adapter list from environment variables.
  *
- * - `TURSO_ORG_NAME` + `TURSO_API_TOKEN` present → `TursoEnvironmentDatabaseAdapter`
- *   (provisions real cloud databases via the Turso Platform API).
- * - Otherwise → `LocalSQLiteEnvironmentDatabaseAdapter`
- *   (creates one `.db` file per environment under `.objectstack/data/environments/`).
+ * Adapters are keyed by the **ObjectQL driver name** users see in Studio
+ * (`memory`, `turso`, `sqlite`, …) so the dispatcher can look them up
+ * directly when a caller picks a driver.
+ *
+ * Selection rules:
+ *  - Always register the `memory` adapter (writes a `.memory.json` marker
+ *    file per environment so operators can see what was provisioned).
+ *  - Always register the `sqlite` adapter (writes a `.db` file per env
+ *    under `.objectstack/data/environments/`).
+ *  - For the `turso` key:
+ *      - if `TURSO_ORG_NAME` + `TURSO_API_TOKEN` are both set → use the
+ *        real Turso Platform adapter (creates cloud databases);
+ *      - otherwise → fall back to the local sqlite adapter so users on
+ *        machines without Turso creds still get a real `.db` file.
  */
 export function createDefaultEnvironmentAdapters(
   env: Record<string, string | undefined> = process.env,
 ): EnvironmentDatabaseAdapter[] {
+  const adapters: EnvironmentDatabaseAdapter[] = [];
+  adapters.push(new MemoryEnvironmentDatabaseAdapter());
+  adapters.push(new LocalSQLiteEnvironmentDatabaseAdapter());
+
   const orgName = env.TURSO_ORG_NAME;
   const apiToken = env.TURSO_API_TOKEN;
-
-  if (orgName && apiToken) {
-    return [new TursoEnvironmentDatabaseAdapter({ organization: orgName, apiToken })];
+  if (orgName && apiToken && orgName !== 'your-org-slug' && apiToken !== 'your-platform-api-token') {
+    adapters.push(new TursoEnvironmentDatabaseAdapter({ organization: orgName, apiToken }));
+  } else {
+    // Local-dev fallback: when the user picks `turso` in Studio but no
+    // platform creds are configured, still create a real file on disk so
+    // the UX is "I created an env and I can see it".
+    adapters.push(new LocalSQLiteEnvironmentDatabaseAdapter(undefined, 'turso'));
   }
-
-  return [new LocalSQLiteEnvironmentDatabaseAdapter()];
+  return adapters;
 }

@@ -381,6 +381,34 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            // Alias expected by @objectstack/client: POST /environments/:id/credentials/rotate
+            server.post(`${prefix}/cloud/environments/:id/credentials/rotate`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/credentials/rotate`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/cloud/environments/:id/activate`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/activate`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.post(`${prefix}/cloud/environments/:id/retry`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/environments/${req.params.id}/retry`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             server.get(`${prefix}/cloud/environments/:id/members`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/environments/${req.params.id}/members`, 'GET', {}, req.query, { request: req });

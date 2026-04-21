@@ -944,6 +944,7 @@ export class HttpDispatcher {
      *  - POST   /cloud/environments                            → provision (driver: memory | turso | <any registered driver>)
      *  - GET    /cloud/environments/:id                        → detail (+ db, credential, membership)
      *  - PATCH  /cloud/environments/:id                        → update displayName / plan / status / isDefault / metadata
+     *  - POST   /cloud/environments/:id/retry                  → re-run provisioning for a failed environment
      *  - POST   /cloud/environments/:id/activate               → mark as active for session (stub)
      *  - POST   /cloud/environments/:id/credentials/rotate     → rotate credential
      *  - GET    /cloud/environments/:id/members                → list members
@@ -1034,6 +1035,35 @@ export class HttpDispatcher {
             }
         };
 
+        /**
+         * Real physical-DB adapter resolver. Looks up the
+         * `environment-provisioning-adapters` service registered by the
+         * tenant plugin. When present, provisioning actually creates a file
+         * on disk (sqlite adapter) or a Turso cloud DB (when TURSO_ORG_NAME
+         * + TURSO_API_TOKEN are set).
+         *
+         * Returns `undefined` if the service is not registered. In that
+         * case the dispatcher falls back to the mock-URL behaviour — the
+         * state machine still works, but no real DB file is created.
+         */
+        const getRealAdapter = async (
+            driverName: string,
+        ): Promise<{
+            createDatabase(params: {
+                environmentId: string;
+                databaseName: string;
+                region: string;
+                storageLimitMb: number;
+            }): Promise<{ databaseUrl: string; plaintextSecret: string }>;
+        } | undefined> => {
+            try {
+                const registry: any = await this.resolveService('environment-provisioning-adapters');
+                return registry?.get?.(driverName);
+            } catch {
+                return undefined;
+            }
+        };
+
         const findOne = async (obj: string, where: Record<string, unknown>): Promise<any | undefined> => {
             let rows = await ql.find(obj, { where } as any);
             if (rows && (rows as any).value) rows = (rows as any).value;
@@ -1043,6 +1073,10 @@ export class HttpDispatcher {
 
         const toEnvironmentDto = (row: any): any => {
             if (!row) return row;
+            let metadata: any = row.metadata;
+            if (typeof metadata === 'string') {
+                try { metadata = JSON.parse(metadata); } catch { /* keep raw string if not JSON */ }
+            }
             return {
                 id: row.id,
                 organizationId: row.organization_id,
@@ -1054,7 +1088,7 @@ export class HttpDispatcher {
                 plan: row.plan,
                 status: row.status,
                 createdBy: row.created_by,
-                metadata: row.metadata,
+                metadata,
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
                 databaseUrl: row.database_url,
@@ -1135,9 +1169,19 @@ export class HttpDispatcher {
                 }
                 const driver = resolved.name;
                 const region = req.region ?? 'us-east-1';
-                const databaseUrl = buildDatabaseUrl(driver, environmentId);
-                const plaintextSecret = `mock-token-${environmentId}`;
+                let plaintextSecret = `mock-token-${environmentId}`;
 
+                // Insert environment row in `provisioning` state first so the
+                // UI can show a "Provisioning…" indicator while the driver
+                // handshake runs in the background. Status transitions to
+                // `active` on success, or `failed` (+metadata.provisioningError)
+                // on unrecoverable errors.
+                const baseMetadata: Record<string, unknown> = { ...(req.metadata ?? {}) };
+                // Dev-only: callers can set `metadata.__simulateFailure = true`
+                // (or `__simulateDelayMs = N`) to exercise the provisioning /
+                // failed / retry state machine end-to-end without a real driver.
+                const simulateFailure = Boolean((baseMetadata as any).__simulateFailure);
+                const simulateDelayMs = Number((baseMetadata as any).__simulateDelayMs ?? 1500);
                 await ql.insert(ENV, {
                     id: environmentId,
                     organization_id: req.organizationId,
@@ -1147,31 +1191,98 @@ export class HttpDispatcher {
                     is_default: req.isDefault ?? false,
                     region,
                     plan: req.plan ?? 'free',
-                    status: 'active',
+                    status: 'provisioning',
                     created_by: req.createdBy ?? 'system',
-                    metadata: req.metadata ? JSON.stringify(req.metadata) : null,
+                    metadata: JSON.stringify(baseMetadata),
                     created_at: nowIso,
                     updated_at: nowIso,
-                    database_url: databaseUrl,
+                    database_url: null,
                     database_driver: driver,
                     storage_limit_mb: req.storageLimitMb ?? 1024,
-                    provisioned_at: nowIso,
+                    provisioned_at: null,
                 });
 
-                await ql.insert(CRED, {
-                    id: credentialId,
-                    environment_id: environmentId,
-                    secret_ciphertext: plaintextSecret,
-                    encryption_key_id: 'noop',
-                    authorization: 'full_access',
-                    status: 'active',
-                    created_at: nowIso,
-                    updated_at: nowIso,
-                });
+                // Fire-and-forget the provisioning work so the POST returns
+                // immediately with a `provisioning` record. The UI can then
+                // refresh (or poll) to observe the transition.
+                const runProvisioning = async (): Promise<void> => {
+                    try {
+                        if (simulateDelayMs > 0) {
+                            await new Promise((r) => setTimeout(r, simulateDelayMs));
+                        }
+                        if (simulateFailure) {
+                            throw new Error('Simulated provisioning failure (metadata.__simulateFailure=true)');
+                        }
+                        // Try a real adapter first (creates a real sqlite file
+                        // or Turso cloud DB). Fall back to the mock URL if no
+                        // adapter is registered for this driver.
+                        let databaseUrl: string;
+                        try {
+                            const adapter = await getRealAdapter(driver);
+                            if (adapter) {
+                                const result = await adapter.createDatabase({
+                                    environmentId,
+                                    databaseName: `env-${environmentId}`,
+                                    region,
+                                    storageLimitMb: req.storageLimitMb ?? 1024,
+                                });
+                                databaseUrl = result.databaseUrl;
+                                if (result.plaintextSecret) plaintextSecret = result.plaintextSecret;
+                            } else {
+                                databaseUrl = buildDatabaseUrl(driver, environmentId);
+                            }
+                        } catch (adapterErr) {
+                            // Adapter call failed (e.g. Turso API down). Surface
+                            // the underlying message — the outer catch will flip
+                            // the env to `failed`.
+                            throw adapterErr instanceof Error
+                                ? adapterErr
+                                : new Error(String(adapterErr));
+                        }
+                        const finishedAt = new Date().toISOString();
+                        await ql.update(
+                            ENV,
+                            {
+                                status: 'active',
+                                database_url: databaseUrl,
+                                provisioned_at: finishedAt,
+                                updated_at: finishedAt,
+                            },
+                            { where: { id: environmentId } } as any,
+                        );
+                        await ql.insert(CRED, {
+                            id: credentialId,
+                            environment_id: environmentId,
+                            secret_ciphertext: plaintextSecret,
+                            encryption_key_id: 'noop',
+                            authorization: 'full_access',
+                            status: 'active',
+                            created_at: finishedAt,
+                            updated_at: finishedAt,
+                        });
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : String(err);
+                        const failedAt = new Date().toISOString();
+                        await ql.update(
+                            ENV,
+                            {
+                                status: 'failed',
+                                metadata: JSON.stringify({
+                                    ...baseMetadata,
+                                    provisioningError: { message, failedAt },
+                                }),
+                                updated_at: failedAt,
+                            },
+                            { where: { id: environmentId } } as any,
+                        );
+                    }
+                };
+                // Don't await — respond immediately with the provisioning row.
+                void runProvisioning();
 
                 const environment = toEnvironmentDto(await findOne(ENV, { id: environmentId }));
                 const res = this.success({ environment });
-                res.status = 201;
+                res.status = 202; // Accepted — provisioning continues async.
                 return { handled: true, response: res };
             }
 
@@ -1194,9 +1305,22 @@ export class HttpDispatcher {
                               expiresAt: credRow.expires_at,
                           }
                         : undefined;
+                    // Expose a `database` block so Studio can show physical DB
+                    // addressing directly (mirrors the legacy sys_environment_database shape).
+                    const envDto = toEnvironmentDto(envRow);
+                    const database = envDto.databaseUrl
+                        ? {
+                              driver: envDto.databaseDriver,
+                              region: envDto.region,
+                              databaseName: `env-${envDto.id}`,
+                              databaseUrl: envDto.databaseUrl,
+                              storageLimitMb: envDto.storageLimitMb,
+                              provisionedAt: envDto.provisionedAt,
+                          }
+                        : undefined;
                     return {
                         handled: true,
-                        response: this.success({ environment: toEnvironmentDto(envRow), credential: credMeta, membership }),
+                        response: this.success({ environment: envDto, database, credential: credMeta, membership }),
                     };
                 }
 
@@ -1213,6 +1337,143 @@ export class HttpDispatcher {
                     if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
                     return { handled: true, response: this.success({ environment: toEnvironmentDto(envRow) }) };
                 }
+            }
+
+            // ----- /cloud/environments/:id/retry -----
+            if (parts.length === 3 && parts[0] === 'environments' && parts[2] === 'retry' && m === 'POST') {
+                const id = decodeURIComponent(parts[1]);
+                const envRow = await findOne(ENV, { id });
+                if (!envRow) return { handled: true, response: this.error(`Environment '${id}' not found`, 404) };
+                if (envRow.status !== 'failed' && envRow.status !== 'provisioning') {
+                    return {
+                        handled: true,
+                        response: this.error(
+                            `Environment '${id}' is '${envRow.status}'; only failed or provisioning environments can be retried.`,
+                            409,
+                        ),
+                    };
+                }
+
+                const driverName = envRow.database_driver;
+                const resolved = resolveDriver(driverName);
+                if (!resolved) {
+                    return {
+                        handled: true,
+                        response: this.error(
+                            `Driver '${driverName}' is no longer registered; retry aborted.`,
+                            503,
+                        ),
+                    };
+                }
+
+                // Parse metadata so we can clear provisioningError on success
+                // (or rewrite it on another failure).
+                let metadata: Record<string, unknown> = {};
+                if (envRow.metadata) {
+                    if (typeof envRow.metadata === 'string') {
+                        try { metadata = JSON.parse(envRow.metadata); } catch { metadata = {}; }
+                    } else if (typeof envRow.metadata === 'object') {
+                        metadata = { ...(envRow.metadata as Record<string, unknown>) };
+                    }
+                }
+                delete (metadata as any).provisioningError;
+
+                // Flip back to `provisioning` while we retry — Studio renders
+                // the spinner instead of the red error card.
+                const retryStartedAt = new Date().toISOString();
+                await ql.update(
+                    ENV,
+                    {
+                        status: 'provisioning',
+                        metadata: JSON.stringify(metadata),
+                        updated_at: retryStartedAt,
+                    },
+                    { where: { id } } as any,
+                );
+
+                // Same dev-only knobs as POST /environments: if the caller
+                // originally asked to simulate a failure they must clear the
+                // flag in metadata before retry — otherwise retry fails again.
+                const simulateRetryFailure = Boolean((metadata as any).__simulateFailure);
+                const simulateRetryDelay = Number((metadata as any).__simulateDelayMs ?? 1500);
+
+                const runRetry = async (): Promise<void> => {
+                    try {
+                        if (simulateRetryDelay > 0) {
+                            await new Promise((r) => setTimeout(r, simulateRetryDelay));
+                        }
+                        if (simulateRetryFailure) {
+                            throw new Error('Simulated provisioning failure (metadata.__simulateFailure=true)');
+                        }
+                        let databaseUrl: string;
+                        let retrySecret = `mock-token-${id}`;
+                        try {
+                            const adapter = await getRealAdapter(resolved.name);
+                            if (adapter) {
+                                const result = await adapter.createDatabase({
+                                    environmentId: id,
+                                    databaseName: `env-${id}`,
+                                    region: envRow.region ?? 'us-east-1',
+                                    storageLimitMb: envRow.storage_limit_mb ?? 1024,
+                                });
+                                databaseUrl = result.databaseUrl;
+                                if (result.plaintextSecret) retrySecret = result.plaintextSecret;
+                            } else {
+                                databaseUrl = buildDatabaseUrl(resolved.name, id);
+                            }
+                        } catch (adapterErr) {
+                            throw adapterErr instanceof Error
+                                ? adapterErr
+                                : new Error(String(adapterErr));
+                        }
+                        const nowIso = new Date().toISOString();
+                        await ql.update(
+                            ENV,
+                            {
+                                status: 'active',
+                                database_url: databaseUrl,
+                                database_driver: resolved.name,
+                                provisioned_at: nowIso,
+                                updated_at: nowIso,
+                            },
+                            { where: { id } } as any,
+                        );
+                        const existingCred = await findOne(CRED, { environment_id: id, status: 'active' });
+                        if (!existingCred) {
+                            await ql.insert(CRED, {
+                                id: randomUUID(),
+                                environment_id: id,
+                                secret_ciphertext: retrySecret,
+                                encryption_key_id: 'noop',
+                                authorization: 'full_access',
+                                status: 'active',
+                                created_at: nowIso,
+                                updated_at: nowIso,
+                            });
+                        }
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : String(err);
+                        const failedAt = new Date().toISOString();
+                        await ql.update(
+                            ENV,
+                            {
+                                status: 'failed',
+                                metadata: JSON.stringify({
+                                    ...metadata,
+                                    provisioningError: { message, failedAt },
+                                }),
+                                updated_at: failedAt,
+                            },
+                            { where: { id } } as any,
+                        );
+                    }
+                };
+                void runRetry();
+
+                const envAfter = toEnvironmentDto(await findOne(ENV, { id }));
+                const retryRes = this.success({ environment: envAfter });
+                retryRes.status = 202;
+                return { handled: true, response: retryRes };
             }
 
             // ----- /cloud/environments/:id/activate -----

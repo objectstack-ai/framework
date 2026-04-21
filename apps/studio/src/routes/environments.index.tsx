@@ -14,12 +14,13 @@
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Plus, Database, MapPin } from 'lucide-react';
+import { Plus, Database, MapPin, RefreshCw } from 'lucide-react';
 import { SiteHeader } from '@/components/site-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EnvironmentBadge } from '@/components/environment-badge';
+import { EnvironmentStatusBadge } from '@/components/environment-status-badge';
 import { NewEnvironmentDialog } from '@/components/new-environment-dialog';
 import { useEnvironments } from '@/hooks/useEnvironments';
 
@@ -45,6 +46,20 @@ function EnvironmentsListComponent() {
             <Button onClick={() => setCreateOpen(true)} className="gap-2">
               <Plus className="h-4 w-4" />
               New environment
+            </Button>
+          </div>
+
+          <div className="mb-3 flex items-center justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => reload()}
+              disabled={loading}
+              className="gap-2"
+              title="Refresh the environment list (does not auto-poll)"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
           </div>
 
@@ -92,9 +107,7 @@ function EnvironmentsListComponent() {
                           default
                         </Badge>
                       )}
-                      <Badge variant="secondary" className="text-[10px]">
-                        {env.status}
-                      </Badge>
+                      <EnvironmentStatusBadge status={env.status} />
                     </div>
                     <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                       <code className="font-mono">{env.slug}</code>

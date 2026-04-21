@@ -687,6 +687,19 @@ export class ObjectStackClient {
     },
 
     /**
+     * Retry provisioning for an environment stuck in `failed` (or
+     * `provisioning`) state. The server re-runs the driver handshake; on
+     * success the environment flips to `active`, on failure it stays
+     * `failed` with `metadata.provisioningError` updated.
+     */
+    retryProvisioning: async (id: string) => {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/environments/${encodeURIComponent(id)}/retry`, {
+        method: 'POST',
+      });
+      return this.unwrapResponse<{ environment: any }>(res);
+    },
+
+    /**
      * List members of an environment (per-environment RBAC).
      */
     listMembers: async (id: string) => {

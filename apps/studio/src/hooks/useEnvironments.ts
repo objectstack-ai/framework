@@ -100,38 +100,39 @@ export function useEnvironmentDetail(environmentId: string | undefined) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!environmentId || !client?.environments) {
       setDetail(null);
       client?.setEnvironmentId?.(undefined);
       return;
     }
-    let alive = true;
     setLoading(true);
     setError(null);
     client.setEnvironmentId(environmentId);
     rememberActiveEnvironment(environmentId);
+    try {
+      const result = await client.environments.get(environmentId);
+      setDetail(result as EnvironmentDetail);
+    } catch (err) {
+      setError(err as Error);
+      setDetail(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [client, environmentId]);
 
+  useEffect(() => {
+    let alive = true;
     (async () => {
-      try {
-        const result = await client.environments.get(environmentId);
-        if (!alive) return;
-        setDetail(result as EnvironmentDetail);
-      } catch (err) {
-        if (!alive) return;
-        setError(err as Error);
-        setDetail(null);
-      } finally {
-        if (alive) setLoading(false);
-      }
+      if (!alive) return;
+      await load();
     })();
-
     return () => {
       alive = false;
     };
-  }, [client, environmentId]);
+  }, [load]);
 
-  return { detail, loading, error };
+  return { detail, loading, error, reload: load };
 }
 
 /**
@@ -199,4 +200,38 @@ export function useProvisionEnvironment() {
   );
 
   return { provision, provisioning, error };
+}
+
+/**
+ * Hook: retry provisioning for an environment stuck in `failed` state.
+ *
+ * Wraps `client.environments.retryProvisioning(id)`. Exposes `retrying`
+ * state so callers can disable the button and show a spinner while the
+ * server re-runs the driver handshake.
+ */
+export function useRetryProvisioning() {
+  const client = useClient() as any;
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const retry = useCallback(
+    async (environmentId: string) => {
+      if (!client?.environments?.retryProvisioning) {
+        throw new Error('Client not ready');
+      }
+      setRetrying(true);
+      setError(null);
+      try {
+        return await client.environments.retryProvisioning(environmentId);
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setRetrying(false);
+      }
+    },
+    [client],
+  );
+
+  return { retry, retrying, error };
 }

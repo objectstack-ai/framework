@@ -17,17 +17,20 @@ import {
   KeyRound,
   MapPin,
   RefreshCw,
+  RotateCw,
   Trash,
   AlertTriangle,
+  Loader2,
   Package,
 } from 'lucide-react';
 import { SiteHeader } from '@/components/site-header';
 import { EnvironmentBadge } from '@/components/environment-badge';
+import { EnvironmentStatusBadge } from '@/components/environment-status-badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useEnvironmentDetail } from '@/hooks/useEnvironments';
+import { useEnvironmentDetail, useRetryProvisioning } from '@/hooks/useEnvironments';
 import { useClient } from '@objectstack/client-react';
 import { useProductionGuard } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
@@ -36,13 +39,47 @@ function EnvironmentOverviewComponent() {
   const { environmentId } = useParams({
     from: '/environments/$environmentId',
   });
-  const { detail, loading } = useEnvironmentDetail(environmentId);
+  const { detail, loading, reload } = useEnvironmentDetail(environmentId);
   const client = useClient() as any;
   const navigate = useNavigate();
   const guard = useProductionGuard();
   const [rotating, setRotating] = useState(false);
+  const { retry, retrying } = useRetryProvisioning();
 
   const env = detail?.environment;
+  const provisioningError =
+    (env?.metadata as Record<string, any> | undefined)?.provisioningError as
+      | { message?: string; failedAt?: string }
+      | undefined;
+
+  const handleRetry = async () => {
+    if (!env) return;
+    try {
+      const result = await retry(env.id);
+      const nextStatus = (result as any)?.environment?.status;
+      if (nextStatus === 'active') {
+        toast({
+          title: 'Provisioning complete',
+          description: 'The environment is now active and ready to use.',
+        });
+      } else if (nextStatus === 'failed') {
+        toast({
+          title: 'Retry failed',
+          description:
+            (result as any)?.environment?.metadata?.provisioningError?.message ??
+            'Provisioning failed again. Check server logs.',
+          variant: 'destructive',
+        });
+      }
+      await reload();
+    } catch (err) {
+      toast({
+        title: 'Retry failed',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleRotate = async () => {
     if (!env) return;
@@ -100,7 +137,7 @@ function EnvironmentOverviewComponent() {
                       {env.isDefault && (
                         <Badge variant="outline">default</Badge>
                       )}
-                      <Badge variant="secondary">{env.status}</Badge>
+                      <EnvironmentStatusBadge status={env.status} />
                     </div>
                     <p className="mt-1 font-mono text-xs text-muted-foreground">
                       {env.id}
@@ -109,11 +146,23 @@ function EnvironmentOverviewComponent() {
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
+                      size="sm"
+                      onClick={() => reload()}
+                      disabled={loading}
+                      className="gap-2"
+                      title="Refresh environment status"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <Button
+                      variant="outline"
                       className="gap-2"
                       onClick={() => navigate({
                         to: '/environments/$environmentId/packages',
                         params: { environmentId: env.id },
                       })}
+                      disabled={env.status !== 'active'}
                     >
                       <Package className="h-4 w-4" />
                       Packages
@@ -127,7 +176,56 @@ function EnvironmentOverviewComponent() {
                   </div>
                 </div>
 
-                {env.envType === 'production' && (
+                {env.status === 'provisioning' && (
+                  <Card className="flex items-start gap-3 border-sky-500/40 bg-sky-500/5 p-4">
+                    <Loader2 className="mt-0.5 h-5 w-5 shrink-0 animate-spin text-sky-600" />
+                    <div className="flex-1 text-sm">
+                      <p className="font-medium text-sky-700 dark:text-sky-300">
+                        Provisioning in progress
+                      </p>
+                      <p className="text-muted-foreground">
+                        We&rsquo;re allocating the physical database and
+                        minting credentials for this environment. This
+                        normally takes a few seconds — click Refresh to
+                        check the latest status.
+                      </p>
+                    </div>
+                  </Card>
+                )}
+
+                {env.status === 'failed' && (
+                  <Card className="flex items-start gap-3 border-red-500/40 bg-red-500/5 p-4">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                    <div className="flex-1 text-sm">
+                      <p className="font-medium text-red-700 dark:text-red-300">
+                        Provisioning failed
+                      </p>
+                      <p className="text-muted-foreground">
+                        {provisioningError?.message ??
+                          'The environment could not be provisioned. Retry to run the driver handshake again.'}
+                      </p>
+                      {provisioningError?.failedAt && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Last attempt: {new Date(provisioningError.failedAt).toLocaleString()}
+                        </p>
+                      )}
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleRetry}
+                          disabled={retrying}
+                          className="gap-2"
+                        >
+                          <RotateCw className={`h-3.5 w-3.5 ${retrying ? 'animate-spin' : ''}`} />
+                          {retrying ? 'Retrying…' : 'Retry provisioning'}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {env.envType === 'production' && env.status === 'active' && (
                   <Card className="flex items-start gap-3 border-red-500/40 bg-red-500/5 p-4">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
                     <div className="text-sm">
@@ -193,7 +291,7 @@ function EnvironmentOverviewComponent() {
                       size="sm"
                       variant="outline"
                       onClick={handleRotate}
-                      disabled={rotating}
+                      disabled={rotating || env.status !== 'active'}
                       className="gap-2"
                     >
                       <RefreshCw
