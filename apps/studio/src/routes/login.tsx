@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
+import { useEnvironments } from '@/hooks/useEnvironments';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -17,16 +18,35 @@ export const Route = createFileRoute('/login')({
 function LoginPage() {
   const navigate = useNavigate();
   const client = useClient() as any;
-  const { user, refresh } = useSession();
+  const { session, user, refresh } = useSession();
+  const { environments, loading: envsLoading } = useEnvironments();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      navigate({ to: '/' });
+    if (!user) return;
+    if (!session?.activeOrganizationId) {
+      navigate({ to: '/orgs' });
+      return;
     }
-  }, [user, navigate]);
+    if (envsLoading) return;
+
+    const lastEnvId = localStorage.getItem('objectstack.lastEnvId');
+    const targetEnv =
+      (lastEnvId && environments.find((e) => e.id === lastEnvId)) ||
+      environments.find((e) => e.isDefault) ||
+      environments[0];
+
+    if (targetEnv) {
+      navigate({
+        to: '/environments/$environmentId',
+        params: { environmentId: targetEnv.id },
+      });
+    } else {
+      navigate({ to: '/environments' });
+    }
+  }, [user, session, environments, envsLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +56,6 @@ function LoginPage() {
       await client.auth.login({ type: 'email', email, password });
       await refresh();
       toast({ title: 'Welcome back' });
-      navigate({ to: '/' });
     } catch (err) {
       toast({
         title: 'Sign in failed',

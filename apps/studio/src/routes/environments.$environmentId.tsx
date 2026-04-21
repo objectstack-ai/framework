@@ -11,9 +11,11 @@
  *    {@link useEnvironmentDetail}, causing every downstream API request to
  *    carry the `X-Environment-Id` header.
  *  - Render the package-scoped {@link AppSidebar} (metadata tree) for ALL
- *    routes under `/environments/:envId/*` — overview, package management,
- *    and the package workspace — so the user sees the metadata list as soon
- *    as they select an environment.
+ *    routes under `/environments/:envId/*` EXCEPT `/packages` (the package
+ *    management page), where the sidebar would compete with the page content.
+ *  - When no package is selected (URL has no `:package` segment), AppSidebar
+ *    renders environment-wide metadata by passing `packageId: undefined` to
+ *    `client.meta.getItems`.
  *  - Redirect back to `/environments` when the environment cannot be loaded.
  */
 
@@ -112,15 +114,18 @@ function EnvironmentLayoutComponent() {
     }
   }, [error, navigate]);
 
-  // Only render the package-scoped AppSidebar once the user has drilled into
-  // a specific package. Environment overview and the packages management page
-  // continue to render the GlobalSidebar from `routes/__root.tsx`.
+  // Reserved child segments that do NOT get the metadata AppSidebar.
+  // /packages is the package-management surface; rendering the tree there
+  // would compete with the page's own content. Everything else — overview
+  // and the package workspace — shows the sidebar.
+  const hideSidebar = location.pathname.endsWith(`/environments/${environmentId}/packages`);
+
   return (
     <>
-      {activePackageId && (
+      {!hideSidebar && (
         <AppSidebar
           packages={packages}
-          selectedPackage={selectedPackage}
+          selectedPackage={selectedPackage}   // null when no package chosen → env-wide metadata
           onSelectPackage={handleSelectPackage}
           environmentId={environmentId}
         />

@@ -8,7 +8,6 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/toaster';
 import { AiChatPanel } from '@/components/AiChatPanel';
 import { ProductionGuardProvider } from '@/components/production-guard';
-import { GlobalSidebar } from '@/components/global-sidebar';
 import { TopBar } from '@/components/top-bar';
 import { PluginRegistryProvider } from '../plugins';
 import { builtInPlugins } from '../plugins/built-in';
@@ -19,31 +18,6 @@ import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 /** Routes that don't require authentication. */
 const PUBLIC_ROUTES = new Set(['/login', '/register']);
-
-/**
- * Returns true when the current route should render the GlobalSidebar
- * (the top-level nav shell) rather than the package-scoped AppSidebar.
- *
- * Package-scoped routes (`/$package/*` and `/environments/:id/:package/*`)
- * have their own AppSidebar injected by their layout component, so the
- * GlobalSidebar must be suppressed there to avoid rendering two sidebars.
- */
-function isGlobalShellPath(pathname: string): boolean {
-  if (PUBLIC_ROUTES.has(pathname)) return false;
-  // Once the user drills into a package under an environment
-  // (`/environments/:envId/:package/*` where :package is NOT the reserved
-  // `packages` segment), the package-scoped AppSidebar takes over.
-  if (/^\/environments\/[^/]+\/(?!packages(?:\/|$))[^/]+/.test(pathname)) {
-    return false;
-  }
-  // /environments (list), /environments/:envId (overview), and
-  // /environments/:envId/packages (package management) all keep GlobalSidebar.
-  const globalPrefixes = ['/orgs', '/environments', '/packages', '/api-console'];
-  if (pathname === '/') return true;
-  return globalPrefixes.some(
-    (p) => pathname === p || pathname.startsWith(p + '/'),
-  );
-}
 
 /**
  * Routes where an environment selection is NOT required.
@@ -134,10 +108,8 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // Authenticated layout with TopBar + Sidebar + Content
+  // Authenticated layout with TopBar + Content
   if (user) {
-    const showGlobalSidebar = isGlobalShellPath(location.pathname);
-
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full flex-col">
@@ -147,7 +119,6 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
             onSelectPackage={handleSelectPackage}
           />
           <div className="flex flex-1 w-full overflow-hidden">
-            {showGlobalSidebar && <GlobalSidebar />}
             <main className="flex flex-1 min-w-0 overflow-hidden">
               {children}
             </main>
