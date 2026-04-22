@@ -30,6 +30,7 @@ import { ProjectSwitcher } from '@/components/project-switcher';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { UserMenu } from '@/components/user-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useActiveOrganizationId } from '@/hooks/useSession';
 
 const META_TYPE_LABELS: Record<string, string> = {
   action: 'Actions',
@@ -74,6 +75,7 @@ function SlashDivider() {
 
 export function TopBar() {
   const location = useLocation();
+  const activeOrgId = useActiveOrganizationId();
   const params = useParams({ strict: false }) as {
     package?: string;
     projectId?: string;
@@ -174,8 +176,12 @@ export function TopBar() {
         <SlashDivider />
         <div className="hidden sm:flex items-center gap-1.5">
           <OrganizationSwitcher />
-          <SlashDivider />
-          <ProjectSwitcher />
+          {activeOrgId && (
+            <>
+              <SlashDivider />
+              <ProjectSwitcher />
+            </>
+          )}
         </div>
         {/* Mobile: Show only current page breadcrumb */}
         <div className="sm:hidden min-w-0 flex-1">

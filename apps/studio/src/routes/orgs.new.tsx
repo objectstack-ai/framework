@@ -25,7 +25,7 @@ function slugify(input: string): string {
 function NewOrgPage() {
   const navigate = useNavigate();
   const { create, creating } = useCreateOrganization();
-  const { setActiveOrganization } = useSession();
+  const { setActiveOrganization, reloadOrganizations } = useSession();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugDirty, setSlugDirty] = useState(false);
@@ -45,8 +45,9 @@ function NewOrgPage() {
       if (newId) {
         await setActiveOrganization(newId).catch(() => {});
       }
+      await reloadOrganizations().catch(() => {});
       toast({ title: 'Organization created' });
-      navigate({ to: '/orgs' });
+      navigate({ to: '/projects' });
     } catch (err) {
       toast({
         title: 'Failed to create organization',

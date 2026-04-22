@@ -54,6 +54,9 @@ export interface SessionState {
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
   setActiveOrganization: (organizationId: string) => Promise<void>;
+  organizations: Organization[];
+  organizationsLoading: boolean;
+  reloadOrganizations: () => Promise<void>;
 }
 
 export interface Organization {
@@ -87,6 +90,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organizationsLoading, setOrganizationsLoading] = useState(false);
+
+  const reloadOrganizations = useCallback(async () => {
+    if (!client?.organizations) return;
+    setOrganizationsLoading(true);
+    try {
+      const result = await client.organizations.list();
+      setOrganizations(result?.organizations ?? []);
+    } catch {
+      setOrganizations([]);
+    } finally {
+      setOrganizationsLoading(false);
+    }
+  }, [client]);
 
   const refresh = useCallback(async () => {
     if (!client?.auth) return;
@@ -110,6 +128,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (user) {
+      reloadOrganizations();
+    } else {
+      setOrganizations([]);
+    }
+  }, [user, reloadOrganizations]);
+
   const logout = useCallback(async () => {
     if (!client?.auth) return;
     try {
@@ -117,6 +143,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       setSession(null);
+      setOrganizations([]);
     }
   }, [client]);
 
@@ -130,8 +157,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<SessionState>(
-    () => ({ user, session, loading, error, refresh, logout, setActiveOrganization }),
-    [user, session, loading, error, refresh, logout, setActiveOrganization],
+    () => ({
+      user,
+      session,
+      loading,
+      error,
+      refresh,
+      logout,
+      setActiveOrganization,
+      organizations,
+      organizationsLoading,
+      reloadOrganizations,
+    }),
+    [
+      user,
+      session,
+      loading,
+      error,
+      refresh,
+      logout,
+      setActiveOrganization,
+      organizations,
+      organizationsLoading,
+      reloadOrganizations,
+    ],
   );
 
   return createElement(SessionContext.Provider, { value }, children);
@@ -156,33 +205,19 @@ export function useActiveOrganizationId(): string | undefined {
 
 /**
  * Hook: list every organization the current user belongs to.
+ *
+ * Backed by the shared state in {@link SessionProvider}, so every caller
+ * (top-bar switcher, org list page, new-org redirect) sees the same list
+ * and a single reload refreshes them all.
  */
 export function useOrganizations() {
-  const client = useClient() as any;
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const load = useCallback(async () => {
-    if (!client?.organizations) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await client.organizations.list();
-      setOrganizations(result?.organizations ?? []);
-    } catch (err) {
-      setError(err as Error);
-      setOrganizations([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [client]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  return { organizations, loading, error, reload: load };
+  const { organizations, organizationsLoading, reloadOrganizations } = useSession();
+  return {
+    organizations,
+    loading: organizationsLoading,
+    error: null as Error | null,
+    reload: reloadOrganizations,
+  };
 }
 
 /**

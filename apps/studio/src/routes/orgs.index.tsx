@@ -1,9 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import { Building2, Check, Plus } from 'lucide-react';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { Building2, Check, Plus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { useOrganizations, useSession } from '@/hooks/useSession';
 
@@ -12,19 +13,20 @@ export const Route = createFileRoute('/orgs/')({
 });
 
 function OrgsListPage() {
-  const { organizations, loading, reload } = useOrganizations();
+  const { organizations, loading } = useOrganizations();
   const { session, setActiveOrganization } = useSession();
   const navigate = useNavigate();
   const activeId = session?.activeOrganizationId ?? undefined;
 
-  const handleSetActive = async (id: string) => {
+  const handleSelect = async (id: string) => {
     try {
-      await setActiveOrganization(id);
-      await reload();
-      toast({ title: 'Organization switched' });
+      if (id !== activeId) {
+        await setActiveOrganization(id);
+      }
+      navigate({ to: '/projects' });
     } catch (err) {
       toast({
-        title: 'Failed to switch',
+        title: 'Failed to switch organization',
         description: (err as Error).message,
         variant: 'destructive',
       });
@@ -39,58 +41,84 @@ function OrgsListPage() {
             <div>
               <h1 className="text-2xl font-semibold">Organizations</h1>
               <p className="text-sm text-muted-foreground">
-                Manage the organizations you belong to.
+                Select an organization to work with, or create a new one.
               </p>
             </div>
             <Button onClick={() => navigate({ to: '/orgs/new' })}>
               <Plus className="mr-2 h-4 w-4" /> New organization
             </Button>
           </div>
+
           {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+
           {!loading && organizations.length === 0 && (
-            <Card>
-              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-                <Building2 className="h-10 w-10 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  You don't belong to any organization yet.
-                </p>
-                <Button onClick={() => navigate({ to: '/orgs/new' })}>
-                  Create your first organization
-                </Button>
-              </CardContent>
+            <Card className="p-10 text-center">
+              <Building2 className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+              <h3 className="text-base font-medium">No organizations yet</h3>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Create your first organization to start building.
+              </p>
+              <Button onClick={() => navigate({ to: '/orgs/new' })}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create organization
+              </Button>
             </Card>
           )}
+
           <div className="grid gap-3">
-            {organizations.map((org) => (
-              <Card key={org.id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <div>
-                    <CardTitle className="text-base">{org.name}</CardTitle>
-                    {org.slug && (
-                      <CardDescription className="font-mono text-xs">{org.slug}</CardDescription>
-                    )}
-                  </div>
-                  {org.id === activeId ? (
-                    <span className="flex items-center gap-1 text-xs text-primary">
-                      <Check className="h-3.5 w-3.5" /> Active
-                    </span>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => handleSetActive(org.id)}>
-                      Set active
+            {organizations.map((org) => {
+              const isActive = org.id === activeId;
+              return (
+                <Card
+                  key={org.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSelect(org.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelect(org.id);
+                    }
+                  }}
+                  className={`cursor-pointer p-4 transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring ${
+                    isActive ? 'border-primary ring-1 ring-primary/40' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate text-base font-medium">
+                          {org.name}
+                        </h3>
+                        {isActive && (
+                          <Badge variant="outline" className="gap-1 text-[10px]">
+                            <Check className="h-3 w-3" />
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                      {org.slug && (
+                        <code className="mt-1 block font-mono text-xs text-muted-foreground">
+                          {org.slug}
+                        </code>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate({ to: '/orgs/$orgId', params: { orgId: org.id } });
+                      }}
+                      aria-label="Organization settings"
+                    >
+                      <Settings className="h-4 w-4" />
                     </Button>
-                  )}
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <Link
-                    to="/orgs/$orgId"
-                    params={{ orgId: org.id }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    View details →
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </div>
