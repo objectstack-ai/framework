@@ -13,6 +13,8 @@ export { AppPlugin } from './app-plugin.js';
 export { SeedLoaderService } from './seed-loader.js';
 export { createDispatcherPlugin } from './dispatcher-plugin.js';
 export type { DispatcherPluginConfig } from './dispatcher-plugin.js';
+export { createSystemProjectPlugin, SYSTEM_PROJECT_ID } from './system-project-plugin.js';
+export type { SystemProjectPluginConfig } from './system-project-plugin.js';
 
 // Export HTTP Server Components
 export { HttpServer } from './http-server.js';

@@ -76,9 +76,23 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 if (packageService) {
                     const basePath = config.api?.api?.basePath || '/api';
                     const version = config.api?.api?.version || 'v1';
-                    registerPackageRoutes(server, packageService, `${basePath}/${version}`, {
-                        protocol,
-                    });
+                    const versionedBase = `${basePath}/${version}`;
+                    const enableProjectScoping = config.api?.api?.enableProjectScoping ?? false;
+                    const projectResolution = config.api?.api?.projectResolution ?? 'auto';
+
+                    if (enableProjectScoping && projectResolution === 'required') {
+                        // Only register the scoped variant
+                        registerPackageRoutes(server, packageService, `${versionedBase}/projects/:projectId`, {
+                            protocol,
+                        });
+                    } else {
+                        registerPackageRoutes(server, packageService, versionedBase, { protocol });
+                        if (enableProjectScoping) {
+                            registerPackageRoutes(server, packageService, `${versionedBase}/projects/:projectId`, {
+                                protocol,
+                            });
+                        }
+                    }
                     ctx.logger.info('Package management routes registered');
                 }
             } catch (e) {
