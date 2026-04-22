@@ -785,6 +785,46 @@ export class ObjectStackClient {
   };
 
   /**
+   * Project-scoped client factory.
+   *
+   * Returns a thin wrapper around the data / meta / packages namespaces that
+   * prefixes every request with `/api/v1/projects/:projectId/...`. Use this
+   * when the server has `enableProjectScoping: true` in its REST API config.
+   *
+   * Backward compatibility: `client.data.*`, `client.meta.*`, and
+   * `client.packages.*` continue to work unchanged; they hit unscoped routes
+   * and rely on hostname / `X-Project-Id` header / session resolution.
+   *
+   * @example
+   * ```ts
+   * const scoped = client.project('00000000-0000-0000-0000-000000000001');
+   * const tasks = await scoped.data.find('task', { top: 10 });
+   * const objects = await scoped.meta.getItems('object');
+   * ```
+   */
+  project(projectId: string): ScopedProjectClient {
+    if (!projectId) {
+      throw new Error('[ObjectStack] project(id): projectId is required');
+    }
+    return new ScopedProjectClient(this, projectId);
+  }
+
+  // ── Internal accessors exposed to ScopedProjectClient ────────────────
+  // The scoped client lives in the same module so using module-level access
+  // works; TypeScript requires these to be accessible, so we expose them via
+  // small protected getters that keep the public surface unchanged.
+  /** @internal */
+  _baseUrl(): string { return this.baseUrl; }
+  /** @internal */
+  _fetch(url: string, init?: RequestInit): Promise<Response> {
+    return this.fetch(url, init);
+  }
+  /** @internal */
+  _unwrap<T>(res: Response): Promise<T> { return this.unwrapResponse<T>(res); }
+  /** @internal */
+  _isFilterAST(v: unknown): boolean { return this.isFilterAST(v); }
+
+  /**
    * Organization Services
    *
    * Thin wrapper around better-auth's organization plugin endpoints, which
@@ -2139,6 +2179,222 @@ export class ObjectStackClient {
     
     return routeMap[type] || `/api/v1/${type}`;
   }
+}
+
+/**
+ * Project-scoped sub-client.
+ *
+ * Wraps an {@link ObjectStackClient} and prefixes every request with
+ * `/api/v1/projects/:projectId/...` so a single client instance can talk to
+ * multiple projects without mutating global state.
+ *
+ * The scoped client exposes the same shape as the `data`, `meta`, `batch`,
+ * and `packages` namespaces on `ObjectStackClient` — only the URL prefix
+ * differs. The server-side dual-mode route registration (see
+ * `packages/rest/src/rest-server.ts`) accepts both shapes when
+ * `projectResolution` is `'auto'` or `'optional'`.
+ */
+export class ScopedProjectClient {
+  private readonly parent: ObjectStackClient;
+  private readonly projectId: string;
+
+  constructor(parent: ObjectStackClient, projectId: string) {
+    this.parent = parent;
+    this.projectId = projectId;
+  }
+
+  /** The projectId this client is scoped to. */
+  getProjectId(): string { return this.projectId; }
+
+  /** Prefix segment inserted between the baseUrl and the resource path. */
+  private scope(): string { return `/api/v1/projects/${encodeURIComponent(this.projectId)}`; }
+
+  private url(suffix: string): string {
+    return `${this.parent._baseUrl()}${this.scope()}${suffix}`;
+  }
+
+  /**
+   * Metadata operations scoped to this project.
+   */
+  meta = {
+    getTypes: async (): Promise<GetMetaTypesResponse> => {
+      const res = await this.parent._fetch(this.url('/meta'));
+      return this.parent._unwrap<GetMetaTypesResponse>(res);
+    },
+    getItems: async (type: string, options?: { packageId?: string }): Promise<GetMetaItemsResponse> => {
+      const params = new URLSearchParams();
+      if (options?.packageId) params.set('package', options.packageId);
+      const qs = params.toString();
+      const res = await this.parent._fetch(this.url(`/meta/${type}${qs ? `?${qs}` : ''}`));
+      return this.parent._unwrap<GetMetaItemsResponse>(res);
+    },
+    getItem: async (type: string, name: string, options?: { packageId?: string }) => {
+      const params = new URLSearchParams();
+      if (options?.packageId) params.set('package', options.packageId);
+      const qs = params.toString();
+      const res = await this.parent._fetch(this.url(`/meta/${type}/${name}${qs ? `?${qs}` : ''}`));
+      return this.parent._unwrap(res);
+    },
+    saveItem: async (type: string, name: string, item: any) => {
+      const res = await this.parent._fetch(this.url(`/meta/${type}/${name}`), {
+        method: 'PUT',
+        body: JSON.stringify(item),
+      });
+      return this.parent._unwrap(res);
+    },
+    deleteItem: async (type: string, name: string): Promise<{ type: string; name: string; deleted: boolean }> => {
+      const res = await this.parent._fetch(this.url(`/meta/${encodeURIComponent(type)}/${encodeURIComponent(name)}`), {
+        method: 'DELETE',
+      });
+      return this.parent._unwrap(res);
+    },
+  };
+
+  /**
+   * Data operations scoped to this project.
+   *
+   * Mirrors the query / find / get / create / update / delete / batch
+   * surface on {@link ObjectStackClient}. URL construction differs only
+   * in the prefix — query parameter serialization is identical.
+   */
+  data = {
+    query: async <T = any>(object: string, query: Partial<QueryAST>): Promise<PaginatedResult<T>> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/query`), {
+        method: 'POST',
+        body: JSON.stringify(query),
+      });
+      return this.parent._unwrap<PaginatedResult<T>>(res);
+    },
+    find: async <T = any>(object: string, options: QueryOptions | QueryOptionsV2 = {}): Promise<PaginatedResult<T>> => {
+      const queryParams = new URLSearchParams();
+
+      const v2 = options as QueryOptionsV2;
+      const normalizedOptions: QueryOptions = {} as QueryOptions;
+      if ('where' in options || 'fields' in options || 'orderBy' in options || 'offset' in options) {
+        if (v2.where) normalizedOptions.filter = v2.where as any;
+        if (v2.fields) normalizedOptions.select = v2.fields;
+        if (v2.orderBy) normalizedOptions.sort = v2.orderBy as any;
+        if (v2.limit != null) normalizedOptions.top = v2.limit;
+        if (v2.offset != null) normalizedOptions.skip = v2.offset;
+        if (v2.aggregations) normalizedOptions.aggregations = v2.aggregations;
+        if (v2.groupBy) normalizedOptions.groupBy = v2.groupBy;
+      } else {
+        Object.assign(normalizedOptions, options);
+      }
+
+      if (normalizedOptions.top) queryParams.set('top', normalizedOptions.top.toString());
+      if (normalizedOptions.skip) queryParams.set('skip', normalizedOptions.skip.toString());
+      if (normalizedOptions.sort) {
+        if (Array.isArray(normalizedOptions.sort) && typeof normalizedOptions.sort[0] === 'object') {
+          queryParams.set('sort', JSON.stringify(normalizedOptions.sort));
+        } else {
+          const sortVal = Array.isArray(normalizedOptions.sort) ? normalizedOptions.sort.join(',') : normalizedOptions.sort;
+          queryParams.set('sort', sortVal as string);
+        }
+      }
+      if (normalizedOptions.select) {
+        queryParams.set('select', normalizedOptions.select.join(','));
+      }
+      const filterValue = normalizedOptions.filter ?? normalizedOptions.filters;
+      if (filterValue) {
+        if (this.parent._isFilterAST(filterValue) || Array.isArray(filterValue)) {
+          queryParams.set('filter', JSON.stringify(filterValue));
+        } else if (typeof filterValue === 'object' && filterValue !== null) {
+          Object.entries(filterValue as Record<string, unknown>).forEach(([k, v]) => {
+            if (v !== undefined && v !== null) {
+              queryParams.append(k, String(v));
+            }
+          });
+        }
+      }
+      if (normalizedOptions.aggregations) {
+        queryParams.set('aggregations', JSON.stringify(normalizedOptions.aggregations));
+      }
+      if (normalizedOptions.groupBy) {
+        queryParams.set('groupBy', normalizedOptions.groupBy.join(','));
+      }
+
+      const qs = queryParams.toString();
+      const res = await this.parent._fetch(this.url(`/data/${object}${qs ? `?${qs}` : ''}`));
+      return this.parent._unwrap<PaginatedResult<T>>(res);
+    },
+    get: async <T = any>(object: string, id: string): Promise<GetDataResult<T>> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/${id}`));
+      return this.parent._unwrap<GetDataResult<T>>(res);
+    },
+    create: async <T = any>(object: string, data: Partial<T>): Promise<CreateDataResult<T>> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}`), {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return this.parent._unwrap<CreateDataResult<T>>(res);
+    },
+    createMany: async <T = any>(object: string, data: Partial<T>[]): Promise<T[]> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/createMany`), {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      return this.parent._unwrap<T[]>(res);
+    },
+    update: async <T = any>(object: string, id: string, data: Partial<T>): Promise<UpdateDataResult<T>> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/${id}`), {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
+      return this.parent._unwrap<UpdateDataResult<T>>(res);
+    },
+    batch: async (object: string, request: BatchUpdateRequest): Promise<BatchUpdateResponse> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/batch`), {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return this.parent._unwrap<BatchUpdateResponse>(res);
+    },
+    updateMany: async <T = any>(
+      object: string,
+      records: Array<{ id: string; data: Partial<T> }>,
+      options?: BatchOptions,
+    ): Promise<BatchUpdateResponse> => {
+      const request: UpdateManyRequest = { records, options };
+      const res = await this.parent._fetch(this.url(`/data/${object}/updateMany`), {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return this.parent._unwrap<BatchUpdateResponse>(res);
+    },
+    delete: async (object: string, id: string): Promise<DeleteDataResult> => {
+      const res = await this.parent._fetch(this.url(`/data/${object}/${id}`), {
+        method: 'DELETE',
+      });
+      return this.parent._unwrap<DeleteDataResult>(res);
+    },
+    deleteMany: async (object: string, ids: string[], options?: BatchOptions): Promise<BatchUpdateResponse> => {
+      const request: DeleteManyRequest = { ids, options };
+      const res = await this.parent._fetch(this.url(`/data/${object}/deleteMany`), {
+        method: 'POST',
+        body: JSON.stringify(request),
+      });
+      return this.parent._unwrap<BatchUpdateResponse>(res);
+    },
+  };
+
+  /**
+   * Package management scoped to this project.
+   * Only the read-path is exposed here — publish / delete remain on the
+   * global `client.packages` namespace for now, pending dedicated per-project
+   * package tests.
+   */
+  packages = {
+    list: async (): Promise<{ packages: any[]; total: number }> => {
+      const res = await this.parent._fetch(this.url('/packages'));
+      return this.parent._unwrap<{ packages: any[]; total: number }>(res);
+    },
+    get: async (id: string, version?: string) => {
+      const qs = version ? `?version=${encodeURIComponent(version)}` : '';
+      const res = await this.parent._fetch(this.url(`/packages/${encodeURIComponent(id)}${qs}`));
+      return this.parent._unwrap<{ package: any }>(res);
+    },
+  };
 }
 
 // Re-export type-safe query builder

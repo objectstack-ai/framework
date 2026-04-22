@@ -80,9 +80,26 @@ export const RestApiConfigSchema = z.object({
   enableBatch: z.boolean().default(true).describe('Enable batch operation endpoints'),
   
   /**
-   * Enable discovery endpoint
+   * Enable API discovery endpoint
    */
   enableDiscovery: z.boolean().default(true).describe('Enable API discovery endpoint'),
+
+  /**
+   * Enable project-scoped routing (/api/v1/projects/:projectId/data/...)
+   * When true, all data/meta/AI APIs are scoped under /projects/:projectId
+   * Control plane routes (/auth, /cloud) remain unscoped
+   */
+  enableProjectScoping: z.boolean().default(false)
+    .describe('Enable project-scoped routing for data/meta/AI APIs'),
+
+  /**
+   * Project ID resolution strategy when enableProjectScoping is true
+   * - 'required': projectId must be in URL (strict, recommended for production)
+   * - 'optional': projectId can be in URL or fallback to headers/session
+   * - 'auto': backward compatible - accepts both scoped and unscoped routes
+   */
+  projectResolution: z.enum(['required', 'optional', 'auto']).default('auto')
+    .describe('Project ID resolution strategy'),
 
   /**
    * API documentation configuration

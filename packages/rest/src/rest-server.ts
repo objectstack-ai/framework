@@ -19,6 +19,8 @@ type NormalizedRestServerConfig = {
         enableUi: boolean;
         enableBatch: boolean;
         enableDiscovery: boolean;
+        enableProjectScoping: boolean;
+        projectResolution: 'required' | 'optional' | 'auto';
         documentation: RestApiConfig['documentation'];
         responseFormat: RestApiConfig['responseFormat'];
     };
@@ -126,6 +128,8 @@ export class RestServer {
                 enableUi: api.enableUi ?? true,
                 enableBatch: api.enableBatch ?? true,
                 enableDiscovery: api.enableDiscovery ?? true,
+                enableProjectScoping: api.enableProjectScoping ?? false,
+                projectResolution: api.projectResolution ?? 'auto',
                 documentation: api.documentation,
                 responseFormat: api.responseFormat,
             },
@@ -179,36 +183,58 @@ export class RestServer {
         const { api } = this.config;
         return api.apiPath ?? `${api.basePath}/${api.version}`;
     }
-    
+
+    /**
+     * Get the project-scoped base path for a given unscoped base.
+     * Example: `/api/v1` → `/api/v1/projects/:projectId`.
+     */
+    private getScopedBasePath(basePath: string): string {
+        return `${basePath}/projects/:projectId`;
+    }
+
     /**
      * Register all REST API routes
+     *
+     * When `enableProjectScoping` is true, routes are registered under
+     * `/api/v1/projects/:projectId/...`. The `projectResolution` strategy
+     * controls whether unscoped legacy routes remain available:
+     *   - `required` → only scoped routes registered.
+     *   - `optional` / `auto` → both scoped and unscoped routes registered.
      */
     registerRoutes(): void {
         const basePath = this.getApiBasePath();
-        
-        // Discovery endpoint
-        if (this.config.api.enableDiscovery) {
-            this.registerDiscoveryEndpoints(basePath);
-        }
-        
-        // Metadata endpoints
-        if (this.config.api.enableMetadata) {
-            this.registerMetadataEndpoints(basePath);
-        }
+        const { enableProjectScoping, projectResolution } = this.config.api;
 
-        // UI endpoints
-        if (this.config.api.enableUi) {
-            this.registerUiEndpoints(basePath);
-        }
-        
-        // CRUD endpoints
-        if (this.config.api.enableCrud) {
-            this.registerCrudEndpoints(basePath);
-        }
-        
-        // Batch endpoints
-        if (this.config.api.enableBatch) {
-            this.registerBatchEndpoints(basePath);
+        const registerForBase = (bp: string) => {
+            if (this.config.api.enableDiscovery) {
+                this.registerDiscoveryEndpoints(bp);
+            }
+            if (this.config.api.enableMetadata) {
+                this.registerMetadataEndpoints(bp);
+            }
+            if (this.config.api.enableUi) {
+                this.registerUiEndpoints(bp);
+            }
+            if (this.config.api.enableCrud) {
+                this.registerCrudEndpoints(bp);
+            }
+            if (this.config.api.enableBatch) {
+                this.registerBatchEndpoints(bp);
+            }
+        };
+
+        if (enableProjectScoping) {
+            const scopedBase = this.getScopedBasePath(basePath);
+            if (projectResolution === 'required') {
+                // Strict: only scoped routes
+                registerForBase(scopedBase);
+            } else {
+                // 'optional' | 'auto' — keep both so legacy callers keep working
+                registerForBase(basePath);
+                registerForBase(scopedBase);
+            }
+        } else {
+            registerForBase(basePath);
         }
     }
     
@@ -216,32 +242,51 @@ export class RestServer {
      * Register discovery endpoints
      */
     private registerDiscoveryEndpoints(basePath: string): void {
-        const discoveryHandler = async (_req: any, res: any) => {
+        const isScoped = basePath.includes('/projects/:projectId');
+        const discoveryHandler = async (req: any, res: any) => {
                 try {
                     const discovery = await this.protocol.getDiscovery();
-                    
+
                     // Override discovery information with actual server configuration
                     discovery.version = this.config.api.version;
-                    
+
+                    // Substitute the resolved projectId into the advertised routes so
+                    // clients can consume them verbatim (e.g. /api/v1/projects/abc/data).
+                    const realBase = isScoped
+                        ? basePath.replace(':projectId', req.params?.projectId ?? ':projectId')
+                        : basePath;
+
                     if (discovery.routes) {
                         // Ensure routes match the actual mounted paths
                         if (this.config.api.enableCrud) {
-                            discovery.routes.data = `${basePath}${this.config.crud.dataPrefix}`;
+                            discovery.routes.data = `${realBase}${this.config.crud.dataPrefix}`;
                         }
-                        
+
                         if (this.config.api.enableMetadata) {
-                            discovery.routes.metadata = `${basePath}${this.config.metadata.prefix}`;
+                            discovery.routes.metadata = `${realBase}${this.config.metadata.prefix}`;
                         }
 
                         if (this.config.api.enableUi) {
-                            discovery.routes.ui = `${basePath}/ui`;
+                            discovery.routes.ui = `${realBase}/ui`;
                         }
 
-                        // Align auth route with the versioned base path if present
+                        // Align auth route with the versioned base path if present.
+                        // Auth is a control-plane concern, so use the unscoped base.
                         if (discovery.routes.auth) {
-                            discovery.routes.auth = `${basePath}/auth`;
+                            const unscopedBase = isScoped
+                                ? basePath.replace(/\/projects\/:projectId$/, '')
+                                : basePath;
+                            discovery.routes.auth = `${unscopedBase}/auth`;
                         }
                     }
+
+                    // Attach scoping metadata so clients can detect dual-mode routing.
+                    (discovery as any).scoping = {
+                        enabled: this.config.api.enableProjectScoping,
+                        resolution: this.config.api.projectResolution,
+                        scoped: isScoped,
+                        projectId: isScoped ? req.params?.projectId : undefined,
+                    };
 
                     res.json(discovery);
                 } catch (error: any) {
@@ -278,15 +323,19 @@ export class RestServer {
     private registerMetadataEndpoints(basePath: string): void {
         const { metadata } = this.config;
         const metaPath = `${basePath}${metadata.prefix}`;
-        
+        const isScoped = basePath.includes('/projects/:projectId');
+
         // GET /meta - List all metadata types
         if (metadata.endpoints.types !== false) {
             this.routeManager.register({
                 method: 'GET',
                 path: metaPath,
-                handler: async (_req: any, res: any) => {
+                handler: async (req: any, res: any) => {
                     try {
-                        const types = await this.protocol.getMetaTypes();
+                        const projectId = isScoped ? req.params?.projectId : undefined;
+                        const types = await this.protocol.getMetaTypes(
+                            projectId ? ({ projectId } as any) : undefined,
+                        );
                         res.json(types);
                     } catch (error: any) {
                         res.status(500).json({ error: error.message });
@@ -298,7 +347,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // GET /meta/:type - List items of a type
         if (metadata.endpoints.items !== false) {
             this.routeManager.register({
@@ -307,7 +356,12 @@ export class RestServer {
                 handler: async (req: any, res: any) => {
                     try {
                         const packageId = req.query?.package || undefined;
-                        const items = await this.protocol.getMetaItems({ type: req.params.type, packageId });
+                        const projectId = isScoped ? req.params?.projectId : undefined;
+                        const items = await this.protocol.getMetaItems({
+                            type: req.params.type,
+                            packageId,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(items);
                     } catch (error: any) {
                         res.status(404).json({ error: error.message });
@@ -319,7 +373,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // GET /meta/:type/:name - Get specific item
         if (metadata.endpoints.item !== false) {
             this.routeManager.register({
@@ -327,28 +381,30 @@ export class RestServer {
                 path: `${metaPath}/:type/:name`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         // Check if cached version is available
                         if (metadata.enableCache && this.protocol.getMetaItemCached) {
                             const cacheRequest = {
                                 ifNoneMatch: req.headers['if-none-match'] as string,
                                 ifModifiedSince: req.headers['if-modified-since'] as string,
                             };
-                            
+
                             const result = await this.protocol.getMetaItemCached({
                                 type: req.params.type,
                                 name: req.params.name,
-                                cacheRequest
-                            });
-                            
+                                cacheRequest,
+                                ...(projectId ? { projectId } : {}),
+                            } as any);
+
                             if (result.notModified) {
                                 res.status(304).send();
                                 return;
                             }
-                            
+
                             // Set cache headers
                             if (result.etag) {
-                                const etagValue = result.etag.weak 
-                                    ? `W/"${result.etag.value}"` 
+                                const etagValue = result.etag.weak
+                                    ? `W/"${result.etag.value}"`
                                     : `"${result.etag.value}"`;
                                 res.header('ETag', etagValue);
                             }
@@ -357,17 +413,22 @@ export class RestServer {
                             }
                             if (result.cacheControl) {
                                 const directives = result.cacheControl.directives.join(', ');
-                                const maxAge = result.cacheControl.maxAge 
-                                    ? `, max-age=${result.cacheControl.maxAge}` 
+                                const maxAge = result.cacheControl.maxAge
+                                    ? `, max-age=${result.cacheControl.maxAge}`
                                     : '';
                                 res.header('Cache-Control', directives + maxAge);
                             }
-                            
+
                             res.json(result.data);
                         } else {
                             // Non-cached version
                             const packageId = req.query?.package || undefined;
-                            const item = await this.protocol.getMetaItem({ type: req.params.type, name: req.params.name, packageId });
+                            const item = await this.protocol.getMetaItem({
+                                type: req.params.type,
+                                name: req.params.name,
+                                packageId,
+                                ...(projectId ? { projectId } : {}),
+                            } as any);
                             res.json(item);
                         }
                     } catch (error: any) {
@@ -394,11 +455,13 @@ export class RestServer {
                         return;
                     }
 
+                    const projectId = isScoped ? req.params?.projectId : undefined;
                     const result = await this.protocol.saveMetaItem({
                         type: req.params.type,
                         name: req.params.name,
-                        item: req.body
-                    });
+                        item: req.body,
+                        ...(projectId ? { projectId } : {}),
+                    } as any);
                     res.json(result);
                 } catch (error: any) {
                     res.status(400).json({ error: error.message });
@@ -416,7 +479,8 @@ export class RestServer {
      */
     private registerUiEndpoints(basePath: string): void {
         const uiPath = `${basePath}/ui`;
-        
+        const isScoped = basePath.includes('/projects/:projectId');
+
         // GET /ui/view/:object/:type - Resolve view for object
         this.routeManager.register({
             method: 'GET',
@@ -424,10 +488,12 @@ export class RestServer {
             handler: async (req: any, res: any) => {
                 try {
                     if (this.protocol.getUiView) {
-                        const view = await this.protocol.getUiView({ 
-                            object: req.params.object, 
-                            type: req.params.type as any 
-                        });
+                        const projectId = isScoped ? req.params?.projectId : undefined;
+                        const view = await this.protocol.getUiView({
+                            object: req.params.object,
+                            type: req.params.type as any,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(view);
                     } else {
                         res.status(501).json({ error: 'UI View resolution not supported by protocol implementation' });
@@ -449,9 +515,10 @@ export class RestServer {
     private registerCrudEndpoints(basePath: string): void {
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
-        
+        const isScoped = basePath.includes('/projects/:projectId');
+
         const operations = crud.operations;
-        
+
         // GET /data/:object - List/query records
         if (operations.list) {
             this.routeManager.register({
@@ -459,10 +526,12 @@ export class RestServer {
                 path: `${dataPath}/:object`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.findData({
-                            object: req.params.object, 
-                            query: req.query
-                        });
+                            object: req.params.object,
+                            query: req.query,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -474,7 +543,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // GET /data/:object/:id - Get single record
         if (operations.read) {
             this.routeManager.register({
@@ -482,13 +551,15 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const { select, expand } = req.query || {};
                         const result = await this.protocol.getData({
-                            object: req.params.object, 
+                            object: req.params.object,
                             id: req.params.id,
                             ...(select != null ? { select } : {}),
                             ...(expand != null ? { expand } : {}),
-                        });
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(404).json({ error: error.message });
@@ -500,7 +571,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // POST /data/:object - Create record
         if (operations.create) {
             this.routeManager.register({
@@ -508,10 +579,12 @@ export class RestServer {
                 path: `${dataPath}/:object`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.createData({
-                            object: req.params.object, 
-                            data: req.body
-                        });
+                            object: req.params.object,
+                            data: req.body,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.status(201).json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -523,7 +596,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // PATCH /data/:object/:id - Update record
         if (operations.update) {
             this.routeManager.register({
@@ -531,11 +604,13 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.updateData({
                             object: req.params.object,
                             id: req.params.id,
-                            data: req.body
-                        });
+                            data: req.body,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -547,7 +622,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // DELETE /data/:object/:id - Delete record
         if (operations.delete) {
             this.routeManager.register({
@@ -555,10 +630,12 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.deleteData({
-                            object: req.params.object, 
-                            id: req.params.id
-                        });
+                            object: req.params.object,
+                            id: req.params.id,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -578,9 +655,10 @@ export class RestServer {
     private registerBatchEndpoints(basePath: string): void {
         const { crud, batch } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
-        
+        const isScoped = basePath.includes('/projects/:projectId');
+
         const operations = batch.operations;
-        
+
         // POST /data/:object/batch - Generic batch endpoint
         if (batch.enableBatchEndpoint && this.protocol.batchData) {
             this.routeManager.register({
@@ -588,10 +666,12 @@ export class RestServer {
                 path: `${dataPath}/:object/batch`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.batchData!({
-                            object: req.params.object, 
-                            request: req.body
-                        });
+                            object: req.params.object,
+                            request: req.body,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -603,7 +683,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // POST /data/:object/createMany - Bulk create
         if (operations.createMany && this.protocol.createManyData) {
             this.routeManager.register({
@@ -611,10 +691,12 @@ export class RestServer {
                 path: `${dataPath}/:object/createMany`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.createManyData!({
                             object: req.params.object,
-                            records: req.body || []
-                        });
+                            records: req.body || [],
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.status(201).json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -626,7 +708,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // POST /data/:object/updateMany - Bulk update
         if (operations.updateMany && this.protocol.updateManyData) {
             this.routeManager.register({
@@ -634,10 +716,12 @@ export class RestServer {
                 path: `${dataPath}/:object/updateMany`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.updateManyData!({
                             object: req.params.object,
-                            ...req.body
-                        });
+                            ...req.body,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });
@@ -649,7 +733,7 @@ export class RestServer {
                 },
             });
         }
-        
+
         // POST /data/:object/deleteMany - Bulk delete
         if (operations.deleteMany && this.protocol.deleteManyData) {
             this.routeManager.register({
@@ -657,10 +741,12 @@ export class RestServer {
                 path: `${dataPath}/:object/deleteMany`,
                 handler: async (req: any, res: any) => {
                     try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
                         const result = await this.protocol.deleteManyData!({
-                            object: req.params.object, 
-                            ...req.body
-                        });
+                            object: req.params.object,
+                            ...req.body,
+                            ...(projectId ? { projectId } : {}),
+                        } as any);
                         res.json(result);
                     } catch (error: any) {
                         res.status(400).json({ error: error.message });

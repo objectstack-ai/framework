@@ -164,19 +164,42 @@ export class HttpDispatcher {
     }
 
     /**
+     * Parse a project UUID out of a scoped URL path such as
+     * `/api/v1/projects/abc-123/data/task` or `/projects/abc-123/meta`.
+     * Returns `undefined` when the path does not match the scoped pattern.
+     */
+    private extractProjectIdFromPath(path: string): string | undefined {
+        if (!path) return undefined;
+        const m = path.match(/\/projects\/([^/?#]+)/);
+        if (!m) return undefined;
+        const candidate = m[1];
+        // Guard against matching control-plane routes like /cloud/projects.
+        // `/projects/<id>` directly nested under the API prefix wins;
+        // `/cloud/projects/<id>` is a CRUD endpoint on the control plane.
+        if (path.includes('/cloud/projects/')) return undefined;
+        return candidate;
+    }
+
+    /**
      * Resolve environment context for incoming request.
      *
      * Precedence:
+     * 0. URL path matches `/projects/:projectId/...` OR request.params.projectId set by router
+     *    → envRegistry.resolveById(id)
      * 1. request.headers.host → envRegistry.resolveByHostname(host)
      * 2. request.headers['x-project-id'] → envRegistry.resolveById(id)
      * 3. session.activeEnvironmentId → envRegistry.resolveById(id)
      * 4. session.activeOrganizationId → find default project → envRegistry.resolveById(id)
      *
-     * Skip for paths: /auth, /cloud, /health, /discovery, /meta
+     * Skip for paths: /auth, /cloud, /health, /discovery (NOT /meta when scoped,
+     * so project-scoped meta routes can resolve their project).
      */
     private async resolveEnvironmentContext(context: HttpProtocolContext, path: string): Promise<void> {
-        // Skip environment resolution for control-plane routes
-        const skipPaths = ['/auth', '/cloud', '/health', '/discovery', '/meta'];
+        // Skip environment resolution for control-plane routes.
+        // NOTE: /meta is intentionally not in this list anymore — a scoped
+        // /projects/:id/meta path still needs the project resolved so the
+        // protocol can scope its answer.
+        const skipPaths = ['/auth', '/cloud', '/health', '/discovery'];
         if (skipPaths.some(p => path.startsWith(p))) {
             return;
         }
@@ -187,6 +210,18 @@ export class HttpDispatcher {
         }
 
         try {
+            // 0. Try URL-param / path-embedded projectId (highest precedence).
+            const urlProjectId = this.extractProjectIdFromPath(path)
+                ?? context.request?.params?.projectId;
+            if (urlProjectId) {
+                const driver = await this.envRegistry.resolveById(urlProjectId);
+                if (driver) {
+                    context.projectId = urlProjectId;
+                    context.dataDriver = driver;
+                    return;
+                }
+            }
+
             // 1. Try hostname resolution
             const host = context.request?.headers?.host || context.request?.headers?.['Host'];
             if (host) {

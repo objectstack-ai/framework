@@ -83,6 +83,9 @@ export const ProjectSchema = z.object({
   /** Whether this is the organization's **default** project. Exactly one per org. */
   isDefault: z.boolean().default(false).describe('Whether this is the default project for the organization'),
 
+  /** Whether this is a system project (platform infrastructure, not user data). */
+  isSystem: z.boolean().default(false).describe('Whether this is a system project (platform infrastructure, not user data)'),
+
   /** Region where the physical database is deployed. */
   region: z.string().optional().describe('Region where the physical database is deployed (e.g. us-east-1)'),
 

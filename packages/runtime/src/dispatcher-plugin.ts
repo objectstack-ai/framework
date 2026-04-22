@@ -9,6 +9,21 @@ export interface DispatcherPluginConfig {
      * @default '/api/v1'
      */
     prefix?: string;
+
+    /**
+     * Project-scoping configuration. Must match the REST API
+     * `enableProjectScoping` / `projectResolution` fields so AI / automation
+     * routes stay in lockstep with /data and /meta.
+     *
+     * When `enableProjectScoping` is true and `projectResolution` is:
+     *   - `required` — only `/projects/:projectId/...` variants are registered.
+     *   - `optional` / `auto` — both unscoped and scoped variants are registered
+     *     (the scoped handler forwards `req.params.projectId` into context).
+     */
+    scoping?: {
+        enableProjectScoping?: boolean;
+        projectResolution?: 'required' | 'optional' | 'auto';
+    };
 }
 
 /**
@@ -533,112 +548,160 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             });
 
             // ── Automation ──────────────────────────────────────────────
-            server.get(`${prefix}/automation`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation('', 'GET', {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+            // Registered at both `${prefix}/automation/...` and
+            // `${prefix}/projects/:projectId/automation/...` when project
+            // scoping is enabled. Handlers surface `req.params.projectId` to
+            // the HttpDispatcher through the `request` context so downstream
+            // resolution (see HttpDispatcher.resolveEnvironmentContext) can
+            // pick the right data driver.
+            const registerAutomationRoutes = (base: string) => {
+                server!.get(`${base}/automation`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation('', 'GET', {}, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.post(`${prefix}/automation`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation('', 'POST', req.body, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.post(`${base}/automation`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation('', 'POST', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.get(`${prefix}/automation/:name`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}`, 'GET', {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.get(`${base}/automation/:name`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}`, 'GET', {}, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.put(`${prefix}/automation/:name`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}`, 'PUT', req.body, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.put(`${base}/automation/:name`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}`, 'PUT', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.delete(`${prefix}/automation/:name`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}`, 'DELETE', {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.delete(`${base}/automation/:name`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}`, 'DELETE', {}, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.post(`${prefix}/automation/trigger/:name`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`trigger/${req.params.name}`, 'POST', req.body, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.post(`${base}/automation/trigger/:name`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`trigger/${req.params.name}`, 'POST', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.post(`${prefix}/automation/:name/trigger`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}/trigger`, 'POST', req.body, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.post(`${base}/automation/:name/trigger`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}/trigger`, 'POST', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.post(`${prefix}/automation/:name/toggle`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}/toggle`, 'POST', req.body, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.post(`${base}/automation/:name/toggle`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}/toggle`, 'POST', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.get(`${prefix}/automation/:name/runs`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}/runs`, 'GET', {}, { request: req }, req.query);
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.get(`${base}/automation/:name/runs`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}/runs`, 'GET', {}, { request: req }, req.query);
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
 
-            server.get(`${prefix}/automation/:name/runs/:runId`, async (req: any, res: any) => {
-                try {
-                    const result = await dispatcher.handleAutomation(`${req.params.name}/runs/${req.params.runId}`, 'GET', {}, { request: req });
-                    sendResult(result, res);
-                } catch (err: any) {
-                    errorResponse(err, res);
-                }
-            });
+                server!.get(`${base}/automation/:name/runs/:runId`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleAutomation(`${req.params.name}/runs/${req.params.runId}`, 'GET', {}, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
+            };
 
-            ctx.logger.info('Dispatcher bridge routes registered', { prefix });
+            const enableProjectScoping = config.scoping?.enableProjectScoping ?? false;
+            const projectResolution = config.scoping?.projectResolution ?? 'auto';
+
+            if (enableProjectScoping && projectResolution === 'required') {
+                registerAutomationRoutes(`${prefix}/projects/:projectId`);
+            } else {
+                registerAutomationRoutes(prefix);
+                if (enableProjectScoping) {
+                    registerAutomationRoutes(`${prefix}/projects/:projectId`);
+                }
+            }
+
+            ctx.logger.info('Dispatcher bridge routes registered', { prefix, enableProjectScoping, projectResolution });
 
             // ── Dynamic service routes (AI, etc.) ───────────────────
             // Listen for route definitions emitted by service plugins.
             // The AIServicePlugin emits 'ai:routes' with RouteDefinition[].
+            //
+            // When project-scoping is enabled, each AI route is mounted on
+            // BOTH `${prefix}${path}` and `${prefix}/projects/:projectId${path}`
+            // (or only the scoped variant when `projectResolution === 'required'`).
+            const toScopedPath = (routePath: string): string => {
+                // routePath may already include /api/v1; splice /projects/:projectId
+                // after the `${prefix}` portion to produce the scoped variant.
+                if (routePath.startsWith(prefix)) {
+                    const tail = routePath.slice(prefix.length);
+                    return `${prefix}/projects/:projectId${tail}`;
+                }
+                return `/projects/:projectId${routePath}`;
+            };
+
+            const mountAiRoute = (route: RouteDefinition) => {
+                if (!server) return 0;
+                const routePath = route.path.startsWith('/api/v1')
+                    ? route.path
+                    : `${prefix}${route.path}`;
+
+                let count = 0;
+                if (enableProjectScoping && projectResolution === 'required') {
+                    if (mountRouteOnServer(route, server, toScopedPath(routePath))) count++;
+                } else {
+                    if (mountRouteOnServer(route, server, routePath)) count++;
+                    if (enableProjectScoping) {
+                        if (mountRouteOnServer(route, server, toScopedPath(routePath))) count++;
+                    }
+                }
+                return count;
+            };
+
             ctx.hook('ai:routes', async (routes: RouteDefinition[]) => {
                 if (!server) return;
+                let total = 0;
                 for (const route of routes) {
-                    // Strip the /api/v1 prefix if present (it's already in the path)
-                    // and register on the HTTP server with the configured prefix.
-                    const routePath = route.path.startsWith('/api/v1')
-                        ? route.path
-                        : `${prefix}${route.path}`;
-                    mountRouteOnServer(route, server, routePath);
+                    total += mountAiRoute(route);
                 }
-                ctx.logger.info(`[Dispatcher] Registered ${routes.length} AI routes`);
+                ctx.logger.info(`[Dispatcher] Registered ${total} AI route mount(s) from ${routes.length} definition(s)`);
             });
 
             // ── Fallback: recover routes cached before hook was registered ──
@@ -652,15 +715,10 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             if (cachedRoutes && Array.isArray(cachedRoutes) && cachedRoutes.length > 0) {
                 let registered = 0;
                 for (const route of cachedRoutes) {
-                    const routePath = route.path.startsWith('/api/v1')
-                        ? route.path
-                        : `${prefix}${route.path}`;
-                    if (mountRouteOnServer(route, server, routePath)) {
-                        registered++;
-                    }
+                    registered += mountAiRoute(route);
                 }
                 if (registered > 0) {
-                    ctx.logger.info(`[Dispatcher] Recovered ${registered} cached AI routes (hook timing fallback)`);
+                    ctx.logger.info(`[Dispatcher] Recovered ${registered} cached AI route mount(s) (hook timing fallback)`);
                 }
             }
         },

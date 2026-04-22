@@ -352,6 +352,7 @@ export class ProjectProvisioningService {
       displayName: parsed.displayName ?? parsed.slug,
       projectType: parsed.projectType,
       isDefault: parsed.isDefault ?? false,
+      isSystem: false, // Regular projects are not system projects
       region,
       plan: parsed.plan ?? 'free',
       status: 'active',
@@ -386,6 +387,7 @@ export class ProjectProvisioningService {
           display_name: project.displayName,
           project_type: project.projectType,
           is_default: project.isDefault,
+          is_system: project.isSystem,
           region: project.region,
           plan: project.plan,
           status: project.status,
@@ -478,6 +480,145 @@ export class ProjectProvisioningService {
     });
 
     return credential;
+  }
+
+  /**
+   * Provision the built-in system project during platform bootstrap.
+   * This project contains system-level packages and operates on the control plane DB.
+   *
+   * @returns The provisioned system project or existing if already created (idempotent)
+   */
+  async provisionSystemProject(): Promise<ProvisionProjectResponse> {
+    const SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
+    const PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000000';
+    const startedAt = Date.now();
+    const warnings: string[] = [];
+
+    // Check if system project already exists (idempotent operation)
+    if (this.config.controlPlaneDriver) {
+      try {
+        const existing = await this.config.controlPlaneDriver.findOne('project', {
+          where: { id: SYSTEM_PROJECT_ID },
+        });
+
+        if (existing) {
+          // System project already exists - return it
+          const credentialId = randomUUID();
+          const nowIso = new Date().toISOString();
+
+          return {
+            project: {
+              id: existing.id,
+              organizationId: existing.organization_id,
+              slug: existing.slug,
+              displayName: existing.display_name,
+              projectType: existing.project_type,
+              isDefault: existing.is_default,
+              isSystem: existing.is_system ?? true,
+              region: existing.region,
+              plan: existing.plan,
+              status: existing.status,
+              createdBy: existing.created_by,
+              createdAt: existing.created_at,
+              updatedAt: existing.updated_at,
+              databaseUrl: existing.database_url,
+              databaseDriver: existing.database_driver,
+              storageLimitMb: existing.storage_limit_mb,
+              provisionedAt: existing.provisioned_at,
+              metadata: existing.metadata ? JSON.parse(existing.metadata) : undefined,
+              hostname: existing.hostname,
+            },
+            credential: {
+              id: credentialId,
+              projectId: SYSTEM_PROJECT_ID,
+              secretCiphertext: '',
+              encryptionKeyId: this.encryptor.keyId,
+              authorization: 'full_access',
+              status: 'active',
+              createdAt: nowIso,
+            },
+            durationMs: Date.now() - startedAt,
+            warnings: ['System project already exists'],
+          };
+        }
+      } catch (error) {
+        // Project not found - proceed with creation
+      }
+    }
+
+    // Create new system project
+    const nowIso = new Date().toISOString();
+    const credentialId = randomUUID();
+
+    const project: Project = {
+      id: SYSTEM_PROJECT_ID,
+      organizationId: PLATFORM_ORG_ID,
+      slug: 'system',
+      displayName: 'System',
+      projectType: 'production',
+      isDefault: false,
+      isSystem: true,
+      region: this.config.defaultRegion,
+      plan: 'enterprise',
+      status: 'active',
+      createdBy: 'system',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      metadata: {
+        description: 'Built-in system project for platform infrastructure',
+        protected: true,
+      },
+      databaseUrl: undefined,
+      databaseDriver: undefined,
+      storageLimitMb: undefined,
+      provisionedAt: nowIso,
+      hostname: 'system.objectstack.internal',
+    };
+
+    const credential: ProjectCredential = {
+      id: credentialId,
+      projectId: SYSTEM_PROJECT_ID,
+      secretCiphertext: '',
+      encryptionKeyId: this.encryptor.keyId,
+      authorization: 'full_access',
+      status: 'active',
+      createdAt: nowIso,
+    };
+
+    // Persist to control plane
+    if (this.config.controlPlaneDriver) {
+      try {
+        await this.config.controlPlaneDriver.create('project', {
+          id: project.id,
+          organization_id: project.organizationId,
+          slug: project.slug,
+          display_name: project.displayName,
+          project_type: project.projectType,
+          is_default: project.isDefault,
+          is_system: project.isSystem,
+          region: project.region,
+          plan: project.plan,
+          status: project.status,
+          created_by: project.createdBy,
+          created_at: project.createdAt,
+          updated_at: project.updatedAt,
+          database_url: project.databaseUrl,
+          database_driver: project.databaseDriver,
+          storage_limit_mb: project.storageLimitMb,
+          provisioned_at: project.provisionedAt,
+          metadata: project.metadata ? JSON.stringify(project.metadata) : null,
+          hostname: project.hostname,
+        });
+
+        warnings.push('System project created successfully');
+      } catch (error) {
+        throw new Error(
+          `Failed to persist system project: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    return { project, credential, durationMs: Date.now() - startedAt, warnings };
   }
 
   registerAdapter(adapter: ProjectDatabaseAdapter): void {

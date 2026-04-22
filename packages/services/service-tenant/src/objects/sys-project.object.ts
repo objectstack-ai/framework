@@ -90,6 +90,13 @@ export const SysProject = ObjectSchema.create({
       description: 'Whether this is the default project for the organization. Exactly one per org.',
     }),
 
+    is_system: Field.boolean({
+      label: 'Is System',
+      required: true,
+      defaultValue: false,
+      description: 'Whether this is a system project (platform infrastructure, not user data).',
+    }),
+
     region: Field.text({
       label: 'Region',
       required: false,

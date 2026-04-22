@@ -670,3 +670,96 @@ describe('createRestApiPlugin', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// RestServer — project-scoped routing (Phase 2)
+// ---------------------------------------------------------------------------
+
+describe('RestServer project-scoped routing', () => {
+  it('only registers unscoped routes by default', () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const rest = new RestServer(server as any, protocol as any);
+    rest.registerRoutes();
+
+    const paths = rest.getRoutes().map(r => r.path);
+    expect(paths).toContain('/api/v1/data/:object');
+    expect(paths.some(p => p.includes('/projects/:projectId'))).toBe(false);
+  });
+
+  it("registers both unscoped and scoped routes in 'auto' mode", () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const rest = new RestServer(server as any, protocol as any, {
+      api: { enableProjectScoping: true, projectResolution: 'auto' } as any,
+    } as any);
+    rest.registerRoutes();
+
+    const paths = rest.getRoutes().map(r => r.path);
+    expect(paths).toContain('/api/v1/data/:object');
+    expect(paths).toContain('/api/v1/projects/:projectId/data/:object');
+    expect(paths).toContain('/api/v1/meta');
+    expect(paths).toContain('/api/v1/projects/:projectId/meta');
+  });
+
+  it("only registers scoped routes in 'required' mode", () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const rest = new RestServer(server as any, protocol as any, {
+      api: { enableProjectScoping: true, projectResolution: 'required' } as any,
+    } as any);
+    rest.registerRoutes();
+
+    const paths = rest.getRoutes().map(r => r.path);
+    expect(paths).toContain('/api/v1/projects/:projectId/data/:object');
+    expect(paths).not.toContain('/api/v1/data/:object');
+  });
+
+  it('scoped CRUD handler forwards req.params.projectId into the protocol call', async () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const rest = new RestServer(server as any, protocol as any, {
+      api: { enableProjectScoping: true, projectResolution: 'required' } as any,
+    } as any);
+    rest.registerRoutes();
+
+    const listRoute = rest
+      .getRoutes()
+      .find(r => r.path === '/api/v1/projects/:projectId/data/:object' && r.method === 'GET');
+    expect(listRoute).toBeDefined();
+
+    const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+    await listRoute!.handler(
+      { params: { projectId: 'proj-123', object: 'task' }, query: {} },
+      res,
+    );
+
+    expect(protocol.findData).toHaveBeenCalledWith(
+      expect.objectContaining({ object: 'task', projectId: 'proj-123' }),
+    );
+  });
+
+  it('unscoped handler in auto mode does NOT set projectId on the protocol call', async () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const rest = new RestServer(server as any, protocol as any, {
+      api: { enableProjectScoping: true, projectResolution: 'auto' } as any,
+    } as any);
+    rest.registerRoutes();
+
+    const unscoped = rest
+      .getRoutes()
+      .find(r => r.path === '/api/v1/data/:object' && r.method === 'GET');
+    expect(unscoped).toBeDefined();
+
+    const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+    await unscoped!.handler(
+      { params: { object: 'task' }, query: {} },
+      res,
+    );
+
+    expect(protocol.findData).toHaveBeenCalledWith(
+      expect.not.objectContaining({ projectId: expect.anything() }),
+    );
+  });
+});
