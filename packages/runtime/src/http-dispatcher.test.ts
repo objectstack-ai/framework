@@ -1380,4 +1380,140 @@ describe('HttpDispatcher', () => {
             expect(context.projectId).toBe('proj-header');
         });
     });
+
+    describe('enforceProjectMembership (RBAC)', () => {
+        const SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
+        const PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000000';
+
+        function buildDispatcher(opts: {
+            memberRows?: any[];
+            userId?: string;
+            orgId?: string;
+            enforce?: boolean;
+        }) {
+            const memberQL = {
+                ...mockObjectQL,
+                find: vi.fn().mockImplementation(async (name: string) => {
+                    if (name === 'sys__project_member') return opts.memberRows ?? [];
+                    return [];
+                }),
+            };
+            const authService = {
+                api: {
+                    getSession: vi.fn().mockResolvedValue(
+                        opts.userId
+                            ? {
+                                user: { id: opts.userId },
+                                session: { activeOrganizationId: opts.orgId },
+                            }
+                            : null,
+                    ),
+                },
+            };
+            const k: any = {
+                context: {
+                    getService: (name: string) => {
+                        if (name === 'protocol') return mockProtocol;
+                        if (name === 'objectql') return memberQL;
+                        if (name === 'auth') return authService;
+                        return null;
+                    },
+                },
+            };
+            return {
+                dispatcher: new HttpDispatcher(k, undefined, {
+                    enforceProjectMembership: opts.enforce ?? true,
+                }),
+                memberQL,
+            };
+        }
+
+        it('returns 403 when user is not a member of the scoped project', async () => {
+            const { dispatcher: d, memberQL } = buildDispatcher({
+                memberRows: [],
+                userId: 'user-1',
+                orgId: 'org-tenant',
+            });
+            const ctx: any = { request: { headers: {} }, projectId: 'proj-private' };
+            const result = await (d as any).enforceProjectMembership(
+                ctx,
+                '/api/v1/projects/proj-private/data/task',
+            );
+            expect(result).not.toBeNull();
+            expect(result.status).toBe(403);
+            expect(result.body.error.details.type).toBe('PROJECT_MEMBERSHIP_REQUIRED');
+            expect(memberQL.find).toHaveBeenCalledWith('sys__project_member', expect.objectContaining({
+                where: { project_id: 'proj-private', user_id: 'user-1' },
+            }));
+        });
+
+        it('bypasses the check for the system project', async () => {
+            const { dispatcher: d, memberQL } = buildDispatcher({
+                memberRows: [],
+                userId: 'user-1',
+                orgId: 'org-tenant',
+            });
+            const ctx: any = { request: { headers: {} }, projectId: SYSTEM_PROJECT_ID };
+            const result = await (d as any).enforceProjectMembership(
+                ctx,
+                `/api/v1/projects/${SYSTEM_PROJECT_ID}/meta`,
+            );
+            expect(result).toBeNull();
+            expect(memberQL.find).not.toHaveBeenCalled();
+        });
+
+        it('bypasses the check for platform-org members', async () => {
+            const { dispatcher: d, memberQL } = buildDispatcher({
+                memberRows: [],
+                userId: 'staff-1',
+                orgId: PLATFORM_ORG_ID,
+            });
+            const ctx: any = { request: { headers: {} }, projectId: 'proj-any' };
+            const result = await (d as any).enforceProjectMembership(
+                ctx,
+                '/api/v1/projects/proj-any/data/task',
+            );
+            expect(result).toBeNull();
+            expect(memberQL.find).not.toHaveBeenCalled();
+        });
+
+        it('caches positive results so repeat calls skip the DB lookup', async () => {
+            const { dispatcher: d, memberQL } = buildDispatcher({
+                memberRows: [{ id: 'm1', role: 'admin' }],
+                userId: 'user-1',
+                orgId: 'org-tenant',
+            });
+            const ctx: any = { request: { headers: {} }, projectId: 'proj-a' };
+
+            const r1 = await (d as any).enforceProjectMembership(
+                ctx,
+                '/api/v1/projects/proj-a/data/task',
+            );
+            expect(r1).toBeNull();
+            expect(memberQL.find).toHaveBeenCalledTimes(1);
+
+            const r2 = await (d as any).enforceProjectMembership(
+                ctx,
+                '/api/v1/projects/proj-a/data/task',
+            );
+            expect(r2).toBeNull();
+            expect(memberQL.find).toHaveBeenCalledTimes(1);
+        });
+
+        it('is a no-op when enforcement is disabled', async () => {
+            const { dispatcher: d, memberQL } = buildDispatcher({
+                memberRows: [],
+                userId: 'user-1',
+                orgId: 'org-tenant',
+                enforce: false,
+            });
+            const ctx: any = { request: { headers: {} }, projectId: 'proj-any' };
+            const result = await (d as any).enforceProjectMembership(
+                ctx,
+                '/api/v1/projects/proj-any/data/task',
+            );
+            expect(result).toBeNull();
+            expect(memberQL.find).not.toHaveBeenCalled();
+        });
+    });
 });

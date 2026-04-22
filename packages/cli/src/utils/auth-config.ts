@@ -32,6 +32,12 @@ export interface AuthConfig {
    * Timestamp when credentials were last used
    */
   lastUsedAt?: string;
+  /**
+   * Active project id for subsequent CLI calls. Set via `os projects switch`;
+   * read by `createApiClient` so every command lands in the right project
+   * without an explicit flag.
+   */
+  activeProjectId?: string;
 }
 
 /**

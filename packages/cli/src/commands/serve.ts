@@ -332,9 +332,19 @@ export default class Serve extends Command {
 
       // Register REST API and Dispatcher plugins (consume http.server + protocol services)
       if (flags.server) {
+        // Read project-scoping config from the stack's top-level `api` field
+        // (e.g. { api: { enableProjectScoping: true, projectResolution: 'auto' } }).
+        // Forwarded to both REST and Dispatcher plugins so they mount scoped
+        // routes consistently.
+        const apiConfig = (config as any).api ?? {};
+        const enableProjectScoping = apiConfig.enableProjectScoping ?? false;
+        const projectResolution = apiConfig.projectResolution ?? 'auto';
+
         try {
           const { createRestApiPlugin } = await import('@objectstack/rest');
-          await kernel.use(createRestApiPlugin());
+          await kernel.use(
+            createRestApiPlugin({ api: { api: { enableProjectScoping, projectResolution } } as any }),
+          );
           trackPlugin('RestAPI');
         } catch (e: any) {
           // @objectstack/rest is optional
@@ -343,7 +353,9 @@ export default class Serve extends Command {
         // Register Dispatcher plugin (auth, graphql, analytics, packages, hub, storage, automation)
         try {
           const { createDispatcherPlugin } = await import('@objectstack/runtime');
-          await kernel.use(createDispatcherPlugin());
+          await kernel.use(
+            createDispatcherPlugin({ scoping: { enableProjectScoping, projectResolution } }),
+          );
           trackPlugin('Dispatcher');
         } catch (e: any) {
           // optional

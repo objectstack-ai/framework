@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { useState, useEffect } from 'react';
-import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -191,7 +192,8 @@ function JsonTree({ data, depth = 0 }: { data: any; depth?: number }) {
 
 
 export function MetadataInspector({ metaType, metaName, packageId }: MetadataInspectorProps) {
-  const client = useClient();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const client = useScopedClient(params.projectId);
   const [item, setItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -200,13 +202,14 @@ export function MetadataInspector({ metaType, metaName, packageId }: MetadataIns
   const typeLabel = TYPE_LABELS[metaType] || metaType.charAt(0).toUpperCase() + metaType.slice(1);
 
   useEffect(() => {
+    if (!client) return;
     let mounted = true;
     setLoading(true);
     setItem(null);
 
     async function load() {
       try {
-        const result: any = await client.meta.getItem(metaType, metaName, packageId ? { packageId } : undefined);
+        const result: any = await client!.meta.getItem(metaType, metaName, packageId ? { packageId } : undefined);
         if (mounted) {
           setItem(result?.item || result);
         }

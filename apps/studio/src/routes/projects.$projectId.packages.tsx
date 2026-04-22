@@ -10,7 +10,7 @@
 
 import { createFileRoute, useParams, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect, useCallback } from 'react';
-import { useClient } from '@objectstack/client-react';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { Package, Power, PowerOff, Trash2, Plus, RefreshCw, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +22,7 @@ import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 function ProjectPackagesComponent() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
-  const client = useClient() as any;
+  const client = useScopedClient(projectId) as any;
   const navigate = useNavigate();
 
   const { packages: installedPkgs, loading, error, install, uninstall, enable, disable, reload } =

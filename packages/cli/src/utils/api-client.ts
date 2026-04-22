@@ -16,6 +16,11 @@ export interface ApiClientOptions {
    */
   token?: string;
   /**
+   * Explicit project id. Overrides the stored `activeProjectId` from
+   * `~/.objectstack/credentials.json` (written by `os projects switch`).
+   */
+  projectId?: string;
+  /**
    * Enable debug logging
    */
   debug?: boolean;
@@ -28,6 +33,7 @@ export interface ApiClientOptions {
 export interface ApiClientResult {
   client: ObjectStackClient;
   token?: string;
+  projectId?: string;
 }
 
 /**
@@ -46,8 +52,11 @@ export async function createApiClient(options: ApiClientOptions = {}): Promise<A
   // Resolve authentication token
   let token = options.token || process.env.OBJECTSTACK_TOKEN;
 
+  // Resolve active project id (explicit > env > stored credentials)
+  let projectId = options.projectId || process.env.OBJECTSTACK_PROJECT_ID;
+
   // If URL or token is missing, try to load from stored credentials
-  if (!baseUrl || !token) {
+  if (!baseUrl || !token || !projectId) {
     try {
       const authConfig = await readAuthConfig();
       if (!token && authConfig.token) {
@@ -55,6 +64,9 @@ export async function createApiClient(options: ApiClientOptions = {}): Promise<A
       }
       if (!baseUrl && authConfig.url) {
         baseUrl = authConfig.url;
+      }
+      if (!projectId && authConfig.activeProjectId) {
+        projectId = authConfig.activeProjectId;
       }
     } catch {
       // No stored credentials - commands will fail if auth is required
@@ -69,10 +81,11 @@ export async function createApiClient(options: ApiClientOptions = {}): Promise<A
   const client = new ObjectStackClient({
     baseUrl,
     token,
+    projectId,
     debug: options.debug || false,
   });
 
-  return { client, token };
+  return { client, token, projectId };
 }
 
 /**

@@ -44,10 +44,31 @@ export interface HttpDispatcherResult {
 export class HttpDispatcher {
     private kernel: any; // Casting to any to access dynamic props like services, graphql
     private envRegistry?: any; // EnvironmentDriverRegistry
+    /**
+     * When `true`, scoped data-plane routes enforce a
+     * `sys_project_member` lookup and return 403 for non-members.
+     * Defaults to `true` when a projectId is resolvable — legacy callers
+     * can opt out via the third constructor argument (see
+     * `DispatcherConfig.enforceProjectMembership`).
+     */
+    private enforceMembership: boolean;
+    /**
+     * In-memory cache of positive membership checks, keyed by
+     * `${projectId}:${userId}`. Entries expire 60 seconds after insertion
+     * — a short TTL is acceptable because a user whose access was just
+     * revoked sees stale access for at most one minute.
+     */
+    private membershipCache: Map<string, number> = new Map();
+    private static readonly MEMBERSHIP_CACHE_TTL_MS = 60_000;
+    /** Well-known system project id — bypassed for any authenticated user. */
+    private static readonly SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
+    /** Well-known platform org id — members bypass project membership. */
+    private static readonly PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
-    constructor(kernel: ObjectKernel, envRegistry?: any) {
+    constructor(kernel: ObjectKernel, envRegistry?: any, options?: { enforceProjectMembership?: boolean }) {
         this.kernel = kernel;
         this.envRegistry = envRegistry;
+        this.enforceMembership = options?.enforceProjectMembership ?? true;
     }
 
     private success(data: any, meta?: any) {
@@ -295,6 +316,103 @@ export class HttpDispatcher {
             }
         } catch (error) {
             console.error('[HttpDispatcher] Environment resolution failed:', error);
+        }
+    }
+
+    /**
+     * Check whether the authenticated user is a member of
+     * `context.projectId`. Runs after {@link resolveEnvironmentContext}
+     * and is a no-op when:
+     *
+     *   - Membership enforcement is disabled via the constructor.
+     *   - The route is control-plane (`/auth/*`, `/cloud/*`, `/health`,
+     *     `/discovery`) — already skipped upstream.
+     *   - No `projectId` was resolved (e.g. unscoped legacy routes).
+     *   - The project is the well-known system project (bypassed so any
+     *     authenticated user can read platform metadata).
+     *   - The user's active organization is the platform org (staff).
+     *
+     * Positive results are cached for 60 seconds to avoid hitting the
+     * control-plane on every request. A failed check returns a 403
+     * response object that callers should surface directly — no further
+     * dispatch happens.
+     */
+    private async enforceProjectMembership(
+        context: HttpProtocolContext,
+        path: string,
+    ): Promise<{ status: number; body: any } | null> {
+        if (!this.enforceMembership) return null;
+
+        // Control-plane paths — never gated by project membership.
+        const skipPaths = ['/auth', '/cloud', '/health', '/discovery'];
+        if (skipPaths.some(p => path.startsWith(p))) return null;
+
+        const projectId = context.projectId;
+        if (!projectId) return null; // Unscoped legacy routes fall through.
+
+        // System project is always reachable by any authenticated user.
+        if (projectId === HttpDispatcher.SYSTEM_PROJECT_ID) return null;
+
+        // Read the session. If auth is not wired up, fail open — tests
+        // and single-tenant setups run without auth.
+        let userId: string | undefined;
+        let activeOrganizationId: string | undefined;
+        try {
+            const authService: any = await this.resolveService(CoreServiceName.enum.auth);
+            const sessionData = await authService?.api?.getSession?.({
+                headers: context.request?.headers,
+            });
+            userId = sessionData?.user?.id ?? sessionData?.session?.userId;
+            activeOrganizationId = sessionData?.session?.activeOrganizationId;
+        } catch {
+            // Auth resolution failed — do not block the request on RBAC.
+            return null;
+        }
+
+        if (!userId) return null; // Anonymous requests — upstream auth will decide.
+
+        // Platform-org members bypass project membership.
+        if (activeOrganizationId === HttpDispatcher.PLATFORM_ORG_ID) return null;
+
+        // Check cache.
+        const cacheKey = `${projectId}:${userId}`;
+        const cached = this.membershipCache.get(cacheKey);
+        const now = Date.now();
+        if (cached && now - cached < HttpDispatcher.MEMBERSHIP_CACHE_TTL_MS) {
+            return null; // Recently verified as a member.
+        }
+        if (cached) {
+            this.membershipCache.delete(cacheKey); // expired
+        }
+
+        // Query sys_project_member (control plane).
+        try {
+            const qlService = await this.getObjectQLService();
+            const ql = qlService ?? await this.resolveService('objectql');
+            if (!ql) return null; // No QL — cannot enforce; fail open.
+
+            let rows = await ql.find('sys__project_member', {
+                where: { project_id: projectId, user_id: userId },
+                limit: 1,
+            } as any);
+            if (rows && (rows as any).value) rows = (rows as any).value;
+            const isMember = Array.isArray(rows) && rows.length > 0;
+
+            if (isMember) {
+                this.membershipCache.set(cacheKey, now);
+                return null;
+            }
+
+            return this.error(
+                `Forbidden: user ${userId} is not a member of project ${projectId}`,
+                403,
+                { projectId, userId, type: 'PROJECT_MEMBERSHIP_REQUIRED' },
+            );
+        } catch (err) {
+            // Control-plane lookup failure — log and fail open rather than
+            // break the request. Tightening this is deferred to Phase 4.
+            console.debug('[HttpDispatcher] Membership check failed:', err);
+            return null;
         }
     }
 
@@ -1229,11 +1347,8 @@ export class HttpDispatcher {
             return {
                 id: row.id,
                 organizationId: row.organization_id,
-                slug: row.slug,
                 displayName: row.display_name,
-                projectType: row.project_type,
                 isDefault: row.is_default ?? false,
-                region: row.region,
                 plan: row.plan,
                 status: row.status,
                 createdBy: row.created_by,
@@ -1259,7 +1374,6 @@ export class HttpDispatcher {
             if (parts.length === 1 && parts[0] === 'projects' && m === 'GET') {
                 const where: Record<string, unknown> = {};
                 if (query?.organizationId) where.organization_id = query.organizationId;
-                if (query?.projectType) where.project_type = query.projectType;
                 if (query?.status) where.status = query.status;
                 let rows = await ql.find(ENV, Object.keys(where).length ? ({ where } as any) : undefined);
                 if (rows && (rows as any).value) rows = (rows as any).value;
@@ -1287,8 +1401,8 @@ export class HttpDispatcher {
                         // Fall through — validation below will reject missing fields.
                     }
                 }
-                if (!req.organizationId || !req.slug || !req.displayName || !req.projectType) {
-                    return { handled: true, response: this.error('organizationId, slug, displayName, projectType are required', 400) };
+                if (!req.organizationId || !req.displayName) {
+                    return { handled: true, response: this.error('organizationId and displayName are required', 400) };
                 }
                 const projectId = randomUUID();
                 const credentialId = randomUUID();
@@ -1318,23 +1432,23 @@ export class HttpDispatcher {
                     };
                 }
                 const driver = resolved.name;
-                const region = req.region ?? 'us-east-1';
                 let plaintextSecret = `mock-token-${projectId}`;
 
-                // Compute hostname if not provided
-                // Format: {org-slug}-{env-slug}.{rootDomain}
-                // For now, use a simple format. In production, fetch org.slug from database.
+                // Compute hostname if not provided.
+                // Format: {org-slug}-{short-project-id}.{rootDomain}
+                // Uses the first 8 chars of the UUID as a stable, collision-free
+                // suffix now that projects no longer carry a user-facing slug.
                 let computedHostname = req.hostname;
                 if (!computedHostname) {
-                    // Try to look up organization slug
+                    const shortId = projectId.slice(0, 8);
                     try {
                         const orgRow = await findOne('sys__organization', { id: req.organizationId });
                         const orgSlug = orgRow?.slug || req.organizationId;
                         const rootDomain = getEnv('ROOT_DOMAIN', 'objectstack.app');
-                        computedHostname = `${orgSlug}-${req.slug}.${rootDomain}`;
+                        computedHostname = `${orgSlug}-${shortId}.${rootDomain}`;
                     } catch {
                         // Fallback if sys__organization doesn't exist
-                        computedHostname = `${req.organizationId}-${req.slug}.objectstack.app`;
+                        computedHostname = `${req.organizationId}-${shortId}.objectstack.app`;
                     }
                 }
 
@@ -1352,11 +1466,8 @@ export class HttpDispatcher {
                 await ql.insert(ENV, {
                     id: projectId,
                     organization_id: req.organizationId,
-                    slug: req.slug,
                     display_name: req.displayName,
-                    project_type: req.projectType,
                     is_default: req.isDefault ?? false,
-                    region,
                     plan: req.plan ?? 'free',
                     status: 'provisioning',
                     created_by: req.createdBy ?? 'system',
@@ -1391,7 +1502,7 @@ export class HttpDispatcher {
                                 const result = await adapter.createDatabase({
                                     projectId,
                                     databaseName: `proj-${projectId}`,
-                                    region,
+                                    region: 'us-east-1',
                                     storageLimitMb: req.storageLimitMb ?? 1024,
                                 });
                                 databaseUrl = result.databaseUrl;
@@ -1479,7 +1590,6 @@ export class HttpDispatcher {
                     const database = envDto.databaseUrl
                         ? {
                               driver: envDto.databaseDriver,
-                              region: envDto.region,
                               databaseName: `env-${envDto.id}`,
                               databaseUrl: envDto.databaseUrl,
                               storageLimitMb: envDto.storageLimitMb,
@@ -1581,7 +1691,7 @@ export class HttpDispatcher {
                                 const result = await adapter.createDatabase({
                                     projectId: id,
                                     databaseName: `proj-${id}`,
-                                    region: envRow.region ?? 'us-east-1',
+                                    region: 'us-east-1',
                                     storageLimitMb: envRow.storage_limit_mb ?? 1024,
                                 });
                                 databaseUrl = result.databaseUrl;
@@ -2204,6 +2314,15 @@ export class HttpDispatcher {
         // ── Environment Resolution ──
         // Resolve environment context for data-plane requests before routing
         await this.resolveEnvironmentContext(context, cleanPath);
+
+        // ── Project Membership Enforcement ──
+        // Once the projectId is known, gate scoped data/meta/AI/automation
+        // routes on `sys_project_member`. Control-plane paths, the system
+        // project, and platform-org members bypass this check.
+        const forbidden = await this.enforceProjectMembership(context, cleanPath);
+        if (forbidden) {
+            return { handled: true, response: forbidden };
+        }
 
         // 0. Discovery Endpoint (GET /discovery or GET /)
         // Standard route: /discovery (protocol-compliant)

@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { useState, useEffect, useCallback } from 'react';
-import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,8 @@ interface SystemStats {
 }
 
 export function DeveloperOverview({ packages, selectedPackage, onNavigate }: DeveloperOverviewProps) {
-  const client = useClient();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const client = useScopedClient(params.projectId);
   const [stats, setStats] = useState<SystemStats>({
     packages: { total: 0, enabled: 0, disabled: 0, byType: {} },
     metadata: { types: [], counts: {} },
@@ -33,6 +35,7 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate }: Dev
   });
 
   const loadStats = useCallback(async () => {
+    if (!client) return;
     setStats(prev => ({ ...prev, loading: true }));
     try {
       // Fetch metadata types

@@ -9,7 +9,7 @@
  */
 
 import { defineStack } from '@objectstack/spec';
-import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
+import { AppPlugin, DriverPlugin, createSystemProjectPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { TursoDriver } from '@objectstack/driver-turso';
@@ -63,6 +63,12 @@ export default defineStack({
     description: 'Production server aggregating CRM, Todo and BI plugins',
     type: 'app',
   },
+  // Phase 3: enable project-scoped URLs (/api/v1/projects/:projectId/...)
+  // under 'auto' resolution so legacy unscoped routes continue to work.
+  api: {
+    enableProjectScoping: true,
+    projectResolution: 'auto',
+  },
   plugins: [
     oqlPlugin,
     // Set datasourceMapping right after ObjectQL init — access ql instance directly
@@ -77,6 +83,9 @@ export default defineStack({
     new DriverPlugin(tursoDriver, 'turso'),
     new PackageServicePlugin(), // Package management service
     createTenantPlugin({ registerSystemObjects: true, registerLegacyTenantDatabase: false }),
+    // Provisions the well-known system project (00000000-0000-0000-0000-000000000001)
+    // on startup. Idempotent — safe to register unconditionally.
+    createSystemProjectPlugin(),
     new AppPlugin(CrmApp),
     new AppPlugin(TodoApp),
     new AppPlugin(BiPluginManifest),

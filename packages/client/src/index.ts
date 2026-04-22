@@ -637,9 +637,10 @@ export class ObjectStackClient {
      */
     create: async (req: {
       organizationId: string;
-      slug: string;
+      slug?: string;
       displayName: string;
-      envType: string;
+      envType?: string;
+      projectType?: string;
       plan?: string;
       region?: string;
       driver?: string;

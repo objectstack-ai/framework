@@ -1,0 +1,77 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { Args, Command, Flags } from '@oclif/core';
+import { printError } from '../../utils/format.js';
+import { createApiClient, requireAuth } from '../../utils/api-client.js';
+import { formatOutput } from '../../utils/output-formatter.js';
+
+/**
+ * `os projects show <id>` — show detailed information for a single project.
+ *
+ * Renders the project row plus its database, active credential, and
+ * membership row (same shape as `client.projects.get(id)`).
+ */
+export default class ProjectsShow extends Command {
+  static override description = 'Show detailed information for a project';
+
+  static override examples = [
+    '$ os projects show 00000000-0000-0000-0000-000000000001',
+    '$ os projects show proj-123 --format json',
+  ];
+
+  static override args = {
+    id: Args.string({ description: 'Project id', required: true }),
+  };
+
+  static override flags = {
+    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OBJECTSTACK_URL' }),
+    token: Flags.string({ char: 't', description: 'Authentication token', env: 'OBJECTSTACK_TOKEN' }),
+    format: Flags.string({
+      char: 'f',
+      description: 'Output format',
+      options: ['json', 'table', 'yaml'],
+      default: 'table',
+    }),
+  };
+
+  async run(): Promise<void> {
+    const { args, flags } = await this.parse(ProjectsShow);
+
+    try {
+      const { client, token } = await createApiClient({ url: flags.url, token: flags.token });
+      requireAuth(token);
+
+      const res = await client.projects.get(args.id);
+
+      if (flags.format === 'json') {
+        formatOutput(res, 'json');
+      } else if (flags.format === 'yaml') {
+        formatOutput(res, 'yaml');
+      } else {
+        const p = res?.project ?? {};
+        console.log(`\nProject: ${p.displayName ?? p.id}`);
+        console.log('─'.repeat(60));
+        console.log(`  id:             ${p.id}`);
+        console.log(`  organization:   ${p.organizationId ?? '—'}`);
+        console.log(`  status:         ${p.status ?? '—'}`);
+        console.log(`  plan:           ${p.plan ?? '—'}`);
+        console.log(`  isDefault:      ${Boolean(p.isDefault)}`);
+        console.log(`  isSystem:       ${Boolean(p.isSystem)}`);
+        if (res?.database) {
+          console.log(`  database:       ${res.database.driver ?? '—'} @ ${res.database.url ?? '—'}`);
+        }
+        if (res?.membership) {
+          console.log(`  yourRole:       ${res.membership.role ?? '—'}`);
+        }
+        console.log('');
+      }
+    } catch (error: any) {
+      if (flags.format === 'json') {
+        console.log(JSON.stringify({ success: false, error: error.message }, null, 2));
+        this.exit(1);
+      }
+      printError(error.message || String(error));
+      this.exit(1);
+    }
+  }
+}

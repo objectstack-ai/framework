@@ -24,6 +24,18 @@ export interface DispatcherPluginConfig {
         enableProjectScoping?: boolean;
         projectResolution?: 'required' | 'optional' | 'auto';
     };
+
+    /**
+     * Enforce per-project membership (`sys_project_member`) on scoped
+     * data-plane routes. Returns 403 for non-members unless they are
+     * staff (platform org) or the project is the well-known system
+     * project.
+     *
+     * Defaults to `true` when `scoping.enableProjectScoping` is enabled;
+     * explicitly set to `false` for tests and single-tenant deployments
+     * where membership has not been seeded.
+     */
+    enforceProjectMembership?: boolean;
 }
 
 /**
@@ -188,7 +200,13 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             if (!server) return;
 
             const kernel = ctx.getKernel();
-            const dispatcher = new HttpDispatcher(kernel);
+            // Default: enable membership enforcement iff project-scoping is on.
+            // Tests / single-tenant deploys can opt out via the explicit flag.
+            const enforceMembership =
+                config.enforceProjectMembership ?? (config.scoping?.enableProjectScoping ?? false);
+            const dispatcher = new HttpDispatcher(kernel, undefined, {
+                enforceProjectMembership: enforceMembership,
+            });
             const prefix = config.prefix || '/api/v1';
 
             // ── Discovery (.well-known) ─────────────────────────────────

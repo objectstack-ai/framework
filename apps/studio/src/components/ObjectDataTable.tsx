@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { useState, useEffect } from 'react';
-import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -80,7 +81,8 @@ function TableSkeleton({ cols }: { cols: number }) {
 }
 
 export function ObjectDataTable({ objectApiName, onEdit, refreshTrigger = 0 }: ObjectDataTableProps) {
-    const client = useClient();
+    const params = useParams({ strict: false }) as { projectId?: string };
+    const client = useScopedClient(params.projectId);
     const [def, setDef] = useState<any>(null);
     const [records, setRecords] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -91,10 +93,11 @@ export function ObjectDataTable({ objectApiName, onEdit, refreshTrigger = 0 }: O
 
     // Load Definition
     useEffect(() => {
+        if (!client) return;
         let mounted = true;
         async function loadDef() {
             try {
-                const found: any = await client.meta.getItem('object', objectApiName);
+                const found: any = await client!.meta.getItem('object', objectApiName);
                 if (mounted && found) {
                     // Spec: GetMetaItemResponse = { type, name, item }
                     const def = found.item || found;
@@ -110,11 +113,12 @@ export function ObjectDataTable({ objectApiName, onEdit, refreshTrigger = 0 }: O
 
     // Load Data
     useEffect(() => {
+        if (!client) return;
         let mounted = true;
         async function loadData() {
             setLoading(true);
             try {
-                const result: any = await client.data.find(objectApiName, {
+                const result: any = await client!.data.find(objectApiName, {
                     filters: {
                         top: pageSize,
                         skip: (page - 1) * pageSize,
@@ -140,6 +144,7 @@ export function ObjectDataTable({ objectApiName, onEdit, refreshTrigger = 0 }: O
     }, [client, objectApiName, page, refreshTrigger]);
 
     async function handleDelete(id: string) {
+        if (!client) return;
         if (!confirm('Are you sure you want to delete this record?')) return;
         try {
             await client.data.delete(objectApiName, id);
@@ -161,6 +166,7 @@ export function ObjectDataTable({ objectApiName, onEdit, refreshTrigger = 0 }: O
     }
 
     async function handleRefresh() {
+        if (!client) return;
         setLoading(true);
         try {
             const result: any = await client.data.find(objectApiName, {

@@ -36,6 +36,7 @@ import {
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useNavigate, useParams, useLocation } from '@tanstack/react-router';
 import { useClient, useMetadataSubscriptionCallback } from '@objectstack/client-react';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 import {
@@ -166,10 +167,16 @@ export function AppSidebar({
   packages, selectedPackage, onSelectPackage, projectId,
   ...props
 }: AppSidebarProps) {
-  const client = useClient();
+  const unscopedClient = useClient();
   const navigate = useNavigate();
-  const params = useParams({ strict: false });
+  const params = useParams({ strict: false }) as any;
   const location = useLocation();
+
+  // Prefer a project-scoped client when a projectId is present in the URL
+  // (e.g. under /projects/$projectId/...). Falls back to the unscoped client
+  // during login / organization pages that have no project context yet.
+  const scopedClient = useScopedClient(params.projectId);
+  const client = scopedClient ?? unscopedClient;
 
   // Extract current selection from URL params
   const selectedObject = params.name && params.package && !params.type ? params.name : null;

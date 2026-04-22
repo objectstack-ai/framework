@@ -20,3 +20,9 @@ export { default as PluginListCommand } from './commands/plugin/list.js';
 export { default as PluginInfoCommand } from './commands/plugin/info.js';
 export { default as PluginAddCommand } from './commands/plugin/add.js';
 export { default as PluginRemoveCommand } from './commands/plugin/remove.js';
+
+// ─── Projects topic subcommands ─────────────────────────────────────
+export { default as ProjectsListCommand } from './commands/projects/list.js';
+export { default as ProjectsShowCommand } from './commands/projects/show.js';
+export { default as ProjectsCreateCommand } from './commands/projects/create.js';
+export { default as ProjectsSwitchCommand } from './commands/projects/switch.js';
