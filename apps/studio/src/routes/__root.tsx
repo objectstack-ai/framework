@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { createRootRoute, Outlet, useLocation, useNavigate, useParams } from '@tanstack/react-router';
-import { useEffect, useMemo } from 'react';
+import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { ObjectStackProvider } from '@objectstack/client-react';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -13,8 +13,6 @@ import { PluginRegistryProvider } from '../plugins';
 import { builtInPlugins } from '../plugins/built-in';
 import { useObjectStackClient } from '../hooks/useObjectStackClient';
 import { SessionProvider, useSession } from '../hooks/useSession';
-import { useEnvAwarePackages } from '../hooks/useProjectAwarePackages';
-import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 /** Routes that don't require authentication. */
 const PUBLIC_ROUTES = new Set(['/login', '/register']);
@@ -39,46 +37,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const params = useParams({ strict: false }) as { projectId?: string; package?: string };
   const isPublic = PUBLIC_ROUTES.has(location.pathname);
-
-  // Get packages for TopBar PackageSwitcher
-  const { packages, selectedPackage, setSelectedPackage } =
-    useEnvAwarePackages(params.projectId);
-
-  // Extract the $package segment from the URL
-  const activePackageId = useMemo(() => {
-    if (!params.package) return undefined;
-    // Reserved segments that are NOT package ids
-    if (params.package === 'packages') return undefined;
-    return params.package;
-  }, [params.package]);
-
-  // Sync selectedPackage with URL
-  useEffect(() => {
-    if (!activePackageId) {
-      if (selectedPackage) setSelectedPackage(null);
-      return;
-    }
-    if (!packages.length) return;
-    const pkg = packages.find(
-      (p) =>
-        p.manifest?.id === activePackageId ||
-        p.manifest?.id?.endsWith('.' + activePackageId),
-    );
-    if (pkg && pkg !== selectedPackage) setSelectedPackage(pkg);
-  }, [activePackageId, packages, selectedPackage, setSelectedPackage]);
-
-  const handleSelectPackage = (pkg: InstalledPackage) => {
-    const nextId = pkg.manifest?.id;
-    if (!nextId) return;
-    if (params.projectId) {
-      navigate({
-        to: '/projects/$projectId/$package',
-        params: { projectId: params.projectId, package: nextId },
-      });
-    }
-  };
 
   // Redirect to environment picker when the user hits a route that requires
   // an environment context (e.g. /$package/*) but isn't already under /projects.
@@ -113,11 +72,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full flex-col">
-          <TopBar
-            packages={packages}
-            selectedPackage={selectedPackage}
-            onSelectPackage={handleSelectPackage}
-          />
+          <TopBar />
           <div className="flex flex-1 w-full overflow-hidden">
             <main className="flex flex-1 min-w-0 overflow-hidden">
               {children}

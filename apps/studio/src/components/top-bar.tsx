@@ -10,7 +10,7 @@
  * - Right segment: Global search placeholder, mode badge, ThemeToggle, UserMenu
  */
 
-import { useLocation, useParams } from '@tanstack/react-router';
+import { Link, useLocation, useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -24,13 +24,11 @@ import {
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Cpu, Search } from 'lucide-react';
+import { Boxes, Cpu, Search } from 'lucide-react';
 import { config } from '@/lib/config';
 import { ProjectSwitcher } from '@/components/project-switcher';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { UserMenu } from '@/components/user-menu';
-import { PackageSwitcher } from '@/components/package-switcher';
-import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 const META_TYPE_LABELS: Record<string, string> = {
   action: 'Actions',
@@ -61,20 +59,19 @@ const META_TYPE_LABELS: Record<string, string> = {
   theme: 'Themes',
 };
 
-interface TopBarProps {
-  /** List of installed packages for the PackageSwitcher dropdown */
-  packages?: InstalledPackage[];
-  /** Currently selected package */
-  selectedPackage?: InstalledPackage | null;
-  /** Callback when a package is selected from the dropdown */
-  onSelectPackage?: (pkg: InstalledPackage) => void;
+function StudioBrand() {
+  return (
+    <Link to="/" className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground hover:opacity-90">
+      <Boxes className="h-4 w-4" />
+    </Link>
+  );
 }
 
-export function TopBar({
-  packages = [],
-  selectedPackage = null,
-  onSelectPackage = () => {},
-}: TopBarProps) {
+function SlashDivider() {
+  return <span aria-hidden className="text-muted-foreground/50 select-none">/</span>;
+}
+
+export function TopBar() {
   const location = useLocation();
   const params = useParams({ strict: false }) as {
     package?: string;
@@ -130,24 +127,15 @@ export function TopBar({
         items.push({ label: 'Overview' });
         break;
       case 'package-overview':
-        if (selectedPackage?.manifest?.name) {
-          items.push({ label: selectedPackage.manifest.name });
-        }
         items.push({ label: 'Overview' });
         break;
       case 'object':
-        if (selectedPackage?.manifest?.name) {
-          items.push({ label: selectedPackage.manifest.name });
-        }
         items.push({ label: 'Objects' });
         if (params.name) {
           items.push({ label: params.name });
         }
         break;
       case 'metadata':
-        if (selectedPackage?.manifest?.name) {
-          items.push({ label: selectedPackage.manifest.name });
-        }
         if (params.type) {
           items.push({ label: META_TYPE_LABELS[params.type] || params.type });
         }
@@ -160,7 +148,7 @@ export function TopBar({
     }
 
     return items;
-  }, [viewType, params, selectedPackage]);
+  }, [viewType, params]);
 
   // Compute API badge for object/metadata views
   const apiBadge = useMemo(() => {
@@ -173,26 +161,15 @@ export function TopBar({
     return null;
   }, [viewType, params]);
 
-  // Show PackageSwitcher only when we're in a package context
-  const showPackageSwitcher = params.package && packages.length > 0;
-
   return (
     <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
-      {/* Left segment: Org + Env + Package switchers */}
-      <div className="flex items-center gap-2">
+      {/* Left segment: Brand + Org + Project switchers */}
+      <div className="flex items-center gap-1.5">
+        <StudioBrand />
+        <SlashDivider />
         <OrganizationSwitcher />
-        <Separator orientation="vertical" className="mx-1 h-4" />
+        <SlashDivider />
         <ProjectSwitcher />
-        {showPackageSwitcher && (
-          <>
-            <Separator orientation="vertical" className="mx-1 h-4" />
-            <PackageSwitcher
-              packages={packages}
-              selectedPackage={selectedPackage}
-              onSelectPackage={onSelectPackage}
-            />
-          </>
-        )}
         <Separator orientation="vertical" className="mx-2 h-4" />
         <Breadcrumb>
           <BreadcrumbList>

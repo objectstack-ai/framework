@@ -20,7 +20,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { ChevronsUpDown, Layers, Plus, Search, Check } from 'lucide-react';
+import { ChevronsUpDown, Plus, Search, Check } from 'lucide-react';
 import type { Project, ProjectType } from '@objectstack/spec/cloud';
 import {
   DropdownMenu,
@@ -110,7 +110,6 @@ export function ProjectSwitcher() {
             size="sm"
             className="h-8 gap-2 px-2 text-sm font-medium"
           >
-            <Layers className="h-3.5 w-3.5 text-muted-foreground" />
             {active ? (
               <>
                 <span className="max-w-[160px] truncate">
@@ -123,7 +122,7 @@ export function ProjectSwitcher() {
                 {loading ? 'Loading projects…' : 'Select project'}
               </span>
             )}
-            <ChevronsUpDown className="h-3.5 w-3.5 opacity-60" />
+            <ChevronsUpDown className="h-3 w-3 opacity-50" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent

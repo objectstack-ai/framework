@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,7 +68,6 @@ export function OrganizationSwitcher() {
           className="h-8 gap-2 px-2 text-sm font-medium"
           disabled={switching}
         >
-          <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
           {active ? (
             <span className="max-w-[140px] truncate">{active.name}</span>
           ) : (
@@ -76,7 +75,7 @@ export function OrganizationSwitcher() {
               {loading ? 'Loading…' : 'Select organization'}
             </span>
           )}
-          <ChevronsUpDown className="h-3.5 w-3.5 opacity-60" />
+          <ChevronsUpDown className="h-3 w-3 opacity-50" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[280px]" sideOffset={4}>
