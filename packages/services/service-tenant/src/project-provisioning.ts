@@ -352,6 +352,7 @@ export class ProjectProvisioningService {
       displayName: parsed.displayName ?? parsed.slug,
       projectType: parsed.projectType,
       isDefault: parsed.isDefault ?? false,
+      isSystem: false, // Regular projects are not system projects
       region,
       plan: parsed.plan ?? 'free',
       status: 'active',
@@ -386,6 +387,7 @@ export class ProjectProvisioningService {
           display_name: project.displayName,
           project_type: project.projectType,
           is_default: project.isDefault,
+          is_system: project.isSystem,
           region: project.region,
           plan: project.plan,
           status: project.status,
