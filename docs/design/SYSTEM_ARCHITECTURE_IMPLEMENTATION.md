@@ -1,10 +1,50 @@
 # System Architecture Implementation Summary
 
-**Status**: Phase 1 Complete ✅
+**Status**: Phase 1 & Phase 2 Complete ✅
 **Date**: 2026-04-22
 **Branch**: `claude/design-new-system-architecture`
 
-## Overview
+---
+
+## Phase 2 — Runtime Implementation (2026-04-22)
+
+Phase 2 wires the Phase 1 schemas into the runtime so project-scoped APIs actually work end-to-end.
+
+### What was delivered
+
+1. **REST server dual-mode routing** — `RestServer.registerRoutes()` now reads `enableProjectScoping` / `projectResolution` from the normalized config and registers CRUD / metadata / batch / UI / package / discovery handlers under both `/api/v1/...` and `/api/v1/projects/:projectId/...` (or only the scoped form in `'required'` mode). Scoped handlers forward `req.params.projectId` into every protocol call.
+2. **HttpDispatcher URL-param resolution** — new `extractProjectIdFromPath` helper and a top-of-chain branch in `resolveEnvironmentContext` that resolves a project from the URL path before falling back to hostname / header / session. `/cloud/projects/...` is explicitly excluded so it does not collide with the scoping pattern.
+3. **Dispatcher plugin scoping** — automation and AI routes now mount both unscoped and scoped variants when `DispatcherPluginConfig.scoping.enableProjectScoping` is set. Routes share a single handler factory.
+4. **Client SDK `project(id)` factory** — new `ScopedProjectClient` class in `packages/client/src/index.ts` exposes `data`, `meta`, and `packages` namespaces under the scoped URL prefix. `client.data.*` / `client.meta.*` remain untouched for backward compatibility.
+5. **System project bootstrap plugin** — new `createSystemProjectPlugin()` in `@objectstack/runtime` idempotently calls `ProjectProvisioningService.provisionSystemProject()` on startup and logs the well-known UUID. Strict mode throws on failure; default mode logs a warning and continues.
+6. **Tenant object rename follow-up** — stale `sys_environment*` tests were rewritten to target the renamed `sys_project*` objects. The obsolete `environment-provisioning.test.ts` (duplicate of `project-provisioning.test.ts`) was deleted.
+7. **Documentation** — new guide `content/docs/guides/project-scoping.mdx` walks developers through server config, client usage, resolution order, and the `auto` → `required` migration path.
+
+### Test coverage added in Phase 2
+
+- `packages/rest/src/rest.test.ts` — +5 tests covering default / `auto` / `required` registration and projectId propagation into protocol calls.
+- `packages/runtime/src/http-dispatcher.test.ts` — +3 tests covering URL-param precedence, `/cloud/projects/` skip, and fallback to header resolution.
+- `packages/runtime/src/system-project-plugin.test.ts` (new) — +7 tests covering service resolution, strict vs lenient failure handling, and idempotent invocation.
+- `packages/client/src/client.test.ts` — +6 tests covering URL prefixing, encoding, validation, and accessors on `ScopedProjectClient`.
+- `packages/client/src/client.project-scoping.test.ts` (new) — live Hono integration test: 5 cases covering scoped CRUD, unscoped CRUD backward compat, scoped meta, end-to-end `client.project(id).data.find()`, and discovery `scoping` metadata.
+- `packages/services/service-tenant/src/objects/environment-objects.test.ts` — rewritten to target the renamed `sys_project*` objects; 17 passing tests.
+
+**Aggregate**: 305 tests passing across `@objectstack/rest` (46), `@objectstack/runtime` (160), `@objectstack/client` (99); `@objectstack/service-tenant` went from 7 failed / 30 passed to 38 passed / 2 skipped.
+
+### What remains for Phase 3 and beyond
+
+Each item below is intentionally sized to be a focused PR:
+
+- **Studio UI migration** — Studio pages should call `client.project(id).*` once a project switcher is wired in. Large surface under `apps/studio/`.
+- **CLI `projects` commands** — `objectstack projects list/create/switch` in `packages/cli/src/commands/projects/`.
+- **Browser E2E** — Playwright suite covering login → project switch → data/meta flows.
+- **`projectResolution: 'required'` as default** — requires Studio migration and examples update; flip only after a deprecation cycle.
+- **Project-level RBAC middleware** — formal hook that enforces `can(user, 'read:project', projectId)` before any scoped handler runs. `DefaultEnvironmentDriverRegistry` already caches drivers, so this only needs an auth check layer.
+- **`envRegistry` rename** — internal field name in `HttpDispatcher` still uses the environment-era naming; cosmetic rename deferred to avoid touching constructors across the runtime test suite.
+
+---
+
+## Phase 1 Overview
 
 This document summarizes the implementation of ObjectStack's new system architecture featuring a built-in "system" project and project-scoped API routing configuration, following Airtable's workspace/base scoping model.
 

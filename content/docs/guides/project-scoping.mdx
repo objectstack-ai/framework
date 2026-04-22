@@ -1,0 +1,130 @@
+---
+title: Project-Scoped Routing
+description: Enable multi-project isolation at the URL level — /api/v1/projects/:projectId/... — with REST, Client SDK, and dispatcher support.
+---
+
+# Project-Scoped Routing
+
+ObjectStack's project-scoping feature puts each project (the "workspace" or "base" in Airtable / "environment" in traditional stacks) into its own URL segment. When enabled, every data, metadata, automation, and AI request runs through `/api/v1/projects/:projectId/...` instead of relying on hostname / header / session resolution alone.
+
+This gives you:
+
+- **Explicit tenancy in URLs** — no more guessing what project a request targets.
+- **Safer client code** — `client.project(id).data.find(...)` cannot be confused with the default project.
+- **Future foundation for RBAC** — the project is in the URL, so middleware can enforce access before any handler runs.
+- **Incremental rollout** — the `'auto'` resolution strategy mounts both scoped and unscoped routes, so you can migrate clients on your own schedule.
+
+## Server configuration
+
+Enable scoping in your `objectstack.config.ts`:
+
+```typescript
+import { defineStack } from '@objectstack/spec';
+
+export default defineStack({
+  // ... rest of your stack
+  api: {
+    enableProjectScoping: true,
+    projectResolution: 'auto', // 'required' | 'optional' | 'auto'
+  },
+});
+```
+
+### Resolution strategies
+
+| Strategy     | Behavior                                                                                   | When to use                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `'auto'`     | Registers **both** `/api/v1/data/:object` and `/api/v1/projects/:projectId/data/:object`.  | Default. Zero risk during migration — old and new clients both work.        |
+| `'optional'` | Same as `auto` today; reserved so a future release can require one of URL / header / session to be present. | Same as `auto`.                                                             |
+| `'required'` | Only scoped routes are registered. Unscoped requests return 404.                           | Production hardening after all clients have migrated.                       |
+
+The setting also propagates to:
+
+- **Dispatcher plugin** — AI (`/ai/*`) and automation (`/automation/*`) routes gain scoped variants.
+- **Package management** — `/api/v1/projects/:projectId/packages` mirrors `/api/v1/packages`.
+- **Discovery** — the `/api/v1/discovery` response includes a `scoping` block so clients can detect the mode.
+
+## Client SDK
+
+The client exposes a `project(id)` factory that returns a sub-client wired to the scoped URL prefix:
+
+```typescript
+import { ObjectStackClient } from '@objectstack/client';
+
+const client = new ObjectStackClient({ baseUrl: 'https://api.example.com' });
+
+const scoped = client.project('00000000-0000-0000-0000-000000000001');
+
+// All calls hit /api/v1/projects/:projectId/...
+const tasks = await scoped.data.find('task', { top: 20 });
+const objects = await scoped.meta.getItems('object');
+const pkg = await scoped.packages.get('my-package');
+```
+
+The top-level `client.data.*`, `client.meta.*`, `client.packages.*` namespaces continue to work unchanged — they hit the unscoped routes, falling back to hostname / `X-Project-Id` header / session resolution exactly as before.
+
+You can switch between projects without rebuilding the client:
+
+```typescript
+const projectA = client.project('proj-a');
+const projectB = client.project('proj-b');
+
+await Promise.all([
+  projectA.data.find('task'),
+  projectB.data.find('task'),
+]);
+```
+
+## Request resolution order
+
+When `enableProjectScoping: true`, `HttpDispatcher.resolveEnvironmentContext` resolves the project in this order:
+
+1. **URL path parameter** — `/api/v1/projects/:projectId/...`. Highest priority.
+2. **Hostname** — `acme-dev.objectstack.app`.
+3. **`X-Project-Id` header** — the client SDK sets this automatically if you pass `projectId` in `ClientConfig`.
+4. **Session** — `session.activeProjectId` (or legacy `activeEnvironmentId`).
+5. **Default project for active organization** — falls back to the org's default.
+
+Under `'required'` mode, the URL path is the only supported source; the other fallbacks are bypassed for data/meta/AI/automation routes.
+
+## System project
+
+Every deployment has a built-in system project at the well-known UUID `00000000-0000-0000-0000-000000000001`. It's used for platform infrastructure (system packages, platform-level flows, etc.) and is created automatically on first startup if you register the plugin:
+
+```typescript
+import { createSystemProjectPlugin } from '@objectstack/runtime';
+
+kernel.use(tenantPlugin);
+kernel.use(createSystemProjectPlugin());
+```
+
+The plugin is idempotent — it's safe to call `provisionSystemProject()` on every boot. Subsequent calls return the existing row.
+
+## Control-plane routes remain unscoped
+
+Control-plane endpoints always live under their unscoped paths:
+
+- `/api/v1/auth/*`
+- `/api/v1/cloud/projects` (CRUD on the project list itself)
+- `/api/v1/cloud/organizations`
+- `/api/v1/health`
+- `/api/v1/discovery`
+- `/.well-known/objectstack`
+
+These are not affected by `enableProjectScoping` because they operate on the control plane, not a specific project's data plane.
+
+## Migration checklist
+
+1. ✅ Upgrade to `@objectstack/core@≥4.x` with the Phase 2 runtime.
+2. ✅ Add `enableProjectScoping: true, projectResolution: 'auto'` to your stack config.
+3. ✅ Register `createSystemProjectPlugin()` in your kernel wiring.
+4. ⏳ Update callers that hard-code `/api/v1/data/...` to use `client.project(id)` or keep them as-is under `auto` mode.
+5. ⏳ Once all callers have migrated, flip `projectResolution` to `'required'` and remove the unscoped code paths.
+
+Steps 4 and 5 are intentionally separate — you can ship Step 3 today and migrate clients over weeks or months.
+
+## Related reading
+
+- [ADR-0002 — Project-per-database isolation](/docs/adr/0002-environment-database-isolation)
+- [Client SDK](/docs/guides/client-sdk)
+- [Authentication](/docs/guides/authentication)

@@ -18,6 +18,7 @@
     "---Integration---",
     "api-reference",
     "client-sdk",
+    "project-scoping",
     "driver-configuration",
     "kernel-services",
     "data-flow",

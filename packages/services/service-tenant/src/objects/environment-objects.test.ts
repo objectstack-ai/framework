@@ -1,57 +1,69 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+/**
+ * Historical filename — kept for git history continuity. Tests the
+ * renamed `sys_project` / `sys_project_credential` / `sys_project_member`
+ * control-plane objects that superseded the `sys_environment*` family
+ * during the project-per-database migration (see
+ * docs/adr/0002-environment-database-isolation.md).
+ */
+
 import { describe, it, expect } from 'vitest';
 import {
-  SysEnvironment,
-  SysDatabaseCredential,
-  SysEnvironmentMember,
+  SysProject,
+  SysProjectCredential,
+  SysProjectMember,
   SysPackage,
   SysPackageVersion,
   SysPackageInstallation,
 } from './index';
 
-describe('control-plane environment objects', () => {
+describe('control-plane project objects', () => {
   it('registers all sys_ objects with correct namespaced names', () => {
-    expect(`${SysEnvironment.namespace}_${SysEnvironment.name}`).toBe('sys_environment');
-    expect(`${SysDatabaseCredential.namespace}_${SysDatabaseCredential.name}`).toBe(
-      'sys_database_credential',
+    expect(`${SysProject.namespace}_${SysProject.name}`).toBe('sys_project');
+    expect(`${SysProjectCredential.namespace}_${SysProjectCredential.name}`).toBe(
+      'sys_project_credential',
     );
-    expect(`${SysEnvironmentMember.namespace}_${SysEnvironmentMember.name}`).toBe(
-      'sys_environment_member',
+    expect(`${SysProjectMember.namespace}_${SysProjectMember.name}`).toBe(
+      'sys_project_member',
     );
   });
 
-  it('declares UNIQUE (organization_id, slug) on sys_environment', () => {
-    const idx = SysEnvironment.indexes ?? [];
+  it('declares UNIQUE (organization_id, slug) on sys_project', () => {
+    const idx = SysProject.indexes ?? [];
     expect(
       idx.some((i: any) => i.unique && i.fields.join(',') === 'organization_id,slug'),
     ).toBe(true);
   });
 
-  it('sys_environment has database addressing fields', () => {
-    expect(SysEnvironment.fields).toHaveProperty('database_url');
-    expect(SysEnvironment.fields).toHaveProperty('database_driver');
-    expect(SysEnvironment.fields).toHaveProperty('storage_limit_mb');
-    expect(SysEnvironment.fields).toHaveProperty('provisioned_at');
+  it('sys_project has database addressing fields', () => {
+    expect(SysProject.fields).toHaveProperty('database_url');
+    expect(SysProject.fields).toHaveProperty('database_driver');
+    expect(SysProject.fields).toHaveProperty('storage_limit_mb');
+    expect(SysProject.fields).toHaveProperty('provisioned_at');
   });
 
-  it('declares UNIQUE (environment_id, user_id) on sys_environment_member', () => {
-    const idx = SysEnvironmentMember.indexes ?? [];
+  it('sys_project has the is_system flag introduced in Phase 1', () => {
+    expect(SysProject.fields).toHaveProperty('is_system');
+  });
+
+  it('declares UNIQUE (project_id, user_id) on sys_project_member', () => {
+    const idx = SysProjectMember.indexes ?? [];
     expect(
-      idx.some((i: any) => i.unique && i.fields.join(',') === 'environment_id,user_id'),
+      idx.some((i: any) => i.unique && i.fields.join(',') === 'project_id,user_id'),
     ).toBe(true);
   });
 
-  it('gives every field on sys_environment a .description', () => {
-    for (const [name, field] of Object.entries(SysEnvironment.fields)) {
+  it('gives every field on sys_project a .description', () => {
+    for (const [name, field] of Object.entries(SysProject.fields)) {
       expect((field as any).description, `field ${name} missing description`).toBeTruthy();
     }
   });
 
-  it('marks sys_environment as a system object', () => {
-    expect(SysEnvironment.isSystem).toBe(true);
-    expect(SysDatabaseCredential.isSystem).toBe(true);
-    expect(SysEnvironmentMember.isSystem).toBe(true);
+  it('marks all project control-plane objects as system objects', () => {
+    expect(SysProject.isSystem).toBe(true);
+    expect(SysProjectCredential.isSystem).toBe(true);
+    expect(SysProjectMember.isSystem).toBe(true);
   });
 });
 
@@ -82,10 +94,10 @@ describe('control-plane package objects (ADR-0003)', () => {
     ).toBe(true);
   });
 
-  it('sys_package_installation has UNIQUE (environment_id, package_id) index', () => {
+  it('sys_package_installation has UNIQUE (project_id, package_id) index', () => {
     const idx = SysPackageInstallation.indexes ?? [];
     expect(
-      idx.some((i: any) => i.unique && i.fields.join(',') === 'environment_id,package_id'),
+      idx.some((i: any) => i.unique && i.fields.join(',') === 'project_id,package_id'),
     ).toBe(true);
   });
 
