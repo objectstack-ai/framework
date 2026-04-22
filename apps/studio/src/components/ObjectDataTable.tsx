@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useScopedClient } from '@/hooks/useObjectStackClient';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";

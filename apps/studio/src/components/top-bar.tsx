@@ -29,6 +29,7 @@ import { config } from '@/lib/config';
 import { ProjectSwitcher } from '@/components/project-switcher';
 import { OrganizationSwitcher } from '@/components/organization-switcher';
 import { UserMenu } from '@/components/user-menu';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 const META_TYPE_LABELS: Record<string, string> = {
   action: 'Actions',
@@ -162,36 +163,53 @@ export function TopBar() {
   }, [viewType, params]);
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4">
+    <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-2 sm:px-4">
       {/* Left segment: Brand + Org + Project switchers */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+        {/* Mobile: Hamburger menu */}
+        <div className="sm:hidden">
+          <SidebarTrigger className="h-9 w-9" />
+        </div>
         <StudioBrand />
         <SlashDivider />
-        <OrganizationSwitcher />
-        <SlashDivider />
-        <ProjectSwitcher />
-        <Separator orientation="vertical" className="mx-2 h-4" />
-        <Breadcrumb>
-          <BreadcrumbList>
-            {breadcrumbs.map((item, index) => (
-              <div key={index} className="flex items-center">
-                {index > 0 && <BreadcrumbSeparator />}
-                <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
-                  {item.href ? (
-                    <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage className="font-medium">{item.label}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-              </div>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="hidden sm:flex items-center gap-1.5">
+          <OrganizationSwitcher />
+          <SlashDivider />
+          <ProjectSwitcher />
+        </div>
+        {/* Mobile: Show only current page breadcrumb */}
+        <div className="sm:hidden min-w-0 flex-1">
+          {breadcrumbs.length > 0 && (
+            <span className="text-sm font-medium truncate">
+              {breadcrumbs[breadcrumbs.length - 1].label}
+            </span>
+          )}
+        </div>
+        {/* Desktop: Show full navigation */}
+        <div className="hidden sm:flex items-center gap-2">
+          <Separator orientation="vertical" className="mx-2 h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              {breadcrumbs.map((item, index) => (
+                <div key={index} className="flex items-center">
+                  {index > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
+                    {item.href ? (
+                      <BreadcrumbLink href={item.href}>{item.label}</BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage className="font-medium">{item.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </div>
+              ))}
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
       </div>
 
       {/* Right segment: Search + Mode + Theme + User */}
-      <div className="flex items-center gap-2">
-        {/* Global search placeholder */}
+      <div className="flex items-center gap-1 sm:gap-2">
+        {/* Global search placeholder - desktop only */}
         <div className="relative hidden lg:flex items-center">
           <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
@@ -204,20 +222,22 @@ export function TopBar() {
           </kbd>
         </div>
 
-        {/* API Badge */}
+        {/* API Badge - hide on small screens */}
         {apiBadge && (
           <Badge variant="outline" className="font-mono text-[10px] gap-1 hidden sm:flex">
             {apiBadge}
           </Badge>
         )}
 
-        {/* Mode Badge */}
-        <Badge variant="secondary" className="text-[10px] gap-1 font-mono">
+        {/* Mode Badge - hide on mobile */}
+        <Badge variant="secondary" className="text-[10px] gap-1 font-mono hidden sm:flex">
           <Cpu className="h-2.5 w-2.5" />
           {config.mode.toUpperCase()}
         </Badge>
 
-        <ThemeToggle />
+        <div className="hidden sm:block">
+          <ThemeToggle />
+        </div>
         <UserMenu />
       </div>
     </header>
