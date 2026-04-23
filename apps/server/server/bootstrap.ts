@@ -90,9 +90,12 @@ async function bootstrapSingle(): Promise<BootstrapResult> {
     // apps/plugins it references. A schema drift in one of the examples
     // shouldn't crash multi-project boots (or the E2E test harness) when
     // they don't need those bundles at all.
-    const dyn = (spec: string) =>
-        (new Function('s', 'return import(s)') as (s: string) => Promise<any>)(spec);
-    const stackConfig = (await dyn('../objectstack.config.ts')).default;
+    //
+    // Use a proper dynamic import (not Function constructor) so esbuild can
+    // bundle the config into the Vercel handler. The Function constructor
+    // bypasses static analysis and prevents bundling, causing runtime errors
+    // when the source .ts file isn't deployed.
+    const stackConfig = (await import('../objectstack.config.js')).default;
 
     if (!stackConfig.plugins || stackConfig.plugins.length === 0) {
         throw new Error('[Bootstrap] No plugins found in stackConfig');
@@ -214,17 +217,15 @@ async function bootstrapMultiProject(
             if (process.env.OBJECTSTACK_BUNDLE_EXAMPLES !== 'true') {
                 return [];
             }
-            // Dynamic `new Function('return import(...)')(…)` sidesteps
-            // TypeScript's static rootDir analysis — the example configs
-            // live outside apps/server's tsconfig rootDir but are still
-            // resolvable at runtime. Kept here intentionally so the tsc
-            // typecheck doesn't need a dedicated include for examples.
-            const dyn = (spec: string) =>
-                (new Function('s', 'return import(s)') as (s: string) => Promise<any>)(spec);
+            // Use proper dynamic imports so esbuild can bundle the example configs.
+            // The Function constructor would bypass static analysis and prevent
+            // bundling, causing runtime errors when source .ts files aren't
+            // deployed. esbuild will inline these imports even though they're
+            // outside the apps/server directory.
             const [crm, todo, bi] = await Promise.all([
-                dyn('../../../examples/app-crm/objectstack.config.ts'),
-                dyn('../../../examples/app-todo/objectstack.config.ts'),
-                dyn('../../../examples/plugin-bi/objectstack.config.ts'),
+                import('../../../examples/app-crm/objectstack.config.js'),
+                import('../../../examples/app-todo/objectstack.config.js'),
+                import('../../../examples/plugin-bi/objectstack.config.js'),
             ]);
             return [crm.default, todo.default, bi.default];
         },
