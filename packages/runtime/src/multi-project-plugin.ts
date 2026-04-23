@@ -205,6 +205,14 @@ function createTemplateSeeder(
                 }
             }
 
+            // Sync schemas so tables exist before seeding.
+            // bulkRegister registers object definitions in metadata but does not
+            // create SQL tables; syncSchemas() ensures all objects that were just
+            // registered have their tables/collections created in the driver.
+            if (items.length > 0 && typeof engine?.syncSchemas === 'function') {
+                try { await engine.syncSchemas(); } catch { /* best effort */ }
+            }
+
             if (dataSets.length > 0) {
                 const seedLoader = new SeedLoaderService(engine, metadata, console as any);
                 const config = SeedLoaderConfigSchema.parse({});

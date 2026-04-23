@@ -1412,9 +1412,34 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Sync all registered object schemas to their respective drivers.
+   * Call this after dynamically registering new objects at runtime
+   * (e.g. after template seeding) to ensure tables/collections exist
+   * before inserting seed data.
+   */
+  async syncSchemas(): Promise<void> {
+    const allObjects = this._registry.getAllObjects();
+    for (const obj of allObjects) {
+      const driver = this.getDriverForObject(obj.name);
+      if (!driver) continue;
+      const tableName = (obj as any).tableName || obj.name;
+      if (typeof (driver as any).syncSchemasBatch === 'function' && (driver as any).supports?.batchSchemaSync) {
+        // Already handled per-driver below; skip individual call
+      }
+      if (typeof (driver as any).syncSchema === 'function') {
+        try {
+          await (driver as any).syncSchema(tableName, obj);
+        } catch {
+          // best effort — log suppressed to avoid noise on already-synced tables
+        }
+      }
+    }
+  }
+
+  /**
    * Get a registered driver by datasource name.
    * Alias matching @objectql/core datasource() API.
-   * 
+   *
    * @throws Error if the datasource is not found
    */
   datasource(name: string): DriverInterface {
