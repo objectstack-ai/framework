@@ -91,7 +91,7 @@ export const SocialProviderConfigSchema = z.record(
   z.object({
     clientId: z.string().describe('OAuth Client ID'),
     clientSecret: z.string().describe('OAuth Client Secret'),
-    enabled: z.boolean().optional().default(true).describe('Enable this provider'),
+    enabled: z.boolean().optional().describe('Enable this provider (default: true)'),
     scope: z.array(z.string()).optional().describe('Additional OAuth scopes'),
   }).catchall(z.unknown()),
 ).optional().describe(
@@ -100,8 +100,38 @@ export const SocialProviderConfigSchema = z.record(
 );
 
 /**
- * Email + Password Configuration
+ * OIDC / Generic OAuth2 Provider Configuration
+ *
+ * Used for enterprise SSO via better-auth's genericOAuth plugin.
+ * Supports any OIDC-compliant provider (Okta, Azure AD, Keycloak, etc.)
+ * by specifying a discovery URL.
  */
+export const OidcProviderConfigSchema = z.object({
+  providerId: z.string().describe('Unique identifier for this provider (e.g., okta, azure-ad)'),
+  name: z.string().optional().describe('Display name shown in the UI (defaults to providerId)'),
+  discoveryUrl: z.string().optional().describe(
+    'OIDC discovery URL (.well-known/openid-configuration). ' +
+    'When provided, authorizationUrl/tokenUrl/userInfoUrl are fetched automatically.'
+  ),
+  issuer: z.string().optional().describe('Expected issuer identifier for token validation'),
+  authorizationUrl: z.string().optional().describe('OAuth2 authorization endpoint (optional if discoveryUrl is set)'),
+  tokenUrl: z.string().optional().describe('OAuth2 token endpoint (optional if discoveryUrl is set)'),
+  userInfoUrl: z.string().optional().describe('OAuth2 userinfo endpoint (optional if discoveryUrl is set)'),
+  clientId: z.string().describe('OAuth2 client ID'),
+  clientSecret: z.string().describe('OAuth2 client secret'),
+  scopes: z.array(z.string()).optional().describe('Requested scopes (default: openid email profile)'),
+  pkce: z.boolean().optional().describe('Enable PKCE (recommended for public clients)'),
+}).describe('OIDC / Generic OAuth2 provider configuration for enterprise SSO');
+
+export const OidcProvidersConfigSchema = z.array(OidcProviderConfigSchema).optional().describe(
+  'List of OIDC/OAuth2 providers for enterprise SSO. ' +
+  'Can also be provided via OIDC_PROVIDERS env var as a JSON array.'
+);
+
+export type OidcProviderConfig = z.infer<typeof OidcProviderConfigSchema>;
+export type OidcProvidersConfig = z.infer<typeof OidcProvidersConfigSchema>;
+
+
 export const EmailAndPasswordConfigSchema = z.object({
   enabled: z.boolean().default(true).describe('Enable email/password auth'),
   disableSignUp: z.boolean().optional().describe('Disable new user registration via email/password'),
@@ -172,6 +202,7 @@ export const AuthConfigSchema = z.object({
     'The baseUrl origin is always trusted implicitly.'
   ),
   socialProviders: SocialProviderConfigSchema,
+  oidcProviders: OidcProvidersConfigSchema,
   emailAndPassword: EmailAndPasswordConfigSchema,
   emailVerification: EmailVerificationConfigSchema,
   advanced: AdvancedAuthConfigSchema,

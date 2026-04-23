@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
+import { SocialSignInButtons } from '@/components/auth/social-sign-in-buttons';
 
 export const Route = createFileRoute('/register')({
   component: RegisterPage,
@@ -58,6 +59,7 @@ function RegisterPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            <SocialSignInButtons mode="sign-up" />
             <div className="space-y-1.5">
               <Label htmlFor="name">Name</Label>
               <Input

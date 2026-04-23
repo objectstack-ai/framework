@@ -1028,6 +1028,42 @@ export class ObjectStackClient {
     },
 
     /**
+     * Initiate OAuth sign-in via a social or OIDC provider.
+     *
+     * - Social providers (Google, GitHub, etc.): calls POST /sign-in/social with `{ provider }`.
+     * - OIDC/enterprise providers: calls POST /sign-in/oauth2 with `{ providerId }`.
+     *
+     * After the provider callback better-auth sets the session cookie and redirects to `callbackURL`.
+     */
+    signInWithProvider: async (
+      provider: string,
+      opts?: { callbackURL?: string; errorCallbackURL?: string; type?: 'social' | 'oidc' },
+    ): Promise<void> => {
+      if (typeof window === 'undefined') {
+        throw new Error('signInWithProvider requires a browser environment');
+      }
+      const route = this.getRoute('auth');
+      const callbackURL = opts?.callbackURL ?? window.location.origin + '/login';
+      const isOidc = opts?.type === 'oidc';
+      const endpoint = isOidc ? '/sign-in/oauth2' : '/sign-in/social';
+      const body: Record<string, string> = isOidc
+        ? { providerId: provider, callbackURL }
+        : { provider, callbackURL };
+      if (opts?.errorCallbackURL) body.errorCallbackURL = opts.errorCallbackURL;
+      const res = await this.fetch(`${this.baseUrl}${route}${endpoint}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      const redirectUrl = data?.url ?? data?.data?.url;
+      if (redirectUrl) {
+        window.location.assign(redirectUrl);
+      } else {
+        throw new Error(`signInWithProvider: no redirect URL returned for provider "${provider}"`);
+      }
+    },
+
+    /**
      * Refresh an authentication token
      * Note: better-auth handles token refresh automatically via /get-session
      * @param _refreshToken - Not used (better-auth handles refresh automatically)

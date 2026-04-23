@@ -30,6 +30,7 @@ import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import CrmApp from '../../examples/app-crm/objectstack.config';
 import TodoApp from '../../examples/app-todo/objectstack.config';
 import BiPluginManifest from '../../examples/plugin-bi/objectstack.config';
+import type { SocialProviderConfig, OidcProvidersConfig } from '@objectstack/spec/system';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -40,6 +41,64 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
   ?? (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}` : undefined)
   ?? 'http://localhost:3000';
+
+function buildSocialProviders(): SocialProviderConfig | undefined {
+  const providers: SocialProviderConfig = {};
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    providers.google = {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      ...(process.env.GOOGLE_OAUTH_SCOPES
+        ? { scope: process.env.GOOGLE_OAUTH_SCOPES.split(',').map((s) => s.trim()) }
+        : {}),
+    };
+  }
+  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+    providers.github = {
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    };
+  }
+  if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
+    providers.microsoft = {
+      clientId: process.env.MICROSOFT_CLIENT_ID,
+      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+      ...(process.env.MICROSOFT_TENANT_ID
+        ? { tenantId: process.env.MICROSOFT_TENANT_ID }
+        : {}),
+    };
+  }
+  if (process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET) {
+    providers.apple = {
+      clientId: process.env.APPLE_CLIENT_ID,
+      clientSecret: process.env.APPLE_CLIENT_SECRET,
+    };
+  }
+  const keys = Object.keys(providers);
+  if (keys.length > 0) {
+    console.info(`[auth] enabled social providers: ${keys.join(', ')}`);
+    return providers;
+  }
+  return undefined;
+}
+
+function buildOidcProviders(): OidcProvidersConfig | undefined {
+  const raw = process.env.OIDC_PROVIDERS;
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as OidcProvidersConfig;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      console.info(`[auth] enabled OIDC providers: ${parsed.map(p => p.providerId).join(', ')}`);
+      return parsed;
+    }
+  } catch {
+    console.warn('[auth] Failed to parse OIDC_PROVIDERS env var — expected a JSON array');
+  }
+  return undefined;
+}
+
+const socialProviders = buildSocialProviders();
+const oidcProviders = buildOidcProviders();
 
 // Turso driver for sys namespace — remote when env vars are configured, local SQLite otherwise
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -99,6 +158,8 @@ export default defineStack({
       secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',
       baseUrl,
       plugins: { organization: true },
+      ...(socialProviders ? { socialProviders } : {}),
+      ...(oidcProviders ? { oidcProviders } : {}),
     }),
     new SecurityPlugin(),
     new AuditPlugin(),

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
 import { useProjects } from '@/hooks/useProjects';
+import { SocialSignInButtons } from '@/components/auth/social-sign-in-buttons';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -76,6 +77,7 @@ function LoginPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            <SocialSignInButtons mode="sign-in" />
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
               <Input

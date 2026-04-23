@@ -1,0 +1,224 @@
+---
+title: Social & Enterprise SSO
+description: Enable social sign-in (Google, GitHub, Microsoft, Apple) and enterprise OIDC/SSO in ObjectStack Studio.
+---
+
+# Social & Enterprise SSO
+
+ObjectStack supports multiple authentication providers out of the box:
+
+- **Social OAuth**: Google, GitHub, Microsoft, Apple — via better-auth's built-in `socialProviders`
+- **Enterprise SSO**: Any OIDC-compliant provider (Okta, Azure AD, Keycloak, Ping Identity, …) — via better-auth's `genericOAuth` plugin
+
+The Studio login and registration pages automatically render **Continue with …** buttons for every enabled provider. No UI changes are required.
+
+---
+
+## Social Providers
+
+### Google
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **Credentials**.
+2. Click **Create Credentials** → **OAuth 2.0 Client ID** → **Web application**.
+3. Add an **Authorized redirect URI**:
+   ```
+   https://<your-domain>/api/v1/auth/callback/google
+   ```
+   For local development: `http://localhost:3000/api/v1/auth/callback/google`
+4. Copy the **Client ID** and **Client Secret**.
+
+```env
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Optional: override default scopes (comma-separated)
+# GOOGLE_OAUTH_SCOPES=openid,email,profile
+```
+
+### GitHub
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers) → **OAuth Apps** → **New OAuth App**.
+2. Set **Authorization callback URL**:
+   ```
+   https://<your-domain>/api/v1/auth/callback/github
+   ```
+3. Copy the **Client ID** and generate a **Client Secret**.
+
+```env
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+```
+
+### Microsoft (Azure AD / Entra ID)
+
+1. Go to [Azure Portal](https://portal.azure.com/) → **Azure Active Directory** → **App registrations** → **New registration**.
+2. Add a redirect URI (Web):
+   ```
+   https://<your-domain>/api/v1/auth/callback/microsoft
+   ```
+3. Under **Certificates & secrets**, create a new client secret.
+
+```env
+MICROSOFT_CLIENT_ID=your-azure-app-client-id
+MICROSOFT_CLIENT_SECRET=your-azure-client-secret
+
+# Optional: restrict to a single tenant (default: "common" — all Microsoft accounts)
+# MICROSOFT_TENANT_ID=your-tenant-id
+```
+
+### Apple
+
+1. Go to [Apple Developer Console](https://developer.apple.com/) → **Certificates, IDs & Profiles** → **Identifiers** → register a **Services ID**.
+2. Enable **Sign In with Apple** and configure the redirect URL:
+   ```
+   https://<your-domain>/api/v1/auth/callback/apple
+   ```
+3. Generate a **private key** under **Keys**.
+
+```env
+APPLE_CLIENT_ID=your-apple-services-id
+APPLE_CLIENT_SECRET=your-apple-private-key-jwt
+```
+
+> Apple requires the client secret to be a signed JWT derived from the private key. See [better-auth Apple docs](https://www.better-auth.com/docs/authentication/apple) for details.
+
+---
+
+## Enterprise SSO (OIDC)
+
+For enterprise single sign-on, set the `OIDC_PROVIDERS` environment variable to a JSON array. Each entry maps to one SSO provider.
+
+### Quick start — Okta
+
+```env
+OIDC_PROVIDERS='[
+  {
+    "providerId": "okta",
+    "name": "Okta",
+    "discoveryUrl": "https://your-org.okta.com/.well-known/openid-configuration",
+    "clientId": "your-okta-client-id",
+    "clientSecret": "your-okta-client-secret",
+    "scopes": ["openid", "email", "profile"]
+  }
+]'
+```
+
+### Quick start — Azure AD (OIDC)
+
+```env
+OIDC_PROVIDERS='[
+  {
+    "providerId": "azure-ad",
+    "name": "Azure AD",
+    "discoveryUrl": "https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration",
+    "clientId": "your-azure-client-id",
+    "clientSecret": "your-azure-client-secret"
+  }
+]'
+```
+
+### Quick start — Keycloak
+
+```env
+OIDC_PROVIDERS='[
+  {
+    "providerId": "keycloak",
+    "name": "Keycloak",
+    "discoveryUrl": "https://keycloak.example.com/realms/your-realm/.well-known/openid-configuration",
+    "clientId": "your-client-id",
+    "clientSecret": "your-client-secret",
+    "pkce": true
+  }
+]'
+```
+
+### Multiple enterprise providers
+
+```env
+OIDC_PROVIDERS='[
+  {
+    "providerId": "okta",
+    "name": "Okta SSO",
+    "discoveryUrl": "https://your-org.okta.com/.well-known/openid-configuration",
+    "clientId": "...",
+    "clientSecret": "..."
+  },
+  {
+    "providerId": "azure-ad",
+    "name": "Microsoft SSO",
+    "discoveryUrl": "https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration",
+    "clientId": "...",
+    "clientSecret": "..."
+  }
+]'
+```
+
+### OIDC provider fields
+
+| Field | Required | Description |
+|---|---|---|
+| `providerId` | ✅ | Unique identifier used internally (e.g. `okta`, `azure-ad`) |
+| `name` | — | Display name shown on the button (defaults to `providerId`) |
+| `discoveryUrl` | ✅* | OIDC discovery URL — auto-fetches all endpoints |
+| `authorizationUrl` | ✅* | OAuth2 authorization endpoint (if no `discoveryUrl`) |
+| `tokenUrl` | ✅* | OAuth2 token endpoint (if no `discoveryUrl`) |
+| `userInfoUrl` | — | OAuth2 userinfo endpoint |
+| `issuer` | — | Expected issuer for token validation |
+| `clientId` | ✅ | OAuth2 client ID |
+| `clientSecret` | ✅ | OAuth2 client secret |
+| `scopes` | — | Requested scopes (default: `openid email profile`) |
+| `pkce` | — | Enable PKCE — recommended for public clients |
+
+*Either `discoveryUrl` or `authorizationUrl` + `tokenUrl` must be provided.
+
+---
+
+## Verify configuration
+
+Restart the server (`pnpm dev`), then:
+
+```bash
+curl http://localhost:3000/api/v1/auth/config
+```
+
+Expected response:
+
+```json
+{
+  "emailPassword": { "enabled": true },
+  "socialProviders": [
+    { "id": "google", "name": "Google", "enabled": true, "type": "social" },
+    { "id": "github", "name": "GitHub", "enabled": true, "type": "social" },
+    { "id": "okta",   "name": "Okta SSO", "enabled": true, "type": "oidc" }
+  ],
+  "features": { "twoFactor": false, "passkeys": false, "magicLink": false, "organization": true }
+}
+```
+
+The Studio `/login` and `/register` pages will now show a button for each enabled provider.
+
+---
+
+## OAuth flow
+
+**Social providers** (Google, GitHub, Microsoft, Apple):
+1. User clicks **Continue with Google** (or similar).
+2. Client calls `POST /api/v1/auth/sign-in/social` with `{ provider: "google", callbackURL }`.
+3. Browser redirects to the provider's consent screen.
+4. Provider redirects to `/api/v1/auth/callback/google`.
+5. better-auth creates a session and redirects to `callbackURL`.
+
+**OIDC/enterprise providers**:
+1. User clicks **Continue with Okta SSO**.
+2. Client calls `POST /api/v1/auth/sign-in/oauth2` with `{ providerId: "okta", callbackURL }`.
+3. Browser redirects to the provider's authorization endpoint.
+4. Provider redirects back; better-auth validates the OIDC token and creates a session.
+
+---
+
+## Notes
+
+- `AUTH_SECRET` must be set to a random string of at least 32 characters in production.
+- `NEXT_PUBLIC_BASE_URL` / `VERCEL_URL` must match the domain registered with each provider.
+- Never commit client secrets to source control — use a secrets manager in production.
+- The redirect URI registered with each provider must match exactly: `https://<your-domain>/api/v1/auth/callback/<provider-id>`.

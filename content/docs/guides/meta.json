@@ -12,6 +12,7 @@
     "plugin-development",
     "business-logic",
     "authentication",
+    "auth-sso",
     "security",
     "ai-capabilities",
     "skills",

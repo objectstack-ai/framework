@@ -168,9 +168,11 @@ export const EndpointMapping = {
  * Does NOT include sensitive configuration (clientSecret, etc.)
  */
 export const AuthProviderInfoSchema = z.object({
-  id: z.string().describe('Provider ID (e.g., google, github, microsoft)'),
+  id: z.string().describe('Provider ID (e.g., google, github, microsoft, okta)'),
   name: z.string().describe('Display name (e.g., Google, GitHub)'),
   enabled: z.boolean().describe('Whether this provider is enabled'),
+  /** Distinguishes built-in social providers from custom OIDC/OAuth2 entries */
+  type: z.enum(['social', 'oidc']).default('social').describe('Provider type'),
 });
 
 /**

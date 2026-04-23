@@ -6,10 +6,12 @@ import { organization } from 'better-auth/plugins/organization';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import { bearer } from 'better-auth/plugins/bearer';
+import { genericOAuth } from 'better-auth/plugins/generic-oauth';
 import type {
   AuthConfig,
   EmailAndPasswordConfig,
   AuthPluginConfig,
+  OidcProvidersConfig,
 } from '@objectstack/spec/system';
 import type { IDataEngine } from '@objectstack/core';
 import { createObjectQLAdapterFactory } from './objectql-adapter.js';
@@ -45,6 +47,12 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * @default '/api/v1/auth'
    */
   basePath?: string;
+
+  /**
+   * OIDC / Generic OAuth2 providers for enterprise SSO.
+   * Each entry is passed to better-auth's genericOAuth plugin.
+   */
+  oidcProviders?: OidcProvidersConfig;
 }
 
 /**
@@ -247,6 +255,24 @@ export class AuthManager {
       }));
     }
 
+    // OIDC / Generic OAuth2 providers (enterprise SSO via genericOAuth plugin)
+    if (this.config.oidcProviders?.length) {
+      plugins.push(genericOAuth({
+        config: this.config.oidcProviders.map(p => ({
+          providerId: p.providerId,
+          ...(p.discoveryUrl ? { discoveryUrl: p.discoveryUrl } : {}),
+          ...(p.issuer ? { issuer: p.issuer } : {}),
+          ...(p.authorizationUrl ? { authorizationUrl: p.authorizationUrl } : {}),
+          ...(p.tokenUrl ? { tokenUrl: p.tokenUrl } : {}),
+          ...(p.userInfoUrl ? { userInfoUrl: p.userInfoUrl } : {}),
+          clientId: p.clientId,
+          clientSecret: p.clientSecret,
+          ...(p.scopes ? { scopes: p.scopes } : {}),
+          ...(p.pkce != null ? { pkce: p.pkce } : {}),
+        })),
+      }));
+    }
+
     return plugins;
   }
 
@@ -405,8 +431,21 @@ export class AuthManager {
             id,
             name: nameMap[id] || id.charAt(0).toUpperCase() + id.slice(1),
             enabled: true,
+            type: 'social' as const,
           });
         }
+      }
+    }
+
+    // Append OIDC providers
+    if (this.config.oidcProviders?.length) {
+      for (const p of this.config.oidcProviders) {
+        socialProviders.push({
+          id: p.providerId,
+          name: p.name ?? (p.providerId.charAt(0).toUpperCase() + p.providerId.slice(1)),
+          enabled: true,
+          type: 'oidc' as const,
+        });
       }
     }
 
