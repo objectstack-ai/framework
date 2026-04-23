@@ -174,8 +174,13 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
   }
 
   private async fetchProject(projectId: string): Promise<SysProjectRow | null> {
-    const result = await this.controlPlaneDriver.find('project', {
-      object: 'project',
+    // Tenant plugin registers the project object under namespace 'sys' so
+    // ObjectQL / the underlying driver store it as the physical table
+    // `sys_project` (namespace `_` name). Use that physical name here —
+    // this path is only used when `envRegistry.peekById` misses, so we go
+    // through the raw driver rather than the ObjectQL layer.
+    const result = await this.controlPlaneDriver.find('sys_project', {
+      object: 'sys_project',
       where: { id: projectId },
       limit: 1,
     } as any);
@@ -184,8 +189,8 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
   }
 
   private async fetchActiveCredential(projectId: string): Promise<SysProjectCredentialRow | null> {
-    const result = await this.controlPlaneDriver.find('project_credential', {
-      object: 'project_credential',
+    const result = await this.controlPlaneDriver.find('sys_project_credential', {
+      object: 'sys_project_credential',
       where: { project_id: projectId, status: 'active' },
       limit: 1,
     } as any);
@@ -203,8 +208,14 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
         const { InMemoryDriver } = await import('@objectstack/driver-memory');
         return new InMemoryDriver({ persistence: 'file' }) as unknown as IDataDriver;
       }
-      case 'sqlite': {
-        const filePath = databaseUrl.replace(/^file:/, '');
+      case 'sqlite':
+      case 'sql': {
+        // `sql` is the short name of the generic SqlDriver; in self-hosted
+        // / multi-project modes projects are often created with driver='sql'
+        // (SqlDriver registered under `com.objectstack.driver.sql`) and a
+        // `file:` URL pointing at a SQLite file. Treat it identically to
+        // an explicit 'sqlite' request.
+        const filePath = databaseUrl.replace(/^file:/, '').replace(/^sql:\/\//, '');
         const { SqlDriver } = await import('@objectstack/driver-sql');
         return new SqlDriver({
           client: 'better-sqlite3',

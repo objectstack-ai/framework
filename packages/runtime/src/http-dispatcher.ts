@@ -252,6 +252,29 @@ export class HttpDispatcher {
             return;
         }
 
+        // Headers may arrive as a Fetch API `Headers` instance (Hono's
+        // `c.req.raw`) — where `.host` / `['x-project-id']` both return
+        // undefined — or as a plain object (Vercel's incoming message
+        // shape). Normalise to a single `.get(name)` accessor so both
+        // layouts resolve correctly.
+        const headers = context.request?.headers;
+        const getHeader = (name: string): string | undefined => {
+            if (!headers) return undefined;
+            const h: any = headers;
+            if (typeof h.get === 'function') {
+                const v = h.get(name);
+                return v == null ? undefined : String(v);
+            }
+            const lower = name.toLowerCase();
+            for (const k of Object.keys(h)) {
+                if (k.toLowerCase() === lower) {
+                    const v = h[k];
+                    return Array.isArray(v) ? v[0] : (v == null ? undefined : String(v));
+                }
+            }
+            return undefined;
+        };
+
         try {
             // 0. Try URL-param / path-embedded projectId (highest precedence).
             const urlProjectId = this.extractProjectIdFromPath(path)
@@ -266,7 +289,7 @@ export class HttpDispatcher {
             }
 
             // 1. Try hostname resolution
-            const host = context.request?.headers?.host || context.request?.headers?.['Host'];
+            const host = getHeader('host');
             if (host) {
                 // Strip port if present (e.g., "localhost:3000" → "localhost")
                 const hostname = host.split(':')[0];
@@ -279,7 +302,7 @@ export class HttpDispatcher {
             }
 
             // 2. Try X-Project-Id header
-            const envIdHeader = context.request?.headers?.['x-project-id'] || context.request?.headers?.['X-Project-Id'];
+            const envIdHeader = getHeader('x-project-id');
             if (envIdHeader) {
                 const driver = await this.envRegistry.resolveById(envIdHeader);
                 if (driver) {
@@ -752,11 +775,46 @@ export class HttpDispatcher {
             try {
                 // Try specific calls based on type
                 if (type === 'objects' || type === 'object') {
-                    // Try ObjectQL service directly
+                    // Check whether the kernel is project-scoped. When it is,
+                    // the process-wide SchemaRegistry is unsafe to query
+                    // directly — it would return objects that other projects
+                    // wrote in this same process. Route through the Protocol
+                    // service (which filters sys_metadata by env_id) in that
+                    // case, and fall back to the registry only for the
+                    // unscoped (single-kernel / control-plane) path.
+                    const protocol = await this.resolveService('protocol') as any;
+                    const scopedEnv = typeof protocol?.getEnvironmentId === 'function'
+                        ? protocol.getEnvironmentId()
+                        : protocol?.environmentId;
+                    const scoped = scopedEnv !== undefined;
+
+                    if (scoped && typeof protocol.getMetaItem === 'function') {
+                        try {
+                            const data = await protocol.getMetaItem({ type: 'object', name });
+                            // Protocol returns `{ type, name, item }` — only
+                            // treat the lookup as a hit when item is present.
+                            if (data && (data.item ?? data)) {
+                                return { handled: true, response: this.success(data) };
+                            }
+                        } catch { /* fall through to registry / 404 */ }
+                    }
+
                     const qlService = await this.getObjectQLService();
                     if (qlService?.registry) {
                         const data = qlService.registry.getObject(name);
                         if (data) return { handled: true, response: this.success(data) };
+                    }
+
+                    // Last-ditch protocol attempt for unscoped kernels whose
+                    // registry missed (e.g. object persisted to DB but not
+                    // yet hydrated). Skip when we already tried above.
+                    if (!scoped && protocol && typeof protocol.getMetaItem === 'function') {
+                        try {
+                            const data = await protocol.getMetaItem({ type: 'object', name });
+                            if (data && (data.item ?? data)) {
+                                return { handled: true, response: this.success(data) };
+                            }
+                        } catch { /* fall through to 404 */ }
                     }
                     return { handled: true, response: this.error('Not found', 404) };
                 }
@@ -1347,7 +1405,14 @@ export class HttpDispatcher {
         } | undefined> => {
             try {
                 const registry: any = await this.resolveService('project-provisioning-adapters');
-                return registry?.get?.(driverName);
+                // Alias the generic 'sql' short name onto the SQLite
+                // provisioning adapter. `sql` is SqlDriver's default short
+                // name when registered via DriverPlugin; provisioning
+                // adapters key themselves by the logical driver family
+                // ('sqlite', 'turso', 'memory') not the implementation id.
+                const aliases: Record<string, string> = { sql: 'sqlite' };
+                const effective = aliases[driverName] ?? driverName;
+                return registry?.get?.(effective) ?? registry?.get?.(driverName);
             } catch {
                 return undefined;
             }

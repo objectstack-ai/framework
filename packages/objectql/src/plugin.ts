@@ -25,21 +25,47 @@ function hasLoadMetaFromDb(service: unknown): service is ProtocolWithDbRestore {
   );
 }
 
+/**
+ * Options for ObjectQLPlugin.
+ *
+ * `environmentId` scopes all metadata writes + reads to a specific project.
+ * When set, `protocol.saveMetaItem` stamps `env_id = <environmentId>` on
+ * new sys_metadata rows, and `protocol.loadMetaFromDb` filters by the same
+ * column. Leave undefined in single-kernel / self-hosted mode — rows land
+ * in the legacy platform-global scope (env_id IS NULL).
+ */
+export interface ObjectQLPluginOptions {
+  /** Optional pre-built engine. When absent, one is lazily created in init. */
+  ql?: ObjectQL;
+  /** Passed to `new ObjectQL(...)` when `ql` is not supplied. */
+  hostContext?: Record<string, any>;
+  /** Scope sys_metadata reads/writes to this project. */
+  environmentId?: string;
+}
+
 export class ObjectQLPlugin implements Plugin {
   name = 'com.objectstack.engine.objectql';
   type = 'objectql';
   version = '1.0.0';
-  
+
   private ql: ObjectQL | undefined;
   private hostContext?: Record<string, any>;
+  private environmentId?: string;
 
-  constructor(ql?: ObjectQL, hostContext?: Record<string, any>) {
-    if (ql) {
-        this.ql = ql;
-    } else {
-        this.hostContext = hostContext;
-        // Lazily created in init
+  constructor(qlOrOptions?: ObjectQL | ObjectQLPluginOptions, hostContext?: Record<string, any>) {
+    // Back-compat: legacy callers passed `(ObjectQL, hostContext)` positionally.
+    if (qlOrOptions instanceof ObjectQL) {
+      this.ql = qlOrOptions;
+      this.hostContext = hostContext;
+      return;
     }
+    // New signature: options bag.
+    const opts = (qlOrOptions as ObjectQLPluginOptions | undefined) ?? {};
+    if (opts.ql) {
+      this.ql = opts.ql;
+    }
+    this.hostContext = opts.hostContext ?? hostContext;
+    this.environmentId = opts.environmentId;
   }
 
   init = async (ctx: PluginContext) => {
@@ -73,8 +99,10 @@ export class ObjectQLPlugin implements Plugin {
 
     // Register Protocol Implementation
     const protocolShim = new ObjectStackProtocolImplementation(
-      this.ql, 
-      () => ctx.getServices ? ctx.getServices() : new Map()
+      this.ql,
+      () => ctx.getServices ? ctx.getServices() : new Map(),
+      undefined,
+      this.environmentId,
     );
 
     ctx.registerService('protocol', protocolShim);
@@ -144,9 +172,19 @@ export class ObjectQLPlugin implements Plugin {
     // object registered by plugins (e.g., sys_user from plugin-auth).
     await this.syncRegisteredSchemas(ctx);
 
-    // Bridge all SchemaRegistry objects to metadata service
-    // This ensures AI tools and other IMetadataService consumers can see all objects
-    await this.bridgeObjectsToMetadataService(ctx);
+    // Bridge all SchemaRegistry objects to metadata service.
+    //
+    // `SchemaRegistry` is a process-wide singleton, so project kernels in a
+    // multi-project server would otherwise inherit every object ever
+    // registered by any sibling project (`saveMetaItem` writes to it).
+    // When this plugin was constructed with an `environmentId`, the kernel
+    // is project-scoped — its own ObjectQL.start already hydrated the
+    // project-owned schemas from sys_metadata (env_id-filtered), and the
+    // bridge would only pollute its metadata service with cross-project
+    // leakage. Skip it in that case.
+    if (this.environmentId === undefined) {
+        await this.bridgeObjectsToMetadataService(ctx);
+    }
 
     // Register built-in audit hooks
     this.registerAuditHooks(ctx);

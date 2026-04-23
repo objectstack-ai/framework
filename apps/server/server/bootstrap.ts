@@ -40,10 +40,6 @@ import { MetadataPlugin } from '@objectstack/metadata';
 import { TursoDriver } from '@objectstack/driver-turso';
 import { SqlDriver } from '@objectstack/driver-sql';
 import type { Contracts } from '@objectstack/spec';
-import CrmApp from '../../../examples/app-crm/objectstack.config';
-import TodoApp from '../../../examples/app-todo/objectstack.config';
-import BiPluginManifest from '../../../examples/plugin-bi/objectstack.config';
-import stackConfig from '../objectstack.config';
 import { createControlPlanePlugins } from './control-plane-preset.js';
 
 type IDataDriver = Contracts.IDataDriver;
@@ -88,6 +84,16 @@ function resolveShape(): ControlPlaneShape {
 async function bootstrapSingle(): Promise<BootstrapResult> {
     console.log('[Bootstrap] Shape: single');
     const kernel = new ObjectKernel();
+
+    // stackConfig is imported dynamically so the multi-project shapes — which
+    // never touch it — do not incur the Zod validation cost of the example
+    // apps/plugins it references. A schema drift in one of the examples
+    // shouldn't crash multi-project boots (or the E2E test harness) when
+    // they don't need those bundles at all.
+    const dyn = (spec: string) =>
+        (new Function('s', 'return import(s)') as (s: string) => Promise<any>)(spec);
+    const stackConfig = (await dyn('../objectstack.config.ts')).default;
+
     if (!stackConfig.plugins || stackConfig.plugins.length === 0) {
         throw new Error('[Bootstrap] No plugins found in stackConfig');
     }
@@ -188,20 +194,54 @@ async function bootstrapMultiProject(
         ),
     });
 
-    // MVP: every project inherits the default bundle set. Swap for a
-    // registry-backed resolver once `sys_project_package` is consulted.
+    // MVP app-bundle resolver.
+    //
+    // The example CRM / Todo / BI bundles are loaded lazily *and* gated on
+    // an env flag so that:
+    //   1. Test environments (E2E, unit tests) can skip them entirely —
+    //      the example `defineStack(...)` configs perform their own Zod
+    //      validation on import, so a single unrelated schema drift in
+    //      an example would otherwise crash bootstrap for everyone.
+    //   2. Production multi-project deployments that do not ship the
+    //      reference apps (the typical case) avoid paying the cost.
+    //
+    // Set `OBJECTSTACK_BUNDLE_EXAMPLES=true` to get the legacy behaviour —
+    // all three example bundles are attached to every project kernel.
+    // Swap this resolver for a registry-backed one once
+    // `sys_project_package` is consulted.
     const appBundles: AppBundleResolver = {
         async resolve() {
-            return [CrmApp, TodoApp, BiPluginManifest];
+            if (process.env.OBJECTSTACK_BUNDLE_EXAMPLES !== 'true') {
+                return [];
+            }
+            // Dynamic `new Function('return import(...)')(…)` sidesteps
+            // TypeScript's static rootDir analysis — the example configs
+            // live outside apps/server's tsconfig rootDir but are still
+            // resolvable at runtime. Kept here intentionally so the tsc
+            // typecheck doesn't need a dedicated include for examples.
+            const dyn = (spec: string) =>
+                (new Function('s', 'return import(s)') as (s: string) => Promise<any>)(spec);
+            const [crm, todo, bi] = await Promise.all([
+                dyn('../../../examples/app-crm/objectstack.config.ts'),
+                dyn('../../../examples/app-todo/objectstack.config.ts'),
+                dyn('../../../examples/plugin-bi/objectstack.config.ts'),
+            ]);
+            return [crm.default, todo.default, bi.default];
         },
     };
 
     // Per-project kernels only need the minimal base — driver is injected
     // by the factory. Additional service plugins (AI, automation, …) can
     // be added here when they are ready to run per-project.
-    const basePlugins: BasePluginsFactory = () => [
-        new ObjectQLPlugin(),
-        new MetadataPlugin({ watch: false }),
+    //
+    // Both ObjectQL and Metadata are scoped to the project id via
+    // `environmentId`. This keeps DatabaseLoader's baseFilter
+    // (`env_id = <projectId>`) and protocol.saveMetaItem writes aligned,
+    // so newly created objects are visible on the next read even though
+    // every project already has its own physical database.
+    const basePlugins: BasePluginsFactory = ({ projectId }) => [
+        new ObjectQLPlugin({ environmentId: projectId }),
+        new MetadataPlugin({ watch: false, environmentId: projectId }),
     ];
 
     const factory = new DefaultProjectKernelFactory({

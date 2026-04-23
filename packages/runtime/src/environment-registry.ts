@@ -98,8 +98,17 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
     this.controlPlaneDriver = config.controlPlaneDriver;
     this.encryptor = config.encryptor ?? new NoopSecretEncryptor();
     this.cacheTTL = config.cacheTTLMs ?? 5 * 60 * 1000;
-    this.projectObjectName = config.projectObjectName ?? 'project';
-    this.credentialObjectName = config.credentialObjectName ?? 'project_credential';
+    // Default to the namespaced physical names that ObjectQL-registered
+    // tenant objects end up with (`sys.project` → `sys__project`). Callers
+    // can override — e.g. a mocked driver in unit tests might use the short
+    // name directly.
+    // Default to the physical table names produced by ObjectQL / the SQL
+    // driver for the tenant plugin's `sys.*` namespace. The FQN is
+    // `sys__project`, but drivers store the physical table as `sys_project`
+    // (namespace `_` name). Callers can override for test drivers that
+    // use different naming.
+    this.projectObjectName = config.projectObjectName ?? 'sys_project';
+    this.credentialObjectName = config.credentialObjectName ?? 'sys_project_credential';
   }
 
   async resolveByHostname(host: string): Promise<{ projectId: string; driver: IDataDriver } | null> {
@@ -267,8 +276,9 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
         }) as unknown as IDataDriver;
       }
 
-      case 'sqlite': {
-        const filePath = databaseUrl.replace(/^file:/, '');
+      case 'sqlite':
+      case 'sql': {
+        const filePath = databaseUrl.replace(/^file:/, '').replace(/^sql:\/\//, '');
         const { SqlDriver } = await import('@objectstack/driver-sql');
         return new SqlDriver({
           client: 'better-sqlite3',
