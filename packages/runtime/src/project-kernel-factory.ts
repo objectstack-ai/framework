@@ -206,7 +206,19 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
     switch (driverType) {
       case 'memory': {
         const { InMemoryDriver } = await import('@objectstack/driver-memory');
-        return new InMemoryDriver({ persistence: 'file' }) as unknown as IDataDriver;
+        // Derive a per-project JSON file path from the `memory://<dbName>`
+        // URL so each project gets its own `.objectstack/data/projects/<dbName>.json`
+        // snapshot instead of every memory-driver project clobbering a single
+        // shared `memory-driver.json`. Falls back to the adapter's default
+        // path if the URL does not carry a usable name.
+        const { resolve: resolvePath } = await import('node:path');
+        const dbName = databaseUrl.replace(/^memory:\/\//, '').trim();
+        const filePath = dbName
+          ? resolvePath(process.cwd(), '.objectstack/data/projects', `${dbName}.json`)
+          : undefined;
+        return new InMemoryDriver({
+          persistence: filePath ? { type: 'file', path: filePath } : 'file',
+        }) as unknown as IDataDriver;
       }
       case 'sqlite':
       case 'sql': {

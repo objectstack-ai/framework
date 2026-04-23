@@ -3,14 +3,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ObjectKernel } from '@objectstack/core';
 import { ObjectQLPlugin } from '../src/plugin';
-import { SchemaRegistry } from '../src/registry';
 import { ObjectSchema } from '@objectstack/spec/data';
 
 describe('ObjectQLPlugin - Metadata Service Integration', () => {
   let kernel: ObjectKernel;
 
   beforeEach(() => {
-    SchemaRegistry.reset();
     kernel = new ObjectKernel({ logLevel: 'silent' });
   });
 

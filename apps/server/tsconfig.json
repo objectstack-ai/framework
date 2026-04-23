@@ -6,6 +6,6 @@
     "module": "NodeNext",
     "skipLibCheck": true
   },
-  "include": ["*.ts", "lib/**/*.ts", "server/**/*.ts", "api/**/*.ts"],
+  "include": ["*.ts", "lib/**/*.ts", "server/**/*.ts", "api/**/*.ts", "types/**/*.d.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }

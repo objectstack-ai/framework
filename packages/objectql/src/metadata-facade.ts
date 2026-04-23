@@ -4,15 +4,21 @@ import { SchemaRegistry } from './registry.js';
 
 /**
  * MetadataFacade
- * 
+ *
  * Provides a clean, injectable interface over SchemaRegistry.
  * Registered as the 'metadata' kernel service to eliminate
  * downstream packages needing to manually wrap SchemaRegistry.
- * 
+ *
  * Implements the async IMetadataService interface.
  * Internally delegates to SchemaRegistry (in-memory) with Promise wrappers.
+ *
+ * Each facade is bound to a specific SchemaRegistry instance — passed in the
+ * constructor — so that multi-kernel servers can give every kernel its own
+ * metadata surface without leaking state across tenants.
  */
 export class MetadataFacade {
+  constructor(private registry: SchemaRegistry) {}
+
   /**
    * Register a metadata item
    */
@@ -21,9 +27,9 @@ export class MetadataFacade {
       ? { ...data, name: data.name ?? name }
       : data;
     if (type === 'object') {
-      SchemaRegistry.registerItem(type, definition, 'name' as any);
+      this.registry.registerItem(type, definition, 'name' as any);
     } else {
-      SchemaRegistry.registerItem(type, definition, definition.id ? 'id' as any : 'name' as any);
+      this.registry.registerItem(type, definition, definition.id ? 'id' as any : 'name' as any);
     }
   }
 
@@ -31,7 +37,7 @@ export class MetadataFacade {
    * Get a metadata item by type and name
    */
   async get(type: string, name: string): Promise<any> {
-    const item = SchemaRegistry.getItem(type, name) as any;
+    const item = this.registry.getItem(type, name) as any;
     return item?.content ?? item;
   }
 
@@ -39,14 +45,14 @@ export class MetadataFacade {
    * Get the raw entry (with metadata wrapper)
    */
   getEntry(type: string, name: string): any {
-    return SchemaRegistry.getItem(type, name);
+    return this.registry.getItem(type, name);
   }
 
   /**
    * List all items of a type
    */
   async list(type: string): Promise<any[]> {
-    const items = SchemaRegistry.listItems(type);
+    const items = this.registry.listItems(type);
     return items.map((item: any) => item?.content ?? item);
   }
 
@@ -54,14 +60,14 @@ export class MetadataFacade {
    * Unregister a metadata item
    */
   async unregister(type: string, name: string): Promise<void> {
-    SchemaRegistry.unregisterItem(type, name);
+    this.registry.unregisterItem(type, name);
   }
 
   /**
    * Check if a metadata item exists
    */
   async exists(type: string, name: string): Promise<boolean> {
-    const item = SchemaRegistry.getItem(type, name);
+    const item = this.registry.getItem(type, name);
     return item !== undefined && item !== null;
   }
 
@@ -69,7 +75,7 @@ export class MetadataFacade {
    * List all names of metadata items of a given type
    */
   async listNames(type: string): Promise<string[]> {
-    const items = SchemaRegistry.listItems(type);
+    const items = this.registry.listItems(type);
     return items.map((item: any) => item?.name ?? item?.content?.name ?? '').filter(Boolean);
   }
 
@@ -77,20 +83,20 @@ export class MetadataFacade {
    * Unregister all metadata from a package
    */
   async unregisterPackage(packageName: string): Promise<void> {
-    SchemaRegistry.unregisterObjectsByPackage(packageName);
+    this.registry.unregisterObjectsByPackage(packageName);
   }
 
   /**
    * Convenience: get object definition
    */
   async getObject(name: string): Promise<any> {
-    return SchemaRegistry.getObject(name);
+    return this.registry.getObject(name);
   }
 
   /**
    * Convenience: list all objects
    */
   async listObjects(): Promise<any[]> {
-    return SchemaRegistry.getAllObjects();
+    return this.registry.getAllObjects();
   }
 }

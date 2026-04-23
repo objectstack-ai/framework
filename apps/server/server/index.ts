@@ -3,45 +3,95 @@
 /**
  * Vercel Serverless API Entrypoint
  *
- * Boots the ObjectStack kernel from the shared objectstack.config.ts
- * and delegates all /api/* traffic to the ObjectStack Hono adapter.
+ * Boots the ObjectStack kernel from the shared `objectstack.config.ts`
+ * and delegates all `/api/*` traffic to the Hono adapter. The same
+ * `ensureApp()` / `ensureBoot()` singletons are reused by the E2E test
+ * harness — local `pnpm dev` is served by the `objectstack dev` CLI and
+ * does not import this file.
  */
 
 import { createHonoApp } from '@objectstack/hono';
 import { createOriginMatcher, hasWildcardPattern } from '@objectstack/plugin-hono-server';
 import { getRequestListener } from '@hono/node-server';
+import { ObjectKernel, createRestApiPlugin, createDispatcherPlugin, KernelManager } from '@objectstack/runtime';
+import type { EnvironmentDriverRegistry } from '@objectstack/runtime';
 import type { Hono } from 'hono';
-import { bootstrap, type BootstrapResult } from './bootstrap.js';
+import stackConfig from '../objectstack.config.js';
+
+// ---------------------------------------------------------------------------
+// Runtime shape returned by ensureBoot()
+// ---------------------------------------------------------------------------
+
+export interface BootResult {
+    kernel: ObjectKernel;
+    kernelManager: KernelManager;
+    envRegistry: EnvironmentDriverRegistry;
+}
 
 // ---------------------------------------------------------------------------
 // Singleton state — persists across warm Vercel invocations
 // ---------------------------------------------------------------------------
 
-let _boot: BootstrapResult | null = null;
+let _boot: BootResult | null = null;
 let _app: Hono | null = null;
 
 /** Shared boot promise — prevents concurrent cold-start races. */
-let _bootPromise: Promise<BootstrapResult> | null = null;
+let _bootPromise: Promise<BootResult> | null = null;
 
-// ---------------------------------------------------------------------------
-// Kernel bootstrap — delegates to dual-mode `bootstrap()`
-// (self-hosted: single kernel; cloud: KernelManager + per-project kernels).
-// ---------------------------------------------------------------------------
+async function bootKernel(): Promise<BootResult> {
+    const kernel = new ObjectKernel();
 
-async function ensureBoot(): Promise<BootstrapResult> {
+    // 1. Config plugins (control-plane preset + MultiProjectPlugin)
+    for (const plugin of stackConfig.plugins ?? []) {
+        await kernel.use(plugin as any);
+    }
+
+    // 2. Optional SetupPlugin — provides the Studio's setup app. Same as
+    //    the CLI's auto-register path; kept here so the serverless bundle
+    //    is independently bootable.
+    try {
+        const setupPkg = '@objectstack/plugin-setup';
+        const { SetupPlugin } = await import(/* webpackIgnore: true */ setupPkg);
+        await kernel.use(new SetupPlugin());
+    } catch {
+        // optional
+    }
+
+    // 3. REST API + Dispatcher — consume the scoping config from stackConfig.api
+    const api = (stackConfig as any).api ?? {};
+    try {
+        await kernel.use(
+            createRestApiPlugin({ api: { api } } as any),
+        );
+    } catch { /* optional */ }
+    try {
+        await kernel.use(
+            createDispatcherPlugin({ scoping: api }),
+        );
+    } catch { /* optional */ }
+
+    await kernel.bootstrap();
+
+    const envRegistry = (kernel as any).getService('env-registry') as EnvironmentDriverRegistry;
+    const kernelManager = (kernel as any).getService('kernel-manager') as KernelManager;
+
+    return { kernel, kernelManager, envRegistry };
+}
+
+async function ensureBoot(): Promise<BootResult> {
     if (_boot) return _boot;
     if (_bootPromise) return _bootPromise;
 
     _bootPromise = (async () => {
-        console.log('[Vercel] Booting ObjectStack runtime...');
+        console.log('[ObjectStack] Booting kernel...');
         try {
-            const result = await bootstrap();
+            const result = await bootKernel();
             _boot = result;
-            console.log(`[Vercel] Runtime ready (mode=${result.mode}).`);
+            console.log('[ObjectStack] Kernel ready.');
             return result;
         } catch (err) {
             _bootPromise = null;
-            console.error('[Vercel] Kernel boot failed:', (err as any)?.message || err);
+            console.error('[ObjectStack] Kernel boot failed:', (err as any)?.message || err);
             throw err;
         }
     })();
@@ -56,8 +106,11 @@ async function ensureBoot(): Promise<BootstrapResult> {
 async function ensureApp(): Promise<Hono> {
     if (_app) return _app;
 
-    const { kernel, kernelManager, envRegistry } = await ensureBoot();
-    _app = createHonoApp({ kernel, kernelManager, envRegistry, prefix: '/api/v1' });
+    const { kernel } = await ensureBoot();
+    // envRegistry / kernelManager are resolved by HttpDispatcher from the
+    // kernel's service registry (MultiProjectPlugin registered them during
+    // bootKernel), so they do NOT need to be passed explicitly here.
+    _app = createHonoApp({ kernel, prefix: '/api/v1' });
     return _app;
 }
 
@@ -88,11 +141,6 @@ function corsMaxAge(): number {
     return process.env.CORS_MAX_AGE ? parseInt(process.env.CORS_MAX_AGE, 10) : 86400;
 }
 
-/**
- * Check if a request origin matches an allowed origin pattern.
- * Supports simple wildcard `*` matching (e.g. `http://localhost:*`
- * matches `http://localhost:5173`).
- */
 function originMatches(pattern: string, origin: string): boolean {
     if (pattern === origin) return true;
     if (!pattern.includes('*')) return false;
@@ -100,33 +148,11 @@ function originMatches(pattern: string, origin: string): boolean {
     return new RegExp(`^${escaped}$`).test(origin);
 }
 
-/**
- * Resolve the `Access-Control-Allow-Origin` value for a given request.
- *
- * - If `CORS_ORIGIN` is unset, reflects the request `Origin` (or `*` when
- *   credentials are disabled and no `Origin` is sent).
- * - If `CORS_ORIGIN` contains wildcard patterns (e.g. `https://*.example.com`
- *   or `http://localhost:*`), matches them against the request origin using
- *   the same rules as the Hono plugin's CORS middleware — see
- *   `@objectstack/plugin-hono-server`'s `createOriginMatcher`.
- * - If `CORS_ORIGIN` is a comma-separated list of exact origins, matches
- *   against it directly.
- * - Returns `null` if the origin is disallowed.
- *
- * Keeping the wildcard semantics identical to the Hono plugin is critical:
- * the Vercel handler short-circuits OPTIONS preflight responses here
- * *before* the Hono app runs. If this function rejected a wildcard origin
- * that the plugin itself would have accepted, the browser would see a
- * missing `Access-Control-Allow-Origin` header and block every subsequent
- * request.
- */
 function resolveAllowOrigin(requestOrigin: string | null): string | null {
     const credentials = corsCredentials();
     const envOrigin = process.env.CORS_ORIGIN?.trim();
 
     if (!envOrigin) {
-        // Default: reflect origin (credentials-safe). Fall back to '*' only
-        // when no Origin header is sent and credentials are disabled.
         if (requestOrigin) return requestOrigin;
         return credentials ? null : '*';
     }
@@ -136,9 +162,6 @@ function resolveAllowOrigin(requestOrigin: string | null): string | null {
         return '*';
     }
 
-    // Wildcard patterns (e.g. "https://*.objectui.org", "http://localhost:*")
-    // must be matched using the shared pattern matcher — plain Array.includes()
-    // treats '*' as a literal character and produces spurious CORS errors.
     if (hasWildcardPattern(envOrigin)) {
         if (!requestOrigin) return null;
         return createOriginMatcher(envOrigin)(requestOrigin);
@@ -149,17 +172,10 @@ function resolveAllowOrigin(requestOrigin: string | null): string | null {
         : [envOrigin];
 
     if (requestOrigin && allowed.some(pattern => originMatches(pattern, requestOrigin))) return requestOrigin;
-    // Exact match with the single configured origin is allowed as a safe default
     if (allowed.length === 1 && !requestOrigin) return allowed[0];
     return null;
 }
 
-/**
- * Apply CORS headers to a Response that was produced outside of the Hono app
- * (e.g., bootstrap-failure 503). Headers are added to a cloned Response so
- * the original is never mutated. Non-browser requests (no `Origin`) are
- * passed through untouched.
- */
 function withCorsHeaders(response: Response, request: Request): Response {
     if (!corsEnabled()) return response;
 
@@ -167,13 +183,11 @@ function withCorsHeaders(response: Response, request: Request): Response {
     const allowOrigin = resolveAllowOrigin(requestOrigin);
     if (!allowOrigin) return response;
 
-    // Clone so we can mutate headers — Response headers may be locked.
     const headers = new Headers(response.headers);
     headers.set('Access-Control-Allow-Origin', allowOrigin);
     if (corsCredentials()) {
         headers.set('Access-Control-Allow-Credentials', 'true');
     }
-    // Vary on Origin whenever we reflect it, per CORS spec recommendation.
     const existingVary = headers.get('Vary');
     if (!existingVary) {
         headers.set('Vary', 'Origin');
@@ -188,17 +202,10 @@ function withCorsHeaders(response: Response, request: Request): Response {
     });
 }
 
-/**
- * Build a CORS preflight (OPTIONS) response without requiring the kernel to
- * be booted. Browsers block the subsequent simple request if preflight fails
- * for any reason, so this path must never depend on bootstrap success.
- */
 function buildPreflightResponse(request: Request): Response {
     const requestOrigin = request.headers.get('origin');
     const allowOrigin = resolveAllowOrigin(requestOrigin);
 
-    // No Origin header or disallowed origin → 204 without CORS headers
-    // (matches Hono's cors() behaviour for non-browser/disallowed requests).
     if (!allowOrigin) {
         return new Response(null, { status: 204 });
     }
@@ -235,7 +242,7 @@ function extractBody(
     incoming: VercelIncomingMessage,
     method: string,
     contentType: string | undefined,
-): BodyInit | null {
+): any {
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null;
 
     if (incoming.rawBody != null) {
@@ -274,11 +281,6 @@ export default getRequestListener(async (request, env) => {
     const incoming = (env as VercelEnv)?.incoming;
     const url = resolvePublicUrl(request.url, incoming);
 
-    // ─── CORS Preflight short-circuit ──────────────────────────────────────
-    // OPTIONS requests must never depend on kernel bootstrap. If we let them
-    // fall through to ensureApp() a slow/failed cold start would cause the
-    // browser to see a missing Access-Control-Allow-Origin on the preflight,
-    // which then blocks every subsequent `/api/v1/*` request.
     if (method === 'OPTIONS') {
         console.log(`[Vercel] OPTIONS ${url} (preflight short-circuit)`);
         return buildPreflightResponse(request);
@@ -300,9 +302,6 @@ export default getRequestListener(async (request, env) => {
             }),
             { status: 503, headers: { 'content-type': 'application/json' } },
         );
-        // Ensure CORS headers are present even on bootstrap failure so that
-        // browsers surface the real status code instead of a generic CORS
-        // error. Without this the frontend sees "missing Access-Control-Allow-Origin".
         return withCorsHeaders(errorResponse, request);
     }
 

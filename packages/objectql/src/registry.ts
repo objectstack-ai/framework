@@ -124,12 +124,12 @@ export class SchemaRegistry {
   // ==========================================
 
   /** Controls verbosity of registry console messages. Default: 'info'. */
-  private static _logLevel: RegistryLogLevel = 'info';
+  private _logLevel: RegistryLogLevel = 'info';
 
-  static get logLevel(): RegistryLogLevel { return this._logLevel; }
-  static set logLevel(level: RegistryLogLevel) { this._logLevel = level; }
+  get logLevel(): RegistryLogLevel { return this._logLevel; }
+  set logLevel(level: RegistryLogLevel) { this._logLevel = level; }
 
-  private static log(msg: string): void {
+  private log(msg: string): void {
     if (this._logLevel === 'silent' || this._logLevel === 'error' || this._logLevel === 'warn') return;
     console.log(msg);
   }
@@ -137,22 +137,22 @@ export class SchemaRegistry {
   // ==========================================
   // Object-specific storage (Ownership Model)
   // ==========================================
-  
+
   /** FQN → Contributor[] (all packages that own/extend this object) */
-  private static objectContributors = new Map<string, ObjectContributor[]>();
-  
+  private objectContributors = new Map<string, ObjectContributor[]>();
+
   /** FQN → Merged ServiceObject (cached, invalidated on changes) */
-  private static mergedObjectCache = new Map<string, ServiceObject>();
-  
+  private mergedObjectCache = new Map<string, ServiceObject>();
+
   /** Namespace → Set<PackageId> (multiple packages can share a namespace) */
-  private static namespaceRegistry = new Map<string, Set<string>>();
+  private namespaceRegistry = new Map<string, Set<string>>();
 
   // ==========================================
   // Generic metadata storage (non-object types)
   // ==========================================
-  
+
   /** Type → Name/ID → MetadataItem */
-  private static metadata = new Map<string, Map<string, any>>();
+  private metadata = new Map<string, Map<string, any>>();
 
   // ==========================================
   // Namespace Management
@@ -162,7 +162,7 @@ export class SchemaRegistry {
    * Register a namespace for a package.
    * Multiple packages can share the same namespace (e.g. 'sys').
    */
-  static registerNamespace(namespace: string, packageId: string): void {
+  registerNamespace(namespace: string, packageId: string): void {
     if (!namespace) return;
 
     let owners = this.namespaceRegistry.get(namespace);
@@ -177,7 +177,7 @@ export class SchemaRegistry {
   /**
    * Unregister a namespace when a package is uninstalled.
    */
-  static unregisterNamespace(namespace: string, packageId: string): void {
+  unregisterNamespace(namespace: string, packageId: string): void {
     const owners = this.namespaceRegistry.get(namespace);
     if (owners) {
       owners.delete(packageId);
@@ -191,7 +191,7 @@ export class SchemaRegistry {
   /**
    * Get the packages that use a namespace.
    */
-  static getNamespaceOwner(namespace: string): string | undefined {
+  getNamespaceOwner(namespace: string): string | undefined {
     const owners = this.namespaceRegistry.get(namespace);
     if (!owners || owners.size === 0) return undefined;
     // Return the first registered package for backwards compatibility
@@ -201,7 +201,7 @@ export class SchemaRegistry {
   /**
    * Get all packages that share a namespace.
    */
-  static getNamespaceOwners(namespace: string): string[] {
+  getNamespaceOwners(namespace: string): string[] {
     const owners = this.namespaceRegistry.get(namespace);
     return owners ? Array.from(owners) : [];
   }
@@ -221,7 +221,7 @@ export class SchemaRegistry {
    * 
    * @throws Error if trying to 'own' an object that already has an owner
    */
-  static registerObject(
+  registerObject(
     schema: ServiceObject,
     packageId: string,
     namespace?: string,
@@ -290,7 +290,7 @@ export class SchemaRegistry {
    * Resolve an object by FQN, merging all contributions.
    * Returns the merged object or undefined if not found.
    */
-  static resolveObject(fqn: string): ServiceObject | undefined {
+  resolveObject(fqn: string): ServiceObject | undefined {
     // Check cache first
     const cached = this.mergedObjectCache.get(fqn);
     if (cached) return cached;
@@ -332,7 +332,7 @@ export class SchemaRegistry {
    *    ObjectSchema.create() auto-derives tableName as {namespace}_{name},
    *    which uses a single underscore — different from the FQN double underscore.
    */
-  static getObject(name: string): ServiceObject | undefined {
+  getObject(name: string): ServiceObject | undefined {
     // Direct FQN lookup
     const direct = this.resolveObject(name);
     if (direct) return direct;
@@ -363,7 +363,7 @@ export class SchemaRegistry {
    * 
    * @param packageId - Optional filter: only objects contributed by this package
    */
-  static getAllObjects(packageId?: string): ServiceObject[] {
+  getAllObjects(packageId?: string): ServiceObject[] {
     const results: ServiceObject[] = [];
 
     for (const fqn of this.objectContributors.keys()) {
@@ -388,14 +388,14 @@ export class SchemaRegistry {
   /**
    * Get all contributors for an object.
    */
-  static getObjectContributors(fqn: string): ObjectContributor[] {
+  getObjectContributors(fqn: string): ObjectContributor[] {
     return this.objectContributors.get(fqn) || [];
   }
 
   /**
    * Get the owner contributor for an object.
    */
-  static getObjectOwner(fqn: string): ObjectContributor | undefined {
+  getObjectOwner(fqn: string): ObjectContributor | undefined {
     const contributors = this.objectContributors.get(fqn);
     return contributors?.find(c => c.ownership === 'own');
   }
@@ -405,7 +405,7 @@ export class SchemaRegistry {
    * 
    * @throws Error if trying to uninstall an owner that has extenders
    */
-  static unregisterObjectsByPackage(packageId: string, force: boolean = false): void {
+  unregisterObjectsByPackage(packageId: string, force: boolean = false): void {
     for (const [fqn, contributors] of this.objectContributors.entries()) {
       // Find this package's contributions
       const packageContribs = contributors.filter(c => c.packageId === packageId);
@@ -449,7 +449,7 @@ export class SchemaRegistry {
   /**
    * Universal Register Method for non-object metadata.
    */
-  static registerItem<T>(type: string, item: T, keyField: keyof T = 'name' as keyof T, packageId?: string) {
+  registerItem<T>(type: string, item: T, keyField: keyof T = 'name' as keyof T, packageId?: string) {
     if (!this.metadata.has(type)) {
       this.metadata.set(type, new Map());
     }
@@ -481,7 +481,7 @@ export class SchemaRegistry {
   /**
    * Validate Metadata against Spec Zod Schemas
    */
-  static validate(type: string, item: any) {
+  validate(type: string, item: any): unknown {
     if (type === 'object') {
       return ObjectSchema.parse(item);
     }
@@ -500,7 +500,7 @@ export class SchemaRegistry {
   /**
    * Universal Unregister Method
    */
-  static unregisterItem(type: string, name: string) {
+  unregisterItem(type: string, name: string) {
     const collection = this.metadata.get(type);
     if (!collection) {
       console.warn(`[Registry] Attempted to unregister non-existent ${type}: ${name}`);
@@ -525,7 +525,7 @@ export class SchemaRegistry {
   /**
    * Universal Get Method
    */
-  static getItem<T>(type: string, name: string): T | undefined {
+  getItem<T>(type: string, name: string): T | undefined {
     // Special handling for 'object' and 'objects' types - use objectContributors
     if (type === 'object' || type === 'objects') {
       return this.getObject(name) as unknown as T | undefined;
@@ -545,7 +545,7 @@ export class SchemaRegistry {
   /**
    * Universal List Method
    */
-  static listItems<T>(type: string, packageId?: string): T[] {
+  listItems<T>(type: string, packageId?: string): T[] {
     // Special handling for 'object' and 'objects' types - use objectContributors
     if (type === 'object' || type === 'objects') {
       return this.getAllObjects(packageId) as unknown as T[];
@@ -561,7 +561,7 @@ export class SchemaRegistry {
   /**
    * Get all registered metadata types (Kinds)
    */
-  static getRegisteredTypes(): string[] {
+  getRegisteredTypes(): string[] {
     const types = Array.from(this.metadata.keys());
     // Always include 'object' even if stored separately
     if (!types.includes('object') && this.objectContributors.size > 0) {
@@ -574,7 +574,7 @@ export class SchemaRegistry {
   // Package Management
   // ==========================================
 
-  static installPackage(manifest: ObjectStackManifest, settings?: Record<string, any>): InstalledPackage {
+  installPackage(manifest: ObjectStackManifest, settings?: Record<string, any>): InstalledPackage {
     const now = new Date().toISOString();
     const pkg: InstalledPackage = {
       manifest,
@@ -602,7 +602,7 @@ export class SchemaRegistry {
     return pkg;
   }
 
-  static uninstallPackage(id: string): boolean {
+  uninstallPackage(id: string): boolean {
     const pkg = this.getPackage(id);
     if (!pkg) {
       console.warn(`[Registry] Package not found for uninstall: ${id}`);
@@ -627,15 +627,15 @@ export class SchemaRegistry {
     return false;
   }
 
-  static getPackage(id: string): InstalledPackage | undefined {
+  getPackage(id: string): InstalledPackage | undefined {
     return this.metadata.get('package')?.get(id) as InstalledPackage | undefined;
   }
 
-  static getAllPackages(): InstalledPackage[] {
+  getAllPackages(): InstalledPackage[] {
     return this.listItems<InstalledPackage>('package');
   }
 
-  static enablePackage(id: string): InstalledPackage | undefined {
+  enablePackage(id: string): InstalledPackage | undefined {
     const pkg = this.getPackage(id);
     if (pkg) {
       pkg.enabled = true;
@@ -647,7 +647,7 @@ export class SchemaRegistry {
     return pkg;
   }
 
-  static disablePackage(id: string): InstalledPackage | undefined {
+  disablePackage(id: string): InstalledPackage | undefined {
     const pkg = this.getPackage(id);
     if (pkg) {
       pkg.enabled = false;
@@ -663,15 +663,15 @@ export class SchemaRegistry {
   // App Helpers
   // ==========================================
 
-  static registerApp(app: any, packageId?: string) {
+  registerApp(app: any, packageId?: string) {
     this.registerItem('app', app, 'name', packageId);
   }
 
-  static getApp(name: string): any {
+  getApp(name: string): any {
     return this.getItem('app', name);
   }
 
-  static getAllApps(): any[] {
+  getAllApps(): any[] {
     return this.listItems('app');
   }
 
@@ -679,11 +679,11 @@ export class SchemaRegistry {
   // Plugin Helpers
   // ==========================================
 
-  static registerPlugin(manifest: ObjectStackManifest) {
+  registerPlugin(manifest: ObjectStackManifest) {
     this.registerItem('plugin', manifest, 'id');
   }
 
-  static getAllPlugins(): ObjectStackManifest[] {
+  getAllPlugins(): ObjectStackManifest[] {
     return this.listItems<ObjectStackManifest>('plugin');
   }
 
@@ -691,11 +691,11 @@ export class SchemaRegistry {
   // Kind Helpers
   // ==========================================
 
-  static registerKind(kind: { id: string, globs: string[] }) {
+  registerKind(kind: { id: string, globs: string[] }) {
     this.registerItem('kind', kind, 'id');
   }
   
-  static getAllKinds(): { id: string, globs: string[] }[] {
+  getAllKinds(): { id: string, globs: string[] }[] {
     return this.listItems('kind');
   }
 
@@ -706,7 +706,7 @@ export class SchemaRegistry {
   /**
    * Clear all registry state. Use only for testing.
    */
-  static reset(): void {
+  reset(): void {
     this.objectContributors.clear();
     this.mergedObjectCache.clear();
     this.namespaceRegistry.clear();

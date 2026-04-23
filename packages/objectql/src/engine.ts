@@ -108,6 +108,15 @@ export class ObjectQL implements IDataEngine {
   // Realtime service for event publishing
   private realtimeService?: IRealtimeService;
 
+  // Per-engine SchemaRegistry instance.
+  //
+  // Historically SchemaRegistry was a process-wide singleton of static state,
+  // which broke multi-project servers: a project kernel would inherit every
+  // object registered by the control plane (e.g. sys_metadata), and
+  // getDriver()'s owner lookup would route CRUD to the wrong database. Each
+  // engine now owns its registry so kernels are fully isolated.
+  private _registry: SchemaRegistry = new SchemaRegistry();
+
   constructor(hostContext: Record<string, any> = {}) {
     this.hostContext = hostContext;
     // Use provided logger or create a new one
@@ -129,10 +138,13 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
-   * Expose the SchemaRegistry for plugins to register metadata
+   * Expose the SchemaRegistry for plugins to register metadata.
+   *
+   * Returns the per-engine instance, NOT the class. Each ObjectQL engine
+   * owns its registry so multi-project kernels remain isolated.
    */
-  get registry() {
-    return SchemaRegistry;
+  get registry(): SchemaRegistry {
+    return this._registry;
   }
 
   /**
@@ -327,7 +339,7 @@ export class ObjectQL implements IDataEngine {
       }
 
       // 1. Register the Package (manifest + lifecycle state)
-      SchemaRegistry.installPackage(manifest);
+      this._registry.installPackage(manifest);
       this.logger.debug('Installed Package', { id: manifest.id, name: manifest.name, namespace });
 
       // 2. Register owned objects
@@ -335,7 +347,7 @@ export class ObjectQL implements IDataEngine {
           if (Array.isArray(manifest.objects)) {
              this.logger.debug('Registering objects from manifest (Array)', { id, objectCount: manifest.objects.length });
              for (const objDef of manifest.objects) {
-                const fqn = SchemaRegistry.registerObject(objDef, id, namespace, 'own');
+                const fqn = this._registry.registerObject(objDef, id, namespace, 'own');
                 this.logger.debug('Registered Object', { fqn, from: id });
              }
           } else {
@@ -343,7 +355,7 @@ export class ObjectQL implements IDataEngine {
              for (const [name, objDef] of Object.entries(manifest.objects)) {
                 // Ensure name in definition matches key
                 (objDef as any).name = name;
-                const fqn = SchemaRegistry.registerObject(objDef as any, id, namespace, 'own');
+                const fqn = this._registry.registerObject(objDef as any, id, namespace, 'own');
                 this.logger.debug('Registered Object', { fqn, from: id });
              }
           }
@@ -366,7 +378,7 @@ export class ObjectQL implements IDataEngine {
                   indexes: ext.indexes,
               };
               // Register as extension (namespace is undefined since we're targeting by FQN)
-              SchemaRegistry.registerObject(extDef as any, id, undefined, 'extend', priority);
+              this._registry.registerObject(extDef as any, id, undefined, 'extend', priority);
               this.logger.debug('Registered Object Extension', { target: targetFqn, priority, from: id });
           }
       }
@@ -380,7 +392,7 @@ export class ObjectQL implements IDataEngine {
               const appName = app.name || app.id;
               if (appName) {
                   const resolved = namespace ? this.resolveNavObjectNames(app, namespace) : app;
-                  SchemaRegistry.registerApp(resolved, id);
+                  this._registry.registerApp(resolved, id);
                   this.logger.debug('Registered App', { app: appName, from: id });
               }
           }
@@ -390,7 +402,7 @@ export class ObjectQL implements IDataEngine {
       //    This handles the case where the manifest IS the app definition (legacy/simple packages)
       if (manifest.name && manifest.navigation && !manifest.apps?.length) {
           const resolved = namespace ? this.resolveNavObjectNames(manifest, namespace) : manifest;
-          SchemaRegistry.registerApp(resolved, id);
+          this._registry.registerApp(resolved, id);
           this.logger.debug('Registered manifest-as-app', { app: manifest.name, from: id });
       }
 
@@ -418,7 +430,7 @@ export class ObjectQL implements IDataEngine {
               for (const item of items) {
                   const itemName = item.name || item.id;
                   if (itemName) {
-                      SchemaRegistry.registerItem(pluralToSingular(key), item, 'name' as any, id);
+                      this._registry.registerItem(pluralToSingular(key), item, 'name' as any, id);
                   }
               }
           }
@@ -430,7 +442,7 @@ export class ObjectQL implements IDataEngine {
           this.logger.debug('Registering seed data datasets', { id, count: seedData.length });
           for (const dataset of seedData) {
               if (dataset.object) {
-                  SchemaRegistry.registerItem('data', dataset, 'object' as any, id);
+                  this._registry.registerItem('data', dataset, 'object' as any, id);
               }
           }
       }
@@ -439,7 +451,7 @@ export class ObjectQL implements IDataEngine {
        if (manifest.contributes?.kinds) {
           this.logger.debug('Registering kinds from manifest', { id, kindCount: manifest.contributes.kinds.length });
           for (const kind of manifest.contributes.kinds) {
-            SchemaRegistry.registerKind(kind);
+            this._registry.registerKind(kind);
             this.logger.debug('Registered Kind', { kind: kind.name || kind.type, from: id });
           }
        }
@@ -507,7 +519,7 @@ export class ObjectQL implements IDataEngine {
               if (Array.isArray(plugin.objects)) {
                   this.logger.debug('Registering plugin objects (Array)', { pluginName, count: plugin.objects.length });
                   for (const objDef of plugin.objects) {
-                      const fqn = SchemaRegistry.registerObject(objDef, ownerId, pluginNamespace, 'own');
+                      const fqn = this._registry.registerObject(objDef, ownerId, pluginNamespace, 'own');
                       this.logger.debug('Registered Object', { fqn, from: pluginName });
                   }
               } else {
@@ -515,7 +527,7 @@ export class ObjectQL implements IDataEngine {
                   this.logger.debug('Registering plugin objects (Map)', { pluginName, count: entries.length });
                   for (const [name, objDef] of entries) {
                       (objDef as any).name = name;
-                      const fqn = SchemaRegistry.registerObject(objDef as any, ownerId, pluginNamespace, 'own');
+                      const fqn = this._registry.registerObject(objDef as any, ownerId, pluginNamespace, 'own');
                       this.logger.debug('Registered Object', { fqn, from: pluginName });
                   }
               }
@@ -528,7 +540,7 @@ export class ObjectQL implements IDataEngine {
       if (plugin.name && plugin.navigation) {
           try {
               const resolved = pluginNamespace ? this.resolveNavObjectNames(plugin, pluginNamespace) : plugin;
-              SchemaRegistry.registerApp(resolved, ownerId);
+              this._registry.registerApp(resolved, ownerId);
               this.logger.debug('Registered plugin-as-app', { app: plugin.name, from: pluginName });
           } catch (err: any) {
               this.logger.warn('Failed to register plugin as app', { pluginName, error: err.message });
@@ -549,7 +561,7 @@ export class ObjectQL implements IDataEngine {
               for (const item of items) {
                   const itemName = item.name || item.id;
                   if (itemName) {
-                      SchemaRegistry.registerItem(pluralToSingular(key), item, 'name' as any, ownerId);
+                      this._registry.registerItem(pluralToSingular(key), item, 'name' as any, ownerId);
                   }
               }
           }
@@ -592,7 +604,7 @@ export class ObjectQL implements IDataEngine {
    * Helper to get object definition
    */
   getSchema(objectName: string): ServiceObject | undefined {
-    return SchemaRegistry.getObject(objectName);
+    return this._registry.getObject(objectName);
   }
 
   /**
@@ -606,7 +618,7 @@ export class ObjectQL implements IDataEngine {
    * regardless of whether the caller uses the short name or FQN.
    */
   private resolveObjectName(name: string): string {
-    const schema = SchemaRegistry.getObject(name);
+    const schema = this._registry.getObject(name);
     if (schema) {
       // Prefer the physical table name (e.g., 'sys_user') over the FQN
       // (e.g., 'sys__user'). ObjectSchema.create() auto-derives tableName
@@ -626,7 +638,7 @@ export class ObjectQL implements IDataEngine {
    * 4. Global default driver
    */
   private getDriver(objectName: string): DriverInterface {
-    const object = SchemaRegistry.getObject(objectName);
+    const object = this._registry.getObject(objectName);
 
     // 1. Object's explicit datasource field (highest priority)
     if (object?.datasource && object.datasource !== 'default') {
@@ -649,7 +661,7 @@ export class ObjectQL implements IDataEngine {
     // 3. Check package's defaultDatasource
     // Use the object's FQN name (from getObject) for ownership lookup
     const fqn = object?.name || objectName;
-    const owner = SchemaRegistry.getObjectOwner(fqn);
+    const owner = this._registry.getObjectOwner(fqn);
     if (owner?.packageId) {
       const manifest = this.manifests.get(owner.packageId);
       if (manifest?.defaultDatasource && manifest.defaultDatasource !== 'default') {
@@ -823,7 +835,7 @@ export class ObjectQL implements IDataEngine {
     if (!records || records.length === 0) return records;
     if (depth >= ObjectQL.MAX_EXPAND_DEPTH) return records;
 
-    const objectSchema = SchemaRegistry.getObject(objectName);
+    const objectSchema = this._registry.getObject(objectName);
     // If no schema registered, skip expand — return raw data
     if (!objectSchema || !objectSchema.fields) return records;
 
@@ -1333,7 +1345,7 @@ export class ObjectQL implements IDataEngine {
         }
       }
     }
-    return SchemaRegistry.registerObject(schema, packageId, namespace);
+    return this._registry.registerObject(schema, packageId, namespace);
   }
 
   /**
@@ -1341,10 +1353,10 @@ export class ObjectQL implements IDataEngine {
    */
   unregisterObject(name: string, packageId?: string): void {
     if (packageId) {
-      SchemaRegistry.unregisterObjectsByPackage(packageId);
+      this._registry.unregisterObjectsByPackage(packageId);
     } else {
       // Remove from generic metadata as fallback
-      SchemaRegistry.unregisterItem('object', name);
+      this._registry.unregisterItem('object', name);
     }
   }
 
@@ -1362,7 +1374,7 @@ export class ObjectQL implements IDataEngine {
    */
   getConfigs(): Record<string, ServiceObject> {
     const result: Record<string, ServiceObject> = {};
-    const objects = SchemaRegistry.getAllObjects();
+    const objects = this._registry.getAllObjects();
     for (const obj of objects) {
       if (obj.name) {
         result[obj.name] = obj;
@@ -1443,7 +1455,7 @@ export class ObjectQL implements IDataEngine {
     // Remove actions
     this.removeActionsByPackage(packageId);
     // Remove objects
-    SchemaRegistry.unregisterObjectsByPackage(packageId, true);
+    this._registry.unregisterObjectsByPackage(packageId, true);
   }
 
   /**

@@ -2,7 +2,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ObjectQL } from './engine.js';
-import { SchemaRegistry } from './registry.js';
 
 // Mock driver for testing
 const createMockDriver = (name: string) => ({
@@ -35,7 +34,7 @@ describe('DatasourceMapping', () => {
 
   beforeEach(() => {
     engine = new ObjectQL();
-    SchemaRegistry.reset();
+    // registry is owned by engine
   });
 
   it('should route objects by namespace', async () => {
@@ -51,7 +50,7 @@ describe('DatasourceMapping', () => {
     ]);
 
     // Register an object in crm namespace
-    SchemaRegistry.registerObject(
+    engine.registry.registerObject(
       {
         name: 'account',
         fields: { name: { type: 'text' } },
@@ -81,7 +80,7 @@ describe('DatasourceMapping', () => {
     ]);
 
     // Register system objects
-    SchemaRegistry.registerObject(
+    engine.registry.registerObject(
       {
         name: 'sys_user',
         fields: { username: { type: 'text' } },
@@ -108,7 +107,7 @@ describe('DatasourceMapping', () => {
       { namespace: 'crm', datasource: 'turso', priority: 50 }, // Lower number = higher priority
     ]);
 
-    SchemaRegistry.registerObject(
+    engine.registry.registerObject(
       {
         name: 'account',
         fields: { name: { type: 'text' } },
@@ -136,7 +135,7 @@ describe('DatasourceMapping', () => {
     ]);
 
     // Register object in different namespace
-    SchemaRegistry.registerObject(
+    engine.registry.registerObject(
       {
         name: 'task',
         fields: { title: { type: 'text' } },
@@ -163,7 +162,7 @@ describe('DatasourceMapping', () => {
     ]);
 
     // Object explicitly sets datasource
-    SchemaRegistry.registerObject(
+    engine.registry.registerObject(
       {
         name: 'account',
         datasource: 'turso', // Explicit override

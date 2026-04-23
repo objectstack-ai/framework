@@ -175,7 +175,7 @@ export function AppSidebar({
   // Prefer a project-scoped client when a projectId is present in the URL
   // (e.g. under /projects/$projectId/...). Falls back to the unscoped client
   // during login / organization pages that have no project context yet.
-  const scopedClient = useScopedClient(params.projectId);
+  const scopedClient = useScopedClient(projectId ?? params.projectId);
   const client = scopedClient ?? unscopedClient;
 
   // Extract current selection from URL params

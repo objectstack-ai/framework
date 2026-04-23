@@ -2,6 +2,7 @@
 
 import { ObjectStackProtocol } from '@objectstack/spec/api';
 import { IDataEngine } from '@objectstack/core';
+import type { ObjectQL } from './engine.js';
 import type {
     BatchUpdateRequest,
     BatchUpdateResponse,
@@ -12,9 +13,6 @@ import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoute
 import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
-
-// We import SchemaRegistry directly since this class lives in the same package
-import { SchemaRegistry } from './registry.js';
 
 /**
  * Simple hash function for ETag generation (browser-compatible)
@@ -52,7 +50,7 @@ const SERVICE_CONFIG: Record<string, { route: string; plugin: string }> = {
 };
 
 export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
-    private engine: IDataEngine;
+    private engine: ObjectQL;
     private getServicesRegistry?: () => Map<string, any>;
     private getFeedService?: () => IFeedService | undefined;
     /**
@@ -71,7 +69,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         getFeedService?: () => IFeedService | undefined,
         environmentId?: string,
     ) {
-        this.engine = engine;
+        this.engine = engine as ObjectQL;
         this.getServicesRegistry = getServicesRegistry;
         this.getFeedService = getFeedService;
         this.environmentId = environmentId;
@@ -206,7 +204,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     async getMetaTypes() {
-        const schemaTypes = SchemaRegistry.getRegisteredTypes();
+        const schemaTypes = this.engine.registry.getRegisteredTypes();
 
         // Also include types from MetadataService (runtime-registered: agent, tool, etc.)
         let runtimeTypes: string[] = [];
@@ -235,11 +233,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // belong to any user project). Go straight to the DB with an env_id
         // filter so isolation is guaranteed. Mirrors the getMetaItem rule.
         if (this.environmentId === undefined) {
-            items = [...SchemaRegistry.listItems(request.type, packageId)];
+            items = [...this.engine.registry.listItems(request.type, packageId)];
             // Normalize singular/plural using explicit mapping
             if (items.length === 0) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) items = [...SchemaRegistry.listItems(alt, packageId)];
+                if (alt) items = [...this.engine.registry.listItems(alt, packageId)];
             }
         }
 
@@ -284,7 +282,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     // Only hydrate the global registry for unscoped calls —
                     // scoped project entries must not leak process-wide.
                     if (this.environmentId === undefined) {
-                        SchemaRegistry.registerItem(request.type, data, 'name' as any);
+                        this.engine.registry.registerItem(request.type, data, 'name' as any);
                     }
                 }
                 items = Array.from(byName.values());
@@ -343,11 +341,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // into another's responses. Go straight to the database so the
         // env_id filter guarantees isolation.
         if (this.environmentId === undefined) {
-            item = SchemaRegistry.getItem(request.type, request.name);
+            item = this.engine.registry.getItem(request.type, request.name);
             // Normalize singular/plural using explicit mapping
             if (item === undefined) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) item = SchemaRegistry.getItem(alt, request.name);
+                if (alt) item = this.engine.registry.getItem(alt, request.name);
             }
         }
 
@@ -372,7 +370,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     // Only hydrate the global registry for unscoped calls,
                     // see getMetaItem preamble for why scoped calls must not.
                     if (this.environmentId === undefined) {
-                        SchemaRegistry.registerItem(request.type, item, 'name' as any);
+                        this.engine.registry.registerItem(request.type, item, 'name' as any);
                     }
                 } else {
                     // Try alternate type name using explicit mapping
@@ -389,7 +387,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             // when we're NOT scoped — otherwise the entry
                             // would leak into other projects in this process.
                             if (this.environmentId === undefined) {
-                                SchemaRegistry.registerItem(request.type, item, 'name' as any);
+                                this.engine.registry.registerItem(request.type, item, 'name' as any);
                             }
                         }
                     }
@@ -420,7 +418,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     }
 
     async getUiView(request: { object: string, type: 'list' | 'form' }) {
-        const schema = SchemaRegistry.getObject(request.object);
+        const schema = this.engine.registry.getObject(request.object);
         if (!schema) throw new Error(`Object ${request.object} not found`);
 
         const fields = schema.fields || {};
@@ -698,12 +696,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async getMetaItemCached(request: { type: string, name: string, cacheRequest?: MetadataCacheRequest }): Promise<MetadataCacheResponse> {
         try {
-            let item = SchemaRegistry.getItem(request.type, request.name);
+            let item = this.engine.registry.getItem(request.type, request.name);
 
             // Normalize singular/plural using explicit mapping
             if (!item) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) item = SchemaRegistry.getItem(alt, request.name);
+                if (alt) item = this.engine.registry.getItem(alt, request.name);
             }
 
             // Fallback to MetadataService (e.g. agents, tools registered in MetadataManager)
@@ -949,7 +947,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     async getAnalyticsMeta(request: any): Promise<any> {
         // Auto-generate cube metadata from registered objects in SchemaRegistry.
         // Each object becomes a cube; number fields → measures; other fields → dimensions.
-        const objects = SchemaRegistry.listItems('object');
+        const objects = this.engine.registry.listItems('object');
         const cubeFilter = request?.cube;
 
         const cubes: any[] = [];
@@ -1077,13 +1075,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         //    kernel restart. Without this mirror the HTTP dispatcher
         //    returns 404 for freshly-created objects even though the
         //    generic item collection has them.
-        SchemaRegistry.registerItem(request.type, request.item, 'name');
+        this.engine.registry.registerItem(request.type, request.item, 'name');
         if (request.type === 'object' || request.type === 'objects') {
             try {
-                SchemaRegistry.registerObject(request.item as any, 'sys_metadata');
+                this.engine.registry.registerObject(request.item as any, 'sys_metadata');
             } catch (err: any) {
                 console.warn(
-                    `[Protocol] SchemaRegistry.registerObject failed for ${request.name}: ${err?.message ?? err}`,
+                    `[Protocol] this.engine.registry.registerObject failed for ${request.name}: ${err?.message ?? err}`,
                 );
             }
         }
@@ -1179,9 +1177,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     // Normalize DB type to singular (DB may store legacy plural forms)
                     const normalizedType = PLURAL_TO_SINGULAR[record.type] ?? record.type;
                     if (normalizedType === 'object') {
-                        SchemaRegistry.registerObject(data as any, record.packageId || 'sys_metadata');
+                        this.engine.registry.registerObject(data as any, record.packageId || 'sys_metadata');
                     } else {
-                        SchemaRegistry.registerItem(normalizedType, data, 'name' as any);
+                        this.engine.registry.registerItem(normalizedType, data, 'name' as any);
                     }
                     loaded++;
                 } catch (e) {

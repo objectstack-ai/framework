@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +23,10 @@ interface ObjectDataFormProps {
 }
 
 export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: ObjectDataFormProps) {
-    const client = useClient();
+    const unscopedClient = useClient();
+    const params = useParams({ strict: false }) as { projectId?: string };
+    const scopedClient = useScopedClient(params.projectId);
+    const client: any = scopedClient ?? unscopedClient;
     const [def, setDef] = useState<any>(null);
     const [formData, setFormData] = useState<any>({});
     const [loading, setLoading] = useState(false);

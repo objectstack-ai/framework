@@ -13,8 +13,6 @@
  * - Create database groups for shared configuration
  */
 
-import type { TenantDatabase } from '@objectstack/spec/cloud';
-
 /**
  * Turso Platform API Configuration
  */

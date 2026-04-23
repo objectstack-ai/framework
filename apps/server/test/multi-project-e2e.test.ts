@@ -67,15 +67,14 @@ function expect(actual: any) {
 }
 
 // ---------------------------------------------------------------------------
-// Env setup must happen BEFORE importing the server — bootstrap.ts reads
-// OBJECTSTACK_MULTI_PROJECT / OBJECTSTACK_CONTROL_DB at module load time.
+// Env setup must happen BEFORE importing the server — objectstack.config.ts
+// reads OBJECTSTACK_DATABASE_URL when selecting the control-plane driver.
 // ---------------------------------------------------------------------------
 
 const workdir = mkdtempSync(join(tmpdir(), 'objectstack-e2e-'));
 const controlDb = join(workdir, 'control.db');
 
-process.env.OBJECTSTACK_MULTI_PROJECT = 'true';
-process.env.OBJECTSTACK_CONTROL_DB = controlDb;
+process.env.OBJECTSTACK_DATABASE_URL = `file:${controlDb}`;
 process.env.AUTH_SECRET = 'e2e-test-secret-must-be-at-least-32-characters-long-xxxx';
 process.env.PORT = '0';
 // Keep kernel LRU small so an eviction test could be added later without
@@ -196,7 +195,7 @@ test('provision project A (sqlite driver, hostname a.e2e.local)', async () => {
         body: {
             organization_id: state.orgId,
             display_name: 'Project A',
-            driver: 'sql',
+            driver: 'sqlite',
             hostname: state.hostnameA,
             metadata: { __simulateDelayMs: 0 },
         },
@@ -217,7 +216,7 @@ test('provision project B (sqlite driver, hostname b.e2e.local)', async () => {
         body: {
             organization_id: state.orgId,
             display_name: 'Project B',
-            driver: 'sql',
+            driver: 'sqlite',
             hostname: state.hostnameB,
             metadata: { __simulateDelayMs: 0 },
         },
@@ -236,7 +235,7 @@ test('hostname collision returns 409 HOSTNAME_TAKEN', async () => {
         body: {
             organization_id: state.orgId,
             display_name: 'Dup',
-            driver: 'sql',
+            driver: 'sqlite',
             hostname: state.hostnameA, // duplicates project A
         },
     });
@@ -345,7 +344,7 @@ test('provision project C with template_id=blank (no-op seeding, project becomes
         body: {
             organization_id: state.orgId,
             display_name: 'Project C (blank template)',
-            driver: 'sql',
+            driver: 'sqlite',
             template_id: 'blank',
             metadata: { __simulateDelayMs: 0 },
         },
@@ -370,7 +369,7 @@ test('provision project D with unknown template_id — error recorded in metadat
         body: {
             organization_id: state.orgId,
             display_name: 'Project D (bad template)',
-            driver: 'sql',
+            driver: 'sqlite',
             template_id: 'nonexistent-template',
             metadata: { __simulateDelayMs: 0 },
         },

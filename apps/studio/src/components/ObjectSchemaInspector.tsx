@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -65,7 +67,10 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export function ObjectSchemaInspector({ objectApiName }: ObjectSchemaInspectorProps) {
-  const client = useClient();
+  const unscopedClient = useClient();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const scopedClient = useScopedClient(params.projectId);
+  const client: any = scopedClient ?? unscopedClient;
   const [def, setDef] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');

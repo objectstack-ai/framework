@@ -1,167 +1,141 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Single-Kernel Server Configuration
+ * ObjectStack Server — Host Configuration
  *
- * Used only by the legacy **single** bootstrap shape (no env flags set).
- * In multi-project modes — whether local (`OBJECTSTACK_MULTI_PROJECT=true`)
- * or remote (`OBJECTSTACK_CONTROL_PLANE_URL=...`) — the plugin list here is
- * ignored: the control plane uses `createControlPlanePlugins()` and each
- * project kernel is assembled by `DefaultProjectKernelFactory` from the
- * base-plugin factory wired in `bootstrap.ts`.
+ * Booted by `objectstack dev` / `objectstack serve` (see `package.json`).
  *
- * See `server/bootstrap.ts` for shape selection logic.
+ * The CLI loads this file, registers the plugins below on a fresh
+ * `ObjectKernel`, then auto-mounts the standard HTTP stack
+ * (HonoServerPlugin, Setup, RestAPI, Dispatcher, I18nService).
+ *
+ * Our plugin list:
+ *  1. `createControlPlanePlugins(...)` — ObjectQL + driver + tenant +
+ *     system-project + auth/security/audit + metadata for `sys_*`.
+ *  2. `MultiProjectPlugin` — registers `env-registry`, `kernel-manager`
+ *     and `template-seeder` on the control kernel so HttpDispatcher can
+ *     route requests to per-project kernels via hostname / X-Project-Id.
+ *
+ * The control-plane driver is selected from a single URL-style env var
+ * (Turso/Prisma convention):
+ *
+ *   OBJECTSTACK_DATABASE_URL
+ *     - unset                 → `file:./.objectstack/data/control.db`
+ *     - `file:<path>` / path  → SQLite at that path (better-sqlite3)
+ *     - `libsql://…`          → libSQL/Turso
+ *     - `http(s)://…`         → libSQL/sqld over HTTP
+ *
+ *   OBJECTSTACK_DATABASE_AUTH_TOKEN — optional, for libSQL/HTTP URLs.
  */
 
-import { defineStack } from '@objectstack/spec';
-import { DriverPlugin } from '@objectstack/runtime';
+import { resolve as resolvePath } from 'node:path';
+import type { Contracts } from '@objectstack/spec';
+import {
+    MultiProjectPlugin,
+    type BasePluginsFactory,
+    type AppBundleResolver,
+} from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
-import { InMemoryDriver } from '@objectstack/driver-memory';
-import { TursoDriver } from '@objectstack/driver-turso';
-import { AuthPlugin } from '@objectstack/plugin-auth';
-import { SecurityPlugin } from '@objectstack/plugin-security';
-import { AuditPlugin } from '@objectstack/plugin-audit';
-import { SetupPlugin } from '@objectstack/plugin-setup';
-import { FeedServicePlugin } from '@objectstack/service-feed';
 import { MetadataPlugin } from '@objectstack/metadata';
-import { AIServicePlugin } from '@objectstack/service-ai';
-import { AutomationServicePlugin } from '@objectstack/service-automation';
-import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
-import type { SocialProviderConfig, OidcProvidersConfig } from '@objectstack/spec/system';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { TursoDriver } from '@objectstack/driver-turso';
+import { SqlDriver } from '@objectstack/driver-sql';
+import { createControlPlanePlugins } from './server/control-plane-preset.js';
+import { templateRegistry } from './server/templates/registry.js';
 
-// Resolve base URL: explicit env > Vercel production URL > Vercel preview URL > localhost
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-  ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined)
-  ?? (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}` : undefined)
-  ?? 'http://localhost:3000';
+type IDataDriver = Contracts.IDataDriver;
 
-function buildSocialProviders(): SocialProviderConfig | undefined {
-  const providers: SocialProviderConfig = {};
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    providers.google = {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      ...(process.env.GOOGLE_OAUTH_SCOPES
-        ? { scope: process.env.GOOGLE_OAUTH_SCOPES.split(',').map((s) => s.trim()) }
-        : {}),
-    };
-  }
-  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-    providers.github = {
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    };
-  }
-  if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
-    providers.microsoft = {
-      clientId: process.env.MICROSOFT_CLIENT_ID,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
-      ...(process.env.MICROSOFT_TENANT_ID
-        ? { tenantId: process.env.MICROSOFT_TENANT_ID }
-        : {}),
-    };
-  }
-  if (process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET) {
-    providers.apple = {
-      clientId: process.env.APPLE_CLIENT_ID,
-      clientSecret: process.env.APPLE_CLIENT_SECRET,
-    };
-  }
-  const keys = Object.keys(providers);
-  if (keys.length > 0) {
-    console.info(`[auth] enabled social providers: ${keys.join(', ')}`);
-    return providers;
-  }
-  return undefined;
-}
+/**
+ * Resolve the control-plane driver from `OBJECTSTACK_DATABASE_URL`.
+ *
+ * `libsql:` / `http(s):` URLs → `TursoDriver`. Anything else is treated
+ * as a SQLite filesystem path, stripping `file:` / `file://` prefixes
+ * so `file:./x.db`, `file:///x.db`, and bare `./x.db` all resolve to
+ * the same file.
+ */
+function buildControlDriver(): {
+    driver: IDataDriver;
+    driverName: 'sqlite' | 'turso';
+    databaseUrl: string;
+} {
+    const raw = process.env.OBJECTSTACK_DATABASE_URL?.trim()
+        || `file:${resolvePath(process.cwd(), '.objectstack/data/control.db')}`;
 
-function buildOidcProviders(): OidcProvidersConfig | undefined {
-  const raw = process.env.OIDC_PROVIDERS;
-  if (!raw) return undefined;
-  try {
-    const parsed = JSON.parse(raw) as OidcProvidersConfig;
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      console.info(`[auth] enabled OIDC providers: ${parsed.map(p => p.providerId).join(', ')}`);
-      return parsed;
+    if (/^(libsql|https?):\/\//i.test(raw)) {
+        const driver = new TursoDriver({
+            url: raw,
+            authToken: process.env.OBJECTSTACK_DATABASE_AUTH_TOKEN,
+        });
+        return {
+            driver: driver as unknown as IDataDriver,
+            driverName: 'turso',
+            databaseUrl: raw,
+        };
     }
-  } catch {
-    console.warn('[auth] Failed to parse OIDC_PROVIDERS env var — expected a JSON array');
-  }
-  return undefined;
+
+    const filename = raw.replace(/^file:(\/\/)?/, '');
+    const driver = new SqlDriver({
+        client: 'better-sqlite3',
+        connection: { filename },
+        useNullAsDefault: true,
+    });
+    return {
+        driver: driver as unknown as IDataDriver,
+        driverName: 'sqlite',
+        databaseUrl: `file:${filename}`,
+    };
 }
 
-const socialProviders = buildSocialProviders();
-const oidcProviders = buildOidcProviders();
+const { driver: controlDriver, driverName, databaseUrl } = buildControlDriver();
+console.log(`[Bootstrap] Control DB: ${databaseUrl} (${driverName})`);
 
-// Turso driver for sys namespace — remote when env vars are configured, local SQLite otherwise
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const tursoDriver = new TursoDriver(
-  process.env.TURSO_DATABASE_URL
-    ? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
-    : { url: `file:${resolve(__dirname, '.objectstack/data/dev.db')}` },
-);
+const authSecret = process.env.AUTH_SECRET
+    ?? 'dev-secret-please-change-in-production-min-32-chars';
+const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : undefined)
+    ?? (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : undefined)
+    ?? `http://localhost:${process.env.PORT ?? 3000}`;
 
-// Datasource routing: default → memory for self-hosted data plane.
-// sys_* namespaces are handled by the control-plane preset in multi-project
-// shapes; in single-kernel mode the tenant/auth tables are bootstrapped via
-// turso when TURSO_DATABASE_URL is configured.
-const datasourceMapping = process.env.TURSO_DATABASE_URL
-  ? [
-      { namespace: 'sys', datasource: 'com.objectstack.driver.turso' },
-      { default: true, datasource: 'com.objectstack.driver.memory' },
-    ]
-  : [
-      { default: true, datasource: 'com.objectstack.driver.memory' },
-    ];
+// Per-project kernels share a minimal base. Both ObjectQL and Metadata
+// are scoped to `environmentId: projectId` so DatabaseLoader's env_id
+// filter and `protocol.saveMetaItem` writes stay aligned across the
+// physically-isolated project databases.
+const basePlugins: BasePluginsFactory = ({ projectId }) => [
+    new ObjectQLPlugin({ environmentId: projectId }),
+    new MetadataPlugin({ watch: false, environmentId: projectId }),
+];
 
-const oqlPlugin = new ObjectQLPlugin();
+// Example bundles are seeded into a project at provisioning time via
+// the template-seeder — not pre-installed into every project kernel.
+const appBundles: AppBundleResolver = {
+    async resolve() { return []; },
+};
 
-export default defineStack({
-  manifest: {
-    id: 'com.objectstack.server',
-    namespace: 'server',
-    name: 'ObjectStack Server',
-    version: '1.0.0',
-    description: 'Production server — multi-project control plane',
-    type: 'app',
-  },
-  // Phase 3: enable project-scoped URLs (/api/v1/projects/:projectId/...)
-  // under 'auto' resolution so legacy unscoped routes continue to work.
-  api: {
-    enableProjectScoping: true,
-    projectResolution: 'auto',
-  },
-  plugins: [
-    oqlPlugin,
-    // Set datasourceMapping right after ObjectQL init — access ql instance directly
-    {
-      name: 'datasource-mapping',
-      init() {
-        const ql = (oqlPlugin as any).ql;
-        if (ql?.setDatasourceMapping) ql.setDatasourceMapping(datasourceMapping);
-      },
+export default {
+    plugins: [
+        ...createControlPlanePlugins({
+            controlDriver,
+            driverName,
+            authSecret,
+            baseUrl,
+        }),
+        new MultiProjectPlugin({
+            controlDriver,
+            basePlugins,
+            appBundles,
+            templates: templateRegistry,
+            maxSize: Number(process.env.OBJECTSTACK_KERNEL_CACHE_SIZE ?? 32),
+            ttlMs: Number(process.env.OBJECTSTACK_KERNEL_TTL_MS ?? 15 * 60 * 1000),
+            cacheTTLMs: Number(process.env.OBJECTSTACK_ENV_CACHE_TTL_MS ?? 5 * 60 * 1000),
+        }),
+    ],
+    // Project-scoping config consumed by `createRestApiPlugin` and
+    // `createDispatcherPlugin` (auto-registered by `objectstack serve`).
+    api: {
+        enableProjectScoping: true,
+        projectResolution: 'auto' as const,
     },
-    new DriverPlugin(new InMemoryDriver(), 'memory'),
-    new DriverPlugin(tursoDriver, 'turso'),
-    new SetupPlugin(),
-    new AuthPlugin({
-      secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',
-      baseUrl,
-      plugins: { organization: true },
-      ...(socialProviders ? { socialProviders } : {}),
-      ...(oidcProviders ? { oidcProviders } : {}),
-    }),
-    new SecurityPlugin(),
-    new AuditPlugin(),
-    new FeedServicePlugin(),
-    new MetadataPlugin({ watch: false }),
-    new AIServicePlugin(),
-    new AutomationServicePlugin(),
-    new AnalyticsServicePlugin(),
-  ],
-  datasourceMapping,
-}, { strict: false });
+};

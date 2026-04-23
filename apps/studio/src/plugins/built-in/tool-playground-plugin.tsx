@@ -13,6 +13,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { defineStudioPlugin } from '@objectstack/spec/studio';
 import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import type { StudioPlugin, MetadataViewerProps } from '../types';
 import type { Tool } from '@objectstack/spec/ai';
 import {
@@ -347,7 +349,10 @@ function ExecutionItem({ entry }: ExecutionItemProps) {
  * Tool Playground Viewer Component
  */
 function ToolPlaygroundViewer({ metadataType, metadataName, data, packageId }: MetadataViewerProps) {
-  const client = useClient();
+  const unscopedClient = useClient();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const scopedClient = useScopedClient(params.projectId);
+  const client: any = scopedClient ?? unscopedClient;
   const [tool, setTool] = useState<Tool | null>(data ?? null);
   const [loading, setLoading] = useState(!data);
   const [executing, setExecuting] = useState(false);

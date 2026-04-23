@@ -13,6 +13,8 @@
 import { useState, useEffect } from 'react';
 import { defineStudioPlugin } from '@objectstack/spec/studio';
 import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { MetadataInspector } from '@/components/MetadataInspector';
 import { CodeExporter } from '@/components/CodeExporter';
 import type { CodeExporterProps } from '@/components/CodeExporter';
@@ -39,7 +41,10 @@ function PreviewViewerComponent({ metadataType, metadataName, packageId }: Metad
 // ─── Code Viewer (Code Exporter) ─────────────────────────────────────
 
 function CodeViewerComponent({ metadataType, metadataName, data, packageId }: MetadataViewerProps) {
-  const client = useClient();
+  const unscopedClient = useClient();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const scopedClient = useScopedClient(params.projectId);
+  const client: any = scopedClient ?? unscopedClient;
   const [definition, setDefinition] = useState<Record<string, unknown> | null>(data ?? null);
   const [loading, setLoading] = useState(!data);
 

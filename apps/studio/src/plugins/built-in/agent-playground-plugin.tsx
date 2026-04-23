@@ -13,6 +13,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { defineStudioPlugin } from '@objectstack/spec/studio';
 import { useClient } from '@objectstack/client-react';
+import { useParams } from '@tanstack/react-router';
+import { useScopedClient } from '@/hooks/useObjectStackClient';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
@@ -305,7 +307,10 @@ function ToolInvocationDisplay({ part, onApprove, onDeny }: ToolInvocationDispla
  * Agent Playground Viewer Component
  */
 function AgentPlaygroundViewer({ metadataType, metadataName, data, packageId }: MetadataViewerProps) {
-  const client = useClient();
+  const unscopedClient = useClient();
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const scopedClient = useScopedClient(params.projectId);
+  const client: any = scopedClient ?? unscopedClient;
   const [agent, setAgent] = useState<Agent | null>(data ?? null);
   const [loading, setLoading] = useState(!data);
   const [input, setInput] = useState('');

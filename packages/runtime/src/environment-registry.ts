@@ -271,8 +271,18 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
     switch (driverType) {
       case 'memory': {
         const { InMemoryDriver } = await import('@objectstack/driver-memory');
+        // Derive a per-project JSON path from the `memory://<dbName>` URL
+        // so each project owns its own persistence file instead of every
+        // memory-driver project sharing a single `memory-driver.json`.
+        // Mirrors DefaultProjectKernelFactory.createDriver so both paths
+        // (cache warm-up here + factory fallback) land on the same file.
+        const { resolve: resolvePath } = await import('node:path');
+        const dbName = databaseUrl.replace(/^memory:\/\//, '').trim();
+        const filePath = dbName
+          ? resolvePath(process.cwd(), '.objectstack/data/projects', `${dbName}.json`)
+          : undefined;
         return new InMemoryDriver({
-          persistence: 'file',
+          persistence: filePath ? { type: 'file', path: filePath } : 'file',
         }) as unknown as IDataDriver;
       }
 

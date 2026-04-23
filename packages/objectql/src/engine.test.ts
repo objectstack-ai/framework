@@ -3,47 +3,67 @@ import { ObjectQL } from './engine';
 import { SchemaRegistry } from './registry';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 
-// Mock the SchemaRegistry to avoid side effects between tests
+// Mock the SchemaRegistry to avoid side effects between tests.
+// SchemaRegistry is now a per-instance class (one per ObjectQL engine), so the
+// mock has to satisfy both use-sites:
+//   1. engine.ts does `new SchemaRegistry()` — the constructor must return a
+//      mocked instance whose methods are the same vi.fn() references the
+//      tests configure via `vi.mocked(SchemaRegistry.X)`.
+//   2. Existing tests reach for `SchemaRegistry.getObject` as if it were a
+//      static — we preserve that by also attaching the same mocks to the
+//      class itself.
 vi.mock('./registry', () => {
   const mockObjects = new Map();
   const mockContributors = new Map();
-  return {
-    SchemaRegistry: {
-      getObject: vi.fn((name) => mockObjects.get(name)),
-      resolveObject: vi.fn((name) => mockObjects.get(name)),
-      registerObject: vi.fn((obj, packageId, namespace, ownership, priority) => {
-        const fqn = namespace ? `${namespace}__${obj.name}` : obj.name;
-        mockObjects.set(fqn, { ...obj, name: fqn });
-        // Also track contributors for getObjectOwner
-        if (!mockContributors.has(fqn)) {
-          mockContributors.set(fqn, []);
-        }
-        const contributors = mockContributors.get(fqn);
-        contributors.push({ packageId, namespace, ownership, priority, definition: obj });
-        return fqn;
-      }),
-      getObjectOwner: vi.fn((fqn) => {
-        const contributors = mockContributors.get(fqn);
-        return contributors?.find(c => c.ownership === 'own');
-      }),
-      registerNamespace: vi.fn(),
-      registerKind: vi.fn(),
-      registerItem: vi.fn(),
-      registerApp: vi.fn(),
-      installPackage: vi.fn((manifest) => ({
-        manifest,
-        status: 'installed',
-        enabled: true,
-        installedAt: new Date().toISOString(),
-      })),
-      reset: vi.fn(() => {
-        mockObjects.clear();
-        mockContributors.clear();
-      }),
-      metadata: {
-        get: vi.fn(() => mockObjects) // Expose for verification if needed
+  const instance: any = {
+    getObject: vi.fn((name) => mockObjects.get(name)),
+    resolveObject: vi.fn((name) => mockObjects.get(name)),
+    registerObject: vi.fn((obj, packageId, namespace, ownership, priority) => {
+      const fqn = namespace ? `${namespace}__${obj.name}` : obj.name;
+      mockObjects.set(fqn, { ...obj, name: fqn });
+      if (!mockContributors.has(fqn)) {
+        mockContributors.set(fqn, []);
       }
-    }
+      const contributors = mockContributors.get(fqn);
+      contributors.push({ packageId, namespace, ownership, priority, definition: obj });
+      return fqn;
+    }),
+    getObjectOwner: vi.fn((fqn) => {
+      const contributors = mockContributors.get(fqn);
+      return contributors?.find((c: any) => c.ownership === 'own');
+    }),
+    registerNamespace: vi.fn(),
+    registerKind: vi.fn(),
+    registerItem: vi.fn(),
+    registerApp: vi.fn(),
+    installPackage: vi.fn((manifest) => ({
+      manifest,
+      status: 'installed',
+      enabled: true,
+      installedAt: new Date().toISOString(),
+    })),
+    reset: vi.fn(() => {
+      mockObjects.clear();
+      mockContributors.clear();
+    }),
+    metadata: {
+      get: vi.fn(() => mockObjects),
+    },
+  };
+  function SchemaRegistry() {
+    return instance;
+  }
+  Object.assign(SchemaRegistry, instance);
+  return {
+    SchemaRegistry,
+    computeFQN: (ns: string | undefined, name: string) =>
+      (ns && ns !== 'base' && ns !== 'system') ? `${ns}__${name}` : name,
+    parseFQN: (fqn: string) => {
+      const idx = fqn.indexOf('__');
+      if (idx < 0) return { namespace: undefined, shortName: fqn };
+      return { namespace: fqn.slice(0, idx), shortName: fqn.slice(idx + 2) };
+    },
+    RESERVED_NAMESPACES: new Set(['base', 'system']),
   };
 });
 

@@ -1,4 +1,4 @@
-# fly.toml — ObjectStack Server (multi-project shape)
+# fly.toml — ObjectStack Server
 #
 # Deploy from the repo root so the monorepo Dockerfile can see the full
 # workspace:
@@ -14,7 +14,8 @@
 # Secrets (never commit — use `fly secrets set …`):
 #   AUTH_SECRET, OBJECTSTACK_COOKIE_DOMAIN,
 #   TURSO_ORG_NAME, TURSO_API_TOKEN,
-#   (optional) TURSO_DATABASE_URL + TURSO_AUTH_TOKEN for multi-project-remote
+#   (optional) OBJECTSTACK_DATABASE_URL + OBJECTSTACK_DATABASE_AUTH_TOKEN
+#     — override the default local-SQLite control DB with a remote libSQL.
 
 app = "objectstack-server"
 primary_region = "iad"
@@ -55,11 +56,10 @@ kill_timeout = "30s"
   destination = "/data"
 
 [env]
-  # Enable multi-project-local mode by default — control plane lives in the
-  # SQLite file on the attached volume. Override to multi-project-remote by
-  # setting OBJECTSTACK_CONTROL_PLANE_URL + TURSO_DATABASE_URL via secrets.
-  OBJECTSTACK_MULTI_PROJECT = "true"
-  OBJECTSTACK_CONTROL_DB = "/data/control.db"
+  # Control plane lives in the SQLite file on the attached volume. Override
+  # with a remote libSQL/Turso by setting `OBJECTSTACK_DATABASE_URL` (and
+  # optionally `OBJECTSTACK_DATABASE_AUTH_TOKEN`) via `fly secrets set`.
+  OBJECTSTACK_DATABASE_URL = "file:/data/control.db"
   OBJECTSTACK_KERNEL_CACHE_SIZE = "50"
   OBJECTSTACK_KERNEL_TTL_MS = "1800000"
   OBJECTSTACK_ENV_CACHE_TTL_MS = "300000"

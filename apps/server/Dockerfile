@@ -68,8 +68,8 @@ EXPOSE 3000
 VOLUME ["/data"]
 
 # The container talks to the control plane (local SQLite at /data or remote
-# Turso) via env. Override any of these in fly.toml / `docker run -e …`.
-ENV OBJECTSTACK_CONTROL_DB=/data/control.db
+# libSQL/Turso) via env. Override in fly.toml / `docker run -e …`.
+ENV OBJECTSTACK_DATABASE_URL=file:/data/control.db
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD wget -qO- "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null 2>&1 || exit 1

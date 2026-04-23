@@ -12,6 +12,7 @@ import { SchemaRegistry } from './registry.js';
 describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     let protocol: ObjectStackProtocolImplementation;
     let mockEngine: any;
+    let registry: SchemaRegistry;
 
     const sampleApp = {
         name: 'test_app',
@@ -20,10 +21,12 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     };
 
     beforeEach(() => {
-        // Reset SchemaRegistry state between tests
-        SchemaRegistry.reset();
+        // Each test owns a fresh registry instance — the protocol reads it
+        // via `engine.registry`, mirroring the real ObjectQL contract.
+        registry = new SchemaRegistry();
 
         mockEngine = {
+            registry,
             find: vi.fn().mockResolvedValue([]),
             findOne: vi.fn().mockResolvedValue(null),
             insert: vi.fn().mockResolvedValue({ id: 'new-uuid' }),
@@ -37,7 +40,6 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
     afterEach(() => {
         vi.clearAllMocks();
-        SchemaRegistry.reset();
     });
 
     // ═══════════════════════════════════════════════════════════════
@@ -54,7 +56,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
         it('should register item in SchemaRegistry', async () => {
             await protocol.saveMetaItem({ type: 'app', name: 'test_app', item: sampleApp });
 
-            const stored = SchemaRegistry.getItem('app', 'test_app');
+            const stored = registry.getItem('app', 'test_app');
             expect(stored).toEqual(sampleApp);
         });
 
@@ -108,7 +110,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect((result as any).warning).toContain('Connection refused');
 
             // Registry should still be updated
-            const stored = SchemaRegistry.getItem('app', 'test_app');
+            const stored = registry.getItem('app', 'test_app');
             expect(stored).toEqual(sampleApp);
         });
 
@@ -149,7 +151,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
     describe('getMetaItem', () => {
         it('should return item from SchemaRegistry when it exists', async () => {
-            SchemaRegistry.registerItem('app', sampleApp, 'name');
+            registry.registerItem('app', sampleApp, 'name');
 
             const result = await protocol.getMetaItem({ type: 'app', name: 'test_app' });
 
@@ -185,7 +187,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             await protocol.getMetaItem({ type: 'app', name: 'test_app' });
 
             // Should now be in registry
-            const cached = SchemaRegistry.getItem('app', 'test_app');
+            const cached = registry.getItem('app', 'test_app');
             expect(cached).toEqual(sampleApp);
         });
 
@@ -258,8 +260,8 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
     describe('getMetaItems', () => {
         it('should return items from SchemaRegistry and still consult DB for seeded entries', async () => {
-            SchemaRegistry.registerItem('app', sampleApp, 'name');
-            SchemaRegistry.registerItem('app', { name: 'app2', label: 'App 2' }, 'name');
+            registry.registerItem('app', sampleApp, 'name');
+            registry.registerItem('app', { name: 'app2', label: 'App 2' }, 'name');
             // DB has no extra rows for this type — registry entries must still
             // be returned unchanged.
             mockEngine.find.mockResolvedValue([]);
@@ -306,7 +308,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             await protocol.getMetaItems({ type: 'app' });
 
             // Should now be in registry
-            const cached = SchemaRegistry.getItem('app', 'test_app');
+            const cached = registry.getItem('app', 'test_app');
             expect(cached).toEqual(sampleApp);
         });
 
@@ -358,8 +360,8 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect(result.loaded).toBe(2);
             expect(result.errors).toBe(0);
 
-            expect(SchemaRegistry.getItem('app', 'test_app')).toEqual(sampleApp);
-            expect(SchemaRegistry.getItem('app', 'app2')).toEqual(app2);
+            expect(registry.getItem('app', 'test_app')).toEqual(sampleApp);
+            expect(registry.getItem('app', 'app2')).toEqual(app2);
         });
 
         it('should query only active state records', async () => {
@@ -411,7 +413,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
             expect(result.loaded).toBe(1);
             expect(result.errors).toBe(0);
-            expect(SchemaRegistry.getItem('app', 'test_app')).toEqual(sampleApp);
+            expect(registry.getItem('app', 'test_app')).toEqual(sampleApp);
         });
 
         it('should load records of different types', async () => {
@@ -424,8 +426,8 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             const result = await protocol.loadMetaFromDb();
 
             expect(result.loaded).toBe(2);
-            expect(SchemaRegistry.getItem('app', 'test_app')).toEqual(sampleApp);
-            expect(SchemaRegistry.getItem('object', 'task')).toEqual(objDef);
+            expect(registry.getItem('app', 'test_app')).toEqual(sampleApp);
+            expect(registry.getItem('object', 'task')).toEqual(objDef);
         });
     });
 

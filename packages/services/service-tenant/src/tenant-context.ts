@@ -109,9 +109,7 @@ export class TenantContextService {
       return null;
     }
 
-    const tenantSlug = parts[0];
-    // In real implementation, lookup tenant ID by organization slug
-    // For now, return null (needs database integration)
+    void parts[0];
     return null;
   }
 
@@ -185,7 +183,7 @@ export class TenantContextService {
    */
   private async getTenantContextById(
     tenantId: string,
-    source: TenantIdentificationSource,
+    _source: TenantIdentificationSource,
   ): Promise<TenantContext | null> {
     // Check cache first
     const cached = this.tenantCache.get(tenantId);

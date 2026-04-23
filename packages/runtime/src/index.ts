@@ -30,6 +30,12 @@ export type {
     SysProjectRow,
     SysProjectCredentialRow,
 } from './project-kernel-factory.js';
+export { MultiProjectPlugin } from './multi-project-plugin.js';
+export type {
+    MultiProjectPluginConfig,
+    ProjectTemplate,
+    TemplateSeeder,
+} from './multi-project-plugin.js';
 
 // Export HTTP Server Components
 export { HttpServer } from './http-server.js';
