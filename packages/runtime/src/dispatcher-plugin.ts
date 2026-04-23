@@ -360,6 +360,15 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            server.get(`${prefix}/cloud/templates`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud('/templates', 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             server.get(`${prefix}/cloud/projects`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud('/projects', 'GET', {}, req.query, { request: req });

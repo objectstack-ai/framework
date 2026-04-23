@@ -1344,6 +1344,30 @@ export class HttpDispatcher {
         };
         const listRegisteredDrivers = (): Array<{ name: string; driverId: string }> => {
             const services = this.getServicesMap();
+            // Prefer the provisioning-adapter registry installed by the tenant
+            // plugin — it exposes the *logical* storage backends the
+            // control-plane can actually allocate a project against (memory /
+            // sqlite / turso / ...). The raw ObjectQL `driver.*` services are
+            // a deeper layer (e.g. a single unified `sql` driver that covers
+            // better-sqlite3 + libsql + pg + mysql) and collapse the user's
+            // meaningful choices into one row, so they make a poor UI source.
+            const registry: any = services['project-provisioning-adapters'];
+            if (registry && typeof registry.list === 'function') {
+                try {
+                    const adapters = registry.list() as Array<{ driver: string }>;
+                    const seen = new Set<string>();
+                    const drivers: Array<{ name: string; driverId: string }> = [];
+                    for (const adapter of adapters ?? []) {
+                        const name = adapter?.driver;
+                        if (!name || seen.has(name)) continue;
+                        seen.add(name);
+                        drivers.push({ name, driverId: `com.objectstack.driver.${name}` });
+                    }
+                    if (drivers.length > 0) return drivers;
+                } catch {
+                    // Adapter registry unusable — fall through to the legacy scan.
+                }
+            }
             const drivers: Array<{ name: string; driverId: string }> = [];
             for (const [serviceKey, svc] of Object.entries(services)) {
                 if (!serviceKey.startsWith('driver.')) continue;
@@ -1442,6 +1466,17 @@ export class HttpDispatcher {
             if (parts.length === 1 && parts[0] === 'drivers' && m === 'GET') {
                 const drivers = listRegisteredDrivers();
                 return { handled: true, response: this.success({ drivers, total: drivers.length }) };
+            }
+
+            // ----- /cloud/templates ----------------------------------------
+            if (parts.length === 1 && parts[0] === 'templates' && m === 'GET') {
+                try {
+                    const seeder: any = await this.resolveService('template-seeder');
+                    const templates = seeder?.listTemplates?.() ?? [];
+                    return { handled: true, response: this.success({ templates, total: templates.length }) };
+                } catch {
+                    return { handled: true, response: this.success({ templates: [], total: 0 }) };
+                }
             }
 
             // ----- /cloud/projects collection routes -----
@@ -1641,6 +1676,40 @@ export class HttpDispatcher {
                             created_at: finishedAt,
                             updated_at: finishedAt,
                         });
+
+                        // Seed template metadata into the newly-provisioned project.
+                        // Non-fatal: errors are stored in sys_project.metadata so the
+                        // project stays `active` even if template seeding fails.
+                        const templateId = req.template_id ?? 'blank';
+                        if (templateId !== 'blank') {
+                            try {
+                                const seeder: any = await this.resolveService('template-seeder');
+                                if (seeder) {
+                                    await seeder.seed({ projectId, templateId });
+                                }
+                            } catch (seedErr) {
+                                const seedMessage = seedErr instanceof Error ? seedErr.message : String(seedErr);
+                                // Persist seed error in metadata (non-fatal — project is active).
+                                try {
+                                    const existing = await findOne(ENV, { id: projectId });
+                                    const existingMeta = typeof existing?.metadata === 'string'
+                                        ? JSON.parse(existing.metadata)
+                                        : (existing?.metadata ?? {});
+                                    await ql.update(
+                                        ENV,
+                                        {
+                                            metadata: JSON.stringify({
+                                                ...existingMeta,
+                                                templateSeedError: { message: seedMessage, templateId },
+                                            }),
+                                        },
+                                        { where: { id: projectId } } as any,
+                                    );
+                                } catch {
+                                    // Best-effort metadata update — ignore secondary failure.
+                                }
+                            }
+                        }
                     } catch (err) {
                         const message = err instanceof Error ? err.message : String(err);
                         const failedAt = new Date().toISOString();

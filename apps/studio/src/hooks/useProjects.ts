@@ -245,6 +245,38 @@ export function useProvisionProject() {
 }
 
 /**
+ * Hook: list available project templates from the server.
+ */
+export function useTemplates() {
+  const client = useClient() as any;
+  const [templates, setTemplates] = useState<Array<{ id: string; label: string; description: string; category?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!client?.projects?.listTemplates) return;
+    let alive = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const result = await client.projects.listTemplates();
+        if (!alive) return;
+        setTemplates(result?.templates ?? []);
+      } catch {
+        if (!alive) return;
+        setTemplates([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [client]);
+
+  return { templates, loading };
+}
+
+/**
  * Hook: update the hostname bound to a project.
  */
 export function useUpdateHostname() {

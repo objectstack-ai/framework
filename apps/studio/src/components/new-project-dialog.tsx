@@ -57,7 +57,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useDrivers, useProvisionProject } from '@/hooks/useProjects';
+import { useDrivers, useProvisionProject, useTemplates } from '@/hooks/useProjects';
 import { toast } from '@/hooks/use-toast';
 import { useActiveOrganizationId, useSession } from '@/hooks/useSession';
 
@@ -74,10 +74,12 @@ export function NewProjectDialog({
 }: NewProjectDialogProps) {
   const { provision, provisioning } = useProvisionProject();
   const { drivers, loading: driversLoading } = useDrivers();
+  const { templates, loading: templatesLoading } = useTemplates();
   const activeOrgId = useActiveOrganizationId();
   const { user } = useSession();
   const [displayName, setDisplayName] = useState('');
   const [driver, setDriver] = useState<string>('');
+  const [templateId, setTemplateId] = useState<string>('blank');
 
   // Auto-select a sensible default once drivers load: prefer turso, then memory,
   // otherwise the first registered driver.
@@ -93,6 +95,7 @@ export function NewProjectDialog({
   const reset = () => {
     setDisplayName('');
     setDriver('');
+    setTemplateId('blank');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -112,6 +115,7 @@ export function NewProjectDialog({
         created_by: user?.id ?? '__session__',
         display_name: displayName.trim(),
         driver: driver || undefined,
+        template_id: templateId !== 'blank' ? templateId : undefined,
       } as any);
       const project = (res?.project ?? res) as ProjectRow;
       toast({
@@ -158,6 +162,34 @@ export function NewProjectDialog({
             </div>
 
             <div className="grid gap-1.5">
+              <Label>Template</Label>
+              <Select
+                value={templateId}
+                onValueChange={setTemplateId}
+                disabled={templatesLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={templatesLoading ? 'Loading templates…' : 'Select a template'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.length === 0 && !templatesLoading && (
+                    <SelectItem value="blank">
+                      <span>Blank — start from scratch</span>
+                    </SelectItem>
+                  )}
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      <div className="flex flex-col">
+                        <span>{t.label}</span>
+                        <span className="text-[11px] text-muted-foreground">{t.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-1.5">
               <Label>Driver</Label>
               <Select
                 value={driver}
@@ -190,7 +222,8 @@ export function NewProjectDialog({
               </Select>
               <p className="text-[11px] text-muted-foreground">
                 Where this project's data will be stored. `memory` is ideal
-                for tests; `turso` persists to libSQL.
+                for tests; `sqlite` persists to a local file; `turso`
+                persists to libSQL (local or remote).
               </p>
             </div>
           </div>

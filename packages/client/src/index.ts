@@ -648,6 +648,7 @@ export class ObjectStackClient {
       is_system?: boolean;
       storage_limit_mb?: number;
       clone_from_project_id?: string;
+      template_id?: string;
     }) => {
       const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects`, {
         method: 'POST',
@@ -732,6 +733,15 @@ export class ObjectStackClient {
     listDrivers: async () => {
       const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/drivers`);
       return this.unwrapResponse<{ drivers: Array<{ name: string; driverId: string }>; total: number }>(res);
+    },
+
+    /**
+     * List available project templates. Templates are seeded into the project
+     * database once at provisioning time when `template_id` is supplied.
+     */
+    listTemplates: async () => {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/templates`);
+      return this.unwrapResponse<{ templates: Array<{ id: string; label: string; description: string; category?: string }>; total: number }>(res);
     },
 
     /**

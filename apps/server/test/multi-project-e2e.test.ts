@@ -328,6 +328,70 @@ test('hostname routing routes B\'s host — should NOT see task', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Template seeding tests
+// ---------------------------------------------------------------------------
+
+test('GET /cloud/templates returns a list including "blank"', async () => {
+    const { status, body } = await call('/api/v1/cloud/templates');
+    expect(status).toBe(200);
+    const templates: Array<{ id: string }> = body?.data?.templates ?? [];
+    const ids = templates.map((t) => t.id);
+    expect(ids).toContain('blank');
+});
+
+test('provision project C with template_id=blank (no-op seeding, project becomes active)', async () => {
+    const { status, body } = await call('/api/v1/cloud/projects', {
+        method: 'POST',
+        body: {
+            organization_id: state.orgId,
+            display_name: 'Project C (blank template)',
+            driver: 'sql',
+            template_id: 'blank',
+            metadata: { __simulateDelayMs: 0 },
+        },
+    });
+    if (status < 200 || status >= 300) {
+        throw new Error(`project C create failed: ${status} ${JSON.stringify(body)}`);
+    }
+    const projectC = body?.data?.project?.id ?? body?.data?.id;
+    expect(projectC).toBeDefined();
+    await waitForActive(projectC);
+    // Confirm no templateSeedError was written (blank is a no-op)
+    const { body: detail } = await call(`/api/v1/cloud/projects/${projectC}`);
+    const meta = detail?.data?.project?.metadata ?? {};
+    if (meta.templateSeedError) {
+        throw new Error(`Unexpected templateSeedError for blank template: ${JSON.stringify(meta.templateSeedError)}`);
+    }
+});
+
+test('provision project D with unknown template_id — error recorded in metadata, project still active', async () => {
+    const { status, body } = await call('/api/v1/cloud/projects', {
+        method: 'POST',
+        body: {
+            organization_id: state.orgId,
+            display_name: 'Project D (bad template)',
+            driver: 'sql',
+            template_id: 'nonexistent-template',
+            metadata: { __simulateDelayMs: 0 },
+        },
+    });
+    if (status < 200 || status >= 300) {
+        throw new Error(`project D create failed: ${status} ${JSON.stringify(body)}`);
+    }
+    const projectD = body?.data?.project?.id ?? body?.data?.id;
+    expect(projectD).toBeDefined();
+    await waitForActive(projectD);
+    // The project must be active despite the seed error (non-fatal)
+    const { body: detail } = await call(`/api/v1/cloud/projects/${projectD}`);
+    const proj = detail?.data?.project;
+    expect(proj?.status).toBe('active');
+    // templateSeedError should be captured in metadata
+    if (!proj?.metadata?.templateSeedError) {
+        throw new Error('Expected templateSeedError in metadata for unknown template, got none');
+    }
+});
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 

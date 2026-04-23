@@ -257,15 +257,21 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     // ═══════════════════════════════════════════════════════════════
 
     describe('getMetaItems', () => {
-        it('should return items from SchemaRegistry when they exist', async () => {
+        it('should return items from SchemaRegistry and still consult DB for seeded entries', async () => {
             SchemaRegistry.registerItem('app', sampleApp, 'name');
             SchemaRegistry.registerItem('app', { name: 'app2', label: 'App 2' }, 'name');
+            // DB has no extra rows for this type — registry entries must still
+            // be returned unchanged.
+            mockEngine.find.mockResolvedValue([]);
 
             const result = await protocol.getMetaItems({ type: 'app' });
 
             expect(result.items).toHaveLength(2);
-            // DB should NOT be queried
-            expect(mockEngine.find).not.toHaveBeenCalled();
+            // DB *is* queried (always-merge semantics) so seeded metadata
+            // surfaces even when the registry already has unrelated items.
+            expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
+                where: { type: 'app', state: 'active' }
+            });
         });
 
         it('should fall back to DB when registry is empty for type', async () => {

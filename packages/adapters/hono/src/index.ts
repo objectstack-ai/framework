@@ -160,7 +160,7 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
       app.use('*', cors({
         origin: origin as any,
         allowMethods: corsOpts.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
-        allowHeaders: corsOpts.allowHeaders || ['Content-Type', 'Authorization', 'X-Requested-With'],
+        allowHeaders: corsOpts.allowHeaders || ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID', 'X-Project-Id'],
         exposeHeaders,
         credentials,
         maxAge,

@@ -14,7 +14,7 @@
  */
 
 import { defineStack } from '@objectstack/spec';
-import { AppPlugin, DriverPlugin } from '@objectstack/runtime';
+import { DriverPlugin } from '@objectstack/runtime';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import { InMemoryDriver } from '@objectstack/driver-memory';
 import { TursoDriver } from '@objectstack/driver-turso';
@@ -27,9 +27,6 @@ import { MetadataPlugin } from '@objectstack/metadata';
 import { AIServicePlugin } from '@objectstack/service-ai';
 import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
-import CrmApp from '../../examples/app-crm/objectstack.config';
-import TodoApp from '../../examples/app-todo/objectstack.config';
-import BiPluginManifest from '../../examples/plugin-bi/objectstack.config';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -70,7 +67,7 @@ export default defineStack({
     namespace: 'server',
     name: 'ObjectStack Server',
     version: '1.0.0',
-    description: 'Production server aggregating CRM, Todo and BI plugins',
+    description: 'Production server — multi-project control plane',
     type: 'app',
   },
   // Phase 3: enable project-scoped URLs (/api/v1/projects/:projectId/...)
@@ -91,9 +88,6 @@ export default defineStack({
     },
     new DriverPlugin(new InMemoryDriver(), 'memory'),
     new DriverPlugin(tursoDriver, 'turso'),
-    new AppPlugin(CrmApp),
-    new AppPlugin(TodoApp),
-    new AppPlugin(BiPluginManifest),
     new SetupPlugin(),
     new AuthPlugin({
       secret: process.env.AUTH_SECRET ?? 'dev-secret-please-change-in-production-min-32-chars',

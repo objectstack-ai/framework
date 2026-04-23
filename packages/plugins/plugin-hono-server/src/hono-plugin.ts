@@ -158,7 +158,7 @@ export class HonoServerPlugin implements Plugin {
                 // the better-auth `bearer()` plugin can deliver rotated
                 // session tokens to cross-origin clients (see plugin-auth).
                 // User-supplied exposeHeaders are merged with this default.
-                const defaultAllowHeaders = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID'];
+                const defaultAllowHeaders = ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID', 'X-Project-Id'];
                 const defaultExposeHeaders = ['set-auth-token'];
                 const allowHeaders = corsOpts.allowHeaders ?? defaultAllowHeaders;
                 const exposeHeaders = Array.from(new Set([

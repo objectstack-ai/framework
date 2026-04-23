@@ -11,7 +11,7 @@ import { defineApp } from '@objectstack/spec/ui';
  * - Sub-groups within groups (Lead Review nested under Sales Cloud)
  * - Global utility entries (Settings, Help) at sidebar bottom
  */
-export const CrmApp = defineApp({
+export const CrmAppModern = defineApp({
   name: 'crm',
   label: 'Sales CRM',
   description: 'Enterprise CRM with nested navigation tree',

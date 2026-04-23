@@ -230,6 +230,7 @@ export const ProvisionProjectRequestSchema = z.object({
   createdBy: z.string().describe('User ID that initiated the provisioning'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Free-form metadata'),
   hostname: z.string().optional().describe('Canonical hostname for this project (auto-generated if omitted)'),
+  templateId: z.string().optional().describe('Template to seed into the project on first provisioning (e.g. "crm", "todo"). Defaults to "blank".'),
 });
 
 export type ProvisionProjectRequest = z.infer<typeof ProvisionProjectRequestSchema>;

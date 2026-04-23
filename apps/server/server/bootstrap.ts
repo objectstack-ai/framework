@@ -41,6 +41,7 @@ import { TursoDriver } from '@objectstack/driver-turso';
 import { SqlDriver } from '@objectstack/driver-sql';
 import type { Contracts } from '@objectstack/spec';
 import { createControlPlanePlugins } from './control-plane-preset.js';
+import { createTemplateSeeder } from './template-seeder.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -194,40 +195,10 @@ async function bootstrapMultiProject(
         ),
     });
 
-    // MVP app-bundle resolver.
-    //
-    // The example CRM / Todo / BI bundles are loaded lazily *and* gated on
-    // an env flag so that:
-    //   1. Test environments (E2E, unit tests) can skip them entirely —
-    //      the example `defineStack(...)` configs perform their own Zod
-    //      validation on import, so a single unrelated schema drift in
-    //      an example would otherwise crash bootstrap for everyone.
-    //   2. Production multi-project deployments that do not ship the
-    //      reference apps (the typical case) avoid paying the cost.
-    //
-    // Set `OBJECTSTACK_BUNDLE_EXAMPLES=true` to get the legacy behaviour —
-    // all three example bundles are attached to every project kernel.
-    // Swap this resolver for a registry-backed one once
-    // `sys_project_package` is consulted.
+    // Example bundles are no longer pre-installed into every project kernel.
+    // They are seeded once at provisioning time via `createTemplateSeeder`.
     const appBundles: AppBundleResolver = {
-        async resolve() {
-            if (process.env.OBJECTSTACK_BUNDLE_EXAMPLES !== 'true') {
-                return [];
-            }
-            // Dynamic `new Function('return import(...)')(…)` sidesteps
-            // TypeScript's static rootDir analysis — the example configs
-            // live outside apps/server's tsconfig rootDir but are still
-            // resolvable at runtime. Kept here intentionally so the tsc
-            // typecheck doesn't need a dedicated include for examples.
-            const dyn = (spec: string) =>
-                (new Function('s', 'return import(s)') as (s: string) => Promise<any>)(spec);
-            const [crm, todo, bi] = await Promise.all([
-                dyn('../../../examples/app-crm/objectstack.config.ts'),
-                dyn('../../../examples/app-todo/objectstack.config.ts'),
-                dyn('../../../examples/plugin-bi/objectstack.config.ts'),
-            ]);
-            return [crm.default, todo.default, bi.default];
-        },
+        async resolve() { return []; },
     };
 
     // Per-project kernels only need the minimal base — driver is injected
@@ -258,6 +229,11 @@ async function bootstrapMultiProject(
     });
 
     const controlKernel = await bootstrapControlKernel(controlDriver, driverName);
+
+    // Register the template seeder so http-dispatcher can resolve it during
+    // provisioning via `kernel.getServiceAsync('template-seeder')`.
+    const seeder = createTemplateSeeder(kernelManager);
+    controlKernel.registerService('template-seeder', seeder);
 
     return {
         kernel: controlKernel,

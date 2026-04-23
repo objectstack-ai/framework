@@ -226,51 +226,71 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     async getMetaItems(request: { type: string; packageId?: string }) {
         const { packageId } = request;
-        let items = SchemaRegistry.listItems(request.type, packageId);
-        // Normalize singular/plural using explicit mapping
-        if (items.length === 0) {
-            const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-            if (alt) items = SchemaRegistry.listItems(alt, packageId);
+        let items: unknown[] = [];
+
+        // Scoped (project) kernels must NOT read from SchemaRegistry — the
+        // registry is a process-wide static singleton shared across every
+        // project kernel, so a Studio request for project A would otherwise
+        // see project B's definitions (and system-bridged entries that don't
+        // belong to any user project). Go straight to the DB with an env_id
+        // filter so isolation is guaranteed. Mirrors the getMetaItem rule.
+        if (this.environmentId === undefined) {
+            items = [...SchemaRegistry.listItems(request.type, packageId)];
+            // Normalize singular/plural using explicit mapping
+            if (items.length === 0) {
+                const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                if (alt) items = [...SchemaRegistry.listItems(alt, packageId)];
+            }
         }
 
-        // Fallback to database if registry is empty for this type
-        if (items.length === 0) {
-            try {
-                const whereClause: any = { type: request.type, state: 'active' };
-                if (packageId) whereClause._packageId = packageId;
-                const allRecords = await this.engine.find('sys_metadata', {
-                    where: whereClause
-                });
-                if (allRecords && allRecords.length > 0) {
-                    items = allRecords.map((record: any) => {
-                        const data = typeof record.metadata === 'string'
-                            ? JSON.parse(record.metadata)
-                            : record.metadata;
-                        // Hydrate back into registry
-                        SchemaRegistry.registerItem(request.type, data, 'name' as any);
-                        return data;
-                    });
-                } else {
-                    // Try alternate type name in DB using explicit mapping
-                    const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                    if (alt) {
-                    const altRecords = await this.engine.find('sys_metadata', {
-                        where: { type: alt, state: 'active' }
-                    });
-                    if (altRecords && altRecords.length > 0) {
-                        items = altRecords.map((record: any) => {
-                            const data = typeof record.metadata === 'string'
-                                ? JSON.parse(record.metadata)
-                                : record.metadata;
-                            SchemaRegistry.registerItem(request.type, data, 'name' as any);
-                            return data;
-                        });
-                    }
+        // Always consult the DB so metadata persisted by the seeder /
+        // bulkRegister shows up even when the registry already has unrelated
+        // entries (the previous fallback-only logic meant project metadata
+        // was never surfaced whenever system-bridged items populated the
+        // registry). Deduplicate against whatever the registry returned.
+        try {
+            const whereClause: Record<string, unknown> = {
+                type: request.type,
+                state: 'active',
+            };
+            if (this.environmentId !== undefined) whereClause.env_id = this.environmentId;
+            if (packageId) whereClause._packageId = packageId;
+            let records = await this.engine.find('sys_metadata', { where: whereClause });
+            if ((!records || records.length === 0)) {
+                // Try alternate type name in DB using explicit mapping
+                const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                if (alt) {
+                    const altWhere: Record<string, unknown> = { type: alt, state: 'active' };
+                    if (this.environmentId !== undefined) altWhere.env_id = this.environmentId;
+                    if (packageId) altWhere._packageId = packageId;
+                    records = await this.engine.find('sys_metadata', { where: altWhere });
+                }
+            }
+            if (records && records.length > 0) {
+                const byName = new Map<string, any>();
+                for (const existing of items) {
+                    const entry = existing as any;
+                    if (entry && typeof entry === 'object' && 'name' in entry) {
+                        byName.set(entry.name, entry);
                     }
                 }
-            } catch {
-                // DB not available, return registry results (empty)
+                for (const record of records) {
+                    const data = typeof record.metadata === 'string'
+                        ? JSON.parse(record.metadata)
+                        : record.metadata;
+                    if (data && typeof data === 'object' && 'name' in data) {
+                        byName.set(data.name, data);
+                    }
+                    // Only hydrate the global registry for unscoped calls —
+                    // scoped project entries must not leak process-wide.
+                    if (this.environmentId === undefined) {
+                        SchemaRegistry.registerItem(request.type, data, 'name' as any);
+                    }
+                }
+                items = Array.from(byName.values());
             }
+        } catch {
+            // DB not available — fall through with whatever we already have.
         }
 
         // Merge with MetadataService (runtime-registered items: agents, tools, etc.)
