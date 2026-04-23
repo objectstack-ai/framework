@@ -24,6 +24,7 @@
 
 import type { Contracts } from '@objectstack/spec';
 import { Plugin, PluginContext } from '@objectstack/core';
+import { SeedLoaderConfigSchema } from '@objectstack/spec/data';
 import {
     DefaultEnvironmentDriverRegistry,
     type EnvironmentDriverRegistry,
@@ -159,7 +160,7 @@ function createTemplateSeeder(
 
             const bundle = await template.load();
             const items = bundle ? extractMetadataItems(bundle) : [];
-            const dataSets = Array.isArray(bundle?.data) ? bundle.data : [];
+            const dataSets = bundle ? namespaceDatasets(bundle) : [];
 
             // Empty bundle (e.g. the "blank" template) → nothing to seed.
             if (items.length === 0 && dataSets.length === 0) return;
@@ -206,7 +207,20 @@ function createTemplateSeeder(
 
             if (dataSets.length > 0) {
                 const seedLoader = new SeedLoaderService(engine, metadata, console as any);
-                await seedLoader.load({ datasets: dataSets, config: {} as any });
+                const config = SeedLoaderConfigSchema.parse({});
+                await seedLoader.load({ datasets: dataSets, config });
+            }
+
+            // Force a persistence flush so the per-project JSON file is
+            // written before the provisioning handler returns; otherwise
+            // the memory driver's dirty flag only saves on a 2s timer and
+            // early HTTP responses may see an empty file on disk.
+            const driverWithFlush = (kernel as any).services?.driver ?? (kernel as any).getService?.('driver');
+            const flushable = typeof driverWithFlush?.flush === 'function'
+                ? driverWithFlush
+                : null;
+            if (flushable) {
+                try { await flushable.flush(); } catch { /* best effort */ }
             }
         },
     };
