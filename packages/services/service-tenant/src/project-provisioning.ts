@@ -134,10 +134,16 @@ export class LocalSQLiteProjectDatabaseAdapter implements ProjectDatabaseAdapter
 }
 
 /**
- * In-memory project adapter. Storage is ephemeral by design.
+ * In-memory project adapter. Pre-creates an empty JSON shell under
+ * `baseDir` so the per-project snapshot is visible on disk immediately
+ * after provisioning; the runtime's memory-driver factory points its
+ * `FileSystemPersistenceAdapter` at the same file, which seeding and
+ * subsequent writes then populate.
  */
 export class MemoryProjectDatabaseAdapter implements ProjectDatabaseAdapter {
   readonly driver: ProjectDriver = 'memory';
+
+  constructor(private readonly baseDir: string = '.objectstack/data/projects') {}
 
   async createDatabase(params: {
     projectId: string;
@@ -145,6 +151,15 @@ export class MemoryProjectDatabaseAdapter implements ProjectDatabaseAdapter {
     region: string;
     storageLimitMb: number;
   }): Promise<{ databaseUrl: string; plaintextSecret: string }> {
+    try {
+      const { mkdirSync, writeFileSync, existsSync } = await import('node:fs');
+      const { resolve } = await import('node:path');
+      const filePath = resolve(this.baseDir, `${params.databaseName}.json`);
+      mkdirSync(this.baseDir, { recursive: true });
+      if (!existsSync(filePath)) writeFileSync(filePath, '{}');
+    } catch {
+      // Non-fatal — the memory driver will recreate the file on first flush.
+    }
     return {
       databaseUrl: `memory://${params.databaseName}`,
       plaintextSecret: '',

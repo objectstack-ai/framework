@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
-import { RestServer } from './rest-server.js';
+import { RestServer, RestKernelManager } from './rest-server.js';
 import { ObjectStackProtocol, RestServerConfig } from '@objectstack/spec/api';
 import { registerPackageRoutes } from './package-routes.js';
 import type { PackageService } from '@objectstack/service-package';
@@ -9,6 +9,12 @@ import type { PackageService } from '@objectstack/service-package';
 export interface RestApiPluginConfig {
     serverServiceName?: string;
     protocolServiceName?: string;
+    /**
+     * Optional override for the kernel-manager service name. When the service
+     * is registered (by @objectstack/runtime's MultiProjectPlugin), scoped
+     * routes resolve per-project protocols at request time.
+     */
+    kernelManagerServiceName?: string;
     api?: RestServerConfig;
 }
 
@@ -47,7 +53,18 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             } catch (e) {
                 // Ignore missing service
             }
-            
+
+            // Optional — only present when MultiProjectPlugin is mounted. When
+            // available, RestServer will resolve a per-project protocol at
+            // request time for scoped (`/projects/:projectId/...`) routes.
+            let kernelManager: RestKernelManager | undefined;
+            const kernelManagerService = config.kernelManagerServiceName || 'kernel-manager';
+            try {
+                kernelManager = ctx.getService<RestKernelManager>(kernelManagerService);
+            } catch (e) {
+                // Single-kernel deployment — fall back to the control protocol
+            }
+
             if (!server) {
                 ctx.logger.warn(`RestApiPlugin: HTTP Server service '${serverService}' not found. REST routes skipped.`);
                 return;
@@ -61,7 +78,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             ctx.logger.info('Hydrating REST API from Protocol...');
             
             try {
-                const restServer = new RestServer(server, protocol, config.api as any);
+                const restServer = new RestServer(server, protocol, config.api as any, kernelManager);
                 restServer.registerRoutes();
 
                 ctx.logger.info('REST API successfully registered');
