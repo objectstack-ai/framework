@@ -91,7 +91,7 @@ export const SocialProviderConfigSchema = z.record(
   z.object({
     clientId: z.string().describe('OAuth Client ID'),
     clientSecret: z.string().describe('OAuth Client Secret'),
-    enabled: z.boolean().optional().describe('Enable this provider (default: true)'),
+    enabled: z.boolean().default(true).describe('Enable this provider (default: true)'),
     scope: z.array(z.string()).optional().describe('Additional OAuth scopes'),
   }).catchall(z.unknown()),
 ).optional().describe(
