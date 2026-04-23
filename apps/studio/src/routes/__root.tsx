@@ -15,7 +15,7 @@ import { useObjectStackClient } from '../hooks/useObjectStackClient';
 import { SessionProvider, useSession } from '../hooks/useSession';
 
 /** Routes that don't require authentication. */
-const PUBLIC_ROUTES = new Set(['/login', '/register']);
+const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot-password']);
 
 /**
  * Routes where an environment selection is NOT required.
