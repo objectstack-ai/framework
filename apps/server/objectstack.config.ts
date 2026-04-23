@@ -57,13 +57,15 @@ function buildControlDriver(): {
     driverName: 'sqlite' | 'turso';
     databaseUrl: string;
 } {
-    const raw = process.env.OBJECTSTACK_DATABASE_URL?.trim()
+    const raw = (process.env.OBJECTSTACK_DATABASE_URL || process.env.TURSO_DATABASE_URL)?.trim()
         || `file:${resolvePath(process.cwd(), '.objectstack/data/control.db')}`;
+
+    const authToken = process.env.OBJECTSTACK_DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN;
 
     if (/^(libsql|https?):\/\//i.test(raw)) {
         const driver = new TursoDriver({
             url: raw,
-            authToken: process.env.OBJECTSTACK_DATABASE_AUTH_TOKEN,
+            authToken,
         });
         return {
             driver: driver as unknown as IDataDriver,
