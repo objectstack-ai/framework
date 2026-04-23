@@ -647,14 +647,22 @@ export function createDefaultProjectAdapters(
   env: Record<string, string | undefined> = process.env,
 ): ProjectDatabaseAdapter[] {
   const adapters: ProjectDatabaseAdapter[] = [];
-  adapters.push(new MemoryProjectDatabaseAdapter());
-  adapters.push(new LocalSQLiteProjectDatabaseAdapter());
+
+  // On serverless platforms (Vercel, etc.) local storage is ephemeral —
+  // only cloud-backed drivers (turso) are meaningful.
+  const isServerless = Boolean(env.VERCEL || env.VERCEL_ENV || env.AWS_LAMBDA_FUNCTION_NAME);
+
+  if (!isServerless) {
+    adapters.push(new MemoryProjectDatabaseAdapter());
+    adapters.push(new LocalSQLiteProjectDatabaseAdapter());
+  }
 
   const orgName = env.TURSO_ORG_NAME;
   const apiToken = env.TURSO_API_TOKEN;
   if (orgName && apiToken && orgName !== 'your-org-slug' && apiToken !== 'your-platform-api-token') {
     adapters.push(new TursoProjectDatabaseAdapter({ organization: orgName, apiToken }));
-  } else {
+  } else if (!isServerless) {
+    // Fallback turso-alias only makes sense in local dev
     adapters.push(new LocalSQLiteProjectDatabaseAdapter(undefined, 'turso'));
   }
   return adapters;
