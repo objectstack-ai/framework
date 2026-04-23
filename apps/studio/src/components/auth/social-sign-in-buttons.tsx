@@ -47,8 +47,8 @@ export function SocialSignInButtons({ mode }: Props) {
           className="w-full"
           onClick={() =>
             client.auth.signInWithProvider(p.id, {
-              callbackURL: window.location.origin + '/login',
-              errorCallbackURL: window.location.origin + '/login',
+              callbackURL: window.location.origin + import.meta.env.BASE_URL + 'login',
+              errorCallbackURL: window.location.origin + import.meta.env.BASE_URL + 'login',
               type: p.type ?? 'social',
             })
           }
