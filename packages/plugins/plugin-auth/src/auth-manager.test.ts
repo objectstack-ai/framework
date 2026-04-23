@@ -815,11 +815,13 @@ describe('AuthManager', () => {
         id: 'google',
         name: 'Google',
         enabled: true,
+        type: 'social',
       });
       expect(config.socialProviders[1]).toEqual({
         id: 'github',
         name: 'GitHub',
         enabled: true,
+        type: 'social',
       });
 
       // Should NOT include sensitive data
@@ -899,6 +901,7 @@ describe('AuthManager', () => {
         id: 'customProvider',
         name: 'CustomProvider',
         enabled: true,
+        type: 'social',
       });
     });
   });

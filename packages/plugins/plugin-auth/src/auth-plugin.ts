@@ -246,27 +246,11 @@ export class AuthPlugin implements Plugin {
 
     const rawApp = (httpServer as any).getRawApp();
 
-    // Register auth config endpoint - public endpoint for frontend discovery
-    rawApp.get(`${basePath}/config`, async (c: any) => {
-      try {
-        const config = this.authManager!.getPublicConfig();
-        return c.json({
-          success: true,
-          data: config,
-        });
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        ctx.logger.error('Auth config error:', err);
-
-        return c.json({
-          success: false,
-          error: {
-            code: 'auth_config_error',
-            message: err.message,
-          },
-        }, 500);
-      }
-    });
+    // NOTE: The `/config` endpoint is now handled in the Hono adapter itself
+    // (packages/adapters/hono/src/index.ts) to avoid route ordering conflicts.
+    // The adapter's catch-all `/auth/*` route intercepts all auth requests
+    // before plugin routes can be registered, so we check for `/config` there
+    // and call getPublicConfig() directly on the auth service.
 
     // Register wildcard route to forward all auth requests to better-auth.
     // better-auth is configured with basePath matching our route prefix, so we

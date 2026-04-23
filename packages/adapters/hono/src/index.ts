@@ -259,6 +259,28 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
         authService = null;
       }
 
+      // Handle /auth/config endpoint specifically (not handled by better-auth)
+      if (path === 'config' && method === 'GET' && authService) {
+        try {
+          const config = (authService as any).getPublicConfig?.();
+          if (config) {
+            return c.json({
+              success: true,
+              data: config,
+            });
+          }
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          return c.json({
+            success: false,
+            error: {
+              code: 'auth_config_error',
+              message: err.message,
+            },
+          }, 500);
+        }
+      }
+
       if (authService && typeof authService.handleRequest === 'function') {
         const response = await authService.handleRequest(c.req.raw);
         return new Response(response.body, {
