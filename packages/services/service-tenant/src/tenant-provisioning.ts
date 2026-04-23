@@ -89,7 +89,8 @@ export class TenantProvisioningService {
 
     // Generate UUID for tenant database
     const tenantId = randomUUID();
-    const databaseName = tenantId; // UUID-based naming
+    // Turso database names must be 1-26 chars; strip dashes and take first 26 hex chars
+    const databaseName = tenantId.replace(/-/g, '').slice(0, 26);
 
     // Determine region
     const region = request.region || this.config.defaultRegion || 'us-east-1';
