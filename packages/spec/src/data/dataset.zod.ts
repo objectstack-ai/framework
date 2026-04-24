@@ -66,3 +66,30 @@ export type Dataset = z.infer<typeof DatasetSchema>;
 export type DatasetInput = z.input<typeof DatasetSchema>;
 
 export type DatasetImportMode = z.infer<typeof DatasetMode>;
+
+/**
+ * Type-safe factory for creating seed dataset definitions.
+ * Infers valid field keys from the object definition passed in,
+ * so typos in record field names are caught at compile time.
+ *
+ * @example
+ * ```ts
+ * export const leadSeed = defineDataset(Lead, {
+ *   externalId: 'email',
+ *   records: [
+ *     { first_name: 'Alice', lead_source: 'web' }, // ✅ type-checked
+ *     { source: 'web' },                            // ❌ compile error
+ *   ],
+ * });
+ * ```
+ */
+export function defineDataset<
+  const TObj extends { name: string; fields: Record<string, unknown> }
+>(
+  objectDef: TObj,
+  config: Omit<DatasetInput, 'object' | 'records'> & {
+    records: Array<Partial<Record<keyof TObj['fields'], unknown>>>;
+  }
+): Dataset {
+  return DatasetSchema.parse({ ...config, object: objectDef.name });
+}

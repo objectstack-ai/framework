@@ -2,15 +2,21 @@
 
 /**
  * CRM Seed Data
- * 
+ *
  * Demo records for all core CRM objects.
- * Uses the DatasetSchema format with upsert mode for idempotent loading.
+ * Uses defineDataset() for type-safe field name checking at compile time.
  */
-import type { DatasetInput } from '@objectstack/spec/data';
+import { defineDataset } from '@objectstack/spec/data';
+import { Account } from '../objects/account.object';
+import { Contact } from '../objects/contact.object';
+import { Lead } from '../objects/lead.object';
+import { Opportunity } from '../objects/opportunity.object';
+import { Product } from '../objects/product.object';
+import { Task } from '../objects/task.object';
+import { Case } from '../objects/case.object';
 
 // ─── Accounts ─────────────────────────────────────────────────────────
-const accounts: DatasetInput = {
-  object: 'account',
+const accounts = defineDataset(Account, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -60,16 +66,15 @@ const accounts: DatasetInput = {
       website: 'https://wayne.example.com',
     },
   ]
-};
+});
 
 // ─── Contacts ─────────────────────────────────────────────────────────
-const contacts: DatasetInput = {
-  object: 'contact',
+const contacts = defineDataset(Contact, {
   mode: 'upsert',
   externalId: 'email',
   records: [
     {
-      salutation: 'Mr.',
+      salutation: 'mr',
       first_name: 'John',
       last_name: 'Smith',
       email: 'john.smith@acme.example.com',
@@ -79,7 +84,7 @@ const contacts: DatasetInput = {
       account: 'Acme Corporation',
     },
     {
-      salutation: 'Ms.',
+      salutation: 'ms',
       first_name: 'Sarah',
       last_name: 'Johnson',
       email: 'sarah.j@globex.example.com',
@@ -89,7 +94,7 @@ const contacts: DatasetInput = {
       account: 'Globex Industries',
     },
     {
-      salutation: 'Dr.',
+      salutation: 'dr',
       first_name: 'Michael',
       last_name: 'Chen',
       email: 'mchen@initech.example.com',
@@ -99,7 +104,7 @@ const contacts: DatasetInput = {
       account: 'Initech Solutions',
     },
     {
-      salutation: 'Ms.',
+      salutation: 'ms',
       first_name: 'Emily',
       last_name: 'Davis',
       email: 'emily.d@starkmed.example.com',
@@ -109,7 +114,7 @@ const contacts: DatasetInput = {
       account: 'Stark Medical',
     },
     {
-      salutation: 'Mr.',
+      salutation: 'mr',
       first_name: 'Robert',
       last_name: 'Wilson',
       email: 'rwilson@wayne.example.com',
@@ -119,11 +124,10 @@ const contacts: DatasetInput = {
       account: 'Wayne Enterprises',
     },
   ]
-};
+});
 
 // ─── Leads ────────────────────────────────────────────────────────────
-const leads: DatasetInput = {
-  object: 'lead',
+const leads = defineDataset(Lead, {
   mode: 'upsert',
   externalId: 'email',
   records: [
@@ -158,11 +162,10 @@ const leads: DatasetInput = {
       industry: 'technology',
     },
   ]
-};
+});
 
 // ─── Opportunities ────────────────────────────────────────────────────
-const opportunities: DatasetInput = {
-  object: 'opportunity',
+const opportunities = defineDataset(Opportunity, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -207,11 +210,10 @@ const opportunities: DatasetInput = {
       forecast_category: 'best_case',
     },
   ]
-};
+});
 
 // ─── Products ─────────────────────────────────────────────────────────
-const products: DatasetInput = {
-  object: 'product',
+const products = defineDataset(Product, {
   mode: 'upsert',
   externalId: 'name',
   records: [
@@ -244,11 +246,10 @@ const products: DatasetInput = {
       is_active: true,
     },
   ]
-};
+});
 
 // ─── Tasks ────────────────────────────────────────────────────────────
-const tasks: DatasetInput = {
-  object: 'task',
+const tasks = defineDataset(Task, {
   mode: 'upsert',
   externalId: 'subject',
   records: [
@@ -282,11 +283,10 @@ const tasks: DatasetInput = {
       due_date: new Date(Date.now() + 86400000 * 7),
     },
   ]
-};
+});
 
 // ─── Cases ────────────────────────────────────────────────────────────
-const cases: DatasetInput = {
-  object: 'case',
+const cases = defineDataset(Case, {
   mode: 'upsert',
   externalId: 'subject',
   records: [
@@ -410,10 +410,10 @@ const cases: DatasetInput = {
       closed_date: new Date(Date.now() - 86400000 * 8),
     },
   ],
-};
+});
 
 /** All CRM seed datasets */
-export const CrmSeedData: DatasetInput[] = [
+export const CrmSeedData = [
   accounts,
   contacts,
   leads,
