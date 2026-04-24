@@ -57,7 +57,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Assert - Should be retrievable via registry (getAllObjects returns ServiceObject[])
       const objects = objectql.registry.getAllObjects();
       const fqns = objects.map((o: any) => o.name);
-      expect(fqns).toContain('test__test_object');
+      expect(fqns).toContain('test_object');
     });
   });
 
@@ -676,12 +676,13 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Act
       await kernel.bootstrap();
 
-      // Assert - syncSchemasBatch should have been called once with all objects
-      expect(batchCalls.length).toBe(1);
-      const batchedObjects = batchCalls[0].map((s) => s.object).sort();
-      expect(batchedObjects).toContain('alpha');
-      expect(batchedObjects).toContain('beta');
-      expect(batchedObjects).toContain('gamma');
+      // Assert - syncSchemasBatch should have been called twice (Phase 1: built-in schemas,
+      // Phase 3: schemas hydrated from DB) with all app objects present in at least one call
+      expect(batchCalls.length).toBe(2);
+      const allBatchedObjects = batchCalls.flat().map((s) => s.object);
+      expect(allBatchedObjects).toContain('alpha');
+      expect(allBatchedObjects).toContain('beta');
+      expect(allBatchedObjects).toContain('gamma');
       // syncSchema should NOT have been called individually
       expect(singleCalls.length).toBe(0);
     });

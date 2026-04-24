@@ -160,13 +160,13 @@ describe('ObjectQL Engine', () => {
                 id: 'com.extender.app',
                 namespace: 'ext',
                 objectExtensions: [
-                    { extend: 'base__contact', fields: { custom_field: { type: 'text' } }, priority: 250 }
+                    { extend: 'contact', fields: { custom_field: { type: 'text' } }, priority: 250 }
                 ]
             };
             
             engine.registerApp(manifest);
             expect(SchemaRegistry.registerObject).toHaveBeenCalledWith(
-                expect.objectContaining({ name: 'base__contact' }),
+                expect.objectContaining({ name: 'contact' }),
                 'com.extender.app',
                 undefined,
                 'extend',

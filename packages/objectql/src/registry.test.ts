@@ -8,26 +8,26 @@ describe('SchemaRegistry', () => {
     });
 
     // ==========================================
-    // FQN Computation Tests
+    // computeFQN / parseFQN — convention tests
     // ==========================================
     describe('computeFQN', () => {
-        it('should compute FQN with namespace prefix', () => {
-            expect(computeFQN('crm', 'account')).toBe('crm__account');
-            expect(computeFQN('todo', 'task')).toBe('todo__task');
+        it('should return the short name unchanged (no namespace prefix)', () => {
+            expect(computeFQN('crm', 'account')).toBe('account');
+            expect(computeFQN('todo', 'task')).toBe('task');
         });
 
-        it('should not prefix reserved namespaces', () => {
+        it('should return the name for reserved namespaces', () => {
             expect(computeFQN('base', 'user')).toBe('user');
             expect(computeFQN('system', 'organization')).toBe('organization');
         });
 
-        it('should not prefix undefined namespace', () => {
+        it('should return the name for undefined namespace', () => {
             expect(computeFQN(undefined, 'task')).toBe('task');
         });
     });
 
     describe('parseFQN', () => {
-        it('should parse FQN with namespace', () => {
+        it('should parse legacy FQN with double-underscore', () => {
             expect(parseFQN('crm__account')).toEqual({ namespace: 'crm', shortName: 'account' });
             expect(parseFQN('todo__task')).toEqual({ namespace: 'todo', shortName: 'task' });
         });
@@ -83,32 +83,29 @@ describe('SchemaRegistry', () => {
     // Object Ownership Tests
     // ==========================================
     describe('Object Ownership', () => {
-        it('should register owned object with FQN', () => {
+        it('should register owned object using object name as canonical key', () => {
             const obj = { name: 'account', fields: { name: { type: 'text' } } };
-            const fqn = registry.registerObject(obj as any, 'com.example.crm', 'crm', 'own');
-            
-            expect(fqn).toBe('crm__account');
-            const resolved = registry.getObject('crm__account');
+            const key = registry.registerObject(obj as any, 'com.example.crm', 'crm', 'own');
+
+            expect(key).toBe('account');
+            const resolved = registry.getObject('account');
             expect(resolved).toBeDefined();
-            expect(resolved?.name).toBe('crm__account');
+            expect(resolved?.name).toBe('account');
         });
 
-        it('should register object without namespace (legacy)', () => {
+        it('should register object without namespace', () => {
             const obj = { name: 'task', fields: {} };
-            const fqn = registry.registerObject(obj as any, 'com.example.app');
-            
-            expect(fqn).toBe('task');
+            const key = registry.registerObject(obj as any, 'com.example.app');
+
+            expect(key).toBe('task');
             expect(registry.getObject('task')).toBeDefined();
         });
 
-        it('should allow only one owner per FQN', () => {
-            // Register first owner
+        it('should allow only one owner per object name', () => {
             const obj = { name: 'shared', fields: {} };
             registry.registerObject(obj as any, 'com.vendor.a', 'vendor_a', 'own');
-            
-            // Second vendor tries to own the same FQN via extension targeting
-            // They cannot own an object that's already owned by another package
-            const obj2 = { name: 'vendor_a__shared', fields: {} };
+
+            const obj2 = { name: 'shared', fields: {} };
             expect(() => {
                 registry.registerObject(obj2 as any, 'com.vendor.b', undefined, 'own');
             }).toThrow(/already owned/);
@@ -117,14 +114,13 @@ describe('SchemaRegistry', () => {
         it('should allow re-registration by same owner', () => {
             const obj = { name: 'account', fields: { v1: { type: 'text' } } };
             registry.registerObject(obj as any, 'com.example.crm', 'crm', 'own');
-            
+
             const obj2 = { name: 'account', fields: { v2: { type: 'text' } } };
             expect(() => {
                 registry.registerObject(obj2 as any, 'com.example.crm', 'crm', 'own');
             }).not.toThrow();
-            
-            // Should have new fields
-            const resolved = registry.getObject('crm__account');
+
+            const resolved = registry.getObject('account');
             expect(resolved?.fields).toHaveProperty('v2');
         });
     });
@@ -136,10 +132,10 @@ describe('SchemaRegistry', () => {
         it('should merge extension fields into owner', () => {
             const owner = { name: 'contact', fields: { email: { type: 'text' } } };
             registry.registerObject(owner as any, 'com.base', 'base', 'own');
-            
+
             const ext = { name: 'contact', fields: { phone: { type: 'text' } } };
             registry.registerObject(ext as any, 'com.crm', undefined, 'extend', 200);
-            
+
             const resolved = registry.getObject('contact');
             expect(resolved?.fields).toHaveProperty('email');
             expect(resolved?.fields).toHaveProperty('phone');
@@ -148,24 +144,24 @@ describe('SchemaRegistry', () => {
         it('should apply priority order (higher wins)', () => {
             const owner = { name: 'task', label: 'Task', fields: {} };
             registry.registerObject(owner as any, 'com.base', 'base', 'own', 100);
-            
+
             const ext1 = { name: 'task', label: 'Extended Task', fields: {} };
             registry.registerObject(ext1 as any, 'com.ext1', undefined, 'extend', 150);
-            
+
             const ext2 = { name: 'task', label: 'Final Task', fields: {} };
             registry.registerObject(ext2 as any, 'com.ext2', undefined, 'extend', 250);
-            
+
             const resolved = registry.getObject('task');
-            expect(resolved?.label).toBe('Final Task'); // Higher priority wins
+            expect(resolved?.label).toBe('Final Task');
         });
 
         it('should merge validations additively', () => {
             const owner = { name: 'order', fields: {}, validations: [{ type: 'required', field: 'id' }] };
             registry.registerObject(owner as any, 'com.base', 'base', 'own');
-            
+
             const ext = { name: 'order', fields: {}, validations: [{ type: 'required', field: 'status' }] };
             registry.registerObject(ext as any, 'com.ext', undefined, 'extend');
-            
+
             const resolved = registry.getObject('order');
             expect(resolved?.validations).toHaveLength(2);
         });
@@ -173,8 +169,7 @@ describe('SchemaRegistry', () => {
         it('should fail extension without owner', () => {
             const ext = { name: 'phantom', fields: {} };
             registry.registerObject(ext as any, 'com.ext', undefined, 'extend');
-            
-            // Should not be resolvable (no owner)
+
             const resolved = registry.getObject('phantom');
             expect(resolved).toBeUndefined();
         });
@@ -184,63 +179,40 @@ describe('SchemaRegistry', () => {
     // Object Resolution Tests
     // ==========================================
     describe('Object Resolution', () => {
-        it('should resolve by FQN', () => {
+        it('should resolve by canonical name', () => {
             const obj = { name: 'deal', fields: {} };
             registry.registerObject(obj as any, 'com.crm', 'crm', 'own');
-            
-            expect(registry.resolveObject('crm__deal')).toBeDefined();
+
+            expect(registry.resolveObject('deal')).toBeDefined();
         });
 
-        it('should resolve by short name (fallback)', () => {
-            const obj = { name: 'task', fields: {} };
-            registry.registerObject(obj as any, 'com.todo', 'todo', 'own');
-            
-            // Should find via fallback scan
-            expect(registry.getObject('task')).toBeDefined();
-        });
-
-        it('should resolve system objects by their literal short name', () => {
-            // System objects use sys_ prefix as part of the short name itself.
+        it('should resolve system objects by their sys_ prefixed name', () => {
             const obj = { name: 'sys_user', fields: {} };
             registry.registerObject(obj as any, 'com.objectstack.system', 'sys', 'own');
 
-            // Both FQN and short-name lookup should resolve
-            expect(registry.getObject('sys__sys_user')).toBeDefined();
             expect(registry.getObject('sys_user')).toBeDefined();
-        });
-
-        it('should resolve namespaced objects by FQN or short name, not by single-underscore concatenation', () => {
-            const obj = { name: 'account', fields: {} };
-            registry.registerObject(obj as any, 'com.crm', 'crm', 'own');
-
-            // FQN works (cross-package disambiguation)
-            expect(registry.getObject('crm__account')).toBeDefined();
-            // Short name works (canonical user-facing form)
-            expect(registry.getObject('account')).toBeDefined();
-            // Single-underscore concatenation must NOT resolve — that ambiguity is the whole reason for FQN
-            expect(registry.getObject('crm_account')).toBeUndefined();
         });
 
         it('should cache merged objects', () => {
             const obj = { name: 'cached', fields: {} };
             registry.registerObject(obj as any, 'com.test', 'test', 'own');
-            
-            const first = registry.resolveObject('test__cached');
-            const second = registry.resolveObject('test__cached');
-            expect(first).toBe(second); // Same reference (cached)
+
+            const first = registry.resolveObject('cached');
+            const second = registry.resolveObject('cached');
+            expect(first).toBe(second);
         });
 
         it('should invalidate cache on re-registration', () => {
             const obj = { name: 'evolve', fields: { v1: { type: 'text' } } };
             registry.registerObject(obj as any, 'com.test', 'test', 'own');
-            
-            const first = registry.resolveObject('test__evolve');
-            
+
+            const first = registry.resolveObject('evolve');
+
             const obj2 = { name: 'evolve', fields: { v2: { type: 'text' } } };
             registry.registerObject(obj2 as any, 'com.test', 'test', 'own');
-            
-            const second = registry.resolveObject('test__evolve');
-            expect(first).not.toBe(second); // Different reference (cache invalidated)
+
+            const second = registry.resolveObject('evolve');
+            expect(first).not.toBe(second);
             expect(second?.fields).toHaveProperty('v2');
         });
     });
@@ -252,26 +224,25 @@ describe('SchemaRegistry', () => {
         it('should return all merged objects', () => {
             registry.registerObject({ name: 'a', fields: {} } as any, 'com.pkg1', 'pkg1', 'own');
             registry.registerObject({ name: 'b', fields: {} } as any, 'com.pkg2', 'pkg2', 'own');
-            
+
             const all = registry.getAllObjects();
             expect(all).toHaveLength(2);
-            expect(all.map(o => o.name).sort()).toEqual(['pkg1__a', 'pkg2__b']);
+            expect(all.map(o => o.name).sort()).toEqual(['a', 'b']);
         });
 
         it('should filter by packageId', () => {
             registry.registerObject({ name: 'a', fields: {} } as any, 'com.pkg1', 'pkg1', 'own');
             registry.registerObject({ name: 'b', fields: {} } as any, 'com.pkg2', 'pkg2', 'own');
-            
+
             const filtered = registry.getAllObjects('com.pkg1');
             expect(filtered).toHaveLength(1);
-            expect(filtered[0].name).toBe('pkg1__a');
+            expect(filtered[0].name).toBe('a');
         });
 
         it('should include objects where package is extender', () => {
             registry.registerObject({ name: 'base_obj', fields: {} } as any, 'com.owner', 'base', 'own');
             registry.registerObject({ name: 'base_obj', fields: { ext: { type: 'text' } } } as any, 'com.extender', undefined, 'extend');
-            
-            // Extender should see the object
+
             const filtered = registry.getAllObjects('com.extender');
             expect(filtered).toHaveLength(1);
         });
@@ -283,18 +254,18 @@ describe('SchemaRegistry', () => {
     describe('Uninstall', () => {
         it('should remove owner contribution', () => {
             registry.registerObject({ name: 'removable', fields: {} } as any, 'com.pkg', 'pkg', 'own');
-            expect(registry.getObject('pkg__removable')).toBeDefined();
-            
+            expect(registry.getObject('removable')).toBeDefined();
+
             registry.unregisterObjectsByPackage('com.pkg');
-            expect(registry.getObject('pkg__removable')).toBeUndefined();
+            expect(registry.getObject('removable')).toBeUndefined();
         });
 
         it('should remove extension contribution', () => {
             registry.registerObject({ name: 'target', fields: { base: { type: 'text' } } } as any, 'com.owner', 'base', 'own');
             registry.registerObject({ name: 'target', fields: { ext: { type: 'text' } } } as any, 'com.ext', undefined, 'extend');
-            
+
             registry.unregisterObjectsByPackage('com.ext');
-            
+
             const resolved = registry.getObject('target');
             expect(resolved?.fields).toHaveProperty('base');
             expect(resolved?.fields).not.toHaveProperty('ext');
@@ -303,7 +274,7 @@ describe('SchemaRegistry', () => {
         it('should prevent uninstall of owner with active extenders', () => {
             registry.registerObject({ name: 'important', fields: {} } as any, 'com.owner', 'base', 'own');
             registry.registerObject({ name: 'important', fields: {} } as any, 'com.ext', undefined, 'extend');
-            
+
             expect(() => {
                 registry.unregisterObjectsByPackage('com.owner');
             }).toThrow(/extended by/);
@@ -312,7 +283,7 @@ describe('SchemaRegistry', () => {
         it('should allow force uninstall of owner with extenders', () => {
             registry.registerObject({ name: 'forced', fields: {} } as any, 'com.owner', 'base', 'own');
             registry.registerObject({ name: 'forced', fields: {} } as any, 'com.ext', undefined, 'extend');
-            
+
             expect(() => {
                 registry.unregisterObjectsByPackage('com.owner', true);
             }).not.toThrow();
@@ -325,20 +296,20 @@ describe('SchemaRegistry', () => {
     describe('Contributors API', () => {
         it('should return all contributors for object', () => {
             registry.registerObject({ name: 'multi', fields: {} } as any, 'com.owner', 'pkg', 'own', 100);
-            registry.registerObject({ name: 'pkg__multi', fields: {} } as any, 'com.ext1', undefined, 'extend', 200);
-            registry.registerObject({ name: 'pkg__multi', fields: {} } as any, 'com.ext2', undefined, 'extend', 300);
-            
-            const contribs = registry.getObjectContributors('pkg__multi');
+            registry.registerObject({ name: 'multi', fields: {} } as any, 'com.ext1', undefined, 'extend', 200);
+            registry.registerObject({ name: 'multi', fields: {} } as any, 'com.ext2', undefined, 'extend', 300);
+
+            const contribs = registry.getObjectContributors('multi');
             expect(contribs).toHaveLength(3);
-            expect(contribs[0].priority).toBe(100); // Sorted by priority
+            expect(contribs[0].priority).toBe(100);
             expect(contribs[1].priority).toBe(200);
             expect(contribs[2].priority).toBe(300);
         });
 
         it('should return owner contributor', () => {
             registry.registerObject({ name: 'owned', fields: {} } as any, 'com.owner', 'pkg', 'own');
-            
-            const owner = registry.getObjectOwner('pkg__owned');
+
+            const owner = registry.getObjectOwner('owned');
             expect(owner).toBeDefined();
             expect(owner?.packageId).toBe('com.owner');
             expect(owner?.ownership).toBe('own');
@@ -373,7 +344,7 @@ describe('SchemaRegistry', () => {
         it('should install package with namespace', () => {
             const manifest = { id: 'com.test', name: 'Test', namespace: 'test', version: '1.0.0' };
             const pkg = registry.installPackage(manifest as any);
-            
+
             expect(pkg.status).toBe('installed');
             expect(registry.getNamespaceOwner('test')).toBe('com.test');
         });
@@ -381,7 +352,7 @@ describe('SchemaRegistry', () => {
         it('should uninstall package and release namespace', () => {
             const manifest = { id: 'com.test', name: 'Test', namespace: 'test', version: '1.0.0' };
             registry.installPackage(manifest as any);
-            
+
             registry.uninstallPackage('com.test');
             expect(registry.getPackage('com.test')).toBeUndefined();
             expect(registry.getNamespaceOwner('test')).toBeUndefined();
@@ -420,10 +391,10 @@ describe('SchemaRegistry', () => {
                 'crm',
                 'own'
             );
-            
+
             const objects = registry.listItems('object');
             expect(objects).toHaveLength(2);
-            expect(objects.map((o: any) => o.name).sort()).toEqual(['crm__account', 'crm__contact']);
+            expect(objects.map((o: any) => o.name).sort()).toEqual(['account', 'contact']);
         });
 
         it('listItems("objects") should return all registered objects (plural alias)', () => {
@@ -433,37 +404,37 @@ describe('SchemaRegistry', () => {
                 'todo',
                 'own'
             );
-            
+
             const objects = registry.listItems('objects');
             expect(objects).toHaveLength(1);
-            expect((objects[0] as any).name).toBe('todo__task');
+            expect((objects[0] as any).name).toBe('task');
         });
 
-        it('getItem("object", fqn) should return object by FQN', () => {
+        it('getItem("object", name) should return object by canonical name', () => {
             registry.registerObject(
                 { name: 'lead', label: 'Lead', fields: { status: { type: 'text' } } } as any,
                 'com.crm',
                 'crm',
                 'own'
             );
-            
-            const obj = registry.getItem('object', 'crm__lead');
+
+            const obj = registry.getItem('object', 'lead');
             expect(obj).toBeDefined();
-            expect((obj as any).name).toBe('crm__lead');
+            expect((obj as any).name).toBe('lead');
             expect((obj as any).label).toBe('Lead');
         });
 
-        it('getItem("object", shortName) should return object by short name fallback', () => {
+        it('getItem("object", name) should return object by name', () => {
             registry.registerObject(
                 { name: 'opportunity', label: 'Opportunity', fields: {} } as any,
                 'com.crm',
                 'crm',
                 'own'
             );
-            
+
             const obj = registry.getItem('object', 'opportunity');
             expect(obj).toBeDefined();
-            expect((obj as any).name).toBe('crm__opportunity');
+            expect((obj as any).name).toBe('opportunity');
         });
 
         it('listItems("object", packageId) should filter by package', () => {
@@ -479,14 +450,14 @@ describe('SchemaRegistry', () => {
                 'todo',
                 'own'
             );
-            
+
             const crmObjects = registry.listItems('object', 'com.crm');
             expect(crmObjects).toHaveLength(1);
-            expect((crmObjects[0] as any).name).toBe('crm__account');
+            expect((crmObjects[0] as any).name).toBe('account');
 
             const todoObjects = registry.listItems('object', 'com.todo');
             expect(todoObjects).toHaveLength(1);
-            expect((todoObjects[0] as any).name).toBe('todo__task');
+            expect((todoObjects[0] as any).name).toBe('task');
         });
     });
 });

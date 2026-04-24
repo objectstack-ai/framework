@@ -134,25 +134,19 @@ export class AppPlugin implements Plugin {
             seedDatasets.push(...manifest.data);
         }
 
-        // Resolve short object names to FQN using the package's namespace.
-        // e.g., seed `object: 'task'` in namespace 'todo' → 'todo__task'
-        // Reserved namespaces ('base', 'system') are not prefixed.
-        const namespace = (this.bundle.manifest || this.bundle)?.namespace as string | undefined;
-        const RESERVED_NS = new Set(['base', 'system']);
-        const toFQN = (name: string) => {
-            if (name.includes('__') || !namespace || RESERVED_NS.has(namespace)) return name;
-            return `${namespace}__${name}`;
-        };
-        
+        // Object names in seed data are used as-is — no FQN expansion.
+        // Under the current naming convention, the object's short name IS
+        // the canonical name and the physical table name.
+
         if (seedDatasets.length > 0) {
              ctx.logger.info(`[AppPlugin] Found ${seedDatasets.length} seed datasets for ${appId}`);
 
-             // Normalize dataset object names to FQN
+             // Pass seed datasets through unchanged — object names are canonical
              const normalizedDatasets = seedDatasets
                  .filter((d: any) => d.object && Array.isArray(d.records))
                  .map((d: any) => ({
                      ...d,
-                     object: toFQN(d.object),
+                     object: d.object,
                  }));
 
              // Use SeedLoaderService for metadata-driven loading with reference resolution

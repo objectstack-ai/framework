@@ -219,7 +219,7 @@ describe('MetadataRegisterRequestSchema', () => {
   it('should accept name with namespace', () => {
     const result = MetadataRegisterRequestSchema.parse({
       type: 'view',
-      name: 'crm__account_list',
+      name: 'account_list',
       data: { label: 'Account List' },
       namespace: 'crm',
     });

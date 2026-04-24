@@ -89,11 +89,11 @@ export const FieldChangeSchema = z.object({
  *
  * @example
  * ```yaml
- * # Package delivers: object "crm__account" with field "status" label "Status"
+ * # Package delivers: object "account" with field "status" label "Status"
  * # Admin changes label to "Account Status"
  * # Overlay record:
  * baseType: object
- * baseName: crm__account
+ * baseName: account
  * packageId: com.acme.crm
  * packageVersion: "1.0.0"
  * changes:
@@ -109,7 +109,7 @@ export const MetadataOverlaySchema = z.object({
   /** The metadata type being customized (e.g. "object", "view", "flow") */
   baseType: z.string().describe('Metadata type being customized'),
 
-  /** The metadata name being customized (e.g. "crm__account") */
+  /** The metadata name being customized (e.g. "account") */
   baseName: z.string().describe('Metadata name being customized'),
 
   /** Package that owns the base metadata (null for platform-created metadata) */

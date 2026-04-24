@@ -99,14 +99,13 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
     this.encryptor = config.encryptor ?? new NoopSecretEncryptor();
     this.cacheTTL = config.cacheTTLMs ?? 5 * 60 * 1000;
     // Default to the namespaced physical names that ObjectQL-registered
-    // tenant objects end up with (`sys.project` → `sys__project`). Callers
+    // tenant objects end up with (`sys.project` → `sys_project`). Callers
     // can override — e.g. a mocked driver in unit tests might use the short
     // name directly.
     // Default to the physical table names produced by ObjectQL / the SQL
-    // driver for the tenant plugin's `sys.*` namespace. The FQN is
-    // `sys__project`, but drivers store the physical table as `sys_project`
-    // (namespace `_` name). Callers can override for test drivers that
-    // use different naming.
+    // driver for the tenant plugin's `sys.*` namespace. The short name is
+    // `sys_project`; drivers store the physical table under that name.
+    // Callers can override for test drivers that use different naming.
     this.projectObjectName = config.projectObjectName ?? 'sys_project';
     this.credentialObjectName = config.credentialObjectName ?? 'sys_project_credential';
   }

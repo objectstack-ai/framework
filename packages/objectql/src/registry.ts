@@ -6,7 +6,7 @@ import { AppSchema } from '@objectstack/spec/ui';
 
 /**
  * Reserved namespaces that do not get FQN prefix applied.
- * Objects in these namespaces keep their short names (e.g., "user" not "base__user").
+ * Objects in these namespaces keep their short names (e.g., "user" — short name IS the canonical key).
  */
 export const RESERVED_NAMESPACES = new Set(['base', 'system']);
 
@@ -29,28 +29,28 @@ export interface ObjectContributor {
 }
 
 /**
- * Compute Fully Qualified Name (FQN) for an object.
- * 
- * @param namespace - The package namespace (e.g., "crm", "todo")
- * @param shortName - The object's short name (e.g., "task", "account")
- * @returns FQN string (e.g., "crm__task") or just shortName for reserved namespaces
- * 
+ * Compute canonical registry key for an object.
+ *
+ * Under the current naming convention, object names are canonical identifiers
+ * and are used as-is (no namespace__ prefix). The namespace parameter is
+ * retained for backward compatibility but no longer affects the returned key.
+ *
+ * @param namespace - The package namespace (unused, kept for API compatibility)
+ * @param shortName - The object's name (already the canonical identifier)
+ * @returns The object name unchanged
+ *
  * @example
- * computeFQN('crm', 'account')  // => 'crm__account'
- * computeFQN('base', 'user')    // => 'user' (reserved, no prefix)
- * computeFQN(undefined, 'task') // => 'task' (legacy, no namespace)
+ * computeFQN('crm', 'account')  // => 'account'
+ * computeFQN(undefined, 'task') // => 'task'
  */
-export function computeFQN(namespace: string | undefined, shortName: string): string {
-  if (!namespace || RESERVED_NAMESPACES.has(namespace)) {
-    return shortName;
-  }
-  return `${namespace}__${shortName}`;
+export function computeFQN(_namespace: string | undefined, shortName: string): string {
+  return shortName;
 }
 
 /**
  * Parse FQN back to namespace and short name.
  * 
- * @param fqn - Fully qualified name (e.g., "crm__account" or "user")
+ * @param fqn - Object name (e.g., "account" or legacy "crm__account" for backward compat)
  * @returns { namespace, shortName } - namespace is undefined for unprefixed names
  */
 export function parseFQN(fqn: string): { namespace: string | undefined; shortName: string } {
@@ -102,7 +102,7 @@ function mergeObjectDefinitions(base: ServiceObject, extension: Partial<ServiceO
  * 
  * Objects use a namespace-based FQN system:
  * - `namespace`: Short identifier from package manifest (e.g., "crm", "todo")
- * - `FQN`: `{namespace}__{short_name}` (e.g., "crm__account")
+ * - `name`: canonical object name (e.g., "account", "sys_user")
  * - Reserved namespaces (`base`, `system`) don't get prefixed
  * 
  * Ownership modes:
@@ -330,10 +330,10 @@ export class SchemaRegistry {
    * when two packages contribute objects with the same short name.
    *
    * Resolution order:
-   * 1. Short name match (e.g., 'account' → 'crm__account'). Returns first match.
+   * 1. Exact name match — the name IS the canonical key.
    *    If multiple packages contribute the same short name, a warning is logged
    *    and the first match wins — disambiguate by passing the FQN explicitly.
-   * 2. Exact FQN match (e.g., 'crm__account').
+   * 2. Legacy FQN match (e.g., 'crm__account') — backward compat.
    */
   getObject(name: string): ServiceObject | undefined {
     // Canonical: short name lookup

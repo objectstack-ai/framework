@@ -36,7 +36,7 @@ describe('MetadataDiffItemSchema', () => {
   it('should accept valid diff item', () => {
     const diff = {
       type: 'object',
-      name: 'crm__account',
+      name: 'account',
       changeType: 'modified' as const,
       summary: 'Added new field "priority"',
     };
@@ -47,7 +47,7 @@ describe('MetadataDiffItemSchema', () => {
   it('should accept diff item with conflict flag', () => {
     const diff = {
       type: 'view',
-      name: 'crm__account_list',
+      name: 'account_list',
       changeType: 'modified' as const,
       hasConflict: true,
       summary: 'Column order changed — conflicts with customer customization',
@@ -59,9 +59,9 @@ describe('MetadataDiffItemSchema', () => {
   it('should accept renamed item with previous name', () => {
     const diff = {
       type: 'object',
-      name: 'crm__contact_v2',
+      name: 'contact_v2',
       changeType: 'renamed' as const,
-      previousName: 'crm__contact',
+      previousName: 'contact',
     };
     expect(() => MetadataDiffItemSchema.parse(diff)).not.toThrow();
   });
@@ -97,9 +97,9 @@ describe('UpgradePlanSchema', () => {
       toVersion: '2.0.0',
       impactLevel: 'high' as const,
       changes: [
-        { type: 'object', name: 'crm__account', changeType: 'modified' as const, hasConflict: true },
-        { type: 'object', name: 'crm__deal', changeType: 'added' as const },
-        { type: 'view', name: 'crm__lead_list', changeType: 'removed' as const },
+        { type: 'object', name: 'account', changeType: 'modified' as const, hasConflict: true },
+        { type: 'object', name: 'deal', changeType: 'added' as const },
+        { type: 'view', name: 'lead_list', changeType: 'removed' as const },
       ],
       affectedCustomizations: 3,
       requiresMigration: true,
@@ -126,8 +126,8 @@ describe('UpgradeSnapshotSchema', () => {
       toVersion: '2.0.0',
       previousManifest: validManifest,
       metadataSnapshot: [
-        { type: 'object', name: 'crm__account', metadata: { label: 'Account' } },
-        { type: 'view', name: 'crm__account_list', metadata: { type: 'grid' } },
+        { type: 'object', name: 'account', metadata: { label: 'Account' } },
+        { type: 'view', name: 'account_list', metadata: { type: 'grid' } },
       ],
       createdAt: '2025-06-15T10:00:00Z',
     };

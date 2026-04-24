@@ -1320,11 +1320,11 @@ export class HttpDispatcher {
      * If `driver` is omitted, the dispatcher auto-selects the first available
      * in preference order: turso → memory → any other registered driver.
      *
-     * Backed by ObjectQL sys__project / sys__project_credential /
-     * sys__project_member tables (registered by
+     * Backed by ObjectQL sys_project / sys_project_credential /
+     * sys_project_member tables (registered by
      * `@objectstack/service-tenant`'s `createTenantPlugin`).
      * Physical database addressing (database_url, database_driver, etc.)
-     * is stored directly on the sys__project row.
+     * is stored directly on the sys_project row.
      */
     async handleCloud(path: string, method: string, body: any, query: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         const m = method.toUpperCase();
@@ -1457,7 +1457,7 @@ export class HttpDispatcher {
         };
 
         // Data crosses the wire as snake_case — matching the canonical
-        // `sys__project` schema. The only post-processing is JSON-parsing the
+        // `sys_project` schema. The only post-processing is JSON-parsing the
         // `metadata` column so consumers don't need to unwrap it.
         const cleanProjectRow = (row: any): any => {
             if (!row) return row;
@@ -1563,7 +1563,7 @@ export class HttpDispatcher {
                         const rootDomain = getEnv('ROOT_DOMAIN', 'objectstack.app');
                         computedHostname = `${orgSlug}-${shortId}.${rootDomain}`;
                     } catch {
-                        // Fallback if sys__organization doesn't exist
+                        // Fallback if sys_organization doesn't exist
                         computedHostname = `${req.organization_id}-${shortId}.objectstack.app`;
                     }
                 }
@@ -1591,7 +1591,7 @@ export class HttpDispatcher {
                         };
                     }
                 } catch {
-                    // sys__project table may not yet be ready (first-run cold
+                    // sys_project table may not yet be ready (first-run cold
                     // boot) — fall through and let the DB enforce uniqueness.
                 }
 

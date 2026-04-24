@@ -263,25 +263,25 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
     expect(exists).toBe(true);
   });
 
-  it('should use object parameter (physical table name) in syncSchema, not schema.name (FQN)', async () => {
-    // Simulates the real-world scenario: syncRegisteredSchemas passes the
-    // physical table name 'sys_user' while the schema object has name 'sys__user' (FQN).
+  it('should use object parameter (physical table name) in syncSchema, matching schema.name', async () => {
+    // Under the new naming convention, system objects use sys_ prefix as their
+    // actual object name (no FQN double-underscore). Both the object name and
+    // physical table name are 'sys_user'.
     const physicalTableName = 'sys_user';
-    const fqnName = 'sys__user';
 
     await driver.syncSchema(physicalTableName, {
-      name: fqnName,
+      name: physicalTableName,
       fields: {
         email: { type: 'string' },
         display_name: { type: 'string' },
       },
     });
 
-    // The table should be created with the physical name, not the FQN
+    // The table should be created with the physical name
     const existsPhysical = await knexInstance.schema.hasTable(physicalTableName);
     expect(existsPhysical).toBe(true);
 
-    const existsFqn = await knexInstance.schema.hasTable(fqnName);
+    const existsFqn = await knexInstance.schema.hasTable('sys__user');
     expect(existsFqn).toBe(false);
 
     // Verify the table has the correct columns
@@ -291,10 +291,10 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
     expect(columns).toHaveProperty('display_name');
   });
 
-  it('should derive physical table name from FQN in initObjects', async () => {
+  it('should use short object name as physical table name in initObjects', async () => {
     const objects = [
       {
-        name: 'crm__deal',
+        name: 'deal',
         fields: {
           amount: { type: 'number' },
         },
@@ -306,6 +306,7 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
     const existsPhysical = await knexInstance.schema.hasTable('deal');
     expect(existsPhysical).toBe(true);
 
+    // FQN-style names should never appear as table names
     const existsFqn = await knexInstance.schema.hasTable('crm__deal');
     expect(existsFqn).toBe(false);
   });

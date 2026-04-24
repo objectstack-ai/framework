@@ -12,7 +12,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  */
 export const AiMessageObject = ObjectSchema.create({
   namespace: 'ai',
-  name: 'messages',
+  name: 'ai_messages',
   label: 'AI Message',
   pluralLabel: 'AI Messages',
   icon: 'message-circle',

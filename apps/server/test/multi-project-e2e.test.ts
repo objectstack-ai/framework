@@ -180,7 +180,7 @@ test('create organization (synthetic — control-plane direct insert)', async ()
     if (!ql || typeof ql.insert !== 'function') {
         throw new Error('Control-plane ObjectQL service not available on boot.kernel');
     }
-    await ql.insert('sys__organization', {
+    await ql.insert('sys_organization', {
         id: state.orgId,
         name: `E2E Org ${state.orgId.slice(0, 6)}`,
         slug: `e2e-${state.orgId.slice(0, 6)}`,

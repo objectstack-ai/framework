@@ -569,7 +569,7 @@ export class SqlDriver implements IDataDriver {
     const objectDef = schema as { name: string; fields?: Record<string, any> };
     // The caller passes the resolved physical table name as `object`. Override
     // the def's `name` to ensure DDL targets the physical table even if the
-    // schema's `name` is an FQN (e.g. 'crm__account').
+    // schema's `name` is the canonical object name (e.g. 'account').
     await this.initObjects([{ ...objectDef, name: object }]);
   }
 

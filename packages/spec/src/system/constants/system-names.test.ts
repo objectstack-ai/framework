@@ -96,16 +96,16 @@ describe('StorageNameMapping', () => {
       expect(StorageNameMapping.resolveTableName({ name: 'user' })).toBe('user');
     });
 
-    it('should strip namespace from FQN to get short name', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'crm__account' })).toBe('account');
+    it('should return name as-is (canonical name = table name)', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'account' })).toBe('account');
     });
 
     it('should keep system table names as-is (single underscore)', () => {
       expect(StorageNameMapping.resolveTableName({ name: 'sys_user' })).toBe('sys_user');
     });
 
-    it('should derive multi-word short name from FQN', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'sys__audit_log' })).toBe('audit_log');
+    it('should return ai-prefixed names as-is', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'sys_audit_log' })).toBe('sys_audit_log');
     });
   });
 

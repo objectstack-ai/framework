@@ -120,7 +120,7 @@ export const StorageNameMapping = {
    * @param object - Object definition (at minimum `{ name: string }`)
    * @returns The physical table / collection name to use in storage operations.
    *
-   * @example resolveTableName({ name: 'crm__account' }) // 'account'
+   * @example resolveTableName({ name: 'account' }) // 'account'
    * @example resolveTableName({ name: 'sys_user' })     // 'sys_user'
    */
   resolveTableName(object: { name: string }): string {

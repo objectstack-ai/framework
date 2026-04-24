@@ -470,10 +470,9 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
-   * Deep-clone an app definition, resolving short objectName references in
-   * navigation items to their fully-qualified names (FQN).
-   *
-   * e.g. `objectName: 'lead'` in namespace 'crm' → `objectName: 'crm__lead'`
+   * Deep-clone an app definition, resolving objectName references in navigation
+   * items via the registry. Object names are canonical identifiers — no FQN
+   * expansion is applied.
    */
   private resolveNavObjectNames(app: any, namespace: string): any {
       if (!app.navigation) return app;
@@ -611,7 +610,7 @@ export class ObjectQL implements IDataEngine {
    * Resolve any object identifier to the physical storage name used by drivers.
    *
    * Accepts the canonical short name (e.g., 'account') or, for explicit
-   * cross-package disambiguation, the FQN (e.g., 'crm__account'). The result is
+   * cross-package disambiguation, the canonical object name (e.g., 'account'). The result is
    * the physical table name derived via `StorageNameMapping.resolveTableName`.
    */
   private resolveObjectName(name: string): string {
@@ -619,7 +618,7 @@ export class ObjectQL implements IDataEngine {
     if (schema) {
       return StorageNameMapping.resolveTableName(schema);
     }
-    // Strip FQN namespace prefix even for unregistered objects (e.g. 'crm__account' → 'account')
+    // Return name as-is (canonical name = table name; no FQN prefix to strip)
     return StorageNameMapping.resolveTableName({ name });
   }
 

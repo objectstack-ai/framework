@@ -6,7 +6,7 @@ import { ObjectKernel } from '@objectstack/core';
  * Factory contract for instantiating a per-project {@link ObjectKernel}.
  *
  * Given a `projectId`, the factory is expected to:
- * 1. Read control-plane metadata (`sys__project` + credentials + subscribed packages).
+ * 1. Read control-plane metadata (`sys_project` + credentials + subscribed packages).
  * 2. Construct a fresh `ObjectKernel` with project-scoped driver + plugins + Apps.
  * 3. Return a **bootstrapped** kernel ready to serve requests.
  */

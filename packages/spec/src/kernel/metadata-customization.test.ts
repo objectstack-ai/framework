@@ -57,7 +57,7 @@ describe('MetadataOverlaySchema', () => {
     const overlay = {
       id: 'overlay-001',
       baseType: 'object',
-      baseName: 'crm__account',
+      baseName: 'account',
       patch: { label: 'My Custom Account' },
     };
     const parsed = MetadataOverlaySchema.parse(overlay);
@@ -69,7 +69,7 @@ describe('MetadataOverlaySchema', () => {
     const overlay = {
       id: 'overlay-002',
       baseType: 'object',
-      baseName: 'crm__account',
+      baseName: 'account',
       packageId: 'com.acme.crm',
       packageVersion: '1.0.0',
       scope: 'platform' as const,
@@ -102,7 +102,7 @@ describe('MetadataOverlaySchema', () => {
     const overlay = {
       id: 'overlay-003',
       baseType: 'view',
-      baseName: 'crm__account_list',
+      baseName: 'account_list',
       scope: 'user' as const,
       owner: 'user-123',
       patch: { columns: ['name', 'status', 'created_at'] },
@@ -171,7 +171,7 @@ describe('MergeResultSchema', () => {
   it('should accept successful merge result', () => {
     const result = {
       success: true,
-      mergedMetadata: { name: 'crm__account', label: 'Custom Account' },
+      mergedMetadata: { name: 'account', label: 'Custom Account' },
       stats: {
         totalFields: 15,
         unchanged: 10,

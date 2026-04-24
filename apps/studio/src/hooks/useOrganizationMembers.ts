@@ -162,7 +162,7 @@ export function useOrganizationInvitations(organizationId: string | undefined) {
       // This would need to query the sys_invitation object via data API
       const route = '/api/v1/data';
       const res = await client.fetch(
-        `${client.baseUrl}${route}/sys__invitation?filter=organization_id eq '${organizationId}'&sort=-created_at`
+        `${client.baseUrl}${route}/sys_invitation?filter=organization_id eq '${organizationId}'&sort=-created_at`
       );
       
       if (!res.ok) {
@@ -192,7 +192,7 @@ export function useOrganizationInvitations(organizationId: string | undefined) {
 
       // Update invitation status to 'canceled'
       const route = '/api/v1/data';
-      const res = await client.fetch(`${client.baseUrl}${route}/sys__invitation/${invitationId}`, {
+      const res = await client.fetch(`${client.baseUrl}${route}/sys_invitation/${invitationId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'canceled' }),
       });

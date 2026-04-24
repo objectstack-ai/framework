@@ -13,7 +13,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  */
 export const AiConversationObject = ObjectSchema.create({
   namespace: 'ai',
-  name: 'conversations',
+  name: 'ai_conversations',
   label: 'AI Conversation',
   pluralLabel: 'AI Conversations',
   icon: 'message-square',
