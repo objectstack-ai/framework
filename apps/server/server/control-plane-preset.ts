@@ -106,6 +106,16 @@ export function createControlPlanePlugins(cfg: ControlPlanePresetConfig): Plugin
       secret: cfg.authSecret,
       baseUrl: cfg.baseUrl,
       plugins: (cfg.authPlugins ?? { organization: true }) as any,
+      socialProviders: (() => {
+        const p: Record<string, { clientId: string; clientSecret: string }> = {};
+        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+          p.google = { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET };
+        if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+          p.github = { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET };
+        if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET)
+          p.microsoft = { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET };
+        return Object.keys(p).length > 0 ? p : undefined;
+      })(),
       // Host-based routing sends every project to its own subdomain
       // (acme.example.com, tasks.example.com, …). For the Studio session
       // cookie to survive the hop from `studio.example.com` into the

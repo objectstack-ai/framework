@@ -120,10 +120,23 @@ async function ensureKernel(): Promise<ObjectKernel> {
             // Reuse the shared helper so CORS and CSRF allowlists stay in sync
             const trustedOrigins = getVercelOrigins();
 
+            // Build social providers from environment variables
+            const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
+            if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+                socialProviders.google = { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET };
+            }
+            if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+                socialProviders.github = { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET };
+            }
+            if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
+                socialProviders.microsoft = { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET };
+            }
+
             await kernel.use(new AuthPlugin({
                 secret: process.env.AUTH_SECRET || 'dev-secret-please-change-in-production-min-32-chars',
                 baseUrl: vercelUrl,
                 ...(trustedOrigins.length > 0 ? { trustedOrigins } : {}),
+                ...(Object.keys(socialProviders).length > 0 ? { socialProviders } : {}),
             }));
 
             await kernel.use(new SecurityPlugin());
