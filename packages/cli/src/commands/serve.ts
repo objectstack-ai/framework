@@ -379,7 +379,11 @@ export default class Serve extends Command {
           // No need to manually construct the adapter here.
           await kernel.use(new AIServicePlugin());
           trackPlugin('AIService');
-        } catch {
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+            console.error('[AI] AIServicePlugin failed to start:', msg);
+          }
           // @objectstack/service-ai not installed — AI features unavailable
         }
       }

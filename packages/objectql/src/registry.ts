@@ -472,7 +472,7 @@ export class SchemaRegistry {
     const storageKey = packageId ? `${packageId}:${baseName}` : baseName;
 
     if (collection.has(storageKey)) {
-      console.warn(`[Registry] Overwriting ${type}: ${storageKey}`);
+      this.log(`[Registry] Overwriting ${type}: ${storageKey}`);
     }
     collection.set(storageKey, item);
     this.log(`[Registry] Registered ${type}: ${storageKey}`);

@@ -250,12 +250,26 @@ export class AIServicePlugin implements Plugin {
 
     // ── Auto-register built-in tools & agents when services are available ──
     let metadataService: IMetadataService | undefined;
+    // Helper: race a promise against a timeout, resolving null on timeout
+    const withTimeout = <T>(promise: Promise<T>, ms = 2000): Promise<T | null> =>
+      Promise.race([promise, new Promise<null>(resolve => setTimeout(() => resolve(null), ms))]);
     try {
       metadataService = ctx.getService<IMetadataService>('metadata');
       console.log('[AI Plugin] Retrieved metadata service:', !!metadataService, 'has getRegisteredTypes:', typeof (metadataService as any)?.getRegisteredTypes);
     } catch (e: any) {
       console.log('[AI] Metadata service not available:', e.message);
       ctx.logger.debug('[AI] Metadata service not available');
+    }
+
+    // Probe metadata service reachability with a short timeout.
+    // If the backing store (e.g. Turso) is unreachable, exists() will hang.
+    // A single probe determines whether persistence is available for all subsequent calls.
+    if (metadataService && typeof metadataService.exists === 'function') {
+      const probeResult = await withTimeout(metadataService.exists('tool', '__probe__'), 3000);
+      if (probeResult === null) {
+        ctx.logger.warn('[AI] Metadata service unreachable (timed out) — AI tools/agents will work but Studio visibility unavailable');
+        metadataService = undefined; // disable persistence for this boot
+      }
     }
 
     // Data tools require only the data engine
@@ -271,11 +285,21 @@ export class AIServicePlugin implements Plugin {
           for (const toolDef of DATA_TOOL_DEFINITIONS) {
             const toolExists =
               typeof metadataService.exists === 'function'
-                ? await metadataService.exists('tool', toolDef.name)
+                ? await withTimeout(metadataService.exists('tool', toolDef.name))
                 : false;
 
+            if (toolExists === null) {
+              ctx.logger.warn('[AI] Metadata service timed out checking tool existence (non-fatal), skipping persistence');
+              break;
+            }
+
             if (!toolExists) {
-              await metadataService.register('tool', toolDef.name, toolDef);
+              try {
+                await withTimeout(metadataService.register('tool', toolDef.name, toolDef));
+              } catch (err) {
+                ctx.logger.warn('[AI] Failed to persist tool metadata (non-fatal)',
+                  err instanceof Error ? { tool: toolDef.name, error: err.message } : { tool: toolDef.name });
+              }
             }
           }
           ctx.logger.info(`[AI] ${DATA_TOOL_DEFINITIONS.length} data tools registered as metadata`);
@@ -286,11 +310,13 @@ export class AIServicePlugin implements Plugin {
           try {
             const agentExists =
               typeof metadataService.exists === 'function'
-                ? await metadataService.exists('agent', DATA_CHAT_AGENT.name)
+                ? await withTimeout(metadataService.exists('agent', DATA_CHAT_AGENT.name))
                 : false;
 
-            if (!agentExists) {
-              await metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT);
+            if (agentExists === null) {
+              ctx.logger.warn('[AI] Metadata service timed out checking data_chat agent, skipping');
+            } else if (!agentExists) {
+              await withTimeout(metadataService.register('agent', DATA_CHAT_AGENT.name, DATA_CHAT_AGENT));
               console.log('[AI] Registered data_chat agent to metadataService');
               ctx.logger.info('[AI] data_chat agent registered');
             } else {
@@ -317,11 +343,21 @@ export class AIServicePlugin implements Plugin {
         for (const toolDef of METADATA_TOOL_DEFINITIONS) {
           const toolExists =
             typeof metadataService.exists === 'function'
-              ? await metadataService.exists('tool', toolDef.name)
+              ? await withTimeout(metadataService.exists('tool', toolDef.name))
               : false;
 
+          if (toolExists === null) {
+            ctx.logger.warn('[AI] Metadata service timed out checking tool existence (non-fatal), skipping persistence');
+            break;
+          }
+
           if (!toolExists) {
-            await metadataService.register('tool', toolDef.name, toolDef);
+            try {
+              await withTimeout(metadataService.register('tool', toolDef.name, toolDef));
+            } catch (err) {
+              ctx.logger.warn('[AI] Failed to persist tool metadata (non-fatal)',
+                err instanceof Error ? { tool: toolDef.name, error: err.message } : { tool: toolDef.name });
+            }
           }
         }
         ctx.logger.info(`[AI] ${METADATA_TOOL_DEFINITIONS.length} metadata tools registered as metadata`);
@@ -330,11 +366,13 @@ export class AIServicePlugin implements Plugin {
         try {
           const agentExists =
             typeof metadataService.exists === 'function'
-              ? await metadataService.exists('agent', METADATA_ASSISTANT_AGENT.name)
+              ? await withTimeout(metadataService.exists('agent', METADATA_ASSISTANT_AGENT.name))
               : false;
 
-          if (!agentExists) {
-            await metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT);
+          if (agentExists === null) {
+            ctx.logger.warn('[AI] Metadata service timed out checking metadata_assistant agent, skipping');
+          } else if (!agentExists) {
+            await withTimeout(metadataService.register('agent', METADATA_ASSISTANT_AGENT.name, METADATA_ASSISTANT_AGENT));
             console.log('[AI] Registered metadata_assistant agent to metadataService');
             ctx.logger.info('[AI] metadata_assistant agent registered');
           } else {

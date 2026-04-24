@@ -328,6 +328,7 @@ export class ObjectKernel {
                 
                 if (!result.success) {
                     this.logger.error(`Plugin startup failed: ${plugin.name}`, result.error);
+                    console.error(`[Kernel] Plugin startup failed: ${plugin.name}`, result.error instanceof Error ? result.error.message : result.error, result.error instanceof Error ? result.error.stack : '');
                     
                     if (this.config.rollbackOnFailure) {
                         this.logger.warn('Rolling back started plugins...');
