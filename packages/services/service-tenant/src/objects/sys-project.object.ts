@@ -163,7 +163,7 @@ export const SysProject = ObjectSchema.create({
     trackHistory: true,
     searchable: true,
     apiEnabled: true,
-    apiMethods: ['get', 'list', 'create', 'update'],
+    apiMethods: ['get', 'list', 'create', 'update', 'delete'],
     trash: false,
     mru: true,
   },

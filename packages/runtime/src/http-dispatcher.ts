@@ -1433,6 +1433,11 @@ export class HttpDispatcher {
                 region: string;
                 storageLimitMb: number;
             }): Promise<{ databaseUrl: string; plaintextSecret: string }>;
+            deleteDatabase?(params: {
+                projectId: string;
+                databaseName: string;
+                databaseUrl?: string;
+            }): Promise<void>;
         } | undefined> => {
             try {
                 const registry: any = await this.resolveService('project-provisioning-adapters');

@@ -38,6 +38,16 @@ export interface ProjectDatabaseAdapter {
     region: string;
     storageLimitMb: number;
   }): Promise<{ databaseUrl: string; plaintextSecret: string }>;
+
+  /**
+   * Permanently destroy the physical database for the given project.
+   * Implementations should treat a missing database as a no-op (idempotent).
+   */
+  deleteDatabase(params: {
+    projectId: string;
+    databaseName: string;
+    databaseUrl?: string;
+  }): Promise<void>;
 }
 
 /**
@@ -98,6 +108,17 @@ export class TursoProjectDatabaseAdapter implements ProjectDatabaseAdapter {
       plaintextSecret: jwt,
     };
   }
+
+  async deleteDatabase(params: { projectId: string; databaseName: string }): Promise<void> {
+    try {
+      await this.client.deleteDatabase(params.databaseName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Treat "not found" as success — deletion is idempotent.
+      if (/404|not.?found/i.test(message)) return;
+      throw error;
+    }
+  }
 }
 
 /**
@@ -130,6 +151,15 @@ export class LocalSQLiteProjectDatabaseAdapter implements ProjectDatabaseAdapter
       databaseUrl: `file:${dbPath}`,
       plaintextSecret: '',
     };
+  }
+
+  async deleteDatabase(params: { projectId: string; databaseName: string }): Promise<void> {
+    const { rmSync, existsSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const dbPath = resolve(this.baseDir, `${params.databaseName}.db`);
+    for (const path of [dbPath, `${dbPath}-shm`, `${dbPath}-wal`, `${dbPath}-journal`]) {
+      if (existsSync(path)) rmSync(path, { force: true });
+    }
   }
 }
 
@@ -165,6 +195,17 @@ export class MemoryProjectDatabaseAdapter implements ProjectDatabaseAdapter {
       plaintextSecret: '',
     };
   }
+
+  async deleteDatabase(params: { projectId: string; databaseName: string }): Promise<void> {
+    try {
+      const { rmSync, existsSync } = await import('node:fs');
+      const { resolve } = await import('node:path');
+      const filePath = resolve(this.baseDir, `${params.databaseName}.json`);
+      if (existsSync(filePath)) rmSync(filePath, { force: true });
+    } catch {
+      // Non-fatal — snapshot may not exist.
+    }
+  }
 }
 
 /**
@@ -186,6 +227,10 @@ export class MockProjectDatabaseAdapter implements ProjectDatabaseAdapter {
       databaseUrl: `libsql://${params.databaseName}.mock-${this.driver}.local`,
       plaintextSecret: `mock-token-${params.projectId}`,
     };
+  }
+
+  async deleteDatabase(_params: { projectId: string; databaseName: string }): Promise<void> {
+    // Mock adapter — no physical resource to release.
   }
 }
 
@@ -637,6 +682,115 @@ export class ProjectProvisioningService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Permanently delete a project: cascade-removes credential, member, and
+   * package-installation rows from the control plane, then destroys the
+   * physical database via the registered adapter, then removes the
+   * `sys_project` row itself.
+   *
+   * Guards:
+   * - System projects (isSystem=true) cannot be deleted.
+   * - Default projects can only be deleted with `force: true`.
+   *
+   * Idempotent: a missing physical database is treated as success and
+   * recorded as a warning rather than an error.
+   */
+  async deleteProject(
+    projectId: string,
+    options: { force?: boolean } = {},
+  ): Promise<{ deleted: boolean; durationMs: number; warnings: string[] }> {
+    const startedAt = Date.now();
+    const warnings: string[] = [];
+
+    if (!this.config.controlPlaneDriver) {
+      throw new Error('Cannot delete project: control plane driver is not configured.');
+    }
+    const cp = this.config.controlPlaneDriver;
+
+    const row = (await cp.findOne('sys_project', { where: { id: projectId } } as any)) as
+      | Record<string, unknown>
+      | null;
+    if (!row) {
+      throw new Error(`Project ${projectId} not found.`);
+    }
+
+    if (row.is_system === true || row.is_system === 1) {
+      throw new Error(`Project ${projectId} is a system project and cannot be deleted.`);
+    }
+
+    if ((row.is_default === true || row.is_default === 1) && !options.force) {
+      throw new Error(
+        `Project ${projectId} is the default project for its organization. Pass { force: true } to delete it.`,
+      );
+    }
+
+    const driver = (row.database_driver as ProjectDriver | undefined) ?? this.config.defaultDriver;
+    const databaseUrl = row.database_url as string | undefined;
+    const databaseName = `p-${projectId.replace(/-/g, '').slice(0, 24)}`;
+
+    // Cascade-delete dependent rows. Use deleteMany if available; otherwise
+    // fall back to find + per-row delete.
+    const cascadeObjects: Array<{ object: string; field: string }> = [
+      { object: 'sys_project_credential', field: 'project_id' },
+      { object: 'sys_project_member', field: 'project_id' },
+      { object: 'sys_package_installation', field: 'project_id' },
+    ];
+
+    for (const { object, field } of cascadeObjects) {
+      try {
+        const anyCp = cp as any;
+        if (typeof anyCp.deleteMany === 'function') {
+          await anyCp.deleteMany(object, { where: { [field]: projectId } });
+        } else {
+          const rows = ((await cp.find(object, { where: { [field]: projectId } } as any)) ??
+            []) as Array<{ id: string | number }>;
+          for (const r of rows) {
+            if (r?.id != null) {
+              await cp.delete(object, r.id);
+            }
+          }
+        }
+      } catch (error) {
+        warnings.push(
+          `Failed to cascade-delete ${object} rows for project ${projectId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    // Tear down the physical database via the adapter (idempotent).
+    const adapter = this.resolveAdapter(driver);
+    if (adapter) {
+      try {
+        await adapter.deleteDatabase({ projectId, databaseName, databaseUrl });
+      } catch (error) {
+        warnings.push(
+          `Failed to delete physical database for project ${projectId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    } else {
+      warnings.push(
+        `No adapter registered for driver "${driver}"; physical database for project ${projectId} was not released.`,
+      );
+    }
+
+    // Finally remove the sys_project row itself.
+    try {
+      await cp.delete('sys_project', projectId);
+    } catch (error) {
+      throw new Error(
+        `Failed to delete sys_project row for ${projectId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+
+    return { deleted: true, durationMs: Date.now() - startedAt, warnings };
   }
 }
 
