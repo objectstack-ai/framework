@@ -76,6 +76,7 @@ const contacts: DatasetInput = {
       phone: '+1-415-555-0101',
       title: 'VP of Engineering',
       department: 'Engineering',
+      account: 'Acme Corporation',
     },
     {
       salutation: 'Ms.',
@@ -85,6 +86,7 @@ const contacts: DatasetInput = {
       phone: '+1-312-555-0201',
       title: 'Chief Procurement Officer',
       department: 'Executive',
+      account: 'Globex Industries',
     },
     {
       salutation: 'Dr.',
@@ -94,6 +96,7 @@ const contacts: DatasetInput = {
       phone: '+1-212-555-0301',
       title: 'Director of Operations',
       department: 'Operations',
+      account: 'Initech Solutions',
     },
     {
       salutation: 'Ms.',
@@ -103,6 +106,7 @@ const contacts: DatasetInput = {
       phone: '+1-617-555-0401',
       title: 'Head of Partnerships',
       department: 'Sales',
+      account: 'Stark Medical',
     },
     {
       salutation: 'Mr.',
@@ -112,6 +116,7 @@ const contacts: DatasetInput = {
       phone: '+1-650-555-0501',
       title: 'CTO',
       department: 'Engineering',
+      account: 'Wayne Enterprises',
     },
   ]
 };
@@ -163,6 +168,7 @@ const opportunities: DatasetInput = {
   records: [
     {
       name: 'Acme Platform Upgrade',
+      account: 'Acme Corporation',
       amount: 150000,
       stage: 'proposal',
       probability: 60,
@@ -172,6 +178,7 @@ const opportunities: DatasetInput = {
     },
     {
       name: 'Globex Manufacturing Suite',
+      account: 'Globex Industries',
       amount: 500000,
       stage: 'qualification',
       probability: 30,
@@ -181,6 +188,7 @@ const opportunities: DatasetInput = {
     },
     {
       name: 'Wayne Enterprise License',
+      account: 'Wayne Enterprises',
       amount: 1200000,
       stage: 'negotiation',
       probability: 75,
@@ -190,6 +198,7 @@ const opportunities: DatasetInput = {
     },
     {
       name: 'Initech Cloud Migration',
+      account: 'Initech Solutions',
       amount: 80000,
       stage: 'needs_analysis',
       probability: 25,
@@ -284,6 +293,8 @@ const cases: DatasetInput = {
     {
       subject: 'Login issues after platform upgrade',
       description: 'Users unable to log in after the v4.2 upgrade.',
+      account: 'Acme Corporation',
+      contact: 'john.smith@acme.example.com',
       status: 'in_progress',
       priority: 'high',
       type: 'problem',
@@ -296,6 +307,8 @@ const cases: DatasetInput = {
     {
       subject: 'Data export timing out for large datasets',
       description: 'CSV export fails for datasets over 10k rows.',
+      account: 'Globex Industries',
+      contact: 'sarah.j@globex.example.com',
       status: 'escalated',
       priority: 'critical',
       type: 'bug',
@@ -309,6 +322,8 @@ const cases: DatasetInput = {
     {
       subject: 'How to configure SSO with Okta?',
       description: 'Customer needs guidance on SSO setup with Okta.',
+      account: 'Initech Solutions',
+      contact: 'mchen@initech.example.com',
       status: 'resolved',
       priority: 'medium',
       type: 'question',
@@ -322,6 +337,8 @@ const cases: DatasetInput = {
     {
       subject: 'API rate limit exceeded on production',
       description: 'Production environment hitting rate limits during peak hours.',
+      account: 'Wayne Enterprises',
+      contact: 'rwilson@wayne.example.com',
       status: 'closed',
       priority: 'high',
       type: 'problem',
@@ -336,6 +353,8 @@ const cases: DatasetInput = {
     {
       subject: 'PDF reports not rendering charts correctly',
       description: 'Charts appear blank when exporting dashboard to PDF.',
+      account: 'Stark Medical',
+      contact: 'emily.d@starkmed.example.com',
       status: 'new',
       priority: 'medium',
       type: 'bug',
@@ -348,6 +367,8 @@ const cases: DatasetInput = {
     {
       subject: 'Billing discrepancy on last invoice',
       description: 'Customer billed for 15 seats but only uses 12.',
+      account: 'Acme Corporation',
+      contact: 'john.smith@acme.example.com',
       status: 'waiting_customer',
       priority: 'low',
       type: 'problem',
@@ -360,6 +381,8 @@ const cases: DatasetInput = {
     {
       subject: 'Mobile app crashes on iOS 17',
       description: 'App crashes on launch for users running iOS 17.2+.',
+      account: 'Globex Industries',
+      contact: 'sarah.j@globex.example.com',
       status: 'in_progress',
       priority: 'critical',
       type: 'bug',
@@ -373,6 +396,8 @@ const cases: DatasetInput = {
     {
       subject: 'Request: bulk import via CSV',
       description: 'Customer requesting ability to import records via CSV upload.',
+      account: 'Wayne Enterprises',
+      contact: 'rwilson@wayne.example.com',
       status: 'closed',
       priority: 'low',
       type: 'feature_request',
