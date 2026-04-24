@@ -71,9 +71,10 @@ const result = AuthEndpoint.parse(data);
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **id** | `string` | ✅ | Provider ID (e.g., google, github, microsoft) |
+| **id** | `string` | ✅ | Provider ID (e.g., google, github, microsoft, okta) |
 | **name** | `string` | ✅ | Display name (e.g., Google, GitHub) |
 | **enabled** | `boolean` | ✅ | Whether this provider is enabled |
+| **type** | `Enum<'social' \| 'oidc'>` | ✅ | Provider type |
 
 
 ---

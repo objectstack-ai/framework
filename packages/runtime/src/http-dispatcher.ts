@@ -1645,7 +1645,7 @@ export class HttpDispatcher {
                             if (adapter) {
                                 const result = await adapter.createDatabase({
                                     projectId,
-                                    databaseName: `proj-${projectId}`,
+                                    databaseName: `p-${projectId.replace(/-/g, "").slice(0, 24)}`,
                                     region: 'us-east-1',
                                     storageLimitMb: req.storage_limit_mb ?? 1024,
                                 });
@@ -1908,7 +1908,7 @@ export class HttpDispatcher {
                             if (adapter) {
                                 const result = await adapter.createDatabase({
                                     projectId: id,
-                                    databaseName: `proj-${id}`,
+                                    databaseName: `p-${id.replace(/-/g, "").slice(0, 24)}`,
                                     region: 'us-east-1',
                                     storageLimitMb: envRow.storage_limit_mb ?? 1024,
                                 });

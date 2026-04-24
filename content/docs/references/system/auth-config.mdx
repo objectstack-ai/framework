@@ -18,8 +18,8 @@ Used in server-side configuration injection.
 ## TypeScript Usage
 
 ```typescript
-import { AdvancedAuthConfig, AuthConfig, AuthPluginConfig, AuthProviderConfig, EmailAndPasswordConfig, EmailVerificationConfig, MutualTLSConfig, SocialProviderConfig } from '@objectstack/spec/system';
-import type { AdvancedAuthConfig, AuthConfig, AuthPluginConfig, AuthProviderConfig, EmailAndPasswordConfig, EmailVerificationConfig, MutualTLSConfig, SocialProviderConfig } from '@objectstack/spec/system';
+import { AdvancedAuthConfig, AuthConfig, AuthPluginConfig, AuthProviderConfig, EmailAndPasswordConfig, EmailVerificationConfig, MutualTLSConfig, OidcProviderConfig, OidcProvidersConfig, SocialProviderConfig } from '@objectstack/spec/system';
+import type { AdvancedAuthConfig, AuthConfig, AuthPluginConfig, AuthProviderConfig, EmailAndPasswordConfig, EmailVerificationConfig, MutualTLSConfig, OidcProviderConfig, OidcProvidersConfig, SocialProviderConfig } from '@objectstack/spec/system';
 
 // Validate data
 const result = AdvancedAuthConfig.parse(data);
@@ -57,6 +57,7 @@ Advanced / low-level Better-Auth options
 | **session** | `Object` | optional |  |
 | **trustedOrigins** | `string[]` | optional | Trusted origins for CSRF protection. Supports wildcards (e.g. "https://*.example.com"). The baseUrl origin is always trusted implicitly. |
 | **socialProviders** | `Record<string, Record<string, any>>` | optional | Social/OAuth provider map forwarded to better-auth socialProviders. Keys are provider ids (google, github, apple, …). |
+| **oidcProviders** | `Object[]` | optional | List of OIDC/OAuth2 providers for enterprise SSO. Can also be provided via OIDC_PROVIDERS env var as a JSON array. |
 | **emailAndPassword** | `Object` | optional | Email and password authentication options forwarded to better-auth |
 | **emailVerification** | `Object` | optional | Email verification options forwarded to better-auth |
 | **advanced** | `Object` | optional | Advanced / low-level Better-Auth options |
@@ -144,6 +145,32 @@ Email verification options forwarded to better-auth
 | **allowedCNs** | `string[]` | optional | Allowed Common Names (CN) on client certificates |
 | **allowedOUs** | `string[]` | optional | Allowed Organizational Units (OU) on client certificates |
 | **pinning** | `Object` | optional | Certificate pinning configuration |
+
+
+---
+
+## OidcProviderConfig
+
+OIDC / Generic OAuth2 provider configuration for enterprise SSO
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **providerId** | `string` | ✅ | Unique identifier for this provider (e.g., okta, azure-ad) |
+| **name** | `string` | optional | Display name shown in the UI (defaults to providerId) |
+| **discoveryUrl** | `string` | optional | OIDC discovery URL (.well-known/openid-configuration). When provided, authorizationUrl/tokenUrl/userInfoUrl are fetched automatically. |
+| **issuer** | `string` | optional | Expected issuer identifier for token validation |
+| **authorizationUrl** | `string` | optional | OAuth2 authorization endpoint (optional if discoveryUrl is set) |
+| **tokenUrl** | `string` | optional | OAuth2 token endpoint (optional if discoveryUrl is set) |
+| **userInfoUrl** | `string` | optional | OAuth2 userinfo endpoint (optional if discoveryUrl is set) |
+| **clientId** | `string` | ✅ | OAuth2 client ID |
+| **clientSecret** | `string` | ✅ | OAuth2 client secret |
+| **scopes** | `string[]` | optional | Requested scopes (default: openid email profile) |
+| **pkce** | `boolean` | optional | Enable PKCE (recommended for public clients) |
+
+
+---
 
 
 ---

@@ -27,7 +27,7 @@ The Studio login and registration pages automatically render **Continue with …
    For local development: `http://localhost:3000/api/v1/auth/callback/google`
 4. Copy the **Client ID** and **Client Secret**.
 
-```env
+```bash
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 
@@ -44,7 +44,7 @@ GOOGLE_CLIENT_SECRET=your-google-client-secret
    ```
 3. Copy the **Client ID** and generate a **Client Secret**.
 
-```env
+```bash
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 ```
@@ -58,7 +58,7 @@ GITHUB_CLIENT_SECRET=your-github-client-secret
    ```
 3. Under **Certificates & secrets**, create a new client secret.
 
-```env
+```bash
 MICROSOFT_CLIENT_ID=your-azure-app-client-id
 MICROSOFT_CLIENT_SECRET=your-azure-client-secret
 
@@ -75,7 +75,7 @@ MICROSOFT_CLIENT_SECRET=your-azure-client-secret
    ```
 3. Generate a **private key** under **Keys**.
 
-```env
+```bash
 APPLE_CLIENT_ID=your-apple-services-id
 APPLE_CLIENT_SECRET=your-apple-private-key-jwt
 ```
@@ -90,7 +90,7 @@ For enterprise single sign-on, set the `OIDC_PROVIDERS` environment variable to 
 
 ### Quick start — Okta
 
-```env
+```bash
 OIDC_PROVIDERS='[
   {
     "providerId": "okta",
@@ -105,7 +105,7 @@ OIDC_PROVIDERS='[
 
 ### Quick start — Azure AD (OIDC)
 
-```env
+```bash
 OIDC_PROVIDERS='[
   {
     "providerId": "azure-ad",
@@ -119,7 +119,7 @@ OIDC_PROVIDERS='[
 
 ### Quick start — Keycloak
 
-```env
+```bash
 OIDC_PROVIDERS='[
   {
     "providerId": "keycloak",
@@ -134,7 +134,7 @@ OIDC_PROVIDERS='[
 
 ### Multiple enterprise providers
 
-```env
+```bash
 OIDC_PROVIDERS='[
   {
     "providerId": "okta",
