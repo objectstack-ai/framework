@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "dev": "objectstack dev",
-    "start": "objectstack serve",
+    "build": "tsup",
+    "start": "objectstack serve dist/objectstack.config.js --prebuilt",
     "doctor": "objectstack doctor",
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",
@@ -45,6 +46,7 @@
     "@objectstack/cli": "workspace:*",
     "esbuild": "^0.28.0",
     "ts-node": "^10.9.2",
+    "tsup": "^8.0.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }

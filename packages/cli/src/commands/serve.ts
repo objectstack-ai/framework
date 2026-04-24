@@ -62,6 +62,7 @@ export default class Serve extends Command {
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
     ui: Flags.boolean({ description: 'Enable Studio UI at /_studio/ (default: true in dev mode)', allowNo: true }),
     server: Flags.boolean({ description: 'Start HTTP server plugin', default: true, allowNo: true }),
+    prebuilt: Flags.boolean({ description: 'Skip esbuild/bundle-require — load config as native ESM (production mode)', default: false }),
   };
 
   async run(): Promise<void> {
@@ -141,9 +142,11 @@ export default class Serve extends Command {
       console.debug = (...args: any[]) => { if (!bootQuiet) originalConsoleDebug(...args); };
 
       // Load configuration
-      const { mod } = await bundleRequire({
-        filepath: absolutePath,
-      });
+      // --prebuilt: load as native ESM (no esbuild, no bundle-require) —
+      // intended for production where the config has been compiled to dist/.
+      const { mod } = flags.prebuilt
+        ? { mod: await import(absolutePath.startsWith('/') ? `file://${absolutePath}` : absolutePath) }
+        : await bundleRequire({ filepath: absolutePath });
 
       const config = mod.default || mod;
 

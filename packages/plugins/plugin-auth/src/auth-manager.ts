@@ -232,6 +232,19 @@ export class AuthManager {
     if (pluginConfig?.organization) {
       plugins.push(organization({
         schema: buildOrganizationPluginSchema(),
+        // No mailer is wired in framework yet — log the accept URL so
+        // operators / UI can fall back to copy-paste flows. Replace this
+        // with a real mail integration when available.
+        sendInvitationEmail: async ({ email, invitation, organization: org, inviter }) => {
+          const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+          const acceptUrl = `${baseUrl}/accept-invitation/${invitation.id}`;
+          console.warn(
+            `[AuthManager] Invitation email not configured. ` +
+            `To: ${email} (org: ${org?.name ?? invitation.organizationId}, ` +
+            `role: ${invitation.role}, inviter: ${inviter?.user?.email ?? 'unknown'}) ` +
+            `URL: ${acceptUrl}`,
+          );
+        },
       }));
     }
 
