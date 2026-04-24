@@ -3,138 +3,185 @@
 /**
  * Control-Plane Plugin Preset
  *
- * Builds the plugin list that powers the shared Server's control plane:
- *  - ObjectQL + driver for sys_* tables (project registry, credentials, …)
- *  - Tenant plugin (registers sys_project / sys_project_credential / …)
- *  - System project plugin (provisions the well-known SYSTEM_PROJECT_ID)
- *  - Auth / Security / Audit for platform-level authentication + RBAC
- *  - Package service for the package registry (ADR-0003)
- *  - Metadata service for schema read/write
+ * All heavy plugin packages (better-auth, security, audit, metadata …) are
+ * loaded via dynamic import() inside init() so that bundleRequire/esbuild
+ * does NOT inline them at parse time. This keeps startup RSS below 200 MB.
  *
- * This was previously lived in `apps/cloud/objectstack.config.ts`. After
- * unifying cloud + server into a single process (per the transformation
- * plan) the preset is imported from the server bootstrap to initialise the
- * "system" kernel that owns the control-plane database.
+ * Each entry is a lazy-proxy plugin: init() dynamically imports the real
+ * package, constructs it, and delegates all subsequent lifecycle hooks
+ * (start, stop) to the real instance stored on `_impl`.
  */
 
 import type { Contracts } from '@objectstack/spec';
-import {
-  DriverPlugin,
-  createSystemProjectPlugin,
-} from '@objectstack/runtime';
-
-type Plugin = any;
-import { ObjectQLPlugin } from '@objectstack/objectql';
-import { MetadataPlugin } from '@objectstack/metadata';
-import { PackageServicePlugin } from '@objectstack/service-package';
-import { createTenantPlugin } from '@objectstack/service-tenant';
-import { AuthPlugin } from '@objectstack/plugin-auth';
-import { SecurityPlugin } from '@objectstack/plugin-security';
-import { AuditPlugin } from '@objectstack/plugin-audit';
-
-type IDataDriver = Contracts.IDataDriver;
 
 export interface ControlPlanePresetConfig {
-  /**
-   * Pre-constructed control-plane driver (Turso or SQLite). The DriverPlugin
-   * will register it under `com.objectstack.driver.<driver.name>`.
-   */
-  controlDriver: IDataDriver;
-
-  /** Driver short id (e.g. `'turso'`, `'sqlite'`). */
-  driverName: string;
-
-  /** Auth secret (≥32 chars). */
+  /** Promise resolving to the control-plane driver. Accepted as a Promise so
+   *  the caller can defer the heavy DB library import until plugin init time. */
+  controlDriverPromise: Promise<{
+    driver: Contracts.IDataDriver;
+    driverName: string;
+    databaseUrl: string;
+  }>;
   authSecret: string;
-
-  /** Base URL used by AuthPlugin for absolute callback URLs. */
   baseUrl: string;
-
-  /**
-   * Whether to register Tenant sys objects (sys_project, sys_project_credential, …).
-   * Defaults to true. Set to false for tests that mock the control plane.
-   */
   registerSystemObjects?: boolean;
-
-  /**
-   * Whether to register the deprecated legacy tenant database object.
-   * Defaults to false.
-   */
   registerLegacyTenantDatabase?: boolean;
-
-  /** Additional AuthPlugin plugin flags. */
   authPlugins?: Record<string, unknown>;
+}
+
+/** Create a lazy-proxy plugin that defers its import to init(). */
+function lazyPlugin(name: string, factory: (ctx: any) => Promise<any>): any {
+  let impl: any = null;
+  return {
+    name,
+    async init(ctx: any) {
+      impl = await factory(ctx);
+      if (impl?.init) await impl.init(ctx);
+    },
+    async start(ctx: any) {
+      if (impl?.start) await impl.start(ctx);
+    },
+    async stop(ctx: any) {
+      if (impl?.stop) await impl.stop(ctx);
+    },
+  };
 }
 
 /**
  * Build the ordered plugin list that powers the control plane.
  *
- * Ordering notes (important):
- *  1. ObjectQLPlugin first so downstream plugins can register schema
- *     through its datasource mapping.
- *  2. Tiny inline plugin right after ObjectQL to set the datasource mapping
- *     (single-driver mapping — control plane only has one physical DB).
- *  3. DriverPlugin registers the control-plane driver.
- *  4. PackageServicePlugin + TenantPlugin + system project plugin introduce
- *     the sys_* objects.
- *  5. Auth/Security/Audit wire up authentication and policy.
- *  6. MetadataPlugin last — it snapshots the final schema registry.
+ * Ordering:
+ *  1. ObjectQL — schema registry
+ *  2. Datasource mapping — wires single driver to ObjectQL
+ *  3. Driver — control-plane database
+ *  4. PackageService, Tenant, SystemProject — sys_* objects
+ *  5. Auth, Security, Audit — authentication + RBAC
+ *  6. Metadata — file-system schema snapshots
  */
-export function createControlPlanePlugins(cfg: ControlPlanePresetConfig): Plugin[] {
-  const oqlPlugin = new ObjectQLPlugin();
-  const datasourceMapping = [
-    { default: true, datasource: `com.objectstack.driver.${cfg.driverName}` },
-  ];
+export function createControlPlanePlugins(cfg: ControlPlanePresetConfig): any[] {
+  // Shared ref so ObjectQL proxy can expose its instance to the datasource-mapping plugin.
+  const oqlRef: { ql: any } = { ql: null };
+  // Driver info resolved lazily; both datasource-mapping and Driver proxy read from here.
+  const driverRef: { driverName: string; driver: any; databaseUrl: string } = {
+    driverName: '', driver: null, databaseUrl: '',
+  };
 
   return [
-    oqlPlugin,
+    // ── 1. ObjectQL ────────────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.engine.objectql', async () => {
+      const { ObjectQLPlugin } = await import('@objectstack/objectql');
+      const plugin = new ObjectQLPlugin();
+      oqlRef.ql = (plugin as any).ql ?? plugin;
+      return plugin;
+    }),
+
+    // ── 2. Datasource mapping (no heavy deps) ─────────────────────────────
+    //   Runs after Driver (step 3) because kernel calls init() in registration order.
+    //   We defer the actual mapping until after driverRef is populated.
     {
       name: 'control-plane-datasource-mapping',
-      init() {
-        const ql = (oqlPlugin as any).ql;
-        if (ql?.setDatasourceMapping) ql.setDatasourceMapping(datasourceMapping);
+      async init() {
+        // Resolve driver info if not yet done (may have been done by step 3 already).
+        if (!driverRef.driverName) {
+          const resolved = await cfg.controlDriverPromise;
+          Object.assign(driverRef, resolved);
+        }
+        const ql = oqlRef.ql;
+        if (ql?.setDatasourceMapping) {
+          ql.setDatasourceMapping([
+            { default: true, datasource: `com.objectstack.driver.${driverRef.driverName}` },
+          ]);
+        }
       },
-    } as unknown as Plugin,
-    new DriverPlugin(cfg.controlDriver as any, cfg.driverName),
-    new PackageServicePlugin(),
-    createTenantPlugin({
-      registerSystemObjects: cfg.registerSystemObjects ?? true,
-      registerLegacyTenantDatabase: cfg.registerLegacyTenantDatabase ?? false,
+    },
+
+    // ── 3. Driver ──────────────────────────────────────────────────────────
+    {
+      name: 'com.objectstack.driver',
+      version: '0.0.0',
+      async init(ctx: any) {
+        const resolved = await cfg.controlDriverPromise;
+        Object.assign(driverRef, resolved);
+        console.log(`[Bootstrap] Control DB: ${driverRef.databaseUrl} (${driverRef.driverName})`);
+        const { DriverPlugin } = await import('@objectstack/runtime');
+        const plugin = new DriverPlugin(driverRef.driver, driverRef.driverName);
+        // Patch the name so kernel registers it under the correct driver id
+        (this as any)._driverPlugin = plugin;
+        if (plugin.init) await plugin.init(ctx);
+      },
+      async start(ctx: any) {
+        if ((this as any)._driverPlugin?.start) await (this as any)._driverPlugin.start(ctx);
+      },
+      async stop(ctx: any) {
+        if ((this as any)._driverPlugin?.stop) await (this as any)._driverPlugin.stop(ctx);
+      },
+    },
+
+    // ── 4a. PackageService ────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.service.package', async () => {
+      const { PackageServicePlugin } = await import('@objectstack/service-package');
+      return new PackageServicePlugin();
     }),
-    createSystemProjectPlugin(),
-    new AuthPlugin({
-      secret: cfg.authSecret,
-      baseUrl: cfg.baseUrl,
-      plugins: (cfg.authPlugins ?? { organization: true }) as any,
-      socialProviders: (() => {
-        const p: Record<string, { clientId: string; clientSecret: string }> = {};
-        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
-          p.google = { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET };
-        if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
-          p.github = { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET };
-        if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET)
-          p.microsoft = { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET };
-        return Object.keys(p).length > 0 ? p : undefined;
-      })(),
-      // Host-based routing sends every project to its own subdomain
-      // (acme.example.com, tasks.example.com, …). For the Studio session
-      // cookie to survive the hop from `studio.example.com` into the
-      // project subdomain we have to opt in to better-auth's
-      // cross-subdomain cookie mode and scope the cookie to the parent
-      // domain (e.g. `.example.com`). Configured via env so the same
-      // image works locally (cookie stays host-only) and in prod.
-      advanced: process.env.OBJECTSTACK_COOKIE_DOMAIN
-        ? ({
-            crossSubDomainCookies: {
-              enabled: true,
-              domain: process.env.OBJECTSTACK_COOKIE_DOMAIN,
-            },
-            useSecureCookies: process.env.NODE_ENV === 'production',
-          } as any)
-        : undefined,
+
+    // ── 4b. Tenant ────────────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.service.tenant', async () => {
+      const { createTenantPlugin } = await import('@objectstack/service-tenant');
+      return createTenantPlugin({
+        registerSystemObjects: cfg.registerSystemObjects ?? true,
+        registerLegacyTenantDatabase: cfg.registerLegacyTenantDatabase ?? false,
+      });
     }),
-    new SecurityPlugin(),
-    new AuditPlugin(),
-    new MetadataPlugin({ watch: false }),
+
+    // ── 4c. SystemProject ─────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.system-project', async () => {
+      const { createSystemProjectPlugin } = await import('@objectstack/runtime');
+      return createSystemProjectPlugin();
+    }),
+
+    // ── 5a. Auth (heavy: better-auth + all plugins) ───────────────────────
+    lazyPlugin('com.objectstack.auth', async () => {
+      const { AuthPlugin } = await import('@objectstack/plugin-auth');
+      const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
+      if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+        socialProviders.google = { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET };
+      if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+        socialProviders.github = { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET };
+      if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET)
+        socialProviders.microsoft = { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET };
+
+      return new AuthPlugin({
+        secret: cfg.authSecret,
+        baseUrl: cfg.baseUrl,
+        plugins: (cfg.authPlugins ?? { organization: true }) as any,
+        socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
+        advanced: process.env.OBJECTSTACK_COOKIE_DOMAIN
+          ? ({
+              crossSubDomainCookies: {
+                enabled: true,
+                domain: process.env.OBJECTSTACK_COOKIE_DOMAIN,
+              },
+              useSecureCookies: process.env.NODE_ENV === 'production',
+            } as any)
+          : undefined,
+      });
+    }),
+
+    // ── 5b. Security ──────────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.security', async () => {
+      const { SecurityPlugin } = await import('@objectstack/plugin-security');
+      return new SecurityPlugin();
+    }),
+
+    // ── 5c. Audit ─────────────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.audit', async () => {
+      const { AuditPlugin } = await import('@objectstack/plugin-audit');
+      return new AuditPlugin();
+    }),
+
+    // ── 6. Metadata ───────────────────────────────────────────────────────
+    lazyPlugin('com.objectstack.metadata', async () => {
+      const { MetadataPlugin } = await import('@objectstack/metadata');
+      return new MetadataPlugin({ watch: false });
+    }),
   ];
 }

@@ -31,14 +31,9 @@
 import { resolve as resolvePath } from 'node:path';
 import type { Contracts } from '@objectstack/spec';
 import {
-    MultiProjectPlugin,
     type BasePluginsFactory,
     type AppBundleResolver,
 } from '@objectstack/runtime';
-import { ObjectQLPlugin } from '@objectstack/objectql';
-import { MetadataPlugin } from '@objectstack/metadata';
-import { TursoDriver } from '@objectstack/driver-turso';
-import { SqlDriver } from '@objectstack/driver-sql';
 import { createControlPlanePlugins } from './server/control-plane-preset.js';
 import { templateRegistry } from './server/templates/registry.js';
 
@@ -46,49 +41,30 @@ type IDataDriver = Contracts.IDataDriver;
 
 /**
  * Resolve the control-plane driver from `OBJECTSTACK_DATABASE_URL`.
- *
- * `libsql:` / `http(s):` URLs → `TursoDriver`. Anything else is treated
- * as a SQLite filesystem path, stripping `file:` / `file://` prefixes
- * so `file:./x.db`, `file:///x.db`, and bare `./x.db` all resolve to
- * the same file.
+ * Drivers are loaded via dynamic import() so esbuild does not bundle
+ * the database libraries (better-sqlite3, libsql) at parse time.
  */
-function buildControlDriver(): {
+async function buildControlDriver(): Promise<{
     driver: IDataDriver;
     driverName: 'sqlite' | 'turso';
     databaseUrl: string;
-} {
+}> {
     const raw = (process.env.OBJECTSTACK_DATABASE_URL || process.env.TURSO_DATABASE_URL)?.trim()
         || `file:${resolvePath(process.cwd(), '.objectstack/data/control.db')}`;
 
     const authToken = process.env.OBJECTSTACK_DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN;
 
     if (/^(libsql|https?):\/\//i.test(raw)) {
-        const driver = new TursoDriver({
-            url: raw,
-            authToken,
-        });
-        return {
-            driver: driver as unknown as IDataDriver,
-            driverName: 'turso',
-            databaseUrl: raw,
-        };
+        const { TursoDriver } = await import('@objectstack/driver-turso');
+        const driver = new TursoDriver({ url: raw, authToken });
+        return { driver: driver as unknown as IDataDriver, driverName: 'turso', databaseUrl: raw };
     }
 
     const filename = raw.replace(/^file:(\/\/)?/, '');
-    const driver = new SqlDriver({
-        client: 'better-sqlite3',
-        connection: { filename },
-        useNullAsDefault: true,
-    });
-    return {
-        driver: driver as unknown as IDataDriver,
-        driverName: 'sqlite',
-        databaseUrl: `file:${filename}`,
-    };
+    const { SqlDriver } = await import('@objectstack/driver-sql');
+    const driver = new SqlDriver({ client: 'better-sqlite3', connection: { filename }, useNullAsDefault: true });
+    return { driver: driver as unknown as IDataDriver, driverName: 'sqlite', databaseUrl: `file:${filename}` };
 }
-
-const { driver: controlDriver, driverName, databaseUrl } = buildControlDriver();
-console.log(`[Bootstrap] Control DB: ${databaseUrl} (${driverName})`);
 
 const authSecret = process.env.AUTH_SECRET
     ?? 'dev-secret-please-change-in-production-min-32-chars';
@@ -101,14 +77,15 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
         : undefined)
     ?? `http://localhost:${process.env.PORT ?? 3000}`;
 
-// Per-project kernels share a minimal base. Both ObjectQL and Metadata
-// are scoped to `environmentId: projectId` so DatabaseLoader's env_id
-// filter and `protocol.saveMetaItem` writes stay aligned across the
-// physically-isolated project databases.
-const basePlugins: BasePluginsFactory = ({ projectId }) => [
-    new ObjectQLPlugin({ environmentId: projectId }),
-    new MetadataPlugin({ watch: false, environmentId: projectId }),
-];
+// Per-project kernels share a minimal base. Loaded lazily on project provisioning.
+const basePlugins: BasePluginsFactory = async ({ projectId }) => {
+    const { ObjectQLPlugin } = await import('@objectstack/objectql');
+    const { MetadataPlugin } = await import('@objectstack/metadata');
+    return [
+        new ObjectQLPlugin({ environmentId: projectId }),
+        new MetadataPlugin({ watch: false, environmentId: projectId }),
+    ];
+};
 
 // Example bundles are seeded into a project at provisioning time via
 // the template-seeder — not pre-installed into every project kernel.
@@ -116,15 +93,20 @@ const appBundles: AppBundleResolver = {
     async resolve() { return []; },
 };
 
-export default {
-    plugins: [
-        ...createControlPlanePlugins({
-            controlDriver,
-            driverName,
-            authSecret,
-            baseUrl,
-        }),
-        new MultiProjectPlugin({
+// Single shared promise — both control-plane plugins and MultiProjectPlugin
+// use the same DB connection. buildControlDriver() is called only once.
+const controlDriverPromise = buildControlDriver();
+
+// Lazy-loading wrapper for MultiProjectPlugin — the control driver is built
+// asynchronously so it is not imported at module evaluation time.
+const multiProjectPluginProxy: any = {
+    name: 'com.objectstack.multi-project',
+    version: '0.0.0',
+    _impl: null as any,
+    async init(ctx: any) {
+        const { driver: controlDriver } = await controlDriverPromise;
+        const { MultiProjectPlugin: MPlugin } = await import('@objectstack/runtime');
+        this._impl = new MPlugin({
             controlDriver,
             basePlugins,
             appBundles,
@@ -132,7 +114,25 @@ export default {
             maxSize: Number(process.env.OBJECTSTACK_KERNEL_CACHE_SIZE ?? 32),
             ttlMs: Number(process.env.OBJECTSTACK_KERNEL_TTL_MS ?? 15 * 60 * 1000),
             cacheTTLMs: Number(process.env.OBJECTSTACK_ENV_CACHE_TTL_MS ?? 5 * 60 * 1000),
+        });
+        if (this._impl.init) await this._impl.init(ctx);
+    },
+    async start(ctx: any) {
+        if (this._impl?.start) await this._impl.start(ctx);
+    },
+    async stop(ctx: any) {
+        if (this._impl?.stop) await this._impl.stop(ctx);
+    },
+};
+
+export default {
+    plugins: [
+        ...createControlPlanePlugins({
+            controlDriverPromise,
+            authSecret,
+            baseUrl,
         }),
+        multiProjectPluginProxy,
     ],
     // Project-scoping config consumed by `createRestApiPlugin` and
     // `createDispatcherPlugin` (auto-registered by `objectstack serve`).

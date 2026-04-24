@@ -205,10 +205,15 @@ function createTemplateSeeder(
                 }
             }
 
+            // Register the bundle into the ObjectQL engine's SchemaRegistry so that
+            // syncSchemas() can create tables for the newly-registered objects.
+            // bulkRegister() only updates MetadataManager's registry, not the engine's
+            // internal _registry — without this, syncSchemas() has no objects to create.
+            if (items.length > 0 && typeof engine?.registerApp === 'function') {
+                try { (engine as any).registerApp(bundle); } catch { /* best effort */ }
+            }
+
             // Sync schemas so tables exist before seeding.
-            // bulkRegister registers object definitions in metadata but does not
-            // create SQL tables; syncSchemas() ensures all objects that were just
-            // registered have their tables/collections created in the driver.
             if (items.length > 0 && typeof engine?.syncSchemas === 'function') {
                 try { await engine.syncSchemas(); } catch { /* best effort */ }
             }
