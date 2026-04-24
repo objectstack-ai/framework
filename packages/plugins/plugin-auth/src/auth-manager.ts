@@ -1,12 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { betterAuth } from 'better-auth';
 import type { Auth, BetterAuthOptions } from 'better-auth';
-import { organization } from 'better-auth/plugins/organization';
-import { twoFactor } from 'better-auth/plugins/two-factor';
-import { magicLink } from 'better-auth/plugins/magic-link';
-import { bearer } from 'better-auth/plugins/bearer';
-import { genericOAuth } from 'better-auth/plugins/generic-oauth';
+// better-auth value imports (betterAuth + plugins) are deferred via dynamic
+// import() in getOrCreateAuth() / buildPluginList() so that disabled plugins
+// never get loaded into the process. See Stage 2F (RSS investigation).
 import type {
   AuthConfig,
   EmailAndPasswordConfig,
@@ -85,9 +82,9 @@ export class AuthManager {
   /**
    * Get or create the better-auth instance (lazy initialization)
    */
-  private getOrCreateAuth(): Auth<any> {
+  private async getOrCreateAuth(): Promise<Auth<any>> {
     if (!this.auth) {
-      this.auth = this.createAuthInstance();
+      this.auth = await this.createAuthInstance();
     }
     return this.auth;
   }
@@ -95,7 +92,9 @@ export class AuthManager {
   /**
    * Create a better-auth instance from configuration
    */
-  private createAuthInstance(): Auth<any> {
+  private async createAuthInstance(): Promise<Auth<any>> {
+    const { betterAuth } = await import('better-auth');
+    const plugins = await this.buildPluginList();
     const betterAuthConfig: BetterAuthOptions = {
       // Base configuration
       secret: this.config.secret || this.generateSecret(),
@@ -163,7 +162,7 @@ export class AuthManager {
       },
 
       // better-auth plugins — registered based on AuthPluginConfig flags
-      plugins: this.buildPluginList(),
+      plugins,
 
       // Trusted origins for CSRF protection (supports wildcards like "https://*.example.com")
       // Auto-includes origins from CORS_ORIGIN env var so CORS and CSRF stay in sync.
@@ -209,7 +208,7 @@ export class AuthManager {
    * a `schema` option containing the appropriate snake_case field mappings,
    * so that `createAdapterFactory` transforms them automatically.
    */
-  private buildPluginList(): any[] {
+  private async buildPluginList(): Promise<any[]> {
     const pluginConfig = this.config.plugins;
     const plugins: any[] = [];
 
@@ -227,9 +226,11 @@ export class AuthManager {
     // This mirrors how Salesforce, Notion, Supabase and first-party mobile
     // SDKs handle auth. Cookie-based auth remains available for same-origin
     // browser deployments; bearer is additive, not a replacement.
+    const { bearer } = await import('better-auth/plugins/bearer');
     plugins.push(bearer());
 
     if (pluginConfig?.organization) {
+      const { organization } = await import('better-auth/plugins/organization');
       plugins.push(organization({
         schema: buildOrganizationPluginSchema(),
         // No mailer is wired in framework yet — log the accept URL so
@@ -249,12 +250,14 @@ export class AuthManager {
     }
 
     if (pluginConfig?.twoFactor) {
+      const { twoFactor } = await import('better-auth/plugins/two-factor');
       plugins.push(twoFactor({
         schema: buildTwoFactorPluginSchema(),
       }));
     }
 
     if (pluginConfig?.magicLink) {
+      const { magicLink } = await import('better-auth/plugins/magic-link');
       // magic-link reuses the `verification` table — no extra schema mapping needed.
       // The sendMagicLink callback must be provided by the application at a higher level.
       // Here we provide a no-op default that logs a warning; real applications should
@@ -270,6 +273,7 @@ export class AuthManager {
 
     // OIDC / Generic OAuth2 providers (enterprise SSO via genericOAuth plugin)
     if (this.config.oidcProviders?.length) {
+      const { genericOAuth } = await import('better-auth/plugins/generic-oauth');
       plugins.push(genericOAuth({
         config: this.config.oidcProviders.map(p => ({
           providerId: p.providerId,
@@ -373,7 +377,7 @@ export class AuthManager {
    * Get the underlying better-auth instance
    * Useful for advanced use cases
    */
-  getAuthInstance(): Auth<any> {
+  getAuthInstance(): Promise<Auth<any>> {
     return this.getOrCreateAuth();
   }
 
@@ -389,7 +393,7 @@ export class AuthManager {
    * @returns Web standard Response object
    */
   async handleRequest(request: Request): Promise<Response> {
-    const auth = this.getOrCreateAuth();
+    const auth = await this.getOrCreateAuth();
     const response = await auth.handler(request);
 
     if (response.status >= 500) {
@@ -408,8 +412,9 @@ export class AuthManager {
    * Get the better-auth API for programmatic access
    * Use this for server-side operations (e.g., creating users, checking sessions)
    */
-  get api() {
-    return this.getOrCreateAuth().api;
+  async getApi(): Promise<Auth<any>['api']> {
+    const auth = await this.getOrCreateAuth();
+    return auth.api;
   }
 
   /**

@@ -105,7 +105,7 @@ rawApp.all('/api/v1/auth/*', async (c) => {
 **Solutions:**
 - Use Hono middleware for request interception if needed
 - Use better-auth plugins for custom behavior
-- Access `authManager.api` for programmatic operations
+- Access `await authManager.getApi()` for programmatic operations
 
 ## Results
 

@@ -142,7 +142,7 @@ describe('AuthManager', () => {
       // We need to trigger the lazy init first
     });
 
-    it('should provide a factory function as database config', () => {
+    it('should provide a factory function as database config', async () => {
       const mockDataEngine = {
         insert: vi.fn().mockResolvedValue({ id: '1' }),
         findOne: vi.fn().mockResolvedValue({ id: '1' }),
@@ -165,13 +165,13 @@ describe('AuthManager', () => {
       });
 
       // Trigger lazy initialisation
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
 
       // The database config should be a function (AdapterFactory)
       expect(typeof capturedConfig.database).toBe('function');
     });
 
-    it('should include modelName and fields mapping for user, session, account, verification', () => {
+    it('should include modelName and fields mapping for user, session, account, verification', async () => {
       const mockDataEngine = {
         insert: vi.fn().mockResolvedValue({ id: '1' }),
         findOne: vi.fn().mockResolvedValue({ id: '1' }),
@@ -193,7 +193,7 @@ describe('AuthManager', () => {
         dataEngine: mockDataEngine as any,
       });
 
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
 
       // Verify user model config
       expect(capturedConfig.user).toBeDefined();
@@ -238,7 +238,7 @@ describe('AuthManager', () => {
       }));
     });
 
-    it('should return undefined (in-memory fallback) when no dataEngine is provided', () => {
+    it('should return undefined (in-memory fallback) when no dataEngine is provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -252,7 +252,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
       });
 
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
 
       expect(capturedConfig.database).toBeUndefined();
       warnSpy.mockRestore();
@@ -260,7 +260,7 @@ describe('AuthManager', () => {
   });
 
   describe('basePath configuration', () => {
-    it('should default basePath to /api/v1/auth when not specified', () => {
+    it('should default basePath to /api/v1/auth when not specified', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -272,13 +272,13 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.basePath).toBe('/api/v1/auth');
     });
 
-    it('should use custom basePath when provided', () => {
+    it('should use custom basePath when provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -291,7 +291,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         basePath: '/custom/auth',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.basePath).toBe('/custom/auth');
@@ -299,7 +299,7 @@ describe('AuthManager', () => {
   });
 
   describe('plugin registration', () => {
-    it('should always register the bearer plugin even with no plugin config', () => {
+    it('should always register the bearer plugin even with no plugin config', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -311,13 +311,13 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.plugins.map((p: any) => p.id)).toEqual(['bearer']);
     });
 
-    it('should register organization plugin with schema mapping when enabled', () => {
+    it('should register organization plugin with schema mapping when enabled', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -330,7 +330,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         plugins: { organization: true },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
@@ -344,7 +344,7 @@ describe('AuthManager', () => {
       expect(orgPlugin._opts.schema.session.fields.activeOrganizationId).toBe('active_organization_id');
     });
 
-    it('should register twoFactor plugin with schema mapping when enabled', () => {
+    it('should register twoFactor plugin with schema mapping when enabled', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -357,7 +357,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         plugins: { twoFactor: true },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       const tfPlugin = capturedConfig.plugins.find((p: any) => p.id === 'two-factor');
@@ -368,7 +368,7 @@ describe('AuthManager', () => {
       expect(tfPlugin._opts.schema.user.fields.twoFactorEnabled).toBe('two_factor_enabled');
     });
 
-    it('should register magicLink plugin when enabled', () => {
+    it('should register magicLink plugin when enabled', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -381,14 +381,14 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         plugins: { magicLink: true },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       const mlPlugin = capturedConfig.plugins.find((p: any) => p.id === 'magic-link');
       expect(mlPlugin).toBeDefined();
     });
 
-    it('should register multiple plugins when multiple flags are enabled', () => {
+    it('should register multiple plugins when multiple flags are enabled', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -401,7 +401,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         plugins: { organization: true, twoFactor: true, magicLink: true },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.plugins).toHaveLength(4);
@@ -412,7 +412,7 @@ describe('AuthManager', () => {
   });
 
   describe('bearer plugin (cross-origin / mobile token auth)', () => {
-    it('should always register the bearer plugin regardless of other flags', () => {
+    it('should always register the bearer plugin regardless of other flags', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -425,7 +425,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         plugins: { organization: true },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       const bearerPlugin = capturedConfig.plugins.find((p: any) => p.id === 'bearer');
@@ -434,7 +434,7 @@ describe('AuthManager', () => {
   });
 
   describe('trustedOrigins passthrough', () => {
-    it('should forward trustedOrigins to betterAuth when provided', () => {
+    it('should forward trustedOrigins to betterAuth when provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -447,7 +447,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         trustedOrigins: ['https://*.objectos.app', 'http://localhost:*'],
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.trustedOrigins).toEqual([
@@ -456,7 +456,7 @@ describe('AuthManager', () => {
       ]);
     });
 
-    it('should default to localhost wildcard when trustedOrigins not provided', () => {
+    it('should default to localhost wildcard when trustedOrigins not provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -468,13 +468,13 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.trustedOrigins).toEqual(['http://localhost:*']);
     });
 
-    it('should default to localhost wildcard when trustedOrigins array is empty', () => {
+    it('should default to localhost wildcard when trustedOrigins array is empty', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -487,7 +487,7 @@ describe('AuthManager', () => {
         baseUrl: 'http://localhost:3000',
         trustedOrigins: [],
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.trustedOrigins).toEqual(['http://localhost:*']);
@@ -495,7 +495,7 @@ describe('AuthManager', () => {
   });
 
   describe('setRuntimeBaseUrl', () => {
-    it('should update baseURL before auth instance is created', () => {
+    it('should update baseURL before auth instance is created', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -509,13 +509,13 @@ describe('AuthManager', () => {
       });
 
       manager.setRuntimeBaseUrl('http://localhost:3002');
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.baseURL).toBe('http://localhost:3002');
     });
 
-    it('should be a no-op and warn when called after auth instance is created', () => {
+    it('should be a no-op and warn when called after auth instance is created', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -529,7 +529,7 @@ describe('AuthManager', () => {
       });
 
       // Force auth instance creation
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       expect(capturedConfig.baseURL).toBe('http://localhost:3000');
 
       // Now try to change — should warn and not affect the already-created instance
@@ -541,7 +541,7 @@ describe('AuthManager', () => {
       warnSpy.mockRestore();
     });
 
-    it('should override the default fallback (localhost:3000) when no baseUrl was configured', () => {
+    it('should override the default fallback (localhost:3000) when no baseUrl was configured', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -554,7 +554,7 @@ describe('AuthManager', () => {
       });
 
       manager.setRuntimeBaseUrl('http://localhost:3002');
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.baseURL).toBe('http://localhost:3002');
@@ -562,7 +562,7 @@ describe('AuthManager', () => {
   });
 
   describe('socialProviders passthrough', () => {
-    it('should forward socialProviders to betterAuth when provided', () => {
+    it('should forward socialProviders to betterAuth when provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -578,7 +578,7 @@ describe('AuthManager', () => {
           github: { clientId: 'ghid', clientSecret: 'ghsecret' },
         },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.socialProviders).toEqual({
@@ -587,7 +587,7 @@ describe('AuthManager', () => {
       });
     });
 
-    it('should NOT include socialProviders when not provided', () => {
+    it('should NOT include socialProviders when not provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -599,7 +599,7 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig).not.toHaveProperty('socialProviders');
@@ -607,7 +607,7 @@ describe('AuthManager', () => {
   });
 
   describe('emailAndPassword passthrough', () => {
-    it('should default emailAndPassword to enabled: true', () => {
+    it('should default emailAndPassword to enabled: true', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -619,13 +619,13 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.emailAndPassword.enabled).toBe(true);
     });
 
-    it('should forward extended emailAndPassword options', () => {
+    it('should forward extended emailAndPassword options', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -645,7 +645,7 @@ describe('AuthManager', () => {
           revokeSessionsOnPasswordReset: true,
         },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.emailAndPassword).toEqual({
@@ -660,7 +660,7 @@ describe('AuthManager', () => {
   });
 
   describe('emailVerification passthrough', () => {
-    it('should forward emailVerification when provided', () => {
+    it('should forward emailVerification when provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -676,7 +676,7 @@ describe('AuthManager', () => {
           expiresIn: 1800,
         },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.emailVerification).toEqual({
@@ -685,7 +685,7 @@ describe('AuthManager', () => {
       });
     });
 
-    it('should NOT include emailVerification when not provided', () => {
+    it('should NOT include emailVerification when not provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -697,7 +697,7 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig).not.toHaveProperty('emailVerification');
@@ -705,7 +705,7 @@ describe('AuthManager', () => {
   });
 
   describe('advanced options passthrough', () => {
-    it('should forward crossSubDomainCookies when provided', () => {
+    it('should forward crossSubDomainCookies when provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -724,7 +724,7 @@ describe('AuthManager', () => {
           useSecureCookies: true,
         },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.advanced).toEqual({
@@ -736,7 +736,7 @@ describe('AuthManager', () => {
       });
     });
 
-    it('should forward cookiePrefix and disableCSRFCheck', () => {
+    it('should forward cookiePrefix and disableCSRFCheck', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -752,14 +752,14 @@ describe('AuthManager', () => {
           cookiePrefix: 'objectos',
         },
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig.advanced.disableCSRFCheck).toBe(true);
       expect(capturedConfig.advanced.cookiePrefix).toBe('objectos');
     });
 
-    it('should NOT include advanced when not provided', () => {
+    it('should NOT include advanced when not provided', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {
         capturedConfig = config;
@@ -771,7 +771,7 @@ describe('AuthManager', () => {
         secret: 'test-secret-at-least-32-chars-long',
         baseUrl: 'http://localhost:3000',
       });
-      manager.getAuthInstance();
+      await manager.getAuthInstance();
       warnSpy.mockRestore();
 
       expect(capturedConfig).not.toHaveProperty('advanced');

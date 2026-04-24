@@ -181,7 +181,7 @@ This architecture provides:
 - ✅ **Full compatibility** - All better-auth features work automatically
 - ✅ **Easy updates** - Better-auth updates don't require code changes
 - ✅ **Type safety** - Full TypeScript support from better-auth
-- ✅ **Programmatic API** - Access auth methods via `authManager.api`
+- ✅ **Programmatic API** - Access auth methods via `await authManager.getApi()`
 
 #### ObjectQL Database Architecture
 
