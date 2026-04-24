@@ -7,6 +7,7 @@ import { z } from 'zod';
 // ============================================================================
 
 /** Aggregation functions used across query, data-engine, analytics, field */
+import { lazySchema } from './lazy-schema';
 export const AggregationFunctionEnum = z.enum([
   'count', 'sum', 'avg', 'min', 'max',
   'count_distinct', 'percentile', 'median', 'stddev', 'variance',
@@ -19,10 +20,10 @@ export const SortDirectionEnum = z.enum(['asc', 'desc'])
 export type SortDirection = z.infer<typeof SortDirectionEnum>;
 
 /** Reusable sort item — field + direction pair used across views, data sources, filters */
-export const SortItemSchema = z.object({
+export const SortItemSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name to sort by'),
   order: SortDirectionEnum.describe('Sort direction'),
-}).describe('Sort field and direction pair');
+}).describe('Sort field and direction pair'));
 export type SortItem = z.infer<typeof SortItemSchema>;
 
 /** CRUD mutation events used across hook, validation, object CDC */

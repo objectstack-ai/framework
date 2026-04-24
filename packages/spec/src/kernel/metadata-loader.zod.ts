@@ -14,13 +14,14 @@ import { z } from 'zod';
  * Metadata Format Enum
  * Supported serialization formats for metadata
  */
-export const MetadataFormatSchema = z.enum(['json', 'yaml', 'typescript', 'javascript']);
+import { lazySchema } from '../shared/lazy-schema';
+export const MetadataFormatSchema = lazySchema(() => z.enum(['json', 'yaml', 'typescript', 'javascript']));
 
 /**
  * Metadata Statistics
  * Information about a metadata item without loading its full content
  */
-export const MetadataStatsSchema = z.object({
+export const MetadataStatsSchema = lazySchema(() => z.object({
   /**
    * Size of the metadata file in bytes
    */
@@ -51,12 +52,12 @@ export const MetadataStatsSchema = z.object({
    * Additional metadata provider-specific properties
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Provider-specific metadata'),
-});
+}));
 
 /**
  * Metadata Load Options
  */
-export const MetadataLoadOptionsSchema = z.object({
+export const MetadataLoadOptionsSchema = lazySchema(() => z.object({
   /**
    * Glob patterns to match files
    * Example: ["**\/*.object.ts", "**\/*.object.json"]
@@ -99,12 +100,12 @@ export const MetadataLoadOptionsSchema = z.object({
    * Recursively search subdirectories
    */
   recursive: z.boolean().default(true).describe('Search subdirectories'),
-});
+}));
 
 /**
  * Metadata Save Options
  */
-export const MetadataSaveOptionsSchema = z.object({
+export const MetadataSaveOptionsSchema = lazySchema(() => z.object({
   /**
    * Serialization format
    */
@@ -149,12 +150,12 @@ export const MetadataSaveOptionsSchema = z.object({
    * Custom file path (overrides default location)
    */
   path: z.string().optional().describe('Custom output path'),
-});
+}));
 
 /**
  * Metadata Export Options
  */
-export const MetadataExportOptionsSchema = z.object({
+export const MetadataExportOptionsSchema = lazySchema(() => z.object({
   /**
    * Output file path
    */
@@ -184,12 +185,12 @@ export const MetadataExportOptionsSchema = z.object({
    * Pretty print output
    */
   prettify: z.boolean().default(true).describe('Pretty print output'),
-});
+}));
 
 /**
  * Metadata Import Options
  */
-export const MetadataImportOptionsSchema = z.object({
+export const MetadataImportOptionsSchema = lazySchema(() => z.object({
   /**
    * Conflict resolution strategy
    */
@@ -217,13 +218,13 @@ export const MetadataImportOptionsSchema = z.object({
    * Example: "(item) => ({ ...item, imported: true })"
    */
   transform: z.string().optional().describe('Transform items before import'),
-});
+}));
 
 /**
  * Metadata Loader Result
  * Result of a metadata load operation
  */
-export const MetadataLoadResultSchema = z.object({
+export const MetadataLoadResultSchema = lazySchema(() => z.object({
   /**
    * Loaded data
    */
@@ -253,12 +254,12 @@ export const MetadataLoadResultSchema = z.object({
    * Load time in milliseconds
    */
   loadTime: z.number().min(0).optional().describe('Load duration in ms'),
-});
+}));
 
 /**
  * Metadata Save Result
  */
-export const MetadataSaveResultSchema = z.object({
+export const MetadataSaveResultSchema = lazySchema(() => z.object({
   /**
    * Whether save was successful
    */
@@ -288,12 +289,12 @@ export const MetadataSaveResultSchema = z.object({
    * Backup path (if created)
    */
   backupPath: z.string().optional().describe('Backup file path'),
-});
+}));
 
 /**
  * Metadata Watch Event
  */
-export const MetadataWatchEventSchema = z.object({
+export const MetadataWatchEventSchema = lazySchema(() => z.object({
   /**
    * Event type
    */
@@ -323,13 +324,13 @@ export const MetadataWatchEventSchema = z.object({
    * Timestamp
    */
   timestamp: z.string().datetime().describe('Event timestamp'),
-});
+}));
 
 /**
  * Metadata Collection Info
  * Summary of a metadata collection
  */
-export const MetadataCollectionInfoSchema = z.object({
+export const MetadataCollectionInfoSchema = lazySchema(() => z.object({
   /**
    * Collection type (e.g., 'object', 'view', 'app')
    */
@@ -359,13 +360,13 @@ export const MetadataCollectionInfoSchema = z.object({
    * Collection location (path or URL)
    */
   location: z.string().optional().describe('Collection location'),
-});
+}));
 
 /**
  * Metadata Loader Interface Contract
  * Defines the standard methods all metadata loaders must implement
  */
-export const MetadataLoaderContractSchema = z.object({
+export const MetadataLoaderContractSchema = lazySchema(() => z.object({
   /**
    * Loader name/identifier
    */
@@ -405,22 +406,22 @@ export const MetadataLoaderContractSchema = z.object({
    * Whether loader supports caching
    */
   supportsCache: z.boolean().default(true).describe('Supports caching'),
-});
+}));
 
 /**
  * Metadata Fallback Strategy
  * Determines behavior when the primary datasource is unavailable.
  */
-export const MetadataFallbackStrategySchema = z.enum([
+export const MetadataFallbackStrategySchema = lazySchema(() => z.enum([
   'filesystem', // Fall back to filesystem-based loading
   'memory',     // Fall back to in-memory storage
   'none',       // No fallback — fail immediately
-]);
+]));
 
 /**
  * Metadata Manager Configuration
  */
-export const MetadataManagerConfigSchema = z.object({
+export const MetadataManagerConfigSchema = lazySchema(() => z.object({
   /**
    * Datasource Name Reference
    * References a DatasourceSchema.name (e.g. 'default').
@@ -485,7 +486,7 @@ export const MetadataManagerConfigSchema = z.object({
    * Loader-specific options
    */
   loaderOptions: z.record(z.string(), z.unknown()).optional().describe('Loader-specific configuration'),
-});
+}));
 
 // Export types
 export type MetadataFormat = z.infer<typeof MetadataFormatSchema>;

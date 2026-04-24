@@ -34,9 +34,10 @@ import { ArtifactReferenceSchema } from '../cloud/marketplace.zod';
 /**
  * Path parameters for package-level operations.
  */
-export const PackagePathParamsSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PackagePathParamsSchema = lazySchema(() => z.object({
   packageId: z.string().describe('Package identifier'),
-});
+}));
 export type PackagePathParams = z.infer<typeof PackagePathParamsSchema>;
 
 // ==========================================
@@ -46,7 +47,7 @@ export type PackagePathParams = z.infer<typeof PackagePathParamsSchema>;
 /**
  * Query parameters for listing installed packages.
  */
-export const ListInstalledPackagesRequestSchema = z.object({
+export const ListInstalledPackagesRequestSchema = lazySchema(() => z.object({
   /** Filter by package status */
   status: z.enum(['installed', 'disabled', 'installing', 'upgrading', 'uninstalling', 'error']).optional()
     .describe('Filter by package status'),
@@ -59,20 +60,20 @@ export const ListInstalledPackagesRequestSchema = z.object({
   /** Cursor for pagination */
   cursor: z.string().optional()
     .describe('Cursor for pagination'),
-}).describe('List installed packages request');
+}).describe('List installed packages request'));
 export type ListInstalledPackagesRequest = z.infer<typeof ListInstalledPackagesRequestSchema>;
 
 /**
  * Response for listing installed packages.
  */
-export const ListInstalledPackagesResponseSchema = BaseResponseSchema.extend({
+export const ListInstalledPackagesResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     packages: z.array(InstalledPackageSchema).describe('Installed packages'),
     total: z.number().int().optional().describe('Total matching packages'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more packages are available'),
   }),
-}).describe('List installed packages response');
+}).describe('List installed packages response'));
 export type ListInstalledPackagesResponse = z.infer<typeof ListInstalledPackagesResponseSchema>;
 
 // ==========================================
@@ -82,15 +83,15 @@ export type ListInstalledPackagesResponse = z.infer<typeof ListInstalledPackages
 /**
  * Request for getting a single installed package.
  */
-export const GetInstalledPackageRequestSchema = PackagePathParamsSchema;
+export const GetInstalledPackageRequestSchema = lazySchema(() => PackagePathParamsSchema);
 export type GetInstalledPackageRequest = z.infer<typeof GetInstalledPackageRequestSchema>;
 
 /**
  * Response for getting a single installed package.
  */
-export const GetInstalledPackageResponseSchema = BaseResponseSchema.extend({
+export const GetInstalledPackageResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: InstalledPackageSchema.describe('Installed package details'),
-}).describe('Get installed package response');
+}).describe('Get installed package response'));
 export type GetInstalledPackageResponse = z.infer<typeof GetInstalledPackageResponseSchema>;
 
 // ==========================================
@@ -103,7 +104,7 @@ export type GetInstalledPackageResponse = z.infer<typeof GetInstalledPackageResp
  * @example POST /api/v1/packages/install
  * { manifest: {...}, platformVersion: '3.2.0', enableOnInstall: true }
  */
-export const PackageInstallRequestSchema = z.object({
+export const PackageInstallRequestSchema = lazySchema(() => z.object({
   /** Package manifest to install */
   manifest: ManifestSchema.describe('Package manifest to install'),
 
@@ -122,13 +123,13 @@ export const PackageInstallRequestSchema = z.object({
   /** Artifact reference for the package (if installing from marketplace) */
   artifactRef: ArtifactReferenceSchema.optional()
     .describe('Artifact reference for marketplace installation'),
-}).describe('Install package request');
+}).describe('Install package request'));
 export type PackageInstallRequest = z.infer<typeof PackageInstallRequestSchema>;
 
 /**
  * Response after installing a package.
  */
-export const PackageInstallResponseSchema = BaseResponseSchema.extend({
+export const PackageInstallResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     package: InstalledPackageSchema.describe('Installed package details'),
     dependencyResolution: DependencyResolutionResultSchema.optional()
@@ -142,7 +143,7 @@ export const PackageInstallResponseSchema = BaseResponseSchema.extend({
     })).optional().describe('Namespace conflicts detected'),
     message: z.string().optional().describe('Installation status message'),
   }),
-}).describe('Install package response');
+}).describe('Install package response'));
 export type PackageInstallResponse = z.infer<typeof PackageInstallResponseSchema>;
 
 // ==========================================
@@ -155,7 +156,7 @@ export type PackageInstallResponse = z.infer<typeof PackageInstallResponseSchema
  * @example POST /api/v1/packages/upgrade
  * { packageId: 'com.acme.crm', targetVersion: '2.0.0', createSnapshot: true }
  */
-export const PackageUpgradeRequestSchema = z.object({
+export const PackageUpgradeRequestSchema = lazySchema(() => z.object({
   /** Package ID to upgrade */
   packageId: z.string().describe('Package ID to upgrade'),
 
@@ -183,13 +184,13 @@ export const PackageUpgradeRequestSchema = z.object({
   /** Skip pre-upgrade compatibility checks */
   skipValidation: z.boolean().default(false)
     .describe('Skip pre-upgrade compatibility checks'),
-}).describe('Upgrade package request');
+}).describe('Upgrade package request'));
 export type PackageUpgradeRequest = z.infer<typeof PackageUpgradeRequestSchema>;
 
 /**
  * Response after upgrading a package.
  */
-export const PackageUpgradeResponseSchema = BaseResponseSchema.extend({
+export const PackageUpgradeResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     success: z.boolean().describe('Whether the upgrade succeeded'),
     phase: z.string().describe('Current upgrade phase'),
@@ -204,7 +205,7 @@ export const PackageUpgradeResponseSchema = BaseResponseSchema.extend({
     errorMessage: z.string().optional().describe('Error message if failed'),
     message: z.string().optional().describe('Human-readable status message'),
   }),
-}).describe('Upgrade package response');
+}).describe('Upgrade package response'));
 export type PackageUpgradeResponse = z.infer<typeof PackageUpgradeResponseSchema>;
 
 // ==========================================
@@ -217,22 +218,22 @@ export type PackageUpgradeResponse = z.infer<typeof PackageUpgradeResponseSchema
  * @example POST /api/v1/packages/resolve-dependencies
  * { manifest: {...}, platformVersion: '3.2.0' }
  */
-export const ResolveDependenciesRequestSchema = z.object({
+export const ResolveDependenciesRequestSchema = lazySchema(() => z.object({
   /** Package manifest whose dependencies to resolve */
   manifest: ManifestSchema.describe('Package manifest to resolve dependencies for'),
 
   /** Current platform version for compatibility checking */
   platformVersion: z.string().optional()
     .describe('Current platform version for compatibility filtering'),
-}).describe('Resolve dependencies request');
+}).describe('Resolve dependencies request'));
 export type ResolveDependenciesRequest = z.infer<typeof ResolveDependenciesRequestSchema>;
 
 /**
  * Response with dependency resolution results.
  */
-export const ResolveDependenciesResponseSchema = BaseResponseSchema.extend({
+export const ResolveDependenciesResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: DependencyResolutionResultSchema.describe('Dependency resolution result with topological sort'),
-}).describe('Resolve dependencies response');
+}).describe('Resolve dependencies response'));
 export type ResolveDependenciesResponse = z.infer<typeof ResolveDependenciesResponseSchema>;
 
 // ==========================================
@@ -246,7 +247,7 @@ export type ResolveDependenciesResponse = z.infer<typeof ResolveDependenciesResp
  * Content-Type: multipart/form-data
  * { artifact: <metadata>, file: <binary> }
  */
-export const UploadArtifactRequestSchema = z.object({
+export const UploadArtifactRequestSchema = lazySchema(() => z.object({
   /** Artifact metadata */
   artifact: PackageArtifactSchema.describe('Package artifact metadata'),
 
@@ -261,13 +262,13 @@ export const UploadArtifactRequestSchema = z.object({
   /** Release notes for this version */
   releaseNotes: z.string().optional()
     .describe('Release notes for this version'),
-}).describe('Upload artifact request');
+}).describe('Upload artifact request'));
 export type UploadArtifactRequest = z.infer<typeof UploadArtifactRequestSchema>;
 
 /**
  * Response after uploading a package artifact.
  */
-export const UploadArtifactResponseSchema = BaseResponseSchema.extend({
+export const UploadArtifactResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     /** Whether the upload succeeded */
     success: z.boolean().describe('Whether the upload succeeded'),
@@ -280,7 +281,7 @@ export const UploadArtifactResponseSchema = BaseResponseSchema.extend({
     /** Message */
     message: z.string().optional().describe('Upload status message'),
   }),
-}).describe('Upload artifact response');
+}).describe('Upload artifact response'));
 export type UploadArtifactResponse = z.infer<typeof UploadArtifactResponseSchema>;
 
 // ==========================================
@@ -290,26 +291,26 @@ export type UploadArtifactResponse = z.infer<typeof UploadArtifactResponseSchema
 /**
  * Request body for rolling back a package upgrade.
  */
-export const PackageRollbackRequestSchema = PackagePathParamsSchema.extend({
+export const PackageRollbackRequestSchema = lazySchema(() => PackagePathParamsSchema.extend({
   /** Snapshot ID to restore from */
   snapshotId: z.string().describe('Snapshot ID to restore from'),
 
   /** Whether to also rollback customizations */
   rollbackCustomizations: z.boolean().default(true)
     .describe('Whether to restore pre-upgrade customizations'),
-}).describe('Rollback package request');
+}).describe('Rollback package request'));
 export type PackageRollbackRequest = z.infer<typeof PackageRollbackRequestSchema>;
 
 /**
  * Response after rolling back a package.
  */
-export const PackageRollbackResponseSchema = BaseResponseSchema.extend({
+export const PackageRollbackResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     success: z.boolean().describe('Whether the rollback succeeded'),
     restoredVersion: z.string().optional().describe('Restored version'),
     message: z.string().optional().describe('Rollback status message'),
   }),
-}).describe('Rollback package response');
+}).describe('Rollback package response'));
 export type PackageRollbackResponse = z.infer<typeof PackageRollbackResponseSchema>;
 
 // ==========================================
@@ -319,19 +320,19 @@ export type PackageRollbackResponse = z.infer<typeof PackageRollbackResponseSche
 /**
  * Request for uninstalling a package.
  */
-export const UninstallPackageApiRequestSchema = PackagePathParamsSchema;
+export const UninstallPackageApiRequestSchema = lazySchema(() => PackagePathParamsSchema);
 export type UninstallPackageApiRequest = z.infer<typeof UninstallPackageApiRequestSchema>;
 
 /**
  * Response after uninstalling a package.
  */
-export const UninstallPackageApiResponseSchema = BaseResponseSchema.extend({
+export const UninstallPackageApiResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     packageId: z.string().describe('Uninstalled package ID'),
     success: z.boolean().describe('Whether uninstall succeeded'),
     message: z.string().optional().describe('Uninstall status message'),
   }),
-}).describe('Uninstall package response');
+}).describe('Uninstall package response'));
 export type UninstallPackageApiResponse = z.infer<typeof UninstallPackageApiResponseSchema>;
 
 // ==========================================

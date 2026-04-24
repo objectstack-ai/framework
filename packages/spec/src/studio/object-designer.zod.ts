@@ -67,7 +67,8 @@ import { z } from 'zod';
  * Field property panel section — groups related field properties
  * in the right-side property inspector.
  */
-export const FieldPropertySectionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const FieldPropertySectionSchema = lazySchema(() => z.object({
   /** Unique section key */
   key: z.string().describe('Section key (e.g., "basics", "constraints", "security")'),
 
@@ -82,7 +83,7 @@ export const FieldPropertySectionSchema = z.object({
 
   /** Sort order — lower values appear first */
   order: z.number().default(0).describe('Sort order (lower = higher)'),
-});
+}));
 
 export type FieldPropertySection = z.infer<typeof FieldPropertySectionSchema>;
 
@@ -90,7 +91,7 @@ export type FieldPropertySection = z.infer<typeof FieldPropertySectionSchema>;
  * Field grouping configuration — organizes fields into collapsible groups
  * within the field editor table (e.g., "Contact Info", "Billing", "System").
  */
-export const FieldGroupSchema = z.object({
+export const FieldGroupSchema = lazySchema(() => z.object({
   /** Group key (matches field.group value) */
   key: z.string().describe('Group key matching field.group values'),
 
@@ -105,14 +106,14 @@ export const FieldGroupSchema = z.object({
 
   /** Sort order — lower values appear first */
   order: z.number().default(0).describe('Sort order (lower = higher)'),
-});
+}));
 
 export type FieldGroup = z.infer<typeof FieldGroupSchema>;
 
 /**
  * Field Editor configuration — controls the visual field editing experience.
  */
-export const FieldEditorConfigSchema = z.object({
+export const FieldEditorConfigSchema = lazySchema(() => z.object({
   /** Enable inline editing of field properties in the table */
   inlineEditing: z.boolean().default(true).describe('Enable inline editing of field properties'),
 
@@ -146,7 +147,7 @@ export const FieldEditorConfigSchema = z.object({
 
   /** Show field usage statistics (views, formulas, relationships referencing this field) */
   showUsageStats: z.boolean().default(false).describe('Show field usage statistics'),
-});
+}));
 
 export type FieldEditorConfig = z.infer<typeof FieldEditorConfigSchema>;
 
@@ -156,7 +157,7 @@ export type FieldEditorConfig = z.infer<typeof FieldEditorConfigSchema>;
  * Relationship display configuration — controls how relationships
  * are visualized in the mapper and ER diagram.
  */
-export const RelationshipDisplaySchema = z.object({
+export const RelationshipDisplaySchema = lazySchema(() => z.object({
   /** Relationship type to configure */
   type: z.enum(['lookup', 'master_detail', 'tree']).describe('Relationship type'),
 
@@ -171,7 +172,7 @@ export const RelationshipDisplaySchema = z.object({
 
   /** Cardinality label to display */
   cardinalityLabel: z.string().default('1:N').describe('Cardinality label (e.g., "1:N", "1:1", "N:M")'),
-});
+}));
 
 export type RelationshipDisplay = z.infer<typeof RelationshipDisplaySchema>;
 
@@ -179,7 +180,7 @@ export type RelationshipDisplay = z.infer<typeof RelationshipDisplaySchema>;
  * Relationship Mapper configuration — controls the relationship
  * editing and visualization experience.
  */
-export const RelationshipMapperConfigSchema = z.object({
+export const RelationshipMapperConfigSchema = lazySchema(() => z.object({
   /** Enable visual relationship creation (drag from source to target) */
   visualCreation: z.boolean().default(true).describe('Enable drag-to-create relationships'),
 
@@ -195,19 +196,19 @@ export const RelationshipMapperConfigSchema = z.object({
     { type: 'master_detail', lineStyle: 'solid', color: '#ea580c', highlightColor: '#f97316', cardinalityLabel: '1:N' },
     { type: 'tree', lineStyle: 'dotted', color: '#8b5cf6', highlightColor: '#a78bfa', cardinalityLabel: '1:N' },
   ]).describe('Visual config per relationship type'),
-});
+}));
 
 export type RelationshipMapperConfig = z.infer<typeof RelationshipMapperConfigSchema>;
 
 // ─── ER Diagram ──────────────────────────────────────────────────────
 
 /** Layout algorithm for ER diagram */
-export const ERLayoutAlgorithmSchema = z.enum([
+export const ERLayoutAlgorithmSchema = lazySchema(() => z.enum([
   'force',      // Force-directed graph (natural clustering)
   'hierarchy',  // Top-down hierarchy (master → detail)
   'grid',       // Uniform grid layout
   'circular',   // Circular arrangement
-]).describe('ER diagram layout algorithm');
+]).describe('ER diagram layout algorithm'));
 
 export type ERLayoutAlgorithm = z.infer<typeof ERLayoutAlgorithmSchema>;
 
@@ -215,7 +216,7 @@ export type ERLayoutAlgorithm = z.infer<typeof ERLayoutAlgorithmSchema>;
  * Node display options — controls what information is shown
  * on each entity node in the ER diagram.
  */
-export const ERNodeDisplaySchema = z.object({
+export const ERNodeDisplaySchema = lazySchema(() => z.object({
   /** Show field list within the node */
   showFields: z.boolean().default(true).describe('Show field list inside entity nodes'),
 
@@ -236,7 +237,7 @@ export const ERNodeDisplaySchema = z.object({
 
   /** Show object description on hover tooltip */
   showDescription: z.boolean().default(true).describe('Show description tooltip on hover'),
-});
+}));
 
 export type ERNodeDisplay = z.infer<typeof ERNodeDisplaySchema>;
 
@@ -244,7 +245,7 @@ export type ERNodeDisplay = z.infer<typeof ERNodeDisplaySchema>;
  * ER Diagram configuration — controls the entity-relationship
  * diagram rendering, interaction, and layout.
  */
-export const ERDiagramConfigSchema = z.object({
+export const ERDiagramConfigSchema = lazySchema(() => z.object({
   /** Enable the ER diagram panel */
   enabled: z.boolean().default(true).describe('Enable ER diagram panel'),
 
@@ -294,33 +295,33 @@ export const ERDiagramConfigSchema = z.object({
 
   /** Export diagram options */
   exportFormats: z.array(z.enum(['png', 'svg', 'json'])).default(['png', 'svg']).describe('Available export formats for diagram'),
-});
+}));
 
 export type ERDiagramConfig = z.infer<typeof ERDiagramConfigSchema>;
 
 // ─── Object Manager ──────────────────────────────────────────────────
 
 /** Object list display mode */
-export const ObjectListDisplayModeSchema = z.enum([
+export const ObjectListDisplayModeSchema = lazySchema(() => z.enum([
   'table',      // Traditional table with columns
   'cards',      // Card grid (visual overview)
   'tree',       // Hierarchical tree (grouped by package/namespace)
-]).describe('Object list display mode');
+]).describe('Object list display mode'));
 
 export type ObjectListDisplayMode = z.infer<typeof ObjectListDisplayModeSchema>;
 
 /** Object list sort field */
-export const ObjectSortFieldSchema = z.enum([
+export const ObjectSortFieldSchema = lazySchema(() => z.enum([
   'name',       // Sort by API name
   'label',      // Sort by display label
   'fieldCount', // Sort by number of fields
   'updatedAt',  // Sort by last modified
-]).describe('Object list sort field');
+]).describe('Object list sort field'));
 
 export type ObjectSortField = z.infer<typeof ObjectSortFieldSchema>;
 
 /** Object filter criteria */
-export const ObjectFilterSchema = z.object({
+export const ObjectFilterSchema = lazySchema(() => z.object({
   /** Filter by package/namespace */
   package: z.string().optional().describe('Filter by owning package'),
 
@@ -341,7 +342,7 @@ export const ObjectFilterSchema = z.object({
 
   /** Text search across name, label, description */
   searchQuery: z.string().optional().describe('Free-text search across name, label, and description'),
-});
+}));
 
 export type ObjectFilter = z.infer<typeof ObjectFilterSchema>;
 
@@ -349,7 +350,7 @@ export type ObjectFilter = z.infer<typeof ObjectFilterSchema>;
  * Object Manager configuration — controls the unified object list,
  * search, and management experience.
  */
-export const ObjectManagerConfigSchema = z.object({
+export const ObjectManagerConfigSchema = lazySchema(() => z.object({
   /** Default display mode */
   defaultDisplayMode: ObjectListDisplayModeSchema.default('table').describe('Default list display mode'),
 
@@ -385,7 +386,7 @@ export const ObjectManagerConfigSchema = z.object({
 
   /** Show object statistics summary bar (total objects, fields, relationships) */
   showStatsSummary: z.boolean().default(true).describe('Show statistics summary bar'),
-});
+}));
 
 export type ObjectManagerConfig = z.infer<typeof ObjectManagerConfigSchema>;
 
@@ -395,7 +396,7 @@ export type ObjectManagerConfig = z.infer<typeof ObjectManagerConfigSchema>;
  * Preview tab configuration — defines the tabs available
  * when viewing a single object.
  */
-export const ObjectPreviewTabSchema = z.object({
+export const ObjectPreviewTabSchema = lazySchema(() => z.object({
   /** Tab key */
   key: z.string().describe('Tab key'),
 
@@ -410,7 +411,7 @@ export const ObjectPreviewTabSchema = z.object({
 
   /** Sort order */
   order: z.number().default(0).describe('Sort order (lower = higher)'),
-});
+}));
 
 export type ObjectPreviewTab = z.infer<typeof ObjectPreviewTabSchema>;
 
@@ -418,7 +419,7 @@ export type ObjectPreviewTab = z.infer<typeof ObjectPreviewTabSchema>;
  * Object Preview configuration — defines the tabs and layout
  * when viewing/editing a single object's metadata.
  */
-export const ObjectPreviewConfigSchema = z.object({
+export const ObjectPreviewConfigSchema = lazySchema(() => z.object({
   /** Tabs to show in the object detail view */
   tabs: z.array(ObjectPreviewTabSchema).default([
     { key: 'fields', label: 'Fields', icon: 'list', enabled: true, order: 0 },
@@ -439,19 +440,19 @@ export const ObjectPreviewConfigSchema = z.object({
 
   /** Show breadcrumbs */
   showBreadcrumbs: z.boolean().default(true).describe('Show navigation breadcrumbs'),
-});
+}));
 
 export type ObjectPreviewConfig = z.infer<typeof ObjectPreviewConfigSchema>;
 
 // ─── Top-Level Object Designer Config ────────────────────────────────
 
 /** Default view when entering the Object Designer */
-export const ObjectDesignerDefaultViewSchema = z.enum([
+export const ObjectDesignerDefaultViewSchema = lazySchema(() => z.enum([
   'field-editor',       // Field table editor (default)
   'relationship-mapper', // Visual relationship view
   'er-diagram',         // Full ER diagram
   'object-manager',     // Object list/manager
-]).describe('Default view when entering the Object Designer');
+]).describe('Default view when entering the Object Designer'));
 
 export type ObjectDesignerDefaultView = z.infer<typeof ObjectDesignerDefaultViewSchema>;
 
@@ -479,7 +480,7 @@ export type ObjectDesignerDefaultView = z.infer<typeof ObjectDesignerDefaultView
  * });
  * ```
  */
-export const ObjectDesignerConfigSchema = z.object({
+export const ObjectDesignerConfigSchema = lazySchema(() => z.object({
   /** Default view when opening the designer */
   defaultView: ObjectDesignerDefaultViewSchema.default('field-editor').describe('Default view'),
 
@@ -575,7 +576,7 @@ export const ObjectDesignerConfigSchema = z.object({
     showHeader: true,
     showBreadcrumbs: true,
   }).describe('Object preview configuration'),
-});
+}));
 
 export type ObjectDesignerConfig = z.infer<typeof ObjectDesignerConfigSchema>;
 

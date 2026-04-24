@@ -32,6 +32,7 @@ import { z } from 'zod';
 /**
  * Resolution status for a single dependency.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const DependencyStatusEnum = z.enum([
   'satisfied',      // Already installed and version compatible
   'needs_install',  // Not installed, needs to be installed
@@ -49,7 +50,7 @@ export type DependencyStatus = z.infer<typeof DependencyStatusEnum>;
  * Single dependency resolution result.
  * Describes the state of one dependency after resolution.
  */
-export const ResolvedDependencySchema = z.object({
+export const ResolvedDependencySchema = lazySchema(() => z.object({
   /** Package identifier of the dependency */
   packageId: z.string().describe('Dependency package identifier'),
 
@@ -70,7 +71,7 @@ export const ResolvedDependencySchema = z.object({
   /** Conflict details (when status is "conflict") */
   conflictReason: z.string().optional()
     .describe('Explanation of the conflict'),
-}).describe('Resolution result for a single dependency');
+}).describe('Resolution result for a single dependency'));
 
 export type ResolvedDependency = z.infer<typeof ResolvedDependencySchema>;
 
@@ -81,7 +82,7 @@ export type ResolvedDependency = z.infer<typeof ResolvedDependencySchema>;
 /**
  * An action required before installation can proceed.
  */
-export const RequiredActionSchema = z.object({
+export const RequiredActionSchema = lazySchema(() => z.object({
   /** Type of action required */
   type: z.enum(['install', 'upgrade', 'confirm_conflict'])
     .describe('Type of action required'),
@@ -91,7 +92,7 @@ export const RequiredActionSchema = z.object({
 
   /** Human-readable description of the action */
   description: z.string().describe('Human-readable action description'),
-}).describe('Action required before installation can proceed');
+}).describe('Action required before installation can proceed'));
 
 export type RequiredAction = z.infer<typeof RequiredActionSchema>;
 
@@ -103,7 +104,7 @@ export type RequiredAction = z.infer<typeof RequiredActionSchema>;
  * Complete dependency resolution result.
  * Aggregates all dependency statuses and computes installation feasibility.
  */
-export const DependencyResolutionResultSchema = z.object({
+export const DependencyResolutionResultSchema = lazySchema(() => z.object({
   /** All dependencies and their resolution results */
   dependencies: z.array(ResolvedDependencySchema)
     .describe('Resolution result for each dependency'),
@@ -123,6 +124,6 @@ export const DependencyResolutionResultSchema = z.object({
   /** Detected circular dependency chains */
   circularDependencies: z.array(z.array(z.string())).optional()
     .describe('Circular dependency chains detected (e.g. [["A", "B", "A"]])'),
-}).describe('Complete dependency resolution result');
+}).describe('Complete dependency resolution result'));
 
 export type DependencyResolutionResult = z.infer<typeof DependencyResolutionResultSchema>;

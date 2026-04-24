@@ -72,6 +72,7 @@ import { MiddlewareConfigSchema } from '../system/http-server.zod';
  * REST API Route Category Enum
  * Categorizes REST API routes by their primary function
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const RestApiRouteCategory = z.enum([
   'discovery',    // API discovery and capabilities
   'metadata',     // Metadata operations (objects, fields, views)
@@ -103,7 +104,7 @@ export type RestApiRouteCategory = z.infer<typeof RestApiRouteCategory>;
  * - `stub`        – A placeholder handler exists that returns 501 Not Implemented.
  * - `planned`     – Declared in the protocol spec but not yet implemented.
  */
-export const HandlerStatusSchema = z.enum(['implemented', 'stub', 'planned']);
+export const HandlerStatusSchema = lazySchema(() => z.enum(['implemented', 'stub', 'planned']));
 export type HandlerStatus = z.infer<typeof HandlerStatusSchema>;
 
 /**
@@ -120,7 +121,7 @@ export type HandlerStatus = z.infer<typeof HandlerStatusSchema>;
  *   "description": "Get API discovery information"
  * }
  */
-export const RestApiEndpointSchema = z.object({
+export const RestApiEndpointSchema = lazySchema(() => z.object({
   /**
    * HTTP method
    */
@@ -183,7 +184,7 @@ export const RestApiEndpointSchema = z.object({
    */
   handlerStatus: HandlerStatusSchema.optional()
     .describe('Handler implementation status: implemented (default if omitted), stub, or planned'),
-});
+}));
 
 export type RestApiEndpoint = z.infer<typeof RestApiEndpointSchema>;
 

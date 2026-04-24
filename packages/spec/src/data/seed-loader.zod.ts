@@ -35,7 +35,8 @@ import { DatasetSchema, DatasetMode } from './dataset.zod';
  * When a lookup/master_detail field value is not an internal ID, the loader
  * attempts to match it against the target object's externalId field.
  */
-export const ReferenceResolutionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ReferenceResolutionSchema = lazySchema(() => z.object({
   /** The field name on the source object (e.g., 'account_id') */
   field: z.string().describe('Source field name containing the reference value'),
 
@@ -50,7 +51,7 @@ export const ReferenceResolutionSchema = z.object({
 
   /** The field type that triggered this resolution (lookup or master_detail) */
   fieldType: z.enum(['lookup', 'master_detail']).describe('Relationship field type'),
-}).describe('Describes how a field reference is resolved during seed loading');
+}).describe('Describes how a field reference is resolved during seed loading'));
 
 export type ReferenceResolution = z.infer<typeof ReferenceResolutionSchema>;
 
@@ -62,7 +63,7 @@ export type ReferenceResolution = z.infer<typeof ReferenceResolutionSchema>;
  * Represents a single object in the dependency graph.
  * Built from object metadata by inspecting lookup/master_detail fields.
  */
-export const ObjectDependencyNodeSchema = z.object({
+export const ObjectDependencyNodeSchema = lazySchema(() => z.object({
   /** Object machine name */
   object: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Object name (snake_case)'),
 
@@ -77,7 +78,7 @@ export const ObjectDependencyNodeSchema = z.object({
    * Maps field name → reference resolution info.
    */
   references: z.array(ReferenceResolutionSchema).describe('Field-level reference details'),
-}).describe('Object node in the seed data dependency graph');
+}).describe('Object node in the seed data dependency graph'));
 
 export type ObjectDependencyNode = z.infer<typeof ObjectDependencyNodeSchema>;
 
@@ -89,7 +90,7 @@ export type ObjectDependencyNode = z.infer<typeof ObjectDependencyNodeSchema>;
  * The complete object dependency graph for seed data loading.
  * Used to determine topological insert order and detect circular dependencies.
  */
-export const ObjectDependencyGraphSchema = z.object({
+export const ObjectDependencyGraphSchema = lazySchema(() => z.object({
   /** All object nodes in the graph */
   nodes: z.array(ObjectDependencyNodeSchema).describe('All objects in the dependency graph'),
 
@@ -108,7 +109,7 @@ export const ObjectDependencyGraphSchema = z.object({
    */
   circularDependencies: z.array(z.array(z.string())).default([])
     .describe('Circular dependency chains (e.g., [["a", "b", "a"]])'),
-}).describe('Complete object dependency graph for seed data loading');
+}).describe('Complete object dependency graph for seed data loading'));
 
 export type ObjectDependencyGraph = z.infer<typeof ObjectDependencyGraphSchema>;
 
@@ -123,7 +124,7 @@ export type ObjectDependencyGraph = z.infer<typeof ObjectDependencyGraphSchema>;
  * Aligns with Salesforce Data Loader error reporting patterns:
  * field name, target object, attempted value, and reason.
  */
-export const ReferenceResolutionErrorSchema = z.object({
+export const ReferenceResolutionErrorSchema = lazySchema(() => z.object({
   /** The source object containing the broken reference */
   sourceObject: z.string().describe('Object with the broken reference'),
 
@@ -144,7 +145,7 @@ export const ReferenceResolutionErrorSchema = z.object({
 
   /** Human-readable error message */
   message: z.string().describe('Human-readable error description'),
-}).describe('Actionable error for a failed reference resolution');
+}).describe('Actionable error for a failed reference resolution'));
 
 export type ReferenceResolutionError = z.infer<typeof ReferenceResolutionErrorSchema>;
 
@@ -156,7 +157,7 @@ export type ReferenceResolutionError = z.infer<typeof ReferenceResolutionErrorSc
  * Configuration for the seed data loader.
  * Controls behavior for reference resolution, error handling, and validation.
  */
-export const SeedLoaderConfigSchema = z.object({
+export const SeedLoaderConfigSchema = lazySchema(() => z.object({
   /**
    * Dry-run mode: validate all references without writing data.
    * Surfaces broken references before any mutations occur.
@@ -211,7 +212,7 @@ export const SeedLoaderConfigSchema = z.object({
    */
   env: z.enum(['prod', 'dev', 'test']).optional()
     .describe('Only load datasets matching this environment'),
-}).describe('Seed data loader configuration');
+}).describe('Seed data loader configuration'));
 
 export type SeedLoaderConfig = z.infer<typeof SeedLoaderConfigSchema>;
 
@@ -225,7 +226,7 @@ export type SeedLoaderConfigInput = z.input<typeof SeedLoaderConfigSchema>;
 /**
  * Result of loading a single object's dataset.
  */
-export const DatasetLoadResultSchema = z.object({
+export const DatasetLoadResultSchema = lazySchema(() => z.object({
   /** Target object name */
   object: z.string().describe('Object that was loaded'),
 
@@ -256,7 +257,7 @@ export const DatasetLoadResultSchema = z.object({
   /** Reference resolution errors for this object */
   errors: z.array(ReferenceResolutionErrorSchema).default([])
     .describe('Reference resolution errors'),
-}).describe('Result of loading a single dataset');
+}).describe('Result of loading a single dataset'));
 
 export type DatasetLoadResult = z.infer<typeof DatasetLoadResultSchema>;
 
@@ -268,7 +269,7 @@ export type DatasetLoadResult = z.infer<typeof DatasetLoadResultSchema>;
  * Complete result of a seed loading operation.
  * Aggregates all per-object results and provides summary statistics.
  */
-export const SeedLoaderResultSchema = z.object({
+export const SeedLoaderResultSchema = lazySchema(() => z.object({
   /** Whether the overall load operation succeeded */
   success: z.boolean().describe('Overall success status'),
 
@@ -316,7 +317,7 @@ export const SeedLoaderResultSchema = z.object({
     /** Duration of the load operation in milliseconds */
     durationMs: z.number().min(0).describe('Load duration in milliseconds'),
   }).describe('Summary statistics'),
-}).describe('Complete seed loader result');
+}).describe('Complete seed loader result'));
 
 export type SeedLoaderResult = z.infer<typeof SeedLoaderResultSchema>;
 
@@ -328,13 +329,13 @@ export type SeedLoaderResult = z.infer<typeof SeedLoaderResultSchema>;
  * Input request for the seed loader.
  * Combines datasets with loader configuration.
  */
-export const SeedLoaderRequestSchema = z.object({
+export const SeedLoaderRequestSchema = lazySchema(() => z.object({
   /** Datasets to load */
   datasets: z.array(DatasetSchema).min(1).describe('Datasets to load'),
 
   /** Loader configuration */
   config: z.preprocess((val) => val ?? {}, SeedLoaderConfigSchema).describe('Loader configuration'),
-}).describe('Seed loader request with datasets and configuration');
+}).describe('Seed loader request with datasets and configuration'));
 
 export type SeedLoaderRequest = z.infer<typeof SeedLoaderRequestSchema>;
 

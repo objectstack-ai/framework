@@ -7,14 +7,15 @@ import { DriverConfigSchema } from './driver.zod';
  * SQL Dialect Enumeration
  * Supported SQL database dialects
  */
-export const SQLDialectSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const SQLDialectSchema = lazySchema(() => z.enum([
   'postgresql',
   'mysql',
   'sqlite',
   'mssql',
   'oracle',
   'mariadb',
-]);
+]));
 
 export type SQLDialect = z.infer<typeof SQLDialectSchema>;
 
@@ -34,7 +35,7 @@ export type SQLDialect = z.infer<typeof SQLDialectSchema>;
  *   binary: 'BYTEA'
  * }
  */
-export const DataTypeMappingSchema = z.object({
+export const DataTypeMappingSchema = lazySchema(() => z.object({
   text: z.string().describe('SQL type for text fields (e.g., VARCHAR, TEXT)'),
   number: z.string().describe('SQL type for number fields (e.g., NUMERIC, DECIMAL, INT)'),
   boolean: z.string().describe('SQL type for boolean fields (e.g., BOOLEAN, BIT)'),
@@ -43,7 +44,7 @@ export const DataTypeMappingSchema = z.object({
   json: z.string().optional().describe('SQL type for JSON fields (e.g., JSON, JSONB)'),
   uuid: z.string().optional().describe('SQL type for UUID fields (e.g., UUID, CHAR(36))'),
   binary: z.string().optional().describe('SQL type for binary fields (e.g., BLOB, BYTEA)'),
-});
+}));
 
 export type DataTypeMapping = z.infer<typeof DataTypeMappingSchema>;
 
@@ -59,7 +60,7 @@ export type DataTypeMapping = z.infer<typeof DataTypeMappingSchema>;
  *   key: '/path/to/client-key.pem'
  * }
  */
-export const SSLConfigSchema = z.object({
+export const SSLConfigSchema = lazySchema(() => z.object({
   rejectUnauthorized: z.boolean().default(true).describe('Reject connections with invalid certificates'),
   ca: z.string().optional().describe('CA certificate file path or content'),
   cert: z.string().optional().describe('Client certificate file path or content'),
@@ -71,7 +72,7 @@ export const SSLConfigSchema = z.object({
   return hasCert === hasKey;
 }, {
   message: 'Client certificate (cert) and private key (key) must be provided together',
-});
+}));
 
 export type SSLConfig = z.infer<typeof SSLConfigSchema>;
 
@@ -141,7 +142,7 @@ export type SSLConfig = z.infer<typeof SSLConfigSchema>;
  *   }
  * }
  */
-export const SQLDriverConfigSchema = DriverConfigSchema.extend({
+export const SQLDriverConfigSchema = lazySchema(() => DriverConfigSchema.extend({
   type: z.literal('sql').describe('Driver type must be "sql"'),
   dialect: SQLDialectSchema.describe('SQL database dialect'),
   dataTypeMapping: DataTypeMappingSchema.describe('SQL data type mapping configuration'),
@@ -155,7 +156,7 @@ export const SQLDriverConfigSchema = DriverConfigSchema.extend({
   return true;
 }, {
   message: 'sslConfig is required when ssl is true',
-});
+}));
 
 export type SQLDriverConfig = z.infer<typeof SQLDriverConfigSchema>;
 

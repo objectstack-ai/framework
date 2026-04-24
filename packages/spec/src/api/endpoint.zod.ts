@@ -7,11 +7,12 @@ import { HttpMethod, RateLimitConfigSchema } from '../shared/http.zod';
  * API Mapping Schema
  * Transform input/output data.
  */
-export const ApiMappingSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ApiMappingSchema = lazySchema(() => z.object({
   source: z.string().describe('Source field/path'),
   target: z.string().describe('Target field/path'),
   transform: z.string().optional().describe('Transformation function name'),
-});
+}));
 
 /**
  * API Endpoint Schema

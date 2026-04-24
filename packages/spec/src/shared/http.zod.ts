@@ -16,6 +16,7 @@ import { z } from 'zod';
 /**
  * HTTP Method Enum
  */
+import { lazySchema } from './lazy-schema';
 export const HttpMethod = z.enum([
   'GET', 
   'POST', 
@@ -33,7 +34,7 @@ export type HttpMethod = z.infer<typeof HttpMethod>;
  * Common HTTP methods used in view data source configurations.
  * Migrated from ui/view.zod.ts to shared for reuse across modules.
  */
-export const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+export const HttpMethodSchema = lazySchema(() => z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']));
 
 export type HttpMethodType = z.infer<typeof HttpMethodSchema>;
 
@@ -42,13 +43,13 @@ export type HttpMethodType = z.infer<typeof HttpMethodSchema>;
  * Defines a complete HTTP request configuration used by API data providers.
  * Migrated from ui/view.zod.ts to shared for reuse across modules.
  */
-export const HttpRequestSchema = z.object({
+export const HttpRequestSchema = lazySchema(() => z.object({
   url: z.string().describe('API endpoint URL'),
   method: HttpMethodSchema.optional().default('GET').describe('HTTP method'),
   headers: z.record(z.string(), z.string()).optional().describe('Custom HTTP headers'),
   params: z.record(z.string(), z.unknown()).optional().describe('Query parameters'),
   body: z.unknown().optional().describe('Request body for POST/PUT/PATCH'),
-});
+}));
 
 export type HttpRequest = z.infer<typeof HttpRequestSchema>;
 
@@ -73,7 +74,7 @@ export type HttpRequest = z.infer<typeof HttpRequestSchema>;
  *   "maxAge": 86400
  * }
  */
-export const CorsConfigSchema = z.object({
+export const CorsConfigSchema = lazySchema(() => z.object({
   /**
    * Enable CORS
    */
@@ -101,7 +102,7 @@ export const CorsConfigSchema = z.object({
    * Preflight cache duration in seconds
    */
   maxAge: z.number().int().optional().describe('Preflight cache duration in seconds'),
-});
+}));
 
 export type CorsConfig = z.infer<typeof CorsConfigSchema>;
 
@@ -123,7 +124,7 @@ export type CorsConfig = z.infer<typeof CorsConfigSchema>;
  *   "maxRequests": 100
  * }
  */
-export const RateLimitConfigSchema = z.object({
+export const RateLimitConfigSchema = lazySchema(() => z.object({
   /**
    * Enable rate limiting
    */
@@ -138,7 +139,7 @@ export const RateLimitConfigSchema = z.object({
    * Max requests per window
    */
   maxRequests: z.number().int().default(100).describe('Max requests per window'),
-});
+}));
 
 export type RateLimitConfig = z.infer<typeof RateLimitConfigSchema>;
 
@@ -161,7 +162,7 @@ export type RateLimitConfig = z.infer<typeof RateLimitConfigSchema>;
  *   "cacheControl": "public, max-age=31536000"
  * }
  */
-export const StaticMountSchema = z.object({
+export const StaticMountSchema = lazySchema(() => z.object({
   /**
    * URL path to serve from
    */
@@ -176,6 +177,6 @@ export const StaticMountSchema = z.object({
    * Cache-Control header value
    */
   cacheControl: z.string().optional().describe('Cache-Control header value'),
-});
+}));
 
 export type StaticMount = z.infer<typeof StaticMountSchema>;

@@ -25,11 +25,12 @@ import { z } from 'zod';
 /**
  * Package visibility — controls who can discover and install the package.
  */
-export const PackageVisibilitySchema = z
+import { lazySchema } from '../shared/lazy-schema';
+export const PackageVisibilitySchema = lazySchema(() => z
   .enum(['private', 'org', 'marketplace'])
   .describe(
     'Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry'
-  );
+  ));
 
 export type PackageVisibility = z.infer<typeof PackageVisibilitySchema>;
 
@@ -37,10 +38,10 @@ export type PackageVisibility = z.infer<typeof PackageVisibilitySchema>;
  * Category hint for marketplace discovery and filtering.
  * Kept open-ended (z.string()) so third-party packages can declare custom categories.
  */
-export const PackageCategorySchema = z
+export const PackageCategorySchema = lazySchema(() => z
   .string()
   .min(1)
-  .describe('Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools")');
+  .describe('Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools")'));
 
 export type PackageCategory = z.infer<typeof PackageCategorySchema>;
 
@@ -56,7 +57,7 @@ export type PackageCategory = z.infer<typeof PackageCategorySchema>;
  *
  * Addressable by `manifest_id` (globally unique reverse-domain string).
  */
-export const PackageSchema = z.object({
+export const PackageSchema = lazySchema(() => z.object({
   /** UUID of the package (stable, never reused). */
   id: z.string().uuid().describe('UUID of the package (stable, never reused)'),
 
@@ -112,7 +113,7 @@ export const PackageSchema = z.object({
 
   /** User ID that created the package entry. */
   createdBy: z.string().describe('User ID that created the package'),
-});
+}));
 
 export type Package = z.infer<typeof PackageSchema>;
 
@@ -123,7 +124,7 @@ export type Package = z.infer<typeof PackageSchema>;
 /**
  * Request to register a new package in the Control Plane.
  */
-export const CreatePackageRequestSchema = z.object({
+export const CreatePackageRequestSchema = lazySchema(() => z.object({
   manifestId: PackageSchema.shape.manifestId,
   ownerOrgId: z.string().describe('Owner organization ID'),
   displayName: PackageSchema.shape.displayName,
@@ -135,7 +136,7 @@ export const CreatePackageRequestSchema = z.object({
   homepageUrl: z.string().url().optional(),
   license: z.string().optional(),
   createdBy: z.string().describe('User ID creating the package'),
-}).describe('Register a new package in the Control Plane');
+}).describe('Register a new package in the Control Plane'));
 
 export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
 
@@ -143,7 +144,7 @@ export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
  * Request to update mutable package metadata (visibility, description, tags…).
  * `manifestId` and `ownerOrgId` are immutable once set.
  */
-export const UpdatePackageRequestSchema = z.object({
+export const UpdatePackageRequestSchema = lazySchema(() => z.object({
   displayName: PackageSchema.shape.displayName.optional(),
   description: PackageSchema.shape.description,
   readme: PackageSchema.shape.readme,
@@ -153,6 +154,6 @@ export const UpdatePackageRequestSchema = z.object({
   iconUrl: z.string().url().optional(),
   homepageUrl: z.string().url().optional(),
   license: z.string().optional(),
-}).describe('Update mutable package metadata');
+}).describe('Update mutable package metadata'));
 
 export type UpdatePackageRequest = z.infer<typeof UpdatePackageRequestSchema>;

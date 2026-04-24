@@ -22,6 +22,7 @@ import { z } from 'zod';
  * Log Level Enum
  * Standard RFC 5424 severity levels (simplified)
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const LogLevel = z.enum([
   'debug',
   'info',
@@ -48,7 +49,7 @@ export type LogFormat = z.infer<typeof LogFormat>;
  * Logger Configuration Schema
  * Configuration for the Kernel's internal logger
  */
-export const LoggerConfigSchema = z.object({
+export const LoggerConfigSchema = lazySchema(() => z.object({
   /**
    * Logger name
    */
@@ -88,7 +89,7 @@ export const LoggerConfigSchema = z.object({
       maxSize: z.string().optional().default('10m'),
       maxFiles: z.number().optional().default(5)
   }).optional()
-});
+}));
 
 export type LoggerConfig = z.infer<typeof LoggerConfigSchema>;
 
@@ -96,7 +97,7 @@ export type LoggerConfig = z.infer<typeof LoggerConfigSchema>;
  * Log Entry Schema
  * The shape of a structured log record
  */
-export const LogEntrySchema = z.object({
+export const LogEntrySchema = lazySchema(() => z.object({
   timestamp: z.string().datetime().describe('ISO 8601 timestamp'),
   level: LogLevel,
   message: z.string().describe('Log message'),
@@ -110,7 +111,7 @@ export const LogEntrySchema = z.object({
   /** Source */
   service: z.string().optional().describe('Service name'),
   component: z.string().optional().describe('Component name (e.g. plugin id)'),
-});
+}));
 
 export type LogEntry = z.infer<typeof LogEntrySchema>;
 
@@ -159,7 +160,7 @@ export type LogDestinationType = z.infer<typeof LogDestinationType>;
 /**
  * Console Destination Configuration
  */
-export const ConsoleDestinationConfigSchema = z.object({
+export const ConsoleDestinationConfigSchema = lazySchema(() => z.object({
   /**
    * Output stream
    */
@@ -174,14 +175,14 @@ export const ConsoleDestinationConfigSchema = z.object({
    * Pretty print JSON
    */
   prettyPrint: z.boolean().optional().default(false),
-}).describe('Console destination configuration');
+}).describe('Console destination configuration'));
 
 export type ConsoleDestinationConfig = z.infer<typeof ConsoleDestinationConfigSchema>;
 
 /**
  * File Destination Configuration
  */
-export const FileDestinationConfigSchema = z.object({
+export const FileDestinationConfigSchema = lazySchema(() => z.object({
   /**
    * File path
    */
@@ -221,14 +222,14 @@ export const FileDestinationConfigSchema = z.object({
    * Append to existing file
    */
   append: z.boolean().optional().default(true),
-}).describe('File destination configuration');
+}).describe('File destination configuration'));
 
 export type FileDestinationConfig = z.infer<typeof FileDestinationConfigSchema>;
 
 /**
  * HTTP Destination Configuration
  */
-export const HttpDestinationConfigSchema = z.object({
+export const HttpDestinationConfigSchema = lazySchema(() => z.object({
   /**
    * HTTP endpoint URL
    */
@@ -295,7 +296,7 @@ export const HttpDestinationConfigSchema = z.object({
    * Timeout in milliseconds
    */
   timeout: z.number().int().positive().optional().default(30000),
-}).describe('HTTP destination configuration');
+}).describe('HTTP destination configuration'));
 
 export type HttpDestinationConfig = z.infer<typeof HttpDestinationConfigSchema>;
 
@@ -303,7 +304,7 @@ export type HttpDestinationConfig = z.infer<typeof HttpDestinationConfigSchema>;
  * External Service Destination Configuration
  * Generic configuration for cloud logging services
  */
-export const ExternalServiceDestinationConfigSchema = z.object({
+export const ExternalServiceDestinationConfigSchema = lazySchema(() => z.object({
   /**
    * Service-specific endpoint
    */
@@ -335,7 +336,7 @@ export const ExternalServiceDestinationConfigSchema = z.object({
    * Service-specific configuration
    */
   config: z.record(z.string(), z.unknown()).optional(),
-}).describe('External service destination configuration');
+}).describe('External service destination configuration'));
 
 export type ExternalServiceDestinationConfig = z.infer<typeof ExternalServiceDestinationConfigSchema>;
 
@@ -343,7 +344,7 @@ export type ExternalServiceDestinationConfig = z.infer<typeof ExternalServiceDes
  * Log Destination Schema
  * Configuration for a single log destination
  */
-export const LogDestinationSchema = z.object({
+export const LogDestinationSchema = lazySchema(() => z.object({
   /**
    * Destination name
    */
@@ -395,7 +396,7 @@ export const LogDestinationSchema = z.object({
    * Filter function reference (runtime only)
    */
   filterId: z.string().optional().describe('Filter function identifier'),
-}).describe('Log destination configuration');
+}).describe('Log destination configuration'));
 
 export type LogDestination = z.infer<typeof LogDestinationSchema>;
 
@@ -403,7 +404,7 @@ export type LogDestination = z.infer<typeof LogDestinationSchema>;
  * Log Enrichment Configuration
  * Add contextual data to all log entries
  */
-export const LogEnrichmentConfigSchema = z.object({
+export const LogEnrichmentConfigSchema = lazySchema(() => z.object({
   /**
    * Static fields to add to all logs
    */
@@ -447,7 +448,7 @@ export const LogEnrichmentConfigSchema = z.object({
    * Add correlation IDs
    */
   addCorrelationIds: z.boolean().optional().default(true),
-}).describe('Log enrichment configuration');
+}).describe('Log enrichment configuration'));
 
 export type LogEnrichmentConfig = z.infer<typeof LogEnrichmentConfigSchema>;
 
@@ -455,7 +456,7 @@ export type LogEnrichmentConfig = z.infer<typeof LogEnrichmentConfigSchema>;
  * Structured Log Entry Schema
  * Enhanced structured log record with enrichment
  */
-export const StructuredLogEntrySchema = z.object({
+export const StructuredLogEntrySchema = lazySchema(() => z.object({
   /**
    * Timestamp (ISO 8601)
    */
@@ -551,7 +552,7 @@ export const StructuredLogEntrySchema = z.object({
    * Additional metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional metadata'),
-}).describe('Structured log entry');
+}).describe('Structured log entry'));
 
 export type StructuredLogEntry = z.infer<typeof StructuredLogEntrySchema>;
 
@@ -559,7 +560,7 @@ export type StructuredLogEntry = z.infer<typeof StructuredLogEntrySchema>;
  * Logging Configuration Schema
  * Main configuration for the logging system
  */
-export const LoggingConfigSchema = z.object({
+export const LoggingConfigSchema = lazySchema(() => z.object({
   /**
    * Configuration name
    */
@@ -678,6 +679,6 @@ export const LoggingConfigSchema = z.object({
      */
     workers: z.number().int().positive().optional().default(1),
   }).optional(),
-}).describe('Logging configuration');
+}).describe('Logging configuration'));
 
 export type LoggingConfig = z.infer<typeof LoggingConfigSchema>;

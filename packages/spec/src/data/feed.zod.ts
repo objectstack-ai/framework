@@ -7,6 +7,7 @@ import { z } from 'zod';
  * Unified activity types for the record timeline.
  * Covers comments, field changes, tasks, events, and system activities.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const FeedItemType = z.enum([
   'comment',
   'field_change',
@@ -28,51 +29,51 @@ export type FeedItemType = z.infer<typeof FeedItemType>;
  * Mention Schema
  * Represents an @mention within comment body text.
  */
-export const MentionSchema = z.object({
+export const MentionSchema = lazySchema(() => z.object({
   type: z.enum(['user', 'team', 'record']).describe('Mention target type'),
   id: z.string().describe('Target ID'),
   name: z.string().describe('Display name for rendering'),
   offset: z.number().int().min(0).describe('Character offset in body text'),
   length: z.number().int().min(1).describe('Length of mention token in body text'),
-});
+}));
 export type Mention = z.infer<typeof MentionSchema>;
 
 /**
  * Field Change Entry Schema
  * Represents a single field-level change within a field_change feed item.
  */
-export const FieldChangeEntrySchema = z.object({
+export const FieldChangeEntrySchema = lazySchema(() => z.object({
   field: z.string().describe('Field machine name'),
   fieldLabel: z.string().optional().describe('Field display label'),
   oldValue: z.unknown().optional().describe('Previous value'),
   newValue: z.unknown().optional().describe('New value'),
   oldDisplayValue: z.string().optional().describe('Human-readable old value'),
   newDisplayValue: z.string().optional().describe('Human-readable new value'),
-});
+}));
 export type FieldChangeEntry = z.infer<typeof FieldChangeEntrySchema>;
 
 /**
  * Reaction Schema
  * Represents an emoji reaction on a feed item.
  */
-export const ReactionSchema = z.object({
+export const ReactionSchema = lazySchema(() => z.object({
   emoji: z.string().describe('Emoji character or shortcode (e.g., "👍", ":thumbsup:")'),
   userIds: z.array(z.string()).describe('Users who reacted'),
   count: z.number().int().min(1).describe('Total reaction count'),
-});
+}));
 export type Reaction = z.infer<typeof ReactionSchema>;
 
 /**
  * Feed Actor Schema
  * Represents the actor who performed the action.
  */
-export const FeedActorSchema = z.object({
+export const FeedActorSchema = lazySchema(() => z.object({
   type: z.enum(['user', 'system', 'service', 'automation']).describe('Actor type'),
   id: z.string().describe('Actor ID'),
   name: z.string().optional().describe('Actor display name'),
   avatarUrl: z.string().url().optional().describe('Actor avatar URL'),
   source: z.string().optional().describe('Source application (e.g., "Omni", "API", "Studio")'),
-});
+}));
 export type FeedActor = z.infer<typeof FeedActorSchema>;
 
 /**
@@ -111,7 +112,7 @@ export type FeedVisibility = z.infer<typeof FeedVisibility>;
  *   createdAt: '2026-01-15T10:25:00Z',
  * }
  */
-export const FeedItemSchema = z.object({
+export const FeedItemSchema = lazySchema(() => z.object({
   /** Unique identifier */
   id: z.string().describe('Feed item ID'),
 
@@ -157,7 +158,7 @@ export const FeedItemSchema = z.object({
   updatedAt: z.string().datetime().optional().describe('Last update timestamp'),
   editedAt: z.string().datetime().optional().describe('When comment was last edited'),
   isEdited: z.boolean().default(false).describe('Whether comment has been edited'),
-});
+}));
 export type FeedItem = z.infer<typeof FeedItemSchema>;
 
 /**

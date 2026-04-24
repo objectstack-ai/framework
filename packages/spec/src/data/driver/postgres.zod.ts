@@ -6,7 +6,8 @@ import { z } from 'zod';
  * PostgreSQL Driver Configuration Schema
  * Defines the connection settings specific to PostgreSQL.
  */
-export const PostgresConfigSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const PostgresConfigSchema = lazySchema(() => z.object({
   /**
    * Connection URI.
    * If provided, it takes precedence over host/port/database.
@@ -98,6 +99,6 @@ export const PostgresConfigSchema = z.object({
    * Abort any statement that takes more than the specified number of milliseconds.
    */
    statementTimeout: z.number().optional().describe('Statement Timeout (ms)'),
-});
+}));
 
 export type PostgresConfig = z.infer<typeof PostgresConfigSchema>;

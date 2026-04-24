@@ -84,7 +84,8 @@ import { FieldMappingSchema as BaseFieldMappingSchema } from '../shared/mapping.
  * Extends the base field mapping with connector-specific features
  * like bidirectional sync modes and data type mapping.
  */
-export const FieldMappingSchema = BaseFieldMappingSchema.extend({
+import { lazySchema } from '../shared/lazy-schema';
+export const FieldMappingSchema = lazySchema(() => BaseFieldMappingSchema.extend({
   /**
    * Data type mapping (connector-specific)
    */
@@ -111,7 +112,7 @@ export const FieldMappingSchema = BaseFieldMappingSchema.extend({
     'write_only',     // Only sync from ObjectStack to external
     'bidirectional',  // Sync both ways
   ]).default('bidirectional').describe('Sync mode'),
-});
+}));
 
 export type FieldMapping = z.infer<typeof FieldMappingSchema>;
 
@@ -122,31 +123,31 @@ export type FieldMapping = z.infer<typeof FieldMappingSchema>;
 /**
  * Sync Strategy Schema
  */
-export const SyncStrategySchema = z.enum([
+export const SyncStrategySchema = lazySchema(() => z.enum([
   'full',           // Full refresh (delete all and re-import)
   'incremental',    // Only sync changes since last sync
   'upsert',         // Insert new, update existing
   'append_only',    // Only insert new records
-]).describe('Synchronization strategy');
+]).describe('Synchronization strategy'));
 
 export type SyncStrategy = z.infer<typeof SyncStrategySchema>;
 
 /**
  * Conflict Resolution Strategy
  */
-export const ConflictResolutionSchema = z.enum([
+export const ConflictResolutionSchema = lazySchema(() => z.enum([
   'source_wins',    // External system data takes precedence
   'target_wins',    // ObjectStack data takes precedence
   'latest_wins',    // Most recently modified wins
   'manual',         // Flag for manual resolution
-]).describe('Conflict resolution strategy');
+]).describe('Conflict resolution strategy'));
 
 export type ConflictResolution = z.infer<typeof ConflictResolutionSchema>;
 
 /**
  * Data Synchronization Configuration
  */
-export const DataSyncConfigSchema = z.object({
+export const DataSyncConfigSchema = lazySchema(() => z.object({
   /**
    * Sync strategy
    */
@@ -199,7 +200,7 @@ export const DataSyncConfigSchema = z.object({
    * Filter criteria for selective sync
    */
   filters: z.record(z.string(), z.unknown()).optional().describe('Filter criteria for selective sync'),
-});
+}));
 
 export type DataSyncConfig = z.infer<typeof DataSyncConfigSchema>;
 
@@ -210,7 +211,7 @@ export type DataSyncConfig = z.infer<typeof DataSyncConfigSchema>;
 /**
  * Webhook Event Schema
  */
-export const WebhookEventSchema = z.enum([
+export const WebhookEventSchema = lazySchema(() => z.enum([
   'record.created',
   'record.updated',
   'record.deleted',
@@ -219,18 +220,18 @@ export const WebhookEventSchema = z.enum([
   'sync.failed',
   'auth.expired',
   'rate_limit.exceeded',
-]).describe('Webhook event type');
+]).describe('Webhook event type'));
 
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
 
 /**
  * Webhook Signature Algorithm
  */
-export const WebhookSignatureAlgorithmSchema = z.enum([
+export const WebhookSignatureAlgorithmSchema = lazySchema(() => z.enum([
   'hmac_sha256',
   'hmac_sha512',
   'none',
-]).describe('Webhook signature algorithm');
+]).describe('Webhook signature algorithm'));
 
 export type WebhookSignatureAlgorithm = z.infer<typeof WebhookSignatureAlgorithmSchema>;
 
@@ -240,7 +241,7 @@ export type WebhookSignatureAlgorithm = z.infer<typeof WebhookSignatureAlgorithm
  * Extends the canonical WebhookSchema with connector-specific event types.
  * This allows connectors to subscribe to both data events and connector lifecycle events.
  */
-export const WebhookConfigSchema = WebhookSchema.extend({
+export const WebhookConfigSchema = lazySchema(() => WebhookSchema.extend({
   /**
    * Events to listen for
    * Connector-specific events like sync completion, auth expiry, etc.
@@ -251,7 +252,7 @@ export const WebhookConfigSchema = WebhookSchema.extend({
    * Signature algorithm for webhook security
    */
   signatureAlgorithm: WebhookSignatureAlgorithmSchema.optional().default('hmac_sha256'),
-});
+}));
 
 export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 
@@ -262,19 +263,19 @@ export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 /**
  * Rate Limiting Strategy
  */
-export const RateLimitStrategySchema = z.enum([
+export const RateLimitStrategySchema = lazySchema(() => z.enum([
   'fixed_window',       // Fixed time window
   'sliding_window',     // Sliding time window
   'token_bucket',       // Token bucket algorithm
   'leaky_bucket',       // Leaky bucket algorithm
-]).describe('Rate limiting strategy');
+]).describe('Rate limiting strategy'));
 
 export type RateLimitStrategy = z.infer<typeof RateLimitStrategySchema>;
 
 /**
  * Rate Limiting Configuration
  */
-export const RateLimitConfigSchema = z.object({
+export const RateLimitConfigSchema = lazySchema(() => z.object({
   /**
    * Rate limiting strategy
    */
@@ -308,26 +309,26 @@ export const RateLimitConfigSchema = z.object({
     limit: z.string().optional().default('X-RateLimit-Limit').describe('Header for rate limit'),
     reset: z.string().optional().default('X-RateLimit-Reset').describe('Header for reset time'),
   }).optional().describe('Custom rate limit headers'),
-});
+}));
 
 export type RateLimitConfig = z.infer<typeof RateLimitConfigSchema>;
 
 /**
  * Retry Strategy
  */
-export const RetryStrategySchema = z.enum([
+export const RetryStrategySchema = lazySchema(() => z.enum([
   'exponential_backoff',
   'linear_backoff',
   'fixed_delay',
   'no_retry',
-]).describe('Retry strategy');
+]).describe('Retry strategy'));
 
 export type RetryStrategy = z.infer<typeof RetryStrategySchema>;
 
 /**
  * Retry Configuration
  */
-export const RetryConfigSchema = z.object({
+export const RetryConfigSchema = lazySchema(() => z.object({
   /**
    * Retry strategy
    */
@@ -367,7 +368,7 @@ export const RetryConfigSchema = z.object({
    * Jitter to add randomness to retry delays
    */
   jitter: z.boolean().optional().default(true).describe('Add jitter to retry delays'),
-});
+}));
 
 export type RetryConfig = z.infer<typeof RetryConfigSchema>;
 
@@ -378,7 +379,7 @@ export type RetryConfig = z.infer<typeof RetryConfigSchema>;
 /**
  * Error Category
  */
-export const ErrorCategorySchema = z.enum([
+export const ErrorCategorySchema = lazySchema(() => z.enum([
   'validation',
   'authorization',
   'not_found',
@@ -387,7 +388,7 @@ export const ErrorCategorySchema = z.enum([
   'timeout',
   'server_error',
   'integration_error',
-]).describe('Standard error category');
+]).describe('Standard error category'));
 
 export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
 
@@ -396,7 +397,7 @@ export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
  * 
  * Maps an external system error code to an ObjectStack standard error.
  */
-export const ErrorMappingRuleSchema = z.object({
+export const ErrorMappingRuleSchema = lazySchema(() => z.object({
   sourceCode: z.union([z.string(), z.number()]).describe('External system error code'),
   sourceMessage: z.string().optional().describe('Pattern to match against error message'),
   targetCode: z.string().describe('ObjectStack standard error code'),
@@ -404,7 +405,7 @@ export const ErrorMappingRuleSchema = z.object({
   severity: z.enum(['low', 'medium', 'high', 'critical']).describe('Error severity level'),
   retryable: z.boolean().describe('Whether the error is retryable'),
   userMessage: z.string().optional().describe('Human-readable message to show users'),
-}).describe('Error mapping rule');
+}).describe('Error mapping rule'));
 
 export type ErrorMappingRule = z.infer<typeof ErrorMappingRuleSchema>;
 
@@ -413,12 +414,12 @@ export type ErrorMappingRule = z.infer<typeof ErrorMappingRuleSchema>;
  * 
  * Configures how external system errors are mapped to ObjectStack standard errors.
  */
-export const ErrorMappingConfigSchema = z.object({
+export const ErrorMappingConfigSchema = lazySchema(() => z.object({
   rules: z.array(ErrorMappingRuleSchema).describe('Error mapping rules'),
   defaultCategory: ErrorCategorySchema.optional().default('integration_error').describe('Default category for unmapped errors'),
   unmappedBehavior: z.enum(['passthrough', 'generic_error', 'throw']).describe('What to do with unmapped errors'),
   logUnmapped: z.boolean().optional().default(true).describe('Log unmapped errors'),
-}).describe('Error mapping configuration');
+}).describe('Error mapping configuration'));
 
 export type ErrorMappingConfig = z.infer<typeof ErrorMappingConfigSchema>;
 
@@ -431,7 +432,7 @@ export type ErrorMappingConfig = z.infer<typeof ErrorMappingConfigSchema>;
  * 
  * Configures periodic health checks for connector endpoints.
  */
-export const HealthCheckConfigSchema = z.object({
+export const HealthCheckConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable health checks'),
   intervalMs: z.number().optional().default(60000).describe('Health check interval in milliseconds'),
   timeoutMs: z.number().optional().default(5000).describe('Health check timeout in milliseconds'),
@@ -440,7 +441,7 @@ export const HealthCheckConfigSchema = z.object({
   expectedStatus: z.number().optional().default(200).describe('Expected HTTP status code'),
   unhealthyThreshold: z.number().optional().default(3).describe('Consecutive failures before marking unhealthy'),
   healthyThreshold: z.number().optional().default(1).describe('Consecutive successes before marking healthy'),
-}).describe('Health check configuration');
+}).describe('Health check configuration'));
 
 export type HealthCheckConfig = z.infer<typeof HealthCheckConfigSchema>;
 
@@ -449,14 +450,14 @@ export type HealthCheckConfig = z.infer<typeof HealthCheckConfigSchema>;
  * 
  * Implements the circuit breaker pattern to prevent cascading failures.
  */
-export const CircuitBreakerConfigSchema = z.object({
+export const CircuitBreakerConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable circuit breaker'),
   failureThreshold: z.number().optional().default(5).describe('Failures before opening circuit'),
   resetTimeoutMs: z.number().optional().default(30000).describe('Time in open state before half-open'),
   halfOpenMaxRequests: z.number().optional().default(1).describe('Requests allowed in half-open state'),
   monitoringWindow: z.number().optional().default(60000).describe('Rolling window for failure count in ms'),
   fallbackStrategy: z.enum(['cache', 'default_value', 'error', 'queue']).optional().describe('Fallback strategy when circuit is open'),
-}).describe('Circuit breaker configuration');
+}).describe('Circuit breaker configuration'));
 
 export type CircuitBreakerConfig = z.infer<typeof CircuitBreakerConfigSchema>;
 
@@ -465,10 +466,10 @@ export type CircuitBreakerConfig = z.infer<typeof CircuitBreakerConfigSchema>;
  * 
  * Combines health check and circuit breaker for connector resilience.
  */
-export const ConnectorHealthSchema = z.object({
+export const ConnectorHealthSchema = lazySchema(() => z.object({
   healthCheck: HealthCheckConfigSchema.optional().describe('Health check configuration'),
   circuitBreaker: CircuitBreakerConfigSchema.optional().describe('Circuit breaker configuration'),
-}).describe('Connector health configuration');
+}).describe('Connector health configuration'));
 
 export type ConnectorHealth = z.infer<typeof ConnectorHealthSchema>;
 
@@ -479,56 +480,56 @@ export type ConnectorHealth = z.infer<typeof ConnectorHealthSchema>;
 /**
  * Connector Type
  */
-export const ConnectorTypeSchema = z.enum([
+export const ConnectorTypeSchema = lazySchema(() => z.enum([
   'saas',           // SaaS application connector
   'database',       // Database connector
   'file_storage',   // File storage connector
   'message_queue',  // Message queue connector
   'api',            // Generic REST/GraphQL API
   'custom',         // Custom connector
-]).describe('Connector type');
+]).describe('Connector type'));
 
 export type ConnectorType = z.infer<typeof ConnectorTypeSchema>;
 
 /**
  * Connector Status
  */
-export const ConnectorStatusSchema = z.enum([
+export const ConnectorStatusSchema = lazySchema(() => z.enum([
   'active',         // Connector is active and syncing
   'inactive',       // Connector is configured but disabled
   'error',          // Connector has errors
   'configuring',    // Connector is being set up
-]).describe('Connector status');
+]).describe('Connector status'));
 
 export type ConnectorStatus = z.infer<typeof ConnectorStatusSchema>;
 
 /**
  * Connector Action Definition
  */
-export const ConnectorActionSchema = z.object({
+export const ConnectorActionSchema = lazySchema(() => z.object({
   key: z.string().describe('Action key (machine name)'),
   label: z.string().describe('Human readable label'),
   description: z.string().optional(),
   inputSchema: z.record(z.string(), z.unknown()).optional().describe('Input parameters schema (JSON Schema)'),
   outputSchema: z.record(z.string(), z.unknown()).optional().describe('Output schema (JSON Schema)'),
-});
+}));
 
 /**
  * Connector Trigger Definition
  */
-export const ConnectorTriggerSchema = z.object({
+export const ConnectorTriggerSchema = lazySchema(() => z.object({
   key: z.string().describe('Trigger key'),
   label: z.string().describe('Trigger label'),
   description: z.string().optional(),
   type: z.enum(['polling', 'webhook']).describe('Trigger type'),
   interval: z.number().optional().describe('Polling interval in seconds'),
-});
+}));
 
 /**
  * Base Connector Schema
  * Core connector configuration shared across all connector types
  */
-export const ConnectorSchema = z.object({
+export const ConnectorSchema = lazySchema(() => z.object({
   /**
    * Machine name (snake_case)
    */
@@ -623,6 +624,6 @@ export const ConnectorSchema = z.object({
    * Custom metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom connector metadata'),
-});
+}));
 
 export type Connector = z.infer<typeof ConnectorSchema>;

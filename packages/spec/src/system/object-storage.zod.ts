@@ -25,7 +25,8 @@ import { SystemIdentifierSchema } from '../shared/identifiers.zod';
  * Storage Scope Enum
  * Defines the lifecycle and persistence guarantee of the storage area.
  */
-export const StorageScopeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const StorageScopeSchema = lazySchema(() => z.enum([
   'global',     // Global application-wide storage
   'tenant',     // Tenant-scoped storage (multi-tenant apps)
   'user',       // User-scoped storage
@@ -36,7 +37,7 @@ export const StorageScopeSchema = z.enum([
   'logs',       // Append-only, rotated
   'config',     // Read-heavy, versioned
   'public'      // Publicly accessible static assets
-]).describe('Storage scope classification');
+]).describe('Storage scope classification'));
 
 export type StorageScope = z.infer<typeof StorageScopeSchema>;
 
@@ -44,7 +45,7 @@ export type StorageScope = z.infer<typeof StorageScopeSchema>;
  * File Metadata Schema
  * Standardized file attribute structure
  */
-export const FileMetadataSchema = z.object({
+export const FileMetadataSchema = lazySchema(() => z.object({
   path: z.string().describe('File path'),
   name: z.string().describe('File name'),
   size: z.number().int().describe('File size in bytes'),
@@ -52,7 +53,7 @@ export const FileMetadataSchema = z.object({
   lastModified: z.string().datetime().describe('Last modified timestamp'),
   created: z.string().datetime().describe('Creation timestamp'),
   etag: z.string().optional().describe('Entity tag'),
-});
+}));
 
 export type FileMetadata = z.infer<typeof FileMetadataSchema>;
 
@@ -65,7 +66,7 @@ export type FileMetadata = z.infer<typeof FileMetadataSchema>;
  * 
  * Supported cloud and self-hosted object storage providers.
  */
-export const StorageProviderSchema = z.enum([
+export const StorageProviderSchema = lazySchema(() => z.enum([
   's3',           // Amazon S3
   'azure_blob',   // Azure Blob Storage
   'gcs',          // Google Cloud Storage
@@ -75,7 +76,7 @@ export const StorageProviderSchema = z.enum([
   'wasabi',       // Wasabi Hot Cloud Storage
   'backblaze',    // Backblaze B2
   'local',        // Local filesystem (development only)
-]).describe('Storage provider type');
+]).describe('Storage provider type'));
 
 export type StorageProvider = z.infer<typeof StorageProviderSchema>;
 
@@ -84,14 +85,14 @@ export type StorageProvider = z.infer<typeof StorageProviderSchema>;
  * 
  * Predefined access control configurations for objects and buckets.
  */
-export const StorageAclSchema = z.enum([
+export const StorageAclSchema = lazySchema(() => z.enum([
   'private',                    // Owner has full control, no one else has access
   'public_read',                // Owner has full control, everyone can read
   'public_read_write',          // Owner has full control, everyone can read/write (not recommended)
   'authenticated_read',         // Owner has full control, authenticated users can read
   'bucket_owner_read',          // Object owner has full control, bucket owner can read
   'bucket_owner_full_control',  // Both object and bucket owner have full control
-]).describe('Storage access control level');
+]).describe('Storage access control level'));
 
 export type StorageAcl = z.infer<typeof StorageAclSchema>;
 
@@ -101,24 +102,24 @@ export type StorageAcl = z.infer<typeof StorageAclSchema>;
  * Different storage tiers for cost optimization.
  * Maps to provider-specific storage classes.
  */
-export const StorageClassSchema = z.enum([
+export const StorageClassSchema = lazySchema(() => z.enum([
   'standard',           // Standard/hot storage for frequently accessed data
   'intelligent',        // Intelligent tiering (auto-moves between hot/cool)
   'infrequent_access',  // Infrequent access/cool storage
   'glacier',            // Archive/cold storage (slower retrieval)
   'deep_archive',       // Deep archive (cheapest, slowest retrieval)
-]).describe('Storage class/tier for cost optimization');
+]).describe('Storage class/tier for cost optimization'));
 
 export type StorageClass = z.infer<typeof StorageClassSchema>;
 
 /**
  * Lifecycle Transition Action
  */
-export const LifecycleActionSchema = z.enum([
+export const LifecycleActionSchema = lazySchema(() => z.enum([
   'transition',  // Move to different storage class
   'delete',      // Delete the object
   'abort',       // Abort incomplete multipart uploads
-]).describe('Lifecycle policy action type');
+]).describe('Lifecycle policy action type'));
 
 export type LifecycleAction = z.infer<typeof LifecycleActionSchema>;
 
@@ -143,7 +144,7 @@ export type LifecycleAction = z.infer<typeof LifecycleActionSchema>;
  *   }
  * }
  */
-export const ObjectMetadataSchema = z.object({
+export const ObjectMetadataSchema = lazySchema(() => z.object({
   contentType: z.string().describe('MIME type (e.g., image/jpeg, application/pdf)'),
   contentLength: z.number().min(0).describe('File size in bytes'),
   contentEncoding: z.string().optional().describe('Content encoding (e.g., gzip)'),
@@ -159,7 +160,7 @@ export const ObjectMetadataSchema = z.object({
     keyId: z.string().optional().describe('KMS key ID if using managed encryption'),
   }).optional().describe('Server-side encryption configuration'),
   custom: z.record(z.string(), z.string()).optional().describe('Custom user-defined metadata'),
-});
+}));
 
 export type ObjectMetadata = z.infer<typeof ObjectMetadataSchema>;
 
@@ -186,14 +187,14 @@ export type ObjectMetadata = z.infer<typeof ObjectMetadataSchema>;
  *   maxSize: 10485760
  * }
  */
-export const PresignedUrlConfigSchema = z.object({
+export const PresignedUrlConfigSchema = lazySchema(() => z.object({
   operation: z.enum(['get', 'put', 'delete', 'head']).describe('Allowed operation'),
   expiresIn: z.number().min(1).max(604800).describe('Expiration time in seconds (max 7 days)'),
   contentType: z.string().optional().describe('Required content type for PUT operations'),
   maxSize: z.number().min(0).optional().describe('Maximum file size in bytes for PUT operations'),
   responseContentType: z.string().optional().describe('Override content-type for GET operations'),
   responseContentDisposition: z.string().optional().describe('Override content-disposition for GET operations'),
-});
+}));
 
 export type PresignedUrlConfig = z.infer<typeof PresignedUrlConfigSchema>;
 
@@ -213,14 +214,14 @@ export type PresignedUrlConfig = z.infer<typeof PresignedUrlConfigSchema>;
  *   maxConcurrent: 4
  * }
  */
-export const MultipartUploadConfigSchema = z.object({
+export const MultipartUploadConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(true).describe('Enable multipart uploads'),
   partSize: z.number().min(5 * 1024 * 1024).max(5 * 1024 * 1024 * 1024).default(10 * 1024 * 1024).describe('Part size in bytes (min 5MB, max 5GB)'),
   maxParts: z.number().min(1).max(10000).default(10000).describe('Maximum number of parts (max 10,000)'),
   threshold: z.number().min(0).default(100 * 1024 * 1024).describe('File size threshold to trigger multipart upload (bytes)'),
   maxConcurrent: z.number().min(1).max(100).default(4).describe('Maximum concurrent part uploads'),
   abortIncompleteAfterDays: z.number().min(1).optional().describe('Auto-abort incomplete uploads after N days'),
-});
+}));
 
 export type MultipartUploadConfig = z.infer<typeof MultipartUploadConfigSchema>;
 
@@ -241,7 +242,7 @@ export type MultipartUploadConfig = z.infer<typeof MultipartUploadConfigSchema>;
  *   }
  * }
  */
-export const AccessControlConfigSchema = z.object({
+export const AccessControlConfigSchema = lazySchema(() => z.object({
   acl: StorageAclSchema.default('private').describe('Default access control level'),
   allowedOrigins: z.array(z.string()).optional().describe('CORS allowed origins'),
   allowedMethods: z.array(z.enum(['GET', 'PUT', 'POST', 'DELETE', 'HEAD'])).optional().describe('CORS allowed HTTP methods'),
@@ -256,7 +257,7 @@ export const AccessControlConfigSchema = z.object({
   }).optional().describe('Public access control'),
   allowedIps: z.array(z.string()).optional().describe('Allowed IP addresses/CIDR blocks'),
   blockedIps: z.array(z.string()).optional().describe('Blocked IP addresses/CIDR blocks'),
-});
+}));
 
 export type AccessControlConfig = z.infer<typeof AccessControlConfigSchema>;
 
@@ -284,7 +285,7 @@ export type AccessControlConfig = z.infer<typeof AccessControlConfigSchema>;
  *   daysAfterCreation: 365
  * }
  */
-export const LifecyclePolicyRuleSchema = z.object({
+export const LifecyclePolicyRuleSchema = lazySchema(() => z.object({
   id: SystemIdentifierSchema.describe('Rule identifier'),
   enabled: z.boolean().default(true).describe('Enable this rule'),
   action: LifecycleActionSchema.describe('Action to perform'),
@@ -301,7 +302,7 @@ export const LifecyclePolicyRuleSchema = z.object({
   return true;
 }, {
   message: 'targetStorageClass is required when action is "transition"',
-});
+}));
 
 export type LifecyclePolicyRule = z.infer<typeof LifecyclePolicyRuleSchema>;
 
@@ -331,10 +332,10 @@ export type LifecyclePolicyRule = z.infer<typeof LifecyclePolicyRuleSchema>;
  *   ]
  * }
  */
-export const LifecyclePolicyConfigSchema = z.object({
+export const LifecyclePolicyConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable lifecycle policies'),
   rules: z.array(LifecyclePolicyRuleSchema).default([]).describe('Lifecycle rules'),
-});
+}));
 
 export type LifecyclePolicyConfig = z.infer<typeof LifecyclePolicyConfigSchema>;
 
@@ -362,7 +363,7 @@ export type LifecyclePolicyConfig = z.infer<typeof LifecyclePolicyConfigSchema>;
  *   }
  * }
  */
-export const BucketConfigSchema = z.object({
+export const BucketConfigSchema = lazySchema(() => z.object({
   name: SystemIdentifierSchema.describe('Bucket identifier in ObjectStack (snake_case)'),
   label: z.string().describe('Display label'),
   bucketName: z.string().describe('Actual bucket/container name in storage provider'),
@@ -385,7 +386,7 @@ export const BucketConfigSchema = z.object({
   tags: z.record(z.string(), z.string()).optional().describe('Bucket tags for organization'),
   description: z.string().optional().describe('Bucket description'),
   enabled: z.boolean().default(true).describe('Enable this bucket'),
-});
+}));
 
 export type BucketConfig = z.infer<typeof BucketConfigSchema>;
 
@@ -409,7 +410,7 @@ export type BucketConfig = z.infer<typeof BucketConfigSchema>;
  *   endpoint: 'https://mystorageaccount.blob.core.windows.net'
  * }
  */
-export const StorageConnectionSchema = z.object({
+export const StorageConnectionSchema = lazySchema(() => z.object({
   // AWS S3 / MinIO
   accessKeyId: z.string().optional().describe('AWS access key ID or MinIO access key'),
   secretAccessKey: z.string().optional().describe('AWS secret access key or MinIO secret key'),
@@ -429,7 +430,7 @@ export const StorageConnectionSchema = z.object({
   region: z.string().optional().describe('Default region'),
   useSSL: z.boolean().default(true).describe('Use SSL/TLS for connections'),
   timeout: z.number().min(0).optional().describe('Connection timeout in milliseconds'),
-});
+}));
 
 export type StorageConnection = z.infer<typeof StorageConnectionSchema>;
 
@@ -461,7 +462,7 @@ export type StorageConnection = z.infer<typeof StorageConnectionSchema>;
  *   defaultBucket: 'user_uploads'
  * }
  */
-export const ObjectStorageConfigSchema = z.object({
+export const ObjectStorageConfigSchema = lazySchema(() => z.object({
   name: SystemIdentifierSchema.describe('Storage configuration identifier'),
   label: z.string().describe('Display label'),
   provider: StorageProviderSchema.describe('Primary storage provider'),
@@ -494,7 +495,7 @@ export const ObjectStorageConfigSchema = z.object({
   
   enabled: z.boolean().default(true).describe('Enable this storage configuration'),
   description: z.string().optional().describe('Configuration description'),
-});
+}));
 
 export type ObjectStorageConfig = z.infer<typeof ObjectStorageConfigSchema>;
 

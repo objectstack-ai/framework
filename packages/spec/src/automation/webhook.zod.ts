@@ -7,6 +7,7 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
  * Webhook Trigger Event
  * When should this webhook fire?
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const WebhookTriggerType = z.enum([
   'create', 
   'update', 
@@ -57,7 +58,7 @@ export const WebhookTriggerType = z.enum([
  * }
  * ```
  */
-export const WebhookSchema = z.object({
+export const WebhookSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Webhook unique name (lowercase snake_case)'),
   label: z.string().optional().describe('Human-readable webhook label'),
   
@@ -105,7 +106,7 @@ export const WebhookSchema = z.object({
   /** Metadata */
   description: z.string().optional().describe('Webhook description'),
   tags: z.array(z.string()).optional().describe('Tags for organization'),
-});
+}));
 
 /**
  * Webhook Receiver Schema (Inbound)
@@ -122,7 +123,7 @@ export const WebhookSchema = z.object({
  * @example Bad names (will be rejected)
  * - 'StripeWebhookHandler' (PascalCase)
  */
-export const WebhookReceiverSchema = z.object({
+export const WebhookReceiverSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Webhook receiver unique name (lowercase snake_case)'),
   path: z.string().describe('URL Path (e.g. /webhooks/stripe)'),
   
@@ -137,7 +138,7 @@ export const WebhookReceiverSchema = z.object({
   /** Action */
   action: z.enum(['trigger_flow', 'script', 'upsert_record']).default('trigger_flow'),
   target: z.string().describe('Flow ID or Script name'),
-});
+}));
 
 export type Webhook = z.infer<typeof WebhookSchema>;
 export type WebhookReceiver = z.infer<typeof WebhookReceiverSchema>;

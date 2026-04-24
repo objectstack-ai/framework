@@ -67,7 +67,8 @@ import { MergeStrategyConfigSchema, CustomizationPolicySchema } from './metadata
  * REST API endpoints continue to use plural forms per REST conventions:
  * - `/api/v1/ai/agents`, `/api/v1/ai/conversations`
  */
-export const MetadataTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const MetadataTypeSchema = lazySchema(() => z.enum([
   // Data Protocol
   'object',      // Business entity definition (ObjectSchema)
   'field',       // Standalone field definition (FieldSchema)
@@ -104,7 +105,7 @@ export const MetadataTypeSchema = z.enum([
   'agent',       // AI agent definitions (AgentSchema)
   'tool',        // AI tool definitions (ToolSchema)
   'skill',       // AI skill definitions (SkillSchema)
-]);
+]));
 
 export type MetadataType = z.infer<typeof MetadataTypeSchema>;
 
@@ -121,7 +122,7 @@ export type MetadataType = z.infer<typeof MetadataTypeSchema>;
  * 2. Validate metadata payloads
  * 3. Determine storage behavior
  */
-export const MetadataTypeRegistryEntrySchema = z.object({
+export const MetadataTypeRegistryEntrySchema = lazySchema(() => z.object({
   /** Metadata type identifier (e.g., 'object', 'view') */
   type: MetadataTypeSchema.describe('Metadata type identifier'),
 
@@ -165,7 +166,7 @@ export const MetadataTypeRegistryEntrySchema = z.object({
   /** The domain this type belongs to */
   domain: z.enum(['data', 'ui', 'automation', 'system', 'security', 'ai'])
     .describe('Protocol domain'),
-});
+}));
 
 export type MetadataTypeRegistryEntry = z.infer<typeof MetadataTypeRegistryEntrySchema>;
 
@@ -179,7 +180,7 @@ export type MetadataTypeRegistryEntry = z.infer<typeof MetadataTypeRegistryEntry
  * Standard protocol for searching and filtering metadata items.
  * Used by the metadata service to support advanced metadata discovery.
  */
-export const MetadataQuerySchema = z.object({
+export const MetadataQuerySchema = lazySchema(() => z.object({
   /** Filter by metadata type(s) */
   types: z.array(MetadataTypeSchema).optional().describe('Filter by metadata types'),
 
@@ -212,14 +213,14 @@ export const MetadataQuerySchema = z.object({
 
   /** Pagination: items per page */
   pageSize: z.number().int().min(1).max(500).default(50).describe('Items per page'),
-});
+}));
 
 export type MetadataQuery = z.input<typeof MetadataQuerySchema>;
 
 /**
  * Metadata Query Result
  */
-export const MetadataQueryResultSchema = z.object({
+export const MetadataQueryResultSchema = lazySchema(() => z.object({
   /** Matched items */
   items: z.array(z.object({
     type: z.string().describe('Metadata type'),
@@ -240,7 +241,7 @@ export const MetadataQueryResultSchema = z.object({
 
   /** Page size */
   pageSize: z.number().int().min(1).describe('Page size'),
-});
+}));
 
 export type MetadataQueryResult = z.infer<typeof MetadataQueryResultSchema>;
 
@@ -255,7 +256,7 @@ export type MetadataQueryResult = z.infer<typeof MetadataQueryResultSchema>;
  * Enables reactive patterns across the platform (cache invalidation,
  * UI refresh, dependency tracking, etc.).
  */
-export const MetadataEventSchema = z.object({
+export const MetadataEventSchema = lazySchema(() => z.object({
   /** Event type */
   event: z.enum([
     'metadata.registered',
@@ -289,7 +290,7 @@ export const MetadataEventSchema = z.object({
 
   /** Additional event-specific payload */
   payload: z.record(z.string(), z.unknown()).optional().describe('Event-specific payload'),
-});
+}));
 
 export type MetadataEvent = z.infer<typeof MetadataEventSchema>;
 
@@ -300,7 +301,7 @@ export type MetadataEvent = z.infer<typeof MetadataEventSchema>;
 /**
  * Metadata Validation Result
  */
-export const MetadataValidationResultSchema = z.object({
+export const MetadataValidationResultSchema = lazySchema(() => z.object({
   /** Whether validation passed */
   valid: z.boolean().describe('Whether the metadata is valid'),
 
@@ -316,7 +317,7 @@ export const MetadataValidationResultSchema = z.object({
     path: z.string().describe('JSON path to the field'),
     message: z.string().describe('Warning description'),
   })).optional().describe('Validation warnings'),
-});
+}));
 
 export type MetadataValidationResult = z.infer<typeof MetadataValidationResultSchema>;
 
@@ -330,7 +331,7 @@ export type MetadataValidationResult = z.infer<typeof MetadataValidationResultSc
  * The unified configuration for the metadata plugin, combining
  * storage, caching, customization, and type registry settings.
  */
-export const MetadataPluginConfigSchema = z.object({
+export const MetadataPluginConfigSchema = lazySchema(() => z.object({
   /**
    * Storage configuration.
    * References MetadataManagerConfigSchema for the underlying storage backend.
@@ -380,7 +381,7 @@ export const MetadataPluginConfigSchema = z.object({
    * Maximum number of metadata items to keep in memory cache.
    */
   cacheMaxItems: z.number().int().min(0).default(10000).describe('Max items in memory cache'),
-});
+}));
 
 export type MetadataPluginConfig = z.input<typeof MetadataPluginConfigSchema>;
 
@@ -395,7 +396,7 @@ export type MetadataPluginConfig = z.input<typeof MetadataPluginConfigSchema>;
  * capabilities, and configuration. This is the "contract" between the
  * metadata plugin and the kernel.
  */
-export const MetadataPluginManifestSchema = z.object({
+export const MetadataPluginManifestSchema = lazySchema(() => z.object({
   /** Plugin identifier */
   id: z.literal('com.objectstack.metadata').describe('Metadata plugin ID'),
 
@@ -444,7 +445,7 @@ export const MetadataPluginManifestSchema = z.object({
 
   /** Plugin configuration */
   config: MetadataPluginConfigSchema.optional().describe('Plugin configuration'),
-});
+}));
 
 export type MetadataPluginManifest = z.input<typeof MetadataPluginManifestSchema>;
 
@@ -504,7 +505,7 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
 /**
  * Bulk Register Request
  */
-export const MetadataBulkRegisterRequestSchema = z.object({
+export const MetadataBulkRegisterRequestSchema = lazySchema(() => z.object({
   /** Items to register */
   items: z.array(z.object({
     type: z.string().describe('Metadata type'),
@@ -518,14 +519,14 @@ export const MetadataBulkRegisterRequestSchema = z.object({
 
   /** Validate items before registering */
   validate: z.boolean().default(true).describe('Validate before register'),
-});
+}));
 
 export type MetadataBulkRegisterRequest = z.input<typeof MetadataBulkRegisterRequestSchema>;
 
 /**
  * Bulk Operation Result
  */
-export const MetadataBulkResultSchema = z.object({
+export const MetadataBulkResultSchema = lazySchema(() => z.object({
   /** Total items processed */
   total: z.number().int().min(0).describe('Total items processed'),
 
@@ -541,7 +542,7 @@ export const MetadataBulkResultSchema = z.object({
     name: z.string().describe('Item name'),
     error: z.string().describe('Error message'),
   })).optional().describe('Per-item errors'),
-});
+}));
 
 export type MetadataBulkResult = z.infer<typeof MetadataBulkResultSchema>;
 
@@ -555,7 +556,7 @@ export type MetadataBulkResult = z.infer<typeof MetadataBulkResultSchema>;
  * Tracks dependencies between metadata items.
  * Used for impact analysis and safe deletion checks.
  */
-export const MetadataDependencySchema = z.object({
+export const MetadataDependencySchema = lazySchema(() => z.object({
   /** Source metadata type */
   sourceType: z.string().describe('Dependent metadata type'),
 
@@ -571,6 +572,6 @@ export const MetadataDependencySchema = z.object({
   /** Dependency kind */
   kind: z.enum(['reference', 'extends', 'includes', 'triggers'])
     .describe('How the dependency is formed'),
-});
+}));
 
 export type MetadataDependency = z.infer<typeof MetadataDependencySchema>;

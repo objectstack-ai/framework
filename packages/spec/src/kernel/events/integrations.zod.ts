@@ -18,7 +18,8 @@ import { z } from 'zod';
  *   "headers": { "Authorization": "Bearer token" }
  * }
  */
-export const EventWebhookConfigSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const EventWebhookConfigSchema = lazySchema(() => z.object({
   /**
    * Webhook identifier
    */
@@ -78,7 +79,7 @@ export const EventWebhookConfigSchema = z.object({
    * Enabled
    */
   enabled: z.boolean().default(true).describe('Whether webhook is enabled'),
-});
+}));
 
 export type EventWebhookConfig = z.infer<typeof EventWebhookConfigSchema>;
 
@@ -98,7 +99,7 @@ export type EventWebhookConfig = z.infer<typeof EventWebhookConfigSchema>;
  *   "partitionKey": "metadata.tenantId"
  * }
  */
-export const EventMessageQueueConfigSchema = z.object({
+export const EventMessageQueueConfigSchema = lazySchema(() => z.object({
   /**
    * Provider
    */
@@ -144,7 +145,7 @@ export const EventMessageQueueConfigSchema = z.object({
    * Flush interval
    */
   flushIntervalMs: z.number().int().positive().default(1000).describe('Flush interval for batching'),
-});
+}));
 
 export type EventMessageQueueConfig = z.infer<typeof EventMessageQueueConfigSchema>;
 
@@ -164,7 +165,7 @@ export type EventMessageQueueConfig = z.infer<typeof EventMessageQueueConfigSche
  *   "userFilter": true
  * }
  */
-export const RealTimeNotificationConfigSchema = z.object({
+export const RealTimeNotificationConfigSchema = lazySchema(() => z.object({
   /**
    * Enable real-time notifications
    */
@@ -209,6 +210,6 @@ export const RealTimeNotificationConfigSchema = z.object({
     maxEventsPerSecond: z.number().int().positive().describe('Max events per second per client'),
     windowMs: z.number().int().positive().default(1000).describe('Rate limit window'),
   }).optional().describe('Rate limiting configuration'),
-});
+}));
 
 export type RealTimeNotificationConfig = z.infer<typeof RealTimeNotificationConfigSchema>;

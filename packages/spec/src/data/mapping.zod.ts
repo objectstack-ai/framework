@@ -8,6 +8,7 @@ import { QuerySchema } from './query.zod';
  * Transformation Logic
  * Built-in helpers for converting data during import.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const TransformType = z.enum([
   'none',         // Direct copy
   'constant',     // Use a hardcoded value
@@ -21,7 +22,7 @@ export const TransformType = z.enum([
 /**
  * Field Mapping Item
  */
-export const FieldMappingSchema = z.object({
+export const FieldMappingSchema = lazySchema(() => z.object({
   /** Source Column */
   source: z.union([z.string(), z.array(z.string())]).describe('Source column header(s)'),
   
@@ -48,7 +49,7 @@ export const FieldMappingSchema = z.object({
     // Split/Join
     separator: z.string().optional()
   }).optional()
-});
+}));
 
 /**
  * Data Mapping Schema
@@ -66,7 +67,7 @@ export const FieldMappingSchema = z.object({
  * - 'SalesforceToCRM' (PascalCase)
  * - 'CSV Import' (spaces)
  */
-export const MappingSchema = z.object({
+export const MappingSchema = lazySchema(() => z.object({
   /** Identity */
   name: SnakeCaseIdentifierSchema.describe('Mapping unique name (lowercase snake_case)'),
   label: z.string().optional(),
@@ -88,7 +89,7 @@ export const MappingSchema = z.object({
   /** Error Handling */
   errorPolicy: z.enum(['skip', 'abort', 'retry']).default('skip'),
   batchSize: z.number().default(1000)
-});
+}));
 
 export type Mapping = z.infer<typeof MappingSchema>;
 export type FieldMapping = z.infer<typeof FieldMappingSchema>;

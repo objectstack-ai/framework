@@ -24,7 +24,8 @@ import { z } from 'zod';
 /**
  * App Manifest — describes an installable app package.
  */
-export const AppManifestSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const AppManifestSchema = lazySchema(() => z.object({
   /** Unique app identifier (snake_case) */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('App identifier (snake_case)'),
 
@@ -57,7 +58,7 @@ export const AppManifestSchema = z.object({
 
   /** App dependencies (other apps that must be installed first) */
   dependencies: z.array(z.string()).default([]).describe('Required app dependencies'),
-}).describe('App manifest for marketplace installation');
+}).describe('App manifest for marketplace installation'));
 
 export type AppManifest = z.infer<typeof AppManifestSchema>;
 
@@ -68,7 +69,7 @@ export type AppManifest = z.infer<typeof AppManifestSchema>;
 /**
  * App Compatibility Check Result.
  */
-export const AppCompatibilityCheckSchema = z.object({
+export const AppCompatibilityCheckSchema = lazySchema(() => z.object({
   /** Whether the app is compatible with the current environment */
   compatible: z.boolean().describe('Whether the app is compatible'),
 
@@ -86,7 +87,7 @@ export const AppCompatibilityCheckSchema = z.object({
       'quota_exceeded',    // Tenant quota would be exceeded
     ]).describe('Issue category'),
   })).default([]).describe('Compatibility issues'),
-}).describe('App compatibility check result');
+}).describe('App compatibility check result'));
 
 export type AppCompatibilityCheck = z.infer<typeof AppCompatibilityCheckSchema>;
 
@@ -97,7 +98,7 @@ export type AppCompatibilityCheck = z.infer<typeof AppCompatibilityCheckSchema>;
 /**
  * App Install Request.
  */
-export const AppInstallRequestSchema = z.object({
+export const AppInstallRequestSchema = lazySchema(() => z.object({
   /** Target tenant ID */
   tenantId: z.string().min(1).describe('Target tenant ID'),
 
@@ -109,14 +110,14 @@ export const AppInstallRequestSchema = z.object({
 
   /** Whether to skip seed data */
   skipSeedData: z.boolean().default(false).describe('Skip seed data population'),
-}).describe('App install request');
+}).describe('App install request'));
 
 export type AppInstallRequest = z.infer<typeof AppInstallRequestSchema>;
 
 /**
  * App Install Result.
  */
-export const AppInstallResultSchema = z.object({
+export const AppInstallResultSchema = lazySchema(() => z.object({
   /** Whether the installation succeeded */
   success: z.boolean().describe('Whether installation succeeded'),
 
@@ -140,6 +141,6 @@ export const AppInstallResultSchema = z.object({
 
   /** Error message if installation failed */
   error: z.string().optional().describe('Error message on failure'),
-}).describe('App install result');
+}).describe('App install result'));
 
 export type AppInstallResult = z.infer<typeof AppInstallResultSchema>;

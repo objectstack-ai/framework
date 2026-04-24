@@ -23,6 +23,7 @@ import { z } from 'zod';
 /**
  * Deployment lifecycle status.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const DeployStatusEnum = z.enum([
   'validating',   // Zod schema validation in progress
   'diffing',      // Comparing desired state vs current state
@@ -42,7 +43,7 @@ export type DeployStatus = z.infer<typeof DeployStatusEnum>;
 /**
  * Schema change descriptor for a single entity (object/field).
  */
-export const SchemaChangeSchema = z.object({
+export const SchemaChangeSchema = lazySchema(() => z.object({
   /** Type of entity being changed */
   entityType: z.enum(['object', 'field', 'index', 'view', 'flow', 'permission']).describe('Entity type'),
 
@@ -60,14 +61,14 @@ export const SchemaChangeSchema = z.object({
 
   /** New value (for added/modified) */
   newValue: z.unknown().optional().describe('New value'),
-}).describe('Individual schema change');
+}).describe('Individual schema change'));
 
 export type SchemaChange = z.infer<typeof SchemaChangeSchema>;
 
 /**
  * Deploy Diff — what changed between current and desired state.
  */
-export const DeployDiffSchema = z.object({
+export const DeployDiffSchema = lazySchema(() => z.object({
   /** List of all schema changes */
   changes: z.array(SchemaChangeSchema).default([]).describe('List of schema changes'),
 
@@ -80,7 +81,7 @@ export const DeployDiffSchema = z.object({
 
   /** Whether the diff contains breaking changes (e.g., column removal) */
   hasBreakingChanges: z.boolean().default(false).describe('Whether diff contains breaking changes'),
-}).describe('Schema diff between current and desired state');
+}).describe('Schema diff between current and desired state'));
 
 export type DeployDiff = z.infer<typeof DeployDiffSchema>;
 
@@ -91,7 +92,7 @@ export type DeployDiff = z.infer<typeof DeployDiffSchema>;
 /**
  * A single DDL migration statement.
  */
-export const MigrationStatementSchema = z.object({
+export const MigrationStatementSchema = lazySchema(() => z.object({
   /** SQL DDL statement to execute */
   sql: z.string().min(1).describe('SQL DDL statement'),
 
@@ -103,14 +104,14 @@ export const MigrationStatementSchema = z.object({
 
   /** Execution order (lower = earlier) */
   order: z.number().int().min(0).describe('Execution order'),
-}).describe('Single DDL migration statement');
+}).describe('Single DDL migration statement'));
 
 export type MigrationStatement = z.infer<typeof MigrationStatementSchema>;
 
 /**
  * Migration Plan — ordered list of DDL statements to execute.
  */
-export const MigrationPlanSchema = z.object({
+export const MigrationPlanSchema = lazySchema(() => z.object({
   /** Ordered list of migration statements */
   statements: z.array(MigrationStatementSchema).default([]).describe('Ordered DDL statements'),
 
@@ -122,7 +123,7 @@ export const MigrationPlanSchema = z.object({
 
   /** Estimated execution time in milliseconds */
   estimatedDurationMs: z.number().int().min(0).optional().describe('Estimated execution time'),
-}).describe('Ordered migration plan');
+}).describe('Ordered migration plan'));
 
 export type MigrationPlan = z.infer<typeof MigrationPlanSchema>;
 
@@ -133,7 +134,7 @@ export type MigrationPlan = z.infer<typeof MigrationPlanSchema>;
 /**
  * Validation issue found during bundle validation.
  */
-export const DeployValidationIssueSchema = z.object({
+export const DeployValidationIssueSchema = lazySchema(() => z.object({
   /** Severity of the issue */
   severity: z.enum(['error', 'warning', 'info']).describe('Issue severity'),
 
@@ -145,14 +146,14 @@ export const DeployValidationIssueSchema = z.object({
 
   /** Zod error code if applicable */
   code: z.string().optional().describe('Validation error code'),
-}).describe('Validation issue');
+}).describe('Validation issue'));
 
 export type DeployValidationIssue = z.infer<typeof DeployValidationIssueSchema>;
 
 /**
  * Zod validation result for the entire deploy bundle.
  */
-export const DeployValidationResultSchema = z.object({
+export const DeployValidationResultSchema = lazySchema(() => z.object({
   /** Whether the bundle passed validation */
   valid: z.boolean().describe('Whether the bundle is valid'),
 
@@ -164,7 +165,7 @@ export const DeployValidationResultSchema = z.object({
 
   /** Number of warnings */
   warningCount: z.number().int().min(0).default(0).describe('Number of warnings'),
-}).describe('Bundle validation result');
+}).describe('Bundle validation result'));
 
 export type DeployValidationResult = z.infer<typeof DeployValidationResultSchema>;
 
@@ -175,7 +176,7 @@ export type DeployValidationResult = z.infer<typeof DeployValidationResultSchema
 /**
  * Deploy Manifest — metadata about the deployment.
  */
-export const DeployManifestSchema = z.object({
+export const DeployManifestSchema = lazySchema(() => z.object({
   /** Deployment version (semver) */
   version: z.string().min(1).describe('Deployment version'),
 
@@ -196,7 +197,7 @@ export const DeployManifestSchema = z.object({
 
   /** Timestamp of bundle creation (ISO 8601) */
   createdAt: z.string().datetime().optional().describe('Bundle creation time'),
-}).describe('Deployment manifest');
+}).describe('Deployment manifest'));
 
 export type DeployManifest = z.infer<typeof DeployManifestSchema>;
 
@@ -204,7 +205,7 @@ export type DeployManifest = z.infer<typeof DeployManifestSchema>;
  * Deploy Bundle — container for all metadata being deployed.
  * This is the primary input to the deploy pipeline.
  */
-export const DeployBundleSchema = z.object({
+export const DeployBundleSchema = lazySchema(() => z.object({
   /** Bundle manifest with version and contents list */
   manifest: DeployManifestSchema,
 
@@ -222,6 +223,6 @@ export const DeployBundleSchema = z.object({
 
   /** Seed data records to populate after schema migration */
   seedData: z.array(z.record(z.string(), z.unknown())).default([]).describe('Seed data records'),
-}).describe('Deploy bundle containing all metadata for deployment');
+}).describe('Deploy bundle containing all metadata for deployment'));
 
 export type DeployBundle = z.infer<typeof DeployBundleSchema>;

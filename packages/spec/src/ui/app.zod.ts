@@ -21,6 +21,7 @@ import { SharingConfigSchema, EmbedConfigSchema } from './sharing.zod';
  * - 'MenuAccounts' (PascalCase)
  * - 'Page Dashboard' (spaces)
  */
+import { lazySchema } from '../shared/lazy-schema';
 const BaseNavItemSchema = z.object({
   /** Unique identifier for the item */
   id: SnakeCaseIdentifierSchema.describe('Unique identifier for this navigation item (lowercase snake_case)'),
@@ -52,72 +53,72 @@ const BaseNavItemSchema = z.object({
  * 1. Object Navigation Item
  * Navigates to an object's list view.
  */
-export const ObjectNavItemSchema = BaseNavItemSchema.extend({
+export const ObjectNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('object'),
   objectName: z.string().describe('Target object name'),
   viewName: z.string().optional().describe('Default list view to open. Defaults to "all"'),
-});
+}));
 
 /**
  * 2. Dashboard Navigation Item
  * Navigates to a specific dashboard.
  */
-export const DashboardNavItemSchema = BaseNavItemSchema.extend({
+export const DashboardNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('dashboard'),
   dashboardName: z.string().describe('Target dashboard name'),
-});
+}));
 
 /**
  * 3. Page Navigation Item
  * Navigates to a custom UI page/component.
  */
-export const PageNavItemSchema = BaseNavItemSchema.extend({
+export const PageNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('page'),
   pageName: z.string().describe('Target custom page component name'),
   params: z.record(z.string(), z.unknown()).optional().describe('Parameters passed to the page context'),
-});
+}));
 
 /**
  * 4. URL Navigation Item
  * Navigates to an external or absolute URL.
  */
-export const UrlNavItemSchema = BaseNavItemSchema.extend({
+export const UrlNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('url'),
   url: z.string().describe('Target external URL'),
   target: z.enum(['_self', '_blank']).default('_self').describe('Link target window'),
-});
+}));
 
 /**
  * 5. Report Navigation Item
  * Navigates to a specific report.
  */
-export const ReportNavItemSchema = BaseNavItemSchema.extend({
+export const ReportNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('report'),
   reportName: z.string().describe('Target report name'),
-});
+}));
 
 /**
  * 6. Action Navigation Item
  * Triggers an action (e.g. opening a flow, running a script, or launching a screen action).
  */
-export const ActionNavItemSchema = BaseNavItemSchema.extend({
+export const ActionNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('action'),
   actionDef: z.object({
     actionName: z.string().describe('Action machine name to execute'),
     params: z.record(z.string(), z.unknown()).optional().describe('Parameters passed to the action'),
   }).describe('Action definition to execute when clicked'),
-});
+}));
 
 /**
  * 7. Group Navigation Item
  * A container for child navigation items (Sub-menu).
  * Does not perform navigation itself.
  */
-export const GroupNavItemSchema = BaseNavItemSchema.extend({
+export const GroupNavItemSchema = lazySchema(() => BaseNavItemSchema.extend({
   type: z.literal('group'),
   expanded: z.boolean().default(false).describe('Default expansion state in sidebar'),
   // children property is added in the recursive definition below
-});
+}));
 
 /**
  * Recursive Union of all navigation item types.
@@ -143,11 +144,11 @@ export const NavigationItemSchema: z.ZodType<any> = z.lazy(() =>
  * App Branding Configuration
  * Allows configuring the look and feel of the specific app.
  */
-export const AppBrandingSchema = z.object({
+export const AppBrandingSchema = lazySchema(() => z.object({
   primaryColor: z.string().optional().describe('Primary theme color hex code'),
   logo: z.string().optional().describe('Custom logo URL for this app'),
   favicon: z.string().optional().describe('Custom favicon URL for this app'),
-});
+}));
 
 /**
  * Navigation Area Schema
@@ -174,7 +175,7 @@ export const AppBrandingSchema = z.object({
  * };
  * ```
  */
-export const NavigationAreaSchema = z.object({
+export const NavigationAreaSchema = lazySchema(() => z.object({
   /** Unique area identifier */
   id: SnakeCaseIdentifierSchema.describe('Unique area identifier (lowercase snake_case)'),
 
@@ -201,7 +202,7 @@ export const NavigationAreaSchema = z.object({
 
   /** Navigation items within this area */
   navigation: z.array(NavigationItemSchema).describe('Navigation items within this area'),
-});
+}));
 
 /**
  * Schema for Applications (Apps).
@@ -244,7 +245,7 @@ export const NavigationAreaSchema = z.object({
  *   ]
  * }
  */
-export const AppSchema = z.object({
+export const AppSchema = lazySchema(() => z.object({
   /** Machine name (id) */
   name: SnakeCaseIdentifierSchema.describe('App unique machine name (lowercase snake_case)'),
   
@@ -334,7 +335,7 @@ export const AppSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes for the application'),
-});
+}));
 
 /**
  * App Factory Helper

@@ -6,26 +6,27 @@ import { z } from 'zod';
  * Full-text search protocol
  * Supports Elasticsearch, Algolia, Meilisearch, Typesense
  */
-export const SearchProviderSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const SearchProviderSchema = lazySchema(() => z.enum([
   'elasticsearch',
   'algolia',
   'meilisearch',
   'typesense',
   'opensearch',
-]).describe('Supported full-text search engine provider');
+]).describe('Supported full-text search engine provider'));
 
 export type SearchProvider = z.infer<typeof SearchProviderSchema>;
 
-export const AnalyzerConfigSchema = z.object({
+export const AnalyzerConfigSchema = lazySchema(() => z.object({
   type: z.enum(['standard', 'simple', 'whitespace', 'keyword', 'pattern', 'language']).describe('Text analyzer type'),
   language: z.string().optional().describe('Language for language-specific analysis'),
   stopwords: z.array(z.string()).optional().describe('Custom stopwords to filter during analysis'),
   customFilters: z.array(z.string()).optional().describe('Additional token filter names to apply'),
-}).describe('Text analyzer configuration for index tokenization and normalization');
+}).describe('Text analyzer configuration for index tokenization and normalization'));
 
 export type AnalyzerConfig = z.infer<typeof AnalyzerConfigSchema>;
 
-export const SearchIndexConfigSchema = z.object({
+export const SearchIndexConfigSchema = lazySchema(() => z.object({
   indexName: z.string().describe('Name of the search index'),
   objectName: z.string().describe('Source ObjectQL object'),
   fields: z.array(z.object({
@@ -39,19 +40,19 @@ export const SearchIndexConfigSchema = z.object({
   })).describe('Fields to include in the search index'),
   replicas: z.number().default(1).describe('Number of index replicas for availability'),
   shards: z.number().default(1).describe('Number of index shards for distribution'),
-}).describe('Search index definition mapping an ObjectQL object to a search engine index');
+}).describe('Search index definition mapping an ObjectQL object to a search engine index'));
 
 export type SearchIndexConfig = z.infer<typeof SearchIndexConfigSchema>;
 
-export const FacetConfigSchema = z.object({
+export const FacetConfigSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name to generate facets from'),
   maxValues: z.number().default(10).describe('Maximum number of facet values to return'),
   sort: z.enum(['count', 'alpha']).default('count').describe('Facet value sort order'),
-}).describe('Faceted search configuration for a single field');
+}).describe('Faceted search configuration for a single field'));
 
 export type FacetConfig = z.infer<typeof FacetConfigSchema>;
 
-export const SearchConfigSchema = z.object({
+export const SearchConfigSchema = lazySchema(() => z.object({
   provider: SearchProviderSchema.describe('Search engine backend provider'),
   indexes: z.array(SearchIndexConfigSchema).describe('Search index definitions'),
   analyzers: z.record(z.string(), AnalyzerConfigSchema).optional().describe('Named text analyzer configurations'),
@@ -59,6 +60,6 @@ export const SearchConfigSchema = z.object({
   typoTolerance: z.boolean().default(true).describe('Enable typo-tolerant search'),
   synonyms: z.record(z.string(), z.array(z.string())).optional().describe('Synonym mappings for search expansion'),
   ranking: z.array(z.enum(['typo', 'geo', 'words', 'filters', 'proximity', 'attribute', 'exact', 'custom'])).optional().describe('Custom ranking rule order'),
-}).describe('Top-level full-text search engine configuration');
+}).describe('Top-level full-text search engine configuration'));
 
 export type SearchConfig = z.infer<typeof SearchConfigSchema>;

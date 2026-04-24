@@ -23,13 +23,14 @@ import { z } from 'zod';
  * Wait event type — determines how a wait node is resumed.
  * Mirrors the `waitEventConfig.eventType` in flow.zod.ts.
  */
-export const WaitEventTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const WaitEventTypeSchema = lazySchema(() => z.enum([
   'timer',      // Resume after duration/datetime
   'signal',     // Resume on named signal dispatch
   'webhook',    // Resume on incoming webhook call
   'manual',     // Resume by manual operator action
   'condition',  // Resume when a data condition is met (polling)
-]).describe('Wait event type determining how a paused flow is resumed');
+]).describe('Wait event type determining how a paused flow is resumed'));
 
 export type WaitEventType = z.infer<typeof WaitEventTypeSchema>;
 
@@ -39,7 +40,7 @@ export type WaitEventType = z.infer<typeof WaitEventTypeSchema>;
  * Payload delivered when a paused wait node is resumed by an external event.
  * The runtime engine passes this to the flow executor to continue execution.
  */
-export const WaitResumePayloadSchema = z.object({
+export const WaitResumePayloadSchema = lazySchema(() => z.object({
   /** The execution id of the paused flow */
   executionId: z.string().describe('Execution ID of the paused flow'),
 
@@ -68,7 +69,7 @@ export const WaitResumePayloadSchema = z.object({
   /** Additional variables to merge into flow context on resume */
   variables: z.record(z.string(), z.unknown()).optional()
     .describe('Variables to merge into flow context upon resume'),
-}).describe('Payload for resuming a paused wait node');
+}).describe('Payload for resuming a paused wait node'));
 
 export type WaitResumePayload = z.infer<typeof WaitResumePayloadSchema>;
 
@@ -77,11 +78,11 @@ export type WaitResumePayload = z.infer<typeof WaitResumePayloadSchema>;
 /**
  * Timeout behavior when a wait node exceeds its timeout.
  */
-export const WaitTimeoutBehaviorSchema = z.enum([
+export const WaitTimeoutBehaviorSchema = lazySchema(() => z.enum([
   'fail',       // Mark execution as failed
   'continue',   // Continue to next node (skip wait)
   'fallback',   // Execute a fallback edge
-]).describe('Behavior when a wait node exceeds its timeout');
+]).describe('Behavior when a wait node exceeds its timeout'));
 
 export type WaitTimeoutBehavior = z.infer<typeof WaitTimeoutBehaviorSchema>;
 
@@ -89,7 +90,7 @@ export type WaitTimeoutBehavior = z.infer<typeof WaitTimeoutBehaviorSchema>;
  * Configuration for the wait node executor plugin.
  * Controls polling intervals, webhook endpoint patterns, and timeout behavior.
  */
-export const WaitExecutorConfigSchema = z.object({
+export const WaitExecutorConfigSchema = lazySchema(() => z.object({
   /** Default timeout for wait nodes without explicit timeout (ms) */
   defaultTimeoutMs: z.number().int().min(0).default(86400000)
     .describe('Default timeout in ms (default: 24 hours)'),
@@ -117,7 +118,7 @@ export const WaitExecutorConfigSchema = z.object({
   /** Maximum concurrent paused executions (0 = unlimited) */
   maxPausedExecutions: z.number().int().min(0).default(0)
     .describe('Max concurrent paused executions (0 = unlimited)'),
-}).describe('Wait node executor plugin configuration');
+}).describe('Wait node executor plugin configuration'));
 
 export type WaitExecutorConfig = z.infer<typeof WaitExecutorConfigSchema>;
 
@@ -128,7 +129,7 @@ export type WaitExecutorConfig = z.infer<typeof WaitExecutorConfigSchema>;
  * Each node type (wait, script, http_request, etc.) can register
  * a custom executor via this descriptor.
  */
-export const NodeExecutorDescriptorSchema = z.object({
+export const NodeExecutorDescriptorSchema = lazySchema(() => z.object({
   /** Unique executor identifier */
   id: z.string().describe('Unique executor plugin identifier'),
 
@@ -160,7 +161,7 @@ export const NodeExecutorDescriptorSchema = z.object({
   /** Executor-specific configuration schema (JSON Schema reference) */
   configSchemaRef: z.string().optional()
     .describe('JSON Schema $ref for executor-specific config'),
-}).describe('Node executor plugin descriptor');
+}).describe('Node executor plugin descriptor'));
 
 export type NodeExecutorDescriptor = z.infer<typeof NodeExecutorDescriptorSchema>;
 

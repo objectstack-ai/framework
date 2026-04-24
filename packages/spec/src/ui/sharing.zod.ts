@@ -16,7 +16,8 @@ import { z } from 'zod';
  * Configuration for public sharing of an app, page, or form.
  * Supports public links, password protection, domain restrictions, and expiration.
  */
-export const SharingConfigSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const SharingConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable public sharing'),
   publicLink: z.string().optional().describe('Generated public share URL'),
   password: z.string().optional().describe('Password required to access shared link'),
@@ -26,14 +27,14 @@ export const SharingConfigSchema = z.object({
     .describe('Expiration date/time in ISO 8601 format'),
   allowAnonymous: z.boolean().optional().default(false)
     .describe('Allow access without authentication'),
-});
+}));
 
 /**
  * Embed Config Schema
  * Configuration for iframe embedding of an app, page, or form.
  * Supports origin restrictions, display options, and responsive sizing.
  */
-export const EmbedConfigSchema = z.object({
+export const EmbedConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable iframe embedding'),
   allowedOrigins: z.array(z.string()).optional()
     .describe('Allowed iframe parent origins (e.g. ["https://example.com"])'),
@@ -42,7 +43,7 @@ export const EmbedConfigSchema = z.object({
   showHeader: z.boolean().optional().default(true).describe('Show interface header in embed'),
   showNavigation: z.boolean().optional().default(false).describe('Show navigation in embed'),
   responsive: z.boolean().optional().default(true).describe('Enable responsive resizing'),
-});
+}));
 
 // Type Exports
 export type SharingConfig = z.infer<typeof SharingConfigSchema>;

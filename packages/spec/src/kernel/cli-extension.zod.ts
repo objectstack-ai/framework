@@ -71,7 +71,8 @@ import { z } from 'zod';
  * commands directory. This schema is retained for backward compatibility
  * and for describing command metadata in plugin manifests.
  */
-export const CLICommandContributionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const CLICommandContributionSchema = lazySchema(() => z.object({
   /** 
    * CLI command name. Must be a valid identifier: lowercase alphanumeric with hyphens.
    * This becomes a top-level subcommand of the `os` CLI.
@@ -97,13 +98,13 @@ export const CLICommandContributionSchema = z.object({
    * @example "./dist/commands"
    */
   module: z.string().optional().describe('Module path exporting oclif Command classes'),
-});
+}));
 
 /**
  * Schema for oclif plugin configuration in package.json.
  * Validates the shape of the `oclif` section in a plugin's package.json.
  */
-export const OclifPluginConfigSchema = z.object({
+export const OclifPluginConfigSchema = lazySchema(() => z.object({
   /** Command discovery configuration */
   commands: z.object({
     /** Discovery strategy — typically "pattern" for file-based discovery */
@@ -120,7 +121,7 @@ export const OclifPluginConfigSchema = z.object({
   /** Topic separator character (default: space) */
   topicSeparator: z.string().optional()
     .describe('Character separating topic and command names'),
-}).describe('oclif plugin configuration section');
+}).describe('oclif plugin configuration section'));
 
 // ─── Types ───────────────────────────────────────────────────────────
 

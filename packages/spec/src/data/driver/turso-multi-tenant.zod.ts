@@ -25,13 +25,14 @@ import { z } from 'zod';
 /**
  * Strategy for resolving which tenant database to connect to.
  */
-export const TenantResolverStrategySchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const TenantResolverStrategySchema = lazySchema(() => z.enum([
   'header',       // Resolve from X-Tenant-ID request header
   'subdomain',    // Resolve from subdomain (e.g., acme.app.com → acme)
   'path',         // Resolve from URL path segment (e.g., /api/acme/...)
   'token',        // Resolve from JWT claim (e.g., tenant_id in access token)
   'lookup',       // Resolve from control-plane database lookup
-]).describe('Strategy for resolving tenant identity from request context');
+]).describe('Strategy for resolving tenant identity from request context'));
 
 export type TenantResolverStrategy = z.infer<typeof TenantResolverStrategySchema>;
 
@@ -46,7 +47,7 @@ export type TenantResolverStrategy = z.infer<typeof TenantResolverStrategySchema
  *
  * @see https://docs.turso.tech/features/multi-db-schemas
  */
-export const TursoGroupSchema = z.object({
+export const TursoGroupSchema = lazySchema(() => z.object({
   /**
    * Group name identifier.
    * Used to reference the group when creating new tenant databases.
@@ -71,7 +72,7 @@ export const TursoGroupSchema = z.object({
    * whose schema is shared by all child (tenant) databases.
    */
   schemaDatabase: z.string().optional().describe('Schema database name for multi-db schemas'),
-}).describe('Turso database group configuration');
+}).describe('Turso database group configuration'));
 
 export type TursoGroup = z.infer<typeof TursoGroupSchema>;
 
@@ -83,7 +84,7 @@ export type TursoGroup = z.infer<typeof TursoGroupSchema>;
  * Database Lifecycle Hook Schema.
  * Defines what happens at each tenant lifecycle event.
  */
-export const TenantDatabaseLifecycleSchema = z.object({
+export const TenantDatabaseLifecycleSchema = lazySchema(() => z.object({
   /**
    * Hook executed when a new tenant is created.
    * Defines how the tenant database is provisioned.
@@ -126,7 +127,7 @@ export const TenantDatabaseLifecycleSchema = z.object({
     /** Whether to set database to read-only mode */
     readOnly: z.boolean().default(true).describe('Set database to read-only on suspension'),
   }).describe('Tenant suspension hook'),
-}).describe('Tenant database lifecycle hooks');
+}).describe('Tenant database lifecycle hooks'));
 
 export type TenantDatabaseLifecycle = z.infer<typeof TenantDatabaseLifecycleSchema>;
 
@@ -162,7 +163,7 @@ export type TenantDatabaseLifecycle = z.infer<typeof TenantDatabaseLifecycleSche
  * });
  * ```
  */
-export const TursoMultiTenantConfigSchema = z.object({
+export const TursoMultiTenantConfigSchema = lazySchema(() => z.object({
   /**
    * Turso organization slug.
    * Used for Platform API calls and URL construction.
@@ -210,6 +211,6 @@ export const TursoMultiTenantConfigSchema = z.object({
    * Cached connections are refreshed after this period.
    */
   connectionCacheTTL: z.number().int().min(0).default(300).describe('Connection cache TTL in seconds'),
-}).describe('Turso multi-tenant router configuration');
+}).describe('Turso multi-tenant router configuration'));
 
 export type TursoMultiTenantConfig = z.infer<typeof TursoMultiTenantConfigSchema>;

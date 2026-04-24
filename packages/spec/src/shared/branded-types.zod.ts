@@ -29,9 +29,10 @@ import { SnakeCaseIdentifierSchema, SystemIdentifierSchema } from './identifiers
  *
  * @example 'project_task', 'crm_account', 'user_profile'
  */
-export const ObjectNameSchema = SnakeCaseIdentifierSchema
+import { lazySchema } from './lazy-schema';
+export const ObjectNameSchema = lazySchema(() => SnakeCaseIdentifierSchema
   .brand<'ObjectName'>()
-  .describe('Branded object name (snake_case, no dots)');
+  .describe('Branded object name (snake_case, no dots)'));
 
 export type ObjectName = z.infer<typeof ObjectNameSchema>;
 
@@ -42,9 +43,9 @@ export type ObjectName = z.infer<typeof ObjectNameSchema>;
  *
  * @example 'first_name', 'created_at', 'total_amount'
  */
-export const FieldNameSchema = SnakeCaseIdentifierSchema
+export const FieldNameSchema = lazySchema(() => SnakeCaseIdentifierSchema
   .brand<'FieldName'>()
-  .describe('Branded field name (snake_case, no dots)');
+  .describe('Branded field name (snake_case, no dots)'));
 
 export type FieldName = z.infer<typeof FieldNameSchema>;
 
@@ -55,9 +56,9 @@ export type FieldName = z.infer<typeof FieldNameSchema>;
  *
  * @example 'all_tasks', 'my_open_deals', 'contact.recent'
  */
-export const ViewNameSchema = SystemIdentifierSchema
+export const ViewNameSchema = lazySchema(() => SystemIdentifierSchema
   .brand<'ViewName'>()
-  .describe('Branded view name (system identifier)');
+  .describe('Branded view name (system identifier)'));
 
 export type ViewName = z.infer<typeof ViewNameSchema>;
 
@@ -68,9 +69,9 @@ export type ViewName = z.infer<typeof ViewNameSchema>;
  *
  * @example 'crm', 'helpdesk', 'project_management'
  */
-export const AppNameSchema = SystemIdentifierSchema
+export const AppNameSchema = lazySchema(() => SystemIdentifierSchema
   .brand<'AppName'>()
-  .describe('Branded app name (system identifier)');
+  .describe('Branded app name (system identifier)'));
 
 export type AppName = z.infer<typeof AppNameSchema>;
 
@@ -81,9 +82,9 @@ export type AppName = z.infer<typeof AppNameSchema>;
  *
  * @example 'approval_flow', 'onboarding_wizard', 'lead_qualification'
  */
-export const FlowNameSchema = SystemIdentifierSchema
+export const FlowNameSchema = lazySchema(() => SystemIdentifierSchema
   .brand<'FlowName'>()
-  .describe('Branded flow name (system identifier)');
+  .describe('Branded flow name (system identifier)'));
 
 export type FlowName = z.infer<typeof FlowNameSchema>;
 
@@ -94,8 +95,8 @@ export type FlowName = z.infer<typeof FlowNameSchema>;
  *
  * @example 'admin', 'sales_manager', 'read_only'
  */
-export const RoleNameSchema = SystemIdentifierSchema
+export const RoleNameSchema = lazySchema(() => SystemIdentifierSchema
   .brand<'RoleName'>()
-  .describe('Branded role name (system identifier)');
+  .describe('Branded role name (system identifier)'));
 
 export type RoleName = z.infer<typeof RoleNameSchema>;

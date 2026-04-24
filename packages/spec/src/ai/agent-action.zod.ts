@@ -29,7 +29,8 @@ import { z } from 'zod';
  * Navigation Action Types
  * Actions that change the current view or location
  */
-export const NavigationActionTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const NavigationActionTypeSchema = lazySchema(() => z.enum([
   'navigate_to_object_list',    // Navigate to object list view
   'navigate_to_object_form',    // Navigate to object form (new/edit)
   'navigate_to_record_detail',  // Navigate to specific record detail page
@@ -40,7 +41,7 @@ export const NavigationActionTypeSchema = z.enum([
   'navigate_home',              // Go to home page
   'open_tab',                   // Open new tab
   'close_tab',                  // Close current tab
-]);
+]));
 
 export type NavigationActionType = z.infer<typeof NavigationActionTypeSchema>;
 
@@ -48,7 +49,7 @@ export type NavigationActionType = z.infer<typeof NavigationActionTypeSchema>;
  * View Manipulation Action Types
  * Actions that change how data is displayed
  */
-export const ViewActionTypeSchema = z.enum([
+export const ViewActionTypeSchema = lazySchema(() => z.enum([
   'change_view_mode',           // Switch between list/kanban/calendar/gantt
   'apply_filter',               // Apply filter to current view
   'clear_filter',               // Clear filters
@@ -59,7 +60,7 @@ export const ViewActionTypeSchema = z.enum([
   'collapse_record',            // Collapse record in list
   'refresh_view',               // Refresh current view
   'export_data',                // Export view data
-]);
+]));
 
 export type ViewActionType = z.infer<typeof ViewActionTypeSchema>;
 
@@ -67,7 +68,7 @@ export type ViewActionType = z.infer<typeof ViewActionTypeSchema>;
  * Form Action Types
  * Actions that interact with forms
  */
-export const FormActionTypeSchema = z.enum([
+export const FormActionTypeSchema = lazySchema(() => z.enum([
   'create_record',              // Create new record (submit form)
   'update_record',              // Update existing record
   'delete_record',              // Delete record
@@ -77,7 +78,7 @@ export const FormActionTypeSchema = z.enum([
   'cancel_form',                // Cancel form editing
   'validate_form',              // Validate form data
   'save_draft',                 // Save as draft
-]);
+]));
 
 export type FormActionType = z.infer<typeof FormActionTypeSchema>;
 
@@ -85,7 +86,7 @@ export type FormActionType = z.infer<typeof FormActionTypeSchema>;
  * Data Action Types
  * Actions that perform data operations
  */
-export const DataActionTypeSchema = z.enum([
+export const DataActionTypeSchema = lazySchema(() => z.enum([
   'select_record',              // Select record(s) in list
   'deselect_record',            // Deselect record(s)
   'select_all',                 // Select all records
@@ -93,7 +94,7 @@ export const DataActionTypeSchema = z.enum([
   'bulk_update',                // Bulk update selected records
   'bulk_delete',                // Bulk delete selected records
   'bulk_export',                // Bulk export selected records
-]);
+]));
 
 export type DataActionType = z.infer<typeof DataActionTypeSchema>;
 
@@ -101,7 +102,7 @@ export type DataActionType = z.infer<typeof DataActionTypeSchema>;
  * Workflow Action Types
  * Actions that trigger workflows or automations
  */
-export const WorkflowActionTypeSchema = z.enum([
+export const WorkflowActionTypeSchema = lazySchema(() => z.enum([
   'trigger_flow',               // Trigger a flow/workflow
   'trigger_approval',           // Start approval process
   'trigger_webhook',            // Trigger webhook
@@ -109,7 +110,7 @@ export const WorkflowActionTypeSchema = z.enum([
   'send_email',                 // Send email
   'send_notification',          // Send notification
   'schedule_task',              // Schedule a task
-]);
+]));
 
 export type WorkflowActionType = z.infer<typeof WorkflowActionTypeSchema>;
 
@@ -117,7 +118,7 @@ export type WorkflowActionType = z.infer<typeof WorkflowActionTypeSchema>;
  * UI Component Action Types
  * Actions that interact with UI components
  */
-export const ComponentActionTypeSchema = z.enum([
+export const ComponentActionTypeSchema = lazySchema(() => z.enum([
   'open_modal',                 // Open modal dialog
   'close_modal',                // Close modal dialog
   'open_sidebar',               // Open sidebar panel
@@ -127,21 +128,21 @@ export const ComponentActionTypeSchema = z.enum([
   'open_dropdown',              // Open dropdown menu
   'close_dropdown',             // Close dropdown menu
   'toggle_section',             // Toggle collapsible section
-]);
+]));
 
 export type ComponentActionType = z.infer<typeof ComponentActionTypeSchema>;
 
 /**
  * All UI Action Types Combined
  */
-export const UIActionTypeSchema = z.union([
+export const UIActionTypeSchema = lazySchema(() => z.union([
   NavigationActionTypeSchema,
   ViewActionTypeSchema,
   FormActionTypeSchema,
   DataActionTypeSchema,
   WorkflowActionTypeSchema,
   ComponentActionTypeSchema,
-]);
+]));
 
 export type UIActionType = z.infer<typeof UIActionTypeSchema>;
 
@@ -152,7 +153,7 @@ export type UIActionType = z.infer<typeof UIActionTypeSchema>;
 /**
  * Navigation Action Parameters
  */
-export const NavigationActionParamsSchema = z.object({
+export const NavigationActionParamsSchema = lazySchema(() => z.object({
   object: z.string().optional().describe('Object name (for object-specific navigation)'),
   recordId: z.string().optional().describe('Record ID (for detail page)'),
   viewType: z.enum(['list', 'form', 'detail', 'kanban', 'calendar', 'gantt']).optional(),
@@ -161,14 +162,14 @@ export const NavigationActionParamsSchema = z.object({
   appName: z.string().optional().describe('App name'),
   mode: z.enum(['new', 'edit', 'view']).optional().describe('Form mode'),
   openInNewTab: z.boolean().optional().describe('Open in new tab'),
-});
+}));
 
 export type NavigationActionParams = z.infer<typeof NavigationActionParamsSchema>;
 
 /**
  * View Action Parameters
  */
-export const ViewActionParamsSchema = z.object({
+export const ViewActionParamsSchema = lazySchema(() => z.object({
   viewMode: z.enum(['list', 'kanban', 'calendar', 'gantt', 'pivot']).optional(),
   filters: z.record(z.string(), z.unknown()).optional().describe('Filter conditions'),
   sort: z.array(z.object({
@@ -179,40 +180,40 @@ export const ViewActionParamsSchema = z.object({
   columns: z.array(z.string()).optional().describe('Columns to show/hide'),
   recordId: z.string().optional().describe('Record to expand/collapse'),
   exportFormat: z.enum(['csv', 'xlsx', 'pdf', 'json']).optional(),
-});
+}));
 
 export type ViewActionParams = z.infer<typeof ViewActionParamsSchema>;
 
 /**
  * Form Action Parameters
  */
-export const FormActionParamsSchema = z.object({
+export const FormActionParamsSchema = lazySchema(() => z.object({
   object: z.string().optional().describe('Object name'),
   recordId: z.string().optional().describe('Record ID (for edit/delete)'),
   fieldValues: z.record(z.string(), z.unknown()).optional().describe('Field name-value pairs'),
   fieldName: z.string().optional().describe('Specific field to fill/clear'),
   fieldValue: z.unknown().optional().describe('Value to set'),
   validateOnly: z.boolean().optional().describe('Validate without saving'),
-});
+}));
 
 export type FormActionParams = z.infer<typeof FormActionParamsSchema>;
 
 /**
  * Data Action Parameters
  */
-export const DataActionParamsSchema = z.object({
+export const DataActionParamsSchema = lazySchema(() => z.object({
   recordIds: z.array(z.string()).optional().describe('Record IDs to select/operate on'),
   filters: z.record(z.string(), z.unknown()).optional().describe('Filter for bulk operations'),
   updateData: z.record(z.string(), z.unknown()).optional().describe('Data for bulk update'),
   exportFormat: z.enum(['csv', 'xlsx', 'pdf', 'json']).optional(),
-});
+}));
 
 export type DataActionParams = z.infer<typeof DataActionParamsSchema>;
 
 /**
  * Workflow Action Parameters
  */
-export const WorkflowActionParamsSchema = z.object({
+export const WorkflowActionParamsSchema = lazySchema(() => z.object({
   flowName: z.string().optional().describe('Flow/workflow name'),
   approvalProcessName: z.string().optional().describe('Approval process name'),
   webhookUrl: z.string().optional().describe('Webhook URL'),
@@ -224,14 +225,14 @@ export const WorkflowActionParamsSchema = z.object({
   taskData: z.record(z.string(), z.unknown()).optional().describe('Task creation data'),
   scheduleTime: z.string().optional().describe('Schedule time (ISO 8601)'),
   contextData: z.record(z.string(), z.unknown()).optional().describe('Additional context data'),
-});
+}));
 
 export type WorkflowActionParams = z.infer<typeof WorkflowActionParamsSchema>;
 
 /**
  * Component Action Parameters
  */
-export const ComponentActionParamsSchema = z.object({
+export const ComponentActionParamsSchema = lazySchema(() => z.object({
   componentId: z.string().optional().describe('Component ID'),
   modalConfig: z.object({
     title: z.string().optional(),
@@ -248,7 +249,7 @@ export const ComponentActionParamsSchema = z.object({
     width: z.string().optional(),
     content: z.unknown().optional(),
   }).optional(),
-});
+}));
 
 export type ComponentActionParams = z.infer<typeof ComponentActionParamsSchema>;
 
@@ -260,7 +261,7 @@ export type ComponentActionParams = z.infer<typeof ComponentActionParamsSchema>;
  * Agent UI Action Schema
  * Complete definition of an AI agent's UI action
  */
-export const AgentActionSchema = z.object({
+export const AgentActionSchema = lazySchema(() => z.object({
   /**
    * Action identifier (generated)
    */
@@ -312,54 +313,54 @@ export const AgentActionSchema = z.object({
     agentName: z.string().optional().describe('Agent that generated this action'),
     timestamp: z.string().datetime().optional().describe('Generation timestamp (ISO 8601)'),
   }).optional(),
-});
+}));
 
 /**
  * Agent Action Typed Schemas
  * Bind params to specific action types for type safety
  */
-export const NavigationAgentActionSchema = AgentActionSchema.extend({
+export const NavigationAgentActionSchema = lazySchema(() => AgentActionSchema.extend({
   type: NavigationActionTypeSchema,
   params: NavigationActionParamsSchema,
-});
+}));
 
-export const ViewAgentActionSchema = AgentActionSchema.extend({
+export const ViewAgentActionSchema = lazySchema(() => AgentActionSchema.extend({
   type: ViewActionTypeSchema,
   params: ViewActionParamsSchema,
-});
+}));
 
-export const FormAgentActionSchema = AgentActionSchema.extend({
+export const FormAgentActionSchema = lazySchema(() => AgentActionSchema.extend({
   type: FormActionTypeSchema,
   params: FormActionParamsSchema,
-});
+}));
 
-export const DataAgentActionSchema = AgentActionSchema.extend({
+export const DataAgentActionSchema = lazySchema(() => AgentActionSchema.extend({
   type: DataActionTypeSchema,
   params: DataActionParamsSchema,
-});
+}));
 
-export const WorkflowAgentActionSchema = AgentActionSchema.extend({
+export const WorkflowAgentActionSchema = lazySchema(() => AgentActionSchema.extend({
   type: WorkflowActionTypeSchema,
   params: WorkflowActionParamsSchema,
-});
+}));
 
-export const ComponentAgentActionSchema = AgentActionSchema.extend({
+export const ComponentAgentActionSchema = lazySchema(() => AgentActionSchema.extend({
   type: ComponentActionTypeSchema,
   params: ComponentActionParamsSchema,
-});
+}));
 
 /**
  * Typed Agent Action Union
  * Replaces the generic AgentActionSchema for stricter typing where possible
  */
-export const TypedAgentActionSchema = z.union([
+export const TypedAgentActionSchema = lazySchema(() => z.union([
   NavigationAgentActionSchema,
   ViewAgentActionSchema,
   FormAgentActionSchema,
   DataAgentActionSchema,
   WorkflowAgentActionSchema,
   ComponentAgentActionSchema,
-]);
+]));
 
 export type AgentAction = z.infer<typeof TypedAgentActionSchema>;
 
@@ -367,7 +368,7 @@ export type AgentAction = z.infer<typeof TypedAgentActionSchema>;
  * Agent Action Sequence Schema
  * Multiple actions to be executed in sequence
  */
-export const AgentActionSequenceSchema = z.object({
+export const AgentActionSequenceSchema = lazySchema(() => z.object({
   /**
    * Sequence identifier
    */
@@ -404,7 +405,7 @@ export const AgentActionSequenceSchema = z.object({
     confidence: z.number().min(0).max(1).optional().describe('Overall confidence score'),
     agentName: z.string().optional().describe('Agent that generated this sequence'),
   }).optional(),
-});
+}));
 
 export type AgentActionSequence = z.infer<typeof AgentActionSequenceSchema>;
 
@@ -412,7 +413,7 @@ export type AgentActionSequence = z.infer<typeof AgentActionSequenceSchema>;
  * Agent Action Result Schema
  * Result of executing an agent action
  */
-export const AgentActionResultSchema = z.object({
+export const AgentActionResultSchema = lazySchema(() => z.object({
   /**
    * Action ID
    */
@@ -445,7 +446,7 @@ export const AgentActionResultSchema = z.object({
     endTime: z.string().optional().describe('Execution end time (ISO 8601)'),
     duration: z.number().optional().describe('Execution duration in ms'),
   }).optional(),
-});
+}));
 
 export type AgentActionResult = z.infer<typeof AgentActionResultSchema>;
 
@@ -453,7 +454,7 @@ export type AgentActionResult = z.infer<typeof AgentActionResultSchema>;
  * Agent Action Sequence Result Schema
  * Result of executing an action sequence
  */
-export const AgentActionSequenceResultSchema = z.object({
+export const AgentActionSequenceResultSchema = lazySchema(() => z.object({
   /**
    * Sequence ID
    */
@@ -487,7 +488,7 @@ export const AgentActionSequenceResultSchema = z.object({
     endTime: z.string().optional(),
     totalDuration: z.number().optional().describe('Total execution time in ms'),
   }).optional(),
-});
+}));
 
 export type AgentActionSequenceResult = z.infer<typeof AgentActionSequenceResultSchema>;
 
@@ -499,7 +500,7 @@ export type AgentActionSequenceResult = z.infer<typeof AgentActionSequenceResult
  * Intent to Action Mapping Schema
  * Maps natural language intent patterns to UI actions
  */
-export const IntentActionMappingSchema = z.object({
+export const IntentActionMappingSchema = lazySchema(() => z.object({
   /**
    * Intent pattern (regex or exact match)
    */
@@ -528,6 +529,6 @@ export const IntentActionMappingSchema = z.object({
    * Confidence threshold
    */
   minConfidence: z.number().min(0).max(1).default(0.7).describe('Minimum confidence to execute'),
-});
+}));
 
 export type IntentActionMapping = z.infer<typeof IntentActionMappingSchema>;

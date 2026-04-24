@@ -13,7 +13,8 @@ import { TokenUsageSchema } from './cost.zod';
 /**
  * Query Intent Type
  */
-export const QueryIntentSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const QueryIntentSchema = lazySchema(() => z.enum([
   'select',          // Retrieve data (e.g., "show me all accounts")
   'aggregate',       // Aggregation (e.g., "total revenue by region")
   'filter',          // Filter data (e.g., "accounts created last month")
@@ -24,23 +25,23 @@ export const QueryIntentSchema = z.enum([
   'create',          // Create record (e.g., "create a new task")
   'update',          // Update record (e.g., "mark this as complete")
   'delete',          // Delete record (e.g., "remove this contact")
-]);
+]));
 
 /**
  * Entity Recognition
  */
-export const EntitySchema = z.object({
+export const EntitySchema = lazySchema(() => z.object({
   type: z.enum(['object', 'field', 'value', 'operator', 'function', 'timeframe']),
   text: z.string().describe('Original text from query'),
   value: z.unknown().describe('Normalized value'),
   confidence: z.number().min(0).max(1).describe('Confidence score'),
   span: z.tuple([z.number(), z.number()]).optional().describe('Character span in query'),
-});
+}));
 
 /**
  * Timeframe Detection
  */
-export const TimeframeSchema = z.object({
+export const TimeframeSchema = lazySchema(() => z.object({
   type: z.enum(['absolute', 'relative']),
   start: z.string().optional().describe('Start date (ISO format)'),
   end: z.string().optional().describe('End date (ISO format)'),
@@ -50,24 +51,24 @@ export const TimeframeSchema = z.object({
     direction: z.enum(['past', 'future', 'current']).default('past'),
   }).optional(),
   text: z.string().describe('Original timeframe text'),
-});
+}));
 
 /**
  * NLQ Field Mapping
  * Maps natural language field names to actual object fields
  */
-export const NLQFieldMappingSchema = z.object({
+export const NLQFieldMappingSchema = lazySchema(() => z.object({
   naturalLanguage: z.string().describe('NL field name (e.g., "customer name")'),
   objectField: z.string().describe('Actual field name (e.g., "account.name")'),
   object: z.string().describe('Object name'),
   field: z.string().describe('Field name'),
   confidence: z.number().min(0).max(1),
-});
+}));
 
 /**
  * Query Context
  */
-export const QueryContextSchema = z.object({
+export const QueryContextSchema = lazySchema(() => z.object({
   /** User Information */
   userId: z.string().optional(),
   userRole: z.string().optional(),
@@ -87,12 +88,12 @@ export const QueryContextSchema = z.object({
   defaultLimit: z.number().int().default(100),
   timezone: z.string().default('UTC'),
   locale: z.string().default('en-US'),
-});
+}));
 
 /**
  * NLQ Parse Result
  */
-export const NLQParseResultSchema = z.object({
+export const NLQParseResultSchema = lazySchema(() => z.object({
   /** Original Query */
   originalQuery: z.string(),
   
@@ -127,12 +128,12 @@ export const NLQParseResultSchema = z.object({
     confidence: z.number(),
     ast: z.unknown(),
   })).optional(),
-});
+}));
 
 /**
  * NLQ Request
  */
-export const NLQRequestSchema = z.object({
+export const NLQRequestSchema = lazySchema(() => z.object({
   /** Query */
   query: z.string().describe('Natural language query'),
   
@@ -147,12 +148,12 @@ export const NLQRequestSchema = z.object({
   /** Execution */
   executeQuery: z.boolean().default(false).describe('Execute query and return results'),
   maxResults: z.number().int().optional().describe('Maximum results to return'),
-});
+}));
 
 /**
  * NLQ Response
  */
-export const NLQResponseSchema = z.object({
+export const NLQResponseSchema = lazySchema(() => z.object({
   /** Parse Result */
   parseResult: NLQParseResultSchema,
   
@@ -170,12 +171,12 @@ export const NLQResponseSchema = z.object({
   
   /** Suggestions */
   suggestions: z.array(z.string()).optional().describe('Query refinement suggestions'),
-});
+}));
 
 /**
  * NLQ Training Example
  */
-export const NLQTrainingExampleSchema = z.object({
+export const NLQTrainingExampleSchema = lazySchema(() => z.object({
   /** Input */
   query: z.string().describe('Natural language query'),
   context: QueryContextSchema.optional(),
@@ -189,12 +190,12 @@ export const NLQTrainingExampleSchema = z.object({
   category: z.string().optional().describe('Example category'),
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
-});
+}));
 
 /**
  * NLQ Model Configuration
  */
-export const NLQModelConfigSchema = z.object({
+export const NLQModelConfigSchema = lazySchema(() => z.object({
   /** Model */
   modelId: z.string().describe('Model from registry'),
   
@@ -222,12 +223,12 @@ export const NLQModelConfigSchema = z.object({
   /** Performance */
   enableCaching: z.boolean().default(true),
   cacheTTL: z.number().int().default(3600).describe('Cache TTL in seconds'),
-});
+}));
 
 /**
  * NLQ Analytics
  */
-export const NLQAnalyticsSchema = z.object({
+export const NLQAnalyticsSchema = lazySchema(() => z.object({
   /** Query Metrics */
   totalQueries: z.number().int(),
   successfulQueries: z.number().int(),
@@ -258,22 +259,22 @@ export const NLQAnalyticsSchema = z.object({
   /** Timeframe */
   startDate: z.string().datetime().describe('ISO timestamp'),
   endDate: z.string().datetime().describe('ISO timestamp'),
-});
+}));
 
 /**
  * Field Synonym Configuration
  */
-export const FieldSynonymConfigSchema = z.object({
+export const FieldSynonymConfigSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   field: z.string().describe('Field name'),
   synonyms: z.array(z.string()).describe('Natural language synonyms'),
   examples: z.array(z.string()).optional().describe('Example queries using synonyms'),
-});
+}));
 
 /**
  * Query Template
  */
-export const QueryTemplateSchema = z.object({
+export const QueryTemplateSchema = lazySchema(() => z.object({
   id: z.string(),
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Template name (snake_case)'),
   label: z.string(),
@@ -293,7 +294,7 @@ export const QueryTemplateSchema = z.object({
   category: z.string().optional(),
   examples: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
-});
+}));
 
 // Type exports
 export type QueryIntent = z.infer<typeof QueryIntentSchema>;

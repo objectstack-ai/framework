@@ -23,6 +23,7 @@ import { BaseResponseSchema } from './contract.zod';
  * Export Format Enum
  * Supported file formats for data export.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ExportFormat = z.enum([
   'csv',
   'json',
@@ -56,7 +57,7 @@ export type ExportJobStatus = z.infer<typeof ExportJobStatus>;
  * @example POST /api/v1/data/account/export
  * { format: 'csv', fields: ['name', 'email', 'status'], filter: { status: 'active' }, limit: 10000 }
  */
-export const CreateExportJobRequestSchema = z.object({
+export const CreateExportJobRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name to export'),
   format: ExportFormat.default('csv').describe('Export file format'),
   fields: z.array(z.string()).optional()
@@ -75,21 +76,21 @@ export const CreateExportJobRequestSchema = z.object({
     .describe('Character encoding for the export file'),
   templateId: z.string().optional()
     .describe('Export template ID for predefined field mappings'),
-});
+}));
 export type CreateExportJobRequest = z.infer<typeof CreateExportJobRequestSchema>;
 
 /**
  * Export Job Response
  * Returns the created export job with tracking info.
  */
-export const CreateExportJobResponseSchema = BaseResponseSchema.extend({
+export const CreateExportJobResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     jobId: z.string().describe('Export job ID'),
     status: ExportJobStatus.describe('Initial job status'),
     estimatedRecords: z.number().int().optional().describe('Estimated total records'),
     createdAt: z.string().datetime().describe('Job creation timestamp'),
   }),
-});
+}));
 export type CreateExportJobResponse = z.infer<typeof CreateExportJobResponseSchema>;
 
 /**
@@ -98,7 +99,7 @@ export type CreateExportJobResponse = z.infer<typeof CreateExportJobResponseSche
  *
  * @example GET /api/v1/data/export/:jobId
  */
-export const ExportJobProgressSchema = BaseResponseSchema.extend({
+export const ExportJobProgressSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     jobId: z.string().describe('Export job ID'),
     status: ExportJobStatus.describe('Current job status'),
@@ -118,7 +119,7 @@ export const ExportJobProgressSchema = BaseResponseSchema.extend({
     startedAt: z.string().datetime().optional().describe('Processing start timestamp'),
     completedAt: z.string().datetime().optional().describe('Completion timestamp'),
   }),
-});
+}));
 export type ExportJobProgress = z.infer<typeof ExportJobProgressSchema>;
 
 // ==========================================
@@ -159,7 +160,7 @@ export type DeduplicationStrategy = z.infer<typeof DeduplicationStrategy>;
  *   trimWhitespace: true,
  * }
  */
-export const ImportValidationConfigSchema = z.object({
+export const ImportValidationConfigSchema = lazySchema(() => z.object({
   mode: ImportValidationMode.default('strict')
     .describe('Validation mode for the import'),
   deduplication: z.object({
@@ -176,14 +177,14 @@ export const ImportValidationConfigSchema = z.object({
     .describe('Expected date format in import data (e.g., "YYYY-MM-DD")'),
   nullValues: z.array(z.string()).optional()
     .describe('Strings to treat as null (e.g., ["", "N/A", "null"])'),
-});
+}));
 export type ImportValidationConfig = z.infer<typeof ImportValidationConfigSchema>;
 
 /**
  * Import Validation Result Schema
  * Summary of the import validation pass.
  */
-export const ImportValidationResultSchema = BaseResponseSchema.extend({
+export const ImportValidationResultSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     totalRecords: z.number().int().describe('Total records in import file'),
     validRecords: z.number().int().describe('Records that passed validation'),
@@ -198,7 +199,7 @@ export const ImportValidationResultSchema = BaseResponseSchema.extend({
     preview: z.array(z.record(z.string(), z.unknown())).optional()
       .describe('Preview of first N valid records (for dry_run mode)'),
   }),
-});
+}));
 export type ImportValidationResult = z.infer<typeof ImportValidationResultSchema>;
 
 // ==========================================
@@ -209,7 +210,7 @@ export type ImportValidationResult = z.infer<typeof ImportValidationResultSchema
  * Field Mapping Entry Schema
  * Maps a source field to a target field with optional transformation.
  */
-export const FieldMappingEntrySchema = z.object({
+export const FieldMappingEntrySchema = lazySchema(() => z.object({
   sourceField: z.string().describe('Field name in the source data (import) or object (export)'),
   targetField: z.string().describe('Field name in the target object (import) or file column (export)'),
   targetLabel: z.string().optional().describe('Display label for the target column (export)'),
@@ -220,7 +221,7 @@ export const FieldMappingEntrySchema = z.object({
     .describe('Default value if source field is null/empty'),
   required: z.boolean().default(false)
     .describe('Whether this field is required (import validation)'),
-});
+}));
 export type FieldMappingEntry = z.infer<typeof FieldMappingEntrySchema>;
 
 /**
@@ -239,7 +240,7 @@ export type FieldMappingEntry = z.infer<typeof FieldMappingEntrySchema>;
  *   ],
  * }
  */
-export const ExportImportTemplateSchema = z.object({
+export const ExportImportTemplateSchema = lazySchema(() => z.object({
   id: z.string().optional().describe('Template ID (generated on save)'),
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Template machine name (snake_case)'),
   label: z.string().describe('Human-readable template label'),
@@ -253,7 +254,7 @@ export const ExportImportTemplateSchema = z.object({
   createdAt: z.string().datetime().optional().describe('Template creation timestamp'),
   updatedAt: z.string().datetime().optional().describe('Last update timestamp'),
   createdBy: z.string().optional().describe('User who created the template'),
-});
+}));
 export type ExportImportTemplate = z.infer<typeof ExportImportTemplateSchema>;
 
 // ==========================================
@@ -273,7 +274,7 @@ export type ExportImportTemplate = z.infer<typeof ExportImportTemplateSchema>;
  *   delivery: { method: 'email', recipients: ['admin@example.com'] },
  * }
  */
-export const ScheduledExportSchema = z.object({
+export const ScheduledExportSchema = lazySchema(() => z.object({
   id: z.string().optional().describe('Scheduled export ID'),
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Schedule name (snake_case)'),
   label: z.string().optional().describe('Human-readable label'),
@@ -301,7 +302,7 @@ export const ScheduledExportSchema = z.object({
   nextRunAt: z.string().datetime().optional().describe('Next scheduled execution'),
   createdAt: z.string().datetime().optional().describe('Creation timestamp'),
   createdBy: z.string().optional().describe('User who created the schedule'),
-});
+}));
 export type ScheduledExport = z.infer<typeof ScheduledExportSchema>;
 
 // ==========================================
@@ -314,16 +315,16 @@ export type ScheduledExport = z.infer<typeof ScheduledExportSchema>;
  *
  * @example GET /api/v1/data/export/:jobId/download
  */
-export const GetExportJobDownloadRequestSchema = z.object({
+export const GetExportJobDownloadRequestSchema = lazySchema(() => z.object({
   jobId: z.string().describe('Export job ID'),
-});
+}));
 export type GetExportJobDownloadRequest = z.infer<typeof GetExportJobDownloadRequestSchema>;
 
 /**
  * Get Export Job Download Response
  * Returns the presigned download URL and metadata.
  */
-export const GetExportJobDownloadResponseSchema = BaseResponseSchema.extend({
+export const GetExportJobDownloadResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     jobId: z.string().describe('Export job ID'),
     downloadUrl: z.string().describe('Presigned download URL'),
@@ -333,7 +334,7 @@ export const GetExportJobDownloadResponseSchema = BaseResponseSchema.extend({
     expiresAt: z.string().datetime().describe('Download URL expiration timestamp'),
     checksum: z.string().optional().describe('File checksum (SHA-256)'),
   }),
-});
+}));
 export type GetExportJobDownloadResponse = z.infer<typeof GetExportJobDownloadResponseSchema>;
 
 // ==========================================
@@ -346,21 +347,21 @@ export type GetExportJobDownloadResponse = z.infer<typeof GetExportJobDownloadRe
  *
  * @example GET /api/v1/data/export?object=account&status=completed&limit=20
  */
-export const ListExportJobsRequestSchema = z.object({
+export const ListExportJobsRequestSchema = lazySchema(() => z.object({
   object: z.string().optional().describe('Filter by object name'),
   status: ExportJobStatus.optional().describe('Filter by job status'),
   limit: z.number().int().min(1).max(100).default(20)
     .describe('Maximum number of jobs to return'),
   cursor: z.string().optional()
     .describe('Pagination cursor from a previous response'),
-});
+}));
 export type ListExportJobsRequest = z.infer<typeof ListExportJobsRequestSchema>;
 
 /**
  * Export Job Summary
  * Compact representation of an export job for list views.
  */
-export const ExportJobSummarySchema = z.object({
+export const ExportJobSummarySchema = lazySchema(() => z.object({
   jobId: z.string().describe('Export job ID'),
   object: z.string().describe('Object name that was exported'),
   status: ExportJobStatus.describe('Current job status'),
@@ -370,20 +371,20 @@ export const ExportJobSummarySchema = z.object({
   createdAt: z.string().datetime().describe('Job creation timestamp'),
   completedAt: z.string().datetime().optional().describe('Completion timestamp'),
   createdBy: z.string().optional().describe('User who initiated the export'),
-});
+}));
 export type ExportJobSummary = z.infer<typeof ExportJobSummarySchema>;
 
 /**
  * List Export Jobs Response
  * Paginated list of export jobs with cursor-based pagination.
  */
-export const ListExportJobsResponseSchema = BaseResponseSchema.extend({
+export const ListExportJobsResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     jobs: z.array(ExportJobSummarySchema).describe('List of export jobs'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more jobs are available'),
   }),
-});
+}));
 export type ListExportJobsResponse = z.infer<typeof ListExportJobsResponseSchema>;
 
 // ==========================================
@@ -396,7 +397,7 @@ export type ListExportJobsResponse = z.infer<typeof ListExportJobsResponseSchema
  *
  * @example POST /api/v1/data/export/schedules
  */
-export const ScheduleExportRequestSchema = z.object({
+export const ScheduleExportRequestSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Schedule name (snake_case)'),
   label: z.string().optional().describe('Human-readable label'),
   object: z.string().describe('Object name to export'),
@@ -418,14 +419,14 @@ export const ScheduleExportRequestSchema = z.object({
     webhookUrl: z.string().optional()
       .describe('Webhook URL (for webhook delivery)'),
   }).describe('Export delivery configuration'),
-});
+}));
 export type ScheduleExportRequest = z.infer<typeof ScheduleExportRequestSchema>;
 
 /**
  * Schedule Export Response
  * Returns the created scheduled export with generated ID and next run info.
  */
-export const ScheduleExportResponseSchema = BaseResponseSchema.extend({
+export const ScheduleExportResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     id: z.string().describe('Scheduled export ID'),
     name: z.string().describe('Schedule name'),
@@ -433,7 +434,7 @@ export const ScheduleExportResponseSchema = BaseResponseSchema.extend({
     nextRunAt: z.string().datetime().optional().describe('Next scheduled execution'),
     createdAt: z.string().datetime().describe('Creation timestamp'),
   }),
-});
+}));
 export type ScheduleExportResponse = z.infer<typeof ScheduleExportResponseSchema>;
 
 // ==========================================

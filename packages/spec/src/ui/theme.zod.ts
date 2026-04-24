@@ -9,7 +9,8 @@ import { FocusManagementSchema } from './keyboard.zod';
  * Color Palette Schema
  * Defines brand colors and their variants.
  */
-export const ColorPaletteSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ColorPaletteSchema = lazySchema(() => z.object({
   primary: z.string().describe('Primary brand color (hex, rgb, or hsl)'),
   secondary: z.string().optional().describe('Secondary brand color'),
   accent: z.string().optional().describe('Accent color for highlights'),
@@ -31,13 +32,13 @@ export const ColorPaletteSchema = z.object({
   primaryDark: z.string().optional().describe('Darker shade of primary'),
   secondaryLight: z.string().optional().describe('Lighter shade of secondary'),
   secondaryDark: z.string().optional().describe('Darker shade of secondary'),
-});
+}));
 
 /**
  * Typography Settings Schema
  * Font families, sizes, weights, and line heights.
  */
-export const TypographySchema = z.object({
+export const TypographySchema = lazySchema(() => z.object({
   fontFamily: z.object({
     base: z.string().optional().describe('Base font family (default: system fonts)'),
     heading: z.string().optional().describe('Heading font family'),
@@ -77,13 +78,13 @@ export const TypographySchema = z.object({
     wide: z.string().optional().describe('Wide letter spacing (e.g., 0.025em)'),
     wider: z.string().optional().describe('Wider letter spacing (e.g., 0.05em)'),
   }).optional(),
-});
+}));
 
 /**
  * Spacing Units Schema
  * Defines spacing scale for margins, padding, gaps.
  */
-export const SpacingSchema = z.object({
+export const SpacingSchema = lazySchema(() => z.object({
   '0': z.string().optional().describe('0 spacing (0)'),
   '1': z.string().optional().describe('Spacing unit 1 (e.g., 0.25rem)'),
   '2': z.string().optional().describe('Spacing unit 2 (e.g., 0.5rem)'),
@@ -97,13 +98,13 @@ export const SpacingSchema = z.object({
   '16': z.string().optional().describe('Spacing unit 16 (e.g., 4rem)'),
   '20': z.string().optional().describe('Spacing unit 20 (e.g., 5rem)'),
   '24': z.string().optional().describe('Spacing unit 24 (e.g., 6rem)'),
-});
+}));
 
 /**
  * Border Radius Schema
  * Rounded corners configuration.
  */
-export const BorderRadiusSchema = z.object({
+export const BorderRadiusSchema = lazySchema(() => z.object({
   none: z.string().optional().describe('No border radius (0)'),
   sm: z.string().optional().describe('Small border radius (e.g., 0.125rem)'),
   base: z.string().optional().describe('Base border radius (e.g., 0.25rem)'),
@@ -112,13 +113,13 @@ export const BorderRadiusSchema = z.object({
   xl: z.string().optional().describe('Extra large border radius (e.g., 0.75rem)'),
   '2xl': z.string().optional().describe('2X large border radius (e.g., 1rem)'),
   full: z.string().optional().describe('Full border radius (50%)'),
-});
+}));
 
 /**
  * Shadow Schema
  * Box shadow effects.
  */
-export const ShadowSchema = z.object({
+export const ShadowSchema = lazySchema(() => z.object({
   none: z.string().optional().describe('No shadow'),
   sm: z.string().optional().describe('Small shadow'),
   base: z.string().optional().describe('Base shadow'),
@@ -127,26 +128,26 @@ export const ShadowSchema = z.object({
   xl: z.string().optional().describe('Extra large shadow'),
   '2xl': z.string().optional().describe('2X large shadow'),
   inner: z.string().optional().describe('Inner shadow (inset)'),
-});
+}));
 
 /**
  * Breakpoints Schema
  * Responsive design breakpoints.
  */
-export const BreakpointsSchema = z.object({
+export const BreakpointsSchema = lazySchema(() => z.object({
   xs: z.string().optional().describe('Extra small breakpoint (e.g., 480px)'),
   sm: z.string().optional().describe('Small breakpoint (e.g., 640px)'),
   md: z.string().optional().describe('Medium breakpoint (e.g., 768px)'),
   lg: z.string().optional().describe('Large breakpoint (e.g., 1024px)'),
   xl: z.string().optional().describe('Extra large breakpoint (e.g., 1280px)'),
   '2xl': z.string().optional().describe('2X large breakpoint (e.g., 1536px)'),
-});
+}));
 
 /**
  * Animation Schema
  * Animation timing and duration settings.
  */
-export const AnimationSchema = z.object({
+export const AnimationSchema = lazySchema(() => z.object({
   duration: z.object({
     fast: z.string().optional().describe('Fast animation (e.g., 150ms)'),
     base: z.string().optional().describe('Base animation (e.g., 300ms)'),
@@ -160,13 +161,13 @@ export const AnimationSchema = z.object({
     ease_out: z.string().optional().describe('Ease-out timing function'),
     ease_in_out: z.string().optional().describe('Ease-in-out timing function'),
   }).optional(),
-});
+}));
 
 /**
  * Z-Index Scale Schema
  * Layering and stacking order.
  */
-export const ZIndexSchema = z.object({
+export const ZIndexSchema = lazySchema(() => z.object({
   base: z.number().optional().describe('Base z-index (e.g., 0)'),
   dropdown: z.number().optional().describe('Dropdown z-index (e.g., 1000)'),
   sticky: z.number().optional().describe('Sticky z-index (e.g., 1020)'),
@@ -175,12 +176,12 @@ export const ZIndexSchema = z.object({
   modal: z.number().optional().describe('Modal z-index (e.g., 1050)'),
   popover: z.number().optional().describe('Popover z-index (e.g., 1060)'),
   tooltip: z.number().optional().describe('Tooltip z-index (e.g., 1070)'),
-});
+}));
 
 /**
  * Theme Mode Schema
  */
-export const ThemeModeSchema = z.enum(['light', 'dark', 'auto']);
+export const ThemeModeSchema = lazySchema(() => z.enum(['light', 'dark', 'auto']));
 
 /** @deprecated Use ThemeModeSchema instead */
 export const ThemeMode = ThemeModeSchema;
@@ -189,7 +190,7 @@ export const ThemeMode = ThemeModeSchema;
  * Density Mode Schema
  * Controls spacing and sizing for different use cases.
  */
-export const DensityModeSchema = z.enum(['compact', 'regular', 'spacious']);
+export const DensityModeSchema = lazySchema(() => z.enum(['compact', 'regular', 'spacious']));
 
 /** @deprecated Use DensityModeSchema instead */
 export const DensityMode = DensityModeSchema;
@@ -198,7 +199,7 @@ export const DensityMode = DensityModeSchema;
  * WCAG Contrast Level Schema
  * Web Content Accessibility Guidelines color contrast requirements.
  */
-export const WcagContrastLevelSchema = z.enum(['AA', 'AAA']);
+export const WcagContrastLevelSchema = lazySchema(() => z.enum(['AA', 'AAA']));
 
 /** @deprecated Use WcagContrastLevelSchema instead */
 export const WcagContrastLevel = WcagContrastLevelSchema;
@@ -207,7 +208,7 @@ export const WcagContrastLevel = WcagContrastLevelSchema;
  * Theme Configuration Schema
  * Complete theme definition for brand customization.
  */
-export const ThemeSchema = z.object({
+export const ThemeSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Unique theme identifier (snake_case)'),
   label: z.string().describe('Human-readable theme name'),
   description: z.string().optional().describe('Theme description'),
@@ -266,7 +267,7 @@ export const ThemeSchema = z.object({
 
   /** Keyboard navigation and focus management */
   keyboardNavigation: FocusManagementSchema.optional().describe('Keyboard focus management settings'),
-});
+}));
 
 export type Theme = z.infer<typeof ThemeSchema>;
 export type ColorPalette = z.infer<typeof ColorPaletteSchema>;

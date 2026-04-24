@@ -48,6 +48,7 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
  * 
  * Defines the different types of APIs supported by ObjectStack.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ApiProtocolType = z.enum([
   'rest',      // RESTful API (CRUD operations)
   'graphql',   // GraphQL API (flexible queries)
@@ -115,7 +116,7 @@ export type HttpStatusCode = z.infer<typeof HttpStatusCode>;
  * }
  * ```
  */
-export const ObjectQLReferenceSchema = z.object({
+export const ObjectQLReferenceSchema = lazySchema(() => z.object({
   /** Referenced object name (snake_case) */
   objectId: SnakeCaseIdentifierSchema.describe('Object name to reference'),
   
@@ -130,7 +131,7 @@ export const ObjectQLReferenceSchema = z.object({
   /** Include related objects via lookup fields */
   includeRelated: z.array(z.string()).optional()
     .describe('Include related objects via lookup fields'),
-});
+}));
 
 export type ObjectQLReference = z.infer<typeof ObjectQLReferenceSchema>;
 
@@ -194,7 +195,7 @@ export type SchemaDefinition = z.infer<typeof SchemaDefinition>;
  * }
  * ```
  */
-export const ApiParameterSchema = z.object({
+export const ApiParameterSchema = lazySchema(() => z.object({
   /** Parameter name */
   name: z.string().describe('Parameter name'),
   
@@ -224,7 +225,7 @@ export const ApiParameterSchema = z.object({
   
   /** Example value */
   example: z.unknown().optional().describe('Example value'),
-});
+}));
 
 export type ApiParameter = z.infer<typeof ApiParameterSchema>;
 
@@ -251,7 +252,7 @@ export type ApiParameter = z.infer<typeof ApiParameterSchema>;
  * }
  * ```
  */
-export const ApiResponseSchema = z.object({
+export const ApiResponseSchema = lazySchema(() => z.object({
   /** HTTP status code */
   statusCode: HttpStatusCode.describe('HTTP status code'),
   
@@ -277,7 +278,7 @@ export const ApiResponseSchema = z.object({
   
   /** Example response */
   example: z.unknown().optional().describe('Example response'),
-});
+}));
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 export type ApiResponseInput = z.input<typeof ApiResponseSchema>;
@@ -339,7 +340,7 @@ export type ApiResponseInput = z.input<typeof ApiResponseSchema>;
  * }
  * ```
  */
-export const ApiEndpointRegistrationSchema = z.object({
+export const ApiEndpointRegistrationSchema = lazySchema(() => z.object({
   /** Unique endpoint identifier */
   id: z.string().describe('Unique endpoint identifier'),
   
@@ -524,7 +525,7 @@ export const ApiEndpointRegistrationSchema = z.object({
     description: z.string().optional(),
     url: z.string().url(),
   }).optional().describe('External documentation link'),
-});
+}));
 
 export type ApiEndpointRegistration = z.infer<typeof ApiEndpointRegistrationSchema>;
 export type ApiEndpointRegistrationInput = z.input<typeof ApiEndpointRegistrationSchema>;
@@ -538,7 +539,7 @@ export type ApiEndpointRegistrationInput = z.input<typeof ApiEndpointRegistratio
  * 
  * Additional metadata for an API registration.
  */
-export const ApiMetadataSchema = z.object({
+export const ApiMetadataSchema = lazySchema(() => z.object({
   /** API owner/team */
   owner: z.string().optional().describe('Owner team or person'),
   
@@ -554,7 +555,7 @@ export const ApiMetadataSchema = z.object({
   
   /** Custom metadata */
   custom: z.record(z.string(), z.unknown()).optional().describe('Custom metadata fields'),
-});
+}));
 
 export type ApiMetadata = z.infer<typeof ApiMetadataSchema>;
 export type ApiMetadataInput = z.input<typeof ApiMetadataSchema>;
@@ -598,7 +599,7 @@ export type ApiMetadataInput = z.input<typeof ApiMetadataSchema>;
  * }
  * ```
  */
-export const ApiRegistryEntrySchema = z.object({
+export const ApiRegistryEntrySchema = lazySchema(() => z.object({
   /** Unique API identifier */
   id: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Unique API identifier (snake_case)'),
   
@@ -641,7 +642,7 @@ export const ApiRegistryEntrySchema = z.object({
     name: z.string(),
     url: z.string().url().optional(),
   }).optional().describe('License information'),
-});
+}));
 
 export type ApiRegistryEntry = z.infer<typeof ApiRegistryEntrySchema>;
 export type ApiRegistryEntryInput = z.input<typeof ApiRegistryEntrySchema>;
@@ -716,7 +717,7 @@ export type ConflictResolutionStrategy = z.infer<typeof ConflictResolutionStrate
  * }
  * ```
  */
-export const ApiRegistrySchema = z.object({
+export const ApiRegistrySchema = lazySchema(() => z.object({
   /** Registry version */
   version: z.string().describe('Registry version'),
   
@@ -775,7 +776,7 @@ export const ApiRegistrySchema = z.object({
   
   /** Last updated timestamp */
   updatedAt: z.string().datetime().optional().describe('Last registry update time'),
-});
+}));
 
 export type ApiRegistry = z.infer<typeof ApiRegistrySchema>;
 
@@ -797,7 +798,7 @@ export type ApiRegistry = z.infer<typeof ApiRegistrySchema>;
  * }
  * ```
  */
-export const ApiDiscoveryQuerySchema = z.object({
+export const ApiDiscoveryQuerySchema = lazySchema(() => z.object({
   /** Filter by API type */
   type: ApiProtocolType.optional().describe('Filter by API protocol type'),
   
@@ -816,7 +817,7 @@ export const ApiDiscoveryQuerySchema = z.object({
   
   /** Filter by version */
   version: z.string().optional().describe('Filter by specific version'),
-});
+}));
 
 export type ApiDiscoveryQuery = z.infer<typeof ApiDiscoveryQuerySchema>;
 
@@ -825,7 +826,7 @@ export type ApiDiscoveryQuery = z.infer<typeof ApiDiscoveryQuerySchema>;
  * 
  * Response for API discovery queries.
  */
-export const ApiDiscoveryResponseSchema = z.object({
+export const ApiDiscoveryResponseSchema = lazySchema(() => z.object({
   /** Matching APIs */
   apis: z.array(ApiRegistryEntrySchema).describe('Matching API entries'),
   
@@ -834,7 +835,7 @@ export const ApiDiscoveryResponseSchema = z.object({
   
   /** Applied filters */
   filters: ApiDiscoveryQuerySchema.optional().describe('Applied query filters'),
-});
+}));
 
 export type ApiDiscoveryResponse = z.infer<typeof ApiDiscoveryResponseSchema>;
 

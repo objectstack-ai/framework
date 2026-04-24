@@ -7,10 +7,11 @@ import { FilterConditionSchema } from './filter.zod';
  * Sort Node
  * Represents "Order By".
  */
-export const SortNodeSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const SortNodeSchema = lazySchema(() => z.object({
   field: z.string(),
   order: z.enum(['asc', 'desc']).default('asc')
-});
+}));
 
 /**
  * Aggregation Function Enum
@@ -87,13 +88,13 @@ export const AggregationFunction = z.enum([
  *   groupBy: ['lead_source']
  * }
  */
-export const AggregationNodeSchema = z.object({
+export const AggregationNodeSchema = lazySchema(() => z.object({
   function: AggregationFunction.describe('Aggregation function'),
   field: z.string().optional().describe('Field to aggregate (optional for COUNT(*))'),
   alias: z.string().describe('Result column alias'),
   distinct: z.boolean().optional().describe('Apply DISTINCT before aggregation'),
   filter: FilterConditionSchema.optional().describe('Filter/Condition to apply to the aggregation (FILTER WHERE clause)'),
-});
+}));
 
 /**
  * Join Type Enum
@@ -322,7 +323,7 @@ export const WindowFunction = z.enum([
  *   }
  * }
  */
-export const WindowSpecSchema = z.object({
+export const WindowSpecSchema = lazySchema(() => z.object({
   partitionBy: z.array(z.string()).optional().describe('PARTITION BY fields'),
   orderBy: z.array(SortNodeSchema).optional().describe('ORDER BY specification'),
   frame: z.object({
@@ -330,7 +331,7 @@ export const WindowSpecSchema = z.object({
     start: z.string().optional().describe('Frame start (e.g., "UNBOUNDED PRECEDING", "1 PRECEDING")'),
     end: z.string().optional().describe('Frame end (e.g., "CURRENT ROW", "1 FOLLOWING")'),
   }).optional().describe('Window frame specification'),
-});
+}));
 
 /**
  * Window Function Node
@@ -375,12 +376,12 @@ export const WindowSpecSchema = z.object({
  *   ]
  * }
  */
-export const WindowFunctionNodeSchema = z.object({
+export const WindowFunctionNodeSchema = lazySchema(() => z.object({
   function: WindowFunction.describe('Window function name'),
   field: z.string().optional().describe('Field to operate on (for aggregate window functions)'),
   alias: z.string().describe('Result column alias'),
   over: WindowSpecSchema.describe('Window specification (OVER clause)'),
-});
+}));
 
 /**
  * Field Selection Node
@@ -415,7 +416,7 @@ export const FieldNodeSchema: z.ZodType<any> = z.lazy(() =>
  *   boost: { "name": 2.0, "email": 1.5 }
  * }
  */
-export const FullTextSearchSchema = z.object({
+export const FullTextSearchSchema = lazySchema(() => z.object({
   query: z.string().describe('Search query text'),
   fields: z.array(z.string()).optional().describe('Fields to search in (if not specified, searches all text fields)'),
   fuzzy: z.boolean().optional().default(false).describe('Enable fuzzy matching (tolerates typos)'),
@@ -424,7 +425,7 @@ export const FullTextSearchSchema = z.object({
   minScore: z.number().optional().describe('Minimum relevance score threshold'),
   language: z.string().optional().describe('Language for text analysis (e.g., "en", "zh", "es")'),
   highlight: z.boolean().optional().default(false).describe('Enable search result highlighting'),
-});
+}));
 
 export type FullTextSearch = z.infer<typeof FullTextSearchSchema>;
 
@@ -547,14 +548,14 @@ export type QueryInput = z.input<typeof BaseQuerySchema> & {
   expand?: Record<string, QueryInput>;
 };
 
-export const QuerySchema: z.ZodType<QueryAST> = BaseQuerySchema.extend({
+export const QuerySchema: z.ZodType<QueryAST> = lazySchema(() => BaseQuerySchema.extend({
   expand: z.lazy(() => z.record(z.string(), QuerySchema)).optional().describe(
     'Recursive relation loading map. Keys are lookup/master_detail field names; '
     + 'values are nested QueryAST objects that control select, filter, sort, and '
     + 'further expansion on the related object. The engine resolves expand via '
     + 'batch $in queries (driver-agnostic) with a default max depth of 3.'
   ),
-});
+}));
 
 export type SortNode = z.infer<typeof SortNodeSchema>;
 export type AggregationNode = z.infer<typeof AggregationNodeSchema>;

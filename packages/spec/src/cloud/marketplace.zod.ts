@@ -45,19 +45,20 @@ import { z } from 'zod';
 /**
  * Publisher Verification Status
  */
-export const PublisherVerificationSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const PublisherVerificationSchema = lazySchema(() => z.enum([
   'unverified',  // Not yet verified
   'pending',     // Verification in progress
   'verified',    // Identity verified by platform
   'trusted',     // Trusted publisher (track record of quality)
   'partner',     // Official platform partner
-]).describe('Publisher verification status');
+]).describe('Publisher verification status'));
 
 /**
  * Publisher Schema
  * Represents a developer or organization that publishes packages.
  */
-export const PublisherSchema = z.object({
+export const PublisherSchema = lazySchema(() => z.object({
   /** Publisher unique identifier */
   id: z.string().describe('Publisher ID'),
 
@@ -86,7 +87,7 @@ export const PublisherSchema = z.object({
   /** Registration date */
   registeredAt: z.string().datetime().optional()
     .describe('Publisher registration timestamp'),
-}).describe('Developer or organization that publishes packages');
+}).describe('Developer or organization that publishes packages'));
 
 // ==========================================
 // Artifact Reference & Distribution
@@ -98,7 +99,7 @@ export const PublisherSchema = z.object({
  * Points to a downloadable package artifact with integrity verification.
  * Used in marketplace listings and install workflows.
  */
-export const ArtifactReferenceSchema = z.object({
+export const ArtifactReferenceSchema = lazySchema(() => z.object({
   /** Artifact download URL */
   url: z.string().url().describe('Artifact download URL'),
 
@@ -113,7 +114,7 @@ export const ArtifactReferenceSchema = z.object({
 
   /** Upload timestamp */
   uploadedAt: z.string().datetime().describe('Upload timestamp'),
-}).describe('Reference to a downloadable package artifact');
+}).describe('Reference to a downloadable package artifact'));
 
 export type ArtifactReference = z.infer<typeof ArtifactReferenceSchema>;
 
@@ -123,7 +124,7 @@ export type ArtifactReference = z.infer<typeof ArtifactReferenceSchema>;
  * Response from the artifact download API endpoint.
  * Provides a time-limited download URL with integrity metadata.
  */
-export const ArtifactDownloadResponseSchema = z.object({
+export const ArtifactDownloadResponseSchema = lazySchema(() => z.object({
   /** Pre-signed or direct download URL */
   downloadUrl: z.string().url().describe('Artifact download URL (may be pre-signed)'),
 
@@ -139,7 +140,7 @@ export const ArtifactDownloadResponseSchema = z.object({
   /** URL expiration time (for pre-signed URLs) */
   expiresAt: z.string().datetime().optional()
     .describe('URL expiration timestamp for pre-signed URLs'),
-}).describe('Artifact download response with integrity metadata');
+}).describe('Artifact download response with integrity metadata'));
 
 export type ArtifactDownloadResponse = z.infer<typeof ArtifactDownloadResponseSchema>;
 
@@ -150,7 +151,7 @@ export type ArtifactDownloadResponse = z.infer<typeof ArtifactDownloadResponseSc
 /**
  * Marketplace Category
  */
-export const MarketplaceCategorySchema = z.enum([
+export const MarketplaceCategorySchema = lazySchema(() => z.enum([
   'crm',             // Customer Relationship Management
   'erp',             // Enterprise Resource Planning
   'hr',              // Human Resources
@@ -166,12 +167,12 @@ export const MarketplaceCategorySchema = z.enum([
   'ui-theme',        // UI Themes & Appearance
   'storage',         // Storage & Drivers
   'other',           // Other / Uncategorized
-]).describe('Marketplace package category');
+]).describe('Marketplace package category'));
 
 /**
  * Listing Status
  */
-export const ListingStatusSchema = z.enum([
+export const ListingStatusSchema = lazySchema(() => z.enum([
   'draft',           // Not yet submitted
   'submitted',       // Submitted for review
   'in-review',       // Under review
@@ -181,19 +182,19 @@ export const ListingStatusSchema = z.enum([
   'suspended',       // Suspended by platform (policy violation)
   'deprecated',      // Deprecated by publisher
   'unlisted',        // Available by direct link only
-]).describe('Marketplace listing status');
+]).describe('Marketplace listing status'));
 
 /**
  * Pricing Model
  */
-export const PricingModelSchema = z.enum([
+export const PricingModelSchema = lazySchema(() => z.enum([
   'free',            // Free to install
   'freemium',        // Free with paid premium features
   'paid',            // Requires purchase
   'subscription',    // Recurring subscription
   'usage-based',     // Pay per usage
   'contact-sales',   // Enterprise pricing, contact for quote
-]).describe('Package pricing model');
+]).describe('Package pricing model'));
 
 /**
  * Marketplace Listing Schema
@@ -201,7 +202,7 @@ export const PricingModelSchema = z.enum([
  * The public-facing profile of a package on the marketplace.
  * Contains marketing information, pricing, and installation metadata.
  */
-export const MarketplaceListingSchema = z.object({
+export const MarketplaceListingSchema = lazySchema(() => z.object({
   /** Listing ID (matches package ID) */
   id: z.string().describe('Listing ID (matches package manifest ID)'),
 
@@ -294,7 +295,7 @@ export const MarketplaceListingSchema = z.object({
   /** Last updated date */
   updatedAt: z.string().datetime().optional()
     .describe('Last updated timestamp'),
-}).describe('Public-facing package listing on the marketplace');
+}).describe('Public-facing package listing on the marketplace'));
 
 // ==========================================
 // Package Submission & Review
@@ -304,7 +305,7 @@ export const MarketplaceListingSchema = z.object({
  * Package Submission Schema
  * A developer's submission of a package version for marketplace review.
  */
-export const PackageSubmissionSchema = z.object({
+export const PackageSubmissionSchema = lazySchema(() => z.object({
   /** Submission ID */
   id: z.string().describe('Submission ID'),
 
@@ -364,7 +365,7 @@ export const PackageSubmissionSchema = z.object({
 
   /** Review completed timestamp */
   reviewedAt: z.string().datetime().optional().describe('Review completion timestamp'),
-}).describe('Developer submission of a package version for review');
+}).describe('Developer submission of a package version for review'));
 
 // ==========================================
 // Marketplace Search & Discovery
@@ -373,7 +374,7 @@ export const PackageSubmissionSchema = z.object({
 /**
  * Marketplace Search Request
  */
-export const MarketplaceSearchRequestSchema = z.object({
+export const MarketplaceSearchRequestSchema = lazySchema(() => z.object({
   /** Search query string */
   query: z.string().optional().describe('Full-text search query'),
 
@@ -412,12 +413,12 @@ export const MarketplaceSearchRequestSchema = z.object({
   /** Filter by minimum platform version compatibility */
   platformVersion: z.string().optional()
     .describe('Filter by platform version compatibility'),
-}).describe('Marketplace search request');
+}).describe('Marketplace search request'));
 
 /**
  * Marketplace Search Response
  */
-export const MarketplaceSearchResponseSchema = z.object({
+export const MarketplaceSearchResponseSchema = lazySchema(() => z.object({
   /** Search results */
   items: z.array(MarketplaceListingSchema).describe('Search result listings'),
 
@@ -441,7 +442,7 @@ export const MarketplaceSearchResponseSchema = z.object({
       count: z.number().int().min(0),
     })).optional(),
   }).optional().describe('Aggregation facets for refining search'),
-}).describe('Marketplace search response');
+}).describe('Marketplace search response'));
 
 // ==========================================
 // Marketplace Install from Marketplace
@@ -451,7 +452,7 @@ export const MarketplaceSearchResponseSchema = z.object({
  * Install from Marketplace Request
  * Extends the basic package install with marketplace-specific fields.
  */
-export const MarketplaceInstallRequestSchema = z.object({
+export const MarketplaceInstallRequestSchema = lazySchema(() => z.object({
   /** Listing ID to install */
   listingId: z.string().describe('Marketplace listing ID'),
 
@@ -475,12 +476,12 @@ export const MarketplaceInstallRequestSchema = z.object({
 
   /** Tenant ID */
   tenantId: z.string().optional().describe('Tenant identifier'),
-}).describe('Install from marketplace request');
+}).describe('Install from marketplace request'));
 
 /**
  * Install from Marketplace Response
  */
-export const MarketplaceInstallResponseSchema = z.object({
+export const MarketplaceInstallResponseSchema = lazySchema(() => z.object({
   /** Whether installation was successful */
   success: z.boolean().describe('Whether installation succeeded'),
 
@@ -492,7 +493,7 @@ export const MarketplaceInstallResponseSchema = z.object({
 
   /** Human-readable message */
   message: z.string().optional().describe('Installation status message'),
-}).describe('Install from marketplace response');
+}).describe('Install from marketplace response'));
 
 // ==========================================
 // Export Types

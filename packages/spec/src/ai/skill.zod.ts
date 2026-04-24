@@ -12,7 +12,8 @@ import { z } from 'zod';
  * Defines programmatic conditions under which a skill becomes active.
  * Allows context-aware activation based on object type, user role, etc.
  */
-export const SkillTriggerConditionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const SkillTriggerConditionSchema = lazySchema(() => z.object({
   /** Condition field (e.g. 'objectName', 'userRole', 'channel') */
   field: z.string().describe('Context field to evaluate'),
 
@@ -21,7 +22,7 @@ export const SkillTriggerConditionSchema = z.object({
 
   /** Expected value(s) */
   value: z.union([z.string(), z.array(z.string())]).describe('Expected value or values'),
-});
+}));
 
 export type SkillTriggerCondition = z.infer<typeof SkillTriggerConditionSchema>;
 
@@ -51,7 +52,7 @@ export type SkillTriggerCondition = z.infer<typeof SkillTriggerConditionSchema>;
  * });
  * ```
  */
-export const SkillSchema = z.object({
+export const SkillSchema = lazySchema(() => z.object({
   /** Machine name (snake_case, globally unique) */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Skill unique identifier (snake_case)'),
 
@@ -90,7 +91,7 @@ export const SkillSchema = z.object({
 
   /** Whether the skill is enabled */
   active: z.boolean().default(true).describe('Whether the skill is enabled'),
-});
+}));
 
 export type Skill = z.infer<typeof SkillSchema>;
 

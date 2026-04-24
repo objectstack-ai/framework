@@ -31,7 +31,8 @@ import { PackageArtifactSchema, ArtifactChecksumSchema, ArtifactSignatureSchema 
  * Options for the `os plugin build` command.
  * Reads the project manifest and produces a .tgz artifact.
  */
-export const PluginBuildOptionsSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PluginBuildOptionsSchema = lazySchema(() => z.object({
   /** Project root directory (defaults to cwd) */
   directory: z.string().optional()
     .describe('Project root directory (defaults to current working directory)'),
@@ -67,14 +68,14 @@ export const PluginBuildOptionsSchema = z.object({
   /** Whether to include locale/translation files */
   includeLocales: z.boolean().default(true)
     .describe('Whether to include locale/translation files'),
-}).describe('Options for the os plugin build command');
+}).describe('Options for the os plugin build command'));
 
 export type PluginBuildOptions = z.infer<typeof PluginBuildOptionsSchema>;
 
 /**
  * Result of the `os plugin build` command.
  */
-export const PluginBuildResultSchema = z.object({
+export const PluginBuildResultSchema = lazySchema(() => z.object({
   /** Whether the build succeeded */
   success: z.boolean().describe('Whether the build succeeded'),
 
@@ -105,7 +106,7 @@ export const PluginBuildResultSchema = z.object({
   /** Warnings emitted during build */
   warnings: z.array(z.string()).optional()
     .describe('Warnings emitted during build'),
-}).describe('Result of the os plugin build command');
+}).describe('Result of the os plugin build command'));
 
 export type PluginBuildResult = z.infer<typeof PluginBuildResultSchema>;
 
@@ -125,7 +126,7 @@ export const ValidationSeverityEnum = z.enum([
 /**
  * A single validation finding.
  */
-export const ValidationFindingSchema = z.object({
+export const ValidationFindingSchema = lazySchema(() => z.object({
   /** Finding severity */
   severity: ValidationSeverityEnum.describe('Issue severity level'),
 
@@ -138,14 +139,14 @@ export const ValidationFindingSchema = z.object({
   /** File path within the artifact (if applicable) */
   path: z.string().optional()
     .describe('Relative file path within the artifact'),
-}).describe('A single validation finding');
+}).describe('A single validation finding'));
 
 export type ValidationFinding = z.infer<typeof ValidationFindingSchema>;
 
 /**
  * Options for the `os plugin validate` command.
  */
-export const PluginValidateOptionsSchema = z.object({
+export const PluginValidateOptionsSchema = lazySchema(() => z.object({
   /** Path to the .tgz artifact file to validate */
   artifactPath: z.string()
     .describe('Path to the artifact file to validate'),
@@ -169,14 +170,14 @@ export const PluginValidateOptionsSchema = z.object({
   /** Target platform version for compatibility check */
   platformVersion: z.string().optional()
     .describe('Platform version for compatibility verification'),
-}).describe('Options for the os plugin validate command');
+}).describe('Options for the os plugin validate command'));
 
 export type PluginValidateOptions = z.infer<typeof PluginValidateOptionsSchema>;
 
 /**
  * Result of the `os plugin validate` command.
  */
-export const PluginValidateResultSchema = z.object({
+export const PluginValidateResultSchema = lazySchema(() => z.object({
   /** Whether the artifact is valid (no error-level findings) */
   valid: z.boolean().describe('Whether the artifact passed validation'),
 
@@ -225,7 +226,7 @@ export const PluginValidateResultSchema = z.object({
     warnings: z.number().int().min(0).describe('Warning count'),
     infos: z.number().int().min(0).describe('Info count'),
   }).optional().describe('Finding counts by severity'),
-}).describe('Result of the os plugin validate command');
+}).describe('Result of the os plugin validate command'));
 
 export type PluginValidateResult = z.infer<typeof PluginValidateResultSchema>;
 
@@ -236,7 +237,7 @@ export type PluginValidateResult = z.infer<typeof PluginValidateResultSchema>;
 /**
  * Options for the `os plugin publish` command.
  */
-export const PluginPublishOptionsSchema = z.object({
+export const PluginPublishOptionsSchema = lazySchema(() => z.object({
   /** Path to the .tgz artifact file to publish */
   artifactPath: z.string()
     .describe('Path to the artifact file to publish'),
@@ -268,14 +269,14 @@ export const PluginPublishOptionsSchema = z.object({
   /** Tags for categorization */
   tags: z.array(z.string()).optional()
     .describe('Tags for marketplace categorization'),
-}).describe('Options for the os plugin publish command');
+}).describe('Options for the os plugin publish command'));
 
 export type PluginPublishOptions = z.infer<typeof PluginPublishOptionsSchema>;
 
 /**
  * Result of the `os plugin publish` command.
  */
-export const PluginPublishResultSchema = z.object({
+export const PluginPublishResultSchema = lazySchema(() => z.object({
   /** Whether the publish succeeded */
   success: z.boolean().describe('Whether the publish succeeded'),
 
@@ -306,7 +307,7 @@ export const PluginPublishResultSchema = z.object({
   /** Human-readable status message */
   message: z.string().optional()
     .describe('Human-readable status message'),
-}).describe('Result of the os plugin publish command');
+}).describe('Result of the os plugin publish command'));
 
 export type PluginPublishResult = z.infer<typeof PluginPublishResultSchema>;
 

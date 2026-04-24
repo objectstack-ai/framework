@@ -18,11 +18,12 @@ import {
  * Page Region Schema
  * A named region in the template where components are dropped.
  */
-export const PageRegionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PageRegionSchema = lazySchema(() => z.object({
   name: z.string().describe('Region name (e.g. "sidebar", "main", "header")'),
   width: z.enum(['small', 'medium', 'large', 'full']).optional(),
   components: z.array(z.lazy(() => PageComponentSchema)).describe('Components in this region')
-});
+}));
 
 /**
  * Standard Page Component Types
@@ -49,19 +50,19 @@ export const PageComponentType = z.enum([
  * Per-element data binding for multi-object pages.
  * Overrides page-level object context so each element can query a different object.
  */
-export const ElementDataSourceSchema = z.object({
+export const ElementDataSourceSchema = lazySchema(() => z.object({
   object: z.string().describe('Object to query'),
   view: z.string().optional().describe('Named view to apply'),
   filter: FilterConditionSchema.optional().describe('Additional filter criteria'),
   sort: z.array(SortItemSchema).optional().describe('Sort order'),
   limit: z.number().int().positive().optional().describe('Max records to display'),
-});
+}));
 
 /**
  * Page Component Schema
  * A configured instance of a UI component.
  */
-export const PageComponentSchema = z.object({
+export const PageComponentSchema = lazySchema(() => z.object({
   /** Definition */
   type: z.union([
     PageComponentType,
@@ -96,44 +97,44 @@ export const PageComponentSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
 /**
  * Page Variable Schema
  * Defines local state for the page.
  * Variables can be bound to interactive elements (e.g. element:record_picker, element:filter).
  */
-export const PageVariableSchema = z.object({
+export const PageVariableSchema = lazySchema(() => z.object({
   name: z.string().describe('Variable name'),
   type: z.enum(['string', 'number', 'boolean', 'object', 'array', 'record_id']).default('string'),
   defaultValue: z.unknown().optional(),
   /** Source element binding (e.g. element:record_picker writes to this variable) */
   source: z.string().optional().describe('Component ID that writes to this variable'),
-});
+}));
 
 /**
  * Blank Page Layout Item Schema
  * Positions a component on a free-form grid canvas.
  */
-export const BlankPageLayoutItemSchema = z.object({
+export const BlankPageLayoutItemSchema = lazySchema(() => z.object({
   componentId: z.string().describe('Reference to a PageComponent.id in the page'),
   x: z.number().int().min(0).describe('Grid column position (0-based)'),
   y: z.number().int().min(0).describe('Grid row position (0-based)'),
   width: z.number().int().min(1).describe('Width in grid columns'),
   height: z.number().int().min(1).describe('Height in grid rows'),
-});
+}));
 
 /**
  * Blank Page Layout Schema
  * Free-form canvas composition with grid-based positioning.
  * Used when page type is 'blank' to enable drag-and-drop element placement.
  */
-export const BlankPageLayoutSchema = z.object({
+export const BlankPageLayoutSchema = lazySchema(() => z.object({
   columns: z.number().int().min(1).default(12).describe('Number of grid columns'),
   rowHeight: z.number().int().min(1).default(40).describe('Height of each grid row in pixels'),
   gap: z.number().int().min(0).default(8).describe('Gap between grid items in pixels'),
   items: z.array(BlankPageLayoutItemSchema).describe('Positioned components on the canvas'),
-});
+}));
 
 /**
  * Page Type Schema
@@ -151,7 +152,7 @@ export const BlankPageLayoutSchema = z.object({
  *   `utility` is a floating utility panel (e.g. notes, phone), `blank` is a free-form canvas
  *   for custom composition. They serve distinct layout purposes.
  */
-export const PageTypeSchema = z.enum([
+export const PageTypeSchema = lazySchema(() => z.enum([
   // Platform page types (Salesforce FlexiPage style)
   'record',         // Component-based record layout page with regions
   'home',           // Platform-level home/landing page
@@ -170,7 +171,7 @@ export const PageTypeSchema = z.enum([
   'record_review',  // Sequential record review/approval
   'overview',       // Interface-level navigation/landing hub
   'blank',          // Free-form canvas for custom composition
-]).describe('Page type — platform or interface page types');
+]).describe('Page type — platform or interface page types'));
 
 /**
  * Record Review Config Schema
@@ -178,7 +179,7 @@ export const PageTypeSchema = z.enum([
  * Users navigate through records one-by-one, taking actions (approve/reject/skip).
  * Only applicable when page type is 'record_review'.
  */
-export const RecordReviewConfigSchema = z.object({
+export const RecordReviewConfigSchema = lazySchema(() => z.object({
   object: z.string().describe('Target object for review'),
   filter: FilterConditionSchema.optional().describe('Filter criteria for review queue'),
   sort: z.array(SortItemSchema).optional().describe('Sort order for review queue'),
@@ -200,7 +201,7 @@ export const RecordReviewConfigSchema = z.object({
     .describe('Record navigation mode'),
   showProgress: z.boolean().optional().default(true)
     .describe('Show review progress indicator'),
-});
+}));
 
 /**
  * Interface Page Configuration Schema (Airtable Interface parity)
@@ -210,7 +211,7 @@ export const RecordReviewConfigSchema = z.object({
  *
  * @see Airtable Interface → right panel (Page / Data / Appearance / User filters / User actions / Advanced)
  */
-export const InterfacePageConfigSchema = z.object({
+export const InterfacePageConfigSchema = lazySchema(() => z.object({
   /** Data binding */
   source: z.string().optional().describe('Source object name for the page'),
   levels: z.number().int().min(1).optional().describe('Number of hierarchy levels to display'),
@@ -237,7 +238,7 @@ export const InterfacePageConfigSchema = z.object({
 
   /** Advanced */
   allowPrinting: z.boolean().optional().describe('Allow users to print the page'),
-}).describe('Interface-level page configuration (Airtable parity)');
+}).describe('Interface-level page configuration (Airtable parity)'));
 
 /**
  * Page Schema
@@ -259,7 +260,7 @@ export const InterfacePageConfigSchema = z.object({
  * - 'PageDashboard' (PascalCase)
  * - 'Settings Page' (spaces)
  */
-export const PageSchema = z.object({
+export const PageSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Page unique name (lowercase snake_case)'),
   label: I18nLabelSchema,
   description: I18nLabelSchema.optional(),
@@ -315,7 +316,7 @@ export const PageSchema = z.object({
       message: 'blankLayout is required when type is "blank"',
     });
   }
-});
+}));
 
 export type Page = z.infer<typeof PageSchema>;
 export type PageType = z.infer<typeof PageTypeSchema>;

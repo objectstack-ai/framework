@@ -26,7 +26,8 @@ import { DriverDefinitionSchema } from '../datasource.zod';
  * Embedded Replica Sync Configuration.
  * Controls how the local embedded replica synchronizes with the remote primary.
  */
-export const TursoSyncConfigSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const TursoSyncConfigSchema = lazySchema(() => z.object({
   /**
    * Sync interval in seconds.
    * The local replica will periodically pull changes from the remote primary.
@@ -39,13 +40,13 @@ export const TursoSyncConfigSchema = z.object({
    * When true, the driver performs a sync immediately upon connection.
    */
   onConnect: z.boolean().default(true).describe('Sync immediately on connect'),
-}).describe('Embedded replica sync configuration');
+}).describe('Embedded replica sync configuration'));
 
 // ==========================================================================
 // 2. Connection Configuration
 // ==========================================================================
 
-export const TursoConfigSchema = z.object({
+export const TursoConfigSchema = lazySchema(() => z.object({
   /**
    * Database URL.
    * Supports multiple protocols:
@@ -108,7 +109,7 @@ export const TursoConfigSchema = z.object({
    * environments that cannot run native bindings (e.g., Cloudflare Workers).
    */
   wasm: z.boolean().optional().describe('Use WASM build for edge/browser environments'),
-}).describe('Turso/libSQL Connection Configuration');
+}).describe('Turso/libSQL Connection Configuration'));
 
 // ==========================================================================
 // 3. Driver Definition (Metadata)

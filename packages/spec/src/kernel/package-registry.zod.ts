@@ -33,6 +33,7 @@ import { DependencyResolutionResultSchema } from './dependency-resolution.zod';
 /**
  * Package installation status.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const PackageStatusEnum = z.enum([
   'installed',     // Successfully installed and enabled
   'disabled',      // Installed but disabled (metadata not active)
@@ -49,7 +50,7 @@ export type PackageStatus = z.infer<typeof PackageStatusEnum>;
  * Wraps a ManifestSchema with runtime lifecycle state.
  * This is the "row" in the installed packages table.
  */
-export const InstalledPackageSchema = z.object({
+export const InstalledPackageSchema = lazySchema(() => z.object({
   /** 
    * The full package manifest (source of truth for package definition).
    */
@@ -136,7 +137,7 @@ export const InstalledPackageSchema = z.object({
    */
   registeredNamespaces: z.array(z.string()).optional()
     .describe('Namespace prefixes registered by this package'),
-}).describe('Installed package with runtime lifecycle state');
+}).describe('Installed package with runtime lifecycle state'));
 export type InstalledPackage = z.infer<typeof InstalledPackageSchema>;
 
 // ==========================================
@@ -147,7 +148,7 @@ export type InstalledPackage = z.infer<typeof InstalledPackageSchema>;
  * Namespace Registry Entry
  * Tracks namespace ownership within the platform instance.
  */
-export const NamespaceRegistryEntrySchema = z.object({
+export const NamespaceRegistryEntrySchema = lazySchema(() => z.object({
   /** Namespace prefix */
   namespace: z.string().describe('Namespace prefix'),
 
@@ -160,7 +161,7 @@ export const NamespaceRegistryEntrySchema = z.object({
   /** Namespace status */
   status: z.enum(['active', 'disabled', 'reserved'])
     .describe('Namespace status'),
-}).describe('Namespace ownership entry in the registry');
+}).describe('Namespace ownership entry in the registry'));
 
 export type NamespaceRegistryEntry = z.infer<typeof NamespaceRegistryEntrySchema>;
 
@@ -168,7 +169,7 @@ export type NamespaceRegistryEntry = z.infer<typeof NamespaceRegistryEntrySchema
  * Namespace Conflict Error
  * Describes a namespace collision detected during package installation.
  */
-export const NamespaceConflictErrorSchema = z.object({
+export const NamespaceConflictErrorSchema = lazySchema(() => z.object({
   /** Error type discriminator */
   type: z.literal('namespace_conflict').describe('Error type'),
 
@@ -184,7 +185,7 @@ export const NamespaceConflictErrorSchema = z.object({
   /** Suggested alternative namespace */
   suggestion: z.string().optional()
     .describe('Suggested alternative namespace'),
-}).describe('Namespace collision error during installation');
+}).describe('Namespace collision error during installation'));
 
 export type NamespaceConflictError = z.infer<typeof NamespaceConflictErrorSchema>;
 
@@ -195,40 +196,40 @@ export type NamespaceConflictError = z.infer<typeof NamespaceConflictErrorSchema
 /**
  * List Packages Request
  */
-export const ListPackagesRequestSchema = z.object({
+export const ListPackagesRequestSchema = lazySchema(() => z.object({
   /** Filter by status */
   status: PackageStatusEnum.optional().describe('Filter by package status'),
   /** Filter by package type */
   type: ManifestSchema.shape.type.optional().describe('Filter by package type'),
   /** Filter by enabled state */
   enabled: z.boolean().optional().describe('Filter by enabled state'),
-}).describe('List packages request');
+}).describe('List packages request'));
 export type ListPackagesRequest = z.infer<typeof ListPackagesRequestSchema>;
 
 /**
  * List Packages Response
  */
-export const ListPackagesResponseSchema = z.object({
+export const ListPackagesResponseSchema = lazySchema(() => z.object({
   packages: z.array(InstalledPackageSchema).describe('List of installed packages'),
   total: z.number().describe('Total package count'),
-}).describe('List packages response');
+}).describe('List packages response'));
 export type ListPackagesResponse = z.infer<typeof ListPackagesResponseSchema>;
 
 /**
  * Get Package Request
  */
-export const GetPackageRequestSchema = z.object({
+export const GetPackageRequestSchema = lazySchema(() => z.object({
   /** Package ID (reverse domain identifier from manifest) */
   id: z.string().describe('Package identifier'),
-}).describe('Get package request');
+}).describe('Get package request'));
 export type GetPackageRequest = z.infer<typeof GetPackageRequestSchema>;
 
 /**
  * Get Package Response
  */
-export const GetPackageResponseSchema = z.object({
+export const GetPackageResponseSchema = lazySchema(() => z.object({
   package: InstalledPackageSchema.describe('Package details'),
-}).describe('Get package response');
+}).describe('Get package response'));
 export type GetPackageResponse = z.infer<typeof GetPackageResponseSchema>;
 
 /**
@@ -237,7 +238,7 @@ export type GetPackageResponse = z.infer<typeof GetPackageResponseSchema>;
  * Accepts a full manifest to install. In a production system,
  * this might also accept a package ID to fetch from a marketplace.
  */
-export const InstallPackageRequestSchema = z.object({
+export const InstallPackageRequestSchema = lazySchema(() => z.object({
   /** The package manifest to install */
   manifest: ManifestSchema.describe('Package manifest to install'),
   /** Optional: user-provided settings at install time */
@@ -253,72 +254,72 @@ export const InstallPackageRequestSchema = z.object({
    */
   platformVersion: z.string().optional()
     .describe('Current platform version for compatibility verification'),
-}).describe('Install package request');
+}).describe('Install package request'));
 export type InstallPackageRequest = z.infer<typeof InstallPackageRequestSchema>;
 
 /**
  * Install Package Response
  */
-export const InstallPackageResponseSchema = z.object({
+export const InstallPackageResponseSchema = lazySchema(() => z.object({
   package: InstalledPackageSchema.describe('Installed package details'),
   message: z.string().optional().describe('Installation status message'),
   /** Dependency resolution result (when dependencies were analyzed) */
   dependencyResolution: DependencyResolutionResultSchema.optional()
     .describe('Dependency resolution result from install analysis'),
-}).describe('Install package response');
+}).describe('Install package response'));
 export type InstallPackageResponse = z.infer<typeof InstallPackageResponseSchema>;
 
 /**
  * Uninstall Package Request
  */
-export const UninstallPackageRequestSchema = z.object({
+export const UninstallPackageRequestSchema = lazySchema(() => z.object({
   /** Package ID to uninstall */
   id: z.string().describe('Package ID to uninstall'),
-}).describe('Uninstall package request');
+}).describe('Uninstall package request'));
 export type UninstallPackageRequest = z.infer<typeof UninstallPackageRequestSchema>;
 
 /**
  * Uninstall Package Response
  */
-export const UninstallPackageResponseSchema = z.object({
+export const UninstallPackageResponseSchema = lazySchema(() => z.object({
   id: z.string().describe('Uninstalled package ID'),
   success: z.boolean().describe('Whether uninstall succeeded'),
   message: z.string().optional().describe('Uninstall status message'),
-}).describe('Uninstall package response');
+}).describe('Uninstall package response'));
 export type UninstallPackageResponse = z.infer<typeof UninstallPackageResponseSchema>;
 
 /**
  * Enable Package Request
  */
-export const EnablePackageRequestSchema = z.object({
+export const EnablePackageRequestSchema = lazySchema(() => z.object({
   /** Package ID to enable */
   id: z.string().describe('Package ID to enable'),
-}).describe('Enable package request');
+}).describe('Enable package request'));
 export type EnablePackageRequest = z.infer<typeof EnablePackageRequestSchema>;
 
 /**
  * Enable Package Response
  */
-export const EnablePackageResponseSchema = z.object({
+export const EnablePackageResponseSchema = lazySchema(() => z.object({
   package: InstalledPackageSchema.describe('Enabled package details'),
   message: z.string().optional().describe('Enable status message'),
-}).describe('Enable package response');
+}).describe('Enable package response'));
 export type EnablePackageResponse = z.infer<typeof EnablePackageResponseSchema>;
 
 /**
  * Disable Package Request
  */
-export const DisablePackageRequestSchema = z.object({
+export const DisablePackageRequestSchema = lazySchema(() => z.object({
   /** Package ID to disable */
   id: z.string().describe('Package ID to disable'),
-}).describe('Disable package request');
+}).describe('Disable package request'));
 export type DisablePackageRequest = z.infer<typeof DisablePackageRequestSchema>;
 
 /**
  * Disable Package Response
  */
-export const DisablePackageResponseSchema = z.object({
+export const DisablePackageResponseSchema = lazySchema(() => z.object({
   package: InstalledPackageSchema.describe('Disabled package details'),
   message: z.string().optional().describe('Disable status message'),
-}).describe('Disable package response');
+}).describe('Disable package response'));
 export type DisablePackageResponse = z.infer<typeof DisablePackageResponseSchema>;

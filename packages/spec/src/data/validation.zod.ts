@@ -57,6 +57,7 @@ import { z } from 'zod';
  * - **Events**: granular control over validation timing (Context-aware validation).
  * - **Tags**: categorization for reporting and management.
  */
+import { lazySchema } from '../shared/lazy-schema';
 const BaseValidationSchema = z.object({
   // Identification
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Unique rule name (snake_case)'),
@@ -80,42 +81,42 @@ const BaseValidationSchema = z.object({
  * 1. Script/Expression Validation
  * Generic formula-based validation.
  */
-export const ScriptValidationSchema = BaseValidationSchema.extend({
+export const ScriptValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('script'),
   condition: z.string().describe('Formula expression. If TRUE, validation fails. (e.g. amount < 0)'),
-});
+}));
 
 /**
  * 2. Uniqueness Validation
  * specialized optimized check for unique constraints.
  */
-export const UniquenessValidationSchema = BaseValidationSchema.extend({
+export const UniquenessValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('unique'),
   fields: z.array(z.string()).describe('Fields that must be combined unique'),
   scope: z.string().optional().describe('Formula condition for scope (e.g. active = true)'),
   caseSensitive: z.boolean().default(true),
-});
+}));
 
 /**
  * 3. State Machine Validation
  * State transition logic.
  */
-export const StateMachineValidationSchema = BaseValidationSchema.extend({
+export const StateMachineValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('state_machine'),
   field: z.string().describe('State field (e.g. status)'),
   transitions: z.record(z.string(), z.array(z.string())).describe('Map of { OldState: [AllowedNewStates] }'),
-});
+}));
 
 /**
  * 4. Value Format Validation
  * Regex or specialized formats.
  */
-export const FormatValidationSchema = BaseValidationSchema.extend({
+export const FormatValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('format'),
   field: z.string(),
   regex: z.string().optional(),
   format: z.enum(['email', 'url', 'phone', 'json']).optional(),
-});
+}));
 
 /**
  * 5. Cross-Field Validation
@@ -180,11 +181,11 @@ export const FormatValidationSchema = BaseValidationSchema.extend({
  * }
  * ```
  */
-export const CrossFieldValidationSchema = BaseValidationSchema.extend({
+export const CrossFieldValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('cross_field'),
   condition: z.string().describe('Formula expression comparing fields (e.g. "end_date > start_date")'),
   fields: z.array(z.string()).describe('Fields involved in the validation'),
-});
+}));
 
 /**
  * 6. JSON Structure Validation
@@ -195,11 +196,11 @@ export const CrossFieldValidationSchema = BaseValidationSchema.extend({
  * - Enforcing API payload structures
  * - Complex nested data validation
  */
-export const JSONValidationSchema = BaseValidationSchema.extend({
+export const JSONValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('json_schema'),
   field: z.string().describe('JSON field to validate'),
   schema: z.record(z.string(), z.unknown()).describe('JSON Schema object definition'),
-});
+}));
 
 /**
  * 7. Async Validation
@@ -316,7 +317,7 @@ export const JSONValidationSchema = BaseValidationSchema.extend({
  * }
  * ```
  */
-export const AsyncValidationSchema = BaseValidationSchema.extend({
+export const AsyncValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('async'),
   field: z.string().describe('Field to validate'),
   validatorUrl: z.string().optional().describe('External API endpoint for validation'),
@@ -326,17 +327,17 @@ export const AsyncValidationSchema = BaseValidationSchema.extend({
   timeout: z.number().optional().default(5000).describe('Timeout in milliseconds'),
   debounce: z.number().optional().describe('Debounce delay in milliseconds'),
   params: z.record(z.string(), z.unknown()).optional().describe('Additional parameters to pass to validator'),
-});
+}));
 
 /**
  * 8. Custom Validator Function
  * User-defined validation logic with code reference.
  */
-export const CustomValidatorSchema = BaseValidationSchema.extend({
+export const CustomValidatorSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('custom'),
   handler: z.string().describe('Name of the custom validation function registered in the system'),
   params: z.record(z.string(), z.unknown()).optional().describe('Parameters passed to the custom handler'),
-});
+}));
 
 /**
  * 9. Master Validation Rule Schema
@@ -546,12 +547,12 @@ export const ValidationRuleSchema: z.ZodType<BaseValidationRuleShape> = z.lazy((
  * }
  * ```
  */
-export const ConditionalValidationSchema = BaseValidationSchema.extend({
+export const ConditionalValidationSchema = lazySchema(() => BaseValidationSchema.extend({
   type: z.literal('conditional'),
   when: z.string().describe('Condition formula (e.g. "type = \'enterprise\'")'),
   then: ValidationRuleSchema.describe('Validation rule to apply when condition is true'),
   otherwise: ValidationRuleSchema.optional().describe('Validation rule to apply when condition is false'),
-});
+}));
 
 export type ValidationRule = z.infer<typeof ValidationRuleSchema>;
 export type ScriptValidation = z.infer<typeof ScriptValidationSchema>;

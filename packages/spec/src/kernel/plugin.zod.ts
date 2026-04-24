@@ -4,7 +4,8 @@ import { z } from 'zod';
 
 // Service method interfaces use z.function() instead of z.any() for type safety.
 // Generic data fields use z.unknown() for type safety.
-export const PluginContextSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PluginContextSchema = lazySchema(() => z.object({
   ql: z.object({
     object: z.function().describe('Get object handle for method chaining'),
     query: z.function().describe('Execute a query'),
@@ -47,7 +48,7 @@ export const PluginContextSchema = z.object({
   drivers: z.object({
     register: z.function().describe('Register a driver'),
   }).passthrough().describe('Driver Registry'),
-});
+}));
 
 export type PluginContextData = z.infer<typeof PluginContextSchema>;
 export type PluginContext = PluginContextData;
@@ -59,7 +60,7 @@ export type PluginContext = PluginContextData;
  * Enables developers to write conditional migration logic based on
  * the previous and new versions.
  */
-export const UpgradeContextSchema = z.object({
+export const UpgradeContextSchema = lazySchema(() => z.object({
   /** Version before upgrade */
   previousVersion: z.string().describe('Version before upgrade'),
 
@@ -72,11 +73,11 @@ export const UpgradeContextSchema = z.object({
   /** Metadata snapshot before upgrade (for migration logic) */
   previousMetadata: z.record(z.string(), z.unknown()).optional()
     .describe('Metadata snapshot before upgrade'),
-}).describe('Version migration context for onUpgrade hook');
+}).describe('Version migration context for onUpgrade hook'));
 
 export type UpgradeContext = z.infer<typeof UpgradeContextSchema>;
 
-export const PluginLifecycleSchema = z.object({
+export const PluginLifecycleSchema = lazySchema(() => z.object({
   onInstall: z.function().optional().describe('Called when plugin is installed'),
   
   onEnable: z.function().optional().describe('Called when plugin is enabled'),
@@ -86,7 +87,7 @@ export const PluginLifecycleSchema = z.object({
   onUninstall: z.function().optional().describe('Called when plugin is uninstalled'),
   
   onUpgrade: z.function().optional().describe('Called when plugin is upgraded. Receives UpgradeContext with previousVersion, newVersion, and isMajorUpgrade'),
-});
+}));
 
 export type PluginLifecycleHooks = z.infer<typeof PluginLifecycleSchema>;
 
@@ -104,7 +105,7 @@ export const CORE_PLUGIN_TYPES = [
   'objectql'    // Core: ObjectQL Engine Data Provider
 ] as const;
 
-export const PluginSchema = PluginLifecycleSchema.extend({
+export const PluginSchema = lazySchema(() => PluginLifecycleSchema.extend({
   id: z.string().min(1).optional().describe('Unique Plugin ID (e.g. com.example.crm)'),
   type: z.enum([
     'standard',   // Default: General purpose backend logic (Service, Hook, etc.)
@@ -119,6 +120,6 @@ export const PluginSchema = PluginLifecycleSchema.extend({
   description: z.string().optional(),
   author: z.string().optional(),
   homepage: z.string().url().optional(),
-});
+}));
 
 export type PluginDefinition = z.infer<typeof PluginSchema>;

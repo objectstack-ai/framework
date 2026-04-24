@@ -73,7 +73,8 @@ import { z } from 'zod';
  * 
  * @see https://docs.oasis-open.org/odata/odata/v4.01/odata-v4.01-part2-url-conventions.html#sec_SystemQueryOptions
  */
-export const ODataQuerySchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ODataQuerySchema = lazySchema(() => z.object({
   /**
    * $select - Select specific fields to return
    * 
@@ -204,7 +205,7 @@ export const ODataQuerySchema = z.object({
    * @example "groupby((country),aggregate(revenue with sum as totalRevenue))"
    */
   $apply: z.string().optional().describe('Aggregation expression'),
-});
+}));
 
 export type ODataQuery = z.infer<typeof ODataQuerySchema>;
 
@@ -213,7 +214,7 @@ export type ODataQuery = z.infer<typeof ODataQuerySchema>;
  * 
  * Standard comparison and logical operators in OData filter expressions.
  */
-export const ODataFilterOperatorSchema = z.enum([
+export const ODataFilterOperatorSchema = lazySchema(() => z.enum([
   // Comparison Operators
   'eq',  // Equal to
   'ne',  // Not equal to
@@ -234,7 +235,7 @@ export const ODataFilterOperatorSchema = z.enum([
   // Other
   'in',  // Value in list
   'has', // Has flag (for enum flags)
-]);
+]));
 
 export type ODataFilterOperator = z.infer<typeof ODataFilterOperatorSchema>;
 
@@ -243,7 +244,7 @@ export type ODataFilterOperator = z.infer<typeof ODataFilterOperatorSchema>;
  * 
  * Standard functions available in OData filter expressions.
  */
-export const ODataFilterFunctionSchema = z.enum([
+export const ODataFilterFunctionSchema = lazySchema(() => z.enum([
   // String Functions
   'contains',      // contains(field, 'value')
   'startswith',    // startswith(field, 'value')
@@ -281,7 +282,7 @@ export const ODataFilterFunctionSchema = z.enum([
   // Collection Functions
   'any',           // collection/any(d:d/prop eq value)
   'all',           // collection/all(d:d/prop eq value)
-]);
+]));
 
 export type ODataFilterFunction = z.infer<typeof ODataFilterFunctionSchema>;
 
@@ -290,7 +291,7 @@ export type ODataFilterFunction = z.infer<typeof ODataFilterFunctionSchema>;
  * 
  * Standard OData JSON response format.
  */
-export const ODataResponseSchema = z.object({
+export const ODataResponseSchema = lazySchema(() => z.object({
   /**
    * OData context URL
    * Describes the payload structure
@@ -311,7 +312,7 @@ export const ODataResponseSchema = z.object({
    * Result array
    */
   value: z.array(z.record(z.string(), z.unknown())).describe('Results array'),
-});
+}));
 
 export type ODataResponse = z.infer<typeof ODataResponseSchema>;
 
@@ -320,7 +321,7 @@ export type ODataResponse = z.infer<typeof ODataResponseSchema>;
  * 
  * Standard OData error format.
  */
-export const ODataErrorSchema = z.object({
+export const ODataErrorSchema = lazySchema(() => z.object({
   error: z.object({
     /**
      * Error code
@@ -351,7 +352,7 @@ export const ODataErrorSchema = z.object({
      */
     innererror: z.record(z.string(), z.unknown()).optional().describe('Inner error details'),
   }),
-});
+}));
 
 export type ODataError = z.infer<typeof ODataErrorSchema>;
 
@@ -360,7 +361,7 @@ export type ODataError = z.infer<typeof ODataErrorSchema>;
  * 
  * Configuration for OData metadata endpoint ($metadata).
  */
-export const ODataMetadataSchema = z.object({
+export const ODataMetadataSchema = lazySchema(() => z.object({
   /**
    * Service namespace
    */
@@ -391,7 +392,7 @@ export const ODataMetadataSchema = z.object({
     name: z.string().describe('Entity set name'),
     entityType: z.string().describe('Entity type'),
   })).describe('Entity sets'),
-});
+}));
 
 export type ODataMetadata = z.infer<typeof ODataMetadataSchema>;
 
@@ -461,7 +462,7 @@ export const OData = {
  * 
  * Configuration for enabling OData v4 API endpoint.
  */
-export const ODataConfigSchema = z.object({
+export const ODataConfigSchema = lazySchema(() => z.object({
   /** Enable OData endpoint */
   enabled: z.boolean().default(true).describe('Enable OData API'),
   
@@ -470,6 +471,6 @@ export const ODataConfigSchema = z.object({
   
   /** Metadata configuration */
   metadata: ODataMetadataSchema.optional().describe('OData metadata configuration'),
-}).passthrough(); // Allow additional properties for flexibility
+}).passthrough()); // Allow additional properties for flexibility
 
 export type ODataConfig = z.infer<typeof ODataConfigSchema>;

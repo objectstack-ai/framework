@@ -30,9 +30,10 @@ import { z } from 'zod';
  * - `deprecated`  — published but superseded; existing installs continue to work
  *                   but new installs are blocked (unless `allowDeprecated = true`)
  */
-export const PackageVersionStatusSchema = z
+import { lazySchema } from '../shared/lazy-schema';
+export const PackageVersionStatusSchema = lazySchema(() => z
   .enum(['draft', 'published', 'deprecated'])
-  .describe('Package version lifecycle status');
+  .describe('Package version lifecycle status'));
 
 export type PackageVersionStatus = z.infer<typeof PackageVersionStatusSchema>;
 
@@ -44,14 +45,14 @@ export type PackageVersionStatus = z.infer<typeof PackageVersionStatusSchema>;
  * A single dependency declared in a package manifest.
  * Follows npm-style `"package_id": "version_range"` semantics.
  */
-export const PackageDependencySchema = z.object({
+export const PackageDependencySchema = lazySchema(() => z.object({
   /** Manifest ID of the required package (e.g. `com.objectstack.core`). */
   packageId: z.string().describe('Manifest ID of the dependency'),
   /** Required version range (semver, e.g. "^1.0.0"). */
   versionRange: z.string().describe('Semver version range (e.g. ^1.0.0)'),
   /** Whether this dependency is optional (missing dep is a warning, not an error). */
   optional: z.boolean().default(false).describe('Whether this dependency is optional'),
-}).describe('Package dependency declaration');
+}).describe('Package dependency declaration'));
 
 export type PackageDependency = z.infer<typeof PackageDependencySchema>;
 
@@ -62,7 +63,7 @@ export type PackageDependency = z.infer<typeof PackageDependencySchema>;
  * The runtime uses this to know what metadata records to load and what
  * minimum platform version is required.
  */
-export const PackageManifestSchema = z.object({
+export const PackageManifestSchema = lazySchema(() => z.object({
   /** Manifest ID (must match the parent `sys_package.manifest_id`). */
   id: z.string().describe('Package manifest ID (reverse-domain)'),
 
@@ -107,7 +108,7 @@ export const PackageManifestSchema = z.object({
 
   /** Free-form extension metadata. */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Extension metadata'),
-}).describe('Package manifest snapshot embedded in a package version');
+}).describe('Package manifest snapshot embedded in a package version'));
 
 export type PackageManifest = z.infer<typeof PackageManifestSchema>;
 
@@ -121,7 +122,7 @@ export type PackageManifest = z.infer<typeof PackageManifestSchema>;
  * The triple `(packageId, version)` is UNIQUE.
  * Once `status = 'published'`, `manifestJson` and `checksum` MUST NOT change.
  */
-export const PackageVersionSchema = z.object({
+export const PackageVersionSchema = lazySchema(() => z.object({
   /** UUID of the version row (stable, never reused). */
   id: z.string().uuid().describe('UUID of the package version (stable, never reused)'),
 
@@ -174,7 +175,7 @@ export const PackageVersionSchema = z.object({
 
   /** User ID that created this version row. */
   createdBy: z.string().describe('User ID that created this version'),
-});
+}));
 
 export type PackageVersion = z.infer<typeof PackageVersionSchema>;
 
@@ -185,14 +186,14 @@ export type PackageVersion = z.infer<typeof PackageVersionSchema>;
 /**
  * Request to create a new draft package version.
  */
-export const CreatePackageVersionRequestSchema = z.object({
+export const CreatePackageVersionRequestSchema = lazySchema(() => z.object({
   packageId: z.string().uuid().describe('Parent package UUID'),
   version: PackageVersionSchema.shape.version,
   manifestJson: z.string().describe('Initial manifest JSON (can be updated while draft)'),
   releaseNotes: z.string().optional(),
   isPreRelease: z.boolean().optional(),
   createdBy: z.string().describe('User ID creating this version'),
-}).describe('Create a new draft package version');
+}).describe('Create a new draft package version'));
 
 export type CreatePackageVersionRequest = z.infer<typeof CreatePackageVersionRequestSchema>;
 
@@ -200,19 +201,19 @@ export type CreatePackageVersionRequest = z.infer<typeof CreatePackageVersionReq
  * Request to update a draft version's manifest before publishing.
  * Only allowed while `status = 'draft'`.
  */
-export const UpdatePackageVersionRequestSchema = z.object({
+export const UpdatePackageVersionRequestSchema = lazySchema(() => z.object({
   manifestJson: z.string().optional().describe('Updated manifest JSON'),
   releaseNotes: z.string().optional(),
   isPreRelease: z.boolean().optional(),
-}).describe('Update a draft package version (only while status is draft)');
+}).describe('Update a draft package version (only while status is draft)'));
 
 export type UpdatePackageVersionRequest = z.infer<typeof UpdatePackageVersionRequestSchema>;
 
 /**
  * Request to publish a draft version (seals manifestJson and checksum).
  */
-export const PublishPackageVersionRequestSchema = z.object({
+export const PublishPackageVersionRequestSchema = lazySchema(() => z.object({
   publishedBy: z.string().describe('User ID publishing this version'),
-}).describe('Publish a draft version — seals manifestJson and checksum');
+}).describe('Publish a draft version — seals manifestJson and checksum'));
 
 export type PublishPackageVersionRequest = z.infer<typeof PublishPackageVersionRequestSchema>;

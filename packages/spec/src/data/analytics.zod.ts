@@ -16,6 +16,7 @@ import { z } from 'zod';
  * Aggregation Metric Type
  * The mathematical operation to perform on a metric.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const AggregationMetricType = z.enum([
   'count', 
   'sum', 
@@ -51,7 +52,7 @@ export const TimeUpdateInterval = z.enum([
  * Metric Schema
  * A quantitative measurement (e.g., "Total Revenue", "Average Order Value").
  */
-export const MetricSchema = z.object({
+export const MetricSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Unique metric ID'),
   label: z.string().describe('Human readable label'),
   description: z.string().optional(),
@@ -68,13 +69,13 @@ export const MetricSchema = z.object({
   
   /** Format for display (e.g. "currency", "percent") */
   format: z.string().optional(),
-});
+}));
 
 /**
  * Dimension Schema
  * A categorical attribute to group by (e.g., "Product Category", "Order Date").
  */
-export const DimensionSchema = z.object({
+export const DimensionSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Unique dimension ID'),
   label: z.string().describe('Human readable label'),
   description: z.string().optional(),
@@ -86,24 +87,24 @@ export const DimensionSchema = z.object({
   
   /** For Time Dimensions: Supported Granularities */
   granularities: z.array(TimeUpdateInterval).optional(),
-});
+}));
 
 /**
  * Join Schema
  * Defines how this cube relates to others.
  */
-export const CubeJoinSchema = z.object({
+export const CubeJoinSchema = lazySchema(() => z.object({
   name: z.string().describe('Target cube name'),
   relationship: z.enum(['one_to_one', 'one_to_many', 'many_to_one']).default('many_to_one'),
   sql: z.string().describe('Join condition (ON clause)'),
-});
+}));
 
 /**
  * Cube Schema
  * A logical data model representing a business entity or process for analysis.
  * Maps physical tables to business metrics and dimensions.
  */
-export const CubeSchema = z.object({
+export const CubeSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Cube name (snake_case)'),
   title: z.string().optional(),
   description: z.string().optional(),
@@ -126,13 +127,13 @@ export const CubeSchema = z.object({
   
   /** Access Control */
   public: z.boolean().default(false),
-});
+}));
 
 /**
  * Analytics Query Schema
  * The request format for the Analytics API.
  */
-export const AnalyticsQuerySchema = z.object({
+export const AnalyticsQuerySchema = lazySchema(() => z.object({
   cube: z.string().optional().describe('Target cube name (optional when provided externally, e.g. in API request wrapper)'),
   measures: z.array(z.string()).describe('List of metrics to calculate'),
   dimensions: z.array(z.string()).optional().describe('List of dimensions to group by'),
@@ -158,7 +159,7 @@ export const AnalyticsQuerySchema = z.object({
   offset: z.number().optional(),
   
   timezone: z.string().optional().default('UTC'),
-});
+}));
 
 export type Metric = z.infer<typeof MetricSchema>;
 export type Dimension = z.infer<typeof DimensionSchema>;

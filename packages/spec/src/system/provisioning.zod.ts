@@ -23,6 +23,7 @@ import { z } from 'zod';
 /**
  * Tenant provisioning lifecycle status.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const TenantProvisioningStatusEnum = z.enum([
   'provisioning',  // Database creation in progress
   'active',        // Fully provisioned and operational
@@ -36,25 +37,25 @@ export type TenantProvisioningStatus = z.infer<typeof TenantProvisioningStatusEn
 /**
  * Tenant subscription plan.
  */
-export const TenantPlanSchema = z.enum([
+export const TenantPlanSchema = lazySchema(() => z.enum([
   'free',        // Free tier with limited quotas
   'pro',         // Professional tier with higher quotas
   'enterprise',  // Enterprise tier with custom quotas and SLAs
-]).describe('Tenant subscription plan');
+]).describe('Tenant subscription plan'));
 
 export type TenantPlan = z.infer<typeof TenantPlanSchema>;
 
 /**
  * Available deployment regions.
  */
-export const TenantRegionSchema = z.enum([
+export const TenantRegionSchema = lazySchema(() => z.enum([
   'us-east',     // US East (Virginia)
   'us-west',     // US West (Oregon)
   'eu-west',     // EU West (Ireland)
   'eu-central',  // EU Central (Frankfurt)
   'ap-southeast',// Asia Pacific (Singapore)
   'ap-northeast',// Asia Pacific (Tokyo)
-]).describe('Available deployment region');
+]).describe('Available deployment region'));
 
 export type TenantRegion = z.infer<typeof TenantRegionSchema>;
 
@@ -66,7 +67,7 @@ export type TenantRegion = z.infer<typeof TenantRegionSchema>;
  * Individual provisioning step status.
  * Tracks the progress of each step in the provisioning pipeline.
  */
-export const ProvisioningStepSchema = z.object({
+export const ProvisioningStepSchema = lazySchema(() => z.object({
   /** Step identifier */
   name: z.string().min(1).describe('Step name (e.g., create_database, sync_schema)'),
 
@@ -84,7 +85,7 @@ export const ProvisioningStepSchema = z.object({
 
   /** Error message if the step failed */
   error: z.string().optional().describe('Error message on failure'),
-}).describe('Individual provisioning step status');
+}).describe('Individual provisioning step status'));
 
 export type ProvisioningStep = z.infer<typeof ProvisioningStepSchema>;
 
@@ -96,7 +97,7 @@ export type ProvisioningStep = z.infer<typeof ProvisioningStepSchema>;
  * Tenant Provisioning Request.
  * Input for creating a new tenant with its isolated database.
  */
-export const TenantProvisioningRequestSchema = z.object({
+export const TenantProvisioningRequestSchema = lazySchema(() => z.object({
   /** Organization ID that owns this tenant */
   orgId: z.string().min(1).describe('Organization ID'),
 
@@ -114,7 +115,7 @@ export const TenantProvisioningRequestSchema = z.object({
 
   /** Optional metadata to attach to the tenant */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional metadata'),
-}).describe('Tenant provisioning request');
+}).describe('Tenant provisioning request'));
 
 export type TenantProvisioningRequest = z.infer<typeof TenantProvisioningRequestSchema>;
 
@@ -122,7 +123,7 @@ export type TenantProvisioningRequest = z.infer<typeof TenantProvisioningRequest
  * Tenant Provisioning Result.
  * Output after provisioning completes (or fails).
  */
-export const TenantProvisioningResultSchema = z.object({
+export const TenantProvisioningResultSchema = lazySchema(() => z.object({
   /** Unique tenant identifier */
   tenantId: z.string().min(1).describe('Provisioned tenant ID'),
 
@@ -149,6 +150,6 @@ export const TenantProvisioningResultSchema = z.object({
 
   /** Error message if provisioning failed */
   error: z.string().optional().describe('Error message on failure'),
-}).describe('Tenant provisioning result');
+}).describe('Tenant provisioning result'));
 
 export type TenantProvisioningResult = z.infer<typeof TenantProvisioningResultSchema>;

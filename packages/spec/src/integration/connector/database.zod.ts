@@ -17,7 +17,8 @@ import {
 /**
  * Database Provider Types
  */
-export const DatabaseProviderSchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const DatabaseProviderSchema = lazySchema(() => z.enum([
   'postgresql',
   'mysql',
   'mariadb',
@@ -30,14 +31,14 @@ export const DatabaseProviderSchema = z.enum([
   'bigquery',
   'redshift',
   'custom',
-]).describe('Database provider type');
+]).describe('Database provider type'));
 
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
 
 /**
  * Database Connection Pool Configuration
  */
-export const DatabasePoolConfigSchema = z.object({
+export const DatabasePoolConfigSchema = lazySchema(() => z.object({
   min: z.number().min(0).default(2).describe('Minimum connections in pool'),
   max: z.number().min(1).default(10).describe('Maximum connections in pool'),
   idleTimeoutMs: z.number().min(1000).default(30000).describe('Idle connection timeout in ms'),
@@ -45,27 +46,27 @@ export const DatabasePoolConfigSchema = z.object({
   acquireTimeoutMs: z.number().min(1000).default(30000).describe('Connection acquisition timeout in ms'),
   evictionRunIntervalMs: z.number().min(1000).default(30000).describe('Connection eviction check interval in ms'),
   testOnBorrow: z.boolean().default(true).describe('Test connection before use'),
-});
+}));
 
 export type DatabasePoolConfig = z.infer<typeof DatabasePoolConfigSchema>;
 
 /**
  * SSL/TLS Configuration
  */
-export const SslConfigSchema = z.object({
+export const SslConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable SSL/TLS'),
   rejectUnauthorized: z.boolean().default(true).describe('Reject unauthorized certificates'),
   ca: z.string().optional().describe('Certificate Authority certificate'),
   cert: z.string().optional().describe('Client certificate'),
   key: z.string().optional().describe('Client private key'),
-});
+}));
 
 export type SslConfig = z.infer<typeof SslConfigSchema>;
 
 /**
  * Change Data Capture (CDC) Configuration
  */
-export const CdcConfigSchema = z.object({
+export const CdcConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable CDC'),
   
   method: z.enum([
@@ -84,14 +85,14 @@ export const CdcConfigSchema = z.object({
   batchSize: z.number().min(1).max(10000).default(1000).describe('CDC batch size'),
   
   pollIntervalMs: z.number().min(100).default(1000).describe('CDC polling interval in ms'),
-});
+}));
 
 export type CdcConfig = z.infer<typeof CdcConfigSchema>;
 
 /**
  * Database Table Configuration
  */
-export const DatabaseTableSchema = z.object({
+export const DatabaseTableSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Table name in ObjectStack (snake_case)'),
   label: z.string().describe('Display label'),
   schema: z.string().optional().describe('Database schema name'),
@@ -100,14 +101,14 @@ export const DatabaseTableSchema = z.object({
   enabled: z.boolean().default(true).describe('Enable sync for this table'),
   fieldMappings: z.array(FieldMappingSchema).optional().describe('Table-specific field mappings'),
   whereClause: z.string().optional().describe('SQL WHERE clause for filtering'),
-});
+}));
 
 export type DatabaseTable = z.infer<typeof DatabaseTableSchema>;
 
 /**
  * Database Connector Configuration Schema
  */
-export const DatabaseConnectorSchema = ConnectorSchema.extend({
+export const DatabaseConnectorSchema = lazySchema(() => ConnectorSchema.extend({
   type: z.literal('database'),
   
   /**
@@ -168,7 +169,7 @@ export const DatabaseConnectorSchema = ConnectorSchema.extend({
    * Enable query logging
    */
   enableQueryLogging: z.boolean().optional().default(false).describe('Enable SQL query logging'),
-});
+}));
 
 export type DatabaseConnector = z.infer<typeof DatabaseConnectorSchema>;
 

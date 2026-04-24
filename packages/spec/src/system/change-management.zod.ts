@@ -9,31 +9,32 @@ import { DataClassificationSchema } from './security-context.zod';
  * Classification of change requests based on risk and approval requirements.
  * Follows ITIL change management best practices.
  */
-export const ChangeTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ChangeTypeSchema = lazySchema(() => z.enum([
   'standard',      // Pre-approved, low-risk changes
   'normal',        // Requires standard approval process
   'emergency',     // Fast-track approval for critical issues
   'major',         // Requires CAB (Change Advisory Board) approval
-]);
+]));
 
 /**
  * Change Priority Enum
  * 
  * Priority level for change request processing.
  */
-export const ChangePrioritySchema = z.enum([
+export const ChangePrioritySchema = lazySchema(() => z.enum([
   'critical',
   'high',
   'medium',
   'low',
-]);
+]));
 
 /**
  * Change Status Enum
  * 
  * Current status of a change request in its lifecycle.
  */
-export const ChangeStatusSchema = z.enum([
+export const ChangeStatusSchema = lazySchema(() => z.enum([
   'draft',
   'submitted',
   'in-review',
@@ -44,7 +45,7 @@ export const ChangeStatusSchema = z.enum([
   'failed',
   'rolled-back',
   'cancelled',
-]);
+]));
 
 /**
  * Change Impact Schema
@@ -65,7 +66,7 @@ export const ChangeStatusSchema = z.enum([
  * }
  * ```
  */
-export const ChangeImpactSchema = z.object({
+export const ChangeImpactSchema = lazySchema(() => z.object({
   /**
    * Overall impact level of the change
    */
@@ -95,7 +96,7 @@ export const ChangeImpactSchema = z.object({
      */
     durationMinutes: z.number().optional().describe('Downtime duration'),
   }).optional().describe('Downtime information'),
-});
+}));
 
 /**
  * Rollback Plan Schema
@@ -123,7 +124,7 @@ export const ChangeImpactSchema = z.object({
  * }
  * ```
  */
-export const RollbackPlanSchema = z.object({
+export const RollbackPlanSchema = lazySchema(() => z.object({
   /**
    * High-level description of the rollback approach
    */
@@ -153,7 +154,7 @@ export const RollbackPlanSchema = z.object({
    * Testing procedure to verify successful rollback
    */
   testProcedure: z.string().optional().describe('Test procedure'),
-});
+}));
 
 /**
  * Change Request Schema
@@ -209,7 +210,7 @@ export const RollbackPlanSchema = z.object({
  * }
  * ```
  */
-export const ChangeRequestSchema = z.object({
+export const ChangeRequestSchema = lazySchema(() => z.object({
   /**
    * Unique change request identifier
    */
@@ -415,7 +416,7 @@ export const ChangeRequestSchema = z.object({
    * Custom metadata key-value pairs for extensibility
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata key-value pairs for extensibility'),
-});
+}));
 
 // Type exports
 export type ChangeRequest = z.infer<typeof ChangeRequestSchema>;

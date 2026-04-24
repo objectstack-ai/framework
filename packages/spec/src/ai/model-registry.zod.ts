@@ -12,7 +12,8 @@ import { z } from 'zod';
 /**
  * Model Provider Type
  */
-export const ModelProviderSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ModelProviderSchema = lazySchema(() => z.enum([
   'openai',
   'azure_openai',
   'anthropic',
@@ -21,12 +22,12 @@ export const ModelProviderSchema = z.enum([
   'huggingface',
   'local',
   'custom',
-]);
+]));
 
 /**
  * Model Capability
  */
-export const ModelCapabilitySchema = z.object({
+export const ModelCapabilitySchema = lazySchema(() => z.object({
   textGeneration: z.boolean().optional().default(true).describe('Supports text generation'),
   textEmbedding: z.boolean().optional().default(false).describe('Supports text embedding'),
   imageGeneration: z.boolean().optional().default(false).describe('Supports image generation'),
@@ -34,12 +35,12 @@ export const ModelCapabilitySchema = z.object({
   functionCalling: z.boolean().optional().default(false).describe('Supports function calling'),
   codeGeneration: z.boolean().optional().default(false).describe('Supports code generation'),
   reasoning: z.boolean().optional().default(false).describe('Supports advanced reasoning'),
-});
+}));
 
 /**
  * Model Limits
  */
-export const ModelLimitsSchema = z.object({
+export const ModelLimitsSchema = lazySchema(() => z.object({
   maxTokens: z.number().int().positive().describe('Maximum tokens per request'),
   contextWindow: z.number().int().positive().describe('Context window size'),
   maxOutputTokens: z.number().int().positive().optional().describe('Maximum output tokens'),
@@ -47,22 +48,22 @@ export const ModelLimitsSchema = z.object({
     requestsPerMinute: z.number().int().positive().optional(),
     tokensPerMinute: z.number().int().positive().optional(),
   }).optional(),
-});
+}));
 
 /**
  * Model Pricing
  */
-export const ModelPricingSchema = z.object({
+export const ModelPricingSchema = lazySchema(() => z.object({
   currency: z.string().optional().default('USD'),
   inputCostPer1kTokens: z.number().optional().describe('Cost per 1K input tokens'),
   outputCostPer1kTokens: z.number().optional().describe('Cost per 1K output tokens'),
   embeddingCostPer1kTokens: z.number().optional().describe('Cost per 1K embedding tokens'),
-});
+}));
 
 /**
  * Model Configuration
  */
-export const ModelConfigSchema = z.object({
+export const ModelConfigSchema = lazySchema(() => z.object({
   /** Identity */
   id: z.string().describe('Unique model identifier'),
   name: z.string().describe('Model display name'),
@@ -87,12 +88,12 @@ export const ModelConfigSchema = z.object({
   tags: z.array(z.string()).optional().describe('Tags for categorization'),
   deprecated: z.boolean().optional().default(false),
   recommendedFor: z.array(z.string()).optional().describe('Use case recommendations'),
-});
+}));
 
 /**
  * Prompt Template Variable
  */
-export const PromptVariableSchema = z.object({
+export const PromptVariableSchema = lazySchema(() => z.object({
   name: z.string().describe('Variable name (e.g., "user_name", "context")'),
   type: z.enum(['string', 'number', 'boolean', 'object', 'array']).default('string'),
   required: z.boolean().default(false),
@@ -104,12 +105,12 @@ export const PromptVariableSchema = z.object({
     pattern: z.string().optional(),
     enum: z.array(z.unknown()).optional(),
   }).optional(),
-});
+}));
 
 /**
  * Prompt Template
  */
-export const PromptTemplateSchema = z.object({
+export const PromptTemplateSchema = lazySchema(() => z.object({
   /** Identity */
   id: z.string().describe('Unique template identifier'),
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Template name (snake_case)'),
@@ -141,12 +142,12 @@ export const PromptTemplateSchema = z.object({
     input: z.record(z.string(), z.unknown()).describe('Example variable values'),
     output: z.string().describe('Expected output'),
   })).optional(),
-});
+}));
 
 /**
  * Model Registry Entry
  */
-export const ModelRegistryEntrySchema = z.object({
+export const ModelRegistryEntrySchema = lazySchema(() => z.object({
   model: ModelConfigSchema,
   status: z.enum(['active', 'deprecated', 'experimental', 'disabled']).default('active'),
   priority: z.number().int().default(0).describe('Priority for model selection'),
@@ -157,30 +158,30 @@ export const ModelRegistryEntrySchema = z.object({
     lastChecked: z.string().optional().describe('ISO timestamp'),
     status: z.enum(['healthy', 'unhealthy', 'unknown']).default('unknown'),
   }).optional(),
-});
+}));
 
 /**
  * Model Registry
  */
-export const ModelRegistrySchema = z.object({
+export const ModelRegistrySchema = lazySchema(() => z.object({
   name: z.string().describe('Registry name'),
   models: z.record(z.string(), ModelRegistryEntrySchema).describe('Model entries by ID'),
   promptTemplates: z.record(z.string(), PromptTemplateSchema).optional().describe('Prompt templates by name'),
   defaultModel: z.string().optional().describe('Default model ID'),
   enableAutoFallback: z.boolean().default(true).describe('Auto-fallback on errors'),
-});
+}));
 
 /**
  * Model Selection Criteria
  */
-export const ModelSelectionCriteriaSchema = z.object({
+export const ModelSelectionCriteriaSchema = lazySchema(() => z.object({
   capabilities: z.array(z.string()).optional().describe('Required capabilities'),
   maxCostPer1kTokens: z.number().optional().describe('Maximum acceptable cost'),
   minContextWindow: z.number().optional().describe('Minimum context window size'),
   provider: ModelProviderSchema.optional(),
   tags: z.array(z.string()).optional(),
   excludeDeprecated: z.boolean().default(true),
-});
+}));
 
 // Type exports
 export type ModelProvider = z.infer<typeof ModelProviderSchema>;

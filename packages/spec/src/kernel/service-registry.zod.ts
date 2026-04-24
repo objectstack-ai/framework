@@ -24,6 +24,7 @@ import { z } from 'zod';
  * Service Scope Type Enum
  * Different service scoping strategies
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ServiceScopeType = z.enum([
   'singleton',    // Single instance shared across the application
   'transient',    // New instance created each time
@@ -44,7 +45,7 @@ export type ServiceScopeType = z.infer<typeof ServiceScopeType>;
  *   "registeredAt": 1706659200000
  * }
  */
-export const ServiceMetadataSchema = z.object({
+export const ServiceMetadataSchema = lazySchema(() => z.object({
   /**
    * Service name (unique identifier)
    */
@@ -72,7 +73,7 @@ export const ServiceMetadataSchema = z.object({
    */
   metadata: z.record(z.string(), z.unknown()).optional()
     .describe('Additional service-specific metadata'),
-});
+}));
 
 export type ServiceMetadata = z.infer<typeof ServiceMetadataSchema>;
 
@@ -92,7 +93,7 @@ export type ServiceMetadata = z.infer<typeof ServiceMetadataSchema>;
  *   "scopeTypes": ["singleton", "transient", "request", "session"]
  * }
  */
-export const ServiceRegistryConfigSchema = z.object({
+export const ServiceRegistryConfigSchema = lazySchema(() => z.object({
   /**
    * Strict mode: throw errors on invalid operations
    * @default true
@@ -126,7 +127,7 @@ export const ServiceRegistryConfigSchema = z.object({
    */
   maxServices: z.number().int().min(1).optional()
     .describe('Maximum number of services that can be registered'),
-});
+}));
 
 export type ServiceRegistryConfig = z.infer<typeof ServiceRegistryConfigSchema>;
 export type ServiceRegistryConfigInput = z.input<typeof ServiceRegistryConfigSchema>;
@@ -146,7 +147,7 @@ export type ServiceRegistryConfigInput = z.input<typeof ServiceRegistryConfigSch
  *   "factoryType": "sync"
  * }
  */
-export const ServiceFactoryRegistrationSchema = z.object({
+export const ServiceFactoryRegistrationSchema = lazySchema(() => z.object({
   /**
    * Service name (unique identifier)
    */
@@ -169,7 +170,7 @@ export const ServiceFactoryRegistrationSchema = z.object({
    */
   singleton: z.boolean().optional().default(true)
     .describe('Whether to cache the factory result (singleton pattern)'),
-});
+}));
 
 export type ServiceFactoryRegistration = z.infer<typeof ServiceFactoryRegistrationSchema>;
 
@@ -191,7 +192,7 @@ export type ServiceFactoryRegistration = z.infer<typeof ServiceFactoryRegistrati
  *   }
  * }
  */
-export const ScopeConfigSchema = z.object({
+export const ScopeConfigSchema = lazySchema(() => z.object({
   /**
    * Type of scope (request, session, transaction, etc.)
    */
@@ -207,7 +208,7 @@ export const ScopeConfigSchema = z.object({
    */
   metadata: z.record(z.string(), z.unknown()).optional()
     .describe('Scope-specific context metadata'),
-});
+}));
 
 export type ScopeConfig = z.infer<typeof ScopeConfigSchema>;
 
@@ -226,7 +227,7 @@ export type ScopeConfig = z.infer<typeof ScopeConfigSchema>;
  *   }
  * }
  */
-export const ScopeInfoSchema = z.object({
+export const ScopeInfoSchema = lazySchema(() => z.object({
   /**
    * Scope identifier
    */
@@ -253,6 +254,6 @@ export const ScopeInfoSchema = z.object({
    */
   metadata: z.record(z.string(), z.unknown()).optional()
     .describe('Scope-specific context metadata'),
-});
+}));
 
 export type ScopeInfo = z.infer<typeof ScopeInfoSchema>;

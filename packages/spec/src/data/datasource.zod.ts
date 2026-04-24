@@ -7,6 +7,7 @@ import { z } from 'zod';
  * Driver Identifier
  * Can be a built-in driver or a plugin-contributed driver (e.g., "com.vendor.snowflake").
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const DriverType = z.string().describe('Underlying driver identifier');
 
 /**
@@ -14,7 +15,7 @@ export const DriverType = z.string().describe('Underlying driver identifier');
  * Metadata describing a Database Driver.
  * Plugins use this to register new connectivity options.
  */
-export const DriverDefinitionSchema = z.object({
+export const DriverDefinitionSchema = lazySchema(() => z.object({
   id: z.string().describe('Unique driver identifier (e.g. "postgres")'),
   label: z.string().describe('Display label (e.g. "PostgreSQL")'),
   description: z.string().optional(),
@@ -32,7 +33,7 @@ export const DriverDefinitionSchema = z.object({
    * What this driver supports out-of-the-box.
    */
   capabilities: z.lazy(() => DatasourceCapabilities).optional(),
-});
+}));
 
 /**
  * Datasource Capabilities Schema
@@ -91,7 +92,7 @@ export const DatasourceCapabilities = z.object({
  * Datasource Schema
  * Represents a connection to an external data store.
  */
-export const DatasourceSchema = z.object({
+export const DatasourceSchema = lazySchema(() => z.object({
   /** Machine Name */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Unique datasource identifier'),
   
@@ -161,7 +162,7 @@ export const DatasourceSchema = z.object({
   
   /** Is enabled? */
   active: z.boolean().default(true).describe('Is datasource enabled'),
-});
+}));
 
 export type Datasource = z.infer<typeof DatasourceSchema>;
 export type DatasourceCapabilitiesType = z.infer<typeof DatasourceCapabilities>;

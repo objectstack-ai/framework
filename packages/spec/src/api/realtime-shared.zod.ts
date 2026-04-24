@@ -35,6 +35,7 @@ import { z } from 'zod';
  * const status = PresenceStatus.parse('online'); // ✅
  * ```
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const PresenceStatus = z.enum([
   'online',   // User is actively connected
   'away',     // User is idle/inactive
@@ -82,7 +83,7 @@ export type RealtimeRecordAction = z.infer<typeof RealtimeRecordAction>;
  * });
  * ```
  */
-export const BasePresenceSchema = z.object({
+export const BasePresenceSchema = lazySchema(() => z.object({
   /** User identifier */
   userId: z.string().describe('User identifier'),
 
@@ -94,6 +95,6 @@ export const BasePresenceSchema = z.object({
 
   /** Custom metadata */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom presence data (e.g., current page, custom status)'),
-});
+}));
 
 export type BasePresence = z.infer<typeof BasePresenceSchema>;

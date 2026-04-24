@@ -18,7 +18,8 @@ import { PluginHealthStatusSchema } from '../kernel/plugin-lifecycle-advanced.zo
  * Anomaly Detection Configuration
  * Configuration for detecting anomalies in plugin behavior
  */
-export const AnomalyDetectionConfigSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const AnomalyDetectionConfigSchema = lazySchema(() => z.object({
   /**
    * Enable anomaly detection
    */
@@ -70,13 +71,13 @@ export const AnomalyDetectionConfigSchema = z.object({
    * Alert on detection
    */
   alertOnDetection: z.boolean().default(true),
-});
+}));
 
 /**
  * Self-Healing Action
  * Defines an automated recovery action
  */
-export const SelfHealingActionSchema = z.object({
+export const SelfHealingActionSchema = lazySchema(() => z.object({
   /**
    * Action identifier
    */
@@ -151,13 +152,13 @@ export const SelfHealingActionSchema = z.object({
    */
   priority: z.number().int().min(1).default(5)
     .describe('Action priority (lower number = higher priority)'),
-});
+}));
 
 /**
  * Self-Healing Configuration
  * Complete configuration for self-healing capabilities
  */
-export const SelfHealingConfigSchema = z.object({
+export const SelfHealingConfigSchema = lazySchema(() => z.object({
   /**
    * Enable self-healing
    */
@@ -198,13 +199,13 @@ export const SelfHealingConfigSchema = z.object({
     feedbackLoop: z.boolean().default(true)
       .describe('Adjust strategy based on outcomes'),
   }).optional(),
-});
+}));
 
 /**
  * Auto-Scaling Policy
  * Defines how to automatically scale plugin resources
  */
-export const AutoScalingPolicySchema = z.object({
+export const AutoScalingPolicySchema = lazySchema(() => z.object({
   /**
    * Enable auto-scaling
    */
@@ -335,13 +336,13 @@ export const AutoScalingPolicySchema = z.object({
     confidence: z.number().min(0).max(100).default(80)
       .describe('Minimum confidence for prediction-based scaling'),
   }).optional(),
-});
+}));
 
 /**
  * Root Cause Analysis Request
  * Request for AI to analyze root cause of issues
  */
-export const RootCauseAnalysisRequestSchema = z.object({
+export const RootCauseAnalysisRequestSchema = lazySchema(() => z.object({
   /**
    * Incident identifier
    */
@@ -389,13 +390,13 @@ export const RootCauseAnalysisRequestSchema = z.object({
    * Context information
    */
   context: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 /**
  * Root Cause Analysis Result
  * Result of root cause analysis
  */
-export const RootCauseAnalysisResultSchema = z.object({
+export const RootCauseAnalysisResultSchema = lazySchema(() => z.object({
   /**
    * Analysis identifier
    */
@@ -505,13 +506,13 @@ export const RootCauseAnalysisResultSchema = z.object({
    * Analysis timestamp
    */
   timestamp: z.string().datetime(),
-});
+}));
 
 /**
  * Performance Optimization Suggestion
  * AI-generated performance optimization suggestion
  */
-export const PerformanceOptimizationSchema = z.object({
+export const PerformanceOptimizationSchema = lazySchema(() => z.object({
   /**
    * Optimization identifier
    */
@@ -589,13 +590,13 @@ export const PerformanceOptimizationSchema = z.object({
    * Priority
    */
   priority: z.enum(['low', 'medium', 'high', 'critical']),
-});
+}));
 
 /**
  * AIOps Agent Configuration
  * Configuration for AI operations agent
  */
-export const AIOpsAgentConfigSchema = z.object({
+export const AIOpsAgentConfigSchema = lazySchema(() => z.object({
   /**
    * Agent identifier
    */
@@ -668,7 +669,7 @@ export const AIOpsAgentConfigSchema = z.object({
       config: z.record(z.string(), z.unknown()),
     })).optional(),
   }).optional(),
-});
+}));
 
 // Export types
 export type AnomalyDetectionConfig = z.infer<typeof AnomalyDetectionConfigSchema>;

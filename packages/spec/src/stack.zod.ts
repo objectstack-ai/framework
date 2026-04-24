@@ -69,7 +69,8 @@ import { ConnectorSchema } from './integration/connector.zod';
  * ]
  * ```
  */
-export const DatasourceMappingRuleSchema = z.object({
+import { lazySchema } from './shared/lazy-schema';
+export const DatasourceMappingRuleSchema = lazySchema(() => z.object({
   /**
    * Match by namespace (e.g., 'crm', 'auth', 'todo')
    * Objects with this namespace will use the specified datasource.
@@ -105,7 +106,7 @@ export const DatasourceMappingRuleSchema = z.object({
    * If not specified, rules are evaluated in array order.
    */
   priority: z.number().optional().describe('Rule priority (lower = higher priority)'),
-}).describe('Datasource routing rule');
+}).describe('Datasource routing rule'));
 
 export type DatasourceMappingRule = z.infer<typeof DatasourceMappingRuleSchema>;
 
@@ -130,7 +131,7 @@ export type DatasourceMappingRule = z.infer<typeof DatasourceMappingRuleSchema>;
  * - AI Agents generate this to create apps.
  * - CI Tools deploy this to the server.
  */
-export const ObjectStackDefinitionSchema = z.object({
+export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
   /** System Configuration */
   manifest: ManifestSchema.optional().describe('Project Package Configuration'),
   datasources: z.array(DatasourceSchema).optional().describe('External Data Connections'),
@@ -285,7 +286,7 @@ export const ObjectStackDefinitionSchema = z.object({
    * Useful for loading dev-tools, mock data generators, or referencing local sibling packages for debugging.
    */
   devPlugins: z.array(z.union([ManifestSchema, z.string()])).optional().describe('Plugins to load only in development (CLI dev command)'),
-});
+}));
 
 export type ObjectStackDefinition = z.infer<typeof ObjectStackDefinitionSchema>;
 
@@ -318,7 +319,7 @@ export type ObjectStackDefinitionInput =
   };
 
 // Alias for backward compatibility
-export const ObjectStackSchema = ObjectStackDefinitionSchema;
+export const ObjectStackSchema = lazySchema(() => ObjectStackDefinitionSchema);
 export type ObjectStack = ObjectStackDefinition;
 
 /**
@@ -659,13 +660,13 @@ export function defineStack(
  * - `'override'` — Last stack wins; later definitions replace earlier ones.
  * - `'merge'`    — Shallow-merge items with the same name (later fields win).
  */
-export const ConflictStrategySchema = z.enum(['error', 'override', 'merge']);
+export const ConflictStrategySchema = lazySchema(() => z.enum(['error', 'override', 'merge']));
 export type ConflictStrategy = z.infer<typeof ConflictStrategySchema>;
 
 /**
  * Options for {@link composeStacks}.
  */
-export const ComposeStacksOptionsSchema = z.object({
+export const ComposeStacksOptionsSchema = lazySchema(() => z.object({
   /**
    * How to handle same-name objects across stacks.
    * @default 'error'
@@ -686,7 +687,7 @@ export const ComposeStacksOptionsSchema = z.object({
    * When set, object names from this composition are prefixed for isolation.
    */
   namespace: z.string().optional(),
-});
+}));
 
 export type ComposeStacksOptions = z.input<typeof ComposeStacksOptionsSchema>;
 
@@ -895,7 +896,7 @@ export function composeStacks(
  * - Database driver support
  * - AI/ML data features
  */
-export const ObjectQLCapabilitiesSchema = z.object({
+export const ObjectQLCapabilitiesSchema = lazySchema(() => z.object({
   /** Query Capabilities */
   queryFilters: z.boolean().default(true).describe('Supports WHERE clause filtering'),
   queryAggregations: z.boolean().default(true).describe('Supports GROUP BY and aggregation functions'),
@@ -928,7 +929,7 @@ export const ObjectQLCapabilitiesSchema = z.object({
   
   /** Driver Support */
   supportedDrivers: z.array(z.string()).optional().describe('Available database drivers (e.g., postgresql, mongodb, excel)'),
-});
+}));
 
 /**
  * ObjectUI Capabilities Schema
@@ -939,7 +940,7 @@ export const ObjectQLCapabilitiesSchema = z.object({
  * - Theming and customization
  * - UI actions and interactions
  */
-export const ObjectUICapabilitiesSchema = z.object({
+export const ObjectUICapabilitiesSchema = lazySchema(() => z.object({
   /** View Types */
   listView: z.boolean().default(true).describe('Supports list/grid views'),
   formView: z.boolean().default(true).describe('Supports form views'),
@@ -964,7 +965,7 @@ export const ObjectUICapabilitiesSchema = z.object({
   /** Responsive & Accessibility */
   mobileOptimized: z.boolean().default(false).describe('UI optimized for mobile devices'),
   accessibility: z.boolean().default(false).describe('WCAG accessibility support'),
-});
+}));
 
 /**
  * ObjectOS Capabilities Schema
@@ -975,7 +976,7 @@ export const ObjectUICapabilitiesSchema = z.object({
  * - Security and multi-tenancy
  * - System services (events, jobs, audit)
  */
-export const ObjectOSCapabilitiesSchema = z.object({
+export const ObjectOSCapabilitiesSchema = lazySchema(() => z.object({
   /** System Identity */
   version: z.string().describe('ObjectOS Kernel Version'),
   environment: z.enum(['development', 'test', 'staging', 'production']),
@@ -1042,7 +1043,7 @@ export const ObjectOSCapabilitiesSchema = z.object({
     apiRateLimit: z.number().optional(),
     fileUploadSizeLimit: z.number().optional().describe('Max file size in bytes'),
   }).optional()
-});
+}));
 
 /**
  * Unified ObjectStack Capabilities Schema
@@ -1050,7 +1051,7 @@ export const ObjectOSCapabilitiesSchema = z.object({
  * Complete capability descriptor for an ObjectStack instance.
  * Organized by architectural layer for clarity and maintainability.
  */
-export const ObjectStackCapabilitiesSchema = z.object({
+export const ObjectStackCapabilitiesSchema = lazySchema(() => z.object({
   /** Data Layer Capabilities (ObjectQL) */
   data: ObjectQLCapabilitiesSchema.describe('Data Layer capabilities'),
   
@@ -1059,7 +1060,7 @@ export const ObjectStackCapabilitiesSchema = z.object({
   
   /** System/Runtime Layer Capabilities (ObjectOS) */
   system: ObjectOSCapabilitiesSchema.describe('System/Runtime Layer capabilities'),
-});
+}));
 
 export type ObjectQLCapabilities = z.infer<typeof ObjectQLCapabilitiesSchema>;
 export type ObjectUICapabilities = z.infer<typeof ObjectUICapabilitiesSchema>;

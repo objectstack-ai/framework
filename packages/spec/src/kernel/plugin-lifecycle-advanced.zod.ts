@@ -19,20 +19,21 @@ import { z } from 'zod';
  * Plugin Health Status
  * Represents the current operational state of a plugin
  */
-export const PluginHealthStatusSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const PluginHealthStatusSchema = lazySchema(() => z.enum([
   'healthy',      // Plugin is operating normally
   'degraded',     // Plugin is operational but with reduced functionality
   'unhealthy',    // Plugin has critical issues but still running
   'failed',       // Plugin has failed and is not operational
   'recovering',   // Plugin is in recovery process
   'unknown',      // Health status cannot be determined
-]).describe('Current health status of the plugin');
+]).describe('Current health status of the plugin'));
 
 /**
  * Plugin Health Check Configuration
  * Defines how to check plugin health
  */
-export const PluginHealthCheckSchema = z.object({
+export const PluginHealthCheckSchema = lazySchema(() => z.object({
   /**
    * Health check interval in milliseconds
    */
@@ -80,13 +81,13 @@ export const PluginHealthCheckSchema = z.object({
    */
   restartBackoff: z.enum(['fixed', 'linear', 'exponential']).default('exponential')
     .describe('Backoff strategy for restart delays'),
-});
+}));
 
 /**
  * Plugin Health Report
  * Detailed health information from a plugin
  */
-export const PluginHealthReportSchema = z.object({
+export const PluginHealthReportSchema = lazySchema(() => z.object({
   /**
    * Overall health status
    */
@@ -132,13 +133,13 @@ export const PluginHealthReportSchema = z.object({
     status: PluginHealthStatusSchema,
     message: z.string().optional(),
   })).optional(),
-});
+}));
 
 /**
  * Distributed State Configuration
  * Configuration for distributed state management in cluster environments
  */
-export const DistributedStateConfigSchema = z.object({
+export const DistributedStateConfigSchema = lazySchema(() => z.object({
   /**
    * Distributed cache provider
    */
@@ -186,13 +187,13 @@ export const DistributedStateConfigSchema = z.object({
    */
   customConfig: z.record(z.string(), z.unknown()).optional()
     .describe('Provider-specific configuration'),
-});
+}));
 
 /**
  * Hot Reload Configuration
  * Controls how plugins handle live updates
  */
-export const HotReloadConfigSchema = z.object({
+export const HotReloadConfigSchema = lazySchema(() => z.object({
   /**
    * Enable hot reload capability
    */
@@ -245,13 +246,13 @@ export const HotReloadConfigSchema = z.object({
    */
   afterReload: z.array(z.string()).optional()
     .describe('Hook names to call after reload'),
-});
+}));
 
 /**
  * Graceful Degradation Configuration
  * Defines how plugin degrades when dependencies fail
  */
-export const GracefulDegradationSchema = z.object({
+export const GracefulDegradationSchema = lazySchema(() => z.object({
   /**
    * Enable graceful degradation
    */
@@ -299,13 +300,13 @@ export const GracefulDegradationSchema = z.object({
     maxAttempts: z.number().int().min(0).default(5)
       .describe('Maximum recovery attempts before giving up'),
   }).optional(),
-});
+}));
 
 /**
  * Plugin Update Strategy
  * Defines how plugin handles version updates
  */
-export const PluginUpdateStrategySchema = z.object({
+export const PluginUpdateStrategySchema = lazySchema(() => z.object({
   /**
    * Update mode
    */
@@ -386,13 +387,13 @@ export const PluginUpdateStrategySchema = z.object({
      */
     testSuite: z.string().optional(),
   }).optional(),
-});
+}));
 
 /**
  * Plugin State Snapshot
  * Captures plugin state for preservation during updates/reloads
  */
-export const PluginStateSnapshotSchema = z.object({
+export const PluginStateSnapshotSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -421,13 +422,13 @@ export const PluginStateSnapshotSchema = z.object({
     compressed: z.boolean().default(false),
     encryption: z.string().optional().describe('Encryption algorithm if encrypted'),
   }).optional(),
-});
+}));
 
 /**
  * Advanced Plugin Lifecycle Configuration
  * Complete configuration for advanced lifecycle management
  */
-export const AdvancedPluginLifecycleConfigSchema = z.object({
+export const AdvancedPluginLifecycleConfigSchema = lazySchema(() => z.object({
   /**
    * Health monitoring configuration
    */
@@ -468,7 +469,7 @@ export const AdvancedPluginLifecycleConfigSchema = z.object({
     metricsInterval: z.number().int().min(1000).default(60000)
       .describe('Metrics collection interval in ms'),
   }).optional(),
-});
+}));
 
 // Export types
 export type PluginHealthStatus = z.infer<typeof PluginHealthStatusSchema>;

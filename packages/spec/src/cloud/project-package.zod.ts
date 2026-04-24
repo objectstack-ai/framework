@@ -25,7 +25,8 @@ import { z } from 'zod';
 /**
  * Lifecycle status of a package installation within a project.
  */
-export const ProjectPackageStatusSchema = z
+import { lazySchema } from '../shared/lazy-schema';
+export const ProjectPackageStatusSchema = lazySchema(() => z
   .enum([
     'installed',   // Active and running; metadata loaded into this project
     'installing',  // Install in progress (async)
@@ -33,7 +34,7 @@ export const ProjectPackageStatusSchema = z
     'disabled',    // Installed but not active — metadata not loaded
     'error',       // Install/upgrade failed; see errorMessage
   ])
-  .describe('Package installation status within a project');
+  .describe('Package installation status within a project'));
 
 export type ProjectPackageStatus = z.infer<typeof ProjectPackageStatusSchema>;
 
@@ -47,7 +48,7 @@ export type ProjectPackageStatus = z.infer<typeof ProjectPackageStatusSchema>;
  * Unique by `(project_id, package_id)` — only one version of a given
  * package may be active per project.
  */
-export const ProjectPackageInstallationSchema = z.object({
+export const ProjectPackageInstallationSchema = lazySchema(() => z.object({
   /** Unique installation record ID (UUID). */
   id: z.string().uuid().describe('Unique installation record ID'),
 
@@ -96,7 +97,7 @@ export const ProjectPackageInstallationSchema = z.object({
 
   /** Error details when `status === "error"`. */
   errorMessage: z.string().optional().describe('Error message when status is error'),
-}).describe('Package installation record in a project (sys_package_installation)');
+}).describe('Package installation record in a project (sys_package_installation)'));
 
 export type ProjectPackageInstallation = z.infer<typeof ProjectPackageInstallationSchema>;
 
@@ -107,7 +108,7 @@ export type ProjectPackageInstallation = z.infer<typeof ProjectPackageInstallati
 /**
  * Request body for `POST /cloud/projects/:projectId/packages`.
  */
-export const InstallPackageToProjectRequestSchema = z.object({
+export const InstallPackageToProjectRequestSchema = lazySchema(() => z.object({
   packageVersionId: z.string().uuid().optional()
     .describe('Exact package version UUID to install (preferred)'),
   packageManifestId: z.string().optional()
@@ -124,14 +125,14 @@ export const InstallPackageToProjectRequestSchema = z.object({
   .refine(
     data => data.packageVersionId != null || data.packageManifestId != null,
     { message: 'Either packageVersionId or packageManifestId must be provided' }
-  );
+  ));
 
 export type InstallPackageToProjectRequest = z.infer<typeof InstallPackageToProjectRequestSchema>;
 
 /**
  * Request body for upgrading a package installation.
  */
-export const UpgradeProjectPackageRequestSchema = z.object({
+export const UpgradeProjectPackageRequestSchema = lazySchema(() => z.object({
   targetPackageVersionId: z.string().uuid().optional()
     .describe('Target package version UUID (preferred)'),
   targetVersion: z.string().optional()
@@ -139,18 +140,18 @@ export const UpgradeProjectPackageRequestSchema = z.object({
   allowDraft: z.boolean().default(false)
     .describe('Allow upgrading to a draft version'),
   upgradedBy: z.string().optional().describe('User ID performing the upgrade'),
-}).describe('Upgrade a package installation to a newer version');
+}).describe('Upgrade a package installation to a newer version'));
 
 export type UpgradeProjectPackageRequest = z.infer<typeof UpgradeProjectPackageRequestSchema>;
 
 /**
  * Request body for rolling back a package installation.
  */
-export const RollbackProjectPackageRequestSchema = z.object({
+export const RollbackProjectPackageRequestSchema = lazySchema(() => z.object({
   targetPackageVersionId: z.string().uuid()
     .describe('Package version UUID to roll back to'),
   rolledBackBy: z.string().optional().describe('User ID performing the rollback'),
-}).describe('Roll back a package installation to a specific older version');
+}).describe('Roll back a package installation to a specific older version'));
 
 export type RollbackProjectPackageRequest = z.infer<typeof RollbackProjectPackageRequestSchema>;
 
@@ -161,10 +162,10 @@ export type RollbackProjectPackageRequest = z.infer<typeof RollbackProjectPackag
 /**
  * Response from `GET /cloud/projects/:projectId/packages`.
  */
-export const ListProjectPackagesResponseSchema = z.object({
+export const ListProjectPackagesResponseSchema = lazySchema(() => z.object({
   packages: z.array(ProjectPackageInstallationSchema)
     .describe('Packages installed in this project'),
   total: z.number().describe('Total count'),
-}).describe('List of packages installed in a project');
+}).describe('List of packages installed in a project'));
 
 export type ListProjectPackagesResponse = z.infer<typeof ListProjectPackagesResponseSchema>;

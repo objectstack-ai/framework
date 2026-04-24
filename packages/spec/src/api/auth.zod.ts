@@ -14,6 +14,7 @@ import { BaseResponseSchema } from './contract.zod';
 // Authentication Types
 // ==========================================
 
+import { lazySchema } from '../shared/lazy-schema';
 export const AuthProvider = z.enum([
   'local',
   'google',
@@ -23,7 +24,7 @@ export const AuthProvider = z.enum([
   'saml'
 ]);
 
-export const SessionUserSchema = z.object({
+export const SessionUserSchema = lazySchema(() => z.object({
   id: z.string().describe('User ID'),
   email: z.string().email().describe('Email address'),
   emailVerified: z.boolean().default(false).describe('Is email verified?'),
@@ -36,16 +37,16 @@ export const SessionUserSchema = z.object({
   timezone: z.string().optional().describe('Preferred timezone'),
   createdAt: z.string().datetime().optional(),
   updatedAt: z.string().datetime().optional(),
-});
+}));
 
-export const SessionSchema = z.object({
+export const SessionSchema = lazySchema(() => z.object({
   id: z.string(),
   expiresAt: z.string().datetime(),
   token: z.string().optional(),
   ipAddress: z.string().optional(),
   userAgent: z.string().optional(),
   userId: z.string(),
-});
+}));
 
 // ==========================================
 // Requests
@@ -53,41 +54,41 @@ export const SessionSchema = z.object({
 
 export const LoginType = z.enum(['email', 'username', 'phone', 'magic-link', 'social']);
 
-export const LoginRequestSchema = z.object({
+export const LoginRequestSchema = lazySchema(() => z.object({
   type: LoginType.default('email').describe('Login method'),
   email: z.string().email().optional().describe('Required for email/magic-link'),
   username: z.string().optional().describe('Required for username login'),
   password: z.string().optional().describe('Required for password login'),
   provider: z.string().optional().describe('Required for social (google, github)'),
   redirectTo: z.string().optional().describe('Redirect URL after successful login'),
-});
+}));
 
-export const RegisterRequestSchema = z.object({
+export const RegisterRequestSchema = lazySchema(() => z.object({
   email: z.string().email(),
   password: z.string(),
   name: z.string(),
   image: z.string().optional(),
-});
+}));
 
-export const RefreshTokenRequestSchema = z.object({
+export const RefreshTokenRequestSchema = lazySchema(() => z.object({
   refreshToken: z.string().describe('Refresh token'),
-});
+}));
 
 // ==========================================
 // Responses
 // ==========================================
 
-export const SessionResponseSchema = BaseResponseSchema.extend({
+export const SessionResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     session: SessionSchema.describe('Active Session Info'),
     user: SessionUserSchema.describe('Current User Details'),
     token: z.string().optional().describe('Bearer token if not using cookies'),
   }),
-});
+}));
 
-export const UserProfileResponseSchema = BaseResponseSchema.extend({
+export const UserProfileResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: SessionUserSchema,
-});
+}));
 
 export type AuthProvider = z.infer<typeof AuthProvider>;
 export type SessionUser = z.infer<typeof SessionUserSchema>;

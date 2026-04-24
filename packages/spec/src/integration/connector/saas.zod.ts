@@ -17,7 +17,8 @@ import {
 /**
  * SaaS Provider Types
  */
-export const SaasProviderSchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const SaasProviderSchema = lazySchema(() => z.enum([
   'salesforce',
   'hubspot',
   'stripe',
@@ -30,19 +31,19 @@ export const SaasProviderSchema = z.enum([
   'servicenow',
   'netsuite',
   'custom',
-]).describe('SaaS provider type');
+]).describe('SaaS provider type'));
 
 export type SaasProvider = z.infer<typeof SaasProviderSchema>;
 
 /**
  * API Version Configuration
  */
-export const ApiVersionConfigSchema = z.object({
+export const ApiVersionConfigSchema = lazySchema(() => z.object({
   version: z.string().describe('API version (e.g., "v2", "2023-10-01")'),
   isDefault: z.boolean().default(false).describe('Is this the default version'),
   deprecationDate: z.string().optional().describe('API version deprecation date (ISO 8601)'),
   sunsetDate: z.string().optional().describe('API version sunset date (ISO 8601)'),
-});
+}));
 
 export type ApiVersionConfig = z.infer<typeof ApiVersionConfigSchema>;
 
@@ -50,7 +51,7 @@ export type ApiVersionConfig = z.infer<typeof ApiVersionConfigSchema>;
  * SaaS Object Type Schema
  * Represents a syncable entity in the SaaS system (e.g., Account, Contact, Deal)
  */
-export const SaasObjectTypeSchema = z.object({
+export const SaasObjectTypeSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Object type name (snake_case)'),
   label: z.string().describe('Display label'),
   apiName: z.string().describe('API name in external system'),
@@ -59,14 +60,14 @@ export const SaasObjectTypeSchema = z.object({
   supportsUpdate: z.boolean().default(true).describe('Supports record updates'),
   supportsDelete: z.boolean().default(true).describe('Supports record deletion'),
   fieldMappings: z.array(FieldMappingSchema).optional().describe('Object-specific field mappings'),
-});
+}));
 
 export type SaasObjectType = z.infer<typeof SaasObjectTypeSchema>;
 
 /**
  * SaaS Connector Configuration Schema
  */
-export const SaasConnectorSchema = ConnectorSchema.extend({
+export const SaasConnectorSchema = lazySchema(() => ConnectorSchema.extend({
   type: z.literal('saas'),
   
   /**
@@ -120,7 +121,7 @@ export const SaasConnectorSchema = ConnectorSchema.extend({
    * Custom request headers
    */
   customHeaders: z.record(z.string(), z.string()).optional().describe('Custom HTTP headers for all requests'),
-});
+}));
 
 export type SaasConnector = z.infer<typeof SaasConnectorSchema>;
 export type SaaSConnector = SaasConnector; // Alias for alternative capitalization

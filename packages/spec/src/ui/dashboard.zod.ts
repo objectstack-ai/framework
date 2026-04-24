@@ -10,7 +10,8 @@ import { ResponsiveConfigSchema, PerformanceConfigSchema } from './responsive.zo
 /**
  * Color variant for dashboard widgets (e.g., KPI cards).
  */
-export const WidgetColorVariantSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const WidgetColorVariantSchema = lazySchema(() => z.enum([
   'default',
   'blue',
   'teal',
@@ -19,24 +20,24 @@ export const WidgetColorVariantSchema = z.enum([
   'success',
   'warning',
   'danger',
-]).describe('Widget color variant');
+]).describe('Widget color variant'));
 
 /**
  * Action type for widget action buttons.
  */
-export const WidgetActionTypeSchema = z.enum([
+export const WidgetActionTypeSchema = lazySchema(() => z.enum([
   'script',
   'url',
   'modal',
   'flow',
   'api',
-]).describe('Widget action type');
+]).describe('Widget action type'));
 
 /**
  * Dashboard Header Action Schema
  * An action button displayed in the dashboard header area.
  */
-export const DashboardHeaderActionSchema = z.object({
+export const DashboardHeaderActionSchema = lazySchema(() => z.object({
   /** Action label */
   label: I18nLabelSchema.describe('Action button label'),
 
@@ -48,13 +49,13 @@ export const DashboardHeaderActionSchema = z.object({
 
   /** Icon identifier */
   icon: z.string().optional().describe('Icon identifier for the action button'),
-}).describe('Dashboard header action');
+}).describe('Dashboard header action'));
 
 /**
  * Dashboard Header Schema
  * Structured header configuration for the dashboard.
  */
-export const DashboardHeaderSchema = z.object({
+export const DashboardHeaderSchema = lazySchema(() => z.object({
   /** Whether to show the dashboard title in the header */
   showTitle: z.boolean().default(true).describe('Show dashboard title in header'),
 
@@ -63,13 +64,13 @@ export const DashboardHeaderSchema = z.object({
 
   /** Action buttons displayed in the header */
   actions: z.array(DashboardHeaderActionSchema).optional().describe('Header action buttons'),
-}).describe('Dashboard header configuration');
+}).describe('Dashboard header configuration'));
 
 /**
  * Widget Measure Schema
  * A single measure definition for multi-measure pivot/matrix widgets.
  */
-export const WidgetMeasureSchema = z.object({
+export const WidgetMeasureSchema = lazySchema(() => z.object({
   /** Value field to aggregate */
   valueField: z.string().describe('Field to aggregate'),
 
@@ -81,13 +82,13 @@ export const WidgetMeasureSchema = z.object({
 
   /** Number format string (e.g., "$0,0.00", "0.0%") */
   format: z.string().optional().describe('Number format string'),
-}).describe('Widget measure definition');
+}).describe('Widget measure definition'));
 
 /**
  * Dashboard Widget Schema
  * A single component on the dashboard grid.
  */
-export const DashboardWidgetSchema = z.object({
+export const DashboardWidgetSchema = lazySchema(() => z.object({
   /** Unique widget identifier (snake_case, used for targetWidgets references) */
   id: SnakeCaseIdentifierSchema.describe('Unique widget identifier (snake_case)'),
 
@@ -155,13 +156,13 @@ export const DashboardWidgetSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
 /**
  * Dynamic options binding for global filters.
  * Allows dropdown options to be fetched from an object at runtime.
  */
-export const GlobalFilterOptionsFromSchema = z.object({
+export const GlobalFilterOptionsFromSchema = lazySchema(() => z.object({
   /** Source object name to fetch options from */
   object: z.string().describe('Source object name'),
 
@@ -173,13 +174,13 @@ export const GlobalFilterOptionsFromSchema = z.object({
 
   /** Optional filter to apply when fetching options */
   filter: FilterConditionSchema.optional().describe('Filter to apply to source object'),
-}).describe('Dynamic filter options from object');
+}).describe('Dynamic filter options from object'));
 
 /**
  * Global Filter Schema
  * Defines a single global filter control for the dashboard filter bar.
  */
-export const GlobalFilterSchema = z.object({
+export const GlobalFilterSchema = lazySchema(() => z.object({
   /** Field name to filter on */
   field: z.string().describe('Field name to filter on'),
 
@@ -206,7 +207,7 @@ export const GlobalFilterSchema = z.object({
 
   /** Widget IDs to apply this filter to (when scope is widget) */
   targetWidgets: z.array(z.string()).optional().describe('Widget IDs to apply this filter to'),
-});
+}));
 
 /**
  * Dashboard Schema
@@ -237,7 +238,7 @@ export const GlobalFilterSchema = z.object({
  *   ]
  * }
  */
-export const DashboardSchema = z.object({
+export const DashboardSchema = lazySchema(() => z.object({
   /** Machine name */
   name: SnakeCaseIdentifierSchema.describe('Dashboard unique name'),
   
@@ -277,7 +278,7 @@ export const DashboardSchema = z.object({
 
   /** Performance optimization settings */
   performance: PerformanceConfigSchema.optional().describe('Performance optimization settings'),
-});
+}));
 
 export type Dashboard = z.infer<typeof DashboardSchema>;
 export type DashboardInput = z.input<typeof DashboardSchema>;

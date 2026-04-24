@@ -6,6 +6,7 @@ import { z } from 'zod';
  * Hook Lifecycle Events
  * Defines the interception points in the ObjectQL execution pipeline.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const HookEvent = z.enum([
   // Read Operations
   'beforeFind', 'afterFind',
@@ -35,7 +36,7 @@ export const HookEvent = z.enum([
  * - Side Effects (Sending emails, Syncing to external systems)
  * - Security (Filtering data based on context)
  */
-export const HookSchema = z.object({
+export const HookSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for the hook
    * Required for debugging and overriding.
@@ -120,7 +121,7 @@ export const HookSchema = z.object({
    * - log: Log error and continue
    */
   onError: z.enum(['abort', 'log']).default('abort').describe('Error handling strategy'),
-});
+}));
 
 /**
  * Hook Runtime Context
@@ -131,7 +132,7 @@ export const HookSchema = z.object({
  * - **Mutability**: `input` and `result` are mutable to allow transformation.
  * - **Encapsulation**: `session` isolates auth info; `transaction` ensures atomicity.
  */
-export const HookContextSchema = z.object({
+export const HookContextSchema = lazySchema(() => z.object({
   /** Tracing ID */
   id: z.string().optional().describe('Unique execution ID for tracing'),
 
@@ -211,7 +212,7 @@ export const HookContextSchema = z.object({
     name: z.string().optional(),
     email: z.string().optional(),
   }).optional().describe('Current user info shortcut'),
-});
+}));
 
 export type Hook = z.input<typeof HookSchema>;
 export type ResolvedHook = z.output<typeof HookSchema>;

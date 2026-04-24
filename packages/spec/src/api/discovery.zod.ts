@@ -14,6 +14,7 @@ import { HttpMethod } from '../shared/http.zod';
  * - `degraded`    – Partially working (e.g., in-memory fallback, missing persistence).
  * - `stub`        – Placeholder handler that always returns 501 Not Implemented.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ServiceStatus = z.enum([
   'available',
   'registered',
@@ -31,7 +32,7 @@ export type ServiceStatus = z.infer<typeof ServiceStatus>;
  * Service Status in Discovery Response
  * Reports per-service availability so clients can adapt their UI accordingly.
  */
-export const ServiceInfoSchema = z.object({
+export const ServiceInfoSchema = lazySchema(() => z.object({
   /** Whether the service is enabled and available */
   enabled: z.boolean(),
   /** Current operational status */
@@ -67,14 +68,14 @@ export const ServiceInfoSchema = z.object({
     burstLimit: z.number().int().optional().describe('Maximum burst request count'),
     retryAfterMs: z.number().int().optional().describe('Suggested retry-after delay in milliseconds when rate-limited'),
   }).optional().describe('Rate limit and quota info for this service'),
-});
+}));
 
 /**
  * API Routes Schema
  * The "Map" for the frontend to know where to send requests.
  * This decouples the frontend from hardcoded URL paths.
  */
-export const ApiRoutesSchema = z.object({
+export const ApiRoutesSchema = lazySchema(() => z.object({
   /** Base URL for Object CRUD (Data Protocol) */
   data: z.string().describe('e.g. /api/v1/data'),
   
@@ -122,7 +123,7 @@ export const ApiRoutesSchema = z.object({
 
   /** Base URL for Feed / Chatter API */
   feed: z.string().optional().describe('e.g. /api/v1/feed'),
-});
+}));
 
 /**
  * Discovery Response Schema
@@ -136,7 +137,7 @@ export const ApiRoutesSchema = z.object({
  * - `capabilities`/`features` was removed because it was fully derivable
  *   from `services[x].enabled`. Use `services` to determine feature availability.
  */
-export const DiscoverySchema = z.object({
+export const DiscoverySchema = lazySchema(() => z.object({
   /** System Identity */
   name: z.string(),
   version: z.string(),
@@ -189,7 +190,7 @@ export const DiscoverySchema = z.object({
    * Custom metadata key-value pairs for extensibility
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata key-value pairs for extensibility'),
-});
+}));
 
 /**
  * Well-Known Capabilities Schema
@@ -197,7 +198,7 @@ export const DiscoverySchema = z.object({
  * Each flag indicates whether the backend supports a specific capability.
  * Clients can use these to show/hide UI elements without probing individual endpoints.
  */
-export const WellKnownCapabilitiesSchema = z.object({
+export const WellKnownCapabilitiesSchema = lazySchema(() => z.object({
   /** Whether the backend supports Feed / Chatter API */
   feed: z.boolean().describe('Whether the backend supports Feed / Chatter API'),
   /** Whether the backend supports comments (a subset of Feed) */
@@ -212,7 +213,7 @@ export const WellKnownCapabilitiesSchema = z.object({
   export: z.boolean().describe('Whether the backend supports async export'),
   /** Whether the backend supports chunked (multipart) uploads */
   chunkedUpload: z.boolean().describe('Whether the backend supports chunked (multipart) uploads'),
-}).describe('Well-known capability flags for frontend intelligent adaptation');
+}).describe('Well-known capability flags for frontend intelligent adaptation'));
 
 export type WellKnownCapabilities = z.infer<typeof WellKnownCapabilitiesSchema>;
 export type DiscoveryResponse = z.infer<typeof DiscoverySchema>;
@@ -226,7 +227,7 @@ export type ServiceInfo = z.infer<typeof ServiceInfoSchema>;
 /**
  * Single route health entry for the coverage report.
  */
-export const RouteHealthEntrySchema = z.object({
+export const RouteHealthEntrySchema = lazySchema(() => z.object({
   /** Route path (e.g. /api/v1/analytics) */
   route: z.string().describe('Route path pattern'),
   /** HTTP method */
@@ -249,7 +250,7 @@ export const RouteHealthEntrySchema = z.object({
   ),
   /** Optional diagnostic message */
   message: z.string().optional().describe('Diagnostic message'),
-});
+}));
 
 export type RouteHealthEntry = z.infer<typeof RouteHealthEntrySchema>;
 
@@ -260,7 +261,7 @@ export type RouteHealthEntry = z.infer<typeof RouteHealthEntrySchema>;
  * This report enables automated detection of routes that are declared
  * in discovery metadata but have no corresponding HTTP handler.
  */
-export const RouteHealthReportSchema = z.object({
+export const RouteHealthReportSchema = lazySchema(() => z.object({
   /** ISO 8601 timestamp of when the report was generated */
   timestamp: z.string().describe('ISO 8601 timestamp of report generation'),
   /** Adapter name that generated the report (e.g. "hono", "express", "nextjs") */
@@ -273,6 +274,6 @@ export const RouteHealthReportSchema = z.object({
   totalMissing: z.number().int().describe('Routes missing a handler'),
   /** Per-route health entries */
   routes: z.array(RouteHealthEntrySchema).describe('Per-route health entries'),
-});
+}));
 
 export type RouteHealthReport = z.infer<typeof RouteHealthReportSchema>;

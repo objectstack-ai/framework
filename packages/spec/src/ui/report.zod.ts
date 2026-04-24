@@ -10,6 +10,7 @@ import { ResponsiveConfigSchema, PerformanceConfigSchema } from './responsive.zo
 /**
  * Report Type Enum
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ReportType = z.enum([
   'tabular',   // Simple list
   'summary',   // Grouped by row
@@ -20,39 +21,39 @@ export const ReportType = z.enum([
 /**
  * Report Column Schema
  */
-export const ReportColumnSchema = z.object({
+export const ReportColumnSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name'),
   label: I18nLabelSchema.optional().describe('Override label'),
   aggregate: z.enum(['sum', 'avg', 'max', 'min', 'count', 'unique']).optional().describe('Aggregation function'),
   /** Responsive visibility/priority per breakpoint */
   responsive: ResponsiveConfigSchema.optional().describe('Responsive visibility for this column'),
-});
+}));
 
 /**
  * Report Grouping Schema
  */
-export const ReportGroupingSchema = z.object({
+export const ReportGroupingSchema = lazySchema(() => z.object({
   field: z.string().describe('Field to group by'),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
   dateGranularity: z.enum(['day', 'week', 'month', 'quarter', 'year']).optional().describe('For date fields'),
-});
+}));
 
 /**
  * Report Chart Schema
  * Embedded visualization configuration using unified chart taxonomy.
  */
-export const ReportChartSchema = ChartConfigSchema.extend({
+export const ReportChartSchema = lazySchema(() => ChartConfigSchema.extend({
   /** Report-specific chart configuration */
   xAxis: z.string().describe('Grouping field for X-Axis'),
   yAxis: z.string().describe('Summary field for Y-Axis'),
   groupBy: z.string().optional().describe('Additional grouping field'),
-});
+}));
 
 /**
  * Report Schema
  * Deep data analysis definition.
  */
-export const ReportSchema = z.object({
+export const ReportSchema = lazySchema(() => z.object({
   /** Identity */
   name: SnakeCaseIdentifierSchema.describe('Report unique name'),
   label: I18nLabelSchema.describe('Report label'),
@@ -81,7 +82,7 @@ export const ReportSchema = z.object({
 
   /** Performance optimization settings */
   performance: PerformanceConfigSchema.optional().describe('Performance optimization settings'),
-});
+}));
 
 /**
  * Report Types

@@ -6,6 +6,7 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 /**
  * Trigger events for workflow automation
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const WorkflowTriggerType = z.enum([
   'on_create',               // When record is created
   'on_update',               // When record is updated
@@ -24,12 +25,12 @@ export const WorkflowTriggerType = z.enum([
  *   value: "approved"
  * }
  */
-export const FieldUpdateActionSchema = z.object({
+export const FieldUpdateActionSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('field_update'),
   field: z.string().describe('Field to update'),
   value: z.unknown().describe('Value or Formula to set'),
-});
+}));
 
 /**
  * Schema for Workflow Email Alert Action
@@ -41,12 +42,12 @@ export const FieldUpdateActionSchema = z.object({
  *   recipients: ["user_id_123", "manager_field"]
  * }
  */
-export const EmailAlertActionSchema = z.object({
+export const EmailAlertActionSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('email_alert'),
   template: z.string().describe('Email template ID/DevName'),
   recipients: z.array(z.string()).describe('List of recipient emails or user IDs'),
-});
+}));
 
 /**
  * Schema for Connector Action Reference
@@ -65,13 +66,13 @@ export const EmailAlertActionSchema = z.object({
  *   }
  * }
  */
-export const ConnectorActionRefSchema = z.object({
+export const ConnectorActionRefSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('connector_action'),
   connectorId: z.string().describe('Target Connector ID (e.g. slack, twilio)'),
   actionId: z.string().describe('Target Action ID (e.g. send_message)'),
   input: z.record(z.string(), z.unknown()).describe('Input parameters matching the action schema'),
-});
+}));
 
 /**
  * Schema for HTTP Callout Action
@@ -86,14 +87,14 @@ export const ConnectorActionRefSchema = z.object({
  *   body: "{ ... }"
  * }
  */
-export const HttpCallActionSchema = z.object({
+export const HttpCallActionSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('http_call'),
   url: z.string().describe('Target URL'),
   method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).default('POST').describe('HTTP Method'),
   headers: z.record(z.string(), z.string()).optional().describe('HTTP Headers'),
   body: z.string().optional().describe('Request body (JSON or text)'),
-});
+}));
 
 /**
  * Schema for Workflow Task Creation Action
@@ -106,7 +107,7 @@ export const HttpCallActionSchema = z.object({
  *   dueDate: "TODAY() + 3"
  * }
  */
-export const TaskCreationActionSchema = z.object({
+export const TaskCreationActionSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('task_creation'),
   taskObject: z.string().describe('Task object name (e.g., "task", "project_task")'),
@@ -117,12 +118,12 @@ export const TaskCreationActionSchema = z.object({
   priority: z.string().optional().describe('Task priority'),
   relatedTo: z.string().optional().describe('Related record ID or field reference'),
   additionalFields: z.record(z.string(), z.unknown()).optional().describe('Additional custom fields'),
-});
+}));
 
 /**
  * Schema for Workflow Push Notification Action
  */
-export const PushNotificationActionSchema = z.object({
+export const PushNotificationActionSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('push_notification'),
   title: z.string().describe('Notification title'),
@@ -132,25 +133,25 @@ export const PushNotificationActionSchema = z.object({
   badge: z.number().optional().describe('Badge count (iOS)'),
   sound: z.string().optional().describe('Notification sound'),
   clickAction: z.string().optional().describe('Action/URL when notification is clicked'),
-});
+}));
 
 /**
  * Schema for Workflow Custom Script Action
  */
-export const CustomScriptActionSchema = z.object({
+export const CustomScriptActionSchema = lazySchema(() => z.object({
   name: z.string().describe('Action name'),
   type: z.literal('custom_script'),
   language: z.enum(['javascript', 'typescript', 'python']).default('javascript').describe('Script language'),
   code: z.string().describe('Script code to execute'),
   timeout: z.number().default(30000).describe('Execution timeout in milliseconds'),
   context: z.record(z.string(), z.unknown()).optional().describe('Additional context variables'),
-});
+}));
 
 /**
  * Universal Workflow Action Schema
  * Union of all supported action types.
  */
-export const WorkflowActionSchema = z.discriminatedUnion('type', [
+export const WorkflowActionSchema = lazySchema(() => z.discriminatedUnion('type', [
   FieldUpdateActionSchema,
   EmailAlertActionSchema,
   HttpCallActionSchema,
@@ -158,7 +159,7 @@ export const WorkflowActionSchema = z.discriminatedUnion('type', [
   TaskCreationActionSchema,
   PushNotificationActionSchema,
   CustomScriptActionSchema,
-]);
+]));
 
 export type WorkflowAction = z.infer<typeof WorkflowActionSchema>;
 
@@ -166,7 +167,7 @@ export type WorkflowAction = z.infer<typeof WorkflowActionSchema>;
  * Time Trigger Definition
  * Schedules actions to run relative to a specific time or date field.
  */
-export const TimeTriggerSchema = z.object({
+export const TimeTriggerSchema = lazySchema(() => z.object({
   id: z.string().optional().describe('Unique identifier'),
   
   /** Timing Logic */
@@ -180,7 +181,7 @@ export const TimeTriggerSchema = z.object({
   
   /** Actions */
   actions: z.array(WorkflowActionSchema).describe('Actions to execute at the scheduled time'),
-});
+}));
 
 /**
  * Schema for Workflow Rules (Automation)
@@ -240,7 +241,7 @@ export const TimeTriggerSchema = z.object({
  *   ]
  * }
  */
-export const WorkflowRuleSchema = z.object({
+export const WorkflowRuleSchema = lazySchema(() => z.object({
   /** Machine name */
   name: SnakeCaseIdentifierSchema.describe('Unique workflow name (lowercase snake_case)'),
   
@@ -273,7 +274,7 @@ export const WorkflowRuleSchema = z.object({
   
   /** Recursion Control */
   reevaluateOnChange: z.boolean().default(false).describe('Re-evaluate rule if field updates change the record validity'),
-});
+}));
 
 export type WorkflowRule = z.infer<typeof WorkflowRuleSchema>;
 export type TimeTrigger = z.infer<typeof TimeTriggerSchema>;

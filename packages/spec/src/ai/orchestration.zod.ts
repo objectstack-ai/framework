@@ -23,7 +23,8 @@ import { TokenUsageSchema } from './cost.zod';
  * Orchestration Trigger Types
  * Defines when an AI Agentic Flow should be initiated
  */
-export const AIOrchestrationTriggerSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const AIOrchestrationTriggerSchema = lazySchema(() => z.enum([
   'record_created',      // When a new record is created
   'record_updated',      // When a record is updated
   'field_changed',       // When specific field(s) change
@@ -31,13 +32,13 @@ export const AIOrchestrationTriggerSchema = z.enum([
   'manual',              // User-initiated trigger
   'webhook',             // External system trigger
   'batch',               // Batch processing trigger
-]);
+]));
 
 /**
  * AI Task Types
  * Cognitive operations that can be performed by AI
  */
-export const AITaskTypeSchema = z.enum([
+export const AITaskTypeSchema = lazySchema(() => z.enum([
   'classify',            // Categorize content into predefined classes
   'extract',             // Extract structured data from unstructured content
   'summarize',           // Generate concise summaries of text
@@ -48,13 +49,13 @@ export const AITaskTypeSchema = z.enum([
   'entity_recognition',  // Identify named entities (people, places, etc.)
   'anomaly_detection',   // Detect outliers or unusual patterns
   'recommendation',      // Recommend items or actions
-]);
+]));
 
 /**
  * AI Task Configuration
  * Individual AI task within a workflow
  */
-export const AITaskSchema = z.object({
+export const AITaskSchema = lazySchema(() => z.object({
   /** Task Identity */
   id: z.string().optional().describe('Optional task ID for referencing'),
   name: z.string().describe('Human-readable task name'),
@@ -95,23 +96,23 @@ export const AITaskSchema = z.object({
   /** Task Metadata */
   description: z.string().optional(),
   active: z.boolean().optional().default(true),
-});
+}));
 
 /**
  * Workflow Field Condition
  * Specifies which field changes trigger the workflow
  */
-export const WorkflowFieldConditionSchema = z.object({
+export const WorkflowFieldConditionSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name to monitor'),
   operator: z.enum(['changed', 'changed_to', 'changed_from', 'is', 'is_not']).optional().default('changed'),
   value: z.unknown().optional().describe('Value to compare against (for changed_to/changed_from/is/is_not)'),
-});
+}));
 
 /**
  * Workflow Schedule Configuration
  * For time-based workflow execution
  */
-export const WorkflowScheduleSchema = z.object({
+export const WorkflowScheduleSchema = lazySchema(() => z.object({
   type: z.enum(['cron', 'interval', 'daily', 'weekly', 'monthly']).default('cron'),
   cron: z.string().optional().describe('Cron expression (required if type is "cron")'),
   interval: z.number().optional().describe('Interval in minutes (required if type is "interval")'),
@@ -119,24 +120,24 @@ export const WorkflowScheduleSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6).optional().describe('Day of week for weekly (0=Sunday)'),
   dayOfMonth: z.number().int().min(1).max(31).optional().describe('Day of month for monthly'),
   timezone: z.string().optional().default('UTC'),
-});
+}));
 
 /**
  * Post-Processing Action
  * Actions to execute after AI tasks complete
  */
-export const PostProcessingActionSchema = z.object({
+export const PostProcessingActionSchema = lazySchema(() => z.object({
   type: z.enum(['field_update', 'send_email', 'create_record', 'update_related', 'trigger_flow', 'webhook']),
   name: z.string().describe('Action name'),
   config: z.record(z.string(), z.unknown()).describe('Action-specific configuration'),
   condition: z.string().optional().describe('Execute only if condition is TRUE'),
-});
+}));
 
 /**
  * AI Agentic Orchestration Schema
  * Complete workflow definition with AI-powered tasks
  */
-export const AIOrchestrationSchema = z.object({
+export const AIOrchestrationSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Orchestration unique identifier (snake_case)'),
   label: z.string().describe('Display name'),
@@ -188,25 +189,25 @@ export const AIOrchestrationSchema = z.object({
   owner: z.string().optional().describe('User ID of workflow owner'),
   createdAt: z.string().datetime().optional().describe('ISO timestamp'),
   updatedAt: z.string().datetime().optional().describe('ISO timestamp'),
-});
+}));
 
 /**
  * Batch AI Orchestration Execution Request
  * For processing multiple records at once
  */
-export const BatchAIOrchestrationExecutionSchema = z.object({
+export const BatchAIOrchestrationExecutionSchema = lazySchema(() => z.object({
   workflowName: z.string().describe('Orchestration to execute'),
   recordIds: z.array(z.string()).describe('Records to process'),
   batchSize: z.number().int().min(1).max(1000).optional().default(10),
   parallelism: z.number().int().min(1).max(10).optional().default(3),
   priority: z.enum(['low', 'normal', 'high']).optional().default('normal'),
-});
+}));
 
 /**
  * AI Orchestration Execution Result
  * Result of a single execution
  */
-export const AIOrchestrationExecutionResultSchema = z.object({
+export const AIOrchestrationExecutionResultSchema = lazySchema(() => z.object({
   workflowName: z.string(),
   recordId: z.string(),
   status: z.enum(['success', 'partial_success', 'failed', 'skipped']),
@@ -229,7 +230,7 @@ export const AIOrchestrationExecutionResultSchema = z.object({
   error: z.string().optional(),
   startedAt: z.string().datetime().describe('ISO timestamp'),
   completedAt: z.string().datetime().optional().describe('ISO timestamp'),
-});
+}));
 
 // Type exports
 export type AIOrchestrationTrigger = z.infer<typeof AIOrchestrationTriggerSchema>;
@@ -251,11 +252,11 @@ export type AIOrchestrationExecutionResult = z.infer<typeof AIOrchestrationExecu
  * 
  * Defines how agents communicate with each other in a group.
  */
-export const AgentCommunicationProtocolSchema = z.enum([
+export const AgentCommunicationProtocolSchema = lazySchema(() => z.enum([
   'message_passing',    // Direct message exchange between agents
   'shared_memory',      // Agents read/write to a shared context store
   'blackboard',         // Centralized workspace agents contribute to
-]);
+]));
 
 export type AgentCommunicationProtocol = z.infer<typeof AgentCommunicationProtocolSchema>;
 
@@ -264,12 +265,12 @@ export type AgentCommunicationProtocol = z.infer<typeof AgentCommunicationProtoc
  * 
  * Defines the function an agent plays within a coordinated group.
  */
-export const AgentGroupRoleSchema = z.enum([
+export const AgentGroupRoleSchema = lazySchema(() => z.enum([
   'coordinator',   // Orchestrates other agents and delegates tasks
   'specialist',    // Domain expert performing specific tasks
   'critic',        // Reviews and validates other agents' outputs
   'executor',      // Carries out actions in the real world (APIs, DB writes)
-]);
+]));
 
 export type AgentGroupRole = z.infer<typeof AgentGroupRoleSchema>;
 
@@ -278,7 +279,7 @@ export type AgentGroupRole = z.infer<typeof AgentGroupRoleSchema>;
  * 
  * Configuration for a single agent within a multi-agent group.
  */
-export const AgentGroupMemberSchema = z.object({
+export const AgentGroupMemberSchema = lazySchema(() => z.object({
   /** Reference to agent name (must match an existing AgentSchema name) */
   agentId: z.string().describe('Agent identifier (reference to AgentSchema.name)'),
 
@@ -293,7 +294,7 @@ export const AgentGroupMemberSchema = z.object({
 
   /** Priority order within the group (lower = higher priority) */
   priority: z.number().int().min(0).optional().describe('Execution priority (0 = highest)'),
-});
+}));
 
 export type AgentGroupMember = z.infer<typeof AgentGroupMemberSchema>;
 
@@ -320,7 +321,7 @@ export type AgentGroupMember = z.infer<typeof AgentGroupMemberSchema>;
  * };
  * ```
  */
-export const MultiAgentGroupSchema = z.object({
+export const MultiAgentGroupSchema = lazySchema(() => z.object({
   /** Group identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Group unique identifier (snake_case)'),
   label: z.string().describe('Group display name'),
@@ -363,7 +364,7 @@ export const MultiAgentGroupSchema = z.object({
 
   /** Whether the group is active */
   active: z.boolean().default(true).describe('Whether this agent group is active'),
-});
+}));
 
 export type MultiAgentGroup = z.infer<typeof MultiAgentGroupSchema>;
 export type MultiAgentGroupInput = z.input<typeof MultiAgentGroupSchema>;

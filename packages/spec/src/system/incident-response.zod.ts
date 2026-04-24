@@ -20,12 +20,13 @@ import { DataClassificationSchema } from './security-context.zod';
  * Severity grading for security incidents following ISO 27001 guidelines.
  * Determines response urgency and escalation requirements.
  */
-export const IncidentSeveritySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const IncidentSeveritySchema = lazySchema(() => z.enum([
   'critical',   // Immediate threat to business operations or data integrity
   'high',       // Significant impact requiring urgent response
   'medium',     // Moderate impact with controlled response timeline
   'low',        // Minor impact with standard response procedures
-]);
+]));
 
 /**
  * Incident Category Schema
@@ -33,7 +34,7 @@ export const IncidentSeveritySchema = z.enum([
  * Classification of security incidents by type (A.5.25).
  * Used for routing, reporting, and trend analysis.
  */
-export const IncidentCategorySchema = z.enum([
+export const IncidentCategorySchema = lazySchema(() => z.enum([
   'data_breach',           // Unauthorized access or disclosure of data
   'malware',               // Malicious software detection
   'unauthorized_access',   // Unauthorized system or data access
@@ -45,14 +46,14 @@ export const IncidentCategorySchema = z.enum([
   'vulnerability_exploit', // Exploitation of known vulnerability
   'policy_violation',      // Violation of security policies
   'other',                 // Other security incidents
-]);
+]));
 
 /**
  * Incident Status Schema
  *
  * Current status of a security incident in its lifecycle.
  */
-export const IncidentStatusSchema = z.enum([
+export const IncidentStatusSchema = lazySchema(() => z.enum([
   'reported',        // Initial report received
   'triaged',         // Severity and category assessed
   'investigating',   // Active investigation in progress
@@ -61,14 +62,14 @@ export const IncidentStatusSchema = z.enum([
   'recovering',      // Systems being restored to normal
   'resolved',        // Incident resolved
   'closed',          // Post-incident review complete
-]);
+]));
 
 /**
  * Incident Response Phase Schema
  *
  * Defines structured response phases per NIST SP 800-61 / ISO 27001 (A.5.26).
  */
-export const IncidentResponsePhaseSchema = z.object({
+export const IncidentResponsePhaseSchema = lazySchema(() => z.object({
   /**
    * Phase name identifier
    */
@@ -104,7 +105,7 @@ export const IncidentResponsePhaseSchema = z.object({
    * Notes and findings during this phase
    */
   notes: z.string().optional().describe('Phase notes and findings'),
-}).describe('Incident response phase with timing and assignment');
+}).describe('Incident response phase with timing and assignment'));
 
 export type IncidentResponsePhase = z.infer<typeof IncidentResponsePhaseSchema>;
 
@@ -113,7 +114,7 @@ export type IncidentResponsePhase = z.infer<typeof IncidentResponsePhaseSchema>;
  *
  * Defines who must be notified and when, based on severity (A.5.27).
  */
-export const IncidentNotificationRuleSchema = z.object({
+export const IncidentNotificationRuleSchema = lazySchema(() => z.object({
   /**
    * Minimum severity level that triggers this notification
    */
@@ -151,7 +152,7 @@ export const IncidentNotificationRuleSchema = z.object({
    */
   regulatorDeadlineHours: z.number().optional()
     .describe('Regulatory notification deadline in hours'),
-}).describe('Incident notification rule per severity level');
+}).describe('Incident notification rule per severity level'));
 
 export type IncidentNotificationRule = z.infer<typeof IncidentNotificationRuleSchema>;
 
@@ -160,7 +161,7 @@ export type IncidentNotificationRule = z.infer<typeof IncidentNotificationRuleSc
  *
  * Complete notification matrix mapping severity levels to stakeholder groups (A.5.27).
  */
-export const IncidentNotificationMatrixSchema = z.object({
+export const IncidentNotificationMatrixSchema = lazySchema(() => z.object({
   /**
    * Notification rules ordered by severity
    */
@@ -178,7 +179,7 @@ export const IncidentNotificationMatrixSchema = z.object({
    */
   escalationChain: z.array(z.string()).default([])
     .describe('Ordered escalation chain of roles'),
-}).describe('Incident notification matrix with escalation policies');
+}).describe('Incident notification matrix with escalation policies'));
 
 export type IncidentNotificationMatrix = z.infer<typeof IncidentNotificationMatrixSchema>;
 
@@ -212,7 +213,7 @@ export type IncidentNotificationMatrix = z.infer<typeof IncidentNotificationMatr
  * }
  * ```
  */
-export const IncidentSchema = z.object({
+export const IncidentSchema = lazySchema(() => z.object({
   /**
    * Unique incident identifier
    */
@@ -308,14 +309,14 @@ export const IncidentSchema = z.object({
    */
   metadata: z.record(z.string(), z.unknown()).optional()
     .describe('Custom metadata key-value pairs'),
-}).describe('Security incident record per ISO 27001:2022 A.5.24–A.5.28');
+}).describe('Security incident record per ISO 27001:2022 A.5.24–A.5.28'));
 
 /**
  * Incident Response Policy Schema
  *
  * Organization-level incident response policy configuration (A.5.24).
  */
-export const IncidentResponsePolicySchema = z.object({
+export const IncidentResponsePolicySchema = lazySchema(() => z.object({
   /**
    * Whether incident response is enabled
    */
@@ -357,7 +358,7 @@ export const IncidentResponsePolicySchema = z.object({
    */
   retentionDays: z.number().default(2555)
     .describe('Incident record retention period in days (default ~7 years)'),
-}).describe('Organization-level incident response policy per ISO 27001:2022');
+}).describe('Organization-level incident response policy per ISO 27001:2022'));
 
 // Type exports
 export type IncidentSeverity = z.infer<typeof IncidentSeveritySchema>;

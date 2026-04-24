@@ -6,7 +6,8 @@ import { z } from 'zod';
 // Locale
 // ────────────────────────────────────────────────────────────────────────────
 
-export const LocaleSchema = z.string().describe('BCP-47 Language Tag (e.g. en-US, zh-CN)');
+import { lazySchema } from '../shared/lazy-schema';
+export const LocaleSchema = lazySchema(() => z.string().describe('BCP-47 Language Tag (e.g. en-US, zh-CN)'));
 
 // ────────────────────────────────────────────────────────────────────────────
 // Object-level Translation (per-object file)
@@ -16,12 +17,12 @@ export const LocaleSchema = z.string().describe('BCP-47 Language Tag (e.g. en-US
  * Field Translation Schema
  * Translation data for a single field.
  */
-export const FieldTranslationSchema = z.object({
+export const FieldTranslationSchema = lazySchema(() => z.object({
   label: z.string().optional().describe('Translated field label'),
   help: z.string().optional().describe('Translated help text'),
   placeholder: z.string().optional().describe('Translated placeholder text for form inputs'),
   options: z.record(z.string(), z.string()).optional().describe('Option value to translated label map'),
-}).describe('Translation data for a single field');
+}).describe('Translation data for a single field'));
 
 export type FieldTranslation = z.infer<typeof FieldTranslationSchema>;
 
@@ -46,7 +47,7 @@ export type FieldTranslation = z.infer<typeof FieldTranslationSchema>;
  * }
  * ```
  */
-export const ObjectTranslationDataSchema = z.object({
+export const ObjectTranslationDataSchema = lazySchema(() => z.object({
   /** Translated singular label for the object */
   label: z.string().describe('Translated singular label'),
   /** Translated plural label for the object */
@@ -55,7 +56,7 @@ export const ObjectTranslationDataSchema = z.object({
   description: z.string().optional().describe('Translated object description'),
   /** Field-level translations keyed by field name (snake_case) */
   fields: z.record(z.string(), FieldTranslationSchema).optional().describe('Field-level translations'),
-}).describe('Translation data for a single object');
+}).describe('Translation data for a single object'));
 
 export type ObjectTranslationData = z.infer<typeof ObjectTranslationDataSchema>;
 
@@ -75,7 +76,7 @@ export type ObjectTranslationData = z.infer<typeof ObjectTranslationDataSchema>;
  * }
  * ```
  */
-export const TranslationDataSchema = z.object({
+export const TranslationDataSchema = lazySchema(() => z.object({
   /** Object translations */
   objects: z.record(z.string(), ObjectTranslationDataSchema).optional().describe('Object translations keyed by object name'),
   
@@ -90,7 +91,7 @@ export const TranslationDataSchema = z.object({
   
   /** Validation Error Messages */
   validationMessages: z.record(z.string(), z.string()).optional().describe('Translatable validation error messages keyed by rule name (e.g., {"discount_limit": "折扣不能超过40%"})'),
-}).describe('Translation data for objects, apps, and UI messages');
+}).describe('Translation data for objects, apps, and UI messages'));
 
 export type TranslationData = z.infer<typeof TranslationDataSchema>;
 
@@ -98,7 +99,7 @@ export type TranslationData = z.infer<typeof TranslationDataSchema>;
 // Translation Bundle (all locales)
 // ────────────────────────────────────────────────────────────────────────────
 
-export const TranslationBundleSchema = z.record(LocaleSchema, TranslationDataSchema).describe('Map of locale codes to translation data');
+export const TranslationBundleSchema = lazySchema(() => z.record(LocaleSchema, TranslationDataSchema).describe('Map of locale codes to translation data'));
 
 export type TranslationBundle = z.infer<typeof TranslationBundleSchema>;
 
@@ -141,11 +142,11 @@ export type TranslationBundle = z.infer<typeof TranslationBundleSchema>;
  *       common.json
  *   ```
  */
-export const TranslationFileOrganizationSchema = z.enum([
+export const TranslationFileOrganizationSchema = lazySchema(() => z.enum([
   'bundled',
   'per_locale',
   'per_namespace',
-]).describe('Translation file organization strategy');
+]).describe('Translation file organization strategy'));
 
 export type TranslationFileOrganization = z.infer<typeof TranslationFileOrganizationSchema>;
 
@@ -179,14 +180,14 @@ export type TranslationFileOrganization = z.infer<typeof TranslationFileOrganiza
  *   Strings may contain `{count, plural, one {# item} other {# items}}` patterns.
  * - `simple` — Simple `{variable}` interpolation only (default).
  */
-export const MessageFormatSchema = z.enum([
+export const MessageFormatSchema = lazySchema(() => z.enum([
   'icu',
   'simple',
-]).describe('Message interpolation format: ICU MessageFormat or simple {variable} replacement');
+]).describe('Message interpolation format: ICU MessageFormat or simple {variable} replacement'));
 
 export type MessageFormat = z.infer<typeof MessageFormatSchema>;
 
-export const TranslationConfigSchema = z.object({
+export const TranslationConfigSchema = lazySchema(() => z.object({
   /** Default locale for the application */
   defaultLocale: LocaleSchema.describe('Default locale (e.g., "en")'),
   /** Supported BCP-47 locale codes */
@@ -208,7 +209,7 @@ export const TranslationConfigSchema = z.object({
   lazyLoad: z.boolean().default(false).describe('Load translations on demand'),
   /** Cache loaded translations in memory */
   cache: z.boolean().default(true).describe('Cache loaded translations'),
-}).describe('Internationalization configuration');
+}).describe('Internationalization configuration'));
 
 export type TranslationConfig = z.infer<typeof TranslationConfigSchema>;
 
@@ -248,7 +249,7 @@ const OptionTranslationMapSchema = z.record(z.string(), z.string())
  * };
  * ```
  */
-export const ObjectTranslationNodeSchema = z.object({
+export const ObjectTranslationNodeSchema = lazySchema(() => z.object({
   /** Translated singular label */
   label: z.string().describe('Translated singular label'),
   /** Translated plural label */
@@ -295,7 +296,7 @@ export const ObjectTranslationNodeSchema = z.object({
   /** Error message translations keyed by error code */
   _errors: z.record(z.string(), z.string()).optional()
     .describe('Error message translations keyed by error code'),
-}).describe('Object-first aggregated translation node');
+}).describe('Object-first aggregated translation node'));
 
 export type ObjectTranslationNode = z.infer<typeof ObjectTranslationNodeSchema>;
 
@@ -340,7 +341,7 @@ export type ObjectTranslationNode = z.infer<typeof ObjectTranslationNodeSchema>;
  * };
  * ```
  */
-export const AppTranslationBundleSchema = z.object({
+export const AppTranslationBundleSchema = lazySchema(() => z.object({
   /**
    * Bundle-level metadata.
    * Provides locale-aware rendering hints such as text direction (bidi)
@@ -414,7 +415,7 @@ export const AppTranslationBundleSchema = z.object({
   /** Global error message translations not bound to a specific object */
   errors: z.record(z.string(), z.string()).optional()
     .describe('Global error message translations keyed by error code'),
-}).describe('Object-first application translation bundle for a single locale');
+}).describe('Object-first application translation bundle for a single locale'));
 
 export type AppTranslationBundle = z.infer<typeof AppTranslationBundleSchema>;
 
@@ -427,11 +428,11 @@ export type AppTranslationBundle = z.infer<typeof AppTranslationBundleSchema>;
  *
  * Status of a single translation entry compared to the source metadata.
  */
-export const TranslationDiffStatusSchema = z.enum([
+export const TranslationDiffStatusSchema = lazySchema(() => z.enum([
   'missing',
   'redundant',
   'stale',
-]).describe('Translation diff status: missing from bundle, redundant (no matching metadata), or stale (metadata changed)');
+]).describe('Translation diff status: missing from bundle, redundant (no matching metadata), or stale (metadata changed)'));
 
 export type TranslationDiffStatus = z.infer<typeof TranslationDiffStatusSchema>;
 
@@ -451,7 +452,7 @@ export type TranslationDiffStatus = z.infer<typeof TranslationDiffStatusSchema>;
  * };
  * ```
  */
-export const TranslationDiffItemSchema = z.object({
+export const TranslationDiffItemSchema = lazySchema(() => z.object({
   /** Dot-path translation key (e.g. "o.account.fields.website.label") */
   key: z.string().describe('Dot-path translation key'),
   /** Diff status */
@@ -472,7 +473,7 @@ export const TranslationDiffItemSchema = z.object({
   aiSuggested: z.string().optional().describe('AI-suggested translation for this key'),
   /** Confidence score (0-1) for the AI suggestion */
   aiConfidence: z.number().min(0).max(1).optional().describe('AI suggestion confidence score (0–1)'),
-}).describe('A single translation diff item');
+}).describe('A single translation diff item'));
 
 export type TranslationDiffItem = z.infer<typeof TranslationDiffItemSchema>;
 
@@ -499,7 +500,7 @@ export type TranslationDiffItem = z.infer<typeof TranslationDiffItemSchema>;
 /**
  * Per-group coverage breakdown entry.
  */
-export const CoverageBreakdownEntrySchema = z.object({
+export const CoverageBreakdownEntrySchema = lazySchema(() => z.object({
   /** Group category (e.g. "fields", "views", "actions", "messages") */
   group: z.string().describe('Translation group category'),
   /** Total translatable keys in this group */
@@ -508,11 +509,11 @@ export const CoverageBreakdownEntrySchema = z.object({
   translatedKeys: z.number().int().nonnegative().describe('Translated keys in this group'),
   /** Coverage percentage for this group */
   coveragePercent: z.number().min(0).max(100).describe('Coverage percentage for this group'),
-}).describe('Coverage breakdown for a single translation group');
+}).describe('Coverage breakdown for a single translation group'));
 
 export type CoverageBreakdownEntry = z.infer<typeof CoverageBreakdownEntrySchema>;
 
-export const TranslationCoverageResultSchema = z.object({
+export const TranslationCoverageResultSchema = lazySchema(() => z.object({
   /** BCP-47 locale code */
   locale: z.string().describe('BCP-47 locale code'),
   /** Optional object name scope */
@@ -538,6 +539,6 @@ export const TranslationCoverageResultSchema = z.object({
    */
   breakdown: z.array(CoverageBreakdownEntrySchema).optional()
     .describe('Per-group coverage breakdown'),
-}).describe('Aggregated translation coverage result');
+}).describe('Aggregated translation coverage result'));
 
 export type TranslationCoverageResult = z.infer<typeof TranslationCoverageResultSchema>;

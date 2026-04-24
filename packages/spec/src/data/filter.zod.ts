@@ -33,9 +33,10 @@ import { z } from 'zod';
  * // user.id = order.owner_id
  * { "$eq": { "$field": "order.owner_id" } }
  */
-export const FieldReferenceSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const FieldReferenceSchema = lazySchema(() => z.object({
   $field: z.string().describe('Field Reference/Column Name')
-});
+}));
 
 export type FieldReference = z.infer<typeof FieldReferenceSchema>;
 
@@ -47,19 +48,19 @@ export type FieldReference = z.infer<typeof FieldReferenceSchema>;
  * Comparison operators for equality and inequality checks.
  * Supported data types: Any
  */
-export const EqualityOperatorSchema = z.object({
+export const EqualityOperatorSchema = lazySchema(() => z.object({
   /** Equal to (default) - SQL: = | MongoDB: $eq */
   $eq: z.any().optional(),
   
   /** Not equal to - SQL: <> or != | MongoDB: $ne */
   $ne: z.any().optional(),
-});
+}));
 
 /**
  * Comparison operators for numeric and date comparisons.
  * Supported data types: Number, Date
  */
-export const ComparisonOperatorSchema = z.object({
+export const ComparisonOperatorSchema = lazySchema(() => z.object({
   /** Greater than - SQL: > | MongoDB: $gt */
   $gt: z.union([z.number(), z.date(), FieldReferenceSchema]).optional(),
   
@@ -71,7 +72,7 @@ export const ComparisonOperatorSchema = z.object({
   
   /** Less than or equal to - SQL: <= | MongoDB: $lte */
   $lte: z.union([z.number(), z.date(), FieldReferenceSchema]).optional(),
-});
+}));
 
 // ============================================================================
 // 3.2 Set & Range Operators
@@ -80,25 +81,25 @@ export const ComparisonOperatorSchema = z.object({
 /**
  * Set operators for membership checks.
  */
-export const SetOperatorSchema = z.object({
+export const SetOperatorSchema = lazySchema(() => z.object({
   /** In list - SQL: IN (?, ?, ?) | MongoDB: $in */
   $in: z.array(z.any()).optional(),
   
   /** Not in list - SQL: NOT IN (...) | MongoDB: $nin */
   $nin: z.array(z.any()).optional(),
-});
+}));
 
 /**
  * Range operator for interval checks (closed interval).
  * SQL: BETWEEN ? AND ? | MongoDB: $gte AND $lte
  */
-export const RangeOperatorSchema = z.object({
+export const RangeOperatorSchema = lazySchema(() => z.object({
   /** Between (inclusive) - takes [min, max] array */
   $between: z.tuple([
     z.union([z.number(), z.date(), FieldReferenceSchema]),
     z.union([z.number(), z.date(), FieldReferenceSchema])
   ]).optional(),
-});
+}));
 
 // ============================================================================
 // 3.3 String-Specific Operators
@@ -108,7 +109,7 @@ export const RangeOperatorSchema = z.object({
  * String pattern matching operators.
  * Note: Case sensitivity should be handled at backend level.
  */
-export const StringOperatorSchema = z.object({
+export const StringOperatorSchema = lazySchema(() => z.object({
   /** Contains substring - SQL: LIKE %?% | MongoDB: $regex */
   $contains: z.string().optional(),
   
@@ -120,7 +121,7 @@ export const StringOperatorSchema = z.object({
   
   /** Ends with suffix - SQL: LIKE %? | MongoDB: $regex */
   $endsWith: z.string().optional(),
-});
+}));
 
 // ============================================================================
 // 3.5 Special Operators
@@ -129,13 +130,13 @@ export const StringOperatorSchema = z.object({
 /**
  * Special check operators for null and existence.
  */
-export const SpecialOperatorSchema = z.object({
+export const SpecialOperatorSchema = lazySchema(() => z.object({
   /** Is null check - SQL: IS NULL (true) / IS NOT NULL (false) | MongoDB: field: null */
   $null: z.boolean().optional(),
   
   /** Field exists check (primarily for NoSQL) - MongoDB: $exists */
   $exists: z.boolean().optional(),
-});
+}));
 
 // ============================================================================
 // Combined Field Operators
@@ -145,7 +146,7 @@ export const SpecialOperatorSchema = z.object({
  * All field-level operators combined.
  * These can be applied to individual fields in a filter.
  */
-export const FieldOperatorsSchema = z.object({
+export const FieldOperatorsSchema = lazySchema(() => z.object({
   // Equality
   $eq: z.any().optional(),
   $ne: z.any().optional(),
@@ -173,7 +174,7 @@ export const FieldOperatorsSchema = z.object({
   // Special
   $null: z.boolean().optional(),
   $exists: z.boolean().optional(),
-});
+}));
 
 // ============================================================================
 // 3.4 Logical Operators & Recursive Filter Structure
@@ -241,9 +242,9 @@ export const FilterConditionSchema: z.ZodType<FilterCondition> = z.lazy(() =>
  * }
  * ```
  */
-export const QueryFilterSchema = z.object({
+export const QueryFilterSchema = lazySchema(() => z.object({
   where: FilterConditionSchema.optional(),
-});
+}));
 
 // ============================================================================
 // TypeScript Type Exports

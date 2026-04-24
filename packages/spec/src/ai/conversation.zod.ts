@@ -13,85 +13,86 @@ import { TokenUsageSchema } from './cost.zod';
 /**
  * Message Role
  */
-export const MessageRoleSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const MessageRoleSchema = lazySchema(() => z.enum([
   'system',
   'user',
   'assistant',
   'function',
   'tool',
-]);
+]));
 
 /**
  * Message Content Type
  */
-export const MessageContentTypeSchema = z.enum([
+export const MessageContentTypeSchema = lazySchema(() => z.enum([
   'text',
   'image',
   'file',
   'code',
   'structured',
-]);
+]));
 
 /**
  * Message Content - Discriminated Union
  */
-export const TextContentSchema = z.object({
+export const TextContentSchema = lazySchema(() => z.object({
   type: z.literal('text'),
   text: z.string().describe('Text content'),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
-export const ImageContentSchema = z.object({
+export const ImageContentSchema = lazySchema(() => z.object({
   type: z.literal('image'),
   imageUrl: z.string().url().describe('Image URL'),
   detail: z.enum(['low', 'high', 'auto']).optional().default('auto'),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
-export const FileContentSchema = z.object({
+export const FileContentSchema = lazySchema(() => z.object({
   type: z.literal('file'),
   fileUrl: z.string().url().describe('File attachment URL'),
   mimeType: z.string().describe('MIME type'),
   fileName: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
-export const CodeContentSchema = z.object({
+export const CodeContentSchema = lazySchema(() => z.object({
   type: z.literal('code'),
   text: z.string().describe('Code snippet'),
   language: z.string().optional().default('text'),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
-export const MessageContentSchema = z.union([
+export const MessageContentSchema = lazySchema(() => z.union([
   TextContentSchema,
   ImageContentSchema,
   FileContentSchema,
   CodeContentSchema
-]);
+]));
 
 /**
  * Function Call
  */
-export const FunctionCallSchema = z.object({
+export const FunctionCallSchema = lazySchema(() => z.object({
   name: z.string().describe('Function name'),
   arguments: z.string().describe('JSON string of function arguments'),
   result: z.string().optional().describe('Function execution result'),
-});
+}));
 
 /**
  * Tool Call
  */
-export const ToolCallSchema = z.object({
+export const ToolCallSchema = lazySchema(() => z.object({
   id: z.string().describe('Tool call ID'),
   type: z.enum(['function']).default('function'),
   function: FunctionCallSchema,
-});
+}));
 
 /**
  * Conversation Message
  */
-export const ConversationMessageSchema = z.object({
+export const ConversationMessageSchema = lazySchema(() => z.object({
   /** Identity */
   id: z.string().describe('Unique message ID'),
   timestamp: z.string().datetime().describe('ISO 8601 timestamp'),
@@ -117,23 +118,23 @@ export const ConversationMessageSchema = z.object({
   
   /** Annotations */
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 /**
  * Token Budget Strategy
  */
-export const TokenBudgetStrategySchema = z.enum([
+export const TokenBudgetStrategySchema = lazySchema(() => z.enum([
   'fifo',              // First-in-first-out (oldest messages dropped)
   'importance',        // Drop by importance score
   'semantic',          // Keep semantically relevant messages
   'sliding_window',    // Fixed window of recent messages
   'summary',           // Summarize old context
-]);
+]));
 
 /**
  * Token Budget Configuration
  */
-export const TokenBudgetConfigSchema = z.object({
+export const TokenBudgetConfigSchema = lazySchema(() => z.object({
   /** Budget Limits */
   maxTokens: z.number().int().positive().describe('Maximum total tokens'),
   maxPromptTokens: z.number().int().positive().optional().describe('Max tokens for prompt'),
@@ -158,12 +159,12 @@ export const TokenBudgetConfigSchema = z.object({
   
   /** Monitoring */
   warnThreshold: z.number().min(0).max(1).default(0.8).describe('Warn at % of budget (0.8 = 80%)'),
-});
+}));
 
 /**
  * Token Usage Stats
  */
-export const TokenUsageStatsSchema = z.object({
+export const TokenUsageStatsSchema = lazySchema(() => z.object({
   promptTokens: z.number().int().nonnegative().default(0),
   completionTokens: z.number().int().nonnegative().default(0),
   totalTokens: z.number().int().nonnegative().default(0),
@@ -178,12 +179,12 @@ export const TokenUsageStatsSchema = z.object({
   messageCount: z.number().int().nonnegative().default(0),
   prunedMessageCount: z.number().int().nonnegative().default(0),
   summarizedMessageCount: z.number().int().nonnegative().default(0),
-});
+}));
 
 /**
  * Conversation Context
  */
-export const ConversationContextSchema = z.object({
+export const ConversationContextSchema = lazySchema(() => z.object({
   /** Identity */
   sessionId: z.string().describe('Conversation session ID'),
   userId: z.string().optional().describe('User identifier'),
@@ -199,12 +200,12 @@ export const ConversationContextSchema = z.object({
   
   /** Metadata */
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 /**
  * Conversation Session
  */
-export const ConversationSessionSchema = z.object({
+export const ConversationSessionSchema = lazySchema(() => z.object({
   /** Identity */
   id: z.string().describe('Unique session ID'),
   name: z.string().optional().describe('Session name/title'),
@@ -230,12 +231,12 @@ export const ConversationSessionSchema = z.object({
   updatedAt: z.string().datetime().describe('ISO 8601 timestamp'),
   expiresAt: z.string().datetime().optional().describe('ISO 8601 timestamp'),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 /**
  * Conversation Summary
  */
-export const ConversationSummarySchema = z.object({
+export const ConversationSummarySchema = lazySchema(() => z.object({
   /** Summary Content */
   summary: z.string().describe('Conversation summary'),
   keyPoints: z.array(z.string()).optional().describe('Key discussion points'),
@@ -254,12 +255,12 @@ export const ConversationSummarySchema = z.object({
   /** Metadata */
   generatedAt: z.string().datetime().describe('ISO 8601 timestamp'),
   modelId: z.string().optional().describe('Model used for summarization'),
-});
+}));
 
 /**
  * Message Pruning Event
  */
-export const MessagePruningEventSchema = z.object({
+export const MessagePruningEventSchema = lazySchema(() => z.object({
   /** Event Details */
   timestamp: z.string().datetime().describe('Event timestamp'),
   /** Pruned Messages */
@@ -277,12 +278,12 @@ export const MessagePruningEventSchema = z.object({
   /** Post-Pruning State */
   remainingTokens: z.number().int().nonnegative(),
   remainingMessages: z.number().int().nonnegative(),
-});
+}));
 
 /**
  * Conversation Analytics
  */
-export const ConversationAnalyticsSchema = z.object({
+export const ConversationAnalyticsSchema = lazySchema(() => z.object({
   /** Session Info */
   sessionId: z.string(),
   
@@ -307,7 +308,7 @@ export const ConversationAnalyticsSchema = z.object({
   duration: z.number().nonnegative().optional().describe('Session duration in seconds'),
   firstMessageAt: z.string().datetime().optional().describe('ISO 8601 timestamp'),
   lastMessageAt: z.string().datetime().optional().describe('ISO 8601 timestamp'),
-});
+}));
 
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 export type MessageContentType = z.infer<typeof MessageContentTypeSchema>;

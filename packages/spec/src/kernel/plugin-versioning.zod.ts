@@ -19,19 +19,20 @@ import { z } from 'zod';
  * Semantic Version Schema
  * Standard SemVer format with optional pre-release and build metadata
  */
-export const SemanticVersionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const SemanticVersionSchema = lazySchema(() => z.object({
   major: z.number().int().min(0).describe('Major version (breaking changes)'),
   minor: z.number().int().min(0).describe('Minor version (backward compatible features)'),
   patch: z.number().int().min(0).describe('Patch version (backward compatible fixes)'),
   preRelease: z.string().optional().describe('Pre-release identifier (alpha, beta, rc.1)'),
   build: z.string().optional().describe('Build metadata'),
-}).describe('Semantic version number');
+}).describe('Semantic version number'));
 
 /**
  * Version Constraint Schema
  * Defines version requirements using SemVer ranges
  */
-export const VersionConstraintSchema = z.union([
+export const VersionConstraintSchema = lazySchema(() => z.union([
   z.string().regex(/^[\d.]+$/).describe('Exact version: `1.2.3`'),
   z.string().regex(/^\^[\d.]+$/).describe('Compatible with: `^1.2.3` (`>=1.2.3 <2.0.0`)'),
   z.string().regex(/^~[\d.]+$/).describe('Approximately: `~1.2.3` (`>=1.2.3 <1.3.0`)'),
@@ -42,25 +43,25 @@ export const VersionConstraintSchema = z.union([
   z.string().regex(/^[\d.]+ - [\d.]+$/).describe('Range: `1.2.3 - 2.3.4`'),
   z.literal('*').describe('Any version'),
   z.literal('latest').describe('Latest stable version'),
-]);
+]));
 
 /**
  * Compatibility Level
  * Describes the level of compatibility between versions
  */
-export const CompatibilityLevelSchema = z.enum([
+export const CompatibilityLevelSchema = lazySchema(() => z.enum([
   'fully-compatible',      // 100% compatible, drop-in replacement
   'backward-compatible',   // Backward compatible, new features added
   'deprecated-compatible', // Compatible but uses deprecated features
   'breaking-changes',      // Breaking changes, migration required
   'incompatible',         // Completely incompatible
-]).describe('Compatibility level between versions');
+]).describe('Compatibility level between versions'));
 
 /**
  * Breaking Change
  * Documents a breaking change in a version
  */
-export const BreakingChangeSchema = z.object({
+export const BreakingChangeSchema = lazySchema(() => z.object({
   /**
    * Version where the change was introduced
    */
@@ -109,13 +110,13 @@ export const BreakingChangeSchema = z.object({
    * Impact severity
    */
   severity: z.enum(['critical', 'major', 'minor']).describe('Impact severity'),
-});
+}));
 
 /**
  * Deprecation Notice
  * Information about deprecated features
  */
-export const DeprecationNoticeSchema = z.object({
+export const DeprecationNoticeSchema = lazySchema(() => z.object({
   /**
    * Feature or API being deprecated
    */
@@ -145,13 +146,13 @@ export const DeprecationNoticeSchema = z.object({
    * Migration path
    */
   migrationPath: z.string().optional().describe('How to migrate to alternative'),
-});
+}));
 
 /**
  * Compatibility Matrix Entry
  * Maps compatibility between different plugin versions
  */
-export const CompatibilityMatrixEntrySchema = z.object({
+export const CompatibilityMatrixEntrySchema = lazySchema(() => z.object({
   /**
    * Source version
    */
@@ -197,13 +198,13 @@ export const CompatibilityMatrixEntrySchema = z.object({
    */
   testCoverage: z.number().min(0).max(100).optional()
     .describe('Percentage of migration covered by tests'),
-});
+}));
 
 /**
  * Plugin Compatibility Matrix
  * Complete compatibility information for a plugin
  */
-export const PluginCompatibilityMatrixSchema = z.object({
+export const PluginCompatibilityMatrixSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -234,7 +235,7 @@ export const PluginCompatibilityMatrixSchema = z.object({
    */
   minimumCompatibleVersion: z.string().optional()
     .describe('Oldest version that can be directly upgraded'),
-});
+}));
 
 /**
  * Dependency Conflict
@@ -244,7 +245,7 @@ export const PluginCompatibilityMatrixSchema = z.object({
  * @see hub/plugin-security.zod.ts DependencyConflictSchema for hub-level package version conflicts
  *      which focuses on marketplace registry resolution.
  */
-export const DependencyConflictSchema = z.object({
+export const DependencyConflictSchema = lazySchema(() => z.object({
   /**
    * Type of conflict
    */
@@ -290,13 +291,13 @@ export const DependencyConflictSchema = z.object({
    * Severity of conflict
    */
   severity: z.enum(['critical', 'error', 'warning', 'info']),
-});
+}));
 
 /**
  * Dependency Resolution Result
  * Result of dependency resolution process
  */
-export const PluginDependencyResolutionResultSchema = z.object({
+export const PluginDependencyResolutionResultSchema = lazySchema(() => z.object({
   /**
    * Resolution successful
    */
@@ -332,13 +333,13 @@ export const PluginDependencyResolutionResultSchema = z.object({
    */
   dependencyGraph: z.record(z.string(), z.array(z.string())).optional()
     .describe('Map of plugin ID to its dependencies'),
-});
+}));
 
 /**
  * Multi-Version Support Configuration
  * Allows running multiple versions of a plugin simultaneously
  */
-export const MultiVersionSupportSchema = z.object({
+export const MultiVersionSupportSchema = lazySchema(() => z.object({
   /**
    * Enable multi-version support
    */
@@ -382,13 +383,13 @@ export const MultiVersionSupportSchema = z.object({
     duration: z.number().int().optional()
       .describe('Rollout duration in milliseconds'),
   }).optional(),
-});
+}));
 
 /**
  * Plugin Version Metadata
  * Complete version information for a plugin
  */
-export const PluginVersionMetadataSchema = z.object({
+export const PluginVersionMetadataSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -456,7 +457,7 @@ export const PluginVersionMetadataSchema = z.object({
     endOfLife: z.string().datetime().optional(),
     securitySupport: z.boolean().default(true),
   }),
-});
+}));
 
 // Export types
 export type SemanticVersion = z.infer<typeof SemanticVersionSchema>;

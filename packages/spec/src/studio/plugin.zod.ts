@@ -59,7 +59,8 @@ import { z } from 'zod';
 // ─── View Mode ───────────────────────────────────────────────────────
 
 /** Supported view modes for metadata viewers */
-export const ViewModeSchema = z.enum(['preview', 'design', 'code', 'data']);
+import { lazySchema } from '../shared/lazy-schema';
+export const ViewModeSchema = lazySchema(() => z.enum(['preview', 'design', 'code', 'data']));
 export type ViewMode = z.infer<typeof ViewModeSchema>;
 
 // ─── Metadata Viewer Contribution ────────────────────────────────────
@@ -68,7 +69,7 @@ export type ViewMode = z.infer<typeof ViewModeSchema>;
  * Declares a metadata viewer/designer component.
  * The runtime component is registered imperatively during plugin activation.
  */
-export const MetadataViewerContributionSchema = z.object({
+export const MetadataViewerContributionSchema = lazySchema(() => z.object({
   /** Unique viewer ID (namespaced: `pluginId.viewerId`) */
   id: z.string().describe('Unique viewer identifier'),
 
@@ -83,7 +84,7 @@ export const MetadataViewerContributionSchema = z.object({
 
   /** View modes this viewer supports */
   modes: z.array(ViewModeSchema).default(['preview']).describe('Supported view modes'),
-});
+}));
 
 export type MetadataViewerContribution = z.infer<typeof MetadataViewerContributionSchema>;
 
@@ -93,7 +94,7 @@ export type MetadataViewerContribution = z.infer<typeof MetadataViewerContributi
  * Declares a sidebar group that organizes metadata types.
  * Plugins can add new groups or extend existing ones.
  */
-export const SidebarGroupContributionSchema = z.object({
+export const SidebarGroupContributionSchema = lazySchema(() => z.object({
   /** Unique group key */
   key: z.string().describe('Unique group key'),
 
@@ -108,20 +109,20 @@ export const SidebarGroupContributionSchema = z.object({
 
   /** Sort order — lower values appear first */
   order: z.number().default(100).describe('Sort order (lower = higher)'),
-});
+}));
 
 export type SidebarGroupContribution = z.infer<typeof SidebarGroupContributionSchema>;
 
 // ─── Action Contribution ─────────────────────────────────────────────
 
 /** Where an action can appear in the UI */
-export const ActionLocationSchema = z.enum(['toolbar', 'contextMenu', 'commandPalette']);
+export const ActionLocationSchema = lazySchema(() => z.enum(['toolbar', 'contextMenu', 'commandPalette']));
 
 /**
  * Declares an action that can be triggered on metadata items.
  * The handler is registered imperatively during activation.
  */
-export const ActionContributionSchema = z.object({
+export const ActionContributionSchema = lazySchema(() => z.object({
   /** Unique action ID */
   id: z.string().describe('Unique action identifier'),
 
@@ -136,7 +137,7 @@ export const ActionContributionSchema = z.object({
 
   /** Metadata types this action applies to (empty = all types) */
   metadataTypes: z.array(z.string()).default([]).describe('Applicable metadata types'),
-});
+}));
 
 export type ActionContribution = z.infer<typeof ActionContributionSchema>;
 
@@ -146,7 +147,7 @@ export type ActionContribution = z.infer<typeof ActionContributionSchema>;
  * Declares an icon and label for a metadata type.
  * Used by the sidebar and breadcrumbs.
  */
-export const MetadataIconContributionSchema = z.object({
+export const MetadataIconContributionSchema = lazySchema(() => z.object({
   /** Metadata type this icon represents */
   metadataType: z.string().describe('Metadata type'),
 
@@ -155,19 +156,19 @@ export const MetadataIconContributionSchema = z.object({
 
   /** Lucide icon name */
   icon: z.string().describe('Lucide icon name'),
-});
+}));
 
 export type MetadataIconContribution = z.infer<typeof MetadataIconContributionSchema>;
 
 // ─── Panel Contribution ──────────────────────────────────────────────
 
 /** Where a panel can be placed */
-export const PanelLocationSchema = z.enum(['bottom', 'right', 'modal']);
+export const PanelLocationSchema = lazySchema(() => z.enum(['bottom', 'right', 'modal']));
 
 /**
  * Declares an auxiliary panel (like VS Code's Terminal, Problems, Output panels).
  */
-export const PanelContributionSchema = z.object({
+export const PanelContributionSchema = lazySchema(() => z.object({
   /** Unique panel ID */
   id: z.string().describe('Unique panel identifier'),
 
@@ -179,7 +180,7 @@ export const PanelContributionSchema = z.object({
 
   /** Panel placement */
   location: PanelLocationSchema.default('bottom').describe('Panel location'),
-});
+}));
 
 export type PanelContribution = z.infer<typeof PanelContributionSchema>;
 
@@ -189,7 +190,7 @@ export type PanelContribution = z.infer<typeof PanelContributionSchema>;
  * Declares a command that can be invoked from the command palette
  * or programmatically by other plugins.
  */
-export const CommandContributionSchema = z.object({
+export const CommandContributionSchema = lazySchema(() => z.object({
   /** Unique command ID (namespaced: `pluginId.commandName`) */
   id: z.string().describe('Unique command identifier'),
 
@@ -201,7 +202,7 @@ export const CommandContributionSchema = z.object({
 
   /** Lucide icon name */
   icon: z.string().optional().describe('Lucide icon name'),
-});
+}));
 
 export type CommandContribution = z.infer<typeof CommandContributionSchema>;
 
@@ -211,7 +212,7 @@ export type CommandContribution = z.infer<typeof CommandContributionSchema>;
  * All contribution points a Studio plugin can declare.
  * Analogous to VS Code's `contributes` section in `package.json`.
  */
-export const StudioPluginContributionsSchema = z.object({
+export const StudioPluginContributionsSchema = lazySchema(() => z.object({
   /** Metadata viewer/designer components */
   metadataViewers: z.array(MetadataViewerContributionSchema).default([]),
 
@@ -229,7 +230,7 @@ export const StudioPluginContributionsSchema = z.object({
 
   /** Command palette entries */
   commands: z.array(CommandContributionSchema).default([]),
-});
+}));
 
 export type StudioPluginContributions = z.infer<typeof StudioPluginContributionsSchema>;
 
@@ -245,7 +246,7 @@ export type StudioPluginContributions = z.infer<typeof StudioPluginContributions
  * - `onCommand:myPlugin.doSomething` — Activate when command is invoked
  * - `onView:myPlugin.myPanel` — Activate when panel is opened
  */
-export const ActivationEventSchema = z.string().describe('Activation event pattern');
+export const ActivationEventSchema = lazySchema(() => z.string().describe('Activation event pattern'));
 
 // ─── Studio Plugin Manifest ──────────────────────────────────────────
 
@@ -256,7 +257,7 @@ export const ActivationEventSchema = z.string().describe('Activation event patte
  * All contribution points are declared here; runtime components
  * are registered imperatively during the `activate()` call.
  */
-export const StudioPluginManifestSchema = z.object({
+export const StudioPluginManifestSchema = lazySchema(() => z.object({
   /** 
    * Unique plugin ID using reverse-domain notation.
    * @example "objectstack.object-designer"
@@ -292,7 +293,7 @@ export const StudioPluginManifestSchema = z.object({
    * Default `['*']` means eager activation.
    */
   activationEvents: z.array(ActivationEventSchema).default(['*']),
-});
+}));
 
 export type StudioPluginManifest = z.infer<typeof StudioPluginManifestSchema>;
 

@@ -6,6 +6,7 @@ import { ObjectSchema } from '../data/object.zod';
 
 // --- Atomic Operations ---
 
+import { lazySchema } from '../shared/lazy-schema';
 export const AddFieldOperation = z.object({
   type: z.literal('add_field'),
   objectName: z.string().describe('Target object name'),
@@ -49,7 +50,7 @@ export const ExecuteSqlOperation = z.object({
 }).describe('Execute a raw SQL statement');
 
 // Union of all possible operations
-export const MigrationOperationSchema = z.discriminatedUnion('type', [
+export const MigrationOperationSchema = lazySchema(() => z.discriminatedUnion('type', [
   AddFieldOperation,
   ModifyFieldOperation,
   RemoveFieldOperation,
@@ -57,16 +58,16 @@ export const MigrationOperationSchema = z.discriminatedUnion('type', [
   RenameObjectOperation,
   DeleteObjectOperation,
   ExecuteSqlOperation
-]);
+]));
 
 // --- Migration & ChangeSet ---
 
-export const MigrationDependencySchema = z.object({
+export const MigrationDependencySchema = lazySchema(() => z.object({
   migrationId: z.string().describe('ID of the migration this depends on'),
   package: z.string().optional().describe('Package that owns the dependency migration')
-}).describe('Dependency reference to another migration that must run first');
+}).describe('Dependency reference to another migration that must run first'));
 
-export const ChangeSetSchema = z.object({
+export const ChangeSetSchema = lazySchema(() => z.object({
   id: z.string().uuid().describe('Unique identifier for this change set'),
   name: z.string().describe('Human readable name for the migration'),
   description: z.string().optional().describe('Detailed description of what this migration does'),
@@ -81,7 +82,7 @@ export const ChangeSetSchema = z.object({
   
   // Rollback operations (AI should generate these too)
   rollback: z.array(MigrationOperationSchema).optional().describe('Operations to reverse this migration')
-}).describe('A versioned set of atomic schema migration operations');
+}).describe('A versioned set of atomic schema migration operations'));
 
 export type ChangeSet = z.infer<typeof ChangeSetSchema>;
 export type MigrationOperation = z.infer<typeof MigrationOperationSchema>;

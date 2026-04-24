@@ -21,32 +21,33 @@ import { z } from 'zod';
  * };
  * ```
  */
-export const BackupStrategySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const BackupStrategySchema = lazySchema(() => z.enum([
   'full',
   'incremental',
   'differential',
-]).describe('Backup strategy type');
+]).describe('Backup strategy type'));
 
 export type BackupStrategy = z.infer<typeof BackupStrategySchema>;
 
 /**
  * Backup Retention Policy Schema
  */
-export const BackupRetentionSchema = z.object({
+export const BackupRetentionSchema = lazySchema(() => z.object({
   /** Number of days to retain backups */
   days: z.number().min(1).describe('Retention period in days'),
   /** Minimum number of backup copies to keep regardless of age */
   minCopies: z.number().min(1).default(3).describe('Minimum backup copies to retain'),
   /** Maximum number of backup copies */
   maxCopies: z.number().optional().describe('Maximum backup copies to store'),
-}).describe('Backup retention policy');
+}).describe('Backup retention policy'));
 
 export type BackupRetention = z.infer<typeof BackupRetentionSchema>;
 
 /**
  * Backup Configuration Schema
  */
-export const BackupConfigSchema = z.object({
+export const BackupConfigSchema = lazySchema(() => z.object({
   /** Backup strategy */
   strategy: BackupStrategySchema.default('incremental').describe('Backup strategy'),
   /** Cron schedule for automated backups */
@@ -74,7 +75,7 @@ export const BackupConfigSchema = z.object({
   }).optional().describe('Backup compression settings'),
   /** Verify backup integrity after creation */
   verifyAfterBackup: z.boolean().default(true).describe('Verify backup integrity after creation'),
-}).describe('Backup configuration');
+}).describe('Backup configuration'));
 
 export type BackupConfig = z.infer<typeof BackupConfigSchema>;
 export type BackupConfigInput = z.input<typeof BackupConfigSchema>;
@@ -89,19 +90,19 @@ export type BackupConfigInput = z.input<typeof BackupConfigSchema>;
  * - **pilot_light**: Minimal secondary with quick scale-up capability
  * - **warm_standby**: Reduced-capacity secondary, faster failover than pilot light
  */
-export const FailoverModeSchema = z.enum([
+export const FailoverModeSchema = lazySchema(() => z.enum([
   'active_passive',
   'active_active',
   'pilot_light',
   'warm_standby',
-]).describe('Failover mode');
+]).describe('Failover mode'));
 
 export type FailoverMode = z.infer<typeof FailoverModeSchema>;
 
 /**
  * Failover Configuration Schema
  */
-export const FailoverConfigSchema = z.object({
+export const FailoverConfigSchema = lazySchema(() => z.object({
   /** Failover mode */
   mode: FailoverModeSchema.default('active_passive').describe('Failover mode'),
   /** Automatic failover enabled */
@@ -123,7 +124,7 @@ export const FailoverConfigSchema = z.object({
     provider: z.enum(['route53', 'cloudflare', 'azure_dns', 'custom']).optional()
       .describe('DNS provider for automatic failover'),
   }).optional().describe('DNS failover settings'),
-}).describe('Failover configuration');
+}).describe('Failover configuration'));
 
 export type FailoverConfig = z.infer<typeof FailoverConfigSchema>;
 export type FailoverConfigInput = z.input<typeof FailoverConfigSchema>;
@@ -133,12 +134,12 @@ export type FailoverConfigInput = z.input<typeof FailoverConfigSchema>;
  *
  * Maximum acceptable amount of data loss measured in time.
  */
-export const RPOSchema = z.object({
+export const RPOSchema = lazySchema(() => z.object({
   /** RPO value */
   value: z.number().min(0).describe('RPO value'),
   /** RPO time unit */
   unit: z.enum(['seconds', 'minutes', 'hours']).default('minutes').describe('RPO time unit'),
-}).describe('Recovery Point Objective (maximum acceptable data loss)');
+}).describe('Recovery Point Objective (maximum acceptable data loss)'));
 
 export type RPO = z.infer<typeof RPOSchema>;
 
@@ -147,12 +148,12 @@ export type RPO = z.infer<typeof RPOSchema>;
  *
  * Maximum acceptable time to restore service after a disaster.
  */
-export const RTOSchema = z.object({
+export const RTOSchema = lazySchema(() => z.object({
   /** RTO value */
   value: z.number().min(0).describe('RTO value'),
   /** RTO time unit */
   unit: z.enum(['seconds', 'minutes', 'hours']).default('minutes').describe('RTO time unit'),
-}).describe('Recovery Time Objective (maximum acceptable downtime)');
+}).describe('Recovery Time Objective (maximum acceptable downtime)'));
 
 export type RTO = z.infer<typeof RTOSchema>;
 
@@ -191,7 +192,7 @@ export type RTO = z.infer<typeof RTOSchema>;
  * };
  * ```
  */
-export const DisasterRecoveryPlanSchema = z.object({
+export const DisasterRecoveryPlanSchema = lazySchema(() => z.object({
   /** Enable disaster recovery */
   enabled: z.boolean().default(false).describe('Enable disaster recovery plan'),
 
@@ -240,7 +241,7 @@ export const DisasterRecoveryPlanSchema = z.object({
     email: z.string().optional().describe('Contact email'),
     phone: z.string().optional().describe('Contact phone'),
   })).optional().describe('Emergency contact list for DR incidents'),
-}).describe('Complete disaster recovery plan configuration');
+}).describe('Complete disaster recovery plan configuration'));
 
 export type DisasterRecoveryPlan = z.infer<typeof DisasterRecoveryPlanSchema>;
 export type DisasterRecoveryPlanInput = z.input<typeof DisasterRecoveryPlanSchema>;

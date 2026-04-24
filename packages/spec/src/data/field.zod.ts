@@ -8,6 +8,7 @@ import { MaskingRuleSchema } from '../system/masking.zod';
 /**
  * Field Type Enum
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const FieldType = z.enum([
   // Core Text
   'text', 'textarea', 'email', 'url', 'phone', 'password',
@@ -67,23 +68,23 @@ export type FieldType = z.infer<typeof FieldType>;
  * { label: 'In Progress', value: 'In Progress' } // spaces and uppercase
  * { label: 'Closed Won', value: 'Closed_Won' } // mixed case
  */
-export const SelectOptionSchema = z.object({
+export const SelectOptionSchema = lazySchema(() => z.object({
   label: z.string().describe('Display label (human-readable, any case allowed)'),
   value: SystemIdentifierSchema.describe('Stored value (lowercase machine identifier)'),
   color: z.string().optional().describe('Color code for badges/charts'),
   default: z.boolean().optional().describe('Is default option'),
-});
+}));
 
 /**
  * Location Coordinates Schema
  * GPS coordinates for location field type
  */
-export const LocationCoordinatesSchema = z.object({
+export const LocationCoordinatesSchema = lazySchema(() => z.object({
   latitude: z.number().min(-90).max(90).describe('Latitude coordinate'),
   longitude: z.number().min(-180).max(180).describe('Longitude coordinate'),
   altitude: z.number().optional().describe('Altitude in meters'),
   accuracy: z.number().optional().describe('Accuracy in meters'),
-});
+}));
 
 /**
  * Currency Configuration Schema
@@ -95,11 +96,11 @@ export const LocationCoordinatesSchema = z.object({
  * - Custom business-specific codes
  * Stricter validation can be implemented at the application layer based on business requirements.
  */
-export const CurrencyConfigSchema = z.object({
+export const CurrencyConfigSchema = lazySchema(() => z.object({
   precision: z.number().int().min(0).max(10).default(2).describe('Decimal precision (default: 2)'),
   currencyMode: z.enum(['dynamic', 'fixed']).default('dynamic').describe('Currency mode: dynamic (user selectable) or fixed (single currency)'),
   defaultCurrency: z.string().length(3).default('CNY').describe('Default or fixed currency code (ISO 4217, e.g., USD, CNY, EUR)'),
-});
+}));
 
 /**
  * Currency Value Schema
@@ -108,16 +109,16 @@ export const CurrencyConfigSchema = z.object({
  * Note: Currency codes are validated by length only (3 characters) to support flexibility.
  * See CurrencyConfigSchema for details on currency code validation strategy.
  */
-export const CurrencyValueSchema = z.object({
+export const CurrencyValueSchema = lazySchema(() => z.object({
   value: z.number().describe('Monetary amount'),
   currency: z.string().length(3).describe('Currency code (ISO 4217)'),
-});
+}));
 
 /**
  * Address Schema
  * Structured address for address field type
  */
-export const AddressSchema = z.object({
+export const AddressSchema = lazySchema(() => z.object({
   street: z.string().optional().describe('Street address'),
   city: z.string().optional().describe('City name'),
   state: z.string().optional().describe('State/Province'),
@@ -125,7 +126,7 @@ export const AddressSchema = z.object({
   country: z.string().optional().describe('Country name or code'),
   countryCode: z.string().optional().describe('ISO country code (e.g., US, GB)'),
   formatted: z.string().optional().describe('Formatted address string'),
-});
+}));
 
 /**
  * Vector Configuration Schema
@@ -151,13 +152,13 @@ export const AddressSchema = z.object({
  *   indexed: true
  * }
  */
-export const VectorConfigSchema = z.object({
+export const VectorConfigSchema = lazySchema(() => z.object({
   dimensions: z.number().int().min(1).max(10000).describe('Vector dimensionality (e.g., 1536 for OpenAI embeddings)'),
   distanceMetric: z.enum(['cosine', 'euclidean', 'dotProduct', 'manhattan']).default('cosine').describe('Distance/similarity metric for vector search'),
   normalized: z.boolean().default(false).describe('Whether vectors are normalized (unit length)'),
   indexed: z.boolean().default(true).describe('Whether to create a vector index for fast similarity search'),
   indexType: z.enum(['hnsw', 'ivfflat', 'flat']).optional().describe('Vector index algorithm (HNSW for high accuracy, IVFFlat for large datasets)'),
-});
+}));
 
 /**
  * File Attachment Configuration Schema
@@ -188,7 +189,7 @@ export const VectorConfigSchema = z.object({
  *   }
  * }
  */
-export const FileAttachmentConfigSchema = z.object({
+export const FileAttachmentConfigSchema = lazySchema(() => z.object({
   /** File Size Limits */
   minSize: z.number().min(0).optional().describe('Minimum file size in bytes'),
   maxSize: z.number().min(1).optional().describe('Maximum file size in bytes (e.g., 10485760 = 10MB)'),
@@ -261,7 +262,7 @@ export const FileAttachmentConfigSchema = z.object({
   return true;
 }, {
   message: 'virusScanProvider requires virusScan to be enabled',
-});
+}));
 
 /**
  * Data Quality Rules Schema
@@ -277,7 +278,7 @@ export const FileAttachmentConfigSchema = z.object({
  *   }
  * }
  */
-export const DataQualityRulesSchema = z.object({
+export const DataQualityRulesSchema = lazySchema(() => z.object({
   /** Enforce uniqueness constraint */
   uniqueness: z.boolean().default(false).describe('Enforce unique values across all records'),
   
@@ -289,7 +290,7 @@ export const DataQualityRulesSchema = z.object({
     source: z.string().describe('Reference data source for validation (e.g., "api.verify.com", "master_data")'),
     threshold: z.number().min(0).max(1).describe('Minimum accuracy threshold (0-1, e.g., 0.95 = 95% match required)'),
   }).optional().describe('Accuracy validation configuration'),
-});
+}));
 
 /**
  * Computed Field Caching Schema
@@ -302,7 +303,7 @@ export const DataQualityRulesSchema = z.object({
  *   invalidateOn: ['inventory.quantity', 'pricing.discount']
  * }
  */
-export const ComputedFieldCacheSchema = z.object({
+export const ComputedFieldCacheSchema = lazySchema(() => z.object({
   /** Enable caching for this computed field */
   enabled: z.boolean().describe('Enable caching for computed field results'),
   
@@ -311,7 +312,7 @@ export const ComputedFieldCacheSchema = z.object({
   
   /** Array of field paths that trigger cache invalidation when changed */
   invalidateOn: z.array(z.string()).describe('Field paths that invalidate cache (e.g., ["inventory.quantity", "pricing.base_price"])'),
-});
+}));
 
 /**
  * Field Schema - Best Practice Enterprise Pattern
@@ -341,7 +342,7 @@ export const ComputedFieldCacheSchema = z.object({
  *   defaultValue: "open"
  * }
  */
-export const FieldSchema = z.object({
+export const FieldSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Machine name (snake_case)').optional(),
   label: z.string().optional().describe('Human readable label'),
@@ -482,7 +483,7 @@ export const FieldSchema = z.object({
   /** Indexing */
   index: z.boolean().default(false).describe('Create standard database index'),
   externalId: z.boolean().default(false).describe('Is external ID for upsert operations'),
-});
+}));
 
 export type Field = z.infer<typeof FieldSchema>;
 export type SelectOption = z.infer<typeof SelectOptionSchema>;

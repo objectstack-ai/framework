@@ -43,6 +43,7 @@ import { z } from 'zod';
  * Cache Control Directive Enum
  * Standard HTTP cache control directives
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const CacheDirective = z.enum([
   'public',           // Cacheable by any cache
   'private',          // Cacheable only by user-agent
@@ -65,12 +66,12 @@ export type CacheDirective = z.infer<typeof CacheDirective>;
  *   "staleWhileRevalidate": 86400
  * }
  */
-export const CacheControlSchema = z.object({
+export const CacheControlSchema = lazySchema(() => z.object({
   directives: z.array(CacheDirective).describe('Cache control directives'),
   maxAge: z.number().optional().describe('Maximum cache age in seconds'),
   staleWhileRevalidate: z.number().optional().describe('Allow serving stale content while revalidating (seconds)'),
   staleIfError: z.number().optional().describe('Allow serving stale content on error (seconds)'),
-});
+}));
 
 export type CacheControl = z.infer<typeof CacheControlSchema>;
 
@@ -86,10 +87,10 @@ export type CacheControl = z.infer<typeof CacheControlSchema>;
  * - Strong: Exact match required (e.g., "686897696a7c876b7e")
  * - Weak: Semantic equivalence (e.g., W/"686897696a7c876b7e")
  */
-export const ETagSchema = z.object({
+export const ETagSchema = lazySchema(() => z.object({
   value: z.string().describe('ETag value (hash or version identifier)'),
   weak: z.boolean().optional().default(false).describe('Whether this is a weak ETag'),
-});
+}));
 
 export type ETag = z.infer<typeof ETagSchema>;
 
@@ -107,11 +108,11 @@ export type ETag = z.infer<typeof ETagSchema>;
  * // If-None-Match: "686897696a7c876b7e"
  * // If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT
  */
-export const MetadataCacheRequestSchema = z.object({
+export const MetadataCacheRequestSchema = lazySchema(() => z.object({
   ifNoneMatch: z.string().optional().describe('ETag value for conditional request (If-None-Match header)'),
   ifModifiedSince: z.string().datetime().optional().describe('Timestamp for conditional request (If-Modified-Since header)'),
   cacheControl: CacheControlSchema.optional().describe('Client cache control preferences'),
-});
+}));
 
 export type MetadataCacheRequest = z.infer<typeof MetadataCacheRequestSchema>;
 
@@ -145,14 +146,14 @@ export type MetadataCacheRequest = z.infer<typeof MetadataCacheRequestSchema>;
  *   }
  * }
  */
-export const MetadataCacheResponseSchema = z.object({
+export const MetadataCacheResponseSchema = lazySchema(() => z.object({
   data: z.unknown().optional().describe('Metadata payload (omitted for 304 Not Modified)'),
   etag: ETagSchema.optional().describe('ETag for this resource version'),
   lastModified: z.string().datetime().optional().describe('Last modification timestamp'),
   cacheControl: CacheControlSchema.optional().describe('Cache control directives'),
   notModified: z.boolean().optional().default(false).describe('True if resource has not been modified (304 response)'),
   version: z.string().optional().describe('Metadata version identifier'),
-});
+}));
 
 export type MetadataCacheResponse = z.infer<typeof MetadataCacheResponseSchema>;
 
@@ -187,12 +188,12 @@ export type CacheInvalidationTarget = z.infer<typeof CacheInvalidationTarget>;
  *   "cascade": true
  * }
  */
-export const CacheInvalidationRequestSchema = z.object({
+export const CacheInvalidationRequestSchema = lazySchema(() => z.object({
   target: CacheInvalidationTarget.describe('What to invalidate'),
   identifiers: z.array(z.string()).optional().describe('Specific resources to invalidate (e.g., object names)'),
   cascade: z.boolean().optional().default(false).describe('If true, invalidate dependent resources'),
   pattern: z.string().optional().describe('Pattern for custom invalidation (supports wildcards)'),
-});
+}));
 
 export type CacheInvalidationRequest = z.infer<typeof CacheInvalidationRequestSchema>;
 
@@ -207,11 +208,11 @@ export type CacheInvalidationRequest = z.infer<typeof CacheInvalidationRequestSc
  *   "targets": ["account", "contact", "opportunity"]
  * }
  */
-export const CacheInvalidationResponseSchema = z.object({
+export const CacheInvalidationResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether invalidation succeeded'),
   invalidated: z.number().describe('Number of cache entries invalidated'),
   targets: z.array(z.string()).optional().describe('List of invalidated resources'),
-});
+}));
 
 export type CacheInvalidationResponse = z.infer<typeof CacheInvalidationResponseSchema>;
 

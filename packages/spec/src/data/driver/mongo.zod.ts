@@ -14,7 +14,8 @@ import { DriverDefinitionSchema } from '../datasource.zod';
 // 1. Connection Configuration
 // ==========================================================================
 
-export const MongoConfigSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const MongoConfigSchema = lazySchema(() => z.object({
   /**
    * Connection URI (Standard Connection String)
    * If provided, host/port/username/password fields may be ignored or merged depending on driver logic.
@@ -48,7 +49,7 @@ export const MongoConfigSchema = z.object({
    * Passthrough options to the underlying MongoDB driver (e.g. valid certs, timeouts)
    */
   options: z.record(z.string(), z.unknown()).describe('Extra driver options (ssl, poolSize, etc)').optional(),
-}).describe('MongoDB Connection Configuration');
+}).describe('MongoDB Connection Configuration'));
 
 // ==========================================================================
 // 2. Driver Definition (Metadata)

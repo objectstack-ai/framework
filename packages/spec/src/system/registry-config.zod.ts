@@ -13,17 +13,18 @@ import { z } from 'zod';
  * Registry Sync Policy
  * Defines how registries synchronize with upstreams
  */
-export const RegistrySyncPolicySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const RegistrySyncPolicySchema = lazySchema(() => z.enum([
   'manual',    // Manual synchronization only
   'auto',      // Automatic synchronization
   'proxy',     // Proxy requests to upstream without caching
-]).describe('Registry synchronization strategy');
+]).describe('Registry synchronization strategy'));
 
 /**
  * Registry Upstream Configuration
  * Configuration for upstream registry connection
  */
-export const RegistryUpstreamSchema = z.object({
+export const RegistryUpstreamSchema = lazySchema(() => z.object({
   /**
    * Upstream registry URL
    */
@@ -75,13 +76,13 @@ export const RegistryUpstreamSchema = z.object({
     maxAttempts: z.number().int().min(0).default(3),
     backoff: z.enum(['fixed', 'linear', 'exponential']).default('exponential'),
   }).optional(),
-});
+}));
 
 /**
  * Registry Configuration
  * Complete registry configuration supporting federation
  */
-export const RegistryConfigSchema = z.object({
+export const RegistryConfigSchema = lazySchema(() => z.object({
   /**
    * Registry type
    */
@@ -174,7 +175,7 @@ export const RegistryConfigSchema = z.object({
     priority: z.number().int().min(1).default(1),
   })).optional()
     .describe('Mirror registries for redundancy'),
-});
+}));
 
 export type RegistrySyncPolicy = z.infer<typeof RegistrySyncPolicySchema>;
 export type RegistryUpstream = z.infer<typeof RegistryUpstreamSchema>;

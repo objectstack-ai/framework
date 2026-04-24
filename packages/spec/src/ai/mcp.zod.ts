@@ -30,17 +30,18 @@ import { z } from 'zod';
  * MCP Transport Type
  * Defines how the MCP server communicates
  */
-export const MCPTransportTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const MCPTransportTypeSchema = lazySchema(() => z.enum([
   'stdio',      // Standard input/output (for local processes)
   'http',       // HTTP REST API
   'websocket',  // WebSocket bidirectional communication
   'grpc',       // gRPC for high-performance communication
-]);
+]));
 
 /**
  * MCP Transport Configuration
  */
-export const MCPTransportConfigSchema = z.object({
+export const MCPTransportConfigSchema = lazySchema(() => z.object({
   type: MCPTransportTypeSchema,
   
   /** HTTP/WebSocket Configuration */
@@ -65,7 +66,7 @@ export const MCPTransportConfigSchema = z.object({
   args: z.array(z.string()).optional().describe('Command arguments'),
   env: z.record(z.string(), z.string()).optional().describe('Environment variables'),
   workingDirectory: z.string().optional().describe('Working directory for the process'),
-});
+}));
 
 // ==========================================
 // MCP Resource Protocol
@@ -75,18 +76,18 @@ export const MCPTransportConfigSchema = z.object({
  * MCP Resource Type
  * Types of resources that can be exposed through MCP
  */
-export const MCPResourceTypeSchema = z.enum([
+export const MCPResourceTypeSchema = lazySchema(() => z.enum([
   'text',       // Plain text or markdown content
   'json',       // Structured JSON data
   'binary',     // Binary data (files, images, etc.)
   'stream',     // Streaming data
-]);
+]));
 
 /**
  * MCP Resource Schema
  * Represents a piece of contextual information available to the AI
  */
-export const MCPResourceSchema = z.object({
+export const MCPResourceSchema = lazySchema(() => z.object({
   /** Identity */
   uri: z.string().describe('Unique resource identifier (e.g., "objectstack://objects/account/ABC123")'),
   name: z.string().describe('Human-readable resource name'),
@@ -115,13 +116,13 @@ export const MCPResourceSchema = z.object({
   /** Caching */
   cacheable: z.boolean().default(true).describe('Whether this resource can be cached'),
   cacheMaxAge: z.number().int().nonnegative().optional().describe('Cache max age in seconds'),
-});
+}));
 
 /**
  * MCP Resource Template
  * Dynamic resource generation pattern
  */
-export const MCPResourceTemplateSchema = z.object({
+export const MCPResourceTemplateSchema = lazySchema(() => z.object({
   uriPattern: z.string().describe('URI pattern with variables (e.g., "objectstack://objects/{objectName}/{recordId}")'),
   name: z.string().describe('Template name'),
   description: z.string().optional(),
@@ -141,7 +142,7 @@ export const MCPResourceTemplateSchema = z.object({
   
   mimeType: z.string().optional(),
   resourceType: MCPResourceTypeSchema.default('json'),
-});
+}));
 
 // ==========================================
 // MCP Tool Protocol
@@ -151,7 +152,7 @@ export const MCPResourceTemplateSchema = z.object({
  * MCP Tool Parameter Schema
  * Defines parameters for MCP tool functions
  */
-export const MCPToolParameterSchema: z.ZodType<MCPToolParameter> = z.object({
+export const MCPToolParameterSchema: z.ZodType<MCPToolParameter> = lazySchema(() => z.object({
   name: z.string().describe('Parameter name'),
   type: z.enum(['string', 'number', 'boolean', 'object', 'array']),
   description: z.string().describe('Parameter description for AI consumption'),
@@ -169,7 +170,7 @@ export const MCPToolParameterSchema: z.ZodType<MCPToolParameter> = z.object({
   /** Nested Schema */
   properties: z.record(z.string(), z.lazy(() => MCPToolParameterSchema)).optional().describe('Properties for object types'),
   items: z.lazy(() => MCPToolParameterSchema).optional().describe('Item schema for array types'),
-});
+}));
 
 /**
  * MCP Tool Parameter Type (inferred before schema to avoid circular reference)
@@ -194,7 +195,7 @@ export type MCPToolParameter = {
  * MCP Tool Schema
  * Represents a callable function or action available to the AI
  */
-export const MCPToolSchema = z.object({
+export const MCPToolSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Tool function name (snake_case)'),
   description: z.string().describe('Tool description for AI consumption (be detailed and specific)'),
@@ -231,7 +232,7 @@ export const MCPToolSchema = z.object({
   tags: z.array(z.string()).optional(),
   deprecated: z.boolean().default(false),
   version: z.string().optional().default('1.0.0'),
-});
+}));
 
 // ==========================================
 // MCP Prompt Protocol
@@ -241,28 +242,28 @@ export const MCPToolSchema = z.object({
  * MCP Prompt Argument
  * Dynamic arguments for prompt templates
  */
-export const MCPPromptArgumentSchema = z.object({
+export const MCPPromptArgumentSchema = lazySchema(() => z.object({
   name: z.string().describe('Argument name'),
   description: z.string().optional(),
   type: z.enum(['string', 'number', 'boolean']).default('string'),
   required: z.boolean().default(false),
   default: z.unknown().optional(),
-});
+}));
 
 /**
  * MCP Prompt Message
  * Individual message in a prompt template
  */
-export const MCPPromptMessageSchema = z.object({
+export const MCPPromptMessageSchema = lazySchema(() => z.object({
   role: z.enum(['system', 'user', 'assistant']).describe('Message role'),
   content: z.string().describe('Message content (can include {{variable}} placeholders)'),
-});
+}));
 
 /**
  * MCP Prompt Schema
  * Predefined prompt templates available to the AI
  */
-export const MCPPromptSchema = z.object({
+export const MCPPromptSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Prompt template name (snake_case)'),
   description: z.string().optional().describe('Prompt description'),
@@ -277,7 +278,7 @@ export const MCPPromptSchema = z.object({
   category: z.string().optional(),
   tags: z.array(z.string()).optional(),
   version: z.string().optional().default('1.0.0'),
-});
+}));
 
 // ==========================================
 // MCP Streaming Configuration
@@ -287,7 +288,7 @@ export const MCPPromptSchema = z.object({
  * MCP Streaming Configuration
  * Controls streaming behavior for MCP server communication
  */
-export const MCPStreamingConfigSchema = z.object({
+export const MCPStreamingConfigSchema = lazySchema(() => z.object({
   /** Whether streaming is enabled */
   enabled: z.boolean().describe('Enable streaming for MCP communication'),
 
@@ -299,7 +300,7 @@ export const MCPStreamingConfigSchema = z.object({
 
   /** Backpressure handling strategy */
   backpressure: z.enum(['drop', 'buffer', 'block']).optional().describe('Backpressure handling strategy'),
-}).describe('Streaming configuration for MCP communication');
+}).describe('Streaming configuration for MCP communication'));
 
 // ==========================================
 // MCP Tool Approval Configuration
@@ -309,7 +310,7 @@ export const MCPStreamingConfigSchema = z.object({
  * MCP Tool Approval Configuration
  * Controls approval requirements for tool execution
  */
-export const MCPToolApprovalSchema = z.object({
+export const MCPToolApprovalSchema = lazySchema(() => z.object({
   /** Whether tool execution requires approval */
   requireApproval: z.boolean().default(false).describe('Require approval before tool execution'),
 
@@ -321,7 +322,7 @@ export const MCPToolApprovalSchema = z.object({
 
   /** Timeout in seconds for auto-approval */
   autoApproveTimeout: z.number().int().positive().optional().describe('Auto-approve timeout in seconds'),
-}).describe('Tool approval configuration for MCP');
+}).describe('Tool approval configuration for MCP'));
 
 // ==========================================
 // MCP Sampling Configuration
@@ -331,7 +332,7 @@ export const MCPToolApprovalSchema = z.object({
  * MCP Sampling Configuration
  * Controls LLM sampling behavior for MCP servers
  */
-export const MCPSamplingConfigSchema = z.object({
+export const MCPSamplingConfigSchema = lazySchema(() => z.object({
   /** Whether sampling is enabled */
   enabled: z.boolean().describe('Enable LLM sampling'),
 
@@ -349,7 +350,7 @@ export const MCPSamplingConfigSchema = z.object({
 
   /** System prompt for sampling context */
   systemPrompt: z.string().optional().describe('System prompt for sampling context'),
-}).describe('Sampling configuration for MCP');
+}).describe('Sampling configuration for MCP'));
 
 // ==========================================
 // MCP Roots Configuration
@@ -359,7 +360,7 @@ export const MCPSamplingConfigSchema = z.object({
  * MCP Root Entry
  * A single root directory or resource available to the MCP client
  */
-export const MCPRootEntrySchema = z.object({
+export const MCPRootEntrySchema = lazySchema(() => z.object({
   /** Root URI */
   uri: z.string().describe('Root URI (e.g., file:///path/to/project)'),
 
@@ -368,13 +369,13 @@ export const MCPRootEntrySchema = z.object({
 
   /** Whether the root is read-only */
   readOnly: z.boolean().optional().describe('Whether the root is read-only'),
-}).describe('A single root directory or resource');
+}).describe('A single root directory or resource'));
 
 /**
  * MCP Roots Configuration
  * Controls filesystem/resource roots available to the MCP client
  */
-export const MCPRootsConfigSchema = z.object({
+export const MCPRootsConfigSchema = lazySchema(() => z.object({
   /** Root directories/resources */
   roots: z.array(MCPRootEntrySchema).describe('Root directories or resources available to the client'),
 
@@ -383,7 +384,7 @@ export const MCPRootsConfigSchema = z.object({
 
   /** Notify server on root changes */
   notifyOnChange: z.boolean().default(true).describe('Notify server when root contents change'),
-}).describe('Roots configuration for MCP client');
+}).describe('Roots configuration for MCP client'));
 
 // ==========================================
 // MCP Server Configuration
@@ -393,20 +394,20 @@ export const MCPRootsConfigSchema = z.object({
  * MCP Capability
  * Features supported by the MCP server
  */
-export const MCPCapabilitySchema = z.object({
+export const MCPCapabilitySchema = lazySchema(() => z.object({
   resources: z.boolean().default(false).describe('Supports resource listing and retrieval'),
   resourceTemplates: z.boolean().default(false).describe('Supports dynamic resource templates'),
   tools: z.boolean().default(false).describe('Supports tool/function calling'),
   prompts: z.boolean().default(false).describe('Supports prompt templates'),
   sampling: z.boolean().default(false).describe('Supports sampling from LLMs'),
   logging: z.boolean().default(false).describe('Supports logging and debugging'),
-});
+}));
 
 /**
  * MCP Server Info
  * Server metadata and capabilities
  */
-export const MCPServerInfoSchema = z.object({
+export const MCPServerInfoSchema = lazySchema(() => z.object({
   name: z.string().describe('Server name'),
   version: z.string().describe('Server version (semver)'),
   description: z.string().optional(),
@@ -419,13 +420,13 @@ export const MCPServerInfoSchema = z.object({
   vendor: z.string().optional().describe('Server vendor/provider'),
   homepage: z.string().url().optional().describe('Server homepage URL'),
   documentation: z.string().url().optional().describe('Documentation URL'),
-});
+}));
 
 /**
  * MCP Server Configuration
  * Complete MCP server definition
  */
-export const MCPServerConfigSchema = z.object({
+export const MCPServerConfigSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Server unique identifier (snake_case)'),
   label: z.string().describe('Display name'),
@@ -487,7 +488,7 @@ export const MCPServerConfigSchema = z.object({
 
   /** Sampling */
   sampling: MCPSamplingConfigSchema.optional().describe('LLM sampling configuration'),
-});
+}));
 
 // ==========================================
 // MCP Request/Response Schemas
@@ -496,23 +497,23 @@ export const MCPServerConfigSchema = z.object({
 /**
  * MCP Resource Request
  */
-export const MCPResourceRequestSchema = z.object({
+export const MCPResourceRequestSchema = lazySchema(() => z.object({
   uri: z.string().describe('Resource URI to fetch'),
   parameters: z.record(z.string(), z.unknown()).optional().describe('URI template parameters'),
-});
+}));
 
 /**
  * MCP Resource Response
  */
-export const MCPResourceResponseSchema = z.object({
+export const MCPResourceResponseSchema = lazySchema(() => z.object({
   resource: MCPResourceSchema,
   content: z.unknown().describe('Resource content'),
-});
+}));
 
 /**
  * MCP Tool Call Request
  */
-export const MCPToolCallRequestSchema = z.object({
+export const MCPToolCallRequestSchema = lazySchema(() => z.object({
   toolName: z.string().describe('Tool to invoke'),
   parameters: z.record(z.string(), z.unknown()).describe('Tool parameters'),
   
@@ -527,12 +528,12 @@ export const MCPToolCallRequestSchema = z.object({
     agentName: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
-});
+}));
 
 /**
  * MCP Tool Call Response
  */
-export const MCPToolCallResponseSchema = z.object({
+export const MCPToolCallResponseSchema = lazySchema(() => z.object({
   toolName: z.string(),
   status: z.enum(['success', 'error', 'timeout', 'cancelled']),
   
@@ -549,23 +550,23 @@ export const MCPToolCallResponseSchema = z.object({
   /** Metrics */
   executionTime: z.number().nonnegative().optional().describe('Execution time in milliseconds'),
   timestamp: z.string().datetime().optional(),
-});
+}));
 
 /**
  * MCP Prompt Request
  */
-export const MCPPromptRequestSchema = z.object({
+export const MCPPromptRequestSchema = lazySchema(() => z.object({
   promptName: z.string().describe('Prompt template to use'),
   arguments: z.record(z.string(), z.unknown()).optional().describe('Prompt arguments'),
-});
+}));
 
 /**
  * MCP Prompt Response
  */
-export const MCPPromptResponseSchema = z.object({
+export const MCPPromptResponseSchema = lazySchema(() => z.object({
   promptName: z.string(),
   messages: z.array(MCPPromptMessageSchema).describe('Rendered prompt messages'),
-});
+}));
 
 // ==========================================
 // MCP Client Configuration
@@ -575,7 +576,7 @@ export const MCPPromptResponseSchema = z.object({
  * MCP Client Configuration
  * Configuration for AI clients connecting to MCP servers
  */
-export const MCPClientConfigSchema = z.object({
+export const MCPClientConfigSchema = lazySchema(() => z.object({
   /** Server Connection */
   servers: z.array(MCPServerConfigSchema).describe('MCP servers to connect to'),
   
@@ -594,7 +595,7 @@ export const MCPClientConfigSchema = z.object({
 
   /** Roots */
   roots: MCPRootsConfigSchema.optional().describe('Root directories/resources configuration'),
-});
+}));
 
 // ==========================================
 // Type Exports

@@ -87,7 +87,8 @@ import { z } from 'zod';
 /**
  * ETL Source/Destination Type
  */
-export const ETLEndpointTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ETLEndpointTypeSchema = lazySchema(() => z.enum([
   'database',    // SQL/NoSQL databases
   'api',         // REST/GraphQL APIs
   'file',        // CSV, JSON, XML, Excel files
@@ -96,14 +97,14 @@ export const ETLEndpointTypeSchema = z.enum([
   'warehouse',   // Data warehouse (Snowflake, BigQuery, Redshift)
   'storage',     // S3, Azure Blob, Google Cloud Storage
   'spreadsheet', // Google Sheets, Excel Online
-]);
+]));
 
 export type ETLEndpointType = z.infer<typeof ETLEndpointTypeSchema>;
 
 /**
  * ETL Source Configuration
  */
-export const ETLSourceSchema = z.object({
+export const ETLSourceSchema = lazySchema(() => z.object({
   /**
    * Source type
    */
@@ -136,14 +137,14 @@ export const ETLSourceSchema = z.object({
     cursorField: z.string().describe('Field to track progress (e.g., updated_at)'),
     cursorValue: z.unknown().optional().describe('Last processed value'),
   }).optional().describe('Incremental extraction config'),
-});
+}));
 
 export type ETLSource = z.infer<typeof ETLSourceSchema>;
 
 /**
  * ETL Destination Configuration
  */
-export const ETLDestinationSchema = z.object({
+export const ETLDestinationSchema = lazySchema(() => z.object({
   /**
    * Destination type
    */
@@ -173,14 +174,14 @@ export const ETLDestinationSchema = z.object({
    * Primary key fields for upsert/merge
    */
   primaryKey: z.array(z.string()).optional().describe('Primary key fields'),
-});
+}));
 
 export type ETLDestination = z.infer<typeof ETLDestinationSchema>;
 
 /**
  * ETL Transformation Type
  */
-export const ETLTransformationTypeSchema = z.enum([
+export const ETLTransformationTypeSchema = lazySchema(() => z.enum([
   'map',         // Field mapping/renaming
   'filter',      // Row filtering
   'aggregate',   // Aggregation/grouping
@@ -191,14 +192,14 @@ export const ETLTransformationTypeSchema = z.enum([
   'merge',       // Merge multiple records into one
   'normalize',   // Data normalization
   'deduplicate', // Remove duplicates
-]);
+]));
 
 export type ETLTransformationType = z.infer<typeof ETLTransformationTypeSchema>;
 
 /**
  * ETL Transformation Configuration
  */
-export const ETLTransformationSchema = z.object({
+export const ETLTransformationSchema = lazySchema(() => z.object({
   /**
    * Transformation name
    */
@@ -222,18 +223,18 @@ export const ETLTransformationSchema = z.object({
    * Whether to continue on error
    */
   continueOnError: z.boolean().default(false).describe('Continue on error'),
-});
+}));
 
 export type ETLTransformation = z.infer<typeof ETLTransformationSchema>;
 
 /**
  * ETL Sync Mode
  */
-export const ETLSyncModeSchema = z.enum([
+export const ETLSyncModeSchema = lazySchema(() => z.enum([
   'full',        // Full refresh - extract all data every time
   'incremental', // Only extract changed data
   'cdc',         // Change Data Capture - real-time streaming
-]);
+]));
 
 export type ETLSyncMode = z.infer<typeof ETLSyncModeSchema>;
 
@@ -242,7 +243,7 @@ export type ETLSyncMode = z.infer<typeof ETLSyncModeSchema>;
  * 
  * Complete definition of a data pipeline from source to destination with transformations.
  */
-export const ETLPipelineSchema = z.object({
+export const ETLPipelineSchema = lazySchema(() => z.object({
   /**
    * Pipeline identifier (snake_case)
    */
@@ -322,21 +323,21 @@ export const ETLPipelineSchema = z.object({
    * Custom metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata'),
-});
+}));
 
 export type ETLPipeline = z.infer<typeof ETLPipelineSchema>;
 
 /**
  * ETL Run Status
  */
-export const ETLRunStatusSchema = z.enum([
+export const ETLRunStatusSchema = lazySchema(() => z.enum([
   'pending',    // Queued for execution
   'running',    // Currently executing
   'succeeded',  // Completed successfully
   'failed',     // Failed with errors
   'cancelled',  // Manually cancelled
   'timeout',    // Timed out
-]);
+]));
 
 export type ETLRunStatus = z.infer<typeof ETLRunStatusSchema>;
 
@@ -345,7 +346,7 @@ export type ETLRunStatus = z.infer<typeof ETLRunStatusSchema>;
  * 
  * Result of a pipeline execution
  */
-export const ETLPipelineRunSchema = z.object({
+export const ETLPipelineRunSchema = lazySchema(() => z.object({
   /**
    * Run ID
    */
@@ -399,7 +400,7 @@ export const ETLPipelineRunSchema = z.object({
    * Execution logs
    */
   logs: z.array(z.string()).optional().describe('Execution logs'),
-});
+}));
 
 export type ETLPipelineRun = z.infer<typeof ETLPipelineRunSchema>;
 

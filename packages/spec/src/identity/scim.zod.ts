@@ -57,6 +57,7 @@ import { z } from 'zod';
  * SCIM Schema URIs
  * Standard schema identifiers defined in RFC 7643
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const SCIM_SCHEMAS = {
   USER: 'urn:ietf:params:scim:schemas:core:2.0:User',
   GROUP: 'urn:ietf:params:scim:schemas:core:2.0:Group',
@@ -75,7 +76,7 @@ export const SCIM_SCHEMAS = {
  * SCIM Meta Schema
  * Common metadata for all SCIM resources
  */
-export const SCIMMetaSchema = z.object({
+export const SCIMMetaSchema = lazySchema(() => z.object({
   /**
    * Resource type name
    * @example "User", "Group"
@@ -116,7 +117,7 @@ export const SCIMMetaSchema = z.object({
   version: z.string()
     .optional()
     .describe('Entity tag (ETag) for concurrency control'),
-});
+}));
 
 export type SCIMMeta = z.infer<typeof SCIMMetaSchema>;
 
@@ -124,7 +125,7 @@ export type SCIMMeta = z.infer<typeof SCIMMetaSchema>;
  * SCIM Name Schema
  * Structured name components
  */
-export const SCIMNameSchema = z.object({
+export const SCIMNameSchema = lazySchema(() => z.object({
   /**
    * Full name formatted for display
    * @example "Ms. Barbara Jane Jensen III"
@@ -172,7 +173,7 @@ export const SCIMNameSchema = z.object({
   honorificSuffix: z.string()
     .optional()
     .describe('Honorific suffix (Jr., Sr.)'),
-});
+}));
 
 export type SCIMName = z.infer<typeof SCIMNameSchema>;
 
@@ -180,7 +181,7 @@ export type SCIMName = z.infer<typeof SCIMNameSchema>;
  * SCIM Email Schema
  * Multi-valued email address
  */
-export const SCIMEmailSchema = z.object({
+export const SCIMEmailSchema = lazySchema(() => z.object({
   /**
    * Email address value
    */
@@ -210,7 +211,7 @@ export const SCIMEmailSchema = z.object({
     .optional()
     .default(false)
     .describe('Primary email indicator'),
-});
+}));
 
 export type SCIMEmail = z.infer<typeof SCIMEmailSchema>;
 
@@ -218,7 +219,7 @@ export type SCIMEmail = z.infer<typeof SCIMEmailSchema>;
  * SCIM Phone Number Schema
  * Multi-valued phone number
  */
-export const SCIMPhoneNumberSchema = z.object({
+export const SCIMPhoneNumberSchema = lazySchema(() => z.object({
   /**
    * Phone number value
    * Format is not enforced to support international numbers
@@ -247,7 +248,7 @@ export const SCIMPhoneNumberSchema = z.object({
     .optional()
     .default(false)
     .describe('Primary phone indicator'),
-});
+}));
 
 export type SCIMPhoneNumber = z.infer<typeof SCIMPhoneNumberSchema>;
 
@@ -255,7 +256,7 @@ export type SCIMPhoneNumber = z.infer<typeof SCIMPhoneNumberSchema>;
  * SCIM Address Schema
  * Multi-valued physical mailing address
  */
-export const SCIMAddressSchema = z.object({
+export const SCIMAddressSchema = lazySchema(() => z.object({
   /**
    * Full mailing address formatted for display
    */
@@ -312,7 +313,7 @@ export const SCIMAddressSchema = z.object({
     .optional()
     .default(false)
     .describe('Primary address indicator'),
-});
+}));
 
 export type SCIMAddress = z.infer<typeof SCIMAddressSchema>;
 
@@ -320,7 +321,7 @@ export type SCIMAddress = z.infer<typeof SCIMAddressSchema>;
  * SCIM Group Reference
  * Reference to a group the user belongs to
  */
-export const SCIMGroupReferenceSchema = z.object({
+export const SCIMGroupReferenceSchema = lazySchema(() => z.object({
   /**
    * Group identifier
    */
@@ -348,7 +349,7 @@ export const SCIMGroupReferenceSchema = z.object({
   type: z.enum(['direct', 'indirect'])
     .optional()
     .describe('Membership type'),
-});
+}));
 
 export type SCIMGroupReference = z.infer<typeof SCIMGroupReferenceSchema>;
 
@@ -356,7 +357,7 @@ export type SCIMGroupReference = z.infer<typeof SCIMGroupReferenceSchema>;
  * SCIM Enterprise User Extension
  * Enterprise-specific user attributes
  */
-export const SCIMEnterpriseUserSchema = z.object({
+export const SCIMEnterpriseUserSchema = lazySchema(() => z.object({
   /**
    * Employee number
    */
@@ -402,7 +403,7 @@ export const SCIMEnterpriseUserSchema = z.object({
   })
     .optional()
     .describe('Manager reference'),
-});
+}));
 
 export type SCIMEnterpriseUser = z.infer<typeof SCIMEnterpriseUserSchema>;
 
@@ -410,7 +411,7 @@ export type SCIMEnterpriseUser = z.infer<typeof SCIMEnterpriseUserSchema>;
  * SCIM User Schema (Core)
  * Complete SCIM 2.0 User resource
  */
-export const SCIMUserSchema = z.object({
+export const SCIMUserSchema = lazySchema(() => z.object({
   /**
    * SCIM schema URIs
    * Must include at minimum the core User schema URI
@@ -637,7 +638,7 @@ export const SCIMUserSchema = z.object({
       message: `schemas must include "${SCIM_SCHEMAS.ENTERPRISE_USER}" when enterprise user extension attributes are present`,
     });
   }
-});
+}));
 
 export type SCIMUser = z.infer<typeof SCIMUserSchema>;
 
@@ -645,7 +646,7 @@ export type SCIMUser = z.infer<typeof SCIMUserSchema>;
  * SCIM Member Reference
  * Reference to a member in a group
  */
-export const SCIMMemberReferenceSchema = z.object({
+export const SCIMMemberReferenceSchema = lazySchema(() => z.object({
   /**
    * Member identifier
    */
@@ -673,7 +674,7 @@ export const SCIMMemberReferenceSchema = z.object({
   display: z.string()
     .optional()
     .describe('Member display name'),
-});
+}));
 
 export type SCIMMemberReference = z.infer<typeof SCIMMemberReferenceSchema>;
 
@@ -681,7 +682,7 @@ export type SCIMMemberReference = z.infer<typeof SCIMMemberReferenceSchema>;
  * SCIM Group Schema
  * Complete SCIM 2.0 Group resource
  */
-export const SCIMGroupSchema = z.object({
+export const SCIMGroupSchema = lazySchema(() => z.object({
   /**
    * SCIM schema URIs
    * Must include at minimum the core Group schema URI
@@ -729,7 +730,7 @@ export const SCIMGroupSchema = z.object({
   meta: SCIMMetaSchema
     .optional()
     .describe('Resource metadata'),
-});
+}));
 
 export type SCIMGroup = z.infer<typeof SCIMGroupSchema>;
 
@@ -746,7 +747,7 @@ export type SCIMResource = SCIMUser | SCIMGroup;
  * Generic type T allows for type-safe responses when the resource type is known.
  * For mixed resource types, use SCIMResource union.
  */
-export const SCIMListResponseSchema = z.object({
+export const SCIMListResponseSchema = lazySchema(() => z.object({
   /**
    * SCIM schema URI
    */
@@ -791,7 +792,7 @@ export const SCIMListResponseSchema = z.object({
     .min(0)
     .optional()
     .describe('Items per page'),
-});
+}));
 
 export type SCIMListResponse = z.infer<typeof SCIMListResponseSchema>;
 
@@ -799,7 +800,7 @@ export type SCIMListResponse = z.infer<typeof SCIMListResponseSchema>;
  * SCIM Error Response
  * Error response format
  */
-export const SCIMErrorSchema = z.object({
+export const SCIMErrorSchema = lazySchema(() => z.object({
   /**
    * SCIM schema URI
    */
@@ -845,7 +846,7 @@ export const SCIMErrorSchema = z.object({
   detail: z.string()
     .optional()
     .describe('Error detail message'),
-});
+}));
 
 export type SCIMError = z.infer<typeof SCIMErrorSchema>;
 
@@ -853,7 +854,7 @@ export type SCIMError = z.infer<typeof SCIMErrorSchema>;
  * SCIM Patch Operation
  * For PATCH requests
  */
-export const SCIMPatchOperationSchema = z.object({
+export const SCIMPatchOperationSchema = lazySchema(() => z.object({
   /**
    * Operation type
    */
@@ -873,14 +874,14 @@ export const SCIMPatchOperationSchema = z.object({
   value: z.unknown()
     .optional()
     .describe('Value to set'),
-});
+}));
 
 export type SCIMPatchOperation = z.infer<typeof SCIMPatchOperationSchema>;
 
 /**
  * SCIM Patch Request
  */
-export const SCIMPatchRequestSchema = z.object({
+export const SCIMPatchRequestSchema = lazySchema(() => z.object({
   /**
    * SCIM schema URI
    */
@@ -899,7 +900,7 @@ export const SCIMPatchRequestSchema = z.object({
   Operations: z.array(SCIMPatchOperationSchema)
     .min(1)
     .describe('Patch operations'),
-});
+}));
 
 export type SCIMPatchRequest = z.infer<typeof SCIMPatchRequestSchema>;
 
@@ -964,7 +965,7 @@ export const SCIM = {
  * SCIM Bulk Operation Schema
  * A single operation within a bulk request
  */
-export const SCIMBulkOperationSchema = z.object({
+export const SCIMBulkOperationSchema = lazySchema(() => z.object({
   /** HTTP method for this operation */
   method: z.enum(['POST', 'PUT', 'PATCH', 'DELETE'])
     .describe('HTTP method for the bulk operation'),
@@ -987,7 +988,7 @@ export const SCIMBulkOperationSchema = z.object({
   version: z.string()
     .optional()
     .describe('ETag for optimistic concurrency control'),
-});
+}));
 
 export type SCIMBulkOperation = z.infer<typeof SCIMBulkOperationSchema>;
 
@@ -995,7 +996,7 @@ export type SCIMBulkOperation = z.infer<typeof SCIMBulkOperationSchema>;
  * SCIM Bulk Request Schema
  * Batch multiple SCIM operations into a single HTTP request
  */
-export const SCIMBulkRequestSchema = z.object({
+export const SCIMBulkRequestSchema = lazySchema(() => z.object({
   /** SCIM schema URI for bulk request */
   schemas: z.array(z.literal(SCIM_SCHEMAS.BULK_REQUEST))
     .default([SCIM_SCHEMAS.BULK_REQUEST])
@@ -1011,7 +1012,7 @@ export const SCIMBulkRequestSchema = z.object({
     .int()
     .optional()
     .describe('Stop processing after this many errors'),
-});
+}));
 
 export type SCIMBulkRequest = z.infer<typeof SCIMBulkRequestSchema>;
 
@@ -1019,7 +1020,7 @@ export type SCIMBulkRequest = z.infer<typeof SCIMBulkRequestSchema>;
  * SCIM Bulk Response Operation Schema
  * Result of a single operation within a bulk response
  */
-export const SCIMBulkResponseOperationSchema = z.object({
+export const SCIMBulkResponseOperationSchema = lazySchema(() => z.object({
   /** HTTP method that was executed */
   method: z.enum(['POST', 'PUT', 'PATCH', 'DELETE'])
     .describe('HTTP method that was executed'),
@@ -1042,7 +1043,7 @@ export const SCIMBulkResponseOperationSchema = z.object({
   response: z.unknown()
     .optional()
     .describe('Response body (typically present for errors)'),
-});
+}));
 
 export type SCIMBulkResponseOperation = z.infer<typeof SCIMBulkResponseOperationSchema>;
 
@@ -1050,7 +1051,7 @@ export type SCIMBulkResponseOperation = z.infer<typeof SCIMBulkResponseOperation
  * SCIM Bulk Response Schema
  * Response to a bulk request containing results for each operation
  */
-export const SCIMBulkResponseSchema = z.object({
+export const SCIMBulkResponseSchema = lazySchema(() => z.object({
   /** SCIM schema URI for bulk response */
   schemas: z.array(z.literal(SCIM_SCHEMAS.BULK_RESPONSE))
     .default([SCIM_SCHEMAS.BULK_RESPONSE])
@@ -1059,6 +1060,6 @@ export const SCIMBulkResponseSchema = z.object({
   /** Array of operation results */
   operations: z.array(SCIMBulkResponseOperationSchema)
     .describe('Results for each bulk operation'),
-});
+}));
 
 export type SCIMBulkResponse = z.infer<typeof SCIMBulkResponseSchema>;

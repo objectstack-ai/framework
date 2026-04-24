@@ -39,6 +39,7 @@ import { z } from 'zod';
  * Task Priority Enum
  * Lower numbers = higher priority
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const TaskPriority = z.enum([
   'critical',   // 0 - Must execute immediately
   'high',       // 1 - Execute soon
@@ -90,14 +91,14 @@ export type TaskStatus = z.infer<typeof TaskStatus>;
  * Task Retry Policy Schema
  * Configuration for task retry behavior
  */
-export const TaskRetryPolicySchema = z.object({
+export const TaskRetryPolicySchema = lazySchema(() => z.object({
   maxRetries: z.number().int().min(0).default(3).describe('Maximum retry attempts'),
   backoffStrategy: z.enum(['fixed', 'linear', 'exponential']).default('exponential')
     .describe('Backoff strategy between retries'),
   initialDelayMs: z.number().int().positive().default(1000).describe('Initial retry delay in milliseconds'),
   maxDelayMs: z.number().int().positive().default(60000).describe('Maximum retry delay in milliseconds'),
   backoffMultiplier: z.number().positive().default(2).describe('Multiplier for exponential backoff'),
-});
+}));
 
 export type TaskRetryPolicy = z.infer<typeof TaskRetryPolicySchema>;
 export type TaskRetryPolicyInput = z.input<typeof TaskRetryPolicySchema>;
@@ -119,7 +120,7 @@ export type TaskRetryPolicyInput = z.input<typeof TaskRetryPolicySchema>;
  *   }
  * }
  */
-export const TaskSchema = z.object({
+export const TaskSchema = lazySchema(() => z.object({
   /**
    * Unique task identifier
    */
@@ -179,7 +180,7 @@ export const TaskSchema = z.object({
     createdBy: z.string().optional().describe('User who created task'),
     tags: z.array(z.string()).optional().describe('Task tags for filtering'),
   }).optional().describe('Task metadata'),
-});
+}));
 
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskInput = z.input<typeof TaskSchema>;
@@ -192,7 +193,7 @@ export type TaskInput = z.input<typeof TaskSchema>;
  * Task Execution Result Schema
  * Result of a task execution attempt
  */
-export const TaskExecutionResultSchema = z.object({
+export const TaskExecutionResultSchema = lazySchema(() => z.object({
   /**
    * Task identifier
    */
@@ -233,7 +234,7 @@ export const TaskExecutionResultSchema = z.object({
    */
   attempt: z.number().int().min(1).describe('Attempt number (1-indexed)'),
   willRetry: z.boolean().describe('Whether task will be retried'),
-});
+}));
 
 export type TaskExecutionResult = z.infer<typeof TaskExecutionResultSchema>;
 
@@ -255,7 +256,7 @@ export type TaskExecutionResult = z.infer<typeof TaskExecutionResultSchema>;
  *   }
  * }
  */
-export const QueueConfigSchema = z.object({
+export const QueueConfigSchema = lazySchema(() => z.object({
   /**
    * Queue name
    */
@@ -299,7 +300,7 @@ export const QueueConfigSchema = z.object({
     scaleUpThreshold: z.number().int().positive().default(100).describe('Queue size to scale up'),
     scaleDownThreshold: z.number().int().min(0).default(10).describe('Queue size to scale down'),
   }).optional().describe('Auto-scaling configuration'),
-});
+}));
 
 export type QueueConfig = z.infer<typeof QueueConfigSchema>;
 export type QueueConfigInput = z.input<typeof QueueConfigSchema>;
@@ -321,7 +322,7 @@ export type QueueConfigInput = z.input<typeof QueueConfigSchema>;
  *   "queue": "batch_processing"
  * }
  */
-export const BatchTaskSchema = z.object({
+export const BatchTaskSchema = lazySchema(() => z.object({
   /**
    * Batch job identifier
    */
@@ -380,7 +381,7 @@ export const BatchTaskSchema = z.object({
     .output(z.void())
     .optional()
     .describe('Progress callback function (called after each batch)'),
-});
+}));
 
 export type BatchTask = z.infer<typeof BatchTaskSchema>;
 export type BatchTaskInput = z.input<typeof BatchTaskSchema>;
@@ -389,7 +390,7 @@ export type BatchTaskInput = z.input<typeof BatchTaskSchema>;
  * Batch Progress Schema
  * Tracks progress of a batch job
  */
-export const BatchProgressSchema = z.object({
+export const BatchProgressSchema = lazySchema(() => z.object({
   /**
    * Batch job identifier
    */
@@ -430,7 +431,7 @@ export const BatchProgressSchema = z.object({
    */
   startedAt: z.string().datetime().optional().describe('When batch started'),
   completedAt: z.string().datetime().optional().describe('When batch completed'),
-});
+}));
 
 export type BatchProgress = z.infer<typeof BatchProgressSchema>;
 export type BatchProgressInput = z.input<typeof BatchProgressSchema>;
@@ -443,7 +444,7 @@ export type BatchProgressInput = z.input<typeof BatchProgressSchema>;
  * Worker Configuration Schema
  * Configuration for a worker instance
  */
-export const WorkerConfigSchema = z.object({
+export const WorkerConfigSchema = lazySchema(() => z.object({
   /**
    * Worker name
    */
@@ -485,7 +486,7 @@ export const WorkerConfigSchema = z.object({
    * Task handlers
    */
   handlers: z.record(z.string(), z.function()).optional().describe('Task type handlers'),
-});
+}));
 
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;
 export type WorkerConfigInput = z.input<typeof WorkerConfigSchema>;
@@ -498,7 +499,7 @@ export type WorkerConfigInput = z.input<typeof WorkerConfigSchema>;
  * Worker Stats Schema
  * Runtime statistics for a worker
  */
-export const WorkerStatsSchema = z.object({
+export const WorkerStatsSchema = lazySchema(() => z.object({
   /**
    * Worker name
    */
@@ -543,7 +544,7 @@ export const WorkerStatsSchema = z.object({
     completed: z.number().int().min(0).describe('Completed tasks'),
     failed: z.number().int().min(0).describe('Failed tasks'),
   })).optional().describe('Per-queue statistics'),
-});
+}));
 
 export type WorkerStats = z.infer<typeof WorkerStatsSchema>;
 

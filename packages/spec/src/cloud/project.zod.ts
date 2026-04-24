@@ -25,18 +25,19 @@ import { TenantPlanSchema } from './tenant.zod';
  * Project type — canonical buckets per industry convention
  * (Salesforce, Power Platform, ServiceNow all use this taxonomy).
  */
-export const ProjectTypeSchema = z
+import { lazySchema } from '../shared/lazy-schema';
+export const ProjectTypeSchema = lazySchema(() => z
   .enum(['production', 'sandbox', 'development', 'test', 'staging', 'preview', 'trial'])
-  .describe('Project type (prod/sandbox/dev/test/…)');
+  .describe('Project type (prod/sandbox/dev/test/…)'));
 
 export type ProjectType = z.infer<typeof ProjectTypeSchema>;
 
 /**
  * Project lifecycle status
  */
-export const ProjectStatusSchema = z
+export const ProjectStatusSchema = lazySchema(() => z
   .enum(['provisioning', 'active', 'suspended', 'archived', 'failed', 'migrating'])
-  .describe('Project lifecycle status');
+  .describe('Project lifecycle status'));
 
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
 
@@ -45,10 +46,10 @@ export type ProjectStatus = z.infer<typeof ProjectStatusSchema>;
  * Kept open-ended (`z.string()`) so third-party drivers can register new
  * backends without a core release.
  */
-export const ProjectDriverSchema = z
+export const ProjectDriverSchema = lazySchema(() => z
   .string()
   .min(1)
-  .describe('Data-plane driver key (e.g. `turso`, `libsql`, `sqlite`, `postgres`)');
+  .describe('Data-plane driver key (e.g. `turso`, `libsql`, `sqlite`, `postgres`)'));
 
 export type ProjectDriver = z.infer<typeof ProjectDriverSchema>;
 
@@ -59,7 +60,7 @@ export type ProjectDriver = z.infer<typeof ProjectDriverSchema>;
  * stored directly on this row so a single lookup gives both logical
  * and physical addressing. Projects are addressable by `id` (UUID).
  */
-export const ProjectSchema = z.object({
+export const ProjectSchema = lazySchema(() => z.object({
   /** UUID of the project (stable, never reused). */
   id: z.string().uuid().describe('UUID of the project (stable, never reused)'),
 
@@ -116,7 +117,7 @@ export const ProjectSchema = z.object({
     .string()
     .optional()
     .describe('Canonical hostname for this project (e.g. acme-dev.objectstack.app or api.acme.com). UNIQUE. Auto-set on creation; can be overridden for custom domains.'),
-});
+}));
 
 export type Project = z.infer<typeof ProjectSchema>;
 
@@ -127,16 +128,16 @@ export type Project = z.infer<typeof ProjectSchema>;
 /**
  * Credential lifecycle status — used during rotation.
  */
-export const ProjectCredentialStatusSchema = z
+export const ProjectCredentialStatusSchema = lazySchema(() => z
   .enum(['active', 'rotating', 'revoked'])
-  .describe('Credential lifecycle status');
+  .describe('Credential lifecycle status'));
 
 export type ProjectCredentialStatus = z.infer<typeof ProjectCredentialStatusSchema>;
 
 /**
  * Encrypted credential for a project's database.
  */
-export const ProjectCredentialSchema = z.object({
+export const ProjectCredentialSchema = lazySchema(() => z.object({
   /** UUID of the credential. */
   id: z.string().uuid().describe('UUID of the credential'),
 
@@ -166,7 +167,7 @@ export const ProjectCredentialSchema = z.object({
 
   /** Timestamp when the credential was revoked (null while active). */
   revokedAt: z.string().datetime().optional().describe('Revocation timestamp (if revoked)'),
-});
+}));
 
 export type ProjectCredential = z.infer<typeof ProjectCredentialSchema>;
 
@@ -177,9 +178,9 @@ export type ProjectCredential = z.infer<typeof ProjectCredentialSchema>;
 /**
  * Per-project role assigned to a user/service principal.
  */
-export const ProjectRoleSchema = z
+export const ProjectRoleSchema = lazySchema(() => z
   .enum(['owner', 'admin', 'maker', 'reader', 'guest'])
-  .describe('Per-project role');
+  .describe('Per-project role'));
 
 export type ProjectRole = z.infer<typeof ProjectRoleSchema>;
 
@@ -188,7 +189,7 @@ export type ProjectRole = z.infer<typeof ProjectRoleSchema>;
  *
  * Unique by `(projectId, userId)`.
  */
-export const ProjectMemberSchema = z.object({
+export const ProjectMemberSchema = lazySchema(() => z.object({
   /** UUID of the membership. */
   id: z.string().uuid().describe('UUID of the membership'),
 
@@ -209,7 +210,7 @@ export const ProjectMemberSchema = z.object({
 
   /** Last update timestamp. */
   updatedAt: z.string().datetime().describe('Last update timestamp (ISO-8601)'),
-});
+}));
 
 export type ProjectMember = z.infer<typeof ProjectMemberSchema>;
 
@@ -220,7 +221,7 @@ export type ProjectMember = z.infer<typeof ProjectMemberSchema>;
 /**
  * Request to provision a new project for an organization.
  */
-export const ProvisionProjectRequestSchema = z.object({
+export const ProvisionProjectRequestSchema = lazySchema(() => z.object({
   organizationId: z.string().describe('Organization that will own the new project'),
   displayName: z.string().min(1).describe('Display name shown in Studio and APIs'),
   driver: ProjectDriverSchema.optional().describe('Driver key (defaults to provisioning service config)'),
@@ -231,19 +232,19 @@ export const ProvisionProjectRequestSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().describe('Free-form metadata'),
   hostname: z.string().optional().describe('Canonical hostname for this project (auto-generated if omitted)'),
   templateId: z.string().optional().describe('Template to seed into the project on first provisioning (e.g. "crm", "todo"). Defaults to "blank".'),
-});
+}));
 
 export type ProvisionProjectRequest = z.infer<typeof ProvisionProjectRequestSchema>;
 
 /**
  * Response of a successful project provisioning call.
  */
-export const ProvisionProjectResponseSchema = z.object({
+export const ProvisionProjectResponseSchema = lazySchema(() => z.object({
   project: ProjectSchema.describe('Provisioned project (includes database addressing)'),
   credential: ProjectCredentialSchema.describe('Freshly-minted credential for the project DB'),
   durationMs: z.number().describe('Total provisioning duration in milliseconds'),
   warnings: z.array(z.string()).optional().describe('Non-fatal warnings emitted during provisioning'),
-});
+}));
 
 export type ProvisionProjectResponse = z.infer<typeof ProvisionProjectResponseSchema>;
 
@@ -251,7 +252,7 @@ export type ProvisionProjectResponse = z.infer<typeof ProvisionProjectResponseSc
  * Request to bootstrap a brand-new organization — allocates the default
  * project (and its DB) in one atomic call.
  */
-export const ProvisionOrganizationRequestSchema = z.object({
+export const ProvisionOrganizationRequestSchema = lazySchema(() => z.object({
   organizationId: z.string().describe('Organization being bootstrapped'),
   defaultProjectDisplayName: z
     .string()
@@ -263,17 +264,17 @@ export const ProvisionOrganizationRequestSchema = z.object({
   storageLimitMb: z.number().int().positive().optional().describe('Storage quota in megabytes'),
   createdBy: z.string().describe('User ID that initiated provisioning'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Free-form metadata'),
-});
+}));
 
 export type ProvisionOrganizationRequest = z.infer<typeof ProvisionOrganizationRequestSchema>;
 
 /**
  * Response of a successful organization bootstrap.
  */
-export const ProvisionOrganizationResponseSchema = z.object({
+export const ProvisionOrganizationResponseSchema = lazySchema(() => z.object({
   defaultProject: ProvisionProjectResponseSchema.describe('Default project that was created'),
   durationMs: z.number().describe('Total bootstrap duration in milliseconds'),
   warnings: z.array(z.string()).optional().describe('Non-fatal warnings'),
-});
+}));
 
 export type ProvisionOrganizationResponse = z.infer<typeof ProvisionOrganizationResponseSchema>;

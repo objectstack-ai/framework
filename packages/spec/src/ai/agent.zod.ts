@@ -6,61 +6,62 @@ import { StateMachineSchema } from '../automation/state-machine.zod';
 /**
  * AI Model Configuration
  */
-export const AIModelConfigSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const AIModelConfigSchema = lazySchema(() => z.object({
   provider: z.enum(['openai', 'azure_openai', 'anthropic', 'local']).default('openai'),
   model: z.string().describe('Model name (e.g. gpt-4, claude-3-opus)'),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().optional(),
   topP: z.number().optional(),
-});
+}));
 
 /**
  * AI Tool Definition
  * References to Actions, Flows, or Objects available to the Agent.
  */
-export const AIToolSchema = z.object({
+export const AIToolSchema = lazySchema(() => z.object({
   type: z.enum(['action', 'flow', 'query', 'vector_search']),
   name: z.string().describe('Reference name (Action Name, Flow Name)'),
   description: z.string().optional().describe('Override description for the LLM'),
-});
+}));
 
 /**
  * AI Knowledge Base
  * RAG configuration.
  */
-export const AIKnowledgeSchema = z.object({
+export const AIKnowledgeSchema = lazySchema(() => z.object({
   topics: z.array(z.string()).describe('Topics/Tags to recruit knowledge from'),
   indexes: z.array(z.string()).describe('Vector Store Indexes'),
-});
+}));
 
 /**
  * Structured Output Format
  * Defines the expected output format for agent responses
  */
-export const StructuredOutputFormatSchema = z.enum([
+export const StructuredOutputFormatSchema = lazySchema(() => z.enum([
   'json_object',
   'json_schema',
   'regex',
   'grammar',
   'xml',
-]).describe('Output format for structured agent responses');
+]).describe('Output format for structured agent responses'));
 
 /**
  * Transform Pipeline Step
  * Post-processing steps applied to structured output
  */
-export const TransformPipelineStepSchema = z.enum([
+export const TransformPipelineStepSchema = lazySchema(() => z.enum([
   'trim',
   'parse_json',
   'validate',
   'coerce_types',
-]).describe('Post-processing step for structured output');
+]).describe('Post-processing step for structured output'));
 
 /**
  * Structured Output Configuration
  * Controls how the agent formats and validates its output
  */
-export const StructuredOutputConfigSchema = z.object({
+export const StructuredOutputConfigSchema = lazySchema(() => z.object({
   /** Output format type */
   format: StructuredOutputFormatSchema.describe('Expected output format'),
 
@@ -81,7 +82,7 @@ export const StructuredOutputConfigSchema = z.object({
 
   /** Post-processing pipeline steps */
   transformPipeline: z.array(TransformPipelineStepSchema).optional().describe('Post-processing steps applied to output'),
-}).describe('Structured output configuration for agent responses');
+}).describe('Structured output configuration for agent responses'));
 
 export type StructuredOutputFormat = z.infer<typeof StructuredOutputFormatSchema>;
 export type TransformPipelineStep = z.infer<typeof TransformPipelineStepSchema>;
@@ -124,7 +125,7 @@ export type StructuredOutputConfig = z.infer<typeof StructuredOutputConfigSchema
  * });
  * ```
  */
-export const AgentSchema = z.object({
+export const AgentSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Agent unique identifier'),
   label: z.string().describe('Agent display name'),
@@ -209,7 +210,7 @@ export const AgentSchema = z.object({
 
   /** Structured Output */
   structuredOutput: StructuredOutputConfigSchema.optional().describe('Structured output format and validation configuration'),
-});
+}));
 
 /**
  * Type-safe factory for creating AI agent definitions.

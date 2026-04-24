@@ -46,7 +46,8 @@ import { z } from 'zod';
  * 
  * Server configuration for OpenAPI specification.
  */
-export const OpenApiServerSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const OpenApiServerSchema = lazySchema(() => z.object({
   /** Server URL */
   url: z.string().url().describe('Server base URL'),
   
@@ -59,7 +60,7 @@ export const OpenApiServerSchema = z.object({
     description: z.string().optional(),
     enum: z.array(z.string()).optional(),
   })).optional().describe('URL template variables'),
-});
+}));
 
 export type OpenApiServer = z.infer<typeof OpenApiServerSchema>;
 
@@ -68,7 +69,7 @@ export type OpenApiServer = z.infer<typeof OpenApiServerSchema>;
  * 
  * Security scheme definition for OpenAPI.
  */
-export const OpenApiSecuritySchemeSchema = z.object({
+export const OpenApiSecuritySchemeSchema = lazySchema(() => z.object({
   /** Security scheme type */
   type: z.enum(['apiKey', 'http', 'oauth2', 'openIdConnect']).describe('Security type'),
   
@@ -97,7 +98,7 @@ export const OpenApiSecuritySchemeSchema = z.object({
   
   /** Description */
   description: z.string().optional().describe('Security scheme description'),
-});
+}));
 
 export type OpenApiSecurityScheme = z.infer<typeof OpenApiSecuritySchemeSchema>;
 
@@ -125,7 +126,7 @@ export type OpenApiSecurityScheme = z.infer<typeof OpenApiSecuritySchemeSchema>;
  * }
  * ```
  */
-export const OpenApiSpecSchema = z.object({
+export const OpenApiSpecSchema = lazySchema(() => z.object({
   /** OpenAPI version */
   openapi: z.string().default('3.0.0').describe('OpenAPI specification version'),
   
@@ -184,7 +185,7 @@ export const OpenApiSpecSchema = z.object({
     description: z.string().optional(),
     url: z.string().url(),
   }).optional().describe('External documentation'),
-});
+}));
 
 export type OpenApiSpec = z.infer<typeof OpenApiSpecSchema>;
 
@@ -227,7 +228,7 @@ export type ApiTestingUiType = z.infer<typeof ApiTestingUiType>;
  * }
  * ```
  */
-export const ApiTestingUiConfigSchema = z.object({
+export const ApiTestingUiConfigSchema = lazySchema(() => z.object({
   /** UI type */
   type: ApiTestingUiType.describe('Testing UI implementation'),
   
@@ -275,7 +276,7 @@ export const ApiTestingUiConfigSchema = z.object({
     docExpansion: z.enum(['list', 'full', 'none']).default('list')
       .describe('Documentation expansion mode'),
   }).optional().describe('Layout configuration'),
-});
+}));
 
 export type ApiTestingUiConfig = z.infer<typeof ApiTestingUiConfigSchema>;
 
@@ -300,7 +301,7 @@ export type ApiTestingUiConfig = z.infer<typeof ApiTestingUiConfigSchema>;
  * }
  * ```
  */
-export const ApiTestRequestSchema = z.object({
+export const ApiTestRequestSchema = lazySchema(() => z.object({
   /** Request name */
   name: z.string().describe('Test request name'),
   
@@ -334,7 +335,7 @@ export const ApiTestRequestSchema = z.object({
     statusCode: z.number().int(),
     body: z.unknown().optional(),
   }).optional().describe('Expected response for validation'),
-});
+}));
 
 export type ApiTestRequest = z.infer<typeof ApiTestRequestSchema>;
 
@@ -356,7 +357,7 @@ export type ApiTestRequest = z.infer<typeof ApiTestRequestSchema>;
  * }
  * ```
  */
-export const ApiTestCollectionSchema = z.object({
+export const ApiTestCollectionSchema = lazySchema(() => z.object({
   /** Collection name */
   name: z.string().describe('Collection name'),
   
@@ -376,7 +377,7 @@ export const ApiTestCollectionSchema = z.object({
     description: z.string().optional(),
     requests: z.array(ApiTestRequestSchema),
   })).optional().describe('Request folders for organization'),
-});
+}));
 
 export type ApiTestCollection = z.infer<typeof ApiTestCollectionSchema>;
 
@@ -389,7 +390,7 @@ export type ApiTestCollection = z.infer<typeof ApiTestCollectionSchema>;
  * 
  * Documents changes in API versions.
  */
-export const ApiChangelogEntrySchema = z.object({
+export const ApiChangelogEntrySchema = lazySchema(() => z.object({
   /** Version */
   version: z.string().describe('API version'),
   
@@ -408,7 +409,7 @@ export const ApiChangelogEntrySchema = z.object({
   
   /** Migration guide */
   migrationGuide: z.string().optional().describe('Migration guide URL or text'),
-});
+}));
 
 export type ApiChangelogEntry = z.infer<typeof ApiChangelogEntrySchema>;
 
@@ -417,7 +418,7 @@ export type ApiChangelogEntry = z.infer<typeof ApiChangelogEntrySchema>;
  * 
  * Templates for generating client code.
  */
-export const CodeGenerationTemplateSchema = z.object({
+export const CodeGenerationTemplateSchema = lazySchema(() => z.object({
   /** Language/framework */
   language: z.string().describe('Target language/framework (e.g., typescript, python, curl)'),
   
@@ -429,7 +430,7 @@ export const CodeGenerationTemplateSchema = z.object({
   
   /** Template variables */
   variables: z.array(z.string()).optional().describe('Required template variables'),
-});
+}));
 
 export type CodeGenerationTemplate = z.infer<typeof CodeGenerationTemplateSchema>;
 
@@ -458,7 +459,7 @@ export type CodeGenerationTemplate = z.infer<typeof CodeGenerationTemplateSchema
  * }
  * ```
  */
-export const ApiDocumentationConfigSchema = z.object({
+export const ApiDocumentationConfigSchema = lazySchema(() => z.object({
   /** Enable documentation */
   enabled: z.boolean().default(true).describe('Enable API documentation'),
   
@@ -532,7 +533,7 @@ export const ApiDocumentationConfigSchema = z.object({
       url: z.string().url(),
     }).optional(),
   })).optional().describe('Global tag definitions'),
-});
+}));
 
 export type ApiDocumentationConfig = z.infer<typeof ApiDocumentationConfigSchema>;
 
@@ -545,7 +546,7 @@ export type ApiDocumentationConfig = z.infer<typeof ApiDocumentationConfigSchema
  * 
  * Output of documentation generation process.
  */
-export const GeneratedApiDocumentationSchema = z.object({
+export const GeneratedApiDocumentationSchema = lazySchema(() => z.object({
   /** OpenAPI specification */
   openApiSpec: OpenApiSpecSchema.optional().describe('Generated OpenAPI specification'),
   
@@ -564,7 +565,7 @@ export const GeneratedApiDocumentationSchema = z.object({
   
   /** Source APIs */
   sourceApis: z.array(z.string()).describe('Source API IDs used for generation'),
-});
+}));
 
 export type GeneratedApiDocumentation = z.infer<typeof GeneratedApiDocumentationSchema>;
 

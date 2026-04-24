@@ -25,9 +25,10 @@ import { z } from 'zod';
  * Shared data classification enum used across security subsystems.
  * Defines the canonical set of data sensitivity labels.
  */
-export const DataClassificationSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const DataClassificationSchema = lazySchema(() => z.enum([
   'pii', 'phi', 'pci', 'financial', 'confidential', 'internal', 'public',
-]).describe('Data classification level');
+]).describe('Data classification level'));
 
 export type DataClassification = z.infer<typeof DataClassificationSchema>;
 
@@ -35,9 +36,9 @@ export type DataClassification = z.infer<typeof DataClassificationSchema>;
  * Shared compliance framework enum used across compliance and security schemas.
  * Defines the canonical set of regulatory frameworks.
  */
-export const ComplianceFrameworkSchema = z.enum([
+export const ComplianceFrameworkSchema = lazySchema(() => z.enum([
   'gdpr', 'hipaa', 'sox', 'pci_dss', 'ccpa', 'iso27001',
-]).describe('Compliance framework identifier');
+]).describe('Compliance framework identifier'));
 
 export type ComplianceFramework = z.infer<typeof ComplianceFrameworkSchema>;
 
@@ -45,7 +46,7 @@ export type ComplianceFramework = z.infer<typeof ComplianceFrameworkSchema>;
  * Compliance-driven audit requirement.
  * Maps specific compliance frameworks to the audit event types that MUST be captured.
  */
-export const ComplianceAuditRequirementSchema = z.object({
+export const ComplianceAuditRequirementSchema = lazySchema(() => z.object({
   framework: ComplianceFrameworkSchema
     .describe('Compliance framework identifier'),
   requiredEvents: z.array(z.string())
@@ -54,7 +55,7 @@ export const ComplianceAuditRequirementSchema = z.object({
     .describe('Minimum audit log retention period required by this framework (in days)'),
   alertOnMissing: z.boolean().default(true)
     .describe('Raise alert if a required audit event is not being captured'),
-}).describe('Compliance framework audit event requirements');
+}).describe('Compliance framework audit event requirements'));
 
 export type ComplianceAuditRequirement = z.infer<typeof ComplianceAuditRequirementSchema>;
 
@@ -62,7 +63,7 @@ export type ComplianceAuditRequirement = z.infer<typeof ComplianceAuditRequireme
  * Compliance-driven encryption requirement.
  * Maps compliance frameworks to encryption mandates for specific data classifications.
  */
-export const ComplianceEncryptionRequirementSchema = z.object({
+export const ComplianceEncryptionRequirementSchema = lazySchema(() => z.object({
   framework: ComplianceFrameworkSchema
     .describe('Compliance framework identifier'),
   dataClassifications: z.array(DataClassificationSchema)
@@ -71,7 +72,7 @@ export const ComplianceEncryptionRequirementSchema = z.object({
     .describe('Minimum encryption algorithm strength required'),
   keyRotationMaxDays: z.number().min(1).default(90)
     .describe('Maximum key rotation interval required (in days)'),
-}).describe('Compliance framework encryption requirements');
+}).describe('Compliance framework encryption requirements'));
 
 export type ComplianceEncryptionRequirement = z.infer<typeof ComplianceEncryptionRequirementSchema>;
 
@@ -79,7 +80,7 @@ export type ComplianceEncryptionRequirement = z.infer<typeof ComplianceEncryptio
  * Masking visibility rule.
  * Controls which roles can view unmasked data with audit trail enforcement.
  */
-export const MaskingVisibilityRuleSchema = z.object({
+export const MaskingVisibilityRuleSchema = lazySchema(() => z.object({
   dataClassification: DataClassificationSchema
     .describe('Data classification this rule applies to'),
   defaultMasked: z.boolean().default(true)
@@ -92,7 +93,7 @@ export const MaskingVisibilityRuleSchema = z.object({
     .describe('Require explicit approval before unmasking'),
   approvalRoles: z.array(z.string()).optional()
     .describe('Roles that can approve unmasking requests'),
-}).describe('Masking visibility and audit rule per data classification');
+}).describe('Masking visibility and audit rule per data classification'));
 
 export type MaskingVisibilityRule = z.infer<typeof MaskingVisibilityRuleSchema>;
 
@@ -100,7 +101,7 @@ export type MaskingVisibilityRule = z.infer<typeof MaskingVisibilityRuleSchema>;
  * Security Event Correlation Schema.
  * Defines how security events from different subsystems are correlated.
  */
-export const SecurityEventCorrelationSchema = z.object({
+export const SecurityEventCorrelationSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(true)
     .describe('Enable cross-subsystem security event correlation'),
   correlationId: z.boolean().default(true)
@@ -111,7 +112,7 @@ export const SecurityEventCorrelationSchema = z.object({
     .describe('Log encryption/decryption operations in the audit trail'),
   linkMaskingToAudit: z.boolean().default(true)
     .describe('Log masking/unmasking operations in the audit trail'),
-}).describe('Cross-subsystem security event correlation configuration');
+}).describe('Cross-subsystem security event correlation configuration'));
 
 export type SecurityEventCorrelation = z.infer<typeof SecurityEventCorrelationSchema>;
 
@@ -119,7 +120,7 @@ export type SecurityEventCorrelation = z.infer<typeof SecurityEventCorrelationSc
  * Data Classification Policy Schema.
  * Assigns classification labels to fields/objects for unified security enforcement.
  */
-export const DataClassificationPolicySchema = z.object({
+export const DataClassificationPolicySchema = lazySchema(() => z.object({
   classification: DataClassificationSchema
     .describe('Data classification level'),
   requireEncryption: z.boolean().default(false)
@@ -130,7 +131,7 @@ export const DataClassificationPolicySchema = z.object({
     .describe('Audit trail required for access to this classification'),
   retentionDays: z.number().optional()
     .describe('Data retention limit in days (for compliance)'),
-}).describe('Security policy for a specific data classification level');
+}).describe('Security policy for a specific data classification level'));
 
 export type DataClassificationPolicy = z.infer<typeof DataClassificationPolicySchema>;
 
@@ -140,7 +141,7 @@ export type DataClassificationPolicy = z.infer<typeof DataClassificationPolicySc
  * Top-level unified security governance context that ties together
  * audit, encryption, compliance, and masking subsystems.
  */
-export const SecurityContextConfigSchema = z.object({
+export const SecurityContextConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(true)
     .describe('Enable unified security context governance'),
 
@@ -167,7 +168,7 @@ export const SecurityContextConfigSchema = z.object({
 
   failOpen: z.boolean().default(false)
     .describe('When false (default), deny access if security context cannot be evaluated'),
-}).describe('Unified security context governance configuration');
+}).describe('Unified security context governance configuration'));
 
 export type SecurityContextConfig = z.infer<typeof SecurityContextConfigSchema>;
 export type SecurityContextConfigInput = z.input<typeof SecurityContextConfigSchema>;

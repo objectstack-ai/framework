@@ -24,7 +24,8 @@ import { EventWebhookConfigSchema, EventMessageQueueConfigSchema, RealTimeNotifi
  *   "realtime": { "enabled": true, "protocol": "websocket" }
  * }
  */
-export const EventBusConfigSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const EventBusConfigSchema = lazySchema(() => z.object({
   /**
    * Event persistence
    */
@@ -71,6 +72,6 @@ export const EventBusConfigSchema = z.object({
    * Global handlers
    */
   handlers: z.array(EventHandlerSchema).optional().describe('Global event handlers'),
-});
+}));
 
 export type EventBusConfig = z.infer<typeof EventBusConfigSchema>;

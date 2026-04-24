@@ -65,7 +65,8 @@ import { z } from 'zod';
 /**
  * Connector Category
  */
-export const ConnectorCategorySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ConnectorCategorySchema = lazySchema(() => z.enum([
   'crm',           // Customer Relationship Management
   'payment',       // Payment processors
   'communication', // Email, SMS, Chat
@@ -81,14 +82,14 @@ export const ConnectorCategorySchema = z.enum([
   'devtools',      // Developer tools
   'social',        // Social media
   'other',         // Other category
-]);
+]));
 
 export type ConnectorCategory = z.infer<typeof ConnectorCategorySchema>;
 
 /**
  * Authentication Type
  */
-export const AuthenticationTypeSchema = z.enum([
+export const AuthenticationTypeSchema = lazySchema(() => z.enum([
   'none',          // No authentication
   'apiKey',        // API key
   'basic',         // Basic auth (username/password)
@@ -96,14 +97,14 @@ export const AuthenticationTypeSchema = z.enum([
   'oauth1',        // OAuth 1.0
   'oauth2',        // OAuth 2.0
   'custom',        // Custom authentication
-]);
+]));
 
 export type AuthenticationType = z.infer<typeof AuthenticationTypeSchema>;
 
 /**
  * Authentication Field Schema
  */
-export const AuthFieldSchema = z.object({
+export const AuthFieldSchema = lazySchema(() => z.object({
   /**
    * Field name (machine name)
    */
@@ -150,14 +151,14 @@ export const AuthFieldSchema = z.object({
    * Placeholder text
    */
   placeholder: z.string().optional().describe('Placeholder text'),
-});
+}));
 
 export type AuthField = z.infer<typeof AuthFieldSchema>;
 
 /**
  * OAuth 2.0 Configuration
  */
-export const OAuth2ConfigSchema = z.object({
+export const OAuth2ConfigSchema = lazySchema(() => z.object({
   /**
    * Authorization URL
    */
@@ -182,14 +183,14 @@ export const OAuth2ConfigSchema = z.object({
    * Client secret field name
    */
   clientSecretField: z.string().default('client_secret').describe('Client secret field name'),
-});
+}));
 
 export type OAuth2Config = z.infer<typeof OAuth2ConfigSchema>;
 
 /**
  * Authentication Configuration
  */
-export const AuthenticationSchema = z.object({
+export const AuthenticationSchema = lazySchema(() => z.object({
   /**
    * Authentication type
    */
@@ -213,28 +214,28 @@ export const AuthenticationSchema = z.object({
     url: z.string().optional().describe('Test endpoint URL'),
     method: z.enum(['GET', 'POST', 'PUT', 'DELETE']).default('GET').describe('HTTP method'),
   }).optional().describe('Authentication test configuration'),
-});
+}));
 
 export type Authentication = z.infer<typeof AuthenticationSchema>;
 
 /**
  * Connector Operation Type
  */
-export const OperationTypeSchema = z.enum([
+export const OperationTypeSchema = lazySchema(() => z.enum([
   'read',    // Read/query data
   'write',   // Create/update data
   'delete',  // Delete data
   'search',  // Search operation
   'trigger', // Webhook/polling trigger
   'action',  // Custom action
-]);
+]));
 
 export type OperationType = z.infer<typeof OperationTypeSchema>;
 
 /**
  * Operation Parameter Schema
  */
-export const OperationParameterSchema = z.object({
+export const OperationParameterSchema = lazySchema(() => z.object({
   /**
    * Parameter name
    */
@@ -275,14 +276,14 @@ export const OperationParameterSchema = z.object({
    * Dynamic options function
    */
   dynamicOptions: z.string().optional().describe('Function to load dynamic options'),
-});
+}));
 
 export type OperationParameter = z.infer<typeof OperationParameterSchema>;
 
 /**
  * Connector Operation Schema
  */
-export const ConnectorOperationSchema = z.object({
+export const ConnectorOperationSchema = lazySchema(() => z.object({
   /**
    * Operation identifier
    */
@@ -333,7 +334,7 @@ export const ConnectorOperationSchema = z.object({
    * Whether operation supports filtering
    */
   supportsFiltering: z.boolean().default(false).describe('Supports filtering'),
-});
+}));
 
 export type ConnectorOperation = z.infer<typeof ConnectorOperationSchema>;
 
@@ -342,7 +343,7 @@ export type ConnectorOperation = z.infer<typeof ConnectorOperationSchema>;
  * 
  * Triggers are special operations that watch for events and initiate workflows.
  */
-export const ConnectorTriggerSchema = z.object({
+export const ConnectorTriggerSchema = lazySchema(() => z.object({
   /**
    * Trigger identifier
    */
@@ -387,7 +388,7 @@ export const ConnectorTriggerSchema = z.object({
   pollingIntervalMs: z.number().int().min(1000)
     .optional()
     .describe('Polling interval in ms'),
-});
+}));
 
 export type ConnectorTrigger = z.infer<typeof ConnectorTriggerSchema>;
 
@@ -396,7 +397,7 @@ export type ConnectorTrigger = z.infer<typeof ConnectorTriggerSchema>;
  * 
  * Complete definition of a connector to an external system.
  */
-export const ConnectorSchema = z.object({
+export const ConnectorSchema = lazySchema(() => z.object({
   /**
    * Connector identifier
    * Must be globally unique
@@ -497,7 +498,7 @@ export const ConnectorSchema = z.object({
    * Custom metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata'),
-});
+}));
 
 export type Connector = z.infer<typeof ConnectorSchema>;
 
@@ -506,7 +507,7 @@ export type Connector = z.infer<typeof ConnectorSchema>;
  * 
  * A configured instance of a connector with credentials.
  */
-export const ConnectorInstanceSchema = z.object({
+export const ConnectorInstanceSchema = lazySchema(() => z.object({
   /**
    * Instance ID
    */
@@ -558,7 +559,7 @@ export const ConnectorInstanceSchema = z.object({
   testStatus: z.enum(['unknown', 'success', 'failed'])
     .default('unknown')
     .describe('Connection test status'),
-});
+}));
 
 export type ConnectorInstance = z.infer<typeof ConnectorInstanceSchema>;
 

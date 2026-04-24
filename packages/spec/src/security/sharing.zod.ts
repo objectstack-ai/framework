@@ -6,6 +6,7 @@ import { z } from 'zod';
  * Organization-Wide Defaults (OWD)
  * The baseline security posture for an object.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const OWDModel = z.enum([
   'private',               // Only owner can see
   'public_read',           // Everyone can see, owner can edit
@@ -72,30 +73,30 @@ const BaseSharingRuleSchema = z.object({
  * 1. Criteria-Based Sharing Rule
  * Share records that meet specific field criteria.
  */
-export const CriteriaSharingRuleSchema = BaseSharingRuleSchema.extend({
+export const CriteriaSharingRuleSchema = lazySchema(() => BaseSharingRuleSchema.extend({
   type: z.literal('criteria'),
   condition: z.string().describe('Formula condition (e.g. "department = \'Sales\'")'),
-});
+}));
 
 /**
  * 2. Owner-Based Sharing Rule
  * Share records owned by a specific group of users.
  */
-export const OwnerSharingRuleSchema = BaseSharingRuleSchema.extend({
+export const OwnerSharingRuleSchema = lazySchema(() => BaseSharingRuleSchema.extend({
   type: z.literal('owner'),
   ownedBy: z.object({
     type: ShareRecipientType,
     value: z.string(),
   }).describe('Source group/role whose records are being shared'),
-});
+}));
 
 /**
  * Master Sharing Rule Schema
  */
-export const SharingRuleSchema = z.discriminatedUnion('type', [
+export const SharingRuleSchema = lazySchema(() => z.discriminatedUnion('type', [
   CriteriaSharingRuleSchema,
   OwnerSharingRuleSchema
-]);
+]));
 
 export type SharingRule = z.infer<typeof SharingRuleSchema>;
 export type CriteriaSharingRule = z.infer<typeof CriteriaSharingRuleSchema>;

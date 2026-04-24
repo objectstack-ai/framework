@@ -9,26 +9,27 @@ import { z } from 'zod';
  * Used in server-side configuration injection.
  */
 
-export const AuthProviderConfigSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const AuthProviderConfigSchema = lazySchema(() => z.object({
   id: z.string().describe('Provider ID (github, google)'),
   clientId: z.string().describe('OAuth Client ID'),
   clientSecret: z.string().describe('OAuth Client Secret'),
   scope: z.array(z.string()).optional().describe('Requested permissions'),
-});
+}));
 
-export const AuthPluginConfigSchema = z.object({
+export const AuthPluginConfigSchema = lazySchema(() => z.object({
   organization: z.boolean().default(false).describe('Enable Organization/Teams support'),
   twoFactor: z.boolean().default(false).describe('Enable 2FA'),
   passkeys: z.boolean().default(false).describe('Enable Passkey support'),
   magicLink: z.boolean().default(false).describe('Enable Magic Link login'),
-});
+}));
 
 /**
  * Mutual TLS (mTLS) Configuration Schema
  * 
  * Enables client certificate authentication for zero-trust architectures.
  */
-export const MutualTLSConfigSchema = z.object({
+export const MutualTLSConfigSchema = lazySchema(() => z.object({
   /** Enable mutual TLS authentication */
   enabled: z.boolean()
     .default(false)
@@ -76,7 +77,7 @@ export const MutualTLSConfigSchema = z.object({
   })
     .optional()
     .describe('Certificate pinning configuration'),
-});
+}));
 
 export type MutualTLSConfig = z.infer<typeof MutualTLSConfigSchema>;
 
@@ -86,7 +87,7 @@ export type MutualTLSConfig = z.infer<typeof MutualTLSConfigSchema>;
  * Maps provider id → { clientId, clientSecret, ... }.
  * Keys must match Better-Auth built-in provider names (google, github, etc.).
  */
-export const SocialProviderConfigSchema = z.record(
+export const SocialProviderConfigSchema = lazySchema(() => z.record(
   z.string(),
   z.object({
     clientId: z.string().describe('OAuth Client ID'),
@@ -97,7 +98,7 @@ export const SocialProviderConfigSchema = z.record(
 ).optional().describe(
   'Social/OAuth provider map forwarded to better-auth socialProviders. ' +
   'Keys are provider ids (google, github, apple, …).'
-);
+));
 
 /**
  * OIDC / Generic OAuth2 Provider Configuration
@@ -106,7 +107,7 @@ export const SocialProviderConfigSchema = z.record(
  * Supports any OIDC-compliant provider (Okta, Azure AD, Keycloak, etc.)
  * by specifying a discovery URL.
  */
-export const OidcProviderConfigSchema = z.object({
+export const OidcProviderConfigSchema = lazySchema(() => z.object({
   providerId: z.string().describe('Unique identifier for this provider (e.g., okta, azure-ad)'),
   name: z.string().optional().describe('Display name shown in the UI (defaults to providerId)'),
   discoveryUrl: z.string().optional().describe(
@@ -121,18 +122,18 @@ export const OidcProviderConfigSchema = z.object({
   clientSecret: z.string().describe('OAuth2 client secret'),
   scopes: z.array(z.string()).optional().describe('Requested scopes (default: openid email profile)'),
   pkce: z.boolean().optional().describe('Enable PKCE (recommended for public clients)'),
-}).describe('OIDC / Generic OAuth2 provider configuration for enterprise SSO');
+}).describe('OIDC / Generic OAuth2 provider configuration for enterprise SSO'));
 
-export const OidcProvidersConfigSchema = z.array(OidcProviderConfigSchema).optional().describe(
+export const OidcProvidersConfigSchema = lazySchema(() => z.array(OidcProviderConfigSchema).optional().describe(
   'List of OIDC/OAuth2 providers for enterprise SSO. ' +
   'Can also be provided via OIDC_PROVIDERS env var as a JSON array.'
-);
+));
 
 export type OidcProviderConfig = z.infer<typeof OidcProviderConfigSchema>;
 export type OidcProvidersConfig = z.infer<typeof OidcProvidersConfigSchema>;
 
 
-export const EmailAndPasswordConfigSchema = z.object({
+export const EmailAndPasswordConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(true).describe('Enable email/password auth'),
   disableSignUp: z.boolean().optional().describe('Disable new user registration via email/password'),
   requireEmailVerification: z.boolean().optional().describe(
@@ -147,12 +148,12 @@ export const EmailAndPasswordConfigSchema = z.object({
   revokeSessionsOnPasswordReset: z.boolean().optional().describe(
     'Revoke all other sessions on password reset'
   ),
-}).optional().describe('Email and password authentication options forwarded to better-auth');
+}).optional().describe('Email and password authentication options forwarded to better-auth'));
 
 /**
  * Email Verification Configuration
  */
-export const EmailVerificationConfigSchema = z.object({
+export const EmailVerificationConfigSchema = lazySchema(() => z.object({
   sendOnSignUp: z.boolean().optional().describe(
     'Automatically send verification email after sign-up'
   ),
@@ -165,12 +166,12 @@ export const EmailVerificationConfigSchema = z.object({
   expiresIn: z.number().optional().describe(
     'Verification token TTL in seconds (default 3600)'
   ),
-}).optional().describe('Email verification options forwarded to better-auth');
+}).optional().describe('Email verification options forwarded to better-auth'));
 
 /**
  * Advanced / Low-level Better-Auth Options
  */
-export const AdvancedAuthConfigSchema = z.object({
+export const AdvancedAuthConfigSchema = lazySchema(() => z.object({
   crossSubDomainCookies: z.object({
     enabled: z.boolean().describe('Enable cross-subdomain cookies'),
     additionalCookies: z.array(z.string()).optional().describe('Extra cookies shared across subdomains'),
@@ -185,9 +186,9 @@ export const AdvancedAuthConfigSchema = z.object({
     '⚠ Disable CSRF check — security risk, use with caution'
   ),
   cookiePrefix: z.string().optional().describe('Prefix for auth cookie names'),
-}).optional().describe('Advanced / low-level Better-Auth options');
+}).optional().describe('Advanced / low-level Better-Auth options'));
 
-export const AuthConfigSchema = z.object({
+export const AuthConfigSchema = lazySchema(() => z.object({
   secret: z.string().optional().describe('Encryption secret'),
   baseUrl: z.string().optional().describe('Base URL for auth routes'),
   databaseUrl: z.string().optional().describe('Database connection string'),
@@ -207,7 +208,7 @@ export const AuthConfigSchema = z.object({
   emailVerification: EmailVerificationConfigSchema,
   advanced: AdvancedAuthConfigSchema,
   mutualTls: MutualTLSConfigSchema.optional().describe('Mutual TLS (mTLS) configuration'),
-}).catchall(z.unknown());
+}).catchall(z.unknown()));
 
 export type AuthProviderConfig = z.infer<typeof AuthProviderConfigSchema>;
 export type AuthPluginConfig = z.infer<typeof AuthPluginConfigSchema>;

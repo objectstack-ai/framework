@@ -41,7 +41,8 @@ import { z } from 'zod';
  * Defines the type of transformation to apply to a field value.
  * Implementations can extend this for domain-specific transforms.
  */
-export const TransformTypeSchema = z.discriminatedUnion('type', [
+import { lazySchema } from './lazy-schema';
+export const TransformTypeSchema = lazySchema(() => z.discriminatedUnion('type', [
   z.object({
     type: z.literal('constant'),
     value: z.unknown().describe('Constant value to use'),
@@ -68,7 +69,7 @@ export const TransformTypeSchema = z.discriminatedUnion('type', [
     type: z.literal('map'),
     mappings: z.record(z.string(), z.unknown()).describe('Value mappings (e.g., {"Active": "active"})'),
   }).describe('Map values using a dictionary'),
-]);
+]));
 
 export type TransformType = z.infer<typeof TransformTypeSchema>;
 
@@ -91,7 +92,7 @@ export type TransformType = z.infer<typeof TransformTypeSchema>;
  * }
  * ```
  */
-export const FieldMappingSchema = z.object({
+export const FieldMappingSchema = lazySchema(() => z.object({
   /**
    * Source field name
    */
@@ -111,6 +112,6 @@ export const FieldMappingSchema = z.object({
    * Default value if source is null/undefined
    */
   defaultValue: z.unknown().optional().describe('Default if source is null/undefined'),
-});
+}));
 
 export type FieldMapping = z.infer<typeof FieldMappingSchema>;

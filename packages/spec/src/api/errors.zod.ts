@@ -25,6 +25,7 @@ import { z } from 'zod';
  * Error Category Enum
  * High-level categorization of errors
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ErrorCategory = z.enum([
   'validation',      // Input validation errors (400)
   'authentication',  // Authentication failures (401)
@@ -156,13 +157,13 @@ export type RetryStrategy = z.infer<typeof RetryStrategy>;
  * Field Error Schema
  * Detailed error for a specific field
  */
-export const FieldErrorSchema = z.object({
+export const FieldErrorSchema = lazySchema(() => z.object({
   field: z.string().describe('Field path (supports dot notation)'),
   code: StandardErrorCode.describe('Error code for this field'),
   message: z.string().describe('Human-readable error message'),
   value: z.unknown().optional().describe('The invalid value that was provided'),
   constraint: z.unknown().optional().describe('The constraint that was violated (e.g., max length)'),
-});
+}));
 
 export type FieldError = z.infer<typeof FieldErrorSchema>;
 
@@ -216,7 +217,7 @@ export type FieldError = z.infer<typeof FieldErrorSchema>;
  *   }
  * }
  */
-export const EnhancedApiErrorSchema = z.object({
+export const EnhancedApiErrorSchema = lazySchema(() => z.object({
   code: StandardErrorCode.describe('Machine-readable error code'),
   message: z.string().describe('Human-readable error message'),
   category: ErrorCategory.optional().describe('Error category'),
@@ -231,7 +232,7 @@ export const EnhancedApiErrorSchema = z.object({
   traceId: z.string().optional().describe('Distributed trace ID'),
   documentation: z.string().url().optional().describe('URL to error documentation'),
   helpText: z.string().optional().describe('Suggested actions to resolve the error'),
-});
+}));
 
 export type EnhancedApiError = z.infer<typeof EnhancedApiErrorSchema>;
 
@@ -255,7 +256,7 @@ export type EnhancedApiError = z.infer<typeof EnhancedApiErrorSchema>;
  *   }
  * }
  */
-export const ErrorResponseSchema = z.object({
+export const ErrorResponseSchema = lazySchema(() => z.object({
   success: z.literal(false).describe('Always false for error responses'),
   error: EnhancedApiErrorSchema.describe('Error details'),
   meta: z.object({
@@ -263,6 +264,6 @@ export const ErrorResponseSchema = z.object({
     requestId: z.string().optional(),
     traceId: z.string().optional(),
   }).optional().describe('Response metadata'),
-});
+}));
 
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;

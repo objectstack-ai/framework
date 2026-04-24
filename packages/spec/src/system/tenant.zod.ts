@@ -19,6 +19,7 @@ import { z } from 'zod';
  * Tenant Isolation Level Enum
  * Defines how tenant data is separated in the system
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const TenantIsolationLevel = z.enum([
   'shared_schema',    // Shared DB, shared schema, row-level isolation (most economical)
   'isolated_schema',  // Shared DB, separate schema per tenant (balanced)
@@ -31,11 +32,11 @@ export type TenantIsolationLevel = z.infer<typeof TenantIsolationLevel>;
  * Database Provider Enum
  * Defines which database backend is used for the tenant
  */
-export const DatabaseProviderSchema = z.enum([
+export const DatabaseProviderSchema = lazySchema(() => z.enum([
   'turso',     // Turso/libSQL (DB-per-Tenant, edge-native)
   'postgres',  // PostgreSQL (traditional, self-hosted or managed)
   'memory',    // In-memory (testing/development only)
-]).describe('Database provider for tenant data');
+]).describe('Database provider for tenant data'));
 
 export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
 
@@ -43,14 +44,14 @@ export type DatabaseProvider = z.infer<typeof DatabaseProviderSchema>;
  * Tenant Connection Config Schema
  * Stores the database connection details for a tenant (encrypted at rest)
  */
-export const TenantConnectionConfigSchema = z.object({
+export const TenantConnectionConfigSchema = lazySchema(() => z.object({
   /** Database connection URL */
   url: z.string().min(1).describe('Database connection URL'),
   /** Authentication token (JWT for Turso, password for Postgres) */
   authToken: z.string().optional().describe('Database auth token (encrypted at rest)'),
   /** Turso database group name */
   group: z.string().optional().describe('Turso database group name'),
-}).describe('Tenant database connection configuration');
+}).describe('Tenant database connection configuration'));
 
 export type TenantConnectionConfig = z.infer<typeof TenantConnectionConfigSchema>;
 
@@ -58,7 +59,7 @@ export type TenantConnectionConfig = z.infer<typeof TenantConnectionConfigSchema
  * Tenant Quota Schema
  * Defines resource limits and usage quotas for a tenant
  */
-export const TenantQuotaSchema = z.object({
+export const TenantQuotaSchema = lazySchema(() => z.object({
   /**
    * Maximum number of users allowed for this tenant
    */
@@ -93,7 +94,7 @@ export const TenantQuotaSchema = z.object({
    * Maximum storage in bytes
    */
   maxStorageBytes: z.number().int().positive().optional().describe('Maximum storage in bytes'),
-});
+}));
 
 export type TenantQuota = z.infer<typeof TenantQuotaSchema>;
 
@@ -101,7 +102,7 @@ export type TenantQuota = z.infer<typeof TenantQuotaSchema>;
  * Tenant Usage Schema
  * Tracks current resource usage for quota enforcement
  */
-export const TenantUsageSchema = z.object({
+export const TenantUsageSchema = lazySchema(() => z.object({
   /** Current number of custom objects */
   currentObjectCount: z.number().int().min(0).default(0).describe('Current number of custom objects'),
   /** Current total record count across all objects */
@@ -116,7 +117,7 @@ export const TenantUsageSchema = z.object({
   apiRequestsThisMinute: z.number().int().min(0).default(0).describe('API requests in the current minute'),
   /** Last updated timestamp (ISO 8601) */
   lastUpdatedAt: z.string().datetime().optional().describe('Last usage update time'),
-}).describe('Current tenant resource usage');
+}).describe('Current tenant resource usage'));
 
 export type TenantUsage = z.infer<typeof TenantUsageSchema>;
 
@@ -124,7 +125,7 @@ export type TenantUsage = z.infer<typeof TenantUsageSchema>;
  * Quota Enforcement Result
  * Result of checking whether an operation would exceed tenant quotas
  */
-export const QuotaEnforcementResultSchema = z.object({
+export const QuotaEnforcementResultSchema = lazySchema(() => z.object({
   /** Whether the operation is allowed */
   allowed: z.boolean().describe('Whether the operation is within quota'),
   /** Quota that would be exceeded (if not allowed) */
@@ -135,7 +136,7 @@ export const QuotaEnforcementResultSchema = z.object({
   limit: z.number().optional().describe('Quota limit'),
   /** Human-readable message */
   message: z.string().optional().describe('Human-readable quota message'),
-}).describe('Quota enforcement check result');
+}).describe('Quota enforcement check result'));
 
 export type QuotaEnforcementResult = z.infer<typeof QuotaEnforcementResultSchema>;
 
@@ -171,7 +172,7 @@ export type QuotaEnforcementResult = z.infer<typeof QuotaEnforcementResultSchema
  * 
  * See HubSpaceSchema in space.zod.ts for the recommended approach.
  */
-export const TenantSchema = z.object({
+export const TenantSchema = lazySchema(() => z.object({
   /**
    * Unique tenant identifier
    */
@@ -218,7 +219,7 @@ export const TenantSchema = z.object({
    * Resource quotas
    */
   quotas: TenantQuotaSchema.optional(),
-});
+}));
 
 export type Tenant = z.infer<typeof TenantSchema>;
 
@@ -271,7 +272,7 @@ export type Tenant = z.infer<typeof TenantSchema>;
  * ALTER TABLE app_data ENABLE ROW LEVEL SECURITY;
  * ```
  */
-export const RowLevelIsolationStrategySchema = z.object({
+export const RowLevelIsolationStrategySchema = lazySchema(() => z.object({
   strategy: z.literal('shared_schema').describe('Row-level isolation strategy'),
   
   /**
@@ -322,7 +323,7 @@ export const RowLevelIsolationStrategySchema = z.object({
      */
     poolSizePerTenant: z.number().int().positive().optional().describe('Connection pool size per tenant'),
   }).optional().describe('Performance settings'),
-});
+}));
 
 export type RowLevelIsolationStrategy = z.infer<typeof RowLevelIsolationStrategySchema>;
 export type RowLevelIsolationStrategyInput = z.input<typeof RowLevelIsolationStrategySchema>;
@@ -372,7 +373,7 @@ export type RowLevelIsolationStrategyInput = z.input<typeof RowLevelIsolationStr
  * SET search_path TO tenant_123, public;
  * ```
  */
-export const SchemaLevelIsolationStrategySchema = z.object({
+export const SchemaLevelIsolationStrategySchema = lazySchema(() => z.object({
   strategy: z.literal('isolated_schema').describe('Schema-level isolation strategy'),
   
   /**
@@ -440,7 +441,7 @@ export const SchemaLevelIsolationStrategySchema = z.object({
      */
     schemaCacheTTL: z.number().int().positive().default(3600).describe('Schema cache TTL'),
   }).optional().describe('Performance settings'),
-});
+}));
 
 export type SchemaLevelIsolationStrategy = z.infer<typeof SchemaLevelIsolationStrategySchema>;
 export type SchemaLevelIsolationStrategyInput = z.input<typeof SchemaLevelIsolationStrategySchema>;
@@ -493,7 +494,7 @@ export type SchemaLevelIsolationStrategyInput = z.input<typeof SchemaLevelIsolat
  * \c tenant_123
  * ```
  */
-export const DatabaseLevelIsolationStrategySchema = z.object({
+export const DatabaseLevelIsolationStrategySchema = lazySchema(() => z.object({
   strategy: z.literal('isolated_db').describe('Database-level isolation strategy'),
   
   /**
@@ -595,7 +596,7 @@ export const DatabaseLevelIsolationStrategySchema = z.object({
      */
     keyManagement: z.enum(['aws_kms', 'azure_key_vault', 'gcp_kms', 'hashicorp_vault', 'custom']).optional().describe('Key management service'),
   }).optional().describe('Encryption configuration'),
-});
+}));
 
 export type DatabaseLevelIsolationStrategy = z.infer<typeof DatabaseLevelIsolationStrategySchema>;
 export type DatabaseLevelIsolationStrategyInput = z.input<typeof DatabaseLevelIsolationStrategySchema>;
@@ -606,11 +607,11 @@ export type DatabaseLevelIsolationStrategyInput = z.input<typeof DatabaseLevelIs
  * Complete configuration for tenant isolation strategy.
  * Supports all three isolation levels with detailed configuration options.
  */
-export const TenantIsolationConfigSchema = z.discriminatedUnion('strategy', [
+export const TenantIsolationConfigSchema = lazySchema(() => z.discriminatedUnion('strategy', [
   RowLevelIsolationStrategySchema,
   SchemaLevelIsolationStrategySchema,
   DatabaseLevelIsolationStrategySchema,
-]);
+]));
 
 export type TenantIsolationConfig = z.infer<typeof TenantIsolationConfigSchema>;
 
@@ -618,7 +619,7 @@ export type TenantIsolationConfig = z.infer<typeof TenantIsolationConfigSchema>;
  * Tenant Security Policy Schema
  * Defines security policies and compliance requirements for tenants
  */
-export const TenantSecurityPolicySchema = z.object({
+export const TenantSecurityPolicySchema = lazySchema(() => z.object({
   /**
    * Encryption requirements
    */
@@ -705,7 +706,7 @@ export const TenantSecurityPolicySchema = z.object({
       excludeRegions: z.array(z.string()).optional().describe('Prohibited regions'),
     }).optional().describe('Data residency requirements'),
   }).optional().describe('Compliance requirements'),
-});
+}));
 
 export type TenantSecurityPolicy = z.infer<typeof TenantSecurityPolicySchema>;
 export type TenantSecurityPolicyInput = z.input<typeof TenantSecurityPolicySchema>;

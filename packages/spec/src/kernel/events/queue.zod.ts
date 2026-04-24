@@ -20,7 +20,8 @@ import { z } from 'zod';
  *   }
  * }
  */
-export const EventQueueConfigSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const EventQueueConfigSchema = lazySchema(() => z.object({
   /**
    * Queue name
    */
@@ -51,7 +52,7 @@ export const EventQueueConfigSchema = z.object({
    * Enable priority processing
    */
   priorityEnabled: z.boolean().default(true).describe('Process events based on priority'),
-});
+}));
 
 export type EventQueueConfig = z.infer<typeof EventQueueConfigSchema>;
 
@@ -71,7 +72,7 @@ export type EventQueueConfig = z.infer<typeof EventQueueConfigSchema>;
  *   "speed": 10
  * }
  */
-export const EventReplayConfigSchema = z.object({
+export const EventReplayConfigSchema = lazySchema(() => z.object({
   /**
    * Start timestamp
    */
@@ -101,7 +102,7 @@ export const EventReplayConfigSchema = z.object({
    * Target handlers
    */
   targetHandlers: z.array(z.string()).optional().describe('Handler IDs to execute (empty = all)'),
-});
+}));
 
 export type EventReplayConfig = z.infer<typeof EventReplayConfigSchema>;
 
@@ -123,7 +124,7 @@ export type EventReplayConfig = z.infer<typeof EventReplayConfigSchema>;
  *   "retention": 365
  * }
  */
-export const EventSourcingConfigSchema = z.object({
+export const EventSourcingConfigSchema = lazySchema(() => z.object({
   /**
    * Enable event sourcing
    */
@@ -161,6 +162,6 @@ export const EventSourcingConfigSchema = z.object({
       .describe('Storage backend'),
     options: z.record(z.string(), z.unknown()).optional().describe('Storage-specific options'),
   }).optional().describe('Event store configuration'),
-});
+}));
 
 export type EventSourcingConfig = z.infer<typeof EventSourcingConfigSchema>;

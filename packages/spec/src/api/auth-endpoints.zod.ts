@@ -23,6 +23,7 @@ import { z } from 'zod';
  * These are the paths relative to the auth base route (e.g., /api/v1/auth).
  * Based on better-auth's endpoint structure.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const AuthEndpointPaths = {
   // Email/Password Authentication
   signInEmail: '/sign-in/email',
@@ -62,7 +63,7 @@ export const AuthEndpointPaths = {
  * 
  * Defines the complete HTTP contract for each endpoint.
  */
-export const AuthEndpointSchema = z.object({
+export const AuthEndpointSchema = lazySchema(() => z.object({
   /** Sign in with email and password */
   signInEmail: z.object({
     method: z.literal('POST'),
@@ -118,7 +119,7 @@ export const AuthEndpointSchema = z.object({
     path: z.literal(AuthEndpointPaths.verifyEmail),
     description: z.literal('Verify email with token'),
   }),
-});
+}));
 
 /**
  * Endpoint Aliases
@@ -167,32 +168,32 @@ export const EndpointMapping = {
  * Public-facing information about an OAuth/social provider.
  * Does NOT include sensitive configuration (clientSecret, etc.)
  */
-export const AuthProviderInfoSchema = z.object({
+export const AuthProviderInfoSchema = lazySchema(() => z.object({
   id: z.string().describe('Provider ID (e.g., google, github, microsoft, okta)'),
   name: z.string().describe('Display name (e.g., Google, GitHub)'),
   enabled: z.boolean().describe('Whether this provider is enabled'),
   /** Distinguishes built-in social providers from custom OIDC/OAuth2 entries */
   type: z.enum(['social', 'oidc']).default('social').describe('Provider type'),
-});
+}));
 
 /**
  * Email/Password Configuration (Public)
  */
-export const EmailPasswordConfigPublicSchema = z.object({
+export const EmailPasswordConfigPublicSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Whether email/password auth is enabled'),
   disableSignUp: z.boolean().optional().describe('Whether new user registration is disabled'),
   requireEmailVerification: z.boolean().optional().describe('Whether email verification is required'),
-});
+}));
 
 /**
  * Auth Features Configuration (Public)
  */
-export const AuthFeaturesConfigSchema = z.object({
+export const AuthFeaturesConfigSchema = lazySchema(() => z.object({
   twoFactor: z.boolean().default(false).describe('Two-factor authentication enabled'),
   passkeys: z.boolean().default(false).describe('Passkey/WebAuthn support enabled'),
   magicLink: z.boolean().default(false).describe('Magic link login enabled'),
   organization: z.boolean().default(false).describe('Multi-tenant organization support enabled'),
-});
+}));
 
 /**
  * Get Auth Config Response
@@ -200,11 +201,11 @@ export const AuthFeaturesConfigSchema = z.object({
  * Returns the public authentication configuration that the frontend
  * can use to render appropriate login UI (social provider buttons, etc.)
  */
-export const GetAuthConfigResponseSchema = z.object({
+export const GetAuthConfigResponseSchema = lazySchema(() => z.object({
   emailPassword: EmailPasswordConfigPublicSchema.describe('Email/password authentication config'),
   socialProviders: z.array(AuthProviderInfoSchema).describe('Available social/OAuth providers'),
   features: AuthFeaturesConfigSchema.describe('Enabled authentication features'),
-});
+}));
 
 // ==========================================
 // Type Exports

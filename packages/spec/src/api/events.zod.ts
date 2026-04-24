@@ -13,6 +13,7 @@ import { z } from 'zod';
  * - `metadata.view.updated` - A view was updated
  * - `metadata.agent.deleted` - An agent was deleted
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const MetadataEventType = z.enum([
   'metadata.object.created',
   'metadata.object.updated',
@@ -78,7 +79,7 @@ export type DataEventType = z.infer<typeof DataEventType>;
  * Represents a metadata change event (create, update, delete).
  * Used for real-time synchronization of metadata across clients.
  */
-export const MetadataEventSchema = z.object({
+export const MetadataEventSchema = lazySchema(() => z.object({
   /** Unique event identifier */
   id: z.string().uuid().describe('Unique event identifier'),
 
@@ -102,7 +103,7 @@ export const MetadataEventSchema = z.object({
 
   /** Event timestamp (ISO 8601) */
   timestamp: z.string().datetime().describe('Event timestamp'),
-});
+}));
 
 export type MetadataEvent = z.infer<typeof MetadataEventSchema>;
 
@@ -112,7 +113,7 @@ export type MetadataEvent = z.infer<typeof MetadataEventSchema>;
  * Represents a data record change event (create, update, delete).
  * Used for real-time synchronization of data records across clients.
  */
-export const DataEventSchema = z.object({
+export const DataEventSchema = lazySchema(() => z.object({
   /** Unique event identifier */
   id: z.string().uuid().describe('Unique event identifier'),
 
@@ -139,6 +140,6 @@ export const DataEventSchema = z.object({
 
   /** Event timestamp (ISO 8601) */
   timestamp: z.string().datetime().describe('Event timestamp'),
-});
+}));
 
 export type DataEvent = z.infer<typeof DataEventSchema>;

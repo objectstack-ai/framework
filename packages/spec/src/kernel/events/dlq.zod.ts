@@ -11,7 +11,8 @@ import { EventSchema } from './core.zod';
  * Dead Letter Queue Entry Schema
  * Represents a failed event in the dead letter queue
  */
-export const DeadLetterQueueEntrySchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const DeadLetterQueueEntrySchema = lazySchema(() => z.object({
   /**
    * Entry identifier
    */
@@ -46,7 +47,7 @@ export const DeadLetterQueueEntrySchema = z.object({
    * Handler that failed
    */
   failedHandler: z.string().optional().describe('Handler ID that failed'),
-});
+}));
 
 export type DeadLetterQueueEntry = z.infer<typeof DeadLetterQueueEntrySchema>;
 
@@ -58,7 +59,7 @@ export type DeadLetterQueueEntry = z.infer<typeof DeadLetterQueueEntrySchema>;
  * Event Log Entry Schema
  * Represents a logged event
  */
-export const EventLogEntrySchema = z.object({
+export const EventLogEntrySchema = lazySchema(() => z.object({
   /**
    * Log entry ID
    */
@@ -94,6 +95,6 @@ export const EventLogEntrySchema = z.object({
    * Total duration
    */
   totalDurationMs: z.number().int().optional().describe('Total processing time'),
-});
+}));
 
 export type EventLogEntry = z.infer<typeof EventLogEntrySchema>;

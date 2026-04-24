@@ -20,6 +20,7 @@ import { z } from 'zod';
  * Audit Event Type Enum
  * Categorizes different types of auditable events in the system
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const AuditEventType = z.enum([
   // Data Operations (CRUD)
   'data.create',       // Record creation
@@ -97,7 +98,7 @@ export type AuditEventSeverity = z.infer<typeof AuditEventSeverity>;
  * Audit Event Actor Schema
  * Identifies who/what performed the action
  */
-export const AuditEventActorSchema = z.object({
+export const AuditEventActorSchema = lazySchema(() => z.object({
   /**
    * Actor type (user, system, service, api_client, etc.)
    */
@@ -127,7 +128,7 @@ export const AuditEventActorSchema = z.object({
    * User agent string (for web/API requests)
    */
   userAgent: z.string().optional().describe('User agent string'),
-});
+}));
 
 export type AuditEventActor = z.infer<typeof AuditEventActorSchema>;
 
@@ -135,7 +136,7 @@ export type AuditEventActor = z.infer<typeof AuditEventActorSchema>;
  * Audit Event Target Schema
  * Identifies what was acted upon
  */
-export const AuditEventTargetSchema = z.object({
+export const AuditEventTargetSchema = lazySchema(() => z.object({
   /**
    * Target type (e.g., 'object', 'record', 'user', 'role', 'config')
    */
@@ -155,7 +156,7 @@ export const AuditEventTargetSchema = z.object({
    * Additional metadata about the target
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Target metadata'),
-});
+}));
 
 export type AuditEventTarget = z.infer<typeof AuditEventTargetSchema>;
 
@@ -163,7 +164,7 @@ export type AuditEventTarget = z.infer<typeof AuditEventTargetSchema>;
  * Audit Event Change Schema
  * Describes what changed (for update operations)
  */
-export const AuditEventChangeSchema = z.object({
+export const AuditEventChangeSchema = lazySchema(() => z.object({
   /**
    * Field/property that changed
    */
@@ -178,7 +179,7 @@ export const AuditEventChangeSchema = z.object({
    * Value after the change
    */
   newValue: z.unknown().optional().describe('New value'),
-});
+}));
 
 export type AuditEventChange = z.infer<typeof AuditEventChangeSchema>;
 
@@ -186,7 +187,7 @@ export type AuditEventChange = z.infer<typeof AuditEventChangeSchema>;
  * Audit Event Schema
  * Complete audit event record
  */
-export const AuditEventSchema = z.object({
+export const AuditEventSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for this audit event
    */
@@ -260,7 +261,7 @@ export const AuditEventSchema = z.object({
     region: z.string().optional(),
     city: z.string().optional(),
   }).optional().describe('Geographic location'),
-});
+}));
 
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 
@@ -268,7 +269,7 @@ export type AuditEvent = z.infer<typeof AuditEventSchema>;
  * Audit Retention Policy Schema
  * Defines how long audit logs are retained
  */
-export const AuditRetentionPolicySchema = z.object({
+export const AuditRetentionPolicySchema = lazySchema(() => z.object({
   /**
    * Retention period in days
    * Default: 180 days (GDPR 6-month requirement)
@@ -303,7 +304,7 @@ export const AuditRetentionPolicySchema = z.object({
    * Prevents accidental deletion below compliance requirements
    */
   minimumRetentionDays: z.number().int().positive().optional().describe('Minimum retention for compliance'),
-});
+}));
 
 export type AuditRetentionPolicy = z.infer<typeof AuditRetentionPolicySchema>;
 
@@ -311,7 +312,7 @@ export type AuditRetentionPolicy = z.infer<typeof AuditRetentionPolicySchema>;
  * Suspicious Activity Rule Schema
  * Defines rules for detecting suspicious activities
  */
-export const SuspiciousActivityRuleSchema = z.object({
+export const SuspiciousActivityRuleSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for the rule
    */
@@ -398,7 +399,7 @@ export const SuspiciousActivityRuleSchema = z.object({
      */
     webhook: z.string().url().optional().describe('Custom webhook URL'),
   }).optional().describe('Notification configuration'),
-});
+}));
 
 export type SuspiciousActivityRule = z.infer<typeof SuspiciousActivityRuleSchema>;
 
@@ -406,7 +407,7 @@ export type SuspiciousActivityRule = z.infer<typeof SuspiciousActivityRuleSchema
  * Audit Log Storage Configuration
  * Defines where and how audit logs are stored
  */
-export const AuditStorageConfigSchema = z.object({
+export const AuditStorageConfigSchema = lazySchema(() => z.object({
   /**
    * Storage backend type
    */
@@ -450,7 +451,7 @@ export const AuditStorageConfigSchema = z.object({
    * Whether to compress stored data
    */
   compression: z.boolean().default(true).describe('Enable compression'),
-});
+}));
 
 export type AuditStorageConfig = z.infer<typeof AuditStorageConfigSchema>;
 
@@ -458,7 +459,7 @@ export type AuditStorageConfig = z.infer<typeof AuditStorageConfigSchema>;
  * Audit Event Filter Schema
  * Defines filters for querying audit events
  */
-export const AuditEventFilterSchema = z.object({
+export const AuditEventFilterSchema = lazySchema(() => z.object({
   /**
    * Filter by event types
    */
@@ -501,7 +502,7 @@ export const AuditEventFilterSchema = z.object({
    * Custom filters
    */
   customFilters: z.record(z.string(), z.unknown()).optional().describe('Custom filters'),
-});
+}));
 
 export type AuditEventFilter = z.infer<typeof AuditEventFilterSchema>;
 
@@ -509,7 +510,7 @@ export type AuditEventFilter = z.infer<typeof AuditEventFilterSchema>;
  * Complete Audit Configuration Schema
  * Main configuration for the audit system
  */
-export const AuditConfigSchema = z.object({
+export const AuditConfigSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for this audit configuration
    * Must be in snake_case following ObjectStack conventions
@@ -638,7 +639,7 @@ export const AuditConfigSchema = z.object({
      */
     signingKey: z.string().optional().describe('Signing key'),
   }).optional().describe('Compliance configuration'),
-});
+}));
 
 export type AuditConfig = z.infer<typeof AuditConfigSchema>;
 

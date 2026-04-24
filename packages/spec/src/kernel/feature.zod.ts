@@ -6,6 +6,7 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 /**
  * Feature Rollout Strategy
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const FeatureStrategy = z.enum([
   'boolean',        // Simple On/Off
   'percentage',     // Gradual rollout (0-100%)
@@ -20,7 +21,7 @@ export const FeatureStrategy = z.enum([
  * Manages feature toggles and gradual rollouts.
  * Used for CI/CD, A/B Testing, and Trunk-Based Development.
  */
-export const FeatureFlagSchema = z.object({
+export const FeatureFlagSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Feature key (snake_case)'),
   label: z.string().optional().describe('Display label'),
   description: z.string().optional(),
@@ -45,7 +46,7 @@ export const FeatureFlagSchema = z.object({
     
   /** Expiration */
   expiresAt: z.string().datetime().optional().describe('Feature flag expiration date'),
-});
+}));
 
 export const FeatureFlag = Object.assign(FeatureFlagSchema, {
   create: <T extends z.input<typeof FeatureFlagSchema>>(config: T) => config,

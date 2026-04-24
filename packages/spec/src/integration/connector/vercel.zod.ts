@@ -50,16 +50,17 @@ import {
 /**
  * Vercel Provider Type
  */
-export const VercelProviderSchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const VercelProviderSchema = lazySchema(() => z.enum([
   'vercel',
-]).describe('Vercel provider type');
+]).describe('Vercel provider type'));
 
 export type VercelProvider = z.infer<typeof VercelProviderSchema>;
 
 /**
  * Vercel Framework Types
  */
-export const VercelFrameworkSchema = z.enum([
+export const VercelFrameworkSchema = lazySchema(() => z.enum([
   'nextjs',
   'react',
   'vue',
@@ -72,14 +73,14 @@ export const VercelFrameworkSchema = z.enum([
   'angular',
   'static',
   'other',
-]).describe('Frontend framework');
+]).describe('Frontend framework'));
 
 export type VercelFramework = z.infer<typeof VercelFrameworkSchema>;
 
 /**
  * Git Repository Configuration
  */
-export const GitRepositoryConfigSchema = z.object({
+export const GitRepositoryConfigSchema = lazySchema(() => z.object({
   /**
    * Git provider type
    */
@@ -104,14 +105,14 @@ export const GitRepositoryConfigSchema = z.object({
    * Auto-deploy preview branches
    */
   autoDeployPreview: z.boolean().optional().default(true).describe('Auto-deploy preview branches'),
-});
+}));
 
 export type GitRepositoryConfig = z.infer<typeof GitRepositoryConfigSchema>;
 
 /**
  * Build Configuration
  */
-export const BuildConfigSchema = z.object({
+export const BuildConfigSchema = lazySchema(() => z.object({
   /**
    * Build command
    */
@@ -141,14 +142,14 @@ export const BuildConfigSchema = z.object({
    * Environment variables
    */
   env: z.record(z.string(), z.string()).optional().describe('Build environment variables'),
-});
+}));
 
 export type BuildConfig = z.infer<typeof BuildConfigSchema>;
 
 /**
  * Deployment Configuration
  */
-export const DeploymentConfigSchema = z.object({
+export const DeploymentConfigSchema = lazySchema(() => z.object({
   /**
    * Enable automatic deployments
    */
@@ -192,14 +193,14 @@ export const DeploymentConfigSchema = z.object({
     url: z.string().url().describe('Deploy hook URL'),
     branch: z.string().optional().describe('Target branch'),
   })).optional().describe('Deploy hooks'),
-});
+}));
 
 export type DeploymentConfig = z.infer<typeof DeploymentConfigSchema>;
 
 /**
  * Domain Configuration
  */
-export const DomainConfigSchema = z.object({
+export const DomainConfigSchema = lazySchema(() => z.object({
   /**
    * Domain name
    */
@@ -223,14 +224,14 @@ export const DomainConfigSchema = z.object({
    * Git branch for this domain
    */
   gitBranch: z.string().optional().describe('Git branch to deploy to this domain'),
-});
+}));
 
 export type DomainConfig = z.infer<typeof DomainConfigSchema>;
 
 /**
  * Environment Variables Configuration
  */
-export const EnvironmentVariablesSchema = z.object({
+export const EnvironmentVariablesSchema = lazySchema(() => z.object({
   /**
    * Variable name
    */
@@ -255,14 +256,14 @@ export const EnvironmentVariablesSchema = z.object({
    * Git branch (for preview/development)
    */
   gitBranch: z.string().optional().describe('Specific git branch'),
-});
+}));
 
 export type EnvironmentVariables = z.infer<typeof EnvironmentVariablesSchema>;
 
 /**
  * Edge Function Configuration
  */
-export const EdgeFunctionConfigSchema = z.object({
+export const EdgeFunctionConfigSchema = lazySchema(() => z.object({
   /**
    * Function name
    */
@@ -287,14 +288,14 @@ export const EdgeFunctionConfigSchema = z.object({
    * Timeout (seconds)
    */
   timeout: z.number().int().min(1).max(300).optional().default(10).describe('Timeout in seconds'),
-});
+}));
 
 export type EdgeFunctionConfig = z.infer<typeof EdgeFunctionConfigSchema>;
 
 /**
  * Vercel Project Configuration
  */
-export const VercelProjectSchema = z.object({
+export const VercelProjectSchema = lazySchema(() => z.object({
   /**
    * Project name
    */
@@ -339,14 +340,14 @@ export const VercelProjectSchema = z.object({
    * Root directory
    */
   rootDirectory: z.string().optional().describe('Root directory (for monorepos)'),
-});
+}));
 
 export type VercelProject = z.infer<typeof VercelProjectSchema>;
 
 /**
  * Vercel Monitoring Configuration
  */
-export const VercelMonitoringSchema = z.object({
+export const VercelMonitoringSchema = lazySchema(() => z.object({
   /**
    * Enable Web Analytics
    */
@@ -366,14 +367,14 @@ export const VercelMonitoringSchema = z.object({
     headers: z.record(z.string(), z.string()).optional().describe('Custom headers'),
     sources: z.array(z.enum(['static', 'lambda', 'edge'])).optional().describe('Log sources'),
   })).optional().describe('Log drains configuration'),
-});
+}));
 
 export type VercelMonitoring = z.infer<typeof VercelMonitoringSchema>;
 
 /**
  * Vercel Team Configuration
  */
-export const VercelTeamSchema = z.object({
+export const VercelTeamSchema = lazySchema(() => z.object({
   /**
    * Team ID or slug
    */
@@ -383,7 +384,7 @@ export const VercelTeamSchema = z.object({
    * Team name
    */
   teamName: z.string().optional().describe('Team name'),
-});
+}));
 
 export type VercelTeam = z.infer<typeof VercelTeamSchema>;
 
@@ -391,7 +392,7 @@ export type VercelTeam = z.infer<typeof VercelTeamSchema>;
  * Vercel Connector Schema
  * Complete Vercel integration configuration
  */
-export const VercelConnectorSchema = ConnectorSchema.extend({
+export const VercelConnectorSchema = lazySchema(() => ConnectorSchema.extend({
   type: z.literal('saas'),
   
   /**
@@ -439,7 +440,7 @@ export const VercelConnectorSchema = ConnectorSchema.extend({
     'project.created',
     'project.removed',
   ])).optional().describe('Webhook events to subscribe to'),
-});
+}));
 
 export type VercelConnector = z.infer<typeof VercelConnectorSchema>;
 

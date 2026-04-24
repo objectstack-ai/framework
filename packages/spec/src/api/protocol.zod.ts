@@ -77,16 +77,17 @@ import type {
   PackageStatus,
 } from '../kernel/package-registry.zod';
 
-export const AutomationTriggerRequestSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const AutomationTriggerRequestSchema = lazySchema(() => z.object({
   trigger: z.string(),
   payload: z.record(z.string(), z.unknown())
-});
+}));
 
-export const AutomationTriggerResponseSchema = z.object({
+export const AutomationTriggerResponseSchema = lazySchema(() => z.object({
   success: z.boolean(),
   jobId: z.string().optional(),
   result: z.unknown().optional()
-});
+}));
 
 /**
  * ObjectStack Protocol - Zod Schema Definitions
@@ -114,7 +115,7 @@ export const AutomationTriggerResponseSchema = z.object({
  * Get API Discovery Request
  * No parameters needed
  */
-export const GetDiscoveryRequestSchema = z.object({});
+export const GetDiscoveryRequestSchema = lazySchema(() => z.object({}));
 
 /**
  * Get API Discovery Response
@@ -129,110 +130,110 @@ export const GetDiscoveryRequestSchema = z.object({});
  * 
  * @see DiscoverySchema in ./discovery.zod.ts — the canonical definition.
  */
-export const GetDiscoveryResponseSchema = DiscoverySchema
+export const GetDiscoveryResponseSchema = lazySchema(() => DiscoverySchema
   .partial()
   .required({ version: true })
   .extend({
     /** @deprecated Use `name` instead. Kept for backward compatibility. */
     apiName: z.string().optional().describe('API name (deprecated — use name)'),
-  });
+  }));
 
 /**
  * Get Metadata Types Request
  */
-export const GetMetaTypesRequestSchema = z.object({});
+export const GetMetaTypesRequestSchema = lazySchema(() => z.object({}));
 
 /**
  * Get Metadata Types Response
  */
-export const GetMetaTypesResponseSchema = z.object({
+export const GetMetaTypesResponseSchema = lazySchema(() => z.object({
   types: z.array(z.string()).describe('Available metadata type names (e.g., "object", "plugin", "view")'),
-});
+}));
 
 /**
  * Get Metadata Items Request
  * Get all items of a specific metadata type
  */
-export const GetMetaItemsRequestSchema = z.object({
+export const GetMetaItemsRequestSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name (e.g., "object", "plugin")'),
   packageId: z.string().optional().describe('Optional package ID to filter items by'),
-});
+}));
 
 /**
  * Get Metadata Items Response
  */
-export const GetMetaItemsResponseSchema = z.object({
+export const GetMetaItemsResponseSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name'),
   items: z.array(z.unknown()).describe('Array of metadata items'),
-});
+}));
 
 /**
  * Get Metadata Item Request
  * Get a specific metadata item by type and name
  */
-export const GetMetaItemRequestSchema = z.object({
+export const GetMetaItemRequestSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name'),
   name: z.string().describe('Item name (snake_case identifier)'),
   packageId: z.string().optional().describe('Optional package ID to filter items by'),
-});
+}));
 
 /**
  * Get Metadata Item Response
  */
-export const GetMetaItemResponseSchema = z.object({
+export const GetMetaItemResponseSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name'),
   name: z.string().describe('Item name'),
   item: z.unknown().describe('Metadata item definition'),
-});
+}));
 
 /**
  * Save Metadata Item Request
  * Create or update a metadata item
  */
-export const SaveMetaItemRequestSchema = z.object({
+export const SaveMetaItemRequestSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name'),
   name: z.string().describe('Item name'),
   item: z.unknown().describe('Metadata item definition'),
-});
+}));
 
 /**
  * Save Metadata Item Response
  */
-export const SaveMetaItemResponseSchema = z.object({
+export const SaveMetaItemResponseSchema = lazySchema(() => z.object({
   success: z.boolean(),
   message: z.string().optional(),
-});
+}));
 
 /**
  * Get Metadata Item with Cache Request
  * Get a specific metadata item with HTTP cache validation support
  */
-export const GetMetaItemCachedRequestSchema = z.object({
+export const GetMetaItemCachedRequestSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name'),
   name: z.string().describe('Item name'),
   cacheRequest: MetadataCacheRequestSchema.optional().describe('Cache validation parameters'),
-});
+}));
 
 /**
  * Get Metadata Item with Cache Response
  * Uses MetadataCacheResponse from http-cache.zod.ts
  */
-export const GetMetaItemCachedResponseSchema = MetadataCacheResponseSchema;
+export const GetMetaItemCachedResponseSchema = lazySchema(() => MetadataCacheResponseSchema);
 
 /**
  * Get UI View Request
  * Resolves the appropriate UI view for an object based on context.
  * Unlike getMetaItem, this does not require a specific View ID.
  */
-export const GetUiViewRequestSchema = z.object({
+export const GetUiViewRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (snake_case)'),
   type: z.enum(['list', 'form']).describe('View type'),
-});
+}));
 
 /**
  * Get UI View Response
  */
-export const GetUiViewResponseSchema = ViewSchema;
+export const GetUiViewResponseSchema = lazySchema(() => ViewSchema);
 
 // ==========================================
 // Data Operations
@@ -253,22 +254,22 @@ export const GetUiViewResponseSchema = ViewSchema;
  *   }
  * }
  */
-export const FindDataRequestSchema = z.object({
+export const FindDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('The unique machine name of the object to query (e.g. "account").'),
   query: QuerySchema.optional().describe('Structured query definition (filter, sort, select, pagination).'),
-});
+}));
 
 /**
  * Find Data Response
  * Returns a list of records matching the query criteria.
  */
-export const FindDataResponseSchema = z.object({
+export const FindDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name for the returned records.'),
   records: z.array(z.record(z.string(), z.unknown())).describe('The list of matching records.'),
   total: z.number().optional().describe('Total number of records matching the filter (if requested).'),
   nextCursor: z.string().optional().describe('Cursor for the next page of results (cursor-based pagination).'),
   hasMore: z.boolean().optional().describe('True if there are more records available (pagination).'),
-});
+}));
 
 /**
  * HTTP Find Query Parameters
@@ -284,7 +285,7 @@ export const FindDataResponseSchema = z.object({
  * @example
  * GET /api/v1/data/contacts?filter={"status":"active"}&select=name,email&top=10&sort=name
  */
-export const HttpFindQueryParamsSchema = z.object({
+export const HttpFindQueryParamsSchema = lazySchema(() => z.object({
   /** @canonical Singular form — the standard going forward. JSON string of filter expression or AST. */
   filter: z.string().optional().describe('JSON-encoded filter expression (canonical, singular).'),
   /** @deprecated Use `filter` (singular). Accepted for backward compatibility. */
@@ -301,7 +302,7 @@ export const HttpFindQueryParamsSchema = z.object({
   search: z.string().optional().describe('Full-text search query.'),
   distinct: z.coerce.boolean().optional().describe('SELECT DISTINCT flag.'),
   count: z.coerce.boolean().optional().describe('Include total count in response.'),
-});
+}));
 
 /**
  * Get Data Request
@@ -317,7 +318,7 @@ export const HttpFindQueryParamsSchema = z.object({
  *   "expand": ["owner", "account"]
  * }
  */
-export const GetDataRequestSchema = z.object({
+export const GetDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name.'),
   id: z.string().describe('The unique record identifier (primary key).'),
   select: z.array(z.string()).optional().describe('Fields to include in the response (allowlisted query param).'),
@@ -325,16 +326,16 @@ export const GetDataRequestSchema = z.object({
     'Lookup/master_detail field names to expand. '
     + 'The engine resolves these via batch $in queries, replacing foreign key IDs with full objects.'
   ),
-});
+}));
 
 /**
  * Get Data Response
  */
-export const GetDataResponseSchema = z.object({
+export const GetDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name.'),
   id: z.string().describe('The record ID.'),
   record: z.record(z.string(), z.unknown()).describe('The complete record data.'),
-});
+}));
 
 /**
  * Create Data Request
@@ -350,19 +351,19 @@ export const GetDataResponseSchema = z.object({
  *   }
  * }
  */
-export const CreateDataRequestSchema = z.object({
+export const CreateDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name.'),
   data: z.record(z.string(), z.unknown()).describe('The dictionary of field values to insert.'),
-});
+}));
 
 /**
  * Create Data Response
  */
-export const CreateDataResponseSchema = z.object({
+export const CreateDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name.'),
   id: z.string().describe('The ID of the newly created record.'),
   record: z.record(z.string(), z.unknown()).describe('The created record, including server-generated fields (created_at, owner).'),
-});
+}));
 
 /**
  * Update Data Request
@@ -378,37 +379,37 @@ export const CreateDataResponseSchema = z.object({
  *   }
  * }
  */
-export const UpdateDataRequestSchema = z.object({
+export const UpdateDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('The object name.'),
   id: z.string().describe('The ID of the record to update.'),
   data: z.record(z.string(), z.unknown()).describe('The fields to update (partial update).'),
-});
+}));
 
 /**
  * Update Data Response
  */
-export const UpdateDataResponseSchema = z.object({
+export const UpdateDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   id: z.string().describe('Updated record ID'),
   record: z.record(z.string(), z.unknown()).describe('Updated record'),
-});
+}));
 
 /**
  * Delete Data Request
  */
-export const DeleteDataRequestSchema = z.object({
+export const DeleteDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   id: z.string().describe('Record ID to delete'),
-});
+}));
 
 /**
  * Delete Data Response
  */
-export const DeleteDataResponseSchema = z.object({
+export const DeleteDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   id: z.string().describe('Deleted record ID'),
   success: z.boolean().describe('Whether deletion succeeded'),
-});
+}));
 
 // ==========================================
 // Batch Operations
@@ -417,65 +418,65 @@ export const DeleteDataResponseSchema = z.object({
 /**
  * Batch Data Request
  */
-export const BatchDataRequestSchema = z.object({
+export const BatchDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   request: BatchUpdateRequestSchema.describe('Batch operation request'),
-});
+}));
 
 /**
  * Batch Data Response
  * Uses BatchUpdateResponse from batch.zod.ts
  */
-export const BatchDataResponseSchema = BatchUpdateResponseSchema;
+export const BatchDataResponseSchema = lazySchema(() => BatchUpdateResponseSchema);
 
 /**
  * Create Many Data Request
  */
-export const CreateManyDataRequestSchema = z.object({
+export const CreateManyDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   records: z.array(z.record(z.string(), z.unknown())).describe('Array of records to create'),
-});
+}));
 
 /**
  * Create Many Data Response
  */
-export const CreateManyDataResponseSchema = z.object({
+export const CreateManyDataResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   records: z.array(z.record(z.string(), z.unknown())).describe('Created records'),
   count: z.number().describe('Number of records created'),
-});
+}));
 
 /**
  * Update Many Data Request
  */
-export const UpdateManyDataRequestSchema = z.object({
+export const UpdateManyDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   records: z.array(z.object({
     id: z.string().describe('Record ID'),
     data: z.record(z.string(), z.unknown()).describe('Fields to update'),
   })).describe('Array of updates'),
   options: BatchOptionsSchema.optional().describe('Update options'),
-});
+}));
 
 /**
  * Update Many Data Response
  * Uses BatchUpdateResponse for consistency
  */
-export const UpdateManyDataResponseSchema = BatchUpdateResponseSchema;
+export const UpdateManyDataResponseSchema = lazySchema(() => BatchUpdateResponseSchema);
 
 /**
  * Delete Many Data Request
  */
-export const DeleteManyDataRequestSchema = z.object({
+export const DeleteManyDataRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   ids: z.array(z.string()).describe('Array of record IDs to delete'),
   options: BatchOptionsSchema.optional().describe('Delete options'),
-});
+}));
 
 /**
  * Delete Many Data Response
  */
-export const DeleteManyDataResponseSchema = BatchUpdateResponseSchema;
+export const DeleteManyDataResponseSchema = lazySchema(() => BatchUpdateResponseSchema);
 
 // ==========================================
 // Package Management Operations
@@ -513,107 +514,107 @@ export {
 // View Management Operations
 // ==========================================
 
-export const ListViewsRequestSchema = z.object({
+export const ListViewsRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (snake_case)'),
   type: z.enum(['list', 'form']).optional().describe('Filter by view type'),
-});
+}));
 
-export const ListViewsResponseSchema = z.object({
+export const ListViewsResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   views: z.array(ViewSchema).describe('Array of view definitions'),
-});
+}));
 
-export const GetViewRequestSchema = z.object({
+export const GetViewRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (snake_case)'),
   viewId: z.string().describe('View identifier'),
-});
+}));
 
-export const GetViewResponseSchema = z.object({
+export const GetViewResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   view: ViewSchema.describe('View definition'),
-});
+}));
 
-export const CreateViewRequestSchema = z.object({
+export const CreateViewRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (snake_case)'),
   data: ViewSchema.describe('View definition to create'),
-});
+}));
 
-export const CreateViewResponseSchema = z.object({
+export const CreateViewResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   viewId: z.string().describe('Created view identifier'),
   view: ViewSchema.describe('Created view definition'),
-});
+}));
 
-export const UpdateViewRequestSchema = z.object({
+export const UpdateViewRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (snake_case)'),
   viewId: z.string().describe('View identifier'),
   data: ViewSchema.partial().describe('Partial view data to update'),
-});
+}));
 
-export const UpdateViewResponseSchema = z.object({
+export const UpdateViewResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   viewId: z.string().describe('Updated view identifier'),
   view: ViewSchema.describe('Updated view definition'),
-});
+}));
 
-export const DeleteViewRequestSchema = z.object({
+export const DeleteViewRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (snake_case)'),
   viewId: z.string().describe('View identifier to delete'),
-});
+}));
 
-export const DeleteViewResponseSchema = z.object({
+export const DeleteViewResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   viewId: z.string().describe('Deleted view identifier'),
   success: z.boolean().describe('Whether deletion succeeded'),
-});
+}));
 
 // ==========================================
 // Permission Operations
 // ==========================================
 
-export const CheckPermissionRequestSchema = z.object({
+export const CheckPermissionRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name to check permissions for'),
   action: z.enum(['create', 'read', 'edit', 'delete', 'transfer', 'restore', 'purge']).describe('Action to check'),
   recordId: z.string().optional().describe('Specific record ID (for record-level checks)'),
   field: z.string().optional().describe('Specific field name (for field-level checks)'),
-});
+}));
 
-export const CheckPermissionResponseSchema = z.object({
+export const CheckPermissionResponseSchema = lazySchema(() => z.object({
   allowed: z.boolean().describe('Whether the action is permitted'),
   reason: z.string().optional().describe('Reason if denied'),
-});
+}));
 
-export const GetObjectPermissionsRequestSchema = z.object({
+export const GetObjectPermissionsRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name to get permissions for'),
-});
+}));
 
-export const GetObjectPermissionsResponseSchema = z.object({
+export const GetObjectPermissionsResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   permissions: ObjectPermissionSchema.describe('Object-level permissions'),
   fieldPermissions: z.record(z.string(), FieldPermissionSchema).optional().describe('Field-level permissions keyed by field name'),
-});
+}));
 
-export const GetEffectivePermissionsRequestSchema = z.object({});
+export const GetEffectivePermissionsRequestSchema = lazySchema(() => z.object({}));
 
-export const GetEffectivePermissionsResponseSchema = z.object({
+export const GetEffectivePermissionsResponseSchema = lazySchema(() => z.object({
   objects: z.record(z.string(), ObjectPermissionSchema).describe('Effective object permissions keyed by object name'),
   systemPermissions: z.array(z.string()).describe('Effective system-level permissions'),
-});
+}));
 
 // ==========================================
 // Workflow Operations
 // ==========================================
 
-export const GetWorkflowConfigRequestSchema = z.object({
+export const GetWorkflowConfigRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name to get workflow config for'),
-});
+}));
 
-export const GetWorkflowConfigResponseSchema = z.object({
+export const GetWorkflowConfigResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   workflows: z.array(WorkflowRuleSchema).describe('Active workflow rules for this object'),
-});
+}));
 
-export const WorkflowStateSchema = z.object({
+export const WorkflowStateSchema = lazySchema(() => z.object({
   currentState: z.string().describe('Current workflow state name'),
   availableTransitions: z.array(z.object({
     name: z.string().describe('Transition name'),
@@ -629,148 +630,148 @@ export const WorkflowStateSchema = z.object({
     timestamp: z.string().datetime().describe('When the transition occurred'),
     comment: z.string().optional().describe('Optional comment'),
   })).optional().describe('State transition history'),
-});
+}));
 
-export const GetWorkflowStateRequestSchema = z.object({
+export const GetWorkflowStateRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID to get workflow state for'),
-});
+}));
 
-export const GetWorkflowStateResponseSchema = z.object({
+export const GetWorkflowStateResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   state: WorkflowStateSchema.describe('Current workflow state and available transitions'),
-});
+}));
 
-export const WorkflowTransitionRequestSchema = z.object({
+export const WorkflowTransitionRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   transition: z.string().describe('Transition name to execute'),
   comment: z.string().optional().describe('Optional comment for the transition'),
   data: z.record(z.string(), z.unknown()).optional().describe('Additional data for the transition'),
-});
+}));
 
-export const WorkflowTransitionResponseSchema = z.object({
+export const WorkflowTransitionResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   success: z.boolean().describe('Whether the transition succeeded'),
   state: WorkflowStateSchema.describe('New workflow state after transition'),
-});
+}));
 
-export const WorkflowApproveRequestSchema = z.object({
+export const WorkflowApproveRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   comment: z.string().optional().describe('Approval comment'),
   data: z.record(z.string(), z.unknown()).optional().describe('Additional data'),
-});
+}));
 
-export const WorkflowApproveResponseSchema = z.object({
+export const WorkflowApproveResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   success: z.boolean().describe('Whether the approval succeeded'),
   state: WorkflowStateSchema.describe('New workflow state after approval'),
-});
+}));
 
-export const WorkflowRejectRequestSchema = z.object({
+export const WorkflowRejectRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   reason: z.string().describe('Rejection reason'),
   comment: z.string().optional().describe('Additional comment'),
-});
+}));
 
-export const WorkflowRejectResponseSchema = z.object({
+export const WorkflowRejectResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
   success: z.boolean().describe('Whether the rejection succeeded'),
   state: WorkflowStateSchema.describe('New workflow state after rejection'),
-});
+}));
 
 // ==========================================
 // Realtime Operations
 // ==========================================
 
-export const RealtimeConnectRequestSchema = z.object({
+export const RealtimeConnectRequestSchema = lazySchema(() => z.object({
   transport: TransportProtocol.optional().describe('Preferred transport protocol'),
   channels: z.array(z.string()).optional().describe('Channels to subscribe to on connect'),
   token: z.string().optional().describe('Authentication token'),
-});
+}));
 
-export const RealtimeConnectResponseSchema = z.object({
+export const RealtimeConnectResponseSchema = lazySchema(() => z.object({
   connectionId: z.string().describe('Unique connection identifier'),
   transport: TransportProtocol.describe('Negotiated transport protocol'),
   url: z.string().optional().describe('WebSocket/SSE endpoint URL'),
-});
+}));
 
-export const RealtimeDisconnectRequestSchema = z.object({
+export const RealtimeDisconnectRequestSchema = lazySchema(() => z.object({
   connectionId: z.string().optional().describe('Connection ID to disconnect'),
-});
+}));
 
-export const RealtimeDisconnectResponseSchema = z.object({
+export const RealtimeDisconnectResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether disconnection succeeded'),
-});
+}));
 
-export const RealtimeSubscribeRequestSchema = z.object({
+export const RealtimeSubscribeRequestSchema = lazySchema(() => z.object({
   channel: z.string().describe('Channel name to subscribe to'),
   events: z.array(z.string()).optional().describe('Specific event types to listen for'),
   filter: z.record(z.string(), z.unknown()).optional().describe('Event filter criteria'),
-});
+}));
 
-export const RealtimeSubscribeResponseSchema = z.object({
+export const RealtimeSubscribeResponseSchema = lazySchema(() => z.object({
   subscriptionId: z.string().describe('Unique subscription identifier'),
   channel: z.string().describe('Subscribed channel name'),
-});
+}));
 
-export const RealtimeUnsubscribeRequestSchema = z.object({
+export const RealtimeUnsubscribeRequestSchema = lazySchema(() => z.object({
   subscriptionId: z.string().describe('Subscription ID to cancel'),
-});
+}));
 
-export const RealtimeUnsubscribeResponseSchema = z.object({
+export const RealtimeUnsubscribeResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether unsubscription succeeded'),
-});
+}));
 
-export const SetPresenceRequestSchema = z.object({
+export const SetPresenceRequestSchema = lazySchema(() => z.object({
   channel: z.string().describe('Channel to set presence in'),
   state: RealtimePresenceSchema.describe('Presence state to set'),
-});
+}));
 
-export const SetPresenceResponseSchema = z.object({
+export const SetPresenceResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether presence was set'),
-});
+}));
 
-export const GetPresenceRequestSchema = z.object({
+export const GetPresenceRequestSchema = lazySchema(() => z.object({
   channel: z.string().describe('Channel to get presence for'),
-});
+}));
 
-export const GetPresenceResponseSchema = z.object({
+export const GetPresenceResponseSchema = lazySchema(() => z.object({
   channel: z.string().describe('Channel name'),
   members: z.array(RealtimePresenceSchema).describe('Active members and their presence state'),
-});
+}));
 
 // ==========================================
 // Notification Operations
 // ==========================================
 
-export const RegisterDeviceRequestSchema = z.object({
+export const RegisterDeviceRequestSchema = lazySchema(() => z.object({
   token: z.string().describe('Device push notification token'),
   platform: z.enum(['ios', 'android', 'web']).describe('Device platform'),
   deviceId: z.string().optional().describe('Unique device identifier'),
   name: z.string().optional().describe('Device friendly name'),
-});
+}));
 
-export const RegisterDeviceResponseSchema = z.object({
+export const RegisterDeviceResponseSchema = lazySchema(() => z.object({
   deviceId: z.string().describe('Registered device ID'),
   success: z.boolean().describe('Whether registration succeeded'),
-});
+}));
 
-export const UnregisterDeviceRequestSchema = z.object({
+export const UnregisterDeviceRequestSchema = lazySchema(() => z.object({
   deviceId: z.string().describe('Device ID to unregister'),
-});
+}));
 
-export const UnregisterDeviceResponseSchema = z.object({
+export const UnregisterDeviceResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether unregistration succeeded'),
-});
+}));
 
-export const NotificationPreferencesSchema = z.object({
+export const NotificationPreferencesSchema = lazySchema(() => z.object({
   email: z.boolean().default(true).describe('Receive email notifications'),
   push: z.boolean().default(true).describe('Receive push notifications'),
   inApp: z.boolean().default(true).describe('Receive in-app notifications'),
@@ -780,23 +781,23 @@ export const NotificationPreferencesSchema = z.object({
     email: z.boolean().optional().describe('Override email setting'),
     push: z.boolean().optional().describe('Override push setting'),
   })).optional().describe('Per-channel notification preferences'),
-});
+}));
 
-export const GetNotificationPreferencesRequestSchema = z.object({});
+export const GetNotificationPreferencesRequestSchema = lazySchema(() => z.object({}));
 
-export const GetNotificationPreferencesResponseSchema = z.object({
+export const GetNotificationPreferencesResponseSchema = lazySchema(() => z.object({
   preferences: NotificationPreferencesSchema.describe('Current notification preferences'),
-});
+}));
 
-export const UpdateNotificationPreferencesRequestSchema = z.object({
+export const UpdateNotificationPreferencesRequestSchema = lazySchema(() => z.object({
   preferences: NotificationPreferencesSchema.partial().describe('Preferences to update'),
-});
+}));
 
-export const UpdateNotificationPreferencesResponseSchema = z.object({
+export const UpdateNotificationPreferencesResponseSchema = lazySchema(() => z.object({
   preferences: NotificationPreferencesSchema.describe('Updated notification preferences'),
-});
+}));
 
-export const NotificationSchema = z.object({
+export const NotificationSchema = lazySchema(() => z.object({
   id: z.string().describe('Notification ID'),
   type: z.string().describe('Notification type'),
   title: z.string().describe('Notification title'),
@@ -805,82 +806,82 @@ export const NotificationSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional().describe('Additional notification data'),
   actionUrl: z.string().optional().describe('URL to navigate to when clicked'),
   createdAt: z.string().datetime().describe('When notification was created'),
-});
+}));
 
-export const ListNotificationsRequestSchema = z.object({
+export const ListNotificationsRequestSchema = lazySchema(() => z.object({
   read: z.boolean().optional().describe('Filter by read status'),
   type: z.string().optional().describe('Filter by notification type'),
   limit: z.number().default(20).describe('Maximum number of notifications to return'),
   cursor: z.string().optional().describe('Pagination cursor'),
-});
+}));
 
-export const ListNotificationsResponseSchema = z.object({
+export const ListNotificationsResponseSchema = lazySchema(() => z.object({
   notifications: z.array(NotificationSchema).describe('List of notifications'),
   unreadCount: z.number().describe('Total number of unread notifications'),
   cursor: z.string().optional().describe('Next page cursor'),
-});
+}));
 
-export const MarkNotificationsReadRequestSchema = z.object({
+export const MarkNotificationsReadRequestSchema = lazySchema(() => z.object({
   ids: z.array(z.string()).describe('Notification IDs to mark as read'),
-});
+}));
 
-export const MarkNotificationsReadResponseSchema = z.object({
+export const MarkNotificationsReadResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether the operation succeeded'),
   readCount: z.number().describe('Number of notifications marked as read'),
-});
+}));
 
-export const MarkAllNotificationsReadRequestSchema = z.object({});
+export const MarkAllNotificationsReadRequestSchema = lazySchema(() => z.object({}));
 
-export const MarkAllNotificationsReadResponseSchema = z.object({
+export const MarkAllNotificationsReadResponseSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether the operation succeeded'),
   readCount: z.number().describe('Number of notifications marked as read'),
-});
+}));
 
 // ==========================================
 // AI Operations
 // ==========================================
 
-export const AiNlqRequestSchema = z.object({
+export const AiNlqRequestSchema = lazySchema(() => z.object({
   query: z.string().describe('Natural language query string'),
   object: z.string().optional().describe('Target object context'),
   conversationId: z.string().optional().describe('Conversation ID for multi-turn queries'),
-});
+}));
 
-export const AiNlqResponseSchema = z.object({
+export const AiNlqResponseSchema = lazySchema(() => z.object({
   query: z.unknown().describe('Generated structured query (AST)'),
   explanation: z.string().optional().describe('Human-readable explanation of the query'),
   confidence: z.number().min(0).max(1).optional().describe('Confidence score (0-1)'),
   suggestions: z.array(z.string()).optional().describe('Suggested follow-up queries'),
-});
+}));
 
 // AiChatRequestSchema and AiChatResponseSchema have been removed.
 // The AI chat wire protocol is now fully aligned with the Vercel AI SDK (`ai`).
 // Frontend consumers should use `@ai-sdk/react/useChat` directly.
 // See: https://ai-sdk.dev/docs
 
-export const AiSuggestRequestSchema = z.object({
+export const AiSuggestRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name for context'),
   field: z.string().optional().describe('Field to suggest values for'),
   recordId: z.string().optional().describe('Record ID for context'),
   partial: z.string().optional().describe('Partial input for completion'),
-});
+}));
 
-export const AiSuggestResponseSchema = z.object({
+export const AiSuggestResponseSchema = lazySchema(() => z.object({
   suggestions: z.array(z.object({
     value: z.unknown().describe('Suggested value'),
     label: z.string().describe('Display label'),
     confidence: z.number().min(0).max(1).optional().describe('Confidence score (0-1)'),
     reason: z.string().optional().describe('Reason for this suggestion'),
   })).describe('Suggested values'),
-});
+}));
 
-export const AiInsightsRequestSchema = z.object({
+export const AiInsightsRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name to analyze'),
   recordId: z.string().optional().describe('Specific record to analyze'),
   type: z.enum(['summary', 'trends', 'anomalies', 'recommendations']).optional().describe('Type of insight'),
-});
+}));
 
-export const AiInsightsResponseSchema = z.object({
+export const AiInsightsResponseSchema = lazySchema(() => z.object({
   insights: z.array(z.object({
     type: z.string().describe('Insight type'),
     title: z.string().describe('Insight title'),
@@ -888,39 +889,39 @@ export const AiInsightsResponseSchema = z.object({
     confidence: z.number().min(0).max(1).optional().describe('Confidence score (0-1)'),
     data: z.record(z.string(), z.unknown()).optional().describe('Supporting data'),
   })).describe('Generated insights'),
-});
+}));
 
 // ==========================================
 // i18n Operations
 // ==========================================
 
-export const GetLocalesRequestSchema = z.object({});
+export const GetLocalesRequestSchema = lazySchema(() => z.object({}));
 
-export const GetLocalesResponseSchema = z.object({
+export const GetLocalesResponseSchema = lazySchema(() => z.object({
   locales: z.array(z.object({
     code: z.string().describe('BCP-47 locale code (e.g., en-US, zh-CN)'),
     label: z.string().describe('Display name of the locale'),
     isDefault: z.boolean().default(false).describe('Whether this is the default locale'),
   })).describe('Available locales'),
-});
+}));
 
-export const GetTranslationsRequestSchema = z.object({
+export const GetTranslationsRequestSchema = lazySchema(() => z.object({
   locale: z.string().describe('BCP-47 locale code'),
   namespace: z.string().optional().describe('Translation namespace (e.g., objects, apps, messages)'),
   keys: z.array(z.string()).optional().describe('Specific translation keys to fetch'),
-});
+}));
 
-export const GetTranslationsResponseSchema = z.object({
+export const GetTranslationsResponseSchema = lazySchema(() => z.object({
   locale: z.string().describe('Locale code'),
   translations: TranslationDataSchema.describe('Translation data'),
-});
+}));
 
-export const GetFieldLabelsRequestSchema = z.object({
+export const GetFieldLabelsRequestSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   locale: z.string().describe('BCP-47 locale code'),
-});
+}));
 
-export const GetFieldLabelsResponseSchema = z.object({
+export const GetFieldLabelsResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
   locale: z.string().describe('Locale code'),
   labels: z.record(z.string(), z.object({
@@ -928,7 +929,7 @@ export const GetFieldLabelsResponseSchema = z.object({
     help: z.string().optional().describe('Translated help text'),
     options: z.record(z.string(), z.string()).optional().describe('Translated option labels'),
   })).describe('Field labels keyed by field name'),
-});
+}));
 
 // ==========================================
 // Protocol Interface Schema
@@ -947,7 +948,7 @@ export const GetFieldLabelsResponseSchema = z.object({
  * 
  * Each method is defined with its request and response schemas.
  */
-export const ObjectStackProtocolSchema = z.object({
+export const ObjectStackProtocolSchema = lazySchema(() => z.object({
   // Discovery & Metadata
   getDiscovery: z.function()
     .describe('Get API discovery information'),
@@ -1136,7 +1137,7 @@ export const ObjectStackProtocolSchema = z.object({
     .describe('Subscribe to record notifications'),
   feedUnsubscribe: z.function()
     .describe('Unsubscribe from record notifications'),
-});
+}));
 
 /**
  * TypeScript Types

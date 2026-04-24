@@ -18,22 +18,23 @@ import { z } from 'zod';
  * Capability Conformance Level
  * Indicates how completely a plugin implements a given protocol.
  */
-export const CapabilityConformanceLevelSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const CapabilityConformanceLevelSchema = lazySchema(() => z.enum([
   'full',        // Complete implementation of all protocol features
   'partial',     // Subset implementation with specific features listed
   'experimental', // Unstable/preview implementation
   'deprecated',  // Still supported but scheduled for removal
-]).describe('Level of protocol conformance');
+]).describe('Level of protocol conformance'));
 
 /**
  * Protocol Version Schema
  * Uses semantic versioning to track protocol evolution.
  */
-export const ProtocolVersionSchema = z.object({
+export const ProtocolVersionSchema = lazySchema(() => z.object({
   major: z.number().int().min(0),
   minor: z.number().int().min(0),
   patch: z.number().int().min(0),
-}).describe('Semantic version of the protocol');
+}).describe('Semantic version of the protocol'));
 
 /**
  * Protocol Reference
@@ -44,7 +45,7 @@ export const ProtocolVersionSchema = z.object({
  * - com.objectstack.protocol.auth.oauth2.v2
  * - com.acme.protocol.payment.stripe.v1
  */
-export const ProtocolReferenceSchema = z.object({
+export const ProtocolReferenceSchema = lazySchema(() => z.object({
   /**
    * Protocol identifier using reverse domain notation.
    * Format: {domain}.protocol.{category}.{name}[.{subcategory}].v{major}
@@ -72,25 +73,25 @@ export const ProtocolReferenceSchema = z.object({
    * Brief description of what this protocol defines
    */
   description: z.string().optional(),
-});
+}));
 
 /**
  * Protocol Feature
  * Represents a specific capability within a protocol.
  */
-export const ProtocolFeatureSchema = z.object({
+export const ProtocolFeatureSchema = lazySchema(() => z.object({
   name: z.string().describe('Feature identifier within the protocol'),
   enabled: z.boolean().default(true),
   description: z.string().optional(),
   sinceVersion: z.string().optional().describe('Version when this feature was added'),
   deprecatedSince: z.string().optional().describe('Version when deprecated'),
-});
+}));
 
 /**
  * Plugin Capability Declaration
  * Documents what protocols a plugin implements and to what extent.
  */
-export const PluginCapabilitySchema = z.object({
+export const PluginCapabilitySchema = lazySchema(() => z.object({
   /**
    * The protocol being implemented
    */
@@ -121,13 +122,13 @@ export const PluginCapabilitySchema = z.object({
    */
   certified: z.boolean().default(false).describe('Has passed official conformance tests'),
   certificationDate: z.string().datetime().optional(),
-});
+}));
 
 /**
  * Plugin Interface Declaration
  * Defines the contract for services this plugin provides to other plugins.
  */
-export const PluginInterfaceSchema = z.object({
+export const PluginInterfaceSchema = lazySchema(() => z.object({
   /**
    * Unique interface identifier
    * Format: {plugin-id}.interface.{name}
@@ -180,13 +181,13 @@ export const PluginInterfaceSchema = z.object({
    * Stability level
    */
   stability: z.enum(['stable', 'beta', 'alpha', 'experimental']).default('stable'),
-});
+}));
 
 /**
  * Plugin Dependency Declaration
  * Specifies what other plugins or capabilities this plugin requires.
  */
-export const PluginDependencySchema = z.object({
+export const PluginDependencySchema = lazySchema(() => z.object({
   /**
    * Plugin ID using reverse domain notation
    */
@@ -214,13 +215,13 @@ export const PluginDependencySchema = z.object({
    * Minimum required capabilities from the dependency
    */
   requiredCapabilities: z.array(z.string()).optional().describe('Protocol IDs the dependency must support'),
-});
+}));
 
 /**
  * Extension Point Declaration
  * Defines hooks where other plugins can extend this plugin's functionality.
  */
-export const ExtensionPointSchema = z.object({
+export const ExtensionPointSchema = lazySchema(() => z.object({
   /**
    * Extension point identifier
    */
@@ -265,13 +266,13 @@ export const ExtensionPointSchema = z.object({
    */
   cardinality: z.enum(['single', 'multiple']).default('multiple')
     .describe('Whether multiple extensions can register to this point'),
-});
+}));
 
 /**
  * Complete Plugin Capability Manifest
  * This is included in the main plugin manifest to declare all capabilities.
  */
-export const PluginCapabilityManifestSchema = z.object({
+export const PluginCapabilityManifestSchema = lazySchema(() => z.object({
   /**
    * Protocols this plugin implements
    */
@@ -305,7 +306,7 @@ export const PluginCapabilityManifestSchema = z.object({
     implementation: z.string().describe('Path to implementation module'),
     priority: z.number().int().default(100).describe('Registration priority (lower = higher priority)'),
   })).optional().describe('Extensions contributed to other plugins'),
-});
+}));
 
 // Export types
 export type CapabilityConformanceLevel = z.infer<typeof CapabilityConformanceLevelSchema>;

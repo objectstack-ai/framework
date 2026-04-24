@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { CorsConfigSchema, StaticMountSchema, HttpMethod } from '../shared/http.zod';
 
 // Re-export HttpMethod for convenience
+import { lazySchema } from '../shared/lazy-schema';
 export { HttpMethod };
 
 /**
@@ -25,7 +26,7 @@ export type RouteCategory = z.infer<typeof RouteCategory>;
  * Route Definition Schema
  * Describes a single routable endpoint in the Kernel.
  */
-export const RouteDefinitionSchema = z.object({
+export const RouteDefinitionSchema = lazySchema(() => z.object({
   /**
    * HTTP Method
    */
@@ -64,7 +65,7 @@ export const RouteDefinitionSchema = z.object({
    */
   timeout: z.number().int().optional().describe('Execution timeout in ms'),
   rateLimit: z.string().optional().describe('Rate limit policy name'),
-});
+}));
 
 export type RouteDefinition = z.infer<typeof RouteDefinitionSchema>;
 
@@ -72,7 +73,7 @@ export type RouteDefinition = z.infer<typeof RouteDefinitionSchema>;
  * Router Configuration Schema
  * Global routing table configuration.
  */
-export const RouterConfigSchema = z.object({
+export const RouterConfigSchema = lazySchema(() => z.object({
   /**
    * URL Prefix for all kernel routes
    */
@@ -122,6 +123,6 @@ export const RouterConfigSchema = z.object({
    * Static asset mounts
    */
   staticMounts: z.array(StaticMountSchema).optional(),
-});
+}));
 
 export type RouterConfig = z.infer<typeof RouterConfigSchema>;

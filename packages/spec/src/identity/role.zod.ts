@@ -29,7 +29,8 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
  * - 'CEO' (uppercase)
  * - 'Region East VP' (spaces and uppercase)
  */
-export const RoleSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const RoleSchema = lazySchema(() => z.object({
   /** Identity */
   name: SnakeCaseIdentifierSchema.describe('Unique role name (lowercase snake_case)'),
   label: z.string().describe('Display label (e.g. VP of Sales)'),
@@ -39,6 +40,6 @@ export const RoleSchema = z.object({
   
   /** Description */
   description: z.string().optional(),
-});
+}));
 
 export type Role = z.infer<typeof RoleSchema>;

@@ -26,6 +26,7 @@ import { ApiErrorSchema, BaseResponseSchema, RecordDataSchema } from './contract
  * Batch Operation Type Enum
  * Defines the type of batch operation to perform
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const BatchOperationType = z.enum([
   'create',    // Batch insert
   'update',    // Batch update
@@ -43,11 +44,11 @@ export type BatchOperationType = z.infer<typeof BatchOperationType>;
  * Batch Record Schema
  * Individual record in a batch operation
  */
-export const BatchRecordSchema = z.object({
+export const BatchRecordSchema = lazySchema(() => z.object({
   id: z.string().optional().describe('Record ID (required for update/delete)'),
   data: RecordDataSchema.optional().describe('Record data (required for create/update/upsert)'),
   externalId: z.string().optional().describe('External ID for upsert matching'),
-});
+}));
 
 export type BatchRecord = z.infer<typeof BatchRecordSchema>;
 
@@ -55,12 +56,12 @@ export type BatchRecord = z.infer<typeof BatchRecordSchema>;
  * Batch Operation Options Schema
  * Configuration options for batch operations
  */
-export const BatchOptionsSchema = z.object({
+export const BatchOptionsSchema = lazySchema(() => z.object({
   atomic: z.boolean().optional().default(true).describe('If true, rollback entire batch on any failure (transaction mode)'),
   returnRecords: z.boolean().optional().default(false).describe('If true, return full record data in response'),
   continueOnError: z.boolean().optional().default(false).describe('If true (and atomic=false), continue processing remaining records after errors'),
   validateOnly: z.boolean().optional().default(false).describe('If true, validate records without persisting changes (dry-run mode)'),
-});
+}));
 
 export type BatchOptions = z.infer<typeof BatchOptionsSchema>;
 
@@ -82,11 +83,11 @@ export type BatchOptions = z.infer<typeof BatchOptionsSchema>;
  *   }
  * }
  */
-export const BatchUpdateRequestSchema = z.object({
+export const BatchUpdateRequestSchema = lazySchema(() => z.object({
   operation: BatchOperationType.describe('Type of batch operation'),
   records: z.array(BatchRecordSchema).min(1).max(200).describe('Array of records to process (max 200 per batch)'),
   options: BatchOptionsSchema.optional().describe('Batch operation options'),
-});
+}));
 
 export type BatchUpdateRequest = z.input<typeof BatchUpdateRequestSchema>;
 
@@ -104,10 +105,10 @@ export type BatchUpdateRequest = z.input<typeof BatchUpdateRequestSchema>;
  *   "options": { "atomic": true }
  * }
  */
-export const UpdateManyRequestSchema = z.object({
+export const UpdateManyRequestSchema = lazySchema(() => z.object({
   records: z.array(BatchRecordSchema).min(1).max(200).describe('Array of records to update (max 200 per batch)'),
   options: BatchOptionsSchema.optional().describe('Update options'),
-});
+}));
 
 export type UpdateManyRequest = z.input<typeof UpdateManyRequestSchema>;
 
@@ -119,13 +120,13 @@ export type UpdateManyRequest = z.input<typeof UpdateManyRequestSchema>;
  * Batch Operation Result Schema
  * Result for a single record in a batch operation
  */
-export const BatchOperationResultSchema = z.object({
+export const BatchOperationResultSchema = lazySchema(() => z.object({
   id: z.string().optional().describe('Record ID if operation succeeded'),
   success: z.boolean().describe('Whether this record was processed successfully'),
   errors: z.array(ApiErrorSchema).optional().describe('Array of errors if operation failed'),
   data: RecordDataSchema.optional().describe('Full record data (if returnRecords=true)'),
   index: z.number().optional().describe('Index of the record in the request array'),
-});
+}));
 
 export type BatchOperationResult = z.infer<typeof BatchOperationResultSchema>;
 
@@ -170,13 +171,13 @@ export type BatchOperationResult = z.infer<typeof BatchOperationResultSchema>;
  *   }
  * }
  */
-export const BatchUpdateResponseSchema = BaseResponseSchema.extend({
+export const BatchUpdateResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   operation: BatchOperationType.optional().describe('Operation type that was performed'),
   total: z.number().describe('Total number of records in the batch'),
   succeeded: z.number().describe('Number of records that succeeded'),
   failed: z.number().describe('Number of records that failed'),
   results: z.array(BatchOperationResultSchema).describe('Detailed results for each record'),
-});
+}));
 
 export type BatchUpdateResponse = z.infer<typeof BatchUpdateResponseSchema>;
 
@@ -195,10 +196,10 @@ export type BatchUpdateResponse = z.infer<typeof BatchUpdateResponseSchema>;
  *   "options": { "atomic": true }
  * }
  */
-export const DeleteManyRequestSchema = z.object({
+export const DeleteManyRequestSchema = lazySchema(() => z.object({
   ids: z.array(z.string()).min(1).max(200).describe('Array of record IDs to delete (max 200)'),
   options: BatchOptionsSchema.optional().describe('Delete options'),
-});
+}));
 
 export type DeleteManyRequest = z.infer<typeof DeleteManyRequestSchema>;
 
@@ -230,7 +231,7 @@ export const BatchApiContracts = {
  * 
  * Configuration for enabling batch operations API.
  */
-export const BatchConfigSchema = z.object({
+export const BatchConfigSchema = lazySchema(() => z.object({
   /** Enable batch operations */
   enabled: z.boolean().default(true).describe('Enable batch operations'),
   
@@ -239,6 +240,6 @@ export const BatchConfigSchema = z.object({
   
   /** Default options */
   defaultOptions: BatchOptionsSchema.optional().describe('Default batch options'),
-}).passthrough(); // Allow additional properties
+}).passthrough()); // Allow additional properties
 
 export type BatchConfig = z.infer<typeof BatchConfigSchema>;

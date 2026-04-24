@@ -8,7 +8,8 @@ import { IsolationLevelEnum } from '../shared/enums.zod';
  * Common Driver Options
  * Passed to most driver methods to control behavior (transactions, timeouts, etc.)
  */
-export const DriverOptionsSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const DriverOptionsSchema = lazySchema(() => z.object({
   /**
    * Transaction handle/identifier.
    * If provided, the operation must run within this transaction.
@@ -36,7 +37,7 @@ export const DriverOptionsSchema = z.object({
    * For multi-tenant databases (row-level security or schema-per-tenant).
    */
   tenantId: z.string().optional().describe('Tenant Isolation identifier'),
-});
+}));
 
 /**
  * Driver Capabilities Schema
@@ -45,7 +46,7 @@ export const DriverOptionsSchema = z.object({
  * This allows ObjectQL to adapt its behavior based on underlying database capabilities.
  * Enhanced with granular capability flags for better feature detection.
  */
-export const DriverCapabilitiesSchema = z.object({
+export const DriverCapabilitiesSchema = lazySchema(() => z.object({
   // ============================================================================
   // Basic CRUD Operations
   // ============================================================================
@@ -250,7 +251,7 @@ export const DriverCapabilitiesSchema = z.object({
    * Whether the driver supports query result caching.
    */
   queryCache: z.boolean().default(false).describe('Supports query result caching'),
-});
+}));
 
 /**
  * Unified Database Driver Interface
@@ -258,7 +259,7 @@ export const DriverCapabilitiesSchema = z.object({
  * This is the contract that all storage adapters (Postgres, Mongo, Excel, Salesforce) must implement.
  * It abstracts the underlying engine, enabling ObjectStack to be "Database Agnostic".
  */
-export const DriverInterfaceSchema = z.object({
+export const DriverInterfaceSchema = lazySchema(() => z.object({
   /**
    * Driver name (e.g., 'postgresql', 'mongodb', 'rest_api').
    */
@@ -625,30 +626,30 @@ export const DriverInterfaceSchema = z.object({
     .input(z.tuple([z.string(), QuerySchema, DriverOptionsSchema.optional()]))
     .output(z.promise(z.unknown()))
     .optional(),
-});
+}));
 
 /**
  * Connection Pool Configuration Schema
  * Manages database connection pooling for performance
  */
-export const PoolConfigSchema = z.object({
+export const PoolConfigSchema = lazySchema(() => z.object({
   min: z.number().min(0).default(2).describe('Minimum number of connections in pool'),
   max: z.number().min(1).default(10).describe('Maximum number of connections in pool'),
   idleTimeoutMillis: z.number().min(0).default(30000).describe('Time in ms before idle connection is closed'),
   connectionTimeoutMillis: z.number().min(0).default(5000).describe('Time in ms to wait for available connection'),
-});
+}));
 
 /**
  * Driver Configuration Schema
  * Base configuration for database drivers
  */
-export const DriverConfigSchema = z.object({
+export const DriverConfigSchema = lazySchema(() => z.object({
   name: z.string().describe('Driver instance name'),
   type: z.enum(['sql', 'nosql', 'cache', 'search', 'graph', 'timeseries']).describe('Driver type category'),
   capabilities: DriverCapabilitiesSchema.describe('Driver capability flags'),
   connectionString: z.string().optional().describe('Database connection string (driver-specific format)'),
   poolConfig: PoolConfigSchema.optional().describe('Connection pool configuration'),
-});
+}));
 
 /**
  * TypeScript types

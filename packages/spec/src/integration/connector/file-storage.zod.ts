@@ -16,7 +16,8 @@ import {
 /**
  * File Storage Provider Types
  */
-export const FileStorageProviderSchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const FileStorageProviderSchema = lazySchema(() => z.enum([
   's3',                    // Amazon S3
   'azure_blob',            // Azure Blob Storage
   'gcs',                   // Google Cloud Storage
@@ -28,27 +29,27 @@ export const FileStorageProviderSchema = z.enum([
   'ftp',                   // FTP/SFTP
   'local',                 // Local file system
   'custom',                // Custom file storage
-]).describe('File storage provider type');
+]).describe('File storage provider type'));
 
 export type FileStorageProvider = z.infer<typeof FileStorageProviderSchema>;
 
 /**
  * File Access Pattern
  */
-export const FileAccessPatternSchema = z.enum([
+export const FileAccessPatternSchema = lazySchema(() => z.enum([
   'public_read',           // Public read access
   'private',               // Private access
   'authenticated_read',    // Requires authentication
   'bucket_owner_read',     // Bucket owner has read access
   'bucket_owner_full',     // Bucket owner has full control
-]).describe('File access pattern');
+]).describe('File access pattern'));
 
 export type FileAccessPattern = z.infer<typeof FileAccessPatternSchema>;
 
 /**
  * File Metadata Configuration
  */
-export const FileMetadataConfigSchema = z.object({
+export const FileMetadataConfigSchema = lazySchema(() => z.object({
   extractMetadata: z.boolean().default(true).describe('Extract file metadata'),
   
   metadataFields: z.array(z.enum([
@@ -63,14 +64,14 @@ export const FileMetadataConfigSchema = z.object({
   ])).optional().describe('Metadata fields to extract'),
   
   customMetadata: z.record(z.string(), z.string()).optional().describe('Custom metadata key-value pairs'),
-});
+}));
 
 export type FileMetadataConfig = z.infer<typeof FileMetadataConfigSchema>;
 
 /**
  * Multipart Upload Configuration
  */
-export const MultipartUploadConfigSchema = z.object({
+export const MultipartUploadConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(true).describe('Enable multipart uploads'),
   
   partSize: z.number().min(5 * 1024 * 1024).default(5 * 1024 * 1024).describe('Part size in bytes (min 5MB)'),
@@ -78,27 +79,27 @@ export const MultipartUploadConfigSchema = z.object({
   maxConcurrentParts: z.number().min(1).max(10).default(5).describe('Maximum concurrent part uploads'),
   
   threshold: z.number().min(5 * 1024 * 1024).default(100 * 1024 * 1024).describe('File size threshold for multipart upload in bytes'),
-});
+}));
 
 export type MultipartUploadConfig = z.infer<typeof MultipartUploadConfigSchema>;
 
 /**
  * File Versioning Configuration
  */
-export const FileVersioningConfigSchema = z.object({
+export const FileVersioningConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable file versioning'),
   
   maxVersions: z.number().min(1).max(100).optional().describe('Maximum versions to retain'),
   
   retentionDays: z.number().min(1).optional().describe('Version retention period in days'),
-});
+}));
 
 export type FileVersioningConfig = z.infer<typeof FileVersioningConfigSchema>;
 
 /**
  * File Filter Configuration
  */
-export const FileFilterConfigSchema = z.object({
+export const FileFilterConfigSchema = lazySchema(() => z.object({
   includePatterns: z.array(z.string()).optional().describe('File patterns to include (glob)'),
   
   excludePatterns: z.array(z.string()).optional().describe('File patterns to exclude (glob)'),
@@ -110,14 +111,14 @@ export const FileFilterConfigSchema = z.object({
   allowedExtensions: z.array(z.string()).optional().describe('Allowed file extensions'),
   
   blockedExtensions: z.array(z.string()).optional().describe('Blocked file extensions'),
-});
+}));
 
 export type FileFilterConfig = z.infer<typeof FileFilterConfigSchema>;
 
 /**
  * File Storage Bucket/Container Configuration
  */
-export const StorageBucketSchema = z.object({
+export const StorageBucketSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Bucket identifier in ObjectStack (snake_case)'),
   label: z.string().describe('Display label'),
   bucketName: z.string().describe('Actual bucket/container name in storage system'),
@@ -126,14 +127,14 @@ export const StorageBucketSchema = z.object({
   prefix: z.string().optional().describe('Prefix/path within bucket'),
   accessPattern: FileAccessPatternSchema.optional().describe('Access pattern'),
   fileFilters: FileFilterConfigSchema.optional().describe('File filter configuration'),
-});
+}));
 
 export type StorageBucket = z.infer<typeof StorageBucketSchema>;
 
 /**
  * File Storage Connector Configuration Schema
  */
-export const FileStorageConnectorSchema = ConnectorSchema.extend({
+export const FileStorageConnectorSchema = lazySchema(() => ConnectorSchema.extend({
   type: z.literal('file_storage'),
   
   /**
@@ -210,7 +211,7 @@ export const FileStorageConnectorSchema = ConnectorSchema.extend({
    * Enable transfer acceleration (for supported providers)
    */
   transferAcceleration: z.boolean().default(false).describe('Enable transfer acceleration'),
-});
+}));
 
 export type FileStorageConnector = z.infer<typeof FileStorageConnectorSchema>;
 

@@ -6,6 +6,7 @@ import { z } from 'zod';
  * Subscription Event Type
  * Event types that can be subscribed to for record-level notifications.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const SubscriptionEventType = z.enum([
   'comment',
   'mention',
@@ -33,7 +34,7 @@ export type NotificationChannel = z.infer<typeof NotificationChannel>;
  * Defines a user's subscription to record-level notifications.
  * Enables Airtable-style bell icon for record change notifications.
  */
-export const RecordSubscriptionSchema = z.object({
+export const RecordSubscriptionSchema = lazySchema(() => z.object({
   /** Target */
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
@@ -56,5 +57,5 @@ export const RecordSubscriptionSchema = z.object({
 
   /** Timestamps */
   createdAt: z.string().datetime().describe('Subscription creation timestamp'),
-});
+}));
 export type RecordSubscription = z.infer<typeof RecordSubscriptionSchema>;

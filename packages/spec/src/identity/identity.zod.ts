@@ -16,7 +16,8 @@ import { z } from 'zod';
  * User Schema
  * Core user identity data model
  */
-export const UserSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const UserSchema = lazySchema(() => z.object({
   /**
    * Unique user identifier
    */
@@ -51,7 +52,7 @@ export const UserSchema = z.object({
    * Last update timestamp
    */
   updatedAt: z.string().datetime().describe('Last update timestamp'),
-});
+}));
 
 export type User = z.infer<typeof UserSchema>;
 
@@ -59,7 +60,7 @@ export type User = z.infer<typeof UserSchema>;
  * Account Schema
  * Links external OAuth/OIDC/SAML accounts to a user
  */
-export const AccountSchema = z.object({
+export const AccountSchema = lazySchema(() => z.object({
   /**
    * Unique account identifier
    */
@@ -136,7 +137,7 @@ export const AccountSchema = z.object({
    * Last update timestamp
    */
   updatedAt: z.string().datetime().describe('Last update timestamp'),
-});
+}));
 
 export type Account = z.infer<typeof AccountSchema>;
 
@@ -144,7 +145,7 @@ export type Account = z.infer<typeof AccountSchema>;
  * Session Schema
  * User session data model
  */
-export const SessionSchema = z.object({
+export const SessionSchema = lazySchema(() => z.object({
   /**
    * Unique session identifier
    */
@@ -195,7 +196,7 @@ export const SessionSchema = z.object({
    * Device fingerprint
    */
   fingerprint: z.string().optional().describe('Device fingerprint'),
-});
+}));
 
 export type Session = z.infer<typeof SessionSchema>;
 
@@ -203,7 +204,7 @@ export type Session = z.infer<typeof SessionSchema>;
  * Verification Token Schema
  * Email verification and password reset tokens
  */
-export const VerificationTokenSchema = z.object({
+export const VerificationTokenSchema = lazySchema(() => z.object({
   /**
    * Token identifier (email or phone)
    */
@@ -223,7 +224,7 @@ export const VerificationTokenSchema = z.object({
    * Token creation timestamp
    */
   createdAt: z.string().datetime().describe('Token creation timestamp'),
-});
+}));
 
 export type VerificationToken = z.infer<typeof VerificationTokenSchema>;
 
@@ -235,7 +236,7 @@ export type VerificationToken = z.infer<typeof VerificationTokenSchema>;
  *
  * @see https://www.better-auth.com/docs/plugins/api-key
  */
-export const ApiKeySchema = z.object({
+export const ApiKeySchema = lazySchema(() => z.object({
   /**
    * Unique API key identifier
    */
@@ -332,6 +333,6 @@ export const ApiKeySchema = z.object({
    * Custom metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata'),
-});
+}));
 
 export type ApiKey = z.infer<typeof ApiKeySchema>;

@@ -14,3 +14,4 @@ export * from './branded-types.zod';
 export * from './suggestions.zod';
 export * from './error-map.zod';
 export * from './metadata-collection.zod';
+export * from './lazy-schema';

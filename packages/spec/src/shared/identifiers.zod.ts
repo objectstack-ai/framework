@@ -45,14 +45,15 @@ import { z } from 'zod';
  * - 'crm-account' (kebab-case - use underscore instead)
  * - 'user profile' (spaces)
  */
-export const SystemIdentifierSchema = z
+import { lazySchema } from './lazy-schema';
+export const SystemIdentifierSchema = lazySchema(() => z
   .string()
   .min(2, { message: 'System identifier must be at least 2 characters' })
   .regex(/^[a-z][a-z0-9_.]*$/, {
     message:
       'System identifier must be lowercase, starting with a letter, and may contain letters, numbers, underscores, or dots (e.g., "user_profile" or "order.created")',
   })
-  .describe('System identifier (lowercase with underscores or dots)');
+  .describe('System identifier (lowercase with underscores or dots)'));
 
 /**
  * Strict Snake Case Identifier
@@ -69,14 +70,14 @@ export const SystemIdentifierSchema = z
  * - 'user.profile' (dots not allowed)
  * - 'UserProfile' (uppercase)
  */
-export const SnakeCaseIdentifierSchema = z
+export const SnakeCaseIdentifierSchema = lazySchema(() => z
   .string()
   .min(2, { message: 'Identifier must be at least 2 characters' })
   .regex(/^[a-z][a-z0-9_]*$/, {
     message:
       'Identifier must be lowercase snake_case, starting with a letter, and may contain only letters, numbers, and underscores (e.g., "user_profile")',
   })
-  .describe('Snake case identifier (lowercase with underscores only)');
+  .describe('Snake case identifier (lowercase with underscores only)'));
 
 /**
  * Event Name Identifier
@@ -96,14 +97,14 @@ export const SnakeCaseIdentifierSchema = z
  * - 'UserCreated' (camelCase)
  * - 'user_created' (should use dots for namespacing)
  */
-export const EventNameSchema = z
+export const EventNameSchema = lazySchema(() => z
   .string()
   .min(3, { message: 'Event name must be at least 3 characters' })
   .regex(/^[a-z][a-z0-9_.]*$/, {
     message:
       'Event name must be lowercase with dots for namespacing (e.g., "user.created", "order.paid")',
   })
-  .describe('Event name (lowercase with dot notation for namespacing)');
+  .describe('Event name (lowercase with dot notation for namespacing)'));
 
 /**
  * Type Exports

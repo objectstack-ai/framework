@@ -33,17 +33,18 @@ import { MarketplaceCategorySchema, PricingModelSchema } from './marketplace.zod
 /**
  * Review Moderation Status
  */
-export const ReviewModerationStatusSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ReviewModerationStatusSchema = lazySchema(() => z.enum([
   'pending',     // Awaiting moderation
   'approved',    // Approved and visible
   'flagged',     // Flagged for review
   'rejected',    // Rejected (spam, inappropriate)
-]);
+]));
 
 /**
  * User Review Schema — a customer's review of an installed app
  */
-export const UserReviewSchema = z.object({
+export const UserReviewSchema = lazySchema(() => z.object({
   /** Review ID */
   id: z.string().describe('Review ID'),
 
@@ -85,12 +86,12 @@ export const UserReviewSchema = z.object({
 
   /** Updated timestamp */
   updatedAt: z.string().datetime().optional(),
-});
+}));
 
 /**
  * Submit Review Request
  */
-export const SubmitReviewRequestSchema = z.object({
+export const SubmitReviewRequestSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string().describe('Listing to review'),
 
@@ -102,12 +103,12 @@ export const SubmitReviewRequestSchema = z.object({
 
   /** Review body */
   body: z.string().max(5000).optional(),
-});
+}));
 
 /**
  * List Reviews Request — customer browsing reviews
  */
-export const ListReviewsRequestSchema = z.object({
+export const ListReviewsRequestSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string().describe('Listing to get reviews for'),
 
@@ -121,12 +122,12 @@ export const ListReviewsRequestSchema = z.object({
   /** Pagination */
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(50).default(10),
-});
+}));
 
 /**
  * List Reviews Response
  */
-export const ListReviewsResponseSchema = z.object({
+export const ListReviewsResponseSchema = lazySchema(() => z.object({
   /** Reviews */
   items: z.array(UserReviewSchema),
 
@@ -149,7 +150,7 @@ export const ListReviewsResponseSchema = z.object({
       5: z.number().int().min(0).default(0),
     }),
   }).optional(),
-});
+}));
 
 // ==========================================
 // App Discovery & Recommendations
@@ -158,19 +159,19 @@ export const ListReviewsResponseSchema = z.object({
 /**
  * App Recommendation Reason
  */
-export const RecommendationReasonSchema = z.enum([
+export const RecommendationReasonSchema = lazySchema(() => z.enum([
   'popular-in-category',  // Popular in your industry/category
   'similar-users',        // Used by similar organizations
   'complements-installed', // Complements apps you already use
   'trending',             // Currently trending
   'new-release',          // Recently released / major update
   'editor-pick',          // Editorial/curated recommendation
-]);
+]));
 
 /**
  * Recommended App
  */
-export const RecommendedAppSchema = z.object({
+export const RecommendedAppSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string(),
 
@@ -197,12 +198,12 @@ export const RecommendedAppSchema = z.object({
 
   /** Why this is recommended */
   reason: RecommendationReasonSchema,
-});
+}));
 
 /**
  * App Discovery Request — personalized browse/home page
  */
-export const AppDiscoveryRequestSchema = z.object({
+export const AppDiscoveryRequestSchema = lazySchema(() => z.object({
   /** Tenant ID for personalization */
   tenantId: z.string().optional(),
 
@@ -214,12 +215,12 @@ export const AppDiscoveryRequestSchema = z.object({
 
   /** Max number of items per section */
   limit: z.number().int().min(1).max(50).default(10),
-});
+}));
 
 /**
  * App Discovery Response — structured content for the storefront
  */
-export const AppDiscoveryResponseSchema = z.object({
+export const AppDiscoveryResponseSchema = lazySchema(() => z.object({
   /** Featured apps (editorial picks) */
   featured: z.array(RecommendedAppSchema).optional(),
 
@@ -240,7 +241,7 @@ export const AppDiscoveryResponseSchema = z.object({
     coverImageUrl: z.string().url().optional(),
     apps: z.array(RecommendedAppSchema),
   })).optional(),
-});
+}));
 
 // ==========================================
 // Subscription & License Management
@@ -249,18 +250,18 @@ export const AppDiscoveryResponseSchema = z.object({
 /**
  * Subscription Status
  */
-export const SubscriptionStatusSchema = z.enum([
+export const SubscriptionStatusSchema = lazySchema(() => z.enum([
   'active',        // Active and paid
   'trialing',      // Free trial period
   'past-due',      // Payment overdue
   'cancelled',     // Cancelled (still active until period ends)
   'expired',       // Expired / ended
-]);
+]));
 
 /**
  * App Subscription Schema — customer's license/subscription for an app
  */
-export const AppSubscriptionSchema = z.object({
+export const AppSubscriptionSchema = lazySchema(() => z.object({
   /** Subscription ID */
   id: z.string().describe('Subscription ID'),
 
@@ -299,7 +300,7 @@ export const AppSubscriptionSchema = z.object({
 
   /** Created timestamp */
   createdAt: z.string().datetime(),
-});
+}));
 
 // ==========================================
 // Installed App Management (Customer Side)
@@ -308,7 +309,7 @@ export const AppSubscriptionSchema = z.object({
 /**
  * Installed App Summary — what the customer sees in their "My Apps" dashboard
  */
-export const InstalledAppSummarySchema = z.object({
+export const InstalledAppSummarySchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string(),
 
@@ -338,12 +339,12 @@ export const InstalledAppSummarySchema = z.object({
 
   /** Installed timestamp */
   installedAt: z.string().datetime(),
-});
+}));
 
 /**
  * List Installed Apps Request
  */
-export const ListInstalledAppsRequestSchema = z.object({
+export const ListInstalledAppsRequestSchema = lazySchema(() => z.object({
   /** Tenant ID */
   tenantId: z.string().optional(),
 
@@ -359,12 +360,12 @@ export const ListInstalledAppsRequestSchema = z.object({
   /** Pagination */
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
-});
+}));
 
 /**
  * List Installed Apps Response
  */
-export const ListInstalledAppsResponseSchema = z.object({
+export const ListInstalledAppsResponseSchema = lazySchema(() => z.object({
   /** Installed apps */
   items: z.array(InstalledAppSummarySchema),
 
@@ -374,7 +375,7 @@ export const ListInstalledAppsResponseSchema = z.object({
   /** Pagination */
   page: z.number().int().min(1),
   pageSize: z.number().int().min(1),
-});
+}));
 
 // ==========================================
 // Export Types

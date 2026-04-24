@@ -18,26 +18,27 @@ import { z } from 'zod';
 /**
  * Tenant Database Status
  */
-export const TenantDatabaseStatusSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const TenantDatabaseStatusSchema = lazySchema(() => z.enum([
   'provisioning',  // Database is being created
   'active',        // Database is active and accepting connections
   'suspended',     // Database is suspended (read-only or inaccessible)
   'archived',      // Database is archived (data preserved but not accessible)
   'failed',        // Provisioning or migration failed
-]);
+]));
 
 export type TenantDatabaseStatus = z.infer<typeof TenantDatabaseStatusSchema>;
 
 /**
  * Tenant Plan Tier
  */
-export const TenantPlanSchema = z.enum([
+export const TenantPlanSchema = lazySchema(() => z.enum([
   'free',
   'starter',
   'pro',
   'enterprise',
   'custom',
-]);
+]));
 
 export type TenantPlan = z.infer<typeof TenantPlanSchema>;
 
@@ -54,7 +55,7 @@ export type TenantPlan = z.infer<typeof TenantPlanSchema>;
  * (and the `sys_tenant_database` table) will be removed in v5.0.
  * See `docs/adr/0002-environment-database-isolation.md`.
  */
-export const TenantDatabaseSchema = z.object({
+export const TenantDatabaseSchema = lazySchema(() => z.object({
   /**
    * Unique tenant database identifier (UUID)
    */
@@ -123,20 +124,20 @@ export const TenantDatabaseSchema = z.object({
    * Can store additional metadata like feature flags, quotas, etc.
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom tenant configuration'),
-});
+}));
 
 export type TenantDatabase = z.infer<typeof TenantDatabaseSchema>;
 
 /**
  * Package Installation Status
  */
-export const PackageInstallationStatusSchema = z.enum([
+export const PackageInstallationStatusSchema = lazySchema(() => z.enum([
   'installing',    // Package is being installed
   'active',        // Package is active and running
   'disabled',      // Package is disabled (soft delete)
   'uninstalling',  // Package is being uninstalled
   'failed',        // Installation failed
-]);
+]));
 
 export type PackageInstallationStatus = z.infer<typeof PackageInstallationStatusSchema>;
 
@@ -146,7 +147,7 @@ export type PackageInstallationStatus = z.infer<typeof PackageInstallationStatus
  * Tracks which packages are installed in which tenant.
  * Stored in the global control plane database.
  */
-export const PackageInstallationSchema = z.object({
+export const PackageInstallationSchema = lazySchema(() => z.object({
   /**
    * Unique installation identifier
    */
@@ -192,7 +193,7 @@ export const PackageInstallationSchema = z.object({
    * Last update timestamp
    */
   updatedAt: z.string().datetime().describe('Last update timestamp'),
-});
+}));
 
 export type PackageInstallation = z.infer<typeof PackageInstallationSchema>;
 
@@ -202,7 +203,7 @@ export type PackageInstallation = z.infer<typeof PackageInstallationSchema>;
  * Runtime context containing current tenant information.
  * Extracted from request (subdomain, header, JWT claim, etc.)
  */
-export const TenantContextSchema = z.object({
+export const TenantContextSchema = lazySchema(() => z.object({
   /**
    * Current tenant database ID
    */
@@ -232,7 +233,7 @@ export const TenantContextSchema = z.object({
    * Custom tenant metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom tenant metadata'),
-});
+}));
 
 export type TenantContext = z.infer<typeof TenantContextSchema>;
 
@@ -241,14 +242,14 @@ export type TenantContext = z.infer<typeof TenantContextSchema>;
  *
  * How the tenant was identified from the request
  */
-export const TenantIdentificationSourceSchema = z.enum([
+export const TenantIdentificationSourceSchema = lazySchema(() => z.enum([
   'subdomain',       // Extracted from subdomain (e.g., acme.objectstack.app)
   'custom_domain',   // Extracted from custom domain (e.g., app.acme.com)
   'header',          // Extracted from X-Tenant-ID header
   'jwt_claim',       // Extracted from JWT organizationId claim
   'session',         // Extracted from session data
   'default',         // Default/fallback tenant
-]);
+]));
 
 export type TenantIdentificationSource = z.infer<typeof TenantIdentificationSourceSchema>;
 
@@ -257,7 +258,7 @@ export type TenantIdentificationSource = z.infer<typeof TenantIdentificationSour
  *
  * Configuration for tenant identification and routing
  */
-export const TenantRoutingConfigSchema = z.object({
+export const TenantRoutingConfigSchema = lazySchema(() => z.object({
   /**
    * Enable multi-tenant mode
    */
@@ -299,7 +300,7 @@ export const TenantRoutingConfigSchema = z.object({
    */
   jwtOrganizationClaim: z.string().default('organizationId')
     .describe('JWT claim name for organization ID'),
-});
+}));
 
 export type TenantRoutingConfig = z.infer<typeof TenantRoutingConfigSchema>;
 
@@ -308,7 +309,7 @@ export type TenantRoutingConfig = z.infer<typeof TenantRoutingConfigSchema>;
  *
  * Request to provision a new tenant database
  */
-export const ProvisionTenantRequestSchema = z.object({
+export const ProvisionTenantRequestSchema = lazySchema(() => z.object({
   /**
    * Organization ID to provision database for
    */
@@ -333,7 +334,7 @@ export const ProvisionTenantRequestSchema = z.object({
    * Custom tenant metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom tenant metadata'),
-});
+}));
 
 export type ProvisionTenantRequest = z.infer<typeof ProvisionTenantRequestSchema>;
 
@@ -342,7 +343,7 @@ export type ProvisionTenantRequest = z.infer<typeof ProvisionTenantRequestSchema
  *
  * Result of tenant provisioning operation
  */
-export const ProvisionTenantResponseSchema = z.object({
+export const ProvisionTenantResponseSchema = lazySchema(() => z.object({
   /**
    * Provisioned tenant database
    */
@@ -357,6 +358,6 @@ export const ProvisionTenantResponseSchema = z.object({
    * Any warnings or notes from provisioning
    */
   warnings: z.array(z.string()).optional().describe('Provisioning warnings'),
-});
+}));
 
 export type ProvisionTenantResponse = z.infer<typeof ProvisionTenantResponseSchema>;

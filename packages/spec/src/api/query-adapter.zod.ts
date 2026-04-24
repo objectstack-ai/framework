@@ -25,11 +25,12 @@ import { z } from 'zod';
 /**
  * Query Adapter Target Protocol
  */
-export const QueryAdapterTargetSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const QueryAdapterTargetSchema = lazySchema(() => z.enum([
   'rest',       // REST API (?filter[field][op]=value)
   'graphql',    // GraphQL (where: \{ field: \{ op: value \}\})
   'odata',      // OData ($filter=field op value)
-]);
+]));
 
 export type QueryAdapterTarget = z.infer<typeof QueryAdapterTargetSchema>;
 
@@ -38,7 +39,7 @@ export type QueryAdapterTarget = z.infer<typeof QueryAdapterTargetSchema>;
  * 
  * Maps a unified DSL operator to its protocol-specific syntax.
  */
-export const OperatorMappingSchema = z.object({
+export const OperatorMappingSchema = lazySchema(() => z.object({
   /** Unified DSL operator (e.g., 'eq', 'gt', 'contains') */
   operator: z.string().describe('Unified DSL operator'),
 
@@ -50,7 +51,7 @@ export const OperatorMappingSchema = z.object({
 
   /** OData $filter expression format (e.g., '{field} {op} {value}') */
   odata: z.string().optional().describe('OData $filter expression template'),
-});
+}));
 
 export type OperatorMapping = z.infer<typeof OperatorMappingSchema>;
 
@@ -67,7 +68,7 @@ export type OperatorMapping = z.infer<typeof OperatorMappingSchema>;
  * Unified: { filters: [['status', '=', 'active']], top: 10 }
  * REST:    ?filter[status][eq]=active&limit=10
  */
-export const RestQueryAdapterSchema = z.object({
+export const RestQueryAdapterSchema = lazySchema(() => z.object({
   /** Filter parameter style */
   filterStyle: z.enum([
     'bracket',       // ?filter[field][op]=value  (JSON API style)
@@ -106,7 +107,7 @@ export const RestQueryAdapterSchema = z.object({
 
   /** Field selection parameter name */
   fieldsParam: z.string().default('fields').describe('Field selection parameter name'),
-});
+}));
 
 export type RestQueryAdapter = z.infer<typeof RestQueryAdapterSchema>;
 export type RestQueryAdapterInput = z.input<typeof RestQueryAdapterSchema>;
@@ -124,7 +125,7 @@ export type RestQueryAdapterInput = z.input<typeof RestQueryAdapterSchema>;
  * Unified: { filters: [['status', '=', 'active']], top: 10, sort: [{ field: 'name', order: 'asc' }] }
  * GraphQL: query { items(where: { status: { eq: "active" } }, limit: 10, orderBy: { name: ASC }) { ... } }
  */
-export const GraphQLQueryAdapterSchema = z.object({
+export const GraphQLQueryAdapterSchema = lazySchema(() => z.object({
   /** Filter argument name in GraphQL queries */
   filterArgName: z.string().default('where').describe('GraphQL filter argument name'),
 
@@ -151,7 +152,7 @@ export const GraphQLQueryAdapterSchema = z.object({
       'array',        // orderBy: [{ field: "name", direction: "ASC" }]
     ]).default('enum').describe('Sort argument format'),
   }).optional().describe('Sort argument mapping'),
-});
+}));
 
 export type GraphQLQueryAdapter = z.infer<typeof GraphQLQueryAdapterSchema>;
 export type GraphQLQueryAdapterInput = z.input<typeof GraphQLQueryAdapterSchema>;
@@ -169,7 +170,7 @@ export type GraphQLQueryAdapterInput = z.input<typeof GraphQLQueryAdapterSchema>
  * Unified: { filters: [['status', '=', 'active']], top: 10, sort: [{ field: 'name', order: 'asc' }] }
  * OData:   ?$filter=status eq 'active'&$top=10&$orderby=name asc
  */
-export const ODataQueryAdapterSchema = z.object({
+export const ODataQueryAdapterSchema = lazySchema(() => z.object({
   /** OData version */
   version: z.enum(['v2', 'v4']).default('v4').describe('OData version'),
 
@@ -194,7 +195,7 @@ export const ODataQueryAdapterSchema = z.object({
     enabled: z.boolean().default(true).describe('Enable $expand support'),
     maxDepth: z.number().int().min(1).default(3).describe('Maximum expand depth'),
   }).optional().describe('$expand configuration'),
-});
+}));
 
 export type ODataQueryAdapter = z.infer<typeof ODataQueryAdapterSchema>;
 export type ODataQueryAdapterInput = z.input<typeof ODataQueryAdapterSchema>;
@@ -209,7 +210,7 @@ export type ODataQueryAdapterInput = z.input<typeof ODataQueryAdapterSchema>;
  * Root configuration for query DSL adapters across all supported protocols.
  * Controls how the internal unified DSL is translated to external API formats.
  */
-export const QueryAdapterConfigSchema = z.object({
+export const QueryAdapterConfigSchema = lazySchema(() => z.object({
   /** Default operator mappings */
   operatorMappings: z.array(OperatorMappingSchema).optional().describe('Custom operator mappings'),
 
@@ -221,7 +222,7 @@ export const QueryAdapterConfigSchema = z.object({
 
   /** OData adapter configuration */
   odata: ODataQueryAdapterSchema.optional().describe('OData query adapter configuration'),
-});
+}));
 
 export type QueryAdapterConfig = z.infer<typeof QueryAdapterConfigSchema>;
 export type QueryAdapterConfigInput = z.input<typeof QueryAdapterConfigSchema>;

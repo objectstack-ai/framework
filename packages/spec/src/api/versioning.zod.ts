@@ -29,6 +29,7 @@ import { z } from 'zod';
  * - `queryParam`: Version in query parameter (e.g., /api/data?version=v1)
  * - `dateBased`: Date-based version in header (e.g., ObjectStack-Version: 2025-01-01) — Stripe-style
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const VersioningStrategy = z.enum([
   'urlPath',
   'header',
@@ -89,7 +90,7 @@ export type VersionStatus = z.infer<typeof VersionStatus>;
  *   "description": "Legacy API version"
  * }
  */
-export const VersionDefinitionSchema = z.object({
+export const VersionDefinitionSchema = lazySchema(() => z.object({
   /** Version identifier (e.g., "v1", "v2beta1", "2025-01-01") */
   version: z.string().describe('Version identifier (e.g., "v1", "v2beta1", "2025-01-01")'),
 
@@ -118,7 +119,7 @@ export const VersionDefinitionSchema = z.object({
   /** Breaking changes introduced in or since this version */
   breakingChanges: z.array(z.string()).optional()
     .describe('List of breaking changes (for preview/new versions)'),
-});
+}));
 
 export type VersionDefinition = z.infer<typeof VersionDefinitionSchema>;
 
@@ -145,7 +146,7 @@ export type VersionDefinition = z.infer<typeof VersionDefinitionSchema>;
  *   }
  * }
  */
-export const VersioningConfigSchema = z.object({
+export const VersioningConfigSchema = lazySchema(() => z.object({
   /** Versioning strategy */
   strategy: VersioningStrategy.default('urlPath')
     .describe('How the API version is specified by clients'),
@@ -199,7 +200,7 @@ export const VersioningConfigSchema = z.object({
   /** Whether to include version info in discovery response */
   includeInDiscovery: z.boolean().default(true)
     .describe('Include version information in the API discovery endpoint'),
-});
+}));
 
 export type VersioningConfig = z.infer<typeof VersioningConfigSchema>;
 export type VersioningConfigInput = z.input<typeof VersioningConfigSchema>;
@@ -223,7 +224,7 @@ export type VersioningConfigInput = z.input<typeof VersioningConfigSchema>;
  *   "versions": [...]
  * }
  */
-export const VersionNegotiationResponseSchema = z.object({
+export const VersionNegotiationResponseSchema = lazySchema(() => z.object({
   /** The current/recommended version */
   current: z.string().describe('Current recommended API version'),
 
@@ -243,7 +244,7 @@ export const VersionNegotiationResponseSchema = z.object({
   /** Full version definitions (optional, for detailed clients) */
   versions: z.array(VersionDefinitionSchema).optional()
     .describe('Full version definitions with lifecycle metadata'),
-});
+}));
 
 export type VersionNegotiationResponse = z.infer<typeof VersionNegotiationResponseSchema>;
 

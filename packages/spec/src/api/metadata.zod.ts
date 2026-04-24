@@ -40,30 +40,31 @@ import { MetadataOverlaySchema } from '../kernel/metadata-customization.zod';
  * Single Object Definition Response
  * Returns the full JSON schema for an Entity (Fields, Actions, Config).
  */
-export const ObjectDefinitionResponseSchema = BaseResponseSchema.extend({
+import { lazySchema } from '../shared/lazy-schema';
+export const ObjectDefinitionResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: ObjectSchema.describe('Full Object Schema'),
-});
+}));
 
 /**
  * App Definition Response
  * Returns the navigation, branding, and layout for an App.
  */
-export const AppDefinitionResponseSchema = BaseResponseSchema.extend({
+export const AppDefinitionResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: AppSchema.describe('Full App Configuration'),
-});
+}));
 
 /**
  * All Concepts Response
  * Bulk load lightweight definitions for autocomplete/pickers.
  */
-export const ConceptListResponseSchema = BaseResponseSchema.extend({
+export const ConceptListResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.array(z.object({
     name: z.string(),
     label: z.string(),
     icon: z.string().optional(),
     description: z.string().optional(),
   })).describe('List of available concepts (Objects, Apps, Flows)'),
-});
+}));
 
 // ==========================================
 // 2. CRUD Request / Response Schemas
@@ -74,61 +75,61 @@ export const ConceptListResponseSchema = BaseResponseSchema.extend({
  * POST /api/meta/:type
  * PUT  /api/meta/:type/:name
  */
-export const MetadataRegisterRequestSchema = z.object({
+export const MetadataRegisterRequestSchema = lazySchema(() => z.object({
   type: MetadataTypeSchema.describe('Metadata type'),
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Item name (snake_case)'),
   data: z.record(z.string(), z.unknown()).describe('Metadata payload'),
   namespace: z.string().optional().describe('Optional namespace'),
-});
+}));
 
 /**
  * Single Metadata Item Response
  * GET /api/meta/:type/:name
  */
-export const MetadataItemResponseSchema = BaseResponseSchema.extend({
+export const MetadataItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     type: z.string().describe('Metadata type'),
     name: z.string().describe('Item name'),
     definition: z.record(z.string(), z.unknown()).describe('Metadata definition payload'),
   }).describe('Metadata item'),
-});
+}));
 
 /**
  * Metadata List Response
  * GET /api/meta/:type
  */
-export const MetadataListResponseSchema = BaseResponseSchema.extend({
+export const MetadataListResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.array(z.record(z.string(), z.unknown())).describe('Array of metadata definitions'),
-});
+}));
 
 /**
  * Metadata Names Response
  * GET /api/meta/:type/names
  */
-export const MetadataNamesResponseSchema = BaseResponseSchema.extend({
+export const MetadataNamesResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.array(z.string()).describe('Array of metadata item names'),
-});
+}));
 
 /**
  * Metadata Exists Response
  * GET /api/meta/:type/:name/exists
  */
-export const MetadataExistsResponseSchema = BaseResponseSchema.extend({
+export const MetadataExistsResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     exists: z.boolean().describe('Whether the item exists'),
   }),
-});
+}));
 
 /**
  * Metadata Delete Response
  * DELETE /api/meta/:type/:name
  */
-export const MetadataDeleteResponseSchema = BaseResponseSchema.extend({
+export const MetadataDeleteResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     type: z.string().describe('Metadata type'),
     name: z.string().describe('Deleted item name'),
   }),
-});
+}));
 
 // ==========================================
 // 3. Query / Search
@@ -138,17 +139,17 @@ export const MetadataDeleteResponseSchema = BaseResponseSchema.extend({
  * Metadata Query Request
  * POST /api/meta/query
  */
-export const MetadataQueryRequestSchema = MetadataQuerySchema.describe(
+export const MetadataQueryRequestSchema = lazySchema(() => MetadataQuerySchema.describe(
   'Metadata query with filtering, sorting, and pagination',
-);
+));
 
 /**
  * Metadata Query Response
  * POST /api/meta/query
  */
-export const MetadataQueryResponseSchema = BaseResponseSchema.extend({
+export const MetadataQueryResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: MetadataQueryResultSchema.describe('Paginated query result'),
-});
+}));
 
 // ==========================================
 // 4. Bulk Operations
@@ -158,7 +159,7 @@ export const MetadataQueryResponseSchema = BaseResponseSchema.extend({
  * Bulk Register Request
  * POST /api/meta/bulk/register
  */
-export const MetadataBulkRegisterRequestSchema = z.object({
+export const MetadataBulkRegisterRequestSchema = lazySchema(() => z.object({
   items: z.array(z.object({
     type: z.string().describe('Metadata type'),
     name: z.string().describe('Item name'),
@@ -166,26 +167,26 @@ export const MetadataBulkRegisterRequestSchema = z.object({
   })).min(1).describe('Items to register'),
   continueOnError: z.boolean().default(false).describe('Continue on individual failure'),
   validate: z.boolean().default(true).describe('Validate before registering'),
-});
+}));
 
 /**
  * Bulk Unregister Request
  * POST /api/meta/bulk/unregister
  */
-export const MetadataBulkUnregisterRequestSchema = z.object({
+export const MetadataBulkUnregisterRequestSchema = lazySchema(() => z.object({
   items: z.array(z.object({
     type: z.string().describe('Metadata type'),
     name: z.string().describe('Item name'),
   })).min(1).describe('Items to unregister'),
-});
+}));
 
 /**
  * Bulk Operation Response
  * POST /api/meta/bulk/*
  */
-export const MetadataBulkResponseSchema = BaseResponseSchema.extend({
+export const MetadataBulkResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: MetadataBulkResultSchema.describe('Bulk operation result'),
-});
+}));
 
 // ==========================================
 // 5. Overlay / Customization
@@ -195,26 +196,26 @@ export const MetadataBulkResponseSchema = BaseResponseSchema.extend({
  * Get Overlay Response
  * GET /api/meta/:type/:name/overlay
  */
-export const MetadataOverlayResponseSchema = BaseResponseSchema.extend({
+export const MetadataOverlayResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: MetadataOverlaySchema.optional().describe('Overlay definition, undefined if none'),
-});
+}));
 
 /**
  * Save Overlay Request
  * PUT /api/meta/:type/:name/overlay
  */
-export const MetadataOverlaySaveRequestSchema = MetadataOverlaySchema.describe(
+export const MetadataOverlaySaveRequestSchema = lazySchema(() => MetadataOverlaySchema.describe(
   'Overlay to save',
-);
+));
 
 /**
  * Get Effective (merged) Response
  * GET /api/meta/:type/:name/effective
  */
-export const MetadataEffectiveResponseSchema = BaseResponseSchema.extend({
+export const MetadataEffectiveResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.record(z.string(), z.unknown()).optional()
     .describe('Effective metadata with all overlays applied'),
-});
+}));
 
 // ==========================================
 // 6. Import / Export
@@ -224,37 +225,37 @@ export const MetadataEffectiveResponseSchema = BaseResponseSchema.extend({
  * Export Metadata Request
  * POST /api/meta/export
  */
-export const MetadataExportRequestSchema = z.object({
+export const MetadataExportRequestSchema = lazySchema(() => z.object({
   types: z.array(z.string()).optional().describe('Filter by metadata types'),
   namespaces: z.array(z.string()).optional().describe('Filter by namespaces'),
   format: z.enum(['json', 'yaml']).default('json').describe('Export format'),
-});
+}));
 
 /**
  * Export Metadata Response
  * POST /api/meta/export
  */
-export const MetadataExportResponseSchema = BaseResponseSchema.extend({
+export const MetadataExportResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.unknown().describe('Exported metadata bundle'),
-});
+}));
 
 /**
  * Import Metadata Request
  * POST /api/meta/import
  */
-export const MetadataImportRequestSchema = z.object({
+export const MetadataImportRequestSchema = lazySchema(() => z.object({
   data: z.unknown().describe('Metadata bundle to import'),
   conflictResolution: z.enum(['skip', 'overwrite', 'merge']).default('skip')
     .describe('Conflict resolution strategy'),
   validate: z.boolean().default(true).describe('Validate before import'),
   dryRun: z.boolean().default(false).describe('Dry run (no save)'),
-});
+}));
 
 /**
  * Import Metadata Response
  * POST /api/meta/import
  */
-export const MetadataImportResponseSchema = BaseResponseSchema.extend({
+export const MetadataImportResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     total: z.number().int().min(0),
     imported: z.number().int().min(0),
@@ -266,7 +267,7 @@ export const MetadataImportResponseSchema = BaseResponseSchema.extend({
       error: z.string(),
     })).optional(),
   }).describe('Import result'),
-});
+}));
 
 // ==========================================
 // 7. Validation
@@ -276,18 +277,18 @@ export const MetadataImportResponseSchema = BaseResponseSchema.extend({
  * Validate Metadata Request
  * POST /api/meta/validate
  */
-export const MetadataValidateRequestSchema = z.object({
+export const MetadataValidateRequestSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type to validate against'),
   data: z.unknown().describe('Metadata payload to validate'),
-});
+}));
 
 /**
  * Validate Metadata Response
  * POST /api/meta/validate
  */
-export const MetadataValidateResponseSchema = BaseResponseSchema.extend({
+export const MetadataValidateResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: MetadataValidationResultSchema.describe('Validation result'),
-});
+}));
 
 // ==========================================
 // 8. Type Registry
@@ -297,15 +298,15 @@ export const MetadataValidateResponseSchema = BaseResponseSchema.extend({
  * List Registered Types Response
  * GET /api/meta/types
  */
-export const MetadataTypesResponseSchema = BaseResponseSchema.extend({
+export const MetadataTypesResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.array(z.string()).describe('Registered metadata type identifiers'),
-});
+}));
 
 /**
  * Type Info Response
  * GET /api/meta/types/:type
  */
-export const MetadataTypeInfoResponseSchema = BaseResponseSchema.extend({
+export const MetadataTypeInfoResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     type: z.string().describe('Metadata type identifier'),
     label: z.string().describe('Display label'),
@@ -314,7 +315,7 @@ export const MetadataTypeInfoResponseSchema = BaseResponseSchema.extend({
     supportsOverlay: z.boolean().describe('Overlay support'),
     domain: z.string().describe('Protocol domain'),
   }).optional().describe('Type info'),
-});
+}));
 
 // ==========================================
 // 9. Dependency Tracking
@@ -324,17 +325,17 @@ export const MetadataTypeInfoResponseSchema = BaseResponseSchema.extend({
  * Dependencies Response
  * GET /api/meta/:type/:name/dependencies
  */
-export const MetadataDependenciesResponseSchema = BaseResponseSchema.extend({
+export const MetadataDependenciesResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.array(MetadataDependencySchema).describe('Items this item depends on'),
-});
+}));
 
 /**
  * Dependents Response
  * GET /api/meta/:type/:name/dependents
  */
-export const MetadataDependentsResponseSchema = BaseResponseSchema.extend({
+export const MetadataDependentsResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.array(MetadataDependencySchema).describe('Items that depend on this item'),
-});
+}));
 
 // ==========================================
 // Type Exports

@@ -12,6 +12,7 @@ import { z } from 'zod';
  */
 
 // REGEX: snake_case identifiers
+import { lazySchema } from '../shared/lazy-schema';
 const SNAKE_CASE_REGEX = /^[a-z][a-z0-9_]*$/;
 
 // REGEX: Standard File Suffixes
@@ -29,7 +30,7 @@ const OPS_FILE_SUFFIX_REGEX = /\.(object|field|trigger|function|view|page|dashbo
  * - "src/CRM/LeadObject.ts" (PascalCase)
  * - "src/utils/helper.js" (Wrong extension)
  */
-export const OpsFilePathSchema = z.string().describe('Validates a file path against OPS naming conventions').superRefine((path, ctx) => {
+export const OpsFilePathSchema = lazySchema(() => z.string().describe('Validates a file path against OPS naming conventions').superRefine((path, ctx) => {
   // 1. Must be in src/
   if (!path.startsWith('src/')) {
     // Non-source files (package.json, config) are ignored by this specific validator
@@ -72,13 +73,13 @@ export const OpsFilePathSchema = z.string().describe('Validates a file path agai
     //   message: `Filename '${filename}' does not end with a valid semantic suffix (.object.ts, .view.ts, etc.)`
     // });
   }
-});
+}));
 
 /**
  * Schema for a "Scanned Module" structure.
  * Represents the contents of a domain folder.
  */
-export const OpsDomainModuleSchema = z.object({
+export const OpsDomainModuleSchema = lazySchema(() => z.object({
   name: z.string().regex(SNAKE_CASE_REGEX).describe('Module name (snake_case)'),
   files: z.array(z.string()).describe('List of files in this module'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata key-value pairs for extensibility'),
@@ -90,12 +91,12 @@ export const OpsDomainModuleSchema = z.object({
       message: `Module '${module.name}' is missing an 'index.ts' entry point.`
     });
   }
-});
+}));
 
 /**
  * Schema for a full Plugin Project Layout
  */
-export const OpsPluginStructureSchema = z.object({
+export const OpsPluginStructureSchema = lazySchema(() => z.object({
   root: z.string().describe('Root directory path of the plugin project'),
   files: z.array(z.string()).describe('List of all file paths relative to root'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata key-value pairs for extensibility'),
@@ -117,7 +118,7 @@ export const OpsPluginStructureSchema = z.object({
           })
       }
   });
-});
+}));
 
 export type OpsFilePath = z.infer<typeof OpsFilePathSchema>;
 export type OpsDomainModule = z.infer<typeof OpsDomainModuleSchema>;

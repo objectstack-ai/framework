@@ -16,7 +16,8 @@ import {
 /**
  * Message Queue Provider Types
  */
-export const MessageQueueProviderSchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const MessageQueueProviderSchema = lazySchema(() => z.enum([
   'rabbitmq',              // RabbitMQ
   'kafka',                 // Apache Kafka
   'redis_pubsub',          // Redis Pub/Sub
@@ -30,50 +31,50 @@ export const MessageQueueProviderSchema = z.enum([
   'pulsar',                // Apache Pulsar
   'activemq',              // Apache ActiveMQ
   'custom',                // Custom message queue
-]).describe('Message queue provider type');
+]).describe('Message queue provider type'));
 
 export type MessageQueueProvider = z.infer<typeof MessageQueueProviderSchema>;
 
 /**
  * Message Format
  */
-export const MessageFormatSchema = z.enum([
+export const MessageFormatSchema = lazySchema(() => z.enum([
   'json',
   'xml',
   'protobuf',
   'avro',
   'text',
   'binary',
-]).describe('Message format/serialization');
+]).describe('Message format/serialization'));
 
 export type MessageFormat = z.infer<typeof MessageFormatSchema>;
 
 /**
  * Message Acknowledgment Mode
  */
-export const AckModeSchema = z.enum([
+export const AckModeSchema = lazySchema(() => z.enum([
   'auto',               // Auto-acknowledge
   'manual',             // Manual acknowledge after processing
   'client',             // Client-controlled acknowledge
-]).describe('Message acknowledgment mode');
+]).describe('Message acknowledgment mode'));
 
 export type AckMode = z.infer<typeof AckModeSchema>;
 
 /**
  * Delivery Guarantee
  */
-export const DeliveryGuaranteeSchema = z.enum([
+export const DeliveryGuaranteeSchema = lazySchema(() => z.enum([
   'at_most_once',       // Fire and forget
   'at_least_once',      // May deliver duplicates
   'exactly_once',       // Guaranteed exactly once delivery
-]).describe('Message delivery guarantee');
+]).describe('Message delivery guarantee'));
 
 export type DeliveryGuarantee = z.infer<typeof DeliveryGuaranteeSchema>;
 
 /**
  * Consumer Configuration
  */
-export const ConsumerConfigSchema = z.object({
+export const ConsumerConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().optional().default(true).describe('Enable consumer'),
   
   consumerGroup: z.string().optional().describe('Consumer group ID'),
@@ -91,14 +92,14 @@ export const ConsumerConfigSchema = z.object({
   sessionTimeoutMs: z.number().min(1000).optional().default(30000).describe('Session timeout in ms'),
   
   rebalanceTimeoutMs: z.number().min(1000).optional().describe('Rebalance timeout in ms'),
-});
+}));
 
 export type ConsumerConfig = z.infer<typeof ConsumerConfigSchema>;
 
 /**
  * Producer Configuration
  */
-export const ProducerConfigSchema = z.object({
+export const ProducerConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().optional().default(true).describe('Enable producer'),
   
   acks: z.enum(['0', '1', 'all']).optional().default('all').describe('Acknowledgment level'),
@@ -116,14 +117,14 @@ export const ProducerConfigSchema = z.object({
   transactional: z.boolean().optional().default(false).describe('Enable transactional producer'),
   
   transactionTimeoutMs: z.number().min(1000).optional().describe('Transaction timeout in ms'),
-});
+}));
 
 export type ProducerConfig = z.infer<typeof ProducerConfigSchema>;
 
 /**
  * Dead Letter Queue Configuration
  */
-export const DlqConfigSchema = z.object({
+export const DlqConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().optional().default(false).describe('Enable DLQ'),
   
   queueName: z.string().describe('Dead letter queue/topic name'),
@@ -131,14 +132,14 @@ export const DlqConfigSchema = z.object({
   maxRetries: z.number().min(0).max(100).optional().default(3).describe('Max retries before DLQ'),
   
   retryDelayMs: z.number().min(0).optional().default(60000).describe('Retry delay in ms'),
-});
+}));
 
 export type DlqConfig = z.infer<typeof DlqConfigSchema>;
 
 /**
  * Topic/Queue Configuration
  */
-export const TopicQueueSchema = z.object({
+export const TopicQueueSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Topic/queue identifier in ObjectStack (snake_case)'),
   label: z.string().describe('Display label'),
   topicName: z.string().describe('Actual topic/queue name in message queue system'),
@@ -191,14 +192,14 @@ export const TopicQueueSchema = z.object({
     headers: z.record(z.string(), z.string()).optional().describe('Filter by message headers'),
     attributes: z.record(z.string(), z.unknown()).optional().describe('Filter by message attributes'),
   }).optional().describe('Message filter criteria'),
-});
+}));
 
 export type TopicQueue = z.infer<typeof TopicQueueSchema>;
 
 /**
  * Message Queue Connector Configuration Schema
  */
-export const MessageQueueConnectorSchema = ConnectorSchema.extend({
+export const MessageQueueConnectorSchema = lazySchema(() => ConnectorSchema.extend({
   type: z.literal('message_queue'),
   
   /**
@@ -271,7 +272,7 @@ export const MessageQueueConnectorSchema = ConnectorSchema.extend({
    * Enable distributed tracing
    */
   enableTracing: z.boolean().optional().default(false).describe('Enable distributed tracing'),
-});
+}));
 
 export type MessageQueueConnector = z.infer<typeof MessageQueueConnectorSchema>;
 

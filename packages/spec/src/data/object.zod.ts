@@ -9,6 +9,7 @@ import { ActionSchema } from '../ui/action.zod';
 /**
  * API Operations Enum
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ApiMethod = z.enum([
   'get', 'list',          // Read
   'create', 'update', 'delete', // Write
@@ -87,13 +88,13 @@ export const ObjectCapabilities = z.object({
  *   unique: true
  * }
  */
-export const IndexSchema = z.object({
+export const IndexSchema = lazySchema(() => z.object({
   name: z.string().optional().describe('Index name (auto-generated if not provided)'),
   fields: z.array(z.string()).describe('Fields included in the index'),
   type: z.enum(['btree', 'hash', 'gin', 'gist', 'fulltext']).optional().default('btree').describe('Index algorithm type'),
   unique: z.boolean().optional().default(false).describe('Whether the index enforces uniqueness'),
   partial: z.string().optional().describe('Partial index condition (SQL WHERE clause for conditional indexes)'),
-});
+}));
 
 /**
  * Search Configuration
@@ -106,11 +107,11 @@ export const IndexSchema = z.object({
  *   filters: ["status = 'active'"]
  * }
  */
-export const SearchConfigSchema = z.object({
+export const SearchConfigSchema = lazySchema(() => z.object({
   fields: z.array(z.string()).describe('Fields to index for full-text search weighting'),
   displayFields: z.array(z.string()).optional().describe('Fields to display in search result cards'),
   filters: z.array(z.string()).optional().describe('Default filters for search results'),
-});
+}));
 
 /**
  * Multi-Tenancy Configuration Schema
@@ -124,12 +125,12 @@ export const SearchConfigSchema = z.object({
  *   crossTenantAccess: false
  * }
  */
-export const TenancyConfigSchema = z.object({
+export const TenancyConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable multi-tenancy for this object'),
   strategy: z.enum(['shared', 'isolated', 'hybrid']).describe('Tenant isolation strategy: shared (single DB, row-level), isolated (separate DB per tenant), hybrid (mix)'),
   tenantField: z.string().default('tenant_id').describe('Field name for tenant identifier'),
   crossTenantAccess: z.boolean().default(false).describe('Allow cross-tenant data access (with explicit permission)'),
-});
+}));
 
 /**
  * Soft Delete Configuration Schema
@@ -142,11 +143,11 @@ export const TenancyConfigSchema = z.object({
  *   cascadeDelete: true
  * }
  */
-export const SoftDeleteConfigSchema = z.object({
+export const SoftDeleteConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable soft delete (trash/recycle bin)'),
   field: z.string().default('deleted_at').describe('Field name for soft delete timestamp'),
   cascadeDelete: z.boolean().default(false).describe('Cascade soft delete to related records'),
-});
+}));
 
 /**
  * Versioning Configuration Schema
@@ -160,12 +161,12 @@ export const SoftDeleteConfigSchema = z.object({
  *   versionField: 'version'
  * }
  */
-export const VersioningConfigSchema = z.object({
+export const VersioningConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable record versioning'),
   strategy: z.enum(['snapshot', 'delta', 'event-sourcing']).describe('Versioning strategy: snapshot (full copy), delta (changes only), event-sourcing (event log)'),
   retentionDays: z.number().min(1).optional().describe('Number of days to retain old versions (undefined = infinite)'),
   versionField: z.string().default('version').describe('Field name for version number/timestamp'),
-});
+}));
 
 /**
  * Partitioning Strategy Schema
@@ -179,7 +180,7 @@ export const VersioningConfigSchema = z.object({
  *   interval: '1 month'
  * }
  */
-export const PartitioningConfigSchema = z.object({
+export const PartitioningConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable table partitioning'),
   strategy: z.enum(['range', 'hash', 'list']).describe('Partitioning strategy: range (date ranges), hash (consistent hashing), list (predefined values)'),
   key: z.string().describe('Field name to partition by'),
@@ -192,7 +193,7 @@ export const PartitioningConfigSchema = z.object({
   return true;
 }, {
   message: 'interval is required when strategy is "range"',
-});
+}));
 
 /**
  * Change Data Capture (CDC) Configuration Schema
@@ -205,11 +206,11 @@ export const PartitioningConfigSchema = z.object({
  *   destination: 'kafka://events.objectstack'
  * }
  */
-export const CDCConfigSchema = z.object({
+export const CDCConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().describe('Enable Change Data Capture'),
   events: z.array(z.enum(['insert', 'update', 'delete'])).describe('Event types to capture'),
   destination: z.string().describe('Destination endpoint (e.g., "kafka://topic", "webhook://url")'),
-});
+}));
 
 /**
  * Object Field Group Schema — MVP (data-layer protocol)
@@ -248,7 +249,7 @@ export const CDCConfigSchema = z.object({
  * ]
  * ```
  */
-export const ObjectFieldGroupSchema = z.object({
+export const ObjectFieldGroupSchema = lazySchema(() => z.object({
   /** Group key — referenced by `Field.group` to assign a field to this group. Must be snake_case. */
   key: z.string().regex(/^[a-z_][a-z0-9_]*$/, {
     message: 'Field group key must be lowercase snake_case (e.g., "contact_info", "billing", "system")',
@@ -268,7 +269,7 @@ export const ObjectFieldGroupSchema = z.object({
 
   /** Optional visibility expression — when false, the entire group is hidden (e.g., "$user.isAdmin", "status == \'closed\'"). */
   visibleOn: z.string().optional().describe('Visibility condition expression; when false the group is hidden'),
-});
+}));
 
 export type ObjectFieldGroup = z.infer<typeof ObjectFieldGroupSchema>;
 export type ObjectFieldGroupInput = z.input<typeof ObjectFieldGroupSchema>;
@@ -455,7 +456,7 @@ function snakeCaseToLabel(name: string): string {
 /**
  * Enhanced ObjectSchema with Factory
  */
-export const ObjectSchema = Object.assign(ObjectSchemaBase, {
+export const ObjectSchema = lazySchema(() => Object.assign(ObjectSchemaBase, {
   /**
    * Type-safe factory for creating business object definitions.
    * 
@@ -481,7 +482,7 @@ export const ObjectSchema = Object.assign(ObjectSchemaBase, {
     };
     return ObjectSchemaBase.parse(withDefaults) as Omit<ServiceObject, 'fields'> & Pick<T, 'fields'>;
   },
-});
+}));
 
 export type ServiceObject = z.infer<typeof ObjectSchemaBase>;
 export type ServiceObjectInput = z.input<typeof ObjectSchemaBase>;
@@ -526,7 +527,7 @@ export type ObjectOwnership = z.infer<typeof ObjectOwnershipEnum>;
  * }]
  * ```
  */
-export const ObjectExtensionSchema = z.object({
+export const ObjectExtensionSchema = lazySchema(() => z.object({
   /** The target object name (FQN) to extend */
   extend: z.string().describe('Target object name (FQN) to extend'),
   
@@ -550,6 +551,6 @@ export const ObjectExtensionSchema = z.object({
   
   /** Merge priority. Higher number applied later (wins on conflict). Default: 200 */
   priority: z.number().int().min(0).max(999).default(200).describe('Merge priority (higher = applied later)'),
-});
+}));
 
 export type ObjectExtension = z.infer<typeof ObjectExtensionSchema>;

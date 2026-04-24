@@ -12,6 +12,7 @@ import { EventNameSchema } from '../../shared/identifiers.zod';
  * Priority levels for event processing
  * Lower numbers = higher priority
  */
+import { lazySchema } from '../../shared/lazy-schema';
 export const EventPriority = z.enum([
   'critical',   // 0 - Process immediately, block if necessary
   'high',       // 1 - Process soon, minimal delay
@@ -42,7 +43,7 @@ export const EVENT_PRIORITY_VALUES: Record<EventPriority, number> = {
  * Event Metadata Schema
  * Metadata associated with every event
  */
-export const EventMetadataSchema = z.object({
+export const EventMetadataSchema = lazySchema(() => z.object({
   source: z.string().describe('Event source (e.g., plugin name, system component)'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime when event was created'),
   userId: z.string().optional().describe('User who triggered the event'),
@@ -50,7 +51,7 @@ export const EventMetadataSchema = z.object({
   correlationId: z.string().optional().describe('Correlation ID for event tracing'),
   causationId: z.string().optional().describe('ID of the event that caused this event'),
   priority: EventPriority.optional().default('normal').describe('Event priority'),
-});
+}));
 
 // ==========================================
 // Event Schema
@@ -74,14 +75,14 @@ export const EventMetadataSchema = z.object({
  *   }
  * }
  */
-export const EventTypeDefinitionSchema = z.object({
+export const EventTypeDefinitionSchema = lazySchema(() => z.object({
   name: EventNameSchema.describe('Event type name (lowercase with dots)'),
   version: z.string().default('1.0.0').describe('Event schema version'),
   schema: z.unknown().optional().describe('JSON Schema for event payload validation'),
   description: z.string().optional().describe('Event type description'),
   deprecated: z.boolean().optional().default(false).describe('Whether this event type is deprecated'),
   tags: z.array(z.string()).optional().describe('Event type tags'),
-});
+}));
 
 export type EventTypeDefinition = z.infer<typeof EventTypeDefinitionSchema>;
 
@@ -92,7 +93,7 @@ export type EventTypeDefinition = z.infer<typeof EventTypeDefinitionSchema>;
  * Event names follow dot notation for namespacing (e.g., 'user.created', 'order.paid').
  * This aligns with industry standards for event-driven architectures and message queues.
  */
-export const EventSchema = z.object({
+export const EventSchema = lazySchema(() => z.object({
   /**
    * Event identifier (for tracking and deduplication)
    */
@@ -112,6 +113,6 @@ export const EventSchema = z.object({
    * Event metadata
    */
   metadata: EventMetadataSchema.describe('Event metadata'),
-});
+}));
 
 export type Event = z.infer<typeof EventSchema>;

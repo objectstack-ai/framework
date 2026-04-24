@@ -32,17 +32,18 @@ import { ExecutionLogSchema } from '../automation/execution.zod';
 /**
  * Path parameters for flow-level operations.
  */
-export const AutomationFlowPathParamsSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const AutomationFlowPathParamsSchema = lazySchema(() => z.object({
   name: z.string().describe('Flow machine name (snake_case)'),
-});
+}));
 export type AutomationFlowPathParams = z.infer<typeof AutomationFlowPathParamsSchema>;
 
 /**
  * Path parameters for run-level operations.
  */
-export const AutomationRunPathParamsSchema = AutomationFlowPathParamsSchema.extend({
+export const AutomationRunPathParamsSchema = lazySchema(() => AutomationFlowPathParamsSchema.extend({
   runId: z.string().describe('Execution run ID'),
-});
+}));
 export type AutomationRunPathParams = z.infer<typeof AutomationRunPathParamsSchema>;
 
 // ==========================================
@@ -54,7 +55,7 @@ export type AutomationRunPathParams = z.infer<typeof AutomationRunPathParamsSche
  *
  * @example GET /api/automation?status=active&limit=20
  */
-export const ListFlowsRequestSchema = z.object({
+export const ListFlowsRequestSchema = lazySchema(() => z.object({
   status: z.enum(['draft', 'active', 'obsolete', 'invalid']).optional()
     .describe('Filter by flow status'),
   type: z.enum(['autolaunched', 'record_change', 'schedule', 'screen', 'api']).optional()
@@ -63,13 +64,13 @@ export const ListFlowsRequestSchema = z.object({
     .describe('Maximum number of flows to return'),
   cursor: z.string().optional()
     .describe('Cursor for pagination'),
-});
+}));
 export type ListFlowsRequest = z.infer<typeof ListFlowsRequestSchema>;
 
 /**
  * Summary information for a flow in list results.
  */
-export const FlowSummarySchema = z.object({
+export const FlowSummarySchema = lazySchema(() => z.object({
   name: z.string().describe('Flow machine name'),
   label: z.string().describe('Flow display label'),
   type: z.string().describe('Flow type'),
@@ -78,20 +79,20 @@ export const FlowSummarySchema = z.object({
   enabled: z.boolean().describe('Whether the flow is enabled for execution'),
   nodeCount: z.number().int().optional().describe('Number of nodes in the flow'),
   lastRunAt: z.string().datetime().optional().describe('Last execution timestamp'),
-});
+}));
 export type FlowSummary = z.infer<typeof FlowSummarySchema>;
 
 /**
  * Response for the list flows endpoint.
  */
-export const ListFlowsResponseSchema = BaseResponseSchema.extend({
+export const ListFlowsResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     flows: z.array(FlowSummarySchema).describe('Flow summaries'),
     total: z.number().int().optional().describe('Total matching flows'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more flows are available'),
   }),
-});
+}));
 export type ListFlowsResponse = z.infer<typeof ListFlowsResponseSchema>;
 
 // ==========================================
@@ -101,15 +102,15 @@ export type ListFlowsResponse = z.infer<typeof ListFlowsResponseSchema>;
 /**
  * Request parameters for getting a single flow.
  */
-export const GetFlowRequestSchema = AutomationFlowPathParamsSchema;
+export const GetFlowRequestSchema = lazySchema(() => AutomationFlowPathParamsSchema);
 export type GetFlowRequest = z.infer<typeof GetFlowRequestSchema>;
 
 /**
  * Response for the get flow endpoint.
  */
-export const GetFlowResponseSchema = BaseResponseSchema.extend({
+export const GetFlowResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: FlowSchema.describe('Full flow definition'),
-});
+}));
 export type GetFlowResponse = z.infer<typeof GetFlowResponseSchema>;
 
 // ==========================================
@@ -122,15 +123,15 @@ export type GetFlowResponse = z.infer<typeof GetFlowResponseSchema>;
  * @example POST /api/automation
  * { name: 'approval_flow', label: 'Approval Flow', type: 'autolaunched', ... }
  */
-export const CreateFlowRequestSchema = FlowSchema;
+export const CreateFlowRequestSchema = lazySchema(() => FlowSchema);
 export type CreateFlowRequest = z.input<typeof CreateFlowRequestSchema>;
 
 /**
  * Response after creating a flow.
  */
-export const CreateFlowResponseSchema = BaseResponseSchema.extend({
+export const CreateFlowResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: FlowSchema.describe('The created flow definition'),
-});
+}));
 export type CreateFlowResponse = z.infer<typeof CreateFlowResponseSchema>;
 
 // ==========================================
@@ -143,17 +144,17 @@ export type CreateFlowResponse = z.infer<typeof CreateFlowResponseSchema>;
  * @example PUT /api/automation/approval_flow
  * { label: 'Updated Label', nodes: [...], edges: [...] }
  */
-export const UpdateFlowRequestSchema = AutomationFlowPathParamsSchema.extend({
+export const UpdateFlowRequestSchema = lazySchema(() => AutomationFlowPathParamsSchema.extend({
   definition: FlowSchema.partial().describe('Partial flow definition to update'),
-});
+}));
 export type UpdateFlowRequest = z.infer<typeof UpdateFlowRequestSchema>;
 
 /**
  * Response after updating a flow.
  */
-export const UpdateFlowResponseSchema = BaseResponseSchema.extend({
+export const UpdateFlowResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: FlowSchema.describe('The updated flow definition'),
-});
+}));
 export type UpdateFlowResponse = z.infer<typeof UpdateFlowResponseSchema>;
 
 // ==========================================
@@ -163,18 +164,18 @@ export type UpdateFlowResponse = z.infer<typeof UpdateFlowResponseSchema>;
 /**
  * Request parameters for deleting a flow.
  */
-export const DeleteFlowRequestSchema = AutomationFlowPathParamsSchema;
+export const DeleteFlowRequestSchema = lazySchema(() => AutomationFlowPathParamsSchema);
 export type DeleteFlowRequest = z.infer<typeof DeleteFlowRequestSchema>;
 
 /**
  * Response after deleting a flow.
  */
-export const DeleteFlowResponseSchema = BaseResponseSchema.extend({
+export const DeleteFlowResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     name: z.string().describe('Name of the deleted flow'),
     deleted: z.boolean().describe('Whether the flow was deleted'),
   }),
-});
+}));
 export type DeleteFlowResponse = z.infer<typeof DeleteFlowResponseSchema>;
 
 // ==========================================
@@ -187,7 +188,7 @@ export type DeleteFlowResponse = z.infer<typeof DeleteFlowResponseSchema>;
  * @example POST /api/automation/approval_flow/trigger
  * { record: { id: 'rec-1' }, object: 'account', event: 'on_create' }
  */
-export const TriggerFlowRequestSchema = AutomationFlowPathParamsSchema.extend({
+export const TriggerFlowRequestSchema = lazySchema(() => AutomationFlowPathParamsSchema.extend({
   record: z.record(z.string(), z.unknown()).optional()
     .describe('Record that triggered the automation'),
   object: z.string().optional()
@@ -198,20 +199,20 @@ export const TriggerFlowRequestSchema = AutomationFlowPathParamsSchema.extend({
     .describe('User who triggered the automation'),
   params: z.record(z.string(), z.unknown()).optional()
     .describe('Additional contextual data'),
-});
+}));
 export type TriggerFlowRequest = z.infer<typeof TriggerFlowRequestSchema>;
 
 /**
  * Response after triggering a flow execution.
  */
-export const TriggerFlowResponseSchema = BaseResponseSchema.extend({
+export const TriggerFlowResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     success: z.boolean().describe('Whether the automation completed successfully'),
     output: z.unknown().optional().describe('Output data from the automation'),
     error: z.string().optional().describe('Error message if execution failed'),
     durationMs: z.number().optional().describe('Execution duration in milliseconds'),
   }),
-});
+}));
 export type TriggerFlowResponse = z.infer<typeof TriggerFlowResponseSchema>;
 
 // ==========================================
@@ -224,20 +225,20 @@ export type TriggerFlowResponse = z.infer<typeof TriggerFlowResponseSchema>;
  * @example POST /api/automation/approval_flow/toggle
  * { enabled: true }
  */
-export const ToggleFlowRequestSchema = AutomationFlowPathParamsSchema.extend({
+export const ToggleFlowRequestSchema = lazySchema(() => AutomationFlowPathParamsSchema.extend({
   enabled: z.boolean().describe('Whether to enable (true) or disable (false) the flow'),
-});
+}));
 export type ToggleFlowRequest = z.infer<typeof ToggleFlowRequestSchema>;
 
 /**
  * Response after toggling a flow.
  */
-export const ToggleFlowResponseSchema = BaseResponseSchema.extend({
+export const ToggleFlowResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     name: z.string().describe('Flow name'),
     enabled: z.boolean().describe('New enabled state'),
   }),
-});
+}));
 export type ToggleFlowResponse = z.infer<typeof ToggleFlowResponseSchema>;
 
 // ==========================================
@@ -249,27 +250,27 @@ export type ToggleFlowResponse = z.infer<typeof ToggleFlowResponseSchema>;
  *
  * @example GET /api/automation/approval_flow/runs?status=completed&limit=10
  */
-export const ListRunsRequestSchema = AutomationFlowPathParamsSchema.extend({
+export const ListRunsRequestSchema = lazySchema(() => AutomationFlowPathParamsSchema.extend({
   status: z.enum(['pending', 'running', 'paused', 'completed', 'failed', 'cancelled', 'timed_out', 'retrying']).optional()
     .describe('Filter by execution status'),
   limit: z.number().int().min(1).max(100).default(20)
     .describe('Maximum number of runs to return'),
   cursor: z.string().optional()
     .describe('Cursor for pagination'),
-});
+}));
 export type ListRunsRequest = z.infer<typeof ListRunsRequestSchema>;
 
 /**
  * Response for the list runs endpoint.
  */
-export const ListRunsResponseSchema = BaseResponseSchema.extend({
+export const ListRunsResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     runs: z.array(ExecutionLogSchema).describe('Execution run logs'),
     total: z.number().int().optional().describe('Total matching runs'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more runs are available'),
   }),
-});
+}));
 export type ListRunsResponse = z.infer<typeof ListRunsResponseSchema>;
 
 // ==========================================
@@ -279,15 +280,15 @@ export type ListRunsResponse = z.infer<typeof ListRunsResponseSchema>;
 /**
  * Request parameters for getting a single execution run.
  */
-export const GetRunRequestSchema = AutomationRunPathParamsSchema;
+export const GetRunRequestSchema = lazySchema(() => AutomationRunPathParamsSchema);
 export type GetRunRequest = z.infer<typeof GetRunRequestSchema>;
 
 /**
  * Response for the get run endpoint.
  */
-export const GetRunResponseSchema = BaseResponseSchema.extend({
+export const GetRunResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: ExecutionLogSchema.describe('Full execution log with step details'),
-});
+}));
 export type GetRunResponse = z.infer<typeof GetRunResponseSchema>;
 
 // ==========================================

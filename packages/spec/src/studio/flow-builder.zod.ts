@@ -39,7 +39,8 @@ import { z } from 'zod';
  * Shape used to render a flow node on the canvas.
  * Matches BPMN conventions where applicable.
  */
-export const FlowNodeShapeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const FlowNodeShapeSchema = lazySchema(() => z.enum([
   'rounded_rect',   // Default activity shape (assignments, CRUD, HTTP, script, subflow)
   'circle',         // Start / End events
   'diamond',        // Decision (XOR gateway)
@@ -48,7 +49,7 @@ export const FlowNodeShapeSchema = z.enum([
   'diamond_thick',  // Parallel gateway (AND-split) & Join gateway (AND-join)
   'attached_circle', // Boundary event (attached to host node)
   'screen_rect',    // Screen / user-interaction node
-]).describe('Visual shape for rendering a flow node on the canvas');
+]).describe('Visual shape for rendering a flow node on the canvas'));
 
 export type FlowNodeShape = z.infer<typeof FlowNodeShapeSchema>;
 
@@ -56,7 +57,7 @@ export type FlowNodeShape = z.infer<typeof FlowNodeShapeSchema>;
  * Maps each FlowNodeAction to its canvas rendering descriptor.
  * Used by the Studio flow canvas to determine shape, icon, and default size.
  */
-export const FlowNodeRenderDescriptorSchema = z.object({
+export const FlowNodeRenderDescriptorSchema = lazySchema(() => z.object({
   /** The node action type this descriptor applies to */
   action: z.string().describe('FlowNodeAction value (e.g., "parallel_gateway")'),
 
@@ -88,7 +89,7 @@ export const FlowNodeRenderDescriptorSchema = z.object({
   /** Category for palette grouping */
   paletteCategory: z.enum(['event', 'gateway', 'activity', 'data', 'subflow'])
     .describe('Palette category for grouping'),
-}).describe('Visual render descriptor for a flow node type');
+}).describe('Visual render descriptor for a flow node type'));
 
 export type FlowNodeRenderDescriptor = z.infer<typeof FlowNodeRenderDescriptorSchema>;
 
@@ -97,7 +98,7 @@ export type FlowNodeRenderDescriptor = z.infer<typeof FlowNodeRenderDescriptorSc
 /**
  * A node instance on the flow canvas, containing position and visual overrides.
  */
-export const FlowCanvasNodeSchema = z.object({
+export const FlowCanvasNodeSchema = lazySchema(() => z.object({
   /** Reference to the flow node id */
   nodeId: z.string().describe('Corresponding FlowNode.id'),
 
@@ -124,7 +125,7 @@ export const FlowCanvasNodeSchema = z.object({
 
   /** User-defined comment/annotation visible on canvas */
   annotation: z.string().optional().describe('User annotation displayed near the node'),
-}).describe('Canvas layout data for a flow node');
+}).describe('Canvas layout data for a flow node'));
 
 export type FlowCanvasNode = z.infer<typeof FlowCanvasNodeSchema>;
 
@@ -133,19 +134,19 @@ export type FlowCanvasNode = z.infer<typeof FlowCanvasNodeSchema>;
 /**
  * Visual style for a sequence flow edge on the canvas.
  */
-export const FlowCanvasEdgeStyleSchema = z.enum([
+export const FlowCanvasEdgeStyleSchema = lazySchema(() => z.enum([
   'solid',    // Normal sequence flow
   'dashed',   // Default sequence flow (isDefault: true)
   'dotted',   // Conditional edge
   'bold',     // Fault / error edge
-]).describe('Edge line style');
+]).describe('Edge line style'));
 
 export type FlowCanvasEdgeStyle = z.infer<typeof FlowCanvasEdgeStyleSchema>;
 
 /**
  * A sequence-flow edge on the flow canvas with visual properties.
  */
-export const FlowCanvasEdgeSchema = z.object({
+export const FlowCanvasEdgeSchema = lazySchema(() => z.object({
   /** Reference to the flow edge id */
   edgeId: z.string().describe('Corresponding FlowEdge.id'),
 
@@ -167,7 +168,7 @@ export const FlowCanvasEdgeSchema = z.object({
 
   /** Whether to show an animated flow indicator */
   animated: z.boolean().default(false).describe('Show animated flow indicator'),
-}).describe('Canvas layout and visual data for a flow edge');
+}).describe('Canvas layout and visual data for a flow edge'));
 
 export type FlowCanvasEdge = z.infer<typeof FlowCanvasEdgeSchema>;
 
@@ -176,24 +177,24 @@ export type FlowCanvasEdge = z.infer<typeof FlowCanvasEdgeSchema>;
 /**
  * Auto-layout algorithm for the flow canvas.
  */
-export const FlowLayoutAlgorithmSchema = z.enum([
+export const FlowLayoutAlgorithmSchema = lazySchema(() => z.enum([
   'dagre',       // Directed acyclic graph layout (top-down or left-right)
   'elk',         // Eclipse Layout Kernel (advanced hierarchical)
   'force',       // Force-directed graph
   'manual',      // User-positioned (no auto-layout)
-]).describe('Auto-layout algorithm for the flow canvas');
+]).describe('Auto-layout algorithm for the flow canvas'));
 
 export type FlowLayoutAlgorithm = z.infer<typeof FlowLayoutAlgorithmSchema>;
 
 /**
  * Direction for the auto-layout.
  */
-export const FlowLayoutDirectionSchema = z.enum([
+export const FlowLayoutDirectionSchema = lazySchema(() => z.enum([
   'TB',  // Top to bottom
   'BT',  // Bottom to top
   'LR',  // Left to right
   'RL',  // Right to left
-]).describe('Auto-layout direction');
+]).describe('Auto-layout direction'));
 
 export type FlowLayoutDirection = z.infer<typeof FlowLayoutDirectionSchema>;
 
@@ -203,7 +204,7 @@ export type FlowLayoutDirection = z.infer<typeof FlowLayoutDirectionSchema>;
  * Flow Builder configuration — top-level config for the Studio
  * automation flow canvas editor.
  */
-export const FlowBuilderConfigSchema = z.object({
+export const FlowBuilderConfigSchema = lazySchema(() => z.object({
   /** Canvas snap settings */
   snap: z.object({
     enabled: z.boolean().default(true).describe('Enable snap-to-grid'),
@@ -252,7 +253,7 @@ export const FlowBuilderConfigSchema = z.object({
   /** Connection validation — prevent invalid edges (e.g., duplicate, self-loop) */
   connectionValidation: z.boolean().default(true)
     .describe('Validate connections before creating edges'),
-}).describe('Studio Flow Builder configuration');
+}).describe('Studio Flow Builder configuration'));
 
 export type FlowBuilderConfig = z.infer<typeof FlowBuilderConfigSchema>;
 

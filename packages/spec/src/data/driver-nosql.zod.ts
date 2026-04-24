@@ -7,7 +7,8 @@ import { DriverConfigSchema } from './driver.zod';
  * NoSQL Database Type Enumeration
  * Supported NoSQL database types
  */
-export const NoSQLDatabaseTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const NoSQLDatabaseTypeSchema = lazySchema(() => z.enum([
   'mongodb',
   'couchdb',
   'dynamodb',
@@ -16,7 +17,7 @@ export const NoSQLDatabaseTypeSchema = z.enum([
   'elasticsearch',
   'neo4j',
   'orientdb',
-]);
+]));
 
 export type NoSQLDatabaseType = z.infer<typeof NoSQLDatabaseTypeSchema>;
 
@@ -24,7 +25,7 @@ export type NoSQLDatabaseType = z.infer<typeof NoSQLDatabaseTypeSchema>;
  * NoSQL Query Operation Types
  * Different types of operations supported by NoSQL databases
  */
-export const NoSQLOperationTypeSchema = z.enum([
+export const NoSQLOperationTypeSchema = lazySchema(() => z.enum([
   'find',           // Query documents/records
   'findOne',        // Get single document
   'insert',         // Insert document
@@ -36,7 +37,7 @@ export const NoSQLOperationTypeSchema = z.enum([
   'distinct',       // Get distinct values
   'createIndex',    // Create index
   'dropIndex',      // Drop index
-]);
+]));
 
 export type NoSQLOperationType = z.infer<typeof NoSQLOperationTypeSchema>;
 
@@ -52,14 +53,14 @@ export type NoSQLOperationType = z.infer<typeof NoSQLOperationTypeSchema>;
  * - **each_quorum**: Quorum of replicas in each datacenter
  * - **eventual**: Eventual consistency (highest availability, weakest consistency)
  */
-export const ConsistencyLevelSchema = z.enum([
+export const ConsistencyLevelSchema = lazySchema(() => z.enum([
   'all',
   'quorum',
   'one',
   'local_quorum',
   'each_quorum',
   'eventual',
-]);
+]));
 
 export type ConsistencyLevel = z.infer<typeof ConsistencyLevelSchema>;
 
@@ -67,7 +68,7 @@ export type ConsistencyLevel = z.infer<typeof ConsistencyLevelSchema>;
  * NoSQL Index Type
  * Types of indexes supported by NoSQL databases
  */
-export const NoSQLIndexTypeSchema = z.enum([
+export const NoSQLIndexTypeSchema = lazySchema(() => z.enum([
   'single',         // Single field index
   'compound',       // Multiple fields index
   'unique',         // Unique constraint
@@ -76,7 +77,7 @@ export const NoSQLIndexTypeSchema = z.enum([
   'hashed',         // Hashed index for sharding
   'ttl',            // Time-to-live index (auto-deletion)
   'sparse',         // Sparse index (only indexed documents with field)
-]);
+]));
 
 export type NoSQLIndexType = z.infer<typeof NoSQLIndexTypeSchema>;
 
@@ -84,12 +85,12 @@ export type NoSQLIndexType = z.infer<typeof NoSQLIndexTypeSchema>;
  * NoSQL Sharding Configuration
  * Configuration for horizontal partitioning across multiple nodes
  */
-export const ShardingConfigSchema = z.object({
+export const ShardingConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable sharding'),
   shardKey: z.string().optional().describe('Field to use as shard key'),
   shardingStrategy: z.enum(['hash', 'range', 'zone']).optional().describe('Sharding strategy'),
   numShards: z.number().int().positive().optional().describe('Number of shards'),
-});
+}));
 
 export type ShardingConfig = z.infer<typeof ShardingConfigSchema>;
 
@@ -97,7 +98,7 @@ export type ShardingConfig = z.infer<typeof ShardingConfigSchema>;
  * NoSQL Replication Configuration
  * Configuration for data replication across nodes
  */
-export const ReplicationConfigSchema = z.object({
+export const ReplicationConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable replication'),
   replicaSetName: z.string().optional().describe('Replica set name'),
   replicas: z.number().int().positive().optional().describe('Number of replicas'),
@@ -107,7 +108,7 @@ export const ReplicationConfigSchema = z.object({
   writeConcern: z.enum(['majority', 'acknowledged', 'unacknowledged'])
     .optional()
     .describe('Write concern level'),
-});
+}));
 
 export type ReplicationConfig = z.infer<typeof ReplicationConfigSchema>;
 
@@ -115,12 +116,12 @@ export type ReplicationConfig = z.infer<typeof ReplicationConfigSchema>;
  * Document Schema Validation
  * Schema validation rules for document-based NoSQL databases
  */
-export const DocumentSchemaValidationSchema = z.object({
+export const DocumentSchemaValidationSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable schema validation'),
   validationLevel: z.enum(['strict', 'moderate', 'off']).optional().describe('Validation strictness'),
   validationAction: z.enum(['error', 'warn']).optional().describe('Action on validation failure'),
   jsonSchema: z.record(z.string(), z.unknown()).optional().describe('JSON Schema for validation'),
-});
+}));
 
 export type DocumentSchemaValidation = z.infer<typeof DocumentSchemaValidationSchema>;
 
@@ -142,7 +143,7 @@ export type DocumentSchemaValidation = z.infer<typeof DocumentSchemaValidationSc
  *   objectId: 'objectId'
  * }
  */
-export const NoSQLDataTypeMappingSchema = z.object({
+export const NoSQLDataTypeMappingSchema = lazySchema(() => z.object({
   text: z.string().describe('NoSQL type for text fields'),
   number: z.string().describe('NoSQL type for number fields'),
   boolean: z.string().describe('NoSQL type for boolean fields'),
@@ -154,7 +155,7 @@ export const NoSQLDataTypeMappingSchema = z.object({
   array: z.string().optional().describe('NoSQL type for array fields'),
   objectId: z.string().optional().describe('NoSQL type for ObjectID fields (MongoDB)'),
   geopoint: z.string().optional().describe('NoSQL type for geospatial point fields'),
-});
+}));
 
 export type NoSQLDataTypeMapping = z.infer<typeof NoSQLDataTypeMappingSchema>;
 
@@ -256,7 +257,7 @@ export type NoSQLDataTypeMapping = z.infer<typeof NoSQLDataTypeMappingSchema>;
  *   }
  * }
  */
-export const NoSQLDriverConfigSchema = DriverConfigSchema.extend({
+export const NoSQLDriverConfigSchema = lazySchema(() => DriverConfigSchema.extend({
   type: z.literal('nosql').describe('Driver type must be "nosql"'),
   databaseType: NoSQLDatabaseTypeSchema.describe('Specific NoSQL database type'),
   dataTypeMapping: NoSQLDataTypeMappingSchema.describe('NoSQL data type mapping configuration'),
@@ -312,7 +313,7 @@ export const NoSQLDriverConfigSchema = DriverConfigSchema.extend({
    * Useful for multi-tenancy or environment isolation
    */
   collectionPrefix: z.string().optional().describe('Prefix for collection/table names'),
-});
+}));
 
 export type NoSQLDriverConfig = z.infer<typeof NoSQLDriverConfigSchema>;
 
@@ -320,7 +321,7 @@ export type NoSQLDriverConfig = z.infer<typeof NoSQLDriverConfigSchema>;
  * NoSQL Query Options
  * Additional options for NoSQL queries
  */
-export const NoSQLQueryOptionsSchema = z.object({
+export const NoSQLQueryOptionsSchema = lazySchema(() => z.object({
   /**
    * Consistency level for this query
    */
@@ -360,7 +361,7 @@ export const NoSQLQueryOptionsSchema = z.object({
    * Use hinted index
    */
   hint: z.string().optional().describe('Index hint for query optimization'),
-});
+}));
 
 export type NoSQLQueryOptions = z.infer<typeof NoSQLQueryOptionsSchema>;
 
@@ -368,7 +369,7 @@ export type NoSQLQueryOptions = z.infer<typeof NoSQLQueryOptionsSchema>;
  * NoSQL Aggregation Pipeline Stage
  * Represents a single stage in an aggregation pipeline (MongoDB-style)
  */
-export const AggregationStageSchema = z.object({
+export const AggregationStageSchema = lazySchema(() => z.object({
   /**
    * Stage operator (e.g., $match, $group, $sort, $project)
    */
@@ -378,7 +379,7 @@ export const AggregationStageSchema = z.object({
    * Stage parameters/options
    */
   options: z.record(z.string(), z.unknown()).describe('Stage-specific options'),
-});
+}));
 
 export type AggregationStage = z.infer<typeof AggregationStageSchema>;
 
@@ -386,7 +387,7 @@ export type AggregationStage = z.infer<typeof AggregationStageSchema>;
  * NoSQL Aggregation Pipeline
  * Sequence of aggregation stages for complex data transformations
  */
-export const AggregationPipelineSchema = z.object({
+export const AggregationPipelineSchema = lazySchema(() => z.object({
   /**
    * Collection/Table to aggregate
    */
@@ -401,7 +402,7 @@ export const AggregationPipelineSchema = z.object({
    * Additional options
    */
   options: NoSQLQueryOptionsSchema.optional().describe('Query options'),
-});
+}));
 
 export type AggregationPipeline = z.infer<typeof AggregationPipelineSchema>;
 
@@ -409,7 +410,7 @@ export type AggregationPipeline = z.infer<typeof AggregationPipelineSchema>;
  * NoSQL Index Definition
  * Definition for creating indexes in NoSQL databases
  */
-export const NoSQLIndexSchema = z.object({
+export const NoSQLIndexSchema = lazySchema(() => z.object({
   /**
    * Index name
    */
@@ -453,7 +454,7 @@ export const NoSQLIndexSchema = z.object({
    * Background index creation
    */
   background: z.boolean().default(false).describe('Create index in background'),
-});
+}));
 
 export type NoSQLIndex = z.infer<typeof NoSQLIndexSchema>;
 
@@ -461,7 +462,7 @@ export type NoSQLIndex = z.infer<typeof NoSQLIndexSchema>;
  * NoSQL Transaction Options
  * Options for NoSQL transactions (where supported)
  */
-export const NoSQLTransactionOptionsSchema = z.object({
+export const NoSQLTransactionOptionsSchema = lazySchema(() => z.object({
   /**
    * Read concern level
    */
@@ -483,6 +484,6 @@ export const NoSQLTransactionOptionsSchema = z.object({
    * Transaction timeout in milliseconds
    */
   maxCommitTimeMS: z.number().int().positive().optional().describe('Transaction commit timeout (ms)'),
-});
+}));
 
 export type NoSQLTransactionOptions = z.infer<typeof NoSQLTransactionOptionsSchema>;

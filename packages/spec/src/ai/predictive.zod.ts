@@ -23,7 +23,8 @@ import { TokenUsageSchema } from './cost.zod';
 /**
  * Predictive Model Types
  */
-export const PredictiveModelTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const PredictiveModelTypeSchema = lazySchema(() => z.enum([
   'classification',      // Binary or multi-class classification
   'regression',          // Numerical prediction
   'clustering',          // Unsupervised grouping
@@ -31,13 +32,13 @@ export const PredictiveModelTypeSchema = z.enum([
   'anomaly_detection',   // Outlier detection
   'recommendation',      // Item or action recommendation
   'ranking',             // Ordering items by relevance
-]);
+]));
 
 /**
  * Model Feature Definition
  * Describes an input feature for a predictive model
  */
-export const ModelFeatureSchema = z.object({
+export const ModelFeatureSchema = lazySchema(() => z.object({
   /** Feature Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Feature name (snake_case)'),
   label: z.string().optional().describe('Human-readable label'),
@@ -68,13 +69,13 @@ export const ModelFeatureSchema = z.object({
   /** Metadata */
   description: z.string().optional(),
   importance: z.number().optional().describe('Feature importance score (0-1)'),
-});
+}));
 
 /**
  * Model Hyperparameters
  * Configuration specific to model algorithms
  */
-export const HyperparametersSchema = z.object({
+export const HyperparametersSchema = lazySchema(() => z.object({
   /** General Parameters */
   learningRate: z.number().optional().describe('Learning rate for training'),
   epochs: z.number().int().optional().describe('Number of training epochs'),
@@ -104,12 +105,12 @@ export const HyperparametersSchema = z.object({
   
   /** Additional custom parameters */
   custom: z.record(z.string(), z.unknown()).optional().describe('Algorithm-specific parameters'),
-});
+}));
 
 /**
  * Model Training Configuration
  */
-export const TrainingConfigSchema = z.object({
+export const TrainingConfigSchema = lazySchema(() => z.object({
   /** Data Split */
   trainingDataRatio: z.number().min(0).max(1).optional().default(0.8).describe('Proportion of data for training'),
   validationDataRatio: z.number().min(0).max(1).optional().default(0.1).describe('Proportion for validation'),
@@ -146,12 +147,12 @@ export const TrainingConfigSchema = z.object({
       });
     }
   }
-});
+}));
 
 /**
  * Model Evaluation Metrics
  */
-export const EvaluationMetricsSchema = z.object({
+export const EvaluationMetricsSchema = lazySchema(() => z.object({
   /** Classification Metrics */
   accuracy: z.number().optional(),
   precision: z.number().optional(),
@@ -175,13 +176,13 @@ export const EvaluationMetricsSchema = z.object({
   
   /** Additional Metrics */
   custom: z.record(z.string(), z.number()).optional(),
-});
+}));
 
 /**
  * Predictive Model Schema
  * Complete definition of a predictive model
  */
-export const PredictiveModelSchema = z.object({
+export const PredictiveModelSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Model unique identifier (snake_case)'),
   label: z.string().describe('Model display name'),
@@ -240,25 +241,25 @@ export const PredictiveModelSchema = z.object({
   lastTrainedAt: z.string().datetime().optional().describe('ISO timestamp'),
   createdAt: z.string().datetime().optional().describe('ISO timestamp'),
   updatedAt: z.string().datetime().optional().describe('ISO timestamp'),
-});
+}));
 
 /**
  * Prediction Request
  * Request for making predictions using a trained model
  */
-export const PredictionRequestSchema = z.object({
+export const PredictionRequestSchema = lazySchema(() => z.object({
   modelName: z.string().describe('Model to use for prediction'),
   recordIds: z.array(z.string()).optional().describe('Specific records to predict (if not provided, uses all)'),
   inputData: z.record(z.string(), z.unknown()).optional().describe('Direct input data (alternative to recordIds)'),
   returnConfidence: z.boolean().optional().default(true),
   returnExplanation: z.boolean().optional().default(false),
-});
+}));
 
 /**
  * Prediction Result
  * Result of a prediction request
  */
-export const PredictionResultSchema = z.object({
+export const PredictionResultSchema = lazySchema(() => z.object({
   modelName: z.string(),
   modelVersion: z.string(),
   recordId: z.string().optional(),
@@ -279,13 +280,13 @@ export const PredictionResultSchema = z.object({
     executionTime: z.number().optional().describe('Execution time in milliseconds'),
     timestamp: z.string().datetime().optional().describe('ISO timestamp'),
   }).optional(),
-});
+}));
 
 /**
  * Model Drift Detection
  * Monitoring for model performance degradation
  */
-export const ModelDriftSchema = z.object({
+export const ModelDriftSchema = lazySchema(() => z.object({
   modelName: z.string(),
   driftType: z.enum(['feature_drift', 'prediction_drift', 'performance_drift']),
   severity: z.enum(['low', 'medium', 'high', 'critical']),
@@ -297,7 +298,7 @@ export const ModelDriftSchema = z.object({
   }),
   recommendation: z.string().optional(),
   autoRetrainTriggered: z.boolean().optional().default(false),
-});
+}));
 
 // Type exports
 export type PredictiveModelType = z.infer<typeof PredictiveModelTypeSchema>;

@@ -17,12 +17,13 @@ import { z } from 'zod';
  * Trace State Schema
  * W3C Trace Context tracestate header
  */
-export const TraceStateSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const TraceStateSchema = lazySchema(() => z.object({
   /**
    * Vendor-specific key-value pairs
    */
   entries: z.record(z.string(), z.string()).describe('Trace state entries'),
-}).describe('Trace state');
+}).describe('Trace state'));
 
 export type TraceState = z.infer<typeof TraceStateSchema>;
 
@@ -30,7 +31,7 @@ export type TraceState = z.infer<typeof TraceStateSchema>;
  * Trace Flags Enum
  * W3C Trace Context trace flags
  */
-export const TraceFlagsSchema = z.number().int().min(0).max(255).describe('Trace flags bitmap');
+export const TraceFlagsSchema = lazySchema(() => z.number().int().min(0).max(255).describe('Trace flags bitmap'));
 
 export type TraceFlags = z.infer<typeof TraceFlagsSchema>;
 
@@ -38,7 +39,7 @@ export type TraceFlags = z.infer<typeof TraceFlagsSchema>;
  * Trace Context Schema
  * W3C Trace Context standard
  */
-export const TraceContextSchema = z.object({
+export const TraceContextSchema = lazySchema(() => z.object({
   /**
    * Trace ID (128-bit identifier, 32 hex chars)
    */
@@ -80,7 +81,7 @@ export const TraceContextSchema = z.object({
    * Remote context (from incoming request)
    */
   remote: z.boolean().optional().default(false),
-}).describe('Trace context (W3C Trace Context)');
+}).describe('Trace context (W3C Trace Context)'));
 
 export type TraceContext = z.infer<typeof TraceContextSchema>;
 
@@ -113,14 +114,14 @@ export type SpanStatus = z.infer<typeof SpanStatus>;
 /**
  * Span Attribute Value Schema
  */
-export const SpanAttributeValueSchema = z.union([
+export const SpanAttributeValueSchema = lazySchema(() => z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.array(z.string()),
   z.array(z.number()),
   z.array(z.boolean()),
-]).describe('Span attribute value');
+]).describe('Span attribute value'));
 
 export type SpanAttributeValue = z.infer<typeof SpanAttributeValueSchema>;
 
@@ -128,14 +129,14 @@ export type SpanAttributeValue = z.infer<typeof SpanAttributeValueSchema>;
  * Span Attributes Schema
  * OpenTelemetry semantic conventions
  */
-export const SpanAttributesSchema = z.record(z.string(), SpanAttributeValueSchema).describe('Span attributes');
+export const SpanAttributesSchema = lazySchema(() => z.record(z.string(), SpanAttributeValueSchema).describe('Span attributes'));
 
 export type SpanAttributes = z.infer<typeof SpanAttributesSchema>;
 
 /**
  * Span Event Schema
  */
-export const SpanEventSchema = z.object({
+export const SpanEventSchema = lazySchema(() => z.object({
   /**
    * Event name
    */
@@ -150,7 +151,7 @@ export const SpanEventSchema = z.object({
    * Event attributes
    */
   attributes: SpanAttributesSchema.optional().describe('Event attributes'),
-}).describe('Span event');
+}).describe('Span event'));
 
 export type SpanEvent = z.infer<typeof SpanEventSchema>;
 
@@ -158,7 +159,7 @@ export type SpanEvent = z.infer<typeof SpanEventSchema>;
  * Span Link Schema
  * Links to other spans
  */
-export const SpanLinkSchema = z.object({
+export const SpanLinkSchema = lazySchema(() => z.object({
   /**
    * Linked trace context
    */
@@ -168,7 +169,7 @@ export const SpanLinkSchema = z.object({
    * Link attributes
    */
   attributes: SpanAttributesSchema.optional().describe('Link attributes'),
-}).describe('Span link');
+}).describe('Span link'));
 
 export type SpanLink = z.infer<typeof SpanLinkSchema>;
 
@@ -176,7 +177,7 @@ export type SpanLink = z.infer<typeof SpanLinkSchema>;
  * Span Schema
  * OpenTelemetry span representation
  */
-export const SpanSchema = z.object({
+export const SpanSchema = lazySchema(() => z.object({
   /**
    * Trace context
    */
@@ -242,7 +243,7 @@ export const SpanSchema = z.object({
     name: z.string().describe('Library name'),
     version: z.string().optional().describe('Library version'),
   }).optional(),
-}).describe('OpenTelemetry span');
+}).describe('OpenTelemetry span'));
 
 export type Span = z.infer<typeof SpanSchema>;
 
@@ -276,7 +277,7 @@ export type SamplingStrategyType = z.infer<typeof SamplingStrategyType>;
 /**
  * Trace Sampling Configuration Schema
  */
-export const TraceSamplingConfigSchema = z.object({
+export const TraceSamplingConfigSchema = lazySchema(() => z.object({
   /**
    * Sampling strategy type
    */
@@ -370,7 +371,7 @@ export const TraceSamplingConfigSchema = z.object({
    * Custom sampler ID (for custom strategy)
    */
   customSamplerId: z.string().optional().describe('Custom sampler identifier'),
-}).describe('Trace sampling configuration');
+}).describe('Trace sampling configuration'));
 
 export type TraceSamplingConfig = z.infer<typeof TraceSamplingConfigSchema>;
 
@@ -392,7 +393,7 @@ export type TracePropagationFormat = z.infer<typeof TracePropagationFormat>;
 /**
  * Trace Context Propagation Schema
  */
-export const TraceContextPropagationSchema = z.object({
+export const TraceContextPropagationSchema = lazySchema(() => z.object({
   /**
    * Propagation formats (in priority order)
    */
@@ -452,7 +453,7 @@ export const TraceContextPropagationSchema = z.object({
      */
     allowedKeys: z.array(z.string()).optional(),
   }).optional(),
-}).describe('Trace context propagation');
+}).describe('Trace context propagation'));
 
 export type TraceContextPropagation = z.infer<typeof TraceContextPropagationSchema>;
 
@@ -477,7 +478,7 @@ export type OtelExporterType = z.infer<typeof OtelExporterType>;
 /**
  * OpenTelemetry Compatibility Schema
  */
-export const OpenTelemetryCompatibilitySchema = z.object({
+export const OpenTelemetryCompatibilitySchema = lazySchema(() => z.object({
   /**
    * OpenTelemetry SDK version
    */
@@ -602,14 +603,14 @@ export const OpenTelemetryCompatibilitySchema = z.object({
    * Semantic conventions version
    */
   semanticConventionsVersion: z.string().optional().describe('Semantic conventions version'),
-}).describe('OpenTelemetry compatibility configuration');
+}).describe('OpenTelemetry compatibility configuration'));
 
 export type OpenTelemetryCompatibility = z.infer<typeof OpenTelemetryCompatibilitySchema>;
 
 /**
  * Tracing Configuration Schema
  */
-export const TracingConfigSchema = z.object({
+export const TracingConfigSchema = lazySchema(() => z.object({
   /**
    * Configuration name
    */
@@ -692,6 +693,6 @@ export const TracingConfigSchema = z.object({
      */
     exportInterval: z.number().int().positive().optional().default(5000),
   }).optional(),
-}).describe('Tracing configuration');
+}).describe('Tracing configuration'));
 
 export type TracingConfig = z.infer<typeof TracingConfigSchema>;

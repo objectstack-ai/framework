@@ -27,7 +27,8 @@ import { z } from 'zod';
 /**
  * Review Criteria — checklist items for human reviewers
  */
-export const ReviewCriterionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ReviewCriterionSchema = lazySchema(() => z.object({
   /** Criterion identifier */
   id: z.string().describe('Criterion ID'),
 
@@ -53,21 +54,21 @@ export const ReviewCriterionSchema = z.object({
 
   /** Reviewer notes for this criterion */
   notes: z.string().optional(),
-});
+}));
 
 /**
  * Review Decision
  */
-export const ReviewDecisionSchema = z.enum([
+export const ReviewDecisionSchema = lazySchema(() => z.enum([
   'approved',            // Approved for publishing
   'rejected',            // Rejected (with reasons)
   'changes-requested',   // Needs changes before re-review
-]);
+]));
 
 /**
  * Rejection Reason Category
  */
-export const RejectionReasonSchema = z.enum([
+export const RejectionReasonSchema = lazySchema(() => z.enum([
   'security-vulnerability',    // Security issues found
   'policy-violation',          // Violates marketplace policy
   'quality-below-standard',    // Does not meet quality bar
@@ -76,14 +77,14 @@ export const RejectionReasonSchema = z.enum([
   'duplicate',                 // Duplicate of existing listing
   'insufficient-documentation', // Inadequate documentation
   'other',                     // Other reason (see notes)
-]);
+]));
 
 /**
  * Submission Review Schema
  *
  * The review record attached to a package submission.
  */
-export const SubmissionReviewSchema = z.object({
+export const SubmissionReviewSchema = lazySchema(() => z.object({
   /** Review ID */
   id: z.string().describe('Review ID'),
 
@@ -114,7 +115,7 @@ export const SubmissionReviewSchema = z.object({
 
   /** Review completed timestamp */
   completedAt: z.string().datetime().optional(),
-});
+}));
 
 // ==========================================
 // Curation: Featured & Collections
@@ -123,7 +124,7 @@ export const SubmissionReviewSchema = z.object({
 /**
  * Featured Listing — promoted on marketplace homepage
  */
-export const FeaturedListingSchema = z.object({
+export const FeaturedListingSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string().describe('Featured listing ID'),
 
@@ -144,12 +145,12 @@ export const FeaturedListingSchema = z.object({
 
   /** Whether currently active */
   active: z.boolean().default(true),
-});
+}));
 
 /**
  * Curated Collection — a themed group of listings
  */
-export const CuratedCollectionSchema = z.object({
+export const CuratedCollectionSchema = lazySchema(() => z.object({
   /** Collection unique identifier */
   id: z.string().describe('Collection ID'),
 
@@ -179,7 +180,7 @@ export const CuratedCollectionSchema = z.object({
 
   /** Updated at */
   updatedAt: z.string().datetime().optional(),
-});
+}));
 
 // ==========================================
 // Governance & Policy
@@ -188,7 +189,7 @@ export const CuratedCollectionSchema = z.object({
 /**
  * Policy Violation Type
  */
-export const PolicyViolationTypeSchema = z.enum([
+export const PolicyViolationTypeSchema = lazySchema(() => z.enum([
   'malware',               // Malicious software
   'data-harvesting',       // Unauthorized data collection
   'spam',                  // Spammy or misleading content
@@ -197,12 +198,12 @@ export const PolicyViolationTypeSchema = z.enum([
   'terms-of-service',      // General ToS violation
   'security-risk',         // Unresolved critical security issues
   'abandoned',             // Abandoned / no longer maintained
-]);
+]));
 
 /**
  * Policy Action — enforcement action on a listing
  */
-export const PolicyActionSchema = z.object({
+export const PolicyActionSchema = lazySchema(() => z.object({
   /** Action ID */
   id: z.string().describe('Action ID'),
 
@@ -234,7 +235,7 @@ export const PolicyActionSchema = z.object({
 
   /** Whether resolved */
   resolved: z.boolean().default(false),
-});
+}));
 
 // ==========================================
 // Platform Analytics
@@ -243,7 +244,7 @@ export const PolicyActionSchema = z.object({
 /**
  * Marketplace Health Metrics — overall platform statistics
  */
-export const MarketplaceHealthMetricsSchema = z.object({
+export const MarketplaceHealthMetricsSchema = lazySchema(() => z.object({
   /** Total number of published listings */
   totalListings: z.number().int().min(0),
 
@@ -273,12 +274,12 @@ export const MarketplaceHealthMetricsSchema = z.object({
 
   /** Snapshot timestamp */
   snapshotAt: z.string().datetime(),
-});
+}));
 
 /**
  * Trending Listing — computed from recent activity
  */
-export const TrendingListingSchema = z.object({
+export const TrendingListingSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string(),
 
@@ -293,7 +294,7 @@ export const TrendingListingSchema = z.object({
 
   /** Measurement period (e.g., "7d", "30d") */
   period: z.string(),
-});
+}));
 
 // ==========================================
 // Export Types

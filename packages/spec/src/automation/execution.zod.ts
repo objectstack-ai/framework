@@ -20,6 +20,7 @@ import { z } from 'zod';
  * Execution Status Enum
  * Tracks the lifecycle of a flow execution instance.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ExecutionStatus = z.enum([
   'pending',     // Queued, not yet started
   'running',     // Currently executing
@@ -40,7 +41,7 @@ export type ExecutionStatus = z.infer<typeof ExecutionStatus>;
  * Execution Step Log Entry
  * Records the result of executing a single node in the flow graph.
  */
-export const ExecutionStepLogSchema = z.object({
+export const ExecutionStepLogSchema = lazySchema(() => z.object({
   nodeId: z.string().describe('Node ID that was executed'),
   nodeType: z.string().describe('Node action type (e.g., "decision", "http_request")'),
   nodeLabel: z.string().optional().describe('Human-readable node label'),
@@ -56,7 +57,7 @@ export const ExecutionStepLogSchema = z.object({
     stack: z.string().optional().describe('Stack trace'),
   }).optional().describe('Error details if step failed'),
   retryAttempt: z.number().int().min(0).optional().describe('Retry attempt number (0 = first try)'),
-});
+}));
 export type ExecutionStepLog = z.infer<typeof ExecutionStepLogSchema>;
 
 /**
@@ -79,7 +80,7 @@ export type ExecutionStepLog = z.infer<typeof ExecutionStepLogSchema>;
  *   durationMs: 1050,
  * }
  */
-export const ExecutionLogSchema = z.object({
+export const ExecutionLogSchema = lazySchema(() => z.object({
   /** Unique execution ID */
   id: z.string().describe('Execution instance ID'),
 
@@ -113,7 +114,7 @@ export const ExecutionLogSchema = z.object({
   /** Context */
   runAs: z.enum(['system', 'user']).optional().describe('Execution context identity'),
   tenantId: z.string().optional().describe('Tenant ID for multi-tenant isolation'),
-});
+}));
 export type ExecutionLog = z.infer<typeof ExecutionLogSchema>;
 
 // ==========================================
@@ -134,7 +135,7 @@ export type ExecutionErrorSeverity = z.infer<typeof ExecutionErrorSeverity>;
  * Execution Error Schema
  * Detailed error record for diagnostics and troubleshooting.
  */
-export const ExecutionErrorSchema = z.object({
+export const ExecutionErrorSchema = lazySchema(() => z.object({
   id: z.string().describe('Error record ID'),
   executionId: z.string().describe('Parent execution ID'),
   nodeId: z.string().optional().describe('Node where the error occurred'),
@@ -147,7 +148,7 @@ export const ExecutionErrorSchema = z.object({
   timestamp: z.string().datetime().describe('When the error occurred'),
   retryable: z.boolean().default(false).describe('Whether this error can be retried'),
   resolvedAt: z.string().datetime().optional().describe('When the error was resolved (e.g., after successful retry)'),
-});
+}));
 export type ExecutionError = z.infer<typeof ExecutionErrorSchema>;
 
 // ==========================================
@@ -160,7 +161,7 @@ export type ExecutionError = z.infer<typeof ExecutionErrorSchema>;
  *
  * Used by wait nodes, user-input screens, and crash recovery.
  */
-export const CheckpointSchema = z.object({
+export const CheckpointSchema = lazySchema(() => z.object({
   /** Unique checkpoint ID */
   id: z.string().describe('Checkpoint ID'),
 
@@ -180,7 +181,7 @@ export const CheckpointSchema = z.object({
   /** Reason */
   reason: z.enum(['wait', 'screen_input', 'approval', 'error', 'manual_pause', 'parallel_join', 'boundary_event'])
     .describe('Why the execution was checkpointed'),
-});
+}));
 export type Checkpoint = z.infer<typeof CheckpointSchema>;
 
 // ==========================================
@@ -193,7 +194,7 @@ export type Checkpoint = z.infer<typeof CheckpointSchema>;
  *
  * Industry alignment: Salesforce "Allow multiple instances", Temporal "Workflow ID reuse policy"
  */
-export const ConcurrencyPolicySchema = z.object({
+export const ConcurrencyPolicySchema = lazySchema(() => z.object({
   /** Maximum concurrent executions of this flow */
   maxConcurrent: z.number().int().min(1).default(1)
     .describe('Maximum number of concurrent executions allowed'),
@@ -211,7 +212,7 @@ export const ConcurrencyPolicySchema = z.object({
   /** Queue timeout (only when onConflict is "queue") */
   queueTimeoutMs: z.number().int().min(0).optional()
     .describe('Maximum time to wait in queue before timing out (ms)'),
-});
+}));
 export type ConcurrencyPolicy = z.infer<typeof ConcurrencyPolicySchema>;
 
 // ==========================================
@@ -224,7 +225,7 @@ export type ConcurrencyPolicy = z.infer<typeof ConcurrencyPolicySchema>;
  *
  * Persists next-run times, pause/resume state, and execution history references.
  */
-export const ScheduleStateSchema = z.object({
+export const ScheduleStateSchema = lazySchema(() => z.object({
   /** Unique schedule ID */
   id: z.string().describe('Schedule instance ID'),
 
@@ -257,7 +258,7 @@ export const ScheduleStateSchema = z.object({
   createdAt: z.string().datetime().describe('Schedule creation timestamp'),
   updatedAt: z.string().datetime().optional().describe('Last update timestamp'),
   createdBy: z.string().optional().describe('User who created the schedule'),
-});
+}));
 export type ScheduleState = z.infer<typeof ScheduleStateSchema>;
 
 // ==========================================

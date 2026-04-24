@@ -89,35 +89,36 @@ import { FieldMappingSchema } from '../shared/mapping.zod';
 /**
  * Sync Direction
  */
-export const SyncDirectionSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const SyncDirectionSchema = lazySchema(() => z.enum([
   'push',        // ObjectStack -> External (one-way)
   'pull',        // External -> ObjectStack (one-way)
   'bidirectional', // Both directions
-]);
+]));
 
 export type SyncDirection = z.infer<typeof SyncDirectionSchema>;
 
 /**
  * Sync Mode
  */
-export const SyncModeSchema = z.enum([
+export const SyncModeSchema = lazySchema(() => z.enum([
   'full',        // Full refresh every time
   'incremental', // Only sync changed records
   'realtime',    // Real-time streaming sync
-]);
+]));
 
 export type SyncMode = z.infer<typeof SyncModeSchema>;
 
 /**
  * Conflict Resolution Strategy
  */
-export const ConflictResolutionSchema = z.enum([
+export const ConflictResolutionSchema = lazySchema(() => z.enum([
   'source_wins',      // Source system always wins
   'destination_wins', // Destination system always wins
   'latest_wins',      // Most recently modified wins
   'manual',           // Flag for manual resolution
   'merge',            // Smart merge (custom logic)
-]);
+]));
 
 export type ConflictResolution = z.infer<typeof ConflictResolutionSchema>;
 
@@ -133,7 +134,7 @@ export type ConflictResolution = z.infer<typeof ConflictResolutionSchema>;
 /**
  * Data Source Configuration
  */
-export const DataSourceConfigSchema = z.object({
+export const DataSourceConfigSchema = lazySchema(() => z.object({
   /**
    * Source object name
    * For ObjectStack objects
@@ -163,14 +164,14 @@ export const DataSourceConfigSchema = z.object({
    * e.g., Salesforce object name, database table, API endpoint
    */
   externalResource: z.string().optional().describe('External resource ID'),
-});
+}));
 
 export type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
 
 /**
  * Data Destination Configuration
  */
-export const DataDestinationConfigSchema = z.object({
+export const DataDestinationConfigSchema = lazySchema(() => z.object({
   /**
    * Destination object name
    * For ObjectStack objects
@@ -213,7 +214,7 @@ export const DataDestinationConfigSchema = z.object({
    * Fields to use for matching existing records
    */
   matchKey: z.array(z.string()).optional().describe('Match key fields'),
-});
+}));
 
 export type DataDestinationConfig = z.infer<typeof DataDestinationConfigSchema>;
 
@@ -222,7 +223,7 @@ export type DataDestinationConfig = z.infer<typeof DataDestinationConfigSchema>;
  * 
  * Complete definition of a data synchronization between systems.
  */
-export const DataSyncConfigSchema = z.object({
+export const DataSyncConfigSchema = lazySchema(() => z.object({
   /**
    * Sync configuration name (snake_case)
    */
@@ -357,21 +358,21 @@ export const DataSyncConfigSchema = z.object({
    * Custom metadata
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata'),
-});
+}));
 
 export type DataSyncConfig = z.infer<typeof DataSyncConfigSchema>;
 
 /**
  * Sync Execution Status
  */
-export const SyncExecutionStatusSchema = z.enum([
+export const SyncExecutionStatusSchema = lazySchema(() => z.enum([
   'pending',      // Queued
   'running',      // Currently executing
   'completed',    // Successfully completed
   'partial',      // Completed with some errors
   'failed',       // Failed
   'cancelled',    // Manually cancelled
-]);
+]));
 
 export type SyncExecutionStatus = z.infer<typeof SyncExecutionStatusSchema>;
 
@@ -380,7 +381,7 @@ export type SyncExecutionStatus = z.infer<typeof SyncExecutionStatusSchema>;
  * 
  * Result of a sync execution.
  */
-export const SyncExecutionResultSchema = z.object({
+export const SyncExecutionResultSchema = lazySchema(() => z.object({
   /**
    * Execution ID
    */
@@ -439,7 +440,7 @@ export const SyncExecutionResultSchema = z.object({
    * Execution logs
    */
   logs: z.array(z.string()).optional().describe('Execution logs'),
-});
+}));
 
 export type SyncExecutionResult = z.infer<typeof SyncExecutionResultSchema>;
 

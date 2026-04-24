@@ -49,18 +49,19 @@ import {
 /**
  * Common path parameters shared across all feed endpoints.
  */
-export const FeedPathParamsSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const FeedPathParamsSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name (e.g., "account")'),
   recordId: z.string().describe('Record ID'),
-});
+}));
 export type FeedPathParams = z.infer<typeof FeedPathParamsSchema>;
 
 /**
  * Path parameters for single-feed-item operations (update, delete).
  */
-export const FeedItemPathParamsSchema = FeedPathParamsSchema.extend({
+export const FeedItemPathParamsSchema = lazySchema(() => FeedPathParamsSchema.extend({
   feedId: z.string().describe('Feed item ID'),
-});
+}));
 export type FeedItemPathParams = z.infer<typeof FeedItemPathParamsSchema>;
 
 // ==========================================
@@ -83,27 +84,27 @@ export const FeedListFilterType = z.enum([
  *
  * @example GET /api/data/account/rec_123/feed?type=all&limit=20&cursor=xxx
  */
-export const GetFeedRequestSchema = FeedPathParamsSchema.extend({
+export const GetFeedRequestSchema = lazySchema(() => FeedPathParamsSchema.extend({
   type: FeedListFilterType.default('all')
     .describe('Filter by feed item category'),
   limit: z.number().int().min(1).max(100).default(20)
     .describe('Maximum number of items to return'),
   cursor: z.string().optional()
     .describe('Cursor for pagination (opaque string from previous response)'),
-});
+}));
 export type GetFeedRequest = z.infer<typeof GetFeedRequestSchema>;
 
 /**
  * Response for the feed list endpoint.
  */
-export const GetFeedResponseSchema = BaseResponseSchema.extend({
+export const GetFeedResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     items: z.array(FeedItemSchema).describe('Feed items in reverse chronological order'),
     total: z.number().int().optional().describe('Total feed items matching filter'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more items are available'),
   }),
-});
+}));
 export type GetFeedResponse = z.infer<typeof GetFeedResponseSchema>;
 
 // ==========================================
@@ -116,7 +117,7 @@ export type GetFeedResponse = z.infer<typeof GetFeedResponseSchema>;
  * @example POST /api/data/account/rec_123/feed
  * { type: 'comment', body: 'Great progress! @jane can you follow up?', mentions: [...] }
  */
-export const CreateFeedItemRequestSchema = FeedPathParamsSchema.extend({
+export const CreateFeedItemRequestSchema = lazySchema(() => FeedPathParamsSchema.extend({
   type: FeedItemType.describe('Type of feed item to create'),
   body: z.string().optional()
     .describe('Rich text body (Markdown supported)'),
@@ -126,15 +127,15 @@ export const CreateFeedItemRequestSchema = FeedPathParamsSchema.extend({
     .describe('Parent feed item ID for threaded replies'),
   visibility: FeedVisibility.default('public')
     .describe('Visibility: public, internal, or private'),
-});
+}));
 export type CreateFeedItemRequest = z.infer<typeof CreateFeedItemRequestSchema>;
 
 /**
  * Response after creating a feed item.
  */
-export const CreateFeedItemResponseSchema = BaseResponseSchema.extend({
+export const CreateFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: FeedItemSchema.describe('The created feed item'),
-});
+}));
 export type CreateFeedItemResponse = z.infer<typeof CreateFeedItemResponseSchema>;
 
 // ==========================================
@@ -147,22 +148,22 @@ export type CreateFeedItemResponse = z.infer<typeof CreateFeedItemResponseSchema
  * @example PUT /api/data/account/rec_123/feed/feed_001
  * { body: 'Updated comment text', mentions: [...] }
  */
-export const UpdateFeedItemRequestSchema = FeedItemPathParamsSchema.extend({
+export const UpdateFeedItemRequestSchema = lazySchema(() => FeedItemPathParamsSchema.extend({
   body: z.string().optional()
     .describe('Updated rich text body'),
   mentions: z.array(MentionSchema).optional()
     .describe('Updated mentions'),
   visibility: FeedVisibility.optional()
     .describe('Updated visibility'),
-});
+}));
 export type UpdateFeedItemRequest = z.infer<typeof UpdateFeedItemRequestSchema>;
 
 /**
  * Response after updating a feed item.
  */
-export const UpdateFeedItemResponseSchema = BaseResponseSchema.extend({
+export const UpdateFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: FeedItemSchema.describe('The updated feed item'),
-});
+}));
 export type UpdateFeedItemResponse = z.infer<typeof UpdateFeedItemResponseSchema>;
 
 // ==========================================
@@ -174,17 +175,17 @@ export type UpdateFeedItemResponse = z.infer<typeof UpdateFeedItemResponseSchema
  *
  * @example DELETE /api/data/account/rec_123/feed/feed_001
  */
-export const DeleteFeedItemRequestSchema = FeedItemPathParamsSchema;
+export const DeleteFeedItemRequestSchema = lazySchema(() => FeedItemPathParamsSchema);
 export type DeleteFeedItemRequest = z.infer<typeof DeleteFeedItemRequestSchema>;
 
 /**
  * Response after deleting a feed item.
  */
-export const DeleteFeedItemResponseSchema = BaseResponseSchema.extend({
+export const DeleteFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     feedId: z.string().describe('ID of the deleted feed item'),
   }),
-});
+}));
 export type DeleteFeedItemResponse = z.infer<typeof DeleteFeedItemResponseSchema>;
 
 // ==========================================
@@ -197,19 +198,19 @@ export type DeleteFeedItemResponse = z.infer<typeof DeleteFeedItemResponseSchema
  * @example POST /api/data/account/rec_123/feed/feed_001/reactions
  * { emoji: '👍' }
  */
-export const AddReactionRequestSchema = FeedItemPathParamsSchema.extend({
+export const AddReactionRequestSchema = lazySchema(() => FeedItemPathParamsSchema.extend({
   emoji: z.string().describe('Emoji character or shortcode (e.g., "👍", ":thumbsup:")'),
-});
+}));
 export type AddReactionRequest = z.infer<typeof AddReactionRequestSchema>;
 
 /**
  * Response after adding a reaction.
  */
-export const AddReactionResponseSchema = BaseResponseSchema.extend({
+export const AddReactionResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     reactions: z.array(ReactionSchema).describe('Updated reaction list for the feed item'),
   }),
-});
+}));
 export type AddReactionResponse = z.infer<typeof AddReactionResponseSchema>;
 
 /**
@@ -217,19 +218,19 @@ export type AddReactionResponse = z.infer<typeof AddReactionResponseSchema>;
  *
  * @example DELETE /api/data/account/rec_123/feed/feed_001/reactions/👍
  */
-export const RemoveReactionRequestSchema = FeedItemPathParamsSchema.extend({
+export const RemoveReactionRequestSchema = lazySchema(() => FeedItemPathParamsSchema.extend({
   emoji: z.string().describe('Emoji character or shortcode to remove'),
-});
+}));
 export type RemoveReactionRequest = z.infer<typeof RemoveReactionRequestSchema>;
 
 /**
  * Response after removing a reaction.
  */
-export const RemoveReactionResponseSchema = BaseResponseSchema.extend({
+export const RemoveReactionResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     reactions: z.array(ReactionSchema).describe('Updated reaction list for the feed item'),
   }),
-});
+}));
 export type RemoveReactionResponse = z.infer<typeof RemoveReactionResponseSchema>;
 
 // ==========================================
@@ -241,19 +242,19 @@ export type RemoveReactionResponse = z.infer<typeof RemoveReactionResponseSchema
  *
  * @example POST /api/data/account/rec_123/feed/feed_001/pin
  */
-export const PinFeedItemRequestSchema = FeedItemPathParamsSchema;
+export const PinFeedItemRequestSchema = lazySchema(() => FeedItemPathParamsSchema);
 export type PinFeedItemRequest = z.infer<typeof PinFeedItemRequestSchema>;
 
 /**
  * Response after pinning a feed item.
  */
-export const PinFeedItemResponseSchema = BaseResponseSchema.extend({
+export const PinFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     feedId: z.string().describe('ID of the pinned feed item'),
     pinned: z.boolean().describe('Whether the item is now pinned'),
     pinnedAt: z.string().datetime().describe('Timestamp when pinned'),
   }),
-});
+}));
 export type PinFeedItemResponse = z.infer<typeof PinFeedItemResponseSchema>;
 
 /**
@@ -261,18 +262,18 @@ export type PinFeedItemResponse = z.infer<typeof PinFeedItemResponseSchema>;
  *
  * @example DELETE /api/data/account/rec_123/feed/feed_001/pin
  */
-export const UnpinFeedItemRequestSchema = FeedItemPathParamsSchema;
+export const UnpinFeedItemRequestSchema = lazySchema(() => FeedItemPathParamsSchema);
 export type UnpinFeedItemRequest = z.infer<typeof UnpinFeedItemRequestSchema>;
 
 /**
  * Response after unpinning a feed item.
  */
-export const UnpinFeedItemResponseSchema = BaseResponseSchema.extend({
+export const UnpinFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     feedId: z.string().describe('ID of the unpinned feed item'),
     pinned: z.boolean().describe('Whether the item is now pinned (should be false)'),
   }),
-});
+}));
 export type UnpinFeedItemResponse = z.infer<typeof UnpinFeedItemResponseSchema>;
 
 /**
@@ -280,19 +281,19 @@ export type UnpinFeedItemResponse = z.infer<typeof UnpinFeedItemResponseSchema>;
  *
  * @example POST /api/data/account/rec_123/feed/feed_001/star
  */
-export const StarFeedItemRequestSchema = FeedItemPathParamsSchema;
+export const StarFeedItemRequestSchema = lazySchema(() => FeedItemPathParamsSchema);
 export type StarFeedItemRequest = z.infer<typeof StarFeedItemRequestSchema>;
 
 /**
  * Response after starring a feed item.
  */
-export const StarFeedItemResponseSchema = BaseResponseSchema.extend({
+export const StarFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     feedId: z.string().describe('ID of the starred feed item'),
     starred: z.boolean().describe('Whether the item is now starred'),
     starredAt: z.string().datetime().describe('Timestamp when starred'),
   }),
-});
+}));
 export type StarFeedItemResponse = z.infer<typeof StarFeedItemResponseSchema>;
 
 /**
@@ -300,18 +301,18 @@ export type StarFeedItemResponse = z.infer<typeof StarFeedItemResponseSchema>;
  *
  * @example DELETE /api/data/account/rec_123/feed/feed_001/star
  */
-export const UnstarFeedItemRequestSchema = FeedItemPathParamsSchema;
+export const UnstarFeedItemRequestSchema = lazySchema(() => FeedItemPathParamsSchema);
 export type UnstarFeedItemRequest = z.infer<typeof UnstarFeedItemRequestSchema>;
 
 /**
  * Response after unstarring a feed item.
  */
-export const UnstarFeedItemResponseSchema = BaseResponseSchema.extend({
+export const UnstarFeedItemResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     feedId: z.string().describe('ID of the unstarred feed item'),
     starred: z.boolean().describe('Whether the item is now starred (should be false)'),
   }),
-});
+}));
 export type UnstarFeedItemResponse = z.infer<typeof UnstarFeedItemResponseSchema>;
 
 // ==========================================
@@ -323,7 +324,7 @@ export type UnstarFeedItemResponse = z.infer<typeof UnstarFeedItemResponseSchema
  *
  * @example GET /api/data/account/rec_123/feed/search?query=follow+up&actorId=user_456&dateFrom=2026-01-01T00:00:00Z
  */
-export const SearchFeedRequestSchema = FeedPathParamsSchema.extend({
+export const SearchFeedRequestSchema = lazySchema(() => FeedPathParamsSchema.extend({
   query: z.string().min(1).describe('Full-text search query against feed body content'),
   type: FeedListFilterType.optional()
     .describe('Filter by feed item category'),
@@ -343,20 +344,20 @@ export const SearchFeedRequestSchema = FeedPathParamsSchema.extend({
     .describe('Maximum number of items to return'),
   cursor: z.string().optional()
     .describe('Cursor for pagination'),
-});
+}));
 export type SearchFeedRequest = z.infer<typeof SearchFeedRequestSchema>;
 
 /**
  * Response for the feed search endpoint.
  */
-export const SearchFeedResponseSchema = BaseResponseSchema.extend({
+export const SearchFeedResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     items: z.array(FeedItemSchema).describe('Matching feed items sorted by relevance'),
     total: z.number().int().optional().describe('Total matching items'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more items are available'),
   }),
-});
+}));
 export type SearchFeedResponse = z.infer<typeof SearchFeedResponseSchema>;
 
 // ==========================================
@@ -368,7 +369,7 @@ export type SearchFeedResponse = z.infer<typeof SearchFeedResponseSchema>;
  *
  * @example GET /api/data/account/rec_123/changelog?field=status&limit=50
  */
-export const GetChangelogRequestSchema = FeedPathParamsSchema.extend({
+export const GetChangelogRequestSchema = lazySchema(() => FeedPathParamsSchema.extend({
   field: z.string().optional()
     .describe('Filter changelog to a specific field name'),
   actorId: z.string().optional()
@@ -381,13 +382,13 @@ export const GetChangelogRequestSchema = FeedPathParamsSchema.extend({
     .describe('Maximum number of changelog entries to return'),
   cursor: z.string().optional()
     .describe('Cursor for pagination'),
-});
+}));
 export type GetChangelogRequest = z.infer<typeof GetChangelogRequestSchema>;
 
 /**
  * A single changelog entry representing one or more field changes at a point in time.
  */
-export const ChangelogEntrySchema = z.object({
+export const ChangelogEntrySchema = lazySchema(() => z.object({
   id: z.string().describe('Changelog entry ID'),
   object: z.string().describe('Object name'),
   recordId: z.string().describe('Record ID'),
@@ -399,20 +400,20 @@ export const ChangelogEntrySchema = z.object({
   changes: z.array(FieldChangeEntrySchema).min(1).describe('Field-level changes'),
   timestamp: z.string().datetime().describe('When the change occurred'),
   source: z.string().optional().describe('Change source (e.g., "API", "UI", "automation")'),
-});
+}));
 export type ChangelogEntry = z.infer<typeof ChangelogEntrySchema>;
 
 /**
  * Response for the changelog endpoint.
  */
-export const GetChangelogResponseSchema = BaseResponseSchema.extend({
+export const GetChangelogResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     entries: z.array(ChangelogEntrySchema).describe('Changelog entries in reverse chronological order'),
     total: z.number().int().optional().describe('Total changelog entries matching filter'),
     nextCursor: z.string().optional().describe('Cursor for the next page'),
     hasMore: z.boolean().describe('Whether more entries are available'),
   }),
-});
+}));
 export type GetChangelogResponse = z.infer<typeof GetChangelogResponseSchema>;
 
 // ==========================================
@@ -425,20 +426,20 @@ export type GetChangelogResponse = z.infer<typeof GetChangelogResponseSchema>;
  * @example POST /api/data/account/rec_123/subscribe
  * { events: ['comment', 'field_change'], channels: ['in_app', 'email'] }
  */
-export const SubscribeRequestSchema = FeedPathParamsSchema.extend({
+export const SubscribeRequestSchema = lazySchema(() => FeedPathParamsSchema.extend({
   events: z.array(SubscriptionEventType).default(['all'])
     .describe('Event types to subscribe to'),
   channels: z.array(NotificationChannel).default(['in_app'])
     .describe('Notification delivery channels'),
-});
+}));
 export type SubscribeRequest = z.infer<typeof SubscribeRequestSchema>;
 
 /**
  * Response after subscribing.
  */
-export const SubscribeResponseSchema = BaseResponseSchema.extend({
+export const SubscribeResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: RecordSubscriptionSchema.describe('The created or updated subscription'),
-});
+}));
 export type SubscribeResponse = z.infer<typeof SubscribeResponseSchema>;
 
 /**
@@ -446,19 +447,19 @@ export type SubscribeResponse = z.infer<typeof SubscribeResponseSchema>;
  *
  * @example DELETE /api/data/account/rec_123/subscribe
  */
-export const FeedUnsubscribeRequestSchema = FeedPathParamsSchema;
+export const FeedUnsubscribeRequestSchema = lazySchema(() => FeedPathParamsSchema);
 export type FeedUnsubscribeRequest = z.infer<typeof FeedUnsubscribeRequestSchema>;
 
 /**
  * Response after unsubscribing.
  */
-export const UnsubscribeResponseSchema = BaseResponseSchema.extend({
+export const UnsubscribeResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     object: z.string().describe('Object name'),
     recordId: z.string().describe('Record ID'),
     unsubscribed: z.boolean().describe('Whether the user was unsubscribed'),
   }),
-});
+}));
 export type UnsubscribeResponse = z.infer<typeof UnsubscribeResponseSchema>;
 
 // ==========================================

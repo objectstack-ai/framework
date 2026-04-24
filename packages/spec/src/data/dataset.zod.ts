@@ -6,6 +6,7 @@ import { z } from 'zod';
  * Data Import Strategy
  * Defines how the engine handles existing records.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const DatasetMode = z.enum([
   'insert',    // Try to insert, fail on duplicate
   'update',    // Only update found records, ignore new
@@ -23,7 +24,7 @@ export const DatasetMode = z.enum([
  * 2. Reference Data (Countries, Currencies)
  * 3. Demo/Test Data
  */
-export const DatasetSchema = z.object({
+export const DatasetSchema = lazySchema(() => z.object({
   /** 
    * Target Object 
    * The machine name of the object to populate.
@@ -56,7 +57,7 @@ export const DatasetSchema = z.object({
    * Array of raw JSON objects matching the Object Schema.
    */
   records: z.array(z.record(z.string(), z.unknown())).describe('Data records'),
-});
+}));
 
 /** Parsed/output type — all defaults are applied (env, mode, externalId always present) */
 export type Dataset = z.infer<typeof DatasetSchema>;

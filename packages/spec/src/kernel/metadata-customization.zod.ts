@@ -40,19 +40,20 @@ import { z } from 'zod';
  * Customization Origin
  * Identifies who created the customization.
  */
-export const CustomizationOriginSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const CustomizationOriginSchema = lazySchema(() => z.enum([
   'package',   // Delivered by a plugin package (system layer, read-only)
   'admin',     // Created/modified by platform admin via UI
   'user',      // Created/modified by end user via UI
   'migration', // Created during data migration
   'api',       // Created via API
-]);
+]));
 
 /**
  * Field-Level Change Tracking
  * Records exactly which fields were modified by the customer.
  */
-export const FieldChangeSchema = z.object({
+export const FieldChangeSchema = lazySchema(() => z.object({
   /** JSON path to the changed field (e.g. "fields.status.label") */
   path: z.string().describe('JSON path to the changed field'),
 
@@ -67,7 +68,7 @@ export const FieldChangeSchema = z.object({
 
   /** When this change was made */
   changedAt: z.string().datetime().optional().describe('Timestamp of the change'),
-});
+}));
 
 /**
  * Metadata Overlay Schema
@@ -102,7 +103,7 @@ export const FieldChangeSchema = z.object({
  *     currentValue: "Account Status"
  * ```
  */
-export const MetadataOverlaySchema = z.object({
+export const MetadataOverlaySchema = lazySchema(() => z.object({
   /** Primary key */
   id: z.string().describe('Overlay record ID (UUID)'),
 
@@ -152,7 +153,7 @@ export const MetadataOverlaySchema = z.object({
   createdBy: z.string().optional(),
   updatedAt: z.string().datetime().optional(),
   updatedBy: z.string().optional(),
-});
+}));
 
 // ==========================================
 // Merge & Conflict Resolution
@@ -162,7 +163,7 @@ export const MetadataOverlaySchema = z.object({
  * Merge Conflict
  * Represents a conflict between package update and customer customization.
  */
-export const MergeConflictSchema = z.object({
+export const MergeConflictSchema = lazySchema(() => z.object({
   /** JSON path to the conflicting field */
   path: z.string().describe('JSON path to the conflicting field'),
 
@@ -184,13 +185,13 @@ export const MergeConflictSchema = z.object({
 
   /** Reason for the suggested resolution */
   reason: z.string().optional().describe('Explanation for the suggested resolution'),
-});
+}));
 
 /**
  * Merge Strategy Configuration
  * Controls how metadata merging behaves during package upgrades.
  */
-export const MergeStrategyConfigSchema = z.object({
+export const MergeStrategyConfigSchema = lazySchema(() => z.object({
   /** Default strategy when no field-level rule matches */
   defaultStrategy: z.enum([
     'keep-custom',     // Preserve all customer customizations (safe)
@@ -217,13 +218,13 @@ export const MergeStrategyConfigSchema = z.object({
   /** Whether to automatically resolve non-conflicting changes */
   autoResolveNonConflicting: z.boolean().default(true)
     .describe('Auto-resolve changes that do not conflict'),
-});
+}));
 
 /**
  * Merge Result
  * Result of a 3-way merge operation during package upgrade.
  */
-export const MergeResultSchema = z.object({
+export const MergeResultSchema = lazySchema(() => z.object({
   /** Whether the merge completed successfully (no unresolved conflicts) */
   success: z.boolean().describe('Whether merge completed without unresolved conflicts'),
 
@@ -253,7 +254,7 @@ export const MergeResultSchema = z.object({
     autoResolved: z.number().int().min(0).describe('Fields auto-resolved'),
     conflicts: z.number().int().min(0).describe('Fields with conflicts'),
   }).optional(),
-});
+}));
 
 // ==========================================
 // Customization Management
@@ -264,7 +265,7 @@ export const MergeResultSchema = z.object({
  * Defines what parts of a metadata item can be customized by admins/users.
  * Package vendors use this to control customization boundaries.
  */
-export const CustomizationPolicySchema = z.object({
+export const CustomizationPolicySchema = lazySchema(() => z.object({
   /** Metadata type this policy applies to */
   metadataType: z.string().describe('Metadata type (e.g. "object", "view")'),
 
@@ -299,7 +300,7 @@ export const CustomizationPolicySchema = z.object({
    */
   allowDeleteFields: z.boolean().default(false)
     .describe('Whether admins can delete package-delivered fields'),
-});
+}));
 
 // ==========================================
 // Export Types

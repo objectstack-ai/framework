@@ -16,24 +16,25 @@ import { FileMetadataSchema } from '../system/object-storage.zod';
 // Requests
 // ==========================================
 
-export const GetPresignedUrlRequestSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const GetPresignedUrlRequestSchema = lazySchema(() => z.object({
   filename: z.string().describe('Original filename'),
   mimeType: z.string().describe('File MIME type'),
   size: z.number().describe('File size in bytes'),
   scope: z.string().default('user').describe('Target storage scope (e.g. user, private, public)'),
   bucket: z.string().optional().describe('Specific bucket override (admin only)'),
-});
+}));
 
-export const CompleteUploadRequestSchema = z.object({
+export const CompleteUploadRequestSchema = lazySchema(() => z.object({
   fileId: z.string().describe('File ID returned from presigned request'),
   eTag: z.string().optional().describe('S3 ETag verification'),
-});
+}));
 
 // ==========================================
 // Responses
 // ==========================================
 
-export const PresignedUrlResponseSchema = BaseResponseSchema.extend({
+export const PresignedUrlResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     uploadUrl: z.string().describe('PUT/POST URL for direct upload'),
     downloadUrl: z.string().optional().describe('Public/Private preview URL'),
@@ -42,11 +43,11 @@ export const PresignedUrlResponseSchema = BaseResponseSchema.extend({
     headers: z.record(z.string(), z.string()).optional().describe('Required headers for upload'),
     expiresIn: z.number().describe('URL expiry in seconds'),
   }),
-});
+}));
 
-export const FileUploadResponseSchema = BaseResponseSchema.extend({
+export const FileUploadResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: FileMetadataSchema.describe('Uploaded file metadata'),
-});
+}));
 
 export type GetPresignedUrlRequest = z.infer<typeof GetPresignedUrlRequestSchema>;
 export type CompleteUploadRequest = z.infer<typeof CompleteUploadRequestSchema>;
@@ -64,7 +65,7 @@ export type FileUploadResponse = z.infer<typeof FileUploadResponseSchema>;
  * @example Allow images only
  * { mode: 'whitelist', mimeTypes: ['image/jpeg', 'image/png', 'image/webp'], maxFileSize: 10485760 }
  */
-export const FileTypeValidationSchema = z.object({
+export const FileTypeValidationSchema = lazySchema(() => z.object({
   mode: z.enum(['whitelist', 'blacklist'])
     .describe('whitelist = only allow listed types, blacklist = block listed types'),
   mimeTypes: z.array(z.string()).min(1)
@@ -75,7 +76,7 @@ export const FileTypeValidationSchema = z.object({
     .describe('Maximum file size in bytes'),
   minFileSize: z.number().int().min(0).optional()
     .describe('Minimum file size in bytes (e.g., reject empty files)'),
-});
+}));
 export type FileTypeValidation = z.infer<typeof FileTypeValidationSchema>;
 
 /**
@@ -85,7 +86,7 @@ export type FileTypeValidation = z.infer<typeof FileTypeValidationSchema>;
  * @example POST /api/v1/storage/upload/chunked
  * { filename: 'large-video.mp4', mimeType: 'video/mp4', totalSize: 1073741824, chunkSize: 5242880 }
  */
-export const InitiateChunkedUploadRequestSchema = z.object({
+export const InitiateChunkedUploadRequestSchema = lazySchema(() => z.object({
   filename: z.string().describe('Original filename'),
   mimeType: z.string().describe('File MIME type'),
   totalSize: z.number().int().min(1).describe('Total file size in bytes'),
@@ -94,14 +95,14 @@ export const InitiateChunkedUploadRequestSchema = z.object({
   scope: z.string().default('user').describe('Target storage scope'),
   bucket: z.string().optional().describe('Specific bucket override (admin only)'),
   metadata: z.record(z.string(), z.string()).optional().describe('Custom metadata key-value pairs'),
-});
+}));
 export type InitiateChunkedUploadRequest = z.infer<typeof InitiateChunkedUploadRequestSchema>;
 
 /**
  * Initiate Chunked Upload Response
  * Returns a resume token and upload session details.
  */
-export const InitiateChunkedUploadResponseSchema = BaseResponseSchema.extend({
+export const InitiateChunkedUploadResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     uploadId: z.string().describe('Multipart upload session ID'),
     resumeToken: z.string().describe('Opaque token for resuming interrupted uploads'),
@@ -110,7 +111,7 @@ export const InitiateChunkedUploadResponseSchema = BaseResponseSchema.extend({
     chunkSize: z.number().int().describe('Chunk size in bytes'),
     expiresAt: z.string().datetime().describe('Upload session expiration timestamp'),
   }),
-});
+}));
 export type InitiateChunkedUploadResponse = z.infer<typeof InitiateChunkedUploadResponseSchema>;
 
 /**
@@ -119,24 +120,24 @@ export type InitiateChunkedUploadResponse = z.infer<typeof InitiateChunkedUpload
  *
  * @example PUT /api/v1/storage/upload/chunked/:uploadId/chunk/:chunkIndex
  */
-export const UploadChunkRequestSchema = z.object({
+export const UploadChunkRequestSchema = lazySchema(() => z.object({
   uploadId: z.string().describe('Multipart upload session ID'),
   chunkIndex: z.number().int().min(0).describe('Zero-based chunk index'),
   resumeToken: z.string().describe('Resume token from initiate response'),
-});
+}));
 export type UploadChunkRequest = z.infer<typeof UploadChunkRequestSchema>;
 
 /**
  * Upload Chunk Response
  * Confirms a single chunk upload with ETag for assembly.
  */
-export const UploadChunkResponseSchema = BaseResponseSchema.extend({
+export const UploadChunkResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     chunkIndex: z.number().int().describe('Chunk index that was uploaded'),
     eTag: z.string().describe('Chunk ETag for multipart completion'),
     bytesReceived: z.number().int().describe('Bytes received for this chunk'),
   }),
-});
+}));
 export type UploadChunkResponse = z.infer<typeof UploadChunkResponseSchema>;
 
 /**
@@ -145,20 +146,20 @@ export type UploadChunkResponse = z.infer<typeof UploadChunkResponseSchema>;
  *
  * @example POST /api/v1/storage/upload/chunked/:uploadId/complete
  */
-export const CompleteChunkedUploadRequestSchema = z.object({
+export const CompleteChunkedUploadRequestSchema = lazySchema(() => z.object({
   uploadId: z.string().describe('Multipart upload session ID'),
   parts: z.array(z.object({
     chunkIndex: z.number().int().describe('Chunk index'),
     eTag: z.string().describe('ETag returned from chunk upload'),
   })).min(1).describe('Ordered list of uploaded parts for assembly'),
-});
+}));
 export type CompleteChunkedUploadRequest = z.infer<typeof CompleteChunkedUploadRequestSchema>;
 
 /**
  * Complete Chunked Upload Response
  * Confirms that all chunks have been assembled into the final file.
  */
-export const CompleteChunkedUploadResponseSchema = BaseResponseSchema.extend({
+export const CompleteChunkedUploadResponseSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     fileId: z.string().describe('Final file ID'),
     key: z.string().describe('Storage key/path of the assembled file'),
@@ -167,7 +168,7 @@ export const CompleteChunkedUploadResponseSchema = BaseResponseSchema.extend({
     eTag: z.string().optional().describe('Final ETag of the assembled file'),
     url: z.string().optional().describe('Download URL for the assembled file'),
   }),
-});
+}));
 export type CompleteChunkedUploadResponse = z.infer<typeof CompleteChunkedUploadResponseSchema>;
 
 /**
@@ -176,7 +177,7 @@ export type CompleteChunkedUploadResponse = z.infer<typeof CompleteChunkedUpload
  *
  * @example GET /api/v1/storage/upload/chunked/:uploadId/progress
  */
-export const UploadProgressSchema = BaseResponseSchema.extend({
+export const UploadProgressSchema = lazySchema(() => BaseResponseSchema.extend({
   data: z.object({
     uploadId: z.string().describe('Multipart upload session ID'),
     fileId: z.string().describe('Assigned file ID'),
@@ -191,7 +192,7 @@ export const UploadProgressSchema = BaseResponseSchema.extend({
     startedAt: z.string().datetime().describe('Upload session start timestamp'),
     expiresAt: z.string().datetime().describe('Session expiration timestamp'),
   }),
-});
+}));
 export type UploadProgress = z.infer<typeof UploadProgressSchema>;
 
 // ==========================================

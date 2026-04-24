@@ -14,7 +14,8 @@ import { PluginCapabilityManifestSchema } from './plugin-capability.zod';
 /**
  * Plugin Vendor Information
  */
-export const PluginVendorSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PluginVendorSchema = lazySchema(() => z.object({
   /**
    * Vendor identifier (reverse domain notation)
    * Example: "com.acme", "org.apache", "com.objectstack"
@@ -47,12 +48,12 @@ export const PluginVendorSchema = z.object({
    * Trust level
    */
   trustLevel: z.enum(['official', 'verified', 'community', 'unverified']).default('unverified'),
-});
+}));
 
 /**
  * Plugin Quality Metrics
  */
-export const PluginQualityMetricsSchema = z.object({
+export const PluginQualityMetricsSchema = lazySchema(() => z.object({
   /**
    * Test coverage percentage
    */
@@ -92,12 +93,12 @@ export const PluginQualityMetricsSchema = z.object({
     passedTests: z.number().int().min(0),
     lastRunDate: z.string().datetime().optional(),
   })).optional(),
-});
+}));
 
 /**
  * Plugin Usage Statistics
  */
-export const PluginStatisticsSchema = z.object({
+export const PluginStatisticsSchema = lazySchema(() => z.object({
   /**
    * Total downloads
    */
@@ -137,13 +138,13 @@ export const PluginStatisticsSchema = z.object({
    * Number of dependent plugins
    */
   dependents: z.number().int().min(0).default(0),
-});
+}));
 
 /**
  * Plugin Registry Entry
  * Complete metadata for a plugin in the registry.
  */
-export const PluginRegistryEntrySchema = z.object({
+export const PluginRegistryEntrySchema = lazySchema(() => z.object({
   /**
    * Plugin identifier (must match manifest.id)
    */
@@ -296,12 +297,12 @@ export const PluginRegistryEntrySchema = z.object({
     featured: z.boolean().default(false),
     verified: z.boolean().default(false),
   }).optional(),
-});
+}));
 
 /**
  * Plugin Search Filters
  */
-export const PluginSearchFiltersSchema = z.object({
+export const PluginSearchFiltersSchema = lazySchema(() => z.object({
   /**
    * Search query
    */
@@ -358,12 +359,12 @@ export const PluginSearchFiltersSchema = z.object({
    */
   page: z.number().int().min(1).default(1).optional(),
   limit: z.number().int().min(1).max(100).default(20).optional(),
-});
+}));
 
 /**
  * Plugin Installation Configuration
  */
-export const PluginInstallConfigSchema = z.object({
+export const PluginInstallConfigSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier to install
    */
@@ -403,7 +404,7 @@ export const PluginInstallConfigSchema = z.object({
      */
     target: z.enum(['system', 'space', 'user']).default('space').optional(),
   }).optional(),
-});
+}));
 
 // Export types
 export type PluginVendor = z.infer<typeof PluginVendorSchema>;

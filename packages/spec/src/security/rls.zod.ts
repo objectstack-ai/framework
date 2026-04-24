@@ -103,6 +103,7 @@ import { z } from 'zod';
  * - **delete**: Controls which rows can be deleted (DELETE statements)
  * - **all**: Shorthand for all operations (equivalent to defining 4 separate policies)
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const RLSOperation = z.enum(['select', 'insert', 'update', 'delete', 'all']);
 
 export type RLSOperation = z.infer<typeof RLSOperation>;
@@ -201,7 +202,7 @@ export type RLSOperation = z.infer<typeof RLSOperation>;
  * }
  * ```
  */
-export const RowLevelSecurityPolicySchema = z.object({
+export const RowLevelSecurityPolicySchema = lazySchema(() => z.object({
   /**
    * Unique identifier for this policy.
    * Must be unique within the object.
@@ -395,14 +396,14 @@ export const RowLevelSecurityPolicySchema = z.object({
   // For non-insert operations, USING should typically be present
   // This is a soft warning through documentation, not enforced here
   // since 'all' and mixed operation types are valid
-});
+}));
 
 /**
  * RLS Audit Event Schema
  * 
  * Records a single RLS policy evaluation event for compliance and debugging.
  */
-export const RLSAuditEventSchema = z.object({
+export const RLSAuditEventSchema = lazySchema(() => z.object({
   /** ISO 8601 timestamp of the evaluation */
   timestamp: z.string()
     .describe('ISO 8601 timestamp of the evaluation'),
@@ -445,7 +446,7 @@ export const RLSAuditEventSchema = z.object({
   metadata: z.record(z.string(), z.unknown())
     .optional()
     .describe('Additional audit event metadata'),
-});
+}));
 
 export type RLSAuditEvent = z.infer<typeof RLSAuditEventSchema>;
 
@@ -454,7 +455,7 @@ export type RLSAuditEvent = z.infer<typeof RLSAuditEventSchema>;
  * 
  * Controls how RLS policy evaluations are logged and monitored.
  */
-export const RLSAuditConfigSchema = z.object({
+export const RLSAuditConfigSchema = lazySchema(() => z.object({
   /** Enable RLS audit logging */
   enabled: z.boolean()
     .describe('Enable RLS audit logging'),
@@ -488,7 +489,7 @@ export const RLSAuditConfigSchema = z.object({
   alertOnDenied: z.boolean()
     .default(true)
     .describe('Send alerts when access is denied'),
-});
+}));
 
 export type RLSAuditConfig = z.infer<typeof RLSAuditConfigSchema>;
 
@@ -498,7 +499,7 @@ export type RLSAuditConfig = z.infer<typeof RLSAuditConfigSchema>;
  * Global configuration for the Row-Level Security system.
  * Defines how RLS is enforced across the entire platform.
  */
-export const RLSConfigSchema = z.object({
+export const RLSConfigSchema = lazySchema(() => z.object({
   /**
    * Global RLS enable/disable flag.
    * When false, all RLS policies are ignored (use with caution!).
@@ -591,7 +592,7 @@ export const RLSConfigSchema = z.object({
   audit: RLSAuditConfigSchema
     .optional()
     .describe('RLS audit logging configuration'),
-});
+}));
 
 /**
  * User Context Schema
@@ -599,7 +600,7 @@ export const RLSConfigSchema = z.object({
  * Represents the current user's context for RLS evaluation.
  * This data is used to evaluate USING and CHECK clauses.
  */
-export const RLSUserContextSchema = z.object({
+export const RLSUserContextSchema = lazySchema(() => z.object({
   /**
    * User ID
    */
@@ -645,7 +646,7 @@ export const RLSUserContextSchema = z.object({
   attributes: z.record(z.string(), z.unknown())
     .optional()
     .describe('Additional custom user attributes'),
-});
+}));
 
 /**
  * RLS Policy Evaluation Result
@@ -653,7 +654,7 @@ export const RLSUserContextSchema = z.object({
  * Result of evaluating an RLS policy for a specific record.
  * Used for debugging and audit logging.
  */
-export const RLSEvaluationResultSchema = z.object({
+export const RLSEvaluationResultSchema = lazySchema(() => z.object({
   /**
    * Policy name that was evaluated
    */
@@ -693,7 +694,7 @@ export const RLSEvaluationResultSchema = z.object({
   checkResult: z.boolean()
     .optional()
     .describe('CHECK clause evaluation result'),
-});
+}));
 
 /**
  * Type exports

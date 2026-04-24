@@ -48,7 +48,8 @@ import { PublisherVerificationSchema } from './marketplace.zod';
  *
  * This schema only holds marketplace-specific publisher metadata.
  */
-export const PublisherProfileSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PublisherProfileSchema = lazySchema(() => z.object({
   /** Organization ID (references Identity.Organization.id) */
   organizationId: z.string().describe('Identity Organization ID'),
 
@@ -69,7 +70,7 @@ export const PublisherProfileSchema = z.object({
 
   /** Registration timestamp (when org became a publisher) */
   registeredAt: z.string().datetime(),
-});
+}));
 
 // ==========================================
 // Version Channels & Release Management
@@ -78,19 +79,19 @@ export const PublisherProfileSchema = z.object({
 /**
  * Release Channel — allows pre-release distribution
  */
-export const ReleaseChannelSchema = z.enum([
+export const ReleaseChannelSchema = lazySchema(() => z.enum([
   'alpha',          // Early development, unstable
   'beta',           // Feature-complete, testing phase
   'rc',             // Release candidate, final testing
   'stable',         // Production-ready, general availability
-]);
+]));
 
 /**
  * Version Release Schema
  *
  * A single version release of a package with channel assignment.
  */
-export const VersionReleaseSchema = z.object({
+export const VersionReleaseSchema = lazySchema(() => z.object({
   /** Semver version string */
   version: z.string().describe('Semver version (e.g., 2.1.0-beta.1)'),
 
@@ -123,7 +124,7 @@ export const VersionReleaseSchema = z.object({
 
   /** Release timestamp */
   releasedAt: z.string().datetime().optional(),
-});
+}));
 
 // ==========================================
 // App Listing Management (Developer CRUD)
@@ -132,7 +133,7 @@ export const VersionReleaseSchema = z.object({
 /**
  * Create Listing Request — developer creates a new marketplace listing
  */
-export const CreateListingRequestSchema = z.object({
+export const CreateListingRequestSchema = lazySchema(() => z.object({
   /** Package ID (reverse domain, e.g., com.acme.crm) */
   packageId: z.string().describe('Package identifier'),
 
@@ -176,12 +177,12 @@ export const CreateListingRequestSchema = z.object({
 
   /** Price in cents (if paid) */
   priceInCents: z.number().int().min(0).optional(),
-});
+}));
 
 /**
  * Update Listing Request — developer updates listing metadata
  */
-export const UpdateListingRequestSchema = z.object({
+export const UpdateListingRequestSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string().describe('Listing ID to update'),
 
@@ -203,12 +204,12 @@ export const UpdateListingRequestSchema = z.object({
     'free', 'freemium', 'paid', 'subscription', 'usage-based', 'contact-sales',
   ]).optional(),
   priceInCents: z.number().int().min(0).optional(),
-});
+}));
 
 /**
  * Listing Action Request — lifecycle actions on a listing
  */
-export const ListingActionRequestSchema = z.object({
+export const ListingActionRequestSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string().describe('Listing ID'),
 
@@ -222,7 +223,7 @@ export const ListingActionRequestSchema = z.object({
 
   /** Reason for action (e.g., deprecation message) */
   reason: z.string().optional(),
-});
+}));
 
 // ==========================================
 // Publishing Analytics (Developer Dashboard)
@@ -231,18 +232,18 @@ export const ListingActionRequestSchema = z.object({
 /**
  * Analytics Time Range
  */
-export const AnalyticsTimeRangeSchema = z.enum([
+export const AnalyticsTimeRangeSchema = lazySchema(() => z.enum([
   'last_7d',
   'last_30d',
   'last_90d',
   'last_365d',
   'all_time',
-]);
+]));
 
 /**
  * Publishing Analytics Request
  */
-export const PublishingAnalyticsRequestSchema = z.object({
+export const PublishingAnalyticsRequestSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string().describe('Listing to get analytics for'),
 
@@ -258,22 +259,22 @@ export const PublishingAnalyticsRequestSchema = z.object({
     'revenue',        // Revenue (for paid apps)
     'page_views',     // Listing page views
   ])).optional().describe('Metrics to include (default: all)'),
-});
+}));
 
 /**
  * Time Series Data Point
  */
-export const TimeSeriesPointSchema = z.object({
+export const TimeSeriesPointSchema = lazySchema(() => z.object({
   /** ISO date string (day granularity) */
   date: z.string(),
   /** Metric value */
   value: z.number(),
-});
+}));
 
 /**
  * Publishing Analytics Response
  */
-export const PublishingAnalyticsResponseSchema = z.object({
+export const PublishingAnalyticsResponseSchema = lazySchema(() => z.object({
   /** Listing ID */
   listingId: z.string(),
 
@@ -303,7 +304,7 @@ export const PublishingAnalyticsResponseSchema = z.object({
     4: z.number().int().min(0).default(0),
     5: z.number().int().min(0).default(0),
   }).optional(),
-});
+}));
 
 // ==========================================
 // Export Types

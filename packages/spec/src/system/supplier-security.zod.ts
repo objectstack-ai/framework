@@ -19,32 +19,33 @@ import { DataClassificationSchema } from './security-context.zod';
  * Risk classification for supplier relationships based on data access
  * and service criticality.
  */
-export const SupplierRiskLevelSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const SupplierRiskLevelSchema = lazySchema(() => z.enum([
   'critical',  // Direct access to sensitive data or core infrastructure
   'high',      // Significant data processing or service dependency
   'medium',    // Limited data access with moderate dependency
   'low',       // Minimal data access and low service dependency
-]);
+]));
 
 /**
  * Supplier Assessment Status Schema
  *
  * Current status of a supplier security assessment.
  */
-export const SupplierAssessmentStatusSchema = z.enum([
+export const SupplierAssessmentStatusSchema = lazySchema(() => z.enum([
   'pending',      // Assessment not yet started
   'in_progress',  // Assessment currently underway
   'completed',    // Assessment completed
   'expired',      // Assessment past its validity period
   'failed',       // Supplier did not meet security requirements
-]);
+]));
 
 /**
  * Supplier Security Requirement Schema
  *
  * Individual security requirement to assess against a supplier (A.5.20).
  */
-export const SupplierSecurityRequirementSchema = z.object({
+export const SupplierSecurityRequirementSchema = lazySchema(() => z.object({
   /**
    * Requirement identifier
    */
@@ -78,7 +79,7 @@ export const SupplierSecurityRequirementSchema = z.object({
    */
   evidence: z.string().optional()
     .describe('Compliance evidence or assessment notes'),
-}).describe('Individual supplier security requirement');
+}).describe('Individual supplier security requirement'));
 
 export type SupplierSecurityRequirement = z.infer<typeof SupplierSecurityRequirementSchema>;
 
@@ -111,7 +112,7 @@ export type SupplierSecurityRequirement = z.infer<typeof SupplierSecurityRequire
  * }
  * ```
  */
-export const SupplierSecurityAssessmentSchema = z.object({
+export const SupplierSecurityAssessmentSchema = lazySchema(() => z.object({
   /**
    * Unique supplier identifier
    */
@@ -192,14 +193,14 @@ export const SupplierSecurityAssessmentSchema = z.object({
    */
   metadata: z.record(z.string(), z.unknown()).optional()
     .describe('Custom metadata key-value pairs'),
-}).describe('Supplier security assessment record per ISO 27001:2022 A.5.19–A.5.21');
+}).describe('Supplier security assessment record per ISO 27001:2022 A.5.19–A.5.21'));
 
 /**
  * Supplier Security Policy Schema
  *
  * Organization-level supplier security management policy (A.5.22).
  */
-export const SupplierSecurityPolicySchema = z.object({
+export const SupplierSecurityPolicySchema = lazySchema(() => z.object({
   /**
    * Whether supplier security management is enabled
    */
@@ -235,7 +236,7 @@ export const SupplierSecurityPolicySchema = z.object({
    */
   requiredCertifications: z.array(z.string()).default([])
     .describe('Required certifications for critical-risk suppliers'),
-}).describe('Organization-level supplier security management policy per ISO 27001:2022');
+}).describe('Organization-level supplier security management policy per ISO 27001:2022'));
 
 // Type exports
 export type SupplierRiskLevel = z.infer<typeof SupplierRiskLevelSchema>;

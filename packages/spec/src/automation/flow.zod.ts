@@ -5,6 +5,7 @@ import { z } from 'zod';
 /**
  * Flow Node Types
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const FlowNodeAction = z.enum([
   'start',              // Trigger
   'end',                // Return/Stop
@@ -30,12 +31,12 @@ export const FlowNodeAction = z.enum([
  * Flow Variable Schema
  * Variables available within the flow execution context.
  */
-export const FlowVariableSchema = z.object({
+export const FlowVariableSchema = lazySchema(() => z.object({
   name: z.string().describe('Variable name'),
   type: z.string().describe('Data type (text, number, boolean, object, list)'),
   isInput: z.boolean().default(false).describe('Is input parameter'),
   isOutput: z.boolean().default(false).describe('Is output parameter'),
-});
+}));
 
 /**
  * Flow Node Schema
@@ -55,7 +56,7 @@ export const FlowVariableSchema = z.object({
  *   position: { x: 300, y: 200 }
  * }
  */
-export const FlowNodeSchema = z.object({
+export const FlowNodeSchema = lazySchema(() => z.object({
   id: z.string().describe('Node unique ID'),
   type: FlowNodeAction.describe('Action type'),
   label: z.string().describe('Node label'),
@@ -132,13 +133,13 @@ export const FlowNodeSchema = z.object({
     /** Signal name — only for signal boundary events */
     signalName: z.string().optional().describe('Named signal to catch'),
   }).optional().describe('Configuration for boundary events attached to host nodes'),
-});
+}));
 
 /**
  * Flow Edge Schema
  * Connections between nodes.
  */
-export const FlowEdgeSchema = z.object({
+export const FlowEdgeSchema = lazySchema(() => z.object({
   id: z.string().describe('Edge unique ID'),
   source: z.string().describe('Source Node ID'),
   target: z.string().describe('Target Node ID'),
@@ -157,7 +158,7 @@ export const FlowEdgeSchema = z.object({
    */
   isDefault: z.boolean().default(false)
     .describe('Marks this edge as the default path when no other conditions match'),
-});
+}));
 
 /**
  * Flow Schema
@@ -182,7 +183,7 @@ export const FlowEdgeSchema = z.object({
  *   ]
  * }
  */
-export const FlowSchema = z.object({
+export const FlowSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Machine name'),
   label: z.string().describe('Flow label'),
@@ -217,7 +218,7 @@ export const FlowSchema = z.object({
     jitter: z.boolean().default(false).describe('Add random jitter to retry delay to avoid thundering herd'),
     fallbackNodeId: z.string().optional().describe('Node ID to jump to on unrecoverable error'),
   }).optional().describe('Flow-level error handling configuration'),
-});
+}));
 
 /**
  * Type-safe factory for creating flow definitions.
@@ -255,14 +256,14 @@ export type FlowEdgeParsed = z.infer<typeof FlowEdgeSchema>;
  *
  * Industry alignment: Salesforce Flow Versions, n8n Workflow History.
  */
-export const FlowVersionHistorySchema = z.object({
+export const FlowVersionHistorySchema = lazySchema(() => z.object({
   flowName: z.string().describe('Flow machine name'),
   version: z.number().int().min(1).describe('Version number'),
   definition: FlowSchema.describe('Complete flow definition snapshot'),
   createdAt: z.string().datetime().describe('When this version was created'),
   createdBy: z.string().optional().describe('User who created this version'),
   changeNote: z.string().optional().describe('Description of what changed in this version'),
-});
+}));
 
 export type FlowVersionHistory = z.input<typeof FlowVersionHistorySchema>;
 export type FlowVersionHistoryParsed = z.infer<typeof FlowVersionHistorySchema>;

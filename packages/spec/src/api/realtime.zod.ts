@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { RealtimeRecordAction, BasePresenceSchema } from './realtime-shared.zod';
 
 // Re-export shared types for backward compatibility
+import { lazySchema } from '../shared/lazy-schema';
 export { PresenceStatus, RealtimeRecordAction, BasePresenceSchema } from './realtime-shared.zod';
 export type { BasePresence } from './realtime-shared.zod';
 
@@ -36,22 +37,22 @@ export type RealtimeEventType = z.infer<typeof RealtimeEventType>;
  * Subscription Event Configuration
  * Defines what events to subscribe to with optional filtering
  */
-export const SubscriptionEventSchema = z.object({
+export const SubscriptionEventSchema = lazySchema(() => z.object({
   type: RealtimeEventType.describe('Type of event to subscribe to'),
   object: z.string().optional().describe('Object name to subscribe to'),
   filters: z.unknown().optional().describe('Filter conditions'),
-});
+}));
 
 /**
  * Subscription Schema
  * Configuration for subscribing to realtime events
  */
-export const SubscriptionSchema = z.object({
+export const SubscriptionSchema = lazySchema(() => z.object({
   id: z.string().uuid().describe('Unique subscription identifier'),
   events: z.array(SubscriptionEventSchema).describe('Array of events to subscribe to'),
   transport: TransportProtocol.describe('Transport protocol to use'),
   channel: z.string().optional().describe('Optional channel name for grouping subscriptions'),
-});
+}));
 
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 
@@ -60,7 +61,7 @@ export type Subscription = z.infer<typeof SubscriptionSchema>;
  * Tracks user online status and metadata.
  * Extends the shared BasePresenceSchema for transport-level presence tracking.
  */
-export const RealtimePresenceSchema = BasePresenceSchema;
+export const RealtimePresenceSchema = lazySchema(() => BasePresenceSchema);
 
 export type RealtimePresence = z.infer<typeof RealtimePresenceSchema>;
 
@@ -68,7 +69,7 @@ export type RealtimePresence = z.infer<typeof RealtimePresenceSchema>;
  * Realtime Event Schema
  * Represents a realtime synchronization event
  */
-export const RealtimeEventSchema = z.object({
+export const RealtimeEventSchema = lazySchema(() => z.object({
   id: z.string().uuid().describe('Unique event identifier'),
   type: z.string().describe('Event type (e.g., record.created, record.updated)'),
   object: z.string().optional().describe('Object name the event relates to'),
@@ -77,7 +78,7 @@ export const RealtimeEventSchema = z.object({
   timestamp: z.string().datetime().describe('ISO 8601 datetime when event occurred'),
   userId: z.string().optional().describe('User who triggered the event'),
   sessionId: z.string().optional().describe('Session identifier'),
-});
+}));
 
 export type RealtimeEvent = z.infer<typeof RealtimeEventSchema>;
 
@@ -86,7 +87,7 @@ export type RealtimeEvent = z.infer<typeof RealtimeEventSchema>;
  * 
  * Configuration for enabling realtime data synchronization.
  */
-export const RealtimeConfigSchema = z.object({
+export const RealtimeConfigSchema = lazySchema(() => z.object({
   /** Enable realtime sync */
   enabled: z.boolean().default(true).describe('Enable realtime synchronization'),
   
@@ -95,6 +96,6 @@ export const RealtimeConfigSchema = z.object({
   
   /** Default subscriptions */
   subscriptions: z.array(SubscriptionSchema).optional().describe('Default subscriptions'),
-}).passthrough(); // Allow additional properties
+}).passthrough()); // Allow additional properties
 
 export type RealtimeConfig = z.infer<typeof RealtimeConfigSchema>;

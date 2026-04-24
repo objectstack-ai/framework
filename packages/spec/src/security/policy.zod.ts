@@ -5,7 +5,8 @@ import { z } from 'zod';
 /**
  * Password Complexity Policy
  */
-export const PasswordPolicySchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const PasswordPolicySchema = lazySchema(() => z.object({
   minLength: z.number().default(8),
   requireUppercase: z.boolean().default(true),
   requireLowercase: z.boolean().default(true),
@@ -13,40 +14,40 @@ export const PasswordPolicySchema = z.object({
   requireSymbols: z.boolean().default(false),
   expirationDays: z.number().optional().describe('Force password change every X days'),
   historyCount: z.number().default(3).describe('Prevent reusing last X passwords'),
-});
+}));
 
 /**
  * Network Access Policy (IP Whitelisting)
  */
-export const NetworkPolicySchema = z.object({
+export const NetworkPolicySchema = lazySchema(() => z.object({
   trustedRanges: z.array(z.string()).describe('CIDR ranges allowed to access (e.g. 10.0.0.0/8)'),
   blockUnknown: z.boolean().default(false).describe('Block all IPs not in trusted ranges'),
   vpnRequired: z.boolean().default(false),
-});
+}));
 
 /**
  * Session Policy
  */
-export const SessionPolicySchema = z.object({
+export const SessionPolicySchema = lazySchema(() => z.object({
   idleTimeout: z.number().default(30).describe('Minutes before idle session logout'),
   absoluteTimeout: z.number().default(480).describe('Max session duration (minutes)'),
   forceMfa: z.boolean().default(false).describe('Require 2FA for all users'),
-});
+}));
 
 /**
  * Audit Retention Policy
  */
-export const AuditPolicySchema = z.object({
+export const AuditPolicySchema = lazySchema(() => z.object({
   logRetentionDays: z.number().default(180),
   sensitiveFields: z.array(z.string()).describe('Fields to redact in logs (e.g. password, ssn)'),
   captureRead: z.boolean().default(false).describe('Log read access (High volume!)'),
-});
+}));
 
 /**
  * Security Policy Schema
  * "The Cloud Compliance Contract"
  */
-export const PolicySchema = z.object({
+export const PolicySchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Policy Name'),
   
   password: PasswordPolicySchema.optional(),
@@ -57,6 +58,6 @@ export const PolicySchema = z.object({
   /** Assignment */
   isDefault: z.boolean().default(false).describe('Apply to all users by default'),
   assignedProfiles: z.array(z.string()).optional().describe('Apply to specific profiles'),
-});
+}));
 
 export type Policy = z.infer<typeof PolicySchema>;

@@ -17,7 +17,8 @@ import { z } from 'zod';
  *
  * Classification of training content by domain.
  */
-export const TrainingCategorySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const TrainingCategorySchema = lazySchema(() => z.enum([
   'security_awareness',       // General security awareness
   'data_protection',          // Data handling and privacy
   'incident_response',        // Incident reporting and response
@@ -28,18 +29,18 @@ export const TrainingCategorySchema = z.enum([
   'physical_security',        // Physical security awareness
   'business_continuity',      // Business continuity and disaster recovery
   'other',                    // Other training categories
-]);
+]));
 
 /**
  * Training Completion Status Schema
  */
-export const TrainingCompletionStatusSchema = z.enum([
+export const TrainingCompletionStatusSchema = lazySchema(() => z.enum([
   'not_started',   // Training not yet begun
   'in_progress',   // Training currently underway
   'completed',     // Training completed successfully
   'failed',        // Training assessment not passed
   'expired',       // Training certification has expired
-]);
+]));
 
 /**
  * Training Course Schema
@@ -61,7 +62,7 @@ export const TrainingCompletionStatusSchema = z.enum([
  * }
  * ```
  */
-export const TrainingCourseSchema = z.object({
+export const TrainingCourseSchema = lazySchema(() => z.object({
   /**
    * Unique course identifier
    */
@@ -112,14 +113,14 @@ export const TrainingCourseSchema = z.object({
    * Course version for tracking content updates
    */
   version: z.string().optional().describe('Course content version'),
-}).describe('Security training course definition');
+}).describe('Security training course definition'));
 
 /**
  * Training Record Schema
  *
  * Individual employee training completion record.
  */
-export const TrainingRecordSchema = z.object({
+export const TrainingRecordSchema = lazySchema(() => z.object({
   /**
    * Reference to the course ID
    */
@@ -159,14 +160,14 @@ export const TrainingRecordSchema = z.object({
    * Notes or comments from instructor or system
    */
   notes: z.string().optional().describe('Training notes or comments'),
-}).describe('Individual training completion record');
+}).describe('Individual training completion record'));
 
 /**
  * Training Plan Schema
  *
  * Organizational training plan defining schedule and requirements (A.6.3).
  */
-export const TrainingPlanSchema = z.object({
+export const TrainingPlanSchema = lazySchema(() => z.object({
   /**
    * Whether training management is enabled
    */
@@ -206,7 +207,7 @@ export const TrainingPlanSchema = z.object({
    */
   reminderDaysBefore: z.number().default(14)
     .describe('Days before deadline to send first reminder'),
-}).describe('Organizational training plan per ISO 27001:2022 A.6.3');
+}).describe('Organizational training plan per ISO 27001:2022 A.6.3'));
 
 // Type exports
 export type TrainingCategory = z.infer<typeof TrainingCategorySchema>;

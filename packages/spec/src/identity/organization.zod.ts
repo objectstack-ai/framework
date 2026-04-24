@@ -15,7 +15,8 @@ import { z } from 'zod';
  * Organization Schema
  * Represents a team, workspace, or tenant in a multi-tenant application
  */
-export const OrganizationSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const OrganizationSchema = lazySchema(() => z.object({
   /**
    * Unique organization identifier
    */
@@ -54,7 +55,7 @@ export const OrganizationSchema = z.object({
    * Last update timestamp
    */
   updatedAt: z.string().datetime().describe('Last update timestamp'),
-});
+}));
 
 export type Organization = z.infer<typeof OrganizationSchema>;
 
@@ -62,7 +63,7 @@ export type Organization = z.infer<typeof OrganizationSchema>;
  * Organization Member Schema
  * Links users to organizations with specific roles
  */
-export const MemberSchema = z.object({
+export const MemberSchema = lazySchema(() => z.object({
   /**
    * Unique member identifier
    */
@@ -94,7 +95,7 @@ export const MemberSchema = z.object({
    * Last update timestamp
    */
   updatedAt: z.string().datetime().describe('Last update timestamp'),
-});
+}));
 
 export type Member = z.infer<typeof MemberSchema>;
 
@@ -109,7 +110,7 @@ export type InvitationStatus = z.infer<typeof InvitationStatus>;
  * Organization Invitation Schema
  * Represents an invitation to join an organization
  */
-export const InvitationSchema = z.object({
+export const InvitationSchema = lazySchema(() => z.object({
   /**
    * Unique invitation identifier
    */
@@ -155,6 +156,6 @@ export const InvitationSchema = z.object({
    * Last update timestamp
    */
   updatedAt: z.string().datetime().describe('Last update timestamp'),
-});
+}));
 
 export type Invitation = z.infer<typeof InvitationSchema>;

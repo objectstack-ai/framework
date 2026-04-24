@@ -19,6 +19,7 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
  * - One User has only ONE Role (Tree).
  */
 
+import { lazySchema } from '../shared/lazy-schema';
 export const TerritoryType = z.enum([
   'geography',      // Region/Country/City
   'industry',       // Vertical
@@ -31,12 +32,12 @@ export const TerritoryType = z.enum([
  * A container for a version of territory planning.
  * (e.g. "Fiscal Year 2024 Planning" vs "Fiscal Year 2025 Planning")
  */
-export const TerritoryModelSchema = z.object({
+export const TerritoryModelSchema = lazySchema(() => z.object({
   name: z.string().describe('Model Name (e.g. FY24 Planning)'),
   state: z.enum(['planning', 'active', 'archived']).default('planning'),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
-});
+}));
 
 /**
  * Territory Node Schema
@@ -55,7 +56,7 @@ export const TerritoryModelSchema = z.object({
  * - 'WestCoast' (PascalCase)
  * - 'West Coast' (spaces)
  */
-export const TerritorySchema = z.object({
+export const TerritorySchema = lazySchema(() => z.object({
   /** Identity */
   name: SnakeCaseIdentifierSchema.describe('Territory unique name (lowercase snake_case)'),
   label: z.string().describe('Territory Label (e.g. "West Coast")'),
@@ -82,7 +83,7 @@ export const TerritorySchema = z.object({
   accountAccess: z.enum(['read', 'edit']).default('read'),
   opportunityAccess: z.enum(['read', 'edit']).default('read'),
   caseAccess: z.enum(['read', 'edit']).default('read'),
-});
+}));
 
 export type Territory = z.infer<typeof TerritorySchema>;
 export type TerritoryModel = z.infer<typeof TerritoryModelSchema>;

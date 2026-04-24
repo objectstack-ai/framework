@@ -33,7 +33,8 @@ import { z } from 'zod';
  * Each override targets a service by name and specifies whether it should
  * be enabled, which implementation strategy to use, and optional config.
  */
-export const DevServiceOverrideSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const DevServiceOverrideSchema = lazySchema(() => z.object({
   /** Service identifier (e.g. 'auth', 'eventBus', 'fileStorage') */
   service: z.string().min(1).describe('Target service identifier'),
 
@@ -53,7 +54,7 @@ export const DevServiceOverrideSchema = z.object({
   /** Optional per-service configuration (strategy-specific) */
   config: z.record(z.string(), z.unknown()).optional()
     .describe('Strategy-specific configuration for this service override'),
-});
+}));
 
 export type DevServiceOverride = z.infer<typeof DevServiceOverrideSchema>;
 
@@ -67,7 +68,7 @@ export type DevServiceOverride = z.infer<typeof DevServiceOverrideSchema>;
  * Configures automatic seed/fixture data loading in development mode.
  * Fixtures provide a reproducible dataset for local development and demos.
  */
-export const DevFixtureConfigSchema = z.object({
+export const DevFixtureConfigSchema = lazySchema(() => z.object({
   /** Whether to load fixtures on startup */
   enabled: z.boolean().default(true).describe('Load fixture data on startup'),
 
@@ -88,7 +89,7 @@ export const DevFixtureConfigSchema = z.object({
    */
   envFilter: z.array(z.string()).optional()
     .describe('Only load fixtures matching these environment tags'),
-});
+}));
 
 export type DevFixtureConfig = z.infer<typeof DevFixtureConfigSchema>;
 
@@ -101,7 +102,7 @@ export type DevFixtureConfig = z.infer<typeof DevFixtureConfigSchema>;
  *
  * Optional developer tooling that can be enabled alongside the dev plugin.
  */
-export const DevToolsConfigSchema = z.object({
+export const DevToolsConfigSchema = lazySchema(() => z.object({
   /** Enable hot-module replacement / live reload */
   hotReload: z.boolean().default(true).describe('Enable HMR / live-reload'),
 
@@ -119,7 +120,7 @@ export const DevToolsConfigSchema = z.object({
 
   /** Enable a mail catcher for outbound email (like MailHog) */
   mailCatcher: z.boolean().default(false).describe('Capture outbound emails in dev'),
-});
+}));
 
 export type DevToolsConfig = z.infer<typeof DevToolsConfigSchema>;
 
@@ -183,7 +184,7 @@ export type DevPluginPreset = z.infer<typeof DevPluginPreset>;
  * };
  * ```
  */
-export const DevPluginConfigSchema = z.object({
+export const DevPluginConfigSchema = lazySchema(() => z.object({
   /**
    * Configuration preset.
    * When provided, services and tools are pre-configured for the selected
@@ -241,7 +242,7 @@ export const DevPluginConfigSchema = z.object({
    */
   simulatedLatency: z.number().int().min(0).default(0)
     .describe('Artificial latency (ms) added to service calls'),
-});
+}));
 
 export type DevPluginConfig = z.infer<typeof DevPluginConfigSchema>;
 export type DevPluginConfigInput = z.input<typeof DevPluginConfigSchema>;

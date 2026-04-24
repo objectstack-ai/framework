@@ -30,11 +30,12 @@ import { DriverDefinitionSchema } from '../datasource.zod';
  * Actual function signature enforcement is done at the TypeScript level
  * via `PersistenceAdapterInterface` in the driver implementation.
  */
-export const PersistenceAdapterSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const PersistenceAdapterSchema = lazySchema(() => z.object({
   load: z.function().describe('Load persisted data on startup. Returns Promise<Record<string, any[]> | null>'),
   save: z.function().describe('Save data to persistent storage. Accepts Record<string, any[]>, returns Promise<void>'),
   flush: z.function().describe('Flush pending writes and ensure data is persisted. Returns Promise<void>'),
-}).describe('Custom persistence adapter interface');
+}).describe('Custom persistence adapter interface'));
 
 export type PersistenceAdapter = z.infer<typeof PersistenceAdapterSchema>;
 
@@ -46,7 +47,7 @@ export type PersistenceAdapter = z.infer<typeof PersistenceAdapterSchema>;
  *   Uses `localStorage` in browser environments, `file` in standard Node.js,
  *   and disables persistence with a warning in serverless/edge runtimes.
  */
-export const PersistenceTypeSchema = z.enum(['file', 'local', 'auto']).describe('Persistence backend type');
+export const PersistenceTypeSchema = lazySchema(() => z.enum(['file', 'local', 'auto']).describe('Persistence backend type'));
 
 export type PersistenceType = z.infer<typeof PersistenceTypeSchema>;
 
@@ -54,13 +55,13 @@ export type PersistenceType = z.infer<typeof PersistenceTypeSchema>;
  * File-system persistence configuration.
  * Used in Node.js environments to save data to a JSON file.
  */
-export const FilePersistenceConfigSchema = z.object({
+export const FilePersistenceConfigSchema = lazySchema(() => z.object({
   type: z.literal('file'),
   /** File path to persist data (JSON format). Defaults to `.objectstack/data/memory-driver.json`. */
   path: z.string().optional().describe('File path to persist data'),
   /** Auto-save interval in milliseconds. Default: 2000ms. */
   autoSaveInterval: z.number().min(100).default(2000).describe('Auto-save interval in ms'),
-}).describe('File-system persistence configuration');
+}).describe('File-system persistence configuration'));
 
 export type FilePersistenceConfig = z.infer<typeof FilePersistenceConfigSchema>;
 
@@ -68,11 +69,11 @@ export type FilePersistenceConfig = z.infer<typeof FilePersistenceConfigSchema>;
  * localStorage persistence configuration.
  * Used in browser environments to save data to localStorage.
  */
-export const LocalStoragePersistenceConfigSchema = z.object({
+export const LocalStoragePersistenceConfigSchema = lazySchema(() => z.object({
   type: z.literal('local'),
   /** localStorage key. Defaults to `objectstack:memory-db`. */
   key: z.string().optional().describe('localStorage key for persisted data'),
-}).describe('localStorage persistence configuration');
+}).describe('localStorage persistence configuration'));
 
 export type LocalStoragePersistenceConfig = z.infer<typeof LocalStoragePersistenceConfigSchema>;
 
@@ -80,9 +81,9 @@ export type LocalStoragePersistenceConfig = z.infer<typeof LocalStoragePersisten
  * Custom adapter persistence configuration.
  * Allows injecting a custom PersistenceAdapter implementation.
  */
-export const CustomPersistenceConfigSchema = z.object({
+export const CustomPersistenceConfigSchema = lazySchema(() => z.object({
   adapter: PersistenceAdapterSchema,
-}).describe('Custom adapter persistence configuration');
+}).describe('Custom adapter persistence configuration'));
 
 export type CustomPersistenceConfig = z.infer<typeof CustomPersistenceConfigSchema>;
 
@@ -102,7 +103,7 @@ export type CustomPersistenceConfig = z.infer<typeof CustomPersistenceConfigSche
  * Optional overrides allow customizing the file path or localStorage key
  * used by the auto-detected adapter.
  */
-export const AutoPersistenceConfigSchema = z.object({
+export const AutoPersistenceConfigSchema = lazySchema(() => z.object({
   type: z.literal('auto'),
   /** File path override when running in Node.js. */
   path: z.string().optional().describe('File path override for Node.js environments'),
@@ -110,7 +111,7 @@ export const AutoPersistenceConfigSchema = z.object({
   autoSaveInterval: z.number().min(100).optional().describe('Auto-save interval override for Node.js environments'),
   /** localStorage key override when running in a browser. */
   key: z.string().optional().describe('localStorage key override for browser environments'),
-}).describe('Auto-detect persistence configuration');
+}).describe('Auto-detect persistence configuration'));
 
 export type AutoPersistenceConfig = z.infer<typeof AutoPersistenceConfigSchema>;
 
@@ -145,19 +146,19 @@ export type AutoPersistenceConfig = z.infer<typeof AutoPersistenceConfigSchema>;
  * // Custom localStorage key
  * persistence: { type: 'local', key: 'myapp:db' }
  */
-export const MemoryPersistenceConfigSchema = z.union([
+export const MemoryPersistenceConfigSchema = lazySchema(() => z.union([
   PersistenceTypeSchema,
   FilePersistenceConfigSchema,
   LocalStoragePersistenceConfigSchema,
   AutoPersistenceConfigSchema,
   CustomPersistenceConfigSchema,
-]).describe('Persistence configuration for the memory driver');
+]).describe('Persistence configuration for the memory driver'));
 
 // ==========================================================================
 // 2. Connection Configuration
 // ==========================================================================
 
-export const MemoryConfigSchema = z.object({
+export const MemoryConfigSchema = lazySchema(() => z.object({
   /**
    * Initial data to pre-populate the in-memory store.
    * Maps object/table names to arrays of records.
@@ -240,7 +241,7 @@ export const MemoryConfigSchema = z.object({
    */
   maxRecordsPerObject: z.number().min(1).optional().describe('Max records per object (memory bound)'),
 
-}).describe('Memory Driver Connection Configuration');
+}).describe('Memory Driver Connection Configuration'));
 
 // ==========================================================================
 // 3. Driver Definition (Metadata)

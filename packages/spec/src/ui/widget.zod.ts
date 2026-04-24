@@ -27,7 +27,8 @@ import { PerformanceConfigSchema } from './responsive.zod';
  * }
  * ```
  */
-export const WidgetLifecycleSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const WidgetLifecycleSchema = lazySchema(() => z.object({
   /**
    * Called when widget is mounted/rendered for the first time
    * Use for initialization, setting up event listeners, loading data, etc.
@@ -80,7 +81,7 @@ export const WidgetLifecycleSchema = z.object({
    * @example "logError(error); showErrorNotification();"
    */
   onError: z.string().optional().describe('Error handling code'),
-});
+}));
 
 export type WidgetLifecycle = z.infer<typeof WidgetLifecycleSchema>;
 
@@ -105,7 +106,7 @@ export type WidgetLifecycle = z.infer<typeof WidgetLifecycleSchema>;
  * }
  * ```
  */
-export const WidgetEventSchema = z.object({
+export const WidgetEventSchema = lazySchema(() => z.object({
   /**
    * Event name
    * Should be lowercase, dash-separated for consistency
@@ -145,7 +146,7 @@ export const WidgetEventSchema = z.object({
    * @example { userId: 'string', timestamp: 'number' }
    */
   payload: z.record(z.string(), z.unknown()).optional().describe('Event payload schema'),
-});
+}));
 
 export type WidgetEvent = z.infer<typeof WidgetEventSchema>;
 
@@ -170,7 +171,7 @@ export type WidgetEvent = z.infer<typeof WidgetEventSchema>;
  * }
  * ```
  */
-export const WidgetPropertySchema = z.object({
+export const WidgetPropertySchema = lazySchema(() => z.object({
   /**
    * Property name
    * Should be camelCase following ObjectStack conventions
@@ -217,7 +218,7 @@ export const WidgetPropertySchema = z.object({
    * Property category for grouping in UI
    */
   category: z.string().optional().describe('Property category'),
-});
+}));
 
 export type WidgetProperty = z.infer<typeof WidgetPropertySchema>;
 
@@ -245,7 +246,7 @@ export type WidgetProperty = z.infer<typeof WidgetPropertySchema>;
  * Widget Source Schema
  * Defines how the widget code is loaded.
  */
-export const WidgetSourceSchema = z.discriminatedUnion('type', [
+export const WidgetSourceSchema = lazySchema(() => z.discriminatedUnion('type', [
   // NPM Registry (standard)
   z.object({
     type: z.literal('npm'),
@@ -265,11 +266,11 @@ export const WidgetSourceSchema = z.discriminatedUnion('type', [
     type: z.literal('inline'),
     code: z.string().describe('JavaScript code body'),
   }),
-]);
+]));
 
 export type WidgetSource = z.infer<typeof WidgetSourceSchema>;
 
-export const WidgetManifestSchema = z.object({
+export const WidgetManifestSchema = lazySchema(() => z.object({
   /**
    * Widget identifier (snake_case)
    */
@@ -371,7 +372,7 @@ export const WidgetManifestSchema = z.object({
 
   /** Performance optimization settings */
   performance: PerformanceConfigSchema.optional().describe('Performance optimization settings'),
-});
+}));
 
 export type WidgetManifest = z.infer<typeof WidgetManifestSchema>;
 
@@ -389,7 +390,7 @@ export type WidgetManifest = z.infer<typeof WidgetManifestSchema>;
  *   // Widget implementation...
  * }
  */
-export const FieldWidgetPropsSchema = z.object({
+export const FieldWidgetPropsSchema = lazySchema(() => z.object({
   /**
    * Current field value.
    * Type depends on the field type (string, number, boolean, array, object, etc.)
@@ -442,7 +443,7 @@ export const FieldWidgetPropsSchema = z.object({
    * Can contain widget-specific configuration like themes, behaviors, etc.
    */
   options: z.record(z.string(), z.unknown()).optional().describe('Custom widget options'),
-});
+}));
 
 /**
  * TypeScript type for Field Widget Props

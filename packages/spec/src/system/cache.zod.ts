@@ -26,45 +26,46 @@ import { z } from 'zod';
  * 
  * @see ../../api/http-cache.zod.ts for HTTP-level caching
  */
-export const CacheStrategySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const CacheStrategySchema = lazySchema(() => z.enum([
   'lru',          // Least Recently Used
   'lfu',          // Least Frequently Used
   'fifo',         // First In First Out
   'ttl',          // Time To Live only
   'adaptive',     // Dynamic strategy selection
-]).describe('Cache eviction strategy');
+]).describe('Cache eviction strategy'));
 
 export type CacheStrategy = z.infer<typeof CacheStrategySchema>;
 
-export const CacheTierSchema = z.object({
+export const CacheTierSchema = lazySchema(() => z.object({
   name: z.string().describe('Unique cache tier name'),
   type: z.enum(['memory', 'redis', 'memcached', 'cdn']).describe('Cache backend type'),
   maxSize: z.number().optional().describe('Max size in MB'),
   ttl: z.number().default(300).describe('Default TTL in seconds'),
   strategy: CacheStrategySchema.default('lru').describe('Eviction strategy'),
   warmup: z.boolean().default(false).describe('Pre-populate cache on startup'),
-}).describe('Configuration for a single cache tier in the hierarchy');
+}).describe('Configuration for a single cache tier in the hierarchy'));
 
 export type CacheTier = z.infer<typeof CacheTierSchema>;
 export type CacheTierInput = z.input<typeof CacheTierSchema>;
 
-export const CacheInvalidationSchema = z.object({
+export const CacheInvalidationSchema = lazySchema(() => z.object({
   trigger: z.enum(['create', 'update', 'delete', 'manual']).describe('Event that triggers invalidation'),
   scope: z.enum(['key', 'pattern', 'tag', 'all']).describe('Invalidation scope'),
   pattern: z.string().optional().describe('Key pattern for pattern-based invalidation'),
   tags: z.array(z.string()).optional().describe('Cache tags to invalidate'),
-}).describe('Rule defining when and how cached entries are invalidated');
+}).describe('Rule defining when and how cached entries are invalidated'));
 
 export type CacheInvalidation = z.infer<typeof CacheInvalidationSchema>;
 
-export const CacheConfigSchema = z.object({
+export const CacheConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable application-level caching'),
   tiers: z.array(CacheTierSchema).describe('Ordered cache tier hierarchy'),
   invalidation: z.array(CacheInvalidationSchema).describe('Cache invalidation rules'),
   prefetch: z.boolean().default(false).describe('Enable cache prefetching'),
   compression: z.boolean().default(false).describe('Enable data compression in cache'),
   encryption: z.boolean().default(false).describe('Enable encryption for cached data'),
-}).describe('Top-level application cache configuration');
+}).describe('Top-level application cache configuration'));
 
 export type CacheConfig = z.infer<typeof CacheConfigSchema>;
 export type CacheConfigInput = z.input<typeof CacheConfigSchema>;
@@ -79,12 +80,12 @@ export type CacheConfigInput = z.input<typeof CacheConfigSchema>;
  * - **write_around**: Write to backend only, cache on next read
  * - **refresh_ahead**: Proactively refresh expiring entries before TTL
  */
-export const CacheConsistencySchema = z.enum([
+export const CacheConsistencySchema = lazySchema(() => z.enum([
   'write_through',
   'write_behind',
   'write_around',
   'refresh_ahead',
-]).describe('Distributed cache write consistency strategy');
+]).describe('Distributed cache write consistency strategy'));
 
 export type CacheConsistency = z.infer<typeof CacheConsistencySchema>;
 
@@ -102,7 +103,7 @@ export type CacheConsistency = z.infer<typeof CacheConsistencySchema>;
  * };
  * ```
  */
-export const CacheAvalanchePreventionSchema = z.object({
+export const CacheAvalanchePreventionSchema = lazySchema(() => z.object({
   /** TTL jitter to stagger cache expiration */
   jitterTtl: z.object({
     enabled: z.boolean().default(false).describe('Add random jitter to TTL values'),
@@ -121,7 +122,7 @@ export const CacheAvalanchePreventionSchema = z.object({
     enabled: z.boolean().default(false).describe('Enable cache locking for key regeneration'),
     lockTimeoutMs: z.number().default(5000).describe('Maximum lock wait time in milliseconds'),
   }).optional().describe('Lock-based stampede prevention'),
-}).describe('Cache avalanche/stampede prevention configuration');
+}).describe('Cache avalanche/stampede prevention configuration'));
 
 export type CacheAvalanchePrevention = z.infer<typeof CacheAvalanchePreventionSchema>;
 
@@ -130,7 +131,7 @@ export type CacheAvalanchePrevention = z.infer<typeof CacheAvalanchePreventionSc
  *
  * Defines how cache is pre-populated on startup or after cache flush.
  */
-export const CacheWarmupSchema = z.object({
+export const CacheWarmupSchema = lazySchema(() => z.object({
   /** Enable cache warming */
   enabled: z.boolean().default(false).describe('Enable cache warmup'),
   /** Warmup strategy */
@@ -142,7 +143,7 @@ export const CacheWarmupSchema = z.object({
   patterns: z.array(z.string()).optional().describe('Key patterns to warm up (e.g., "user:*", "config:*")'),
   /** Maximum concurrent warmup operations */
   concurrency: z.number().default(10).describe('Maximum concurrent warmup operations'),
-}).describe('Cache warmup strategy');
+}).describe('Cache warmup strategy'));
 
 export type CacheWarmup = z.infer<typeof CacheWarmupSchema>;
 
@@ -172,7 +173,7 @@ export type CacheWarmup = z.infer<typeof CacheWarmupSchema>;
  * };
  * ```
  */
-export const DistributedCacheConfigSchema = CacheConfigSchema.extend({
+export const DistributedCacheConfigSchema = lazySchema(() => CacheConfigSchema.extend({
   /** Distributed write consistency strategy */
   consistency: CacheConsistencySchema.optional().describe('Distributed cache consistency strategy'),
   /** Avalanche/stampede prevention settings */
@@ -180,7 +181,7 @@ export const DistributedCacheConfigSchema = CacheConfigSchema.extend({
     .describe('Cache avalanche and stampede prevention'),
   /** Cache warmup configuration */
   warmup: CacheWarmupSchema.optional().describe('Cache warmup strategy'),
-}).describe('Distributed cache configuration with consistency and avalanche prevention');
+}).describe('Distributed cache configuration with consistency and avalanche prevention'));
 
 export type DistributedCacheConfig = z.infer<typeof DistributedCacheConfigSchema>;
 export type DistributedCacheConfigInput = z.input<typeof DistributedCacheConfigSchema>;

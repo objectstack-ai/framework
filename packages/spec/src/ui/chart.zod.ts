@@ -14,7 +14,8 @@ import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
  * Chart Type Enum
  * Categorized by visualization purpose
  */
-export const ChartTypeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ChartTypeSchema = lazySchema(() => z.enum([
   // Comparison
   'bar',
   'horizontal-bar',
@@ -70,7 +71,7 @@ export const ChartTypeSchema = z.enum([
   // Tabular
   'table',
   'pivot',
-]);
+]));
 
 export type ChartType = z.infer<typeof ChartTypeSchema>;
 
@@ -78,7 +79,7 @@ export type ChartType = z.infer<typeof ChartTypeSchema>;
  * Chart Axis Schema
  * Definition for X and Y axes
  */
-export const ChartAxisSchema = z.object({
+export const ChartAxisSchema = lazySchema(() => z.object({
   /** Data field to map to this axis */
   field: z.string().describe('Data field key'),
   
@@ -99,13 +100,13 @@ export const ChartAxisSchema = z.object({
   
   /** Logarithmic scale */
   logarithmic: z.boolean().default(false),
-});
+}));
 
 /**
  * Chart Series Schema
  * Defines a single data series in the chart
  */
-export const ChartSeriesSchema = z.object({
+export const ChartSeriesSchema = lazySchema(() => z.object({
   /** Field name for values */
   name: z.string().describe('Field name or series identifier'),
   
@@ -123,13 +124,13 @@ export const ChartSeriesSchema = z.object({
   
   /** Axis binding */
   yAxis: z.enum(['left', 'right']).default('left').describe('Bind to specific Y-Axis'),
-});
+}));
 
 /**
  * Chart Annotation Schema
  * Static lines or regions to highlight data
  */
-export const ChartAnnotationSchema = z.object({
+export const ChartAnnotationSchema = lazySchema(() => z.object({
   type: z.enum(['line', 'region']).default('line'),
   axis: z.enum(['x', 'y']).default('y'),
   value: z.union([z.number(), z.string()]).describe('Start value'),
@@ -137,23 +138,23 @@ export const ChartAnnotationSchema = z.object({
   color: z.string().optional(),
   label: I18nLabelSchema.optional(),
   style: z.enum(['solid', 'dashed', 'dotted']).default('dashed'),
-});
+}));
 
 /**
  * Chart Interaction Schema
  */
-export const ChartInteractionSchema = z.object({
+export const ChartInteractionSchema = lazySchema(() => z.object({
   tooltips: z.boolean().default(true),
   zoom: z.boolean().default(false),
   brush: z.boolean().default(false),
   clickAction: z.string().optional().describe('Action ID to trigger on click'),
-});
+}));
 
 /**
  * Chart Configuration Base
  * Common configuration for all chart types
  */
-export const ChartConfigSchema = z.object({
+export const ChartConfigSchema = lazySchema(() => z.object({
   /** Chart Type */
   type: ChartTypeSchema,
   
@@ -185,7 +186,7 @@ export const ChartConfigSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
 export type ChartConfig = z.infer<typeof ChartConfigSchema>;
 export type ChartAxis = z.infer<typeof ChartAxisSchema>;

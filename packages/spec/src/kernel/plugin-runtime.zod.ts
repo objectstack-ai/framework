@@ -25,19 +25,20 @@ import { z } from 'zod';
  * Dynamic Plugin Operation Type
  * Operations that can be performed on plugins at runtime
  */
-export const DynamicPluginOperationSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const DynamicPluginOperationSchema = lazySchema(() => z.enum([
   'load',        // Load and initialize a plugin at runtime
   'unload',      // Gracefully unload a running plugin
   'reload',      // Unload then load (e.g., version upgrade)
   'enable',      // Enable a loaded but disabled plugin
   'disable',     // Disable a running plugin without unloading
-]).describe('Runtime plugin operation type');
+]).describe('Runtime plugin operation type'));
 
 /**
  * Plugin Source
  * Where to resolve a plugin for dynamic loading
  */
-export const PluginSourceSchema = z.object({
+export const PluginSourceSchema = lazySchema(() => z.object({
   /**
    * Source type
    */
@@ -63,14 +64,14 @@ export const PluginSourceSchema = z.object({
    * Integrity hash for verification
    */
   integrity: z.string().optional().describe('Subresource Integrity hash (e.g., "sha384-...")'),
-}).describe('Plugin source location for dynamic resolution');
+}).describe('Plugin source location for dynamic resolution'));
 
 /**
  * Activation Event
  * Defines when a dynamically available plugin should be activated.
  * Plugins remain dormant until an activation event fires.
  */
-export const ActivationEventSchema = z.object({
+export const ActivationEventSchema = lazySchema(() => z.object({
   /**
    * Event type
    */
@@ -88,13 +89,13 @@ export const ActivationEventSchema = z.object({
    * Pattern to match (command name, route glob, object name, event pattern, etc.)
    */
   pattern: z.string().describe('Match pattern for the activation trigger'),
-}).describe('Lazy activation trigger for a dynamic plugin');
+}).describe('Lazy activation trigger for a dynamic plugin'));
 
 /**
  * Dynamic Load Request
  * Request to load a plugin at runtime
  */
-export const DynamicLoadRequestSchema = z.object({
+export const DynamicLoadRequestSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier to load
    */
@@ -134,13 +135,13 @@ export const DynamicLoadRequestSchema = z.object({
    */
   timeout: z.number().int().min(1000).default(60000)
     .describe('Maximum time to complete loading in ms'),
-}).describe('Request to dynamically load a plugin at runtime');
+}).describe('Request to dynamically load a plugin at runtime'));
 
 /**
  * Dynamic Unload Request
  * Request to unload a plugin at runtime
  */
-export const DynamicUnloadRequestSchema = z.object({
+export const DynamicUnloadRequestSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier to unload
    */
@@ -175,13 +176,13 @@ export const DynamicUnloadRequestSchema = z.object({
     'warn',        // Warn about dependents but proceed
     'block',       // Block unload if dependents exist
   ]).default('block').describe('How to handle plugins that depend on this one'),
-}).describe('Request to dynamically unload a plugin at runtime');
+}).describe('Request to dynamically unload a plugin at runtime'));
 
 /**
  * Dynamic Plugin Operation Result
  * Result of a dynamic load/unload/reload operation
  */
-export const DynamicPluginResultSchema = z.object({
+export const DynamicPluginResultSchema = lazySchema(() => z.object({
   /**
    * Whether the operation succeeded
    */
@@ -220,13 +221,13 @@ export const DynamicPluginResultSchema = z.object({
    * Warnings (e.g., dependents affected)
    */
   warnings: z.array(z.string()).optional(),
-}).describe('Result of a dynamic plugin operation');
+}).describe('Result of a dynamic plugin operation'));
 
 /**
  * Plugin Discovery Source
  * Defines where to discover available plugins at runtime
  */
-export const PluginDiscoverySourceSchema = z.object({
+export const PluginDiscoverySourceSchema = lazySchema(() => z.object({
   /**
    * Discovery source type
    */
@@ -267,13 +268,13 @@ export const PluginDiscoverySourceSchema = z.object({
      */
     minTrustLevel: z.enum(['verified', 'trusted', 'community', 'untrusted']).optional(),
   }).optional(),
-}).describe('Source for runtime plugin discovery');
+}).describe('Source for runtime plugin discovery'));
 
 /**
  * Plugin Discovery Configuration
  * Controls how the kernel discovers available plugins at runtime
  */
-export const PluginDiscoveryConfigSchema = z.object({
+export const PluginDiscoveryConfigSchema = lazySchema(() => z.object({
   /**
    * Enable runtime plugin discovery
    */
@@ -295,13 +296,13 @@ export const PluginDiscoveryConfigSchema = z.object({
    */
   requireApproval: z.boolean().default(true)
     .describe('Require admin approval before loading discovered plugins'),
-}).describe('Runtime plugin discovery configuration');
+}).describe('Runtime plugin discovery configuration'));
 
 /**
  * Dynamic Loading Configuration
  * Top-level configuration for the dynamic plugin loading subsystem
  */
-export const DynamicLoadingConfigSchema = z.object({
+export const DynamicLoadingConfigSchema = lazySchema(() => z.object({
   /**
    * Enable dynamic loading/unloading at runtime
    */
@@ -342,7 +343,7 @@ export const DynamicLoadingConfigSchema = z.object({
    */
   operationTimeout: z.number().int().min(1000).default(60000)
     .describe('Default timeout for load/unload operations in ms'),
-}).describe('Dynamic plugin loading subsystem configuration');
+}).describe('Dynamic plugin loading subsystem configuration'));
 
 // Export types
 export type DynamicPluginOperation = z.infer<typeof DynamicPluginOperationSchema>;

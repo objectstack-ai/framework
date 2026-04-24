@@ -28,7 +28,8 @@ import { z } from 'zod';
  *   "parallel": false
  * }
  */
-export const StartupOptionsSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const StartupOptionsSchema = lazySchema(() => z.object({
   /**
    * Maximum time (ms) to wait for each plugin to start
    * @default 30000 (30 seconds)
@@ -61,7 +62,7 @@ export const StartupOptionsSchema = z.object({
    * Custom context to pass to plugin lifecycle methods
    */
   context: z.unknown().optional().describe('Custom context object to pass to plugin lifecycle methods'),
-});
+}));
 
 export type StartupOptions = z.infer<typeof StartupOptionsSchema>;
 export type StartupOptionsInput = z.input<typeof StartupOptionsSchema>;
@@ -84,7 +85,7 @@ export type StartupOptionsInput = z.input<typeof StartupOptionsSchema>;
  *   }
  * }
  */
-export const HealthStatusSchema = z.object({
+export const HealthStatusSchema = lazySchema(() => z.object({
   /**
    * Whether the plugin is healthy
    */
@@ -104,7 +105,7 @@ export const HealthStatusSchema = z.object({
    * Optional error message if unhealthy
    */
   message: z.string().optional().describe('Error message if plugin is unhealthy'),
-});
+}));
 
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
 
@@ -127,7 +128,7 @@ export type HealthStatus = z.infer<typeof HealthStatusSchema>;
  *   }
  * }
  */
-export const PluginStartupResultSchema = z.object({
+export const PluginStartupResultSchema = lazySchema(() => z.object({
   /**
    * Plugin that was started
    */
@@ -160,7 +161,7 @@ export const PluginStartupResultSchema = z.object({
    * Health status after startup (if healthCheck enabled)
    */
   health: HealthStatusSchema.optional().describe('Health status after startup if health check was enabled'),
-});
+}));
 
 export type PluginStartupResult = z.infer<typeof PluginStartupResultSchema>;
 
@@ -182,7 +183,7 @@ export type PluginStartupResult = z.infer<typeof PluginStartupResultSchema>;
  *   "allSuccessful": true
  * }
  */
-export const StartupOrchestrationResultSchema = z.object({
+export const StartupOrchestrationResultSchema = lazySchema(() => z.object({
   /**
    * Individual plugin startup results
    */
@@ -202,6 +203,6 @@ export const StartupOrchestrationResultSchema = z.object({
    * Plugins that were rolled back (if rollbackOnFailure was enabled)
    */
   rolledBack: z.array(z.string()).optional().describe('Names of plugins that were rolled back'),
-});
+}));
 
 export type StartupOrchestrationResult = z.infer<typeof StartupOrchestrationResultSchema>;

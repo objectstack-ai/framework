@@ -21,7 +21,8 @@ import { z } from 'zod';
  * }
  * ```
  */
-export const DocumentVersionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const DocumentVersionSchema = lazySchema(() => z.object({
   /**
    * Sequential version number (increments with each new version)
    */
@@ -57,7 +58,7 @@ export const DocumentVersionSchema = z.object({
    * @default false
    */
   isLatest: z.boolean().optional().default(false).describe('Is latest version'),
-});
+}));
 
 /**
  * Document Template Schema
@@ -90,7 +91,7 @@ export const DocumentVersionSchema = z.object({
  * }
  * ```
  */
-export const DocumentTemplateSchema = z.object({
+export const DocumentTemplateSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for the template
    */
@@ -141,7 +142,7 @@ export const DocumentTemplateSchema = z.object({
      */
     required: z.boolean().optional().default(false).describe('Is required'),
   })).describe('Template placeholders'),
-});
+}));
 
 /**
  * E-Signature Configuration Schema
@@ -173,7 +174,7 @@ export const DocumentTemplateSchema = z.object({
  * }
  * ```
  */
-export const ESignatureConfigSchema = z.object({
+export const ESignatureConfigSchema = lazySchema(() => z.object({
   /**
    * E-signature service provider
    */
@@ -221,7 +222,7 @@ export const ESignatureConfigSchema = z.object({
    * @default 7
    */
   reminderDays: z.number().optional().default(7).describe('Reminder interval days'),
-});
+}));
 
 /**
  * Document Schema
@@ -267,7 +268,7 @@ export const ESignatureConfigSchema = z.object({
  * }
  * ```
  */
-export const DocumentSchema = z.object({
+export const DocumentSchema = lazySchema(() => z.object({
   /**
    * Unique document identifier
    */
@@ -363,7 +364,7 @@ export const DocumentSchema = z.object({
    * Custom metadata fields
    */
   metadata: z.record(z.string(), z.unknown()).optional().describe('Custom metadata'),
-});
+}));
 
 // Type exports
 export type Document = z.infer<typeof DocumentSchema>;

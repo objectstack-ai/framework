@@ -11,6 +11,7 @@ import { ResponsiveConfigSchema, PerformanceConfigSchema } from './responsive.zo
  * Migrated to shared/http.zod.ts. Re-exported here for backward compatibility.
  */
 import { HttpMethodSchema, HttpRequestSchema } from '../shared/http.zod';
+import { lazySchema } from '../shared/lazy-schema';
 export { HttpMethodSchema, HttpRequestSchema };
 
 /**
@@ -20,7 +21,7 @@ export { HttpMethodSchema, HttpRequestSchema };
  * 2. 'api': Custom API - Explicitly provided API URLs
  * 3. 'value': Static Data - Hardcoded data array
  */
-export const ViewDataSchema = z.discriminatedUnion('provider', [
+export const ViewDataSchema = lazySchema(() => z.discriminatedUnion('provider', [
   z.object({
     provider: z.literal('object'),
     object: z.string().describe('Target object name'),
@@ -34,7 +35,7 @@ export const ViewDataSchema = z.discriminatedUnion('provider', [
     provider: z.literal('value'),
     items: z.array(z.unknown()).describe('Static data array'),
   }),
-]);
+]));
 
 /**
  * View Filter Rule Schema
@@ -49,7 +50,7 @@ export const ViewDataSchema = z.discriminatedUnion('provider', [
  * ]
  * ```
  */
-export const ViewFilterRuleSchema = z.object({
+export const ViewFilterRuleSchema = lazySchema(() => z.object({
   /** Field name to filter on */
   field: z.string().describe('Field name to filter on'),
   /** Filter operator */
@@ -57,7 +58,7 @@ export const ViewFilterRuleSchema = z.object({
   /** Filter value (optional for unary operators like is_null, this_quarter) */
   value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
     .optional().describe('Filter value'),
-}).describe('View filter rule');
+}).describe('View filter rule'));
 
 export type ViewFilterRule = z.infer<typeof ViewFilterRuleSchema>;
 
@@ -65,7 +66,7 @@ export type ViewFilterRule = z.infer<typeof ViewFilterRuleSchema>;
  * Column Summary Function Schema
  * Aggregation function for column footer (Airtable-style column summaries)
  */
-export const ColumnSummarySchema = z.enum([
+export const ColumnSummarySchema = lazySchema(() => z.enum([
   'none',
   'count',
   'count_empty',
@@ -77,13 +78,13 @@ export const ColumnSummarySchema = z.enum([
   'avg',
   'min',
   'max',
-]).describe('Aggregation function for column footer summary');
+]).describe('Aggregation function for column footer summary'));
 
 /**
  * List Column Configuration Schema
  * Detailed configuration for individual list view columns
  */
-export const ListColumnSchema = z.object({
+export const ListColumnSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name (snake_case)'),
   label: I18nLabelSchema.optional().describe('Display label override'),
   width: z.number().positive().optional().describe('Column width in pixels'),
@@ -103,102 +104,102 @@ export const ListColumnSchema = z.object({
   /** Interaction */
   link: z.boolean().optional().describe('Functions as the primary navigation link (triggers View navigation)'),
   action: z.string().optional().describe('Registered Action ID to execute when clicked'),
-});
+}));
 
 /**
  * List View Selection Configuration
  */
-export const SelectionConfigSchema = z.object({
+export const SelectionConfigSchema = lazySchema(() => z.object({
   type: z.enum(['none', 'single', 'multiple']).default('none').describe('Selection mode'),
-});
+}));
 
 /**
  * List View Pagination Configuration
  */
-export const PaginationConfigSchema = z.object({
+export const PaginationConfigSchema = lazySchema(() => z.object({
   pageSize: z.number().int().positive().default(25).describe('Number of records per page'),
   pageSizeOptions: z.array(z.number().int().positive()).optional().describe('Available page size options'),
-});
+}));
 
 /**
  * Row Height / Density Schema (Airtable-style)
  * Controls the visual density of rows in a list view.
  */
-export const RowHeightSchema = z.enum([
+export const RowHeightSchema = lazySchema(() => z.enum([
   'compact',     // Minimal padding, single line
   'short',       // Reduced padding
   'medium',      // Default padding
   'tall',        // Extra padding, multi-line preview
   'extra_tall',  // Maximum padding, rich content preview
-]).describe('Row height / density setting for list view');
+]).describe('Row height / density setting for list view'));
 
 /**
  * Grouping Field Configuration
  * Defines a single grouping level for record grouping.
  */
-export const GroupingFieldSchema = z.object({
+export const GroupingFieldSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name to group by'),
   order: z.enum(['asc', 'desc']).default('asc').describe('Group sort order'),
   collapsed: z.boolean().default(false).describe('Collapse groups by default'),
-});
+}));
 
 /**
  * Grouping Configuration Schema (Airtable-style)
  * Supports multi-level grouping for grid/gallery views.
  */
-export const GroupingConfigSchema = z.object({
+export const GroupingConfigSchema = lazySchema(() => z.object({
   fields: z.array(GroupingFieldSchema).min(1).describe('Fields to group by (supports up to 3 levels)'),
-}).describe('Record grouping configuration');
+}).describe('Record grouping configuration'));
 
 /**
  * Gallery View Configuration (Airtable-style)
  * Configures card layout for gallery/card views.
  */
-export const GalleryConfigSchema = z.object({
+export const GalleryConfigSchema = lazySchema(() => z.object({
   coverField: z.string().optional().describe('Attachment/image field to display as card cover'),
   coverFit: z.enum(['cover', 'contain']).default('cover').describe('Image fit mode for card cover'),
   cardSize: z.enum(['small', 'medium', 'large']).default('medium').describe('Card size in gallery view'),
   titleField: z.string().optional().describe('Field to display as card title'),
   visibleFields: z.array(z.string()).optional().describe('Fields to display on card body'),
-}).describe('Gallery/card view configuration');
+}).describe('Gallery/card view configuration'));
 
 /**
  * Timeline View Configuration (Airtable-style)
  * Configures timeline/chronological views.
  */
-export const TimelineConfigSchema = z.object({
+export const TimelineConfigSchema = lazySchema(() => z.object({
   startDateField: z.string().describe('Field for timeline item start date'),
   endDateField: z.string().optional().describe('Field for timeline item end date'),
   titleField: z.string().describe('Field to display as timeline item title'),
   groupByField: z.string().optional().describe('Field to group timeline rows'),
   colorField: z.string().optional().describe('Field to determine item color'),
   scale: z.enum(['hour', 'day', 'week', 'month', 'quarter', 'year']).default('week').describe('Default timeline scale'),
-}).describe('Timeline view configuration');
+}).describe('Timeline view configuration'));
 
 /**
  * View Sharing Configuration (Airtable-style)
  * Defines who can see and modify a view.
  */
-export const ViewSharingSchema = z.object({
+export const ViewSharingSchema = lazySchema(() => z.object({
   type: z.enum(['personal', 'collaborative']).default('collaborative').describe('View ownership type'),
   lockedBy: z.string().optional().describe('User who locked the view configuration'),
-}).describe('View sharing and access configuration');
+}).describe('View sharing and access configuration'));
 
 /**
  * Row Color Configuration (Airtable-style)
  * Defines how rows are colored based on field values.
  */
-export const RowColorConfigSchema = z.object({
+export const RowColorConfigSchema = lazySchema(() => z.object({
   field: z.string().describe('Field to derive color from (typically a select/status field)'),
   colors: z.record(z.string(), z.string()).optional().describe('Map of field value to color (hex/token)'),
-}).describe('Row color configuration based on field values');
+}).describe('Row color configuration based on field values'));
 
 /**
  * Visualization Type Schema
  * Whitelist of visualization types the user can switch between.
  * Maps to Airtable's "Visualizations" setting in Appearance panel.
  */
-export const VisualizationTypeSchema = z.enum([
+export const VisualizationTypeSchema = lazySchema(() => z.enum([
   'grid',
   'kanban',
   'gallery',
@@ -206,7 +207,7 @@ export const VisualizationTypeSchema = z.enum([
   'timeline',
   'gantt',
   'map',
-]).describe('Visualization type that users can switch to');
+]).describe('Visualization type that users can switch to'));
 
 /**
  * User Actions Configuration Schema (Airtable Interface parity)
@@ -215,14 +216,14 @@ export const VisualizationTypeSchema = z.enum([
  *
  * @see Airtable Interface → "User actions" panel
  */
-export const UserActionsConfigSchema = z.object({
+export const UserActionsConfigSchema = lazySchema(() => z.object({
   sort: z.boolean().default(true).describe('Allow users to sort records'),
   search: z.boolean().default(true).describe('Allow users to search records'),
   filter: z.boolean().default(true).describe('Allow users to filter records'),
   rowHeight: z.boolean().default(true).describe('Allow users to toggle row height/density'),
   addRecordForm: z.boolean().default(false).describe('Add records through a form instead of inline'),
   buttons: z.array(z.string()).optional().describe('Custom action button IDs to show in the toolbar'),
-}).describe('User action toggles for the view toolbar');
+}).describe('User action toggles for the view toolbar'));
 
 /**
  * Appearance Configuration Schema (Airtable Interface parity)
@@ -230,11 +231,11 @@ export const UserActionsConfigSchema = z.object({
  *
  * @see Airtable Interface → "Appearance" panel
  */
-export const AppearanceConfigSchema = z.object({
+export const AppearanceConfigSchema = lazySchema(() => z.object({
   showDescription: z.boolean().default(true).describe('Show the view description text'),
   allowedVisualizations: z.array(VisualizationTypeSchema).optional()
     .describe('Whitelist of visualization types users can switch between (e.g. ["grid", "gallery", "kanban"])'),
-}).describe('Appearance and visualization configuration');
+}).describe('Appearance and visualization configuration'));
 
 /**
  * View Tab Schema (Airtable Interface parity)
@@ -243,7 +244,7 @@ export const AppearanceConfigSchema = z.object({
  *
  * @see Airtable Interface → "Tabs" panel
  */
-export const ViewTabSchema = z.object({
+export const ViewTabSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Tab identifier (snake_case)'),
   label: I18nLabelSchema.optional().describe('Display label'),
   icon: z.string().optional().describe('Tab icon name'),
@@ -253,7 +254,7 @@ export const ViewTabSchema = z.object({
   pinned: z.boolean().default(false).describe('Pin tab (cannot be removed by users)'),
   isDefault: z.boolean().default(false).describe('Set as the default active tab'),
   visible: z.boolean().default(true).describe('Tab visibility'),
-}).describe('Tab configuration for multi-tab view interface');
+}).describe('Tab configuration for multi-tab view interface'));
 
 /**
  * Add Record Configuration Schema (Airtable Interface parity)
@@ -261,48 +262,48 @@ export const ViewTabSchema = z.object({
  *
  * @see Airtable Interface → "+ Add record" button
  */
-export const AddRecordConfigSchema = z.object({
+export const AddRecordConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(true).describe('Show the add record entry point'),
   position: z.enum(['top', 'bottom', 'both']).default('bottom').describe('Position of the add record button'),
   mode: z.enum(['inline', 'form', 'modal']).default('inline').describe('How to add a new record'),
   formView: z.string().optional().describe('Named form view to use when mode is "form" or "modal"'),
-}).describe('Add record entry point configuration');
+}).describe('Add record entry point configuration'));
 
 /**
  * Kanban Settings
  */
-export const KanbanConfigSchema = z.object({
+export const KanbanConfigSchema = lazySchema(() => z.object({
   groupByField: z.string().describe('Field to group columns by (usually status/select)'),
   summarizeField: z.string().optional().describe('Field to sum at top of column (e.g. amount)'),
   columns: z.array(z.string()).describe('Fields to show on cards'),
-});
+}));
 
 /**
  * Calendar Settings
  */
-export const CalendarConfigSchema = z.object({
+export const CalendarConfigSchema = lazySchema(() => z.object({
   startDateField: z.string(),
   endDateField: z.string().optional(),
   titleField: z.string(),
   colorField: z.string().optional(),
-});
+}));
 
 /**
  * Gantt Settings
  */
-export const GanttConfigSchema = z.object({
+export const GanttConfigSchema = lazySchema(() => z.object({
   startDateField: z.string(),
   endDateField: z.string(),
   titleField: z.string(),
   progressField: z.string().optional(),
   dependenciesField: z.string().optional(),
-});
+}));
 
 /**
  * Navigation Mode Enum
  * Defines how to navigate to the detail view from a list item.
  */
-export const NavigationModeSchema = z.enum([
+export const NavigationModeSchema = lazySchema(() => z.enum([
   'page',       // Navigate to a new route (default)
   'drawer',     // Open details in a side drawer/panel
   'modal',      // Open details in a modal dialog
@@ -310,12 +311,12 @@ export const NavigationModeSchema = z.enum([
   'popover',    // Show details in a popover (lightweight)
   'new_window', // Open in new browser tab/window
   'none'        // No navigation (read-only list)
-]);
+]));
 
 /**
  * Navigation Configuration Schema
  */
-export const NavigationConfigSchema = z.object({
+export const NavigationConfigSchema = lazySchema(() => z.object({
   mode: NavigationModeSchema.default('page'),
   
   /** Target View Config */
@@ -327,7 +328,7 @@ export const NavigationConfigSchema = z.object({
   
   /** Dimensions (for modal/drawer) */
   width: z.union([z.string(), z.number()]).optional().describe('Width of the drawer/modal (e.g. "600px", "50%")'),
-});
+}));
 
 /**
  * List View Schema (Expanded)
@@ -356,7 +357,7 @@ export const NavigationConfigSchema = z.object({
  *   }
  * }
  */
-export const ListViewSchema = z.object({
+export const ListViewSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.optional().describe('Internal view name (lowercase snake_case)'),
   label: I18nLabelSchema.optional(), // Display label override (supports i18n)
   type: z.enum([
@@ -489,13 +490,13 @@ export const ListViewSchema = z.object({
 
   /** Performance optimization settings */
   performance: PerformanceConfigSchema.optional().describe('Performance optimization settings'),
-});
+}));
 
 /**
  * Form Field Configuration Schema
  * Detailed configuration for individual form fields
  */
-export const FormFieldSchema = z.object({
+export const FormFieldSchema = lazySchema(() => z.object({
   field: z.string().describe('Field name (snake_case)'),
   label: I18nLabelSchema.optional().describe('Display label override'),
   placeholder: I18nLabelSchema.optional().describe('Placeholder text'),
@@ -507,12 +508,12 @@ export const FormFieldSchema = z.object({
   widget: z.string().optional().describe('Custom widget/component name'),
   dependsOn: z.string().optional().describe('Parent field name for cascading'),
   visibleOn: z.string().optional().describe('Visibility condition expression'),
-});
+}));
 
 /**
  * Form Layout Section
  */
-export const FormSectionSchema = z.object({
+export const FormSectionSchema = lazySchema(() => z.object({
   label: I18nLabelSchema.optional(),
   collapsible: z.boolean().default(false),
   collapsed: z.boolean().default(false),
@@ -521,7 +522,7 @@ export const FormSectionSchema = z.object({
     z.string(), // Legacy: simple field name
     FormFieldSchema, // Enhanced: detailed field config
   ])),
-});
+}));
 
 /**
  * Form View Schema
@@ -543,7 +544,7 @@ export const FormSectionSchema = z.object({
  *   ]
  * }
  */
-export const FormViewSchema = z.object({
+export const FormViewSchema = lazySchema(() => z.object({
   type: z.enum([
     'simple',  // Single column or sections
     'tabbed',  // Tabs
@@ -570,7 +571,7 @@ export const FormViewSchema = z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes for the form view'),
-});
+}));
 
 /**
  * Master View Schema
@@ -590,12 +591,12 @@ export const FormViewSchema = z.object({
  *   }
  * }
  */
-export const ViewSchema = z.object({
+export const ViewSchema = lazySchema(() => z.object({
     list: ListViewSchema.optional(), // Default list view
     form: FormViewSchema.optional(), // Default form view
     listViews: z.record(z.string(), ListViewSchema).optional().describe('Additional named list views'),
     formViews: z.record(z.string(), FormViewSchema).optional().describe('Additional named form views'),
-});
+}));
 
 /**
  * Type-safe factory for creating view definitions.

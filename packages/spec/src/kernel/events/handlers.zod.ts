@@ -10,7 +10,8 @@ import { z } from 'zod';
  * Event Handler Schema
  * Defines how to handle a specific event
  */
-export const EventHandlerSchema = z.object({
+import { lazySchema } from '../../shared/lazy-schema';
+export const EventHandlerSchema = lazySchema(() => z.object({
   /**
    * Handler identifier
    */
@@ -57,7 +58,7 @@ export const EventHandlerSchema = z.object({
   filter: z.unknown()
     .optional()
     .describe('Optional filter to determine if handler should execute'),
-});
+}));
 
 export type EventHandler = z.infer<typeof EventHandlerSchema>;
 
@@ -65,11 +66,11 @@ export type EventHandler = z.infer<typeof EventHandlerSchema>;
  * Event Route Schema
  * Routes events from one pattern to multiple targets with optional transformation
  */
-export const EventRouteSchema = z.object({
+export const EventRouteSchema = lazySchema(() => z.object({
   from: z.string().describe('Source event pattern (supports wildcards, e.g., user.* or *.created)'),
   to: z.array(z.string()).describe('Target event names to route to'),
   transform: z.unknown().optional().describe('Optional function to transform payload'),
-});
+}));
 
 export type EventRoute = z.infer<typeof EventRouteSchema>;
 
@@ -77,12 +78,12 @@ export type EventRoute = z.infer<typeof EventRouteSchema>;
  * Event Persistence Schema
  * Configuration for persisting events to storage
  */
-export const EventPersistenceSchema = z.object({
+export const EventPersistenceSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable event persistence'),
   retention: z.number().int().positive().describe('Days to retain persisted events'),
   filter: z.unknown().optional().describe('Optional filter function to select which events to persist'),
   storage: z.enum(['database', 'file', 's3', 'custom']).default('database')
     .describe('Storage backend for persisted events'),
-});
+}));
 
 export type EventPersistence = z.infer<typeof EventPersistenceSchema>;

@@ -20,8 +20,9 @@ import { z } from 'zod';
  * Event Phase Enum
  * Lifecycle phase where an error occurred
  */
-export const EventPhaseSchema = z.enum(['init', 'start', 'destroy'])
-  .describe('Plugin lifecycle phase');
+import { lazySchema } from '../shared/lazy-schema';
+export const EventPhaseSchema = lazySchema(() => z.enum(['init', 'start', 'destroy'])
+  .describe('Plugin lifecycle phase'));
 
 export type EventPhase = z.infer<typeof EventPhaseSchema>;
 
@@ -29,7 +30,7 @@ export type EventPhase = z.infer<typeof EventPhaseSchema>;
  * Plugin Event Base Schema
  * Common fields for all plugin events
  */
-export const PluginEventBaseSchema = z.object({
+export const PluginEventBaseSchema = lazySchema(() => z.object({
   /**
    * Plugin name
    */
@@ -39,7 +40,7 @@ export const PluginEventBaseSchema = z.object({
    * Event timestamp (Unix milliseconds)
    */
   timestamp: z.number().int().describe('Unix timestamp in milliseconds when event occurred'),
-});
+}));
 
 /**
  * Plugin Registered Event Schema
@@ -51,12 +52,12 @@ export const PluginEventBaseSchema = z.object({
  *   "version": "1.0.0"
  * }
  */
-export const PluginRegisteredEventSchema = PluginEventBaseSchema.extend({
+export const PluginRegisteredEventSchema = lazySchema(() => PluginEventBaseSchema.extend({
   /**
    * Plugin version (optional)
    */
   version: z.string().optional().describe('Plugin version'),
-});
+}));
 
 export type PluginRegisteredEvent = z.infer<typeof PluginRegisteredEventSchema>;
 
@@ -72,7 +73,7 @@ export type PluginRegisteredEvent = z.infer<typeof PluginRegisteredEventSchema>;
  *   "phase": "init"
  * }
  */
-export const PluginLifecyclePhaseEventSchema = PluginEventBaseSchema.extend({
+export const PluginLifecyclePhaseEventSchema = lazySchema(() => PluginEventBaseSchema.extend({
   /**
    * Duration of the phase (milliseconds)
    */
@@ -82,7 +83,7 @@ export const PluginLifecyclePhaseEventSchema = PluginEventBaseSchema.extend({
    * Lifecycle phase
    */
   phase: EventPhaseSchema.optional().describe('Lifecycle phase'),
-});
+}));
 
 export type PluginLifecyclePhaseEvent = z.infer<typeof PluginLifecyclePhaseEventSchema>;
 
@@ -100,7 +101,7 @@ export type PluginLifecyclePhaseEvent = z.infer<typeof PluginLifecyclePhaseEvent
  *   "errorStack": "Error: Connection failed\n  at ..."
  * }
  */
-export const PluginErrorEventSchema = PluginEventBaseSchema.extend({
+export const PluginErrorEventSchema = lazySchema(() => PluginEventBaseSchema.extend({
   /**
    * Error object
    */
@@ -125,7 +126,7 @@ export const PluginErrorEventSchema = PluginEventBaseSchema.extend({
    * Error stack trace (for debugging)
    */
   errorStack: z.string().optional().describe('Error stack trace'),
-});
+}));
 
 export type PluginErrorEvent = z.infer<typeof PluginErrorEventSchema>;
 
@@ -143,7 +144,7 @@ export type PluginErrorEvent = z.infer<typeof PluginErrorEventSchema>;
  *   "serviceType": "IDataEngine"
  * }
  */
-export const ServiceRegisteredEventSchema = z.object({
+export const ServiceRegisteredEventSchema = lazySchema(() => z.object({
   /**
    * Service name
    */
@@ -158,7 +159,7 @@ export const ServiceRegisteredEventSchema = z.object({
    * Service type (optional)
    */
   serviceType: z.string().optional().describe('Type or interface name of the service'),
-});
+}));
 
 export type ServiceRegisteredEvent = z.infer<typeof ServiceRegisteredEventSchema>;
 
@@ -171,7 +172,7 @@ export type ServiceRegisteredEvent = z.infer<typeof ServiceRegisteredEventSchema
  *   "timestamp": 1706659200000
  * }
  */
-export const ServiceUnregisteredEventSchema = z.object({
+export const ServiceUnregisteredEventSchema = lazySchema(() => z.object({
   /**
    * Service name
    */
@@ -181,7 +182,7 @@ export const ServiceUnregisteredEventSchema = z.object({
    * Event timestamp (Unix milliseconds)
    */
   timestamp: z.number().int().describe('Unix timestamp in milliseconds'),
-});
+}));
 
 export type ServiceUnregisteredEvent = z.infer<typeof ServiceUnregisteredEventSchema>;
 
@@ -199,7 +200,7 @@ export type ServiceUnregisteredEvent = z.infer<typeof ServiceUnregisteredEventSc
  *   "handlerCount": 3
  * }
  */
-export const HookRegisteredEventSchema = z.object({
+export const HookRegisteredEventSchema = lazySchema(() => z.object({
   /**
    * Hook name
    */
@@ -214,7 +215,7 @@ export const HookRegisteredEventSchema = z.object({
    * Number of handlers registered for this hook
    */
   handlerCount: z.number().int().min(0).describe('Number of handlers registered for this hook'),
-});
+}));
 
 export type HookRegisteredEvent = z.infer<typeof HookRegisteredEventSchema>;
 
@@ -229,7 +230,7 @@ export type HookRegisteredEvent = z.infer<typeof HookRegisteredEventSchema>;
  *   "handlerCount": 3
  * }
  */
-export const HookTriggeredEventSchema = z.object({
+export const HookTriggeredEventSchema = lazySchema(() => z.object({
   /**
    * Hook name
    */
@@ -249,7 +250,7 @@ export const HookTriggeredEventSchema = z.object({
    * Number of handlers that will handle this event
    */
   handlerCount: z.number().int().min(0).optional().describe('Number of handlers that will handle this event'),
-});
+}));
 
 export type HookTriggeredEvent = z.infer<typeof HookTriggeredEventSchema>;
 
@@ -261,12 +262,12 @@ export type HookTriggeredEvent = z.infer<typeof HookTriggeredEventSchema>;
  * Kernel Event Base Schema
  * Common fields for kernel events
  */
-export const KernelEventBaseSchema = z.object({
+export const KernelEventBaseSchema = lazySchema(() => z.object({
   /**
    * Event timestamp (Unix milliseconds)
    */
   timestamp: z.number().int().describe('Unix timestamp in milliseconds'),
-});
+}));
 
 /**
  * Kernel Ready Event Schema
@@ -278,7 +279,7 @@ export const KernelEventBaseSchema = z.object({
  *   "pluginCount": 12
  * }
  */
-export const KernelReadyEventSchema = KernelEventBaseSchema.extend({
+export const KernelReadyEventSchema = lazySchema(() => KernelEventBaseSchema.extend({
   /**
    * Total initialization duration (milliseconds)
    */
@@ -288,7 +289,7 @@ export const KernelReadyEventSchema = KernelEventBaseSchema.extend({
    * Number of plugins initialized
    */
   pluginCount: z.number().int().min(0).optional().describe('Number of plugins initialized'),
-});
+}));
 
 export type KernelReadyEvent = z.infer<typeof KernelReadyEventSchema>;
 
@@ -301,12 +302,12 @@ export type KernelReadyEvent = z.infer<typeof KernelReadyEventSchema>;
  *   "reason": "SIGTERM received"
  * }
  */
-export const KernelShutdownEventSchema = KernelEventBaseSchema.extend({
+export const KernelShutdownEventSchema = lazySchema(() => KernelEventBaseSchema.extend({
   /**
    * Shutdown reason (optional)
    */
   reason: z.string().optional().describe('Reason for kernel shutdown'),
-});
+}));
 
 export type KernelShutdownEvent = z.infer<typeof KernelShutdownEventSchema>;
 

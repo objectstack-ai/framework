@@ -13,7 +13,8 @@ import { TokenUsageSchema } from './cost.zod';
 /**
  * Vector Store Provider
  */
-export const VectorStoreProviderSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const VectorStoreProviderSchema = lazySchema(() => z.enum([
   'pinecone',
   'weaviate',
   'qdrant',
@@ -24,12 +25,12 @@ export const VectorStoreProviderSchema = z.enum([
   'opensearch',
   'elasticsearch',
   'custom',
-]);
+]));
 
 /**
  * Embedding Model
  */
-export const EmbeddingModelSchema = z.object({
+export const EmbeddingModelSchema = lazySchema(() => z.object({
   provider: z.enum(['openai', 'cohere', 'huggingface', 'azure_openai', 'local', 'custom']),
   model: z.string().describe('Model name (e.g., "text-embedding-3-large")'),
   dimensions: z.number().int().positive().describe('Embedding vector dimensions'),
@@ -38,12 +39,12 @@ export const EmbeddingModelSchema = z.object({
   endpoint: z.string().url().optional().describe('Custom endpoint URL'),
   apiKey: z.string().optional().describe('API key'),
   secretRef: z.string().optional().describe('Reference to stored secret'),
-});
+}));
 
 /**
  * Text Chunking Strategy
  */
-export const ChunkingStrategySchema = z.discriminatedUnion('type', [
+export const ChunkingStrategySchema = lazySchema(() => z.discriminatedUnion('type', [
   z.object({
     type: z.literal('fixed'),
     chunkSize: z.number().int().positive().describe('Fixed chunk size in tokens/chars'),
@@ -68,12 +69,12 @@ export const ChunkingStrategySchema = z.discriminatedUnion('type', [
     respectHeaders: z.boolean().default(true).describe('Keep headers with content'),
     respectCodeBlocks: z.boolean().default(true).describe('Keep code blocks intact'),
   }),
-]);
+]));
 
 /**
  * Document Metadata Schema
  */
-export const DocumentMetadataSchema = z.object({
+export const DocumentMetadataSchema = lazySchema(() => z.object({
   source: z.string().describe('Document source (file path, URL, etc.)'),
   sourceType: z.enum(['file', 'url', 'api', 'database', 'custom']).optional(),
   title: z.string().optional(),
@@ -84,24 +85,24 @@ export const DocumentMetadataSchema = z.object({
   category: z.string().optional(),
   language: z.string().optional().describe('Document language (ISO 639-1 code)'),
   custom: z.record(z.string(), z.unknown()).optional().describe('Custom metadata fields'),
-});
+}));
 
 /**
  * Document Chunk
  */
-export const DocumentChunkSchema = z.object({
+export const DocumentChunkSchema = lazySchema(() => z.object({
   id: z.string().describe('Unique chunk identifier'),
   content: z.string().describe('Chunk text content'),
   embedding: z.array(z.number()).optional().describe('Embedding vector'),
   metadata: DocumentMetadataSchema,
   chunkIndex: z.number().int().min(0).describe('Chunk position in document'),
   tokens: z.number().int().optional().describe('Token count'),
-});
+}));
 
 /**
  * Retrieval Strategy
  */
-export const RetrievalStrategySchema = z.discriminatedUnion('type', [
+export const RetrievalStrategySchema = lazySchema(() => z.discriminatedUnion('type', [
   z.object({
     type: z.literal('similarity'),
     topK: z.number().int().positive().default(5).describe('Number of results to retrieve'),
@@ -124,22 +125,22 @@ export const RetrievalStrategySchema = z.discriminatedUnion('type', [
     topK: z.number().int().positive().default(5),
     retrieveParent: z.boolean().default(true).describe('Retrieve full parent document'),
   }),
-]);
+]));
 
 /**
  * Reranking Configuration
  */
-export const RerankingConfigSchema = z.object({
+export const RerankingConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false),
   model: z.string().optional().describe('Reranking model name'),
   provider: z.enum(['cohere', 'huggingface', 'custom']).optional(),
   topK: z.number().int().positive().default(3).describe('Final number of results after reranking'),
-});
+}));
 
 /**
  * Vector Store Configuration
  */
-export const VectorStoreConfigSchema = z.object({
+export const VectorStoreConfigSchema = lazySchema(() => z.object({
   provider: VectorStoreProviderSchema,
   indexName: z.string().describe('Index/collection name'),
   namespace: z.string().optional().describe('Namespace for multi-tenancy'),
@@ -158,12 +159,12 @@ export const VectorStoreConfigSchema = z.object({
   batchSize: z.number().int().positive().optional().default(100),
   connectionPoolSize: z.number().int().positive().optional().default(10),
   timeout: z.number().int().positive().optional().default(30000).describe('Timeout in milliseconds'),
-});
+}));
 
 /**
  * Document Loader Configuration
  */
-export const DocumentLoaderConfigSchema = z.object({
+export const DocumentLoaderConfigSchema = lazySchema(() => z.object({
   type: z.enum(['file', 'directory', 'url', 'api', 'database', 'custom']),
   
   /** Source */
@@ -183,41 +184,41 @@ export const DocumentLoaderConfigSchema = z.object({
   
   /** Custom Loader */
   loaderConfig: z.record(z.string(), z.unknown()).optional().describe('Custom loader-specific config'),
-});
+}));
 
 /**
  * Filter Expression Schema
  */
-export const FilterExpressionSchema = z.object({
+export const FilterExpressionSchema = lazySchema(() => z.object({
   field: z.string().describe('Metadata field to filter'),
   operator: z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'nin', 'contains']).default('eq'),
   value: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]).describe('Filter value'),
-});
+}));
 
 export type FilterGroup = {
   logic: 'and' | 'or';
   filters: (z.infer<typeof FilterExpressionSchema> | FilterGroup)[];
 };
 
-export const FilterGroupSchema: z.ZodType<FilterGroup> = z.object({
+export const FilterGroupSchema: z.ZodType<FilterGroup> = lazySchema(() => z.object({
   logic: z.enum(['and', 'or']).default('and'),
   filters: z.array(z.union([FilterExpressionSchema, z.lazy(() => FilterGroupSchema)])),
-});
+}));
 
 /**
  * Standardized Metadata Filter
  */
-export const MetadataFilterSchema = z.union([
+export const MetadataFilterSchema = lazySchema(() => z.union([
   FilterExpressionSchema,
   FilterGroupSchema,
   // Legacy support for simple key-value map
   z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]))
-]);
+]));
 
 /**
  * RAG Pipeline Configuration
  */
-export const RAGPipelineConfigSchema = z.object({
+export const RAGPipelineConfigSchema = lazySchema(() => z.object({
   /** Identity */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Pipeline name (snake_case)'),
   label: z.string().describe('Display name'),
@@ -244,12 +245,12 @@ export const RAGPipelineConfigSchema = z.object({
   enableCache: z.boolean().default(true),
   cacheTTL: z.number().int().positive().default(3600).describe('Cache TTL in seconds'),
   cacheInvalidationStrategy: z.enum(['time_based', 'manual', 'on_update']).default('time_based').optional(),
-});
+}));
 
 /**
  * RAG Query Request
  */
-export const RAGQueryRequestSchema = z.object({
+export const RAGQueryRequestSchema = lazySchema(() => z.object({
   query: z.string().describe('User query'),
   pipelineName: z.string().describe('Pipeline to use'),
   
@@ -266,12 +267,12 @@ export const RAGQueryRequestSchema = z.object({
   /** Options */
   includeMetadata: z.boolean().default(true),
   includeSources: z.boolean().default(true),
-});
+}));
 
 /**
  * RAG Query Response
  */
-export const RAGQueryResponseSchema = z.object({
+export const RAGQueryResponseSchema = lazySchema(() => z.object({
   query: z.string(),
   results: z.array(z.object({
     content: z.string(),
@@ -283,12 +284,12 @@ export const RAGQueryResponseSchema = z.object({
   tokens: TokenUsageSchema.optional().describe('Token usage for this query'),
   cost: z.number().nonnegative().optional().describe('Cost for this query in USD'),
   retrievalTime: z.number().optional().describe('Retrieval time in milliseconds'),
-});
+}));
 
 /**
  * RAG Pipeline Status
  */
-export const RAGPipelineStatusSchema = z.object({
+export const RAGPipelineStatusSchema = lazySchema(() => z.object({
   name: z.string(),
   status: z.enum(['active', 'indexing', 'error', 'disabled']),
   documentsIndexed: z.number().int().min(0),
@@ -298,7 +299,7 @@ export const RAGPipelineStatusSchema = z.object({
     vectorStore: z.enum(['healthy', 'unhealthy', 'unknown']),
     embeddingService: z.enum(['healthy', 'unhealthy', 'unknown']),
   }).optional(),
-});
+}));
 
 // Type exports
 export type VectorStoreProvider = z.infer<typeof VectorStoreProviderSchema>;

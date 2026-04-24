@@ -45,6 +45,7 @@ import { z } from 'zod';
  * Supported metadata categories within an artifact.
  * Each category maps to a subdirectory under `metadata/`.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const MetadataCategoryEnum = z.enum([
   'objects',
   'views',
@@ -72,7 +73,7 @@ export type MetadataCategory = z.infer<typeof MetadataCategoryEnum>;
 /**
  * A single file entry within the artifact.
  */
-export const ArtifactFileEntrySchema = z.object({
+export const ArtifactFileEntrySchema = lazySchema(() => z.object({
   /** Relative path within the artifact (e.g. "metadata/objects/account.object.json") */
   path: z.string().describe('Relative file path within the artifact'),
 
@@ -82,7 +83,7 @@ export const ArtifactFileEntrySchema = z.object({
   /** Metadata category (if under metadata/) */
   category: MetadataCategoryEnum.optional()
     .describe('Metadata category this file belongs to'),
-}).describe('A single file entry within the artifact');
+}).describe('A single file entry within the artifact'));
 
 export type ArtifactFileEntry = z.infer<typeof ArtifactFileEntrySchema>;
 
@@ -100,7 +101,7 @@ export type ArtifactFileEntry = z.infer<typeof ArtifactFileEntrySchema>;
  *   "metadata/objects/account.object.json": "d4e5f6..."
  * }
  */
-export const ArtifactChecksumSchema = z.object({
+export const ArtifactChecksumSchema = lazySchema(() => z.object({
   /** Hash algorithm used (default: SHA256) */
   algorithm: z.enum(['sha256', 'sha384', 'sha512']).default('sha256')
     .describe('Hash algorithm used for checksums'),
@@ -108,7 +109,7 @@ export const ArtifactChecksumSchema = z.object({
   /** Map of relative file paths to their hash values */
   files: z.record(z.string(), z.string().regex(/^[a-f0-9]+$/))
     .describe('File path to hash value mapping'),
-}).describe('Checksum manifest for artifact integrity verification');
+}).describe('Checksum manifest for artifact integrity verification'));
 
 export type ArtifactChecksum = z.infer<typeof ArtifactChecksumSchema>;
 
@@ -120,7 +121,7 @@ export type ArtifactChecksum = z.infer<typeof ArtifactChecksumSchema>;
  * Digital signature for artifact authenticity verification.
  * Ensures the artifact was produced by a trusted publisher and has not been tampered with.
  */
-export const ArtifactSignatureSchema = z.object({
+export const ArtifactSignatureSchema = lazySchema(() => z.object({
   /** Signature algorithm */
   algorithm: z.enum(['RSA-SHA256', 'RSA-SHA384', 'RSA-SHA512', 'ECDSA-SHA256']).default('RSA-SHA256')
     .describe('Signing algorithm used'),
@@ -140,7 +141,7 @@ export const ArtifactSignatureSchema = z.object({
   /** Signer identity (publisher ID or email) */
   signedBy: z.string().optional()
     .describe('Identity of the signer (publisher ID or email)'),
-}).describe('Digital signature for artifact authenticity verification');
+}).describe('Digital signature for artifact authenticity verification'));
 
 export type ArtifactSignature = z.infer<typeof ArtifactSignatureSchema>;
 
@@ -154,7 +155,7 @@ export type ArtifactSignature = z.infer<typeof ArtifactSignatureSchema>;
  * Describes the complete structure and metadata of a built package artifact.
  * This schema is used to validate artifacts before upload to the marketplace.
  */
-export const PackageArtifactSchema = z.object({
+export const PackageArtifactSchema = lazySchema(() => z.object({
   /** Artifact format version (for forward compatibility) */
   formatVersion: z.string().regex(/^\d+\.\d+$/).default('1.0')
     .describe('Artifact format version (e.g. "1.0")'),
@@ -196,7 +197,7 @@ export const PackageArtifactSchema = z.object({
   /** Digital signature for authenticity */
   signature: ArtifactSignatureSchema.optional()
     .describe('Digital signature for artifact authenticity verification'),
-}).describe('Package artifact structure and metadata');
+}).describe('Package artifact structure and metadata'));
 
 export type PackageArtifact = z.infer<typeof PackageArtifactSchema>;
 export type PackageArtifactInput = z.input<typeof PackageArtifactSchema>;

@@ -35,7 +35,8 @@ import { HttpMethod, CorsConfigSchema, RateLimitConfigSchema, StaticMountSchema 
  *   "requestTimeout": 30000
  * }
  */
-export const HttpServerConfigSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const HttpServerConfigSchema = lazySchema(() => z.object({
   /**
    * Server port number
    */
@@ -79,7 +80,7 @@ export const HttpServerConfigSchema = z.object({
    * Trust proxy settings
    */
   trustProxy: z.boolean().default(false).describe('Trust X-Forwarded-* headers'),
-});
+}));
 
 export type HttpServerConfig = z.infer<typeof HttpServerConfigSchema>;
 export type HttpServerConfigInput = z.input<typeof HttpServerConfigSchema>;
@@ -92,7 +93,7 @@ export type HttpServerConfigInput = z.input<typeof HttpServerConfigSchema>;
  * Route Handler Metadata Schema
  * Metadata for route handlers used in registration
  */
-export const RouteHandlerMetadataSchema = z.object({
+export const RouteHandlerMetadataSchema = lazySchema(() => z.object({
   /**
    * HTTP method
    */
@@ -126,7 +127,7 @@ export const RouteHandlerMetadataSchema = z.object({
     permissions: z.array(z.string()).optional().describe('Required permissions'),
     rateLimit: z.string().optional().describe('Rate limit policy override'),
   }).optional(),
-});
+}));
 
 export type RouteHandlerMetadata = z.infer<typeof RouteHandlerMetadataSchema>;
 export type RouteHandlerMetadataInput = z.input<typeof RouteHandlerMetadataSchema>;
@@ -166,7 +167,7 @@ export type MiddlewareType = z.infer<typeof MiddlewareType>;
  *   }
  * }
  */
-export const MiddlewareConfigSchema = z.object({
+export const MiddlewareConfigSchema = lazySchema(() => z.object({
   /**
    * Middleware identifier
    */
@@ -199,7 +200,7 @@ export const MiddlewareConfigSchema = z.object({
     include: z.array(z.string()).optional().describe('Include path patterns (glob)'),
     exclude: z.array(z.string()).optional().describe('Exclude path patterns (glob)'),
   }).optional().describe('Path filtering'),
-});
+}));
 
 export type MiddlewareConfig = z.infer<typeof MiddlewareConfigSchema>;
 export type MiddlewareConfigInput = z.input<typeof MiddlewareConfigSchema>;
@@ -227,7 +228,7 @@ export type ServerEventType = z.infer<typeof ServerEventType>;
  * Server Event Schema
  * Events emitted by the HTTP server during lifecycle
  */
-export const ServerEventSchema = z.object({
+export const ServerEventSchema = lazySchema(() => z.object({
   /**
    * Event type
    */
@@ -242,7 +243,7 @@ export const ServerEventSchema = z.object({
    * Event payload
    */
   data: z.record(z.string(), z.unknown()).optional().describe('Event-specific data'),
-});
+}));
 
 export type ServerEvent = z.infer<typeof ServerEventSchema>;
 
@@ -254,7 +255,7 @@ export type ServerEvent = z.infer<typeof ServerEventSchema>;
  * Server Capabilities Schema
  * Declares what features a server implementation supports
  */
-export const ServerCapabilitiesSchema = z.object({
+export const ServerCapabilitiesSchema = lazySchema(() => z.object({
   /**
    * Supported HTTP versions
    */
@@ -294,7 +295,7 @@ export const ServerCapabilitiesSchema = z.object({
    * Built-in compression
    */
   compression: z.boolean().default(true).describe('Built-in compression support'),
-});
+}));
 
 export type ServerCapabilities = z.infer<typeof ServerCapabilitiesSchema>;
 export type ServerCapabilitiesInput = z.input<typeof ServerCapabilitiesSchema>;
@@ -307,7 +308,7 @@ export type ServerCapabilitiesInput = z.input<typeof ServerCapabilitiesSchema>;
  * Server Status Schema
  * Current operational status of the server
  */
-export const ServerStatusSchema = z.object({
+export const ServerStatusSchema = lazySchema(() => z.object({
   /**
    * Server state
    */
@@ -343,7 +344,7 @@ export const ServerStatusSchema = z.object({
     success: z.number().int().describe('Successful requests'),
     errors: z.number().int().describe('Failed requests'),
   }).optional(),
-});
+}));
 
 export type ServerStatus = z.infer<typeof ServerStatusSchema>;
 

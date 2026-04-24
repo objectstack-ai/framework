@@ -24,19 +24,20 @@ import { z } from 'zod';
  * Plugin Loading Strategy
  * Determines how and when a plugin is loaded into memory
  */
-export const PluginLoadingStrategySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const PluginLoadingStrategySchema = lazySchema(() => z.enum([
   'eager',      // Load immediately during bootstrap (critical plugins)
   'lazy',       // Load on first use (feature plugins)
   'parallel',   // Load in parallel with other plugins
   'deferred',   // Load after initial bootstrap complete
   'on-demand',  // Load only when explicitly requested
-]).describe('Plugin loading strategy');
+]).describe('Plugin loading strategy'));
 
 /**
  * Plugin Preloading Configuration
  * Configures preloading behavior for faster activation
  */
-export const PluginPreloadConfigSchema = z.object({
+export const PluginPreloadConfigSchema = lazySchema(() => z.object({
   /**
    * Enable preloading for this plugin
    */
@@ -82,13 +83,13 @@ export const PluginPreloadConfigSchema = z.object({
      */
     minNetworkSpeed: z.enum(['slow-2g', '2g', '3g', '4g']).optional(),
   }).optional(),
-}).describe('Plugin preloading configuration');
+}).describe('Plugin preloading configuration'));
 
 /**
  * Plugin Code Splitting Configuration
  * Configures how plugin code is split for optimal loading
  */
-export const PluginCodeSplittingSchema = z.object({
+export const PluginCodeSplittingSchema = lazySchema(() => z.object({
   /**
    * Enable code splitting for this plugin
    */
@@ -124,13 +125,13 @@ export const PluginCodeSplittingSchema = z.object({
      */
     minChunks: z.number().int().min(1).default(2),
   }).optional(),
-}).describe('Plugin code splitting configuration');
+}).describe('Plugin code splitting configuration'));
 
 /**
  * Plugin Dynamic Import Configuration
  * Configures dynamic import behavior for runtime module loading
  */
-export const PluginDynamicImportSchema = z.object({
+export const PluginDynamicImportSchema = lazySchema(() => z.object({
   /**
    * Enable dynamic imports
    */
@@ -174,13 +175,13 @@ export const PluginDynamicImportSchema = z.object({
     maxAttempts: z.number().int().min(1).max(10).default(3),
     backoffMs: z.number().int().min(0).default(1000).describe('Exponential backoff base delay'),
   }).optional(),
-}).describe('Plugin dynamic import configuration');
+}).describe('Plugin dynamic import configuration'));
 
 /**
  * Plugin Initialization Configuration
  * Configures how plugin initialization is executed
  */
-export const PluginInitializationSchema = z.object({
+export const PluginInitializationSchema = lazySchema(() => z.object({
   /**
    * Initialization mode
    */
@@ -219,13 +220,13 @@ export const PluginInitializationSchema = z.object({
    * Health check interval for monitoring
    */
   healthCheckInterval: z.number().int().min(0).optional().describe('Health check interval in ms (0 = disabled)'),
-}).describe('Plugin initialization configuration');
+}).describe('Plugin initialization configuration'));
 
 /**
  * Plugin Dependency Resolution Configuration
  * Advanced dependency resolution using semantic versioning
  */
-export const PluginDependencyResolutionSchema = z.object({
+export const PluginDependencyResolutionSchema = lazySchema(() => z.object({
   /**
    * Dependency resolution strategy
    */
@@ -289,7 +290,7 @@ export const PluginDependencyResolutionSchema = z.object({
     'warn',          // Warn but continue
     'allow',         // Allow circular dependencies
   ]).default('warn'),
-}).describe('Plugin dependency resolution configuration');
+}).describe('Plugin dependency resolution configuration'));
 
 /**
  * Plugin Hot Reload Configuration
@@ -298,7 +299,7 @@ export const PluginDependencyResolutionSchema = z.object({
  * Production mode adds safety features: health validation, rollback on failure,
  * connection draining, and concurrency control for zero-downtime reloads.
  */
-export const PluginHotReloadSchema = z.object({
+export const PluginHotReloadSchema = lazySchema(() => z.object({
   /**
    * Enable hot reload
    */
@@ -409,13 +410,13 @@ export const PluginHotReloadSchema = z.object({
     minReloadInterval: z.number().int().min(1000).default(5000)
       .describe('Cooldown period between reloads of the same plugin'),
   }).optional(),
-}).describe('Plugin hot reload configuration');
+}).describe('Plugin hot reload configuration'));
 
 /**
  * Plugin Caching Configuration
  * Configures caching strategy for faster subsequent loads
  */
-export const PluginCachingSchema = z.object({
+export const PluginCachingSchema = lazySchema(() => z.object({
   /**
    * Enable caching
    */
@@ -467,7 +468,7 @@ export const PluginCachingSchema = z.object({
     enabled: z.boolean().default(false),
     algorithm: z.enum(['gzip', 'brotli', 'deflate']).default('gzip'),
   }).optional(),
-}).describe('Plugin caching configuration');
+}).describe('Plugin caching configuration'));
 
 /**
  * Plugin Sandboxing Configuration
@@ -476,7 +477,7 @@ export const PluginCachingSchema = z.object({
  * Supports isolation beyond automation scripts: any plugin can be sandboxed
  * with process-level isolation and inter-plugin communication (IPC).
  */
-export const PluginSandboxingSchema = z.object({
+export const PluginSandboxingSchema = lazySchema(() => z.object({
   /**
    * Enable sandboxing
    */
@@ -597,13 +598,13 @@ export const PluginSandboxingSchema = z.object({
     allowedServices: z.array(z.string()).optional()
       .describe('Service names the sandboxed plugin may invoke via IPC'),
   }).optional(),
-}).describe('Plugin sandboxing configuration');
+}).describe('Plugin sandboxing configuration'));
 
 /**
  * Plugin Performance Monitoring Configuration
  * Telemetry and performance tracking
  */
-export const PluginPerformanceMonitoringSchema = z.object({
+export const PluginPerformanceMonitoringSchema = lazySchema(() => z.object({
   /**
    * Enable performance monitoring
    */
@@ -656,13 +657,13 @@ export const PluginPerformanceMonitoringSchema = z.object({
    * Action on budget violation
    */
   onBudgetViolation: z.enum(['warn', 'error', 'ignore']).default('warn'),
-}).describe('Plugin performance monitoring configuration');
+}).describe('Plugin performance monitoring configuration'));
 
 /**
  * Complete Plugin Loading Configuration
  * Combines all loading-related configurations
  */
-export const PluginLoadingConfigSchema = z.object({
+export const PluginLoadingConfigSchema = lazySchema(() => z.object({
   /**
    * Loading strategy
    */
@@ -712,13 +713,13 @@ export const PluginLoadingConfigSchema = z.object({
    * Performance monitoring
    */
   monitoring: PluginPerformanceMonitoringSchema.optional(),
-}).describe('Complete plugin loading configuration');
+}).describe('Complete plugin loading configuration'));
 
 /**
  * Plugin Loading Event
  * Emitted during plugin loading lifecycle
  */
-export const PluginLoadingEventSchema = z.object({
+export const PluginLoadingEventSchema = lazySchema(() => z.object({
   /**
    * Event type
    */
@@ -767,13 +768,13 @@ export const PluginLoadingEventSchema = z.object({
     code: z.string().optional(),
     stack: z.string().optional(),
   }).optional(),
-}).describe('Plugin loading lifecycle event');
+}).describe('Plugin loading lifecycle event'));
 
 /**
  * Plugin Loading State
  * Tracks the current loading state of a plugin
  */
-export const PluginLoadingStateSchema = z.object({
+export const PluginLoadingStateSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -818,7 +819,7 @@ export const PluginLoadingStateSchema = z.object({
    * Retry count
    */
   retryCount: z.number().int().min(0).default(0),
-}).describe('Plugin loading state');
+}).describe('Plugin loading state'));
 
 // Export types
 export type PluginLoadingStrategy = z.infer<typeof PluginLoadingStrategySchema>;

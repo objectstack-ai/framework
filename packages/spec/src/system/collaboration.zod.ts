@@ -20,6 +20,7 @@ import { z } from 'zod';
  * OT Operation Type Enum
  * Types of operations in Operational Transformation
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const OTOperationType = z.enum([
   'insert',      // Insert characters at position
   'delete',      // Delete characters at position
@@ -32,7 +33,7 @@ export type OTOperationType = z.infer<typeof OTOperationType>;
  * OT Operation Component
  * Single component of an OT operation
  */
-export const OTComponentSchema = z.discriminatedUnion('type', [
+export const OTComponentSchema = lazySchema(() => z.discriminatedUnion('type', [
   z.object({
     type: z.literal('insert'),
     text: z.string().describe('Text to insert'),
@@ -47,7 +48,7 @@ export const OTComponentSchema = z.discriminatedUnion('type', [
     count: z.number().int().positive().describe('Number of characters to retain'),
     attributes: z.record(z.string(), z.unknown()).optional().describe('Attribute changes to apply'),
   }),
-]);
+]));
 
 export type OTComponent = z.infer<typeof OTComponentSchema>;
 
@@ -56,7 +57,7 @@ export type OTComponent = z.infer<typeof OTComponentSchema>;
  * Represents a complete OT operation
  * Based on the OT algorithm used by Google Docs and other collaborative editors
  */
-export const OTOperationSchema = z.object({
+export const OTOperationSchema = lazySchema(() => z.object({
   operationId: z.string().uuid().describe('Unique operation identifier'),
   documentId: z.string().describe('Document identifier'),
   userId: z.string().describe('User who created the operation'),
@@ -65,7 +66,7 @@ export const OTOperationSchema = z.object({
   baseVersion: z.number().int().nonnegative().describe('Document version this operation is based on'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime when operation was created'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional operation metadata'),
-});
+}));
 
 export type OTOperation = z.infer<typeof OTOperationSchema>;
 
@@ -73,11 +74,11 @@ export type OTOperation = z.infer<typeof OTOperationSchema>;
  * OT Transform Result
  * Result of transforming one operation against another
  */
-export const OTTransformResultSchema = z.object({
+export const OTTransformResultSchema = lazySchema(() => z.object({
   operation: OTOperationSchema.describe('Transformed operation'),
   transformed: z.boolean().describe('Whether transformation was applied'),
   conflicts: z.array(z.string()).optional().describe('Conflict descriptions if any'),
-});
+}));
 
 export type OTTransformResult = z.infer<typeof OTTransformResultSchema>;
 
@@ -107,9 +108,9 @@ export type CRDTType = z.infer<typeof CRDTType>;
  * Vector Clock Schema
  * Tracks causality in distributed systems
  */
-export const VectorClockSchema = z.object({
+export const VectorClockSchema = lazySchema(() => z.object({
   clock: z.record(z.string(), z.number().int().nonnegative()).describe('Map of replica ID to logical timestamp'),
-});
+}));
 
 export type VectorClock = z.infer<typeof VectorClockSchema>;
 
@@ -117,13 +118,13 @@ export type VectorClock = z.infer<typeof VectorClockSchema>;
  * LWW-Register Schema
  * Last-Write-Wins Register CRDT
  */
-export const LWWRegisterSchema = z.object({
+export const LWWRegisterSchema = lazySchema(() => z.object({
   type: z.literal('lww-register'),
   value: z.unknown().describe('Current register value'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime of last write'),
   replicaId: z.string().describe('ID of replica that performed last write'),
   vectorClock: VectorClockSchema.optional().describe('Optional vector clock for causality tracking'),
-});
+}));
 
 export type LWWRegister = z.infer<typeof LWWRegisterSchema>;
 
@@ -131,11 +132,11 @@ export type LWWRegister = z.infer<typeof LWWRegisterSchema>;
  * Counter Operation Schema
  * Operations for Counter CRDTs
  */
-export const CounterOperationSchema = z.object({
+export const CounterOperationSchema = lazySchema(() => z.object({
   replicaId: z.string().describe('Replica identifier'),
   delta: z.number().int().describe('Change amount (positive for increment, negative for decrement)'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime of operation'),
-});
+}));
 
 export type CounterOperation = z.infer<typeof CounterOperationSchema>;
 
@@ -143,10 +144,10 @@ export type CounterOperation = z.infer<typeof CounterOperationSchema>;
  * G-Counter Schema
  * Grow-only Counter CRDT
  */
-export const GCounterSchema = z.object({
+export const GCounterSchema = lazySchema(() => z.object({
   type: z.literal('g-counter'),
   counts: z.record(z.string(), z.number().int().nonnegative()).describe('Map of replica ID to count'),
-});
+}));
 
 export type GCounter = z.infer<typeof GCounterSchema>;
 
@@ -154,11 +155,11 @@ export type GCounter = z.infer<typeof GCounterSchema>;
  * PN-Counter Schema
  * Positive-Negative Counter CRDT (supports increment and decrement)
  */
-export const PNCounterSchema = z.object({
+export const PNCounterSchema = lazySchema(() => z.object({
   type: z.literal('pn-counter'),
   positive: z.record(z.string(), z.number().int().nonnegative()).describe('Positive increments per replica'),
   negative: z.record(z.string(), z.number().int().nonnegative()).describe('Negative increments per replica'),
-});
+}));
 
 export type PNCounter = z.infer<typeof PNCounterSchema>;
 
@@ -166,13 +167,13 @@ export type PNCounter = z.infer<typeof PNCounterSchema>;
  * OR-Set Element Schema
  * Element in an Observed-Remove Set
  */
-export const ORSetElementSchema = z.object({
+export const ORSetElementSchema = lazySchema(() => z.object({
   value: z.unknown().describe('Element value'),
   timestamp: z.string().datetime().describe('Addition timestamp'),
   replicaId: z.string().describe('Replica that added the element'),
   uid: z.string().uuid().describe('Unique identifier for this addition'),
   removed: z.boolean().optional().default(false).describe('Whether element has been removed'),
-});
+}));
 
 export type ORSetElement = z.infer<typeof ORSetElementSchema>;
 
@@ -180,10 +181,10 @@ export type ORSetElement = z.infer<typeof ORSetElementSchema>;
  * OR-Set Schema
  * Observed-Remove Set CRDT
  */
-export const ORSetSchema = z.object({
+export const ORSetSchema = lazySchema(() => z.object({
   type: z.literal('or-set'),
   elements: z.array(ORSetElementSchema).describe('Set elements with metadata'),
-});
+}));
 
 export type ORSet = z.infer<typeof ORSetSchema>;
 
@@ -191,7 +192,7 @@ export type ORSet = z.infer<typeof ORSetSchema>;
  * Text CRDT Operation Schema
  * Operations for text-based CRDTs (e.g., Yjs, Automerge)
  */
-export const TextCRDTOperationSchema = z.object({
+export const TextCRDTOperationSchema = lazySchema(() => z.object({
   operationId: z.string().uuid().describe('Unique operation identifier'),
   replicaId: z.string().describe('Replica identifier'),
   position: z.number().int().nonnegative().describe('Position in document'),
@@ -199,7 +200,7 @@ export const TextCRDTOperationSchema = z.object({
   delete: z.number().int().positive().optional().describe('Number of characters to delete'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime of operation'),
   lamportTimestamp: z.number().int().nonnegative().describe('Lamport timestamp for ordering'),
-});
+}));
 
 export type TextCRDTOperation = z.infer<typeof TextCRDTOperationSchema>;
 
@@ -207,14 +208,14 @@ export type TextCRDTOperation = z.infer<typeof TextCRDTOperationSchema>;
  * Text CRDT State Schema
  * State of a text-based CRDT document
  */
-export const TextCRDTStateSchema = z.object({
+export const TextCRDTStateSchema = lazySchema(() => z.object({
   type: z.literal('text'),
   documentId: z.string().describe('Document identifier'),
   content: z.string().describe('Current text content'),
   operations: z.array(TextCRDTOperationSchema).describe('History of operations'),
   lamportClock: z.number().int().nonnegative().describe('Current Lamport clock value'),
   vectorClock: VectorClockSchema.describe('Vector clock for causality'),
-});
+}));
 
 export type TextCRDTState = z.infer<typeof TextCRDTStateSchema>;
 
@@ -222,13 +223,13 @@ export type TextCRDTState = z.infer<typeof TextCRDTStateSchema>;
  * CRDT State Union
  * Discriminated union of all CRDT types
  */
-export const CRDTStateSchema = z.discriminatedUnion('type', [
+export const CRDTStateSchema = lazySchema(() => z.discriminatedUnion('type', [
   LWWRegisterSchema,
   GCounterSchema,
   PNCounterSchema,
   ORSetSchema,
   TextCRDTStateSchema,
-]);
+]));
 
 export type CRDTState = z.infer<typeof CRDTStateSchema>;
 
@@ -236,14 +237,14 @@ export type CRDTState = z.infer<typeof CRDTStateSchema>;
  * CRDT Merge Schema
  * Result of merging two CRDT states
  */
-export const CRDTMergeResultSchema = z.object({
+export const CRDTMergeResultSchema = lazySchema(() => z.object({
   state: CRDTStateSchema.describe('Merged CRDT state'),
   conflicts: z.array(z.object({
     type: z.string().describe('Conflict type'),
     description: z.string().describe('Conflict description'),
     resolved: z.boolean().describe('Whether conflict was automatically resolved'),
   })).optional().describe('Conflicts encountered during merge'),
-});
+}));
 
 export type CRDTMergeResult = z.infer<typeof CRDTMergeResultSchema>;
 
@@ -274,13 +275,13 @@ export type CursorColorPreset = z.infer<typeof CursorColorPreset>;
  * Cursor Style Schema
  * Visual styling for collaborative cursors
  */
-export const CursorStyleSchema = z.object({
+export const CursorStyleSchema = lazySchema(() => z.object({
   color: z.union([CursorColorPreset, z.string()]).describe('Cursor color (preset or custom hex)'),
   opacity: z.number().min(0).max(1).optional().default(1).describe('Cursor opacity (0-1)'),
   label: z.string().optional().describe('Label to display with cursor (usually username)'),
   showLabel: z.boolean().optional().default(true).describe('Whether to show label'),
   pulseOnUpdate: z.boolean().optional().default(true).describe('Whether to pulse when cursor moves'),
-});
+}));
 
 export type CursorStyle = z.infer<typeof CursorStyleSchema>;
 
@@ -288,7 +289,7 @@ export type CursorStyle = z.infer<typeof CursorStyleSchema>;
  * Cursor Selection Schema
  * Represents a text selection in collaborative editing
  */
-export const CursorSelectionSchema = z.object({
+export const CursorSelectionSchema = lazySchema(() => z.object({
   anchor: z.object({
     line: z.number().int().nonnegative().describe('Anchor line number'),
     column: z.number().int().nonnegative().describe('Anchor column number'),
@@ -298,7 +299,7 @@ export const CursorSelectionSchema = z.object({
     column: z.number().int().nonnegative().describe('Focus column number'),
   }).describe('Selection focus (end point)'),
   direction: z.enum(['forward', 'backward']).optional().describe('Selection direction'),
-});
+}));
 
 export type CursorSelection = z.infer<typeof CursorSelectionSchema>;
 
@@ -306,7 +307,7 @@ export type CursorSelection = z.infer<typeof CursorSelectionSchema>;
  * Collaborative Cursor Schema
  * Complete cursor state for a collaborative user
  */
-export const CollaborativeCursorSchema = z.object({
+export const CollaborativeCursorSchema = lazySchema(() => z.object({
   userId: z.string().describe('User identifier'),
   sessionId: z.string().uuid().describe('Session identifier'),
   documentId: z.string().describe('Document identifier'),
@@ -320,7 +321,7 @@ export const CollaborativeCursorSchema = z.object({
   isTyping: z.boolean().optional().default(false).describe('Whether user is currently typing'),
   lastUpdate: z.string().datetime().describe('ISO 8601 datetime of last cursor update'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional cursor metadata'),
-});
+}));
 
 export type CollaborativeCursor = z.infer<typeof CollaborativeCursorSchema>;
 
@@ -328,7 +329,7 @@ export type CollaborativeCursor = z.infer<typeof CollaborativeCursorSchema>;
  * Cursor Update Schema
  * Update to a collaborative cursor
  */
-export const CursorUpdateSchema = z.object({
+export const CursorUpdateSchema = lazySchema(() => z.object({
   position: z.object({
     line: z.number().int().nonnegative(),
     column: z.number().int().nonnegative(),
@@ -336,7 +337,7 @@ export const CursorUpdateSchema = z.object({
   selection: CursorSelectionSchema.optional().describe('Updated selection'),
   isTyping: z.boolean().optional().describe('Updated typing state'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Updated metadata'),
-});
+}));
 
 export type CursorUpdate = z.infer<typeof CursorUpdateSchema>;
 
@@ -361,7 +362,7 @@ export type UserActivityStatus = z.infer<typeof UserActivityStatus>;
  * Awareness User State Schema
  * Tracks what a user is doing in the collaborative session
  */
-export const AwarenessUserStateSchema = z.object({
+export const AwarenessUserStateSchema = lazySchema(() => z.object({
   userId: z.string().describe('User identifier'),
   sessionId: z.string().uuid().describe('Session identifier'),
   userName: z.string().describe('Display name'),
@@ -373,7 +374,7 @@ export const AwarenessUserStateSchema = z.object({
   joinedAt: z.string().datetime().describe('ISO 8601 datetime when user joined session'),
   permissions: z.array(z.string()).optional().describe('User permissions in this session'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional user state metadata'),
-});
+}));
 
 export type AwarenessUserState = z.infer<typeof AwarenessUserStateSchema>;
 
@@ -381,14 +382,14 @@ export type AwarenessUserState = z.infer<typeof AwarenessUserStateSchema>;
  * Awareness Session Schema
  * Represents the complete awareness state for a collaboration session
  */
-export const AwarenessSessionSchema = z.object({
+export const AwarenessSessionSchema = lazySchema(() => z.object({
   sessionId: z.string().uuid().describe('Session identifier'),
   documentId: z.string().optional().describe('Document ID this session is for'),
   users: z.array(AwarenessUserStateSchema).describe('Active users in session'),
   startedAt: z.string().datetime().describe('ISO 8601 datetime when session started'),
   lastUpdate: z.string().datetime().describe('ISO 8601 datetime of last update'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Session metadata'),
-});
+}));
 
 export type AwarenessSession = z.infer<typeof AwarenessSessionSchema>;
 
@@ -396,12 +397,12 @@ export type AwarenessSession = z.infer<typeof AwarenessSessionSchema>;
  * Awareness Update Schema
  * Update to awareness state
  */
-export const AwarenessUpdateSchema = z.object({
+export const AwarenessUpdateSchema = lazySchema(() => z.object({
   status: UserActivityStatus.optional().describe('Updated status'),
   currentDocument: z.string().optional().describe('Updated current document'),
   currentView: z.string().optional().describe('Updated current view'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Updated metadata'),
-});
+}));
 
 export type AwarenessUpdate = z.infer<typeof AwarenessUpdateSchema>;
 
@@ -409,7 +410,7 @@ export type AwarenessUpdate = z.infer<typeof AwarenessUpdateSchema>;
  * Awareness Event Schema
  * Events that occur in awareness tracking
  */
-export const AwarenessEventSchema = z.object({
+export const AwarenessEventSchema = lazySchema(() => z.object({
   eventId: z.string().uuid().describe('Event identifier'),
   sessionId: z.string().uuid().describe('Session identifier'),
   eventType: z.enum([
@@ -422,7 +423,7 @@ export const AwarenessEventSchema = z.object({
   userId: z.string().optional().describe('User involved in event'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime of event'),
   payload: z.unknown().describe('Event payload'),
-});
+}));
 
 export type AwarenessEvent = z.infer<typeof AwarenessEventSchema>;
 
@@ -447,7 +448,7 @@ export type CollaborationMode = z.infer<typeof CollaborationMode>;
  * Collaboration Session Config
  * Configuration for a collaboration session
  */
-export const CollaborationSessionConfigSchema = z.object({
+export const CollaborationSessionConfigSchema = lazySchema(() => z.object({
   mode: CollaborationMode.describe('Collaboration mode to use'),
   enableCursorSharing: z.boolean().optional().default(true).describe('Enable cursor sharing'),
   enablePresence: z.boolean().optional().default(true).describe('Enable presence tracking'),
@@ -460,7 +461,7 @@ export const CollaborationSessionConfigSchema = z.object({
     enabled: z.boolean().describe('Enable periodic snapshots'),
     interval: z.number().int().positive().describe('Snapshot interval in milliseconds'),
   }).optional().describe('Snapshot configuration'),
-});
+}));
 
 export type CollaborationSessionConfig = z.infer<typeof CollaborationSessionConfigSchema>;
 
@@ -468,7 +469,7 @@ export type CollaborationSessionConfig = z.infer<typeof CollaborationSessionConf
  * Collaboration Session Schema
  * Complete collaboration session state
  */
-export const CollaborationSessionSchema = z.object({
+export const CollaborationSessionSchema = lazySchema(() => z.object({
   sessionId: z.string().uuid().describe('Session identifier'),
   documentId: z.string().describe('Document identifier'),
   config: CollaborationSessionConfigSchema.describe('Session configuration'),
@@ -479,6 +480,6 @@ export const CollaborationSessionSchema = z.object({
   createdAt: z.string().datetime().describe('ISO 8601 datetime when session was created'),
   lastActivity: z.string().datetime().describe('ISO 8601 datetime of last activity'),
   status: z.enum(['active', 'idle', 'ended']).describe('Session status'),
-});
+}));
 
 export type CollaborationSession = z.infer<typeof CollaborationSessionSchema>;

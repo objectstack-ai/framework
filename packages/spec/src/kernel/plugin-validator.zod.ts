@@ -27,7 +27,8 @@ import { z } from 'zod';
  *   "code": "INVALID_VERSION"
  * }
  */
-export const ValidationErrorSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ValidationErrorSchema = lazySchema(() => z.object({
   /**
    * Field that failed validation
    */
@@ -42,7 +43,7 @@ export const ValidationErrorSchema = z.object({
    * Machine-readable error code (optional)
    */
   code: z.string().optional().describe('Machine-readable error code'),
-});
+}));
 
 export type ValidationError = z.infer<typeof ValidationErrorSchema>;
 
@@ -57,7 +58,7 @@ export type ValidationError = z.infer<typeof ValidationErrorSchema>;
  *   "code": "MISSING_DESCRIPTION"
  * }
  */
-export const ValidationWarningSchema = z.object({
+export const ValidationWarningSchema = lazySchema(() => z.object({
   /**
    * Field with warning
    */
@@ -72,7 +73,7 @@ export const ValidationWarningSchema = z.object({
    * Machine-readable warning code (optional)
    */
   code: z.string().optional().describe('Machine-readable warning code'),
-});
+}));
 
 export type ValidationWarning = z.infer<typeof ValidationWarningSchema>;
 
@@ -95,7 +96,7 @@ export type ValidationWarning = z.infer<typeof ValidationWarningSchema>;
  *   }]
  * }
  */
-export const ValidationResultSchema = z.object({
+export const ValidationResultSchema = lazySchema(() => z.object({
   /**
    * Whether validation passed
    */
@@ -110,7 +111,7 @@ export const ValidationResultSchema = z.object({
    * Validation warnings (non-fatal issues)
    */
   warnings: z.array(ValidationWarningSchema).optional().describe('Validation warnings'),
-});
+}));
 
 export type ValidationResult = z.infer<typeof ValidationResultSchema>;
 
@@ -131,7 +132,7 @@ export type ValidationResult = z.infer<typeof ValidationResultSchema>;
  *   "dependencies": ["core-plugin"]
  * }
  */
-export const PluginMetadataSchema = z.object({
+export const PluginMetadataSchema = lazySchema(() => z.object({
   /**
    * Unique plugin identifier (snake_case)
    */
@@ -155,6 +156,6 @@ export const PluginMetadataSchema = z.object({
   /**
    * Additional plugin metadata
    */
-}).passthrough().describe('Plugin metadata for validation');
+}).passthrough().describe('Plugin metadata for validation'));
 
 export type PluginMetadata = z.infer<typeof PluginMetadataSchema>;

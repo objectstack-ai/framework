@@ -16,6 +16,7 @@ import { z } from 'zod';
 // Service Identifiers
 // ==========================================
 
+import { lazySchema } from '../shared/lazy-schema';
 export const CoreServiceName = z.enum([
   // Core Data & Metadata
   'metadata',       // Object/Field Definitions
@@ -47,11 +48,11 @@ export type CoreServiceName = z.infer<typeof CoreServiceName>;
  * Service Criticality Level
  * Defines the startup behavior when a service is missing.
  */
-export const ServiceCriticalitySchema = z.enum([
+export const ServiceCriticalitySchema = lazySchema(() => z.enum([
   'required', // System fails to start if missing (Exit Code 1)
   'core',     // System warns if missing, functionality degraded (Warn)
   'optional', // System ignores if missing, feature disabled (Info)
-]);
+]));
 
 /**
  * Service Requirement Definition
@@ -90,23 +91,23 @@ export const ServiceRequirementDef = {
 /**
  * Describes the availability and health of a service
  */
-export const ServiceStatusSchema = z.object({
+export const ServiceStatusSchema = lazySchema(() => z.object({
   name: CoreServiceName,
   enabled: z.boolean(),
   status: z.enum(['running', 'stopped', 'degraded', 'initializing']),
   version: z.string().optional(),
   provider: z.string().optional().describe('Implementation provider (e.g. "s3" for storage)'),
   features: z.array(z.string()).optional().describe('List of supported sub-features'),
-});
+}));
 
 /**
  * The Contract definition for what the Kernel MUST expose
  * map<ServiceName, ServiceInstance>
  */
-export const KernelServiceMapSchema = z.record(
+export const KernelServiceMapSchema = lazySchema(() => z.record(
   CoreServiceName, 
   z.unknown().describe('Service Instance implementing the protocol interface')
-);
+));
 
 // ==========================================
 // Service Interfaces (Stub definitions)
@@ -116,8 +117,8 @@ export const KernelServiceMapSchema = z.record(
 // For Zod, we primarily validate configuration and status.
 
 // e.g.
-export const ServiceConfigSchema = z.object({
+export const ServiceConfigSchema = lazySchema(() => z.object({
   id: z.string(),
   name: CoreServiceName,
   options: z.record(z.string(), z.unknown()).optional(),
-});
+}));

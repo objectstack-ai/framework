@@ -9,13 +9,14 @@ import { I18nLabelSchema, AriaPropsSchema } from './i18n.zod';
  * Action Parameter Schema
  * Defines inputs required before executing an action.
  */
-export const ActionParamSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ActionParamSchema = lazySchema(() => z.object({
   name: z.string(),
   label: I18nLabelSchema,
   type: FieldType,
   required: z.boolean().default(false),
   options: z.array(z.object({ label: I18nLabelSchema, value: z.string() })).optional(),
-});
+}));
 
 /**
  * Action type enum values.
@@ -63,7 +64,7 @@ const TARGET_REQUIRED_TYPES: ReadonlySet<string> = new Set(
  * Note: The action name is the configuration ID. JavaScript function names can use camelCase,
  * but the metadata ID must be lowercase snake_case.
  */
-export const ActionSchema = z.object({
+export const ActionSchema = lazySchema(() => z.object({
   /** Machine name of the action */
   name: SnakeCaseIdentifierSchema.describe('Machine name (lowercase snake_case)'),
   
@@ -151,7 +152,7 @@ export const ActionSchema = z.object({
 }, {
   message: "Action 'target' is required when type is 'url', 'flow', 'modal', or 'api'.",
   path: ['target'],
-});
+}));
 
 export type Action = z.infer<typeof ActionSchema>;
 export type ActionParam = z.infer<typeof ActionParamSchema>;

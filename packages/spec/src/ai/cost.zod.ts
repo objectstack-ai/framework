@@ -13,11 +13,12 @@ import { z } from 'zod';
  * Token Usage Schema
  * Standardized across all AI operations
  */
-export const TokenUsageSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const TokenUsageSchema = lazySchema(() => z.object({
   prompt: z.number().int().nonnegative().describe('Input tokens'),
   completion: z.number().int().nonnegative().describe('Output tokens'),
   total: z.number().int().nonnegative().describe('Total tokens'),
-});
+}));
 
 export type TokenUsage = z.infer<typeof TokenUsageSchema>;
 
@@ -25,7 +26,7 @@ export type TokenUsage = z.infer<typeof TokenUsageSchema>;
  * AI Operation Cost Schema
  * Unified cost tracking for all AI operations
  */
-export const AIOperationCostSchema = z.object({
+export const AIOperationCostSchema = lazySchema(() => z.object({
   operationId: z.string(),
   operationType: z.enum(['conversation', 'orchestration', 'prediction', 'rag', 'nlq']),
   agentName: z.string().optional().describe('Agent that performed the operation'),
@@ -34,26 +35,26 @@ export const AIOperationCostSchema = z.object({
   cost: z.number().nonnegative().describe('Cost in USD'),
   timestamp: z.string().datetime(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 export type AIOperationCost = z.infer<typeof AIOperationCostSchema>;
 
 /**
  * Cost Metric Type
  */
-export const CostMetricTypeSchema = z.enum([
+export const CostMetricTypeSchema = lazySchema(() => z.enum([
   'token',           // Cost per token
   'request',         // Cost per API request
   'character',       // Cost per character (e.g., TTS)
   'second',          // Cost per second (e.g., speech)
   'image',           // Cost per image
   'embedding',       // Cost per embedding
-]);
+]));
 
 /**
  * Billing Period
  */
-export const BillingPeriodSchema = z.enum([
+export const BillingPeriodSchema = lazySchema(() => z.enum([
   'hourly',
   'daily',
   'weekly',
@@ -61,13 +62,13 @@ export const BillingPeriodSchema = z.enum([
   'quarterly',
   'yearly',
   'custom',
-]);
+]));
 
 /**
  * Cost Entry
  * Extended from AIOperationCostSchema with additional tracking fields
  */
-export const CostEntrySchema = z.object({
+export const CostEntrySchema = lazySchema(() => z.object({
   /** Identity */
   id: z.string().describe('Unique cost entry ID'),
   timestamp: z.string().datetime().describe('ISO 8601 timestamp'),
@@ -97,24 +98,24 @@ export const CostEntrySchema = z.object({
   /** Metadata */
   tags: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 /**
  * Budget Type
  */
-export const BudgetTypeSchema = z.enum([
+export const BudgetTypeSchema = lazySchema(() => z.enum([
   'global',          // Organization-wide budget
   'user',            // Per-user budget
   'agent',           // Per-agent budget
   'object',          // Per-object budget (e.g., per case)
   'project',         // Per-project budget
   'department',      // Per-department budget
-]);
+]));
 
 /**
  * Budget Limit
  */
-export const BudgetLimitSchema = z.object({
+export const BudgetLimitSchema = lazySchema(() => z.object({
   /** Limit Configuration */
   type: BudgetTypeSchema,
   scope: z.string().optional().describe('Scope identifier (userId, agentId, etc.)'),
@@ -144,12 +145,12 @@ export const BudgetLimitSchema = z.object({
   description: z.string().optional(),
   active: z.boolean().default(true),
   tags: z.array(z.string()).optional(),
-});
+}));
 
 /**
  * Budget Status
  */
-export const BudgetStatusSchema = z.object({
+export const BudgetStatusSchema = lazySchema(() => z.object({
   /** Budget Reference */
   budgetId: z.string(),
   type: BudgetTypeSchema,
@@ -176,23 +177,23 @@ export const BudgetStatusSchema = z.object({
   
   /** Last Update */
   lastUpdated: z.string().datetime().describe('ISO 8601 timestamp'),
-});
+}));
 
 /**
  * Cost Alert Type
  */
-export const CostAlertTypeSchema = z.enum([
+export const CostAlertTypeSchema = lazySchema(() => z.enum([
   'threshold_warning',    // Warning threshold reached
   'threshold_critical',   // Critical threshold reached
   'limit_exceeded',       // Budget limit exceeded
   'anomaly_detected',     // Unusual spending pattern
   'projection_exceeded',  // Projected to exceed budget
-]);
+]));
 
 /**
  * Cost Alert
  */
-export const CostAlertSchema = z.object({
+export const CostAlertSchema = lazySchema(() => z.object({
   /** Alert Details */
   id: z.string(),
   timestamp: z.string().datetime().describe('ISO 8601 timestamp'),
@@ -222,12 +223,12 @@ export const CostAlertSchema = z.object({
   
   /** Metadata */
   metadata: z.record(z.string(), z.unknown()).optional(),
-});
+}));
 
 /**
  * Cost Breakdown Dimension
  */
-export const CostBreakdownDimensionSchema = z.enum([
+export const CostBreakdownDimensionSchema = lazySchema(() => z.enum([
   'model',
   'provider',
   'user',
@@ -237,12 +238,12 @@ export const CostBreakdownDimensionSchema = z.enum([
   'date',
   'hour',
   'tag',
-]);
+]));
 
 /**
  * Cost Breakdown Entry
  */
-export const CostBreakdownEntrySchema = z.object({
+export const CostBreakdownEntrySchema = lazySchema(() => z.object({
   dimension: CostBreakdownDimensionSchema,
   value: z.string().describe('Dimension value (e.g., model ID, user ID)'),
   
@@ -257,12 +258,12 @@ export const CostBreakdownEntrySchema = z.object({
   /** Time Range */
   periodStart: z.string().datetime().optional(),
   periodEnd: z.string().datetime().optional(),
-});
+}));
 
 /**
  * Cost Analytics
  */
-export const CostAnalyticsSchema = z.object({
+export const CostAnalyticsSchema = lazySchema(() => z.object({
   /** Time Range */
   periodStart: z.string().datetime().describe('ISO 8601 timestamp'),
   periodEnd: z.string().datetime().describe('ISO 8601 timestamp'),
@@ -298,12 +299,12 @@ export const CostAnalyticsSchema = z.object({
   /** Efficiency Metrics */
   tokensPerDollar: z.number().nonnegative().optional(),
   requestsPerDollar: z.number().nonnegative().optional(),
-});
+}));
 
 /**
  * Cost Optimization Recommendation
  */
-export const CostOptimizationRecommendationSchema = z.object({
+export const CostOptimizationRecommendationSchema = lazySchema(() => z.object({
   /** Recommendation Details */
   id: z.string(),
   type: z.enum([
@@ -335,12 +336,12 @@ export const CostOptimizationRecommendationSchema = z.object({
   /** Status */
   status: z.enum(['pending', 'accepted', 'rejected', 'implemented']).default('pending'),
   implementedAt: z.string().datetime().optional(),
-});
+}));
 
 /**
  * Cost Report
  */
-export const CostReportSchema = z.object({
+export const CostReportSchema = lazySchema(() => z.object({
   /** Report Metadata */
   id: z.string(),
   name: z.string(),
@@ -376,12 +377,12 @@ export const CostReportSchema = z.object({
   /** Export */
   format: z.enum(['summary', 'detailed', 'executive']).default('summary'),
   currency: z.string().default('USD'),
-});
+}));
 
 /**
  * Cost Query Filters
  */
-export const CostQueryFiltersSchema = z.object({
+export const CostQueryFiltersSchema = lazySchema(() => z.object({
   /** Time Range */
   startDate: z.string().datetime().optional().describe('ISO 8601 timestamp'),
   endDate: z.string().datetime().optional().describe('ISO 8601 timestamp'),
@@ -411,7 +412,7 @@ export const CostQueryFiltersSchema = z.object({
   /** Pagination */
   limit: z.number().int().positive().optional(),
   offset: z.number().int().nonnegative().optional(),
-});
+}));
 
 // Type exports
 export type CostMetricType = z.infer<typeof CostMetricTypeSchema>;

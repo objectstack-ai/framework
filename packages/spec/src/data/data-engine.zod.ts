@@ -24,10 +24,11 @@ import { ExecutionContextSchema } from '../kernel/execution-context.zod';
  * Data Engine Query filter conditions
  * Supports simple key-value map or complex Logic/Field expressions (DSL)
  */
-export const DataEngineFilterSchema = z.union([
+import { lazySchema } from '../shared/lazy-schema';
+export const DataEngineFilterSchema = lazySchema(() => z.union([
   z.record(z.string(), z.unknown()),
   FilterConditionSchema
-]).describe('Data Engine query filter conditions');
+]).describe('Data Engine query filter conditions'));
 
 /**
  * Sort order definition
@@ -36,11 +37,11 @@ export const DataEngineFilterSchema = z.union([
  * - { name: 1 }
  * - [{ field: 'name', order: 'asc' }]
  */
-export const DataEngineSortSchema = z.union([
+export const DataEngineSortSchema = lazySchema(() => z.union([
   z.record(z.string(), z.enum(['asc', 'desc'])), 
   z.record(z.string(), z.union([z.literal(1), z.literal(-1)])),
   z.array(SortNodeSchema)
-]).describe('Sort order definition');
+]).describe('Sort order definition'));
 
 // ==========================================================================
 // 1b. Base Engine Options (shared context)
@@ -52,10 +53,10 @@ export const DataEngineSortSchema = z.union([
  * All Data Engine operation options extend this schema to carry
  * an optional ExecutionContext for identity, tenant, and transaction propagation.
  */
-export const BaseEngineOptionsSchema = z.object({
+export const BaseEngineOptionsSchema = lazySchema(() => z.object({
   /** Execution context (identity, tenant, transaction) */
   context: ExecutionContextSchema.optional(),
-});
+}));
 
 // ==========================================================================
 // 2. method: FIND (QueryAST-aligned)
@@ -79,7 +80,7 @@ export const BaseEngineOptionsSchema = z.object({
  * });
  * ```
  */
-export const EngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
+export const EngineQueryOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** Filter conditions (WHERE) — standard QueryAST `where` */
   where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
 
@@ -116,7 +117,7 @@ export const EngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
 
   /** SELECT DISTINCT flag */
   distinct: z.boolean().optional(),
-}).describe('QueryAST-aligned query options for IDataEngine.find() operations');
+}).describe('QueryAST-aligned query options for IDataEngine.find() operations'));
 
 // --------------------------------------------------------------------------
 // Legacy: DataEngineQueryOptionsSchema (DEPRECATED)
@@ -128,7 +129,7 @@ export const EngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
  * that require mechanical translation to QueryAST. Migrate to the
  * QueryAST-aligned `EngineQueryOptionsSchema` (where/fields/orderBy/offset/expand).
  */
-export const DataEngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
+export const DataEngineQueryOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** @deprecated Use `where` (EngineQueryOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
   /** @deprecated Use `fields` (EngineQueryOptionsSchema) */
@@ -141,26 +142,26 @@ export const DataEngineQueryOptionsSchema = BaseEngineOptionsSchema.extend({
   top: z.number().int().min(1).optional(),
   /** @deprecated Use `expand` (EngineQueryOptionsSchema) */
   populate: z.array(z.string()).optional(),
-}).describe('Query options for IDataEngine.find() operations');
+}).describe('Query options for IDataEngine.find() operations'));
 
 // ==========================================================================
 // 3. method: INSERT
 // ==========================================================================
 
-export const DataEngineInsertOptionsSchema = BaseEngineOptionsSchema.extend({
+export const DataEngineInsertOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** 
    * Return the inserted record(s)? 
    * Some drivers support RETURNING clause for efficiency.
    * Default: true
    */
   returning: z.boolean().default(true).optional(),
-}).describe('Options for DataEngine.insert operations');
+}).describe('Options for DataEngine.insert operations'));
 
 // ==========================================================================
 // 4. method: UPDATE (QueryAST-aligned)
 // ==========================================================================
 
-export const EngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
+export const EngineUpdateOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** Filter conditions to identify records to update — standard QueryAST `where` */
   where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
   /** Perform an upsert? If true, insert if not found. */
@@ -169,7 +170,7 @@ export const EngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
   multi: z.boolean().default(false).optional(),
   /** Return the updated record(s)? Default: false (returns update count/status) */
   returning: z.boolean().default(false).optional(),
-}).describe('QueryAST-aligned options for DataEngine.update operations');
+}).describe('QueryAST-aligned options for DataEngine.update operations'));
 
 // --------------------------------------------------------------------------
 // Legacy: DataEngineUpdateOptionsSchema (DEPRECATED)
@@ -179,24 +180,24 @@ export const EngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
  * @deprecated Use `EngineUpdateOptionsSchema` instead.
  * Migrate `filter` → `where`.
  */
-export const DataEngineUpdateOptionsSchema = BaseEngineOptionsSchema.extend({
+export const DataEngineUpdateOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** @deprecated Use `where` (EngineUpdateOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
   upsert: z.boolean().default(false).optional(),
   multi: z.boolean().default(false).optional(),
   returning: z.boolean().default(false).optional(),
-}).describe('Options for DataEngine.update operations');
+}).describe('Options for DataEngine.update operations'));
 
 // ==========================================================================
 // 5. method: DELETE (QueryAST-aligned)
 // ==========================================================================
 
-export const EngineDeleteOptionsSchema = BaseEngineOptionsSchema.extend({
+export const EngineDeleteOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** Filter conditions to identify records to delete — standard QueryAST `where` */
   where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
   /** Delete multiple records? If false, only the first match is deleted. Default: false */
   multi: z.boolean().default(false).optional(),
-}).describe('QueryAST-aligned options for DataEngine.delete operations');
+}).describe('QueryAST-aligned options for DataEngine.delete operations'));
 
 // --------------------------------------------------------------------------
 // Legacy: DataEngineDeleteOptionsSchema (DEPRECATED)
@@ -206,17 +207,17 @@ export const EngineDeleteOptionsSchema = BaseEngineOptionsSchema.extend({
  * @deprecated Use `EngineDeleteOptionsSchema` instead.
  * Migrate `filter` → `where`.
  */
-export const DataEngineDeleteOptionsSchema = BaseEngineOptionsSchema.extend({
+export const DataEngineDeleteOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** @deprecated Use `where` (EngineDeleteOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
   multi: z.boolean().default(false).optional(),
-}).describe('Options for DataEngine.delete operations');
+}).describe('Options for DataEngine.delete operations'));
 
 // ==========================================================================
 // 6. method: AGGREGATE (QueryAST-aligned)
 // ==========================================================================
 
-export const EngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
+export const EngineAggregateOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** Filter conditions (WHERE) — standard QueryAST `where` */
   where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
   /** Group By fields */
@@ -226,7 +227,7 @@ export const EngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
    * e.g. [{ function: 'sum', field: 'amount', alias: 'total' }]
    */
   aggregations: z.array(AggregationNodeSchema).optional(),
-}).describe('QueryAST-aligned options for DataEngine.aggregate operations');
+}).describe('QueryAST-aligned options for DataEngine.aggregate operations'));
 
 // --------------------------------------------------------------------------
 // Legacy: DataEngineAggregateOptionsSchema (DEPRECATED)
@@ -236,7 +237,7 @@ export const EngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
  * @deprecated Use `EngineAggregateOptionsSchema` instead.
  * Migrate `filter` → `where`, aggregation `method` → `function`.
  */
-export const DataEngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
+export const DataEngineAggregateOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** @deprecated Use `where` (EngineAggregateOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
   groupBy: z.array(z.string()).optional(),
@@ -248,16 +249,16 @@ export const DataEngineAggregateOptionsSchema = BaseEngineOptionsSchema.extend({
     method: z.enum(['count', 'sum', 'avg', 'min', 'max', 'count_distinct']),
     alias: z.string().optional()
   })).optional(),
-}).describe('Options for DataEngine.aggregate operations');
+}).describe('Options for DataEngine.aggregate operations'));
 
 // ==========================================================================
 // 7. method: COUNT (QueryAST-aligned)
 // ==========================================================================
 
-export const EngineCountOptionsSchema = BaseEngineOptionsSchema.extend({
+export const EngineCountOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** Filter conditions — standard QueryAST `where` */
   where: z.union([z.record(z.string(), z.unknown()), FilterConditionSchema]).optional(),
-}).describe('QueryAST-aligned options for DataEngine.count operations');
+}).describe('QueryAST-aligned options for DataEngine.count operations'));
 
 // --------------------------------------------------------------------------
 // Legacy: DataEngineCountOptionsSchema (DEPRECATED)
@@ -267,16 +268,16 @@ export const EngineCountOptionsSchema = BaseEngineOptionsSchema.extend({
  * @deprecated Use `EngineCountOptionsSchema` instead.
  * Migrate `filter` → `where`.
  */
-export const DataEngineCountOptionsSchema = BaseEngineOptionsSchema.extend({
+export const DataEngineCountOptionsSchema = lazySchema(() => BaseEngineOptionsSchema.extend({
   /** @deprecated Use `where` (EngineCountOptionsSchema) */
   filter: DataEngineFilterSchema.optional(),
-}).describe('Options for DataEngine.count operations');
+}).describe('Options for DataEngine.count operations'));
 
 // ==========================================================================
 // 8. Definition (Contract)
 // ==========================================================================
 
-export const DataEngineContractSchema = z.object({
+export const DataEngineContractSchema = lazySchema(() => z.object({
   find: z.function()
     .input(z.tuple([z.string(), EngineQueryOptionsSchema.optional()]))
     .output(z.promise(z.array(z.unknown()))),
@@ -304,7 +305,7 @@ export const DataEngineContractSchema = z.object({
   aggregate: z.function()
     .input(z.tuple([z.string(), EngineAggregateOptionsSchema]))
     .output(z.promise(z.array(z.unknown())))
-}).describe('Standard Data Engine Contract');
+}).describe('Standard Data Engine Contract'));
 
 // ==========================================================================
 // 9. Virtualization & RPC Protocol
@@ -351,69 +352,69 @@ const RpcQueryOptionsSchema = EngineQueryOptionsSchema.extend({
   populate: z.array(z.string()).optional(),
 });
 
-export const DataEngineFindRequestSchema = z.object({
+export const DataEngineFindRequestSchema = lazySchema(() => z.object({
   method: z.literal('find'),
   object: z.string(),
   query: RpcQueryOptionsSchema.optional()
-});
+}));
 
-export const DataEngineFindOneRequestSchema = z.object({
+export const DataEngineFindOneRequestSchema = lazySchema(() => z.object({
   method: z.literal('findOne'),
   object: z.string(),
   query: RpcQueryOptionsSchema.optional()
-});
+}));
 
-export const DataEngineInsertRequestSchema = z.object({
+export const DataEngineInsertRequestSchema = lazySchema(() => z.object({
   method: z.literal('insert'),
   object: z.string(),
   data: z.union([z.record(z.string(), z.unknown()), z.array(z.record(z.string(), z.unknown()))]),
   options: DataEngineInsertOptionsSchema.optional()
-});
+}));
 
-export const DataEngineUpdateRequestSchema = z.object({
+export const DataEngineUpdateRequestSchema = lazySchema(() => z.object({
   method: z.literal('update'),
   object: z.string(),
   data: z.record(z.string(), z.unknown()),
   id: z.union([z.string(), z.number()]).optional().describe('ID for single update, or use where in options'),
   options: EngineUpdateOptionsSchema.extend(RpcLegacyFilterMixin).optional()
-});
+}));
 
-export const DataEngineDeleteRequestSchema = z.object({
+export const DataEngineDeleteRequestSchema = lazySchema(() => z.object({
   method: z.literal('delete'),
   object: z.string(),
   id: z.union([z.string(), z.number()]).optional().describe('ID for single delete, or use where in options'),
   options: EngineDeleteOptionsSchema.extend(RpcLegacyFilterMixin).optional()
-});
+}));
 
-export const DataEngineCountRequestSchema = z.object({
+export const DataEngineCountRequestSchema = lazySchema(() => z.object({
   method: z.literal('count'),
   object: z.string(),
   query: EngineCountOptionsSchema.extend(RpcLegacyFilterMixin).optional()
-});
+}));
 
-export const DataEngineAggregateRequestSchema = z.object({
+export const DataEngineAggregateRequestSchema = lazySchema(() => z.object({
   method: z.literal('aggregate'),
   object: z.string(),
   query: EngineAggregateOptionsSchema.extend(RpcLegacyFilterMixin)
-});
+}));
 
 /**
  * Data Engine Execute Request (Raw Command)
  * Execute a raw command/query native to the driver (e.g. SQL, Shell, Remote API).
  */
-export const DataEngineExecuteRequestSchema = z.object({
+export const DataEngineExecuteRequestSchema = lazySchema(() => z.object({
   method: z.literal('execute'),
   /** The abstract command (string SQL, or JSON object) */
   command: z.unknown(),
   /** Optional options */
   options: z.record(z.string(), z.unknown()).optional()
-});
+}));
 
 /**
  * Data Engine Vector Find Request (AI/RAG)
  * Perform a similarity search using vector embeddings.
  */
-export const DataEngineVectorFindRequestSchema = z.object({
+export const DataEngineVectorFindRequestSchema = lazySchema(() => z.object({
   method: z.literal('vectorFind'),
   object: z.string(),
   /** The vector embedding to search for */
@@ -426,13 +427,13 @@ export const DataEngineVectorFindRequestSchema = z.object({
   limit: z.number().int().default(5).optional(),
   /** Minimum similarity score (0-1) or distance threshold */
   threshold: z.number().optional()
-});
+}));
 
 /**
  * Data Engine Batch Request
  * Execute multiple operations in a single transaction/request efficiently.
  */
-export const DataEngineBatchRequestSchema = z.object({
+export const DataEngineBatchRequestSchema = lazySchema(() => z.object({
   method: z.literal('batch'),
   requests: z.array(z.discriminatedUnion('method', [
     DataEngineFindRequestSchema,
@@ -451,13 +452,13 @@ export const DataEngineBatchRequestSchema = z.object({
    * - false: Best effort, continue on error
    */
   transaction: z.boolean().default(true).optional()
-});
+}));
 
 /**
  * Unified Data Engine Request Union
  * Use this to validate any incoming "Virtual ObjectQL" request.
  */
-export const DataEngineRequestSchema = z.discriminatedUnion('method', [
+export const DataEngineRequestSchema = lazySchema(() => z.discriminatedUnion('method', [
   DataEngineFindRequestSchema,
   DataEngineFindOneRequestSchema,
   DataEngineInsertRequestSchema,
@@ -468,7 +469,7 @@ export const DataEngineRequestSchema = z.discriminatedUnion('method', [
   DataEngineBatchRequestSchema,
   DataEngineExecuteRequestSchema,
   DataEngineVectorFindRequestSchema
-]).describe('Virtual ObjectQL Request Protocol');
+]).describe('Virtual ObjectQL Request Protocol'));
 
 // ==========================================================================
 // 10. Type Exports

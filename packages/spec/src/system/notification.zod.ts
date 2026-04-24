@@ -25,7 +25,8 @@ import { z } from 'zod';
  * }
  * ```
  */
-export const EmailTemplateSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const EmailTemplateSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for the email template
    */
@@ -59,7 +60,7 @@ export const EmailTemplateSchema = z.object({
     name: z.string().describe('Attachment filename'),
     url: z.string().url().describe('Attachment URL'),
   })).optional().describe('Email attachments'),
-});
+}));
 
 /**
  * SMS Template Schema
@@ -77,7 +78,7 @@ export const EmailTemplateSchema = z.object({
  * }
  * ```
  */
-export const SMSTemplateSchema = z.object({
+export const SMSTemplateSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for the SMS template
    */
@@ -98,7 +99,7 @@ export const SMSTemplateSchema = z.object({
    * List of template variables for dynamic content
    */
   variables: z.array(z.string()).optional().describe('Template variables'),
-});
+}));
 
 /**
  * Push Notification Schema
@@ -121,7 +122,7 @@ export const SMSTemplateSchema = z.object({
  * }
  * ```
  */
-export const PushNotificationSchema = z.object({
+export const PushNotificationSchema = lazySchema(() => z.object({
   /**
    * Notification title
    */
@@ -154,7 +155,7 @@ export const PushNotificationSchema = z.object({
     action: z.string().describe('Action identifier'),
     title: z.string().describe('Action button title'),
   })).optional().describe('Notification actions'),
-});
+}));
 
 /**
  * In-App Notification Schema
@@ -174,7 +175,7 @@ export const PushNotificationSchema = z.object({
  * }
  * ```
  */
-export const InAppNotificationSchema = z.object({
+export const InAppNotificationSchema = lazySchema(() => z.object({
   /**
    * Notification title
    */
@@ -205,14 +206,14 @@ export const InAppNotificationSchema = z.object({
    * Timestamp when notification expires (Unix milliseconds)
    */
   expiresAt: z.number().optional().describe('Expiration timestamp'),
-});
+}));
 
 /**
  * Notification Channel Enum
  * 
  * Supported notification delivery channels.
  */
-export const NotificationChannelSchema = z.enum([
+export const NotificationChannelSchema = lazySchema(() => z.enum([
   'email',
   'sms',
   'push',
@@ -220,7 +221,7 @@ export const NotificationChannelSchema = z.enum([
   'slack',
   'teams',
   'webhook',
-]);
+]));
 
 /**
  * Notification Configuration Schema
@@ -260,7 +261,7 @@ export const NotificationChannelSchema = z.enum([
  * }
  * ```
  */
-export const NotificationConfigSchema = z.object({
+export const NotificationConfigSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for this notification configuration
    */
@@ -370,7 +371,7 @@ export const NotificationConfigSchema = z.object({
      */
     trackDelivery: z.boolean().optional().default(true).describe('Track delivery'),
   }).optional().describe('Tracking configuration'),
-});
+}));
 
 // Type exports
 export type NotificationConfig = z.infer<typeof NotificationConfigSchema>;

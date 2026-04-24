@@ -62,7 +62,8 @@ import { AgentSchema, AIToolSchema } from './agent.zod';
 /**
  * Code Generation Targets
  */
-export const CodeGenerationTargetSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const CodeGenerationTargetSchema = lazySchema(() => z.enum([
   'frontend',       // Frontend UI components
   'backend',        // Backend services
   'api',            // API endpoints
@@ -70,14 +71,14 @@ export const CodeGenerationTargetSchema = z.enum([
   'tests',          // Test suites
   'documentation',  // Documentation
   'infrastructure', // Infrastructure as code
-]).describe('Code generation target');
+]).describe('Code generation target'));
 
 export type CodeGenerationTarget = z.infer<typeof CodeGenerationTargetSchema>;
 
 /**
  * Code Generation Configuration
  */
-export const CodeGenerationConfigSchema = z.object({
+export const CodeGenerationConfigSchema = lazySchema(() => z.object({
   /**
    * Enable code generation
    */
@@ -112,14 +113,14 @@ export const CodeGenerationConfigSchema = z.object({
    * Validation mode
    */
   validationMode: z.enum(['strict', 'moderate', 'permissive']).optional().default('strict').describe('Code validation strictness'),
-});
+}));
 
 export type CodeGenerationConfig = z.infer<typeof CodeGenerationConfigSchema>;
 
 /**
  * Testing Configuration
  */
-export const TestingConfigSchema = z.object({
+export const TestingConfigSchema = lazySchema(() => z.object({
   /**
    * Enable automated testing
    */
@@ -156,14 +157,14 @@ export const TestingConfigSchema = z.object({
    * Auto-fix failing tests
    */
   autoFix: z.boolean().optional().default(false).describe('Attempt to auto-fix failing tests'),
-});
+}));
 
 export type TestingConfig = z.infer<typeof TestingConfigSchema>;
 
 /**
  * CI/CD Pipeline Stage
  */
-export const PipelineStageSchema = z.object({
+export const PipelineStageSchema = lazySchema(() => z.object({
   /**
    * Stage name
    */
@@ -216,14 +217,14 @@ export const PipelineStageSchema = z.object({
    * Max retry attempts
    */
   maxRetries: z.number().int().min(0).max(5).optional().default(0).describe('Maximum retry attempts'),
-});
+}));
 
 export type PipelineStage = z.infer<typeof PipelineStageSchema>;
 
 /**
  * CI/CD Pipeline Configuration
  */
-export const CICDPipelineConfigSchema = z.object({
+export const CICDPipelineConfigSchema = lazySchema(() => z.object({
   /**
    * Pipeline name
    */
@@ -258,14 +259,14 @@ export const CICDPipelineConfigSchema = z.object({
     onFailure: z.boolean().optional().default(true),
     channels: z.array(z.string()).optional().describe('Notification channels (e.g., slack, email)'),
   }).optional().describe('Pipeline notifications'),
-});
+}));
 
 export type CICDPipelineConfig = z.infer<typeof CICDPipelineConfigSchema>;
 
 /**
  * Version Management Configuration
  */
-export const VersionManagementSchema = z.object({
+export const VersionManagementSchema = lazySchema(() => z.object({
   /**
    * Versioning scheme
    */
@@ -295,14 +296,14 @@ export const VersionManagementSchema = z.object({
    * Tag releases
    */
   tagReleases: z.boolean().optional().default(true).describe('Create Git tags for releases'),
-});
+}));
 
 export type VersionManagement = z.infer<typeof VersionManagementSchema>;
 
 /**
  * Deployment Strategy Configuration
  */
-export const DeploymentStrategySchema = z.object({
+export const DeploymentStrategySchema = lazySchema(() => z.object({
   /**
    * Strategy type
    */
@@ -337,14 +338,14 @@ export const DeploymentStrategySchema = z.object({
    * Smoke tests
    */
   smokeTests: z.array(z.string()).optional().describe('Smoke test commands to run post-deployment'),
-});
+}));
 
 export type DeploymentStrategy = z.infer<typeof DeploymentStrategySchema>;
 
 /**
  * Monitoring Configuration
  */
-export const MonitoringConfigSchema = z.object({
+export const MonitoringConfigSchema = lazySchema(() => z.object({
   /**
    * Enable monitoring
    */
@@ -375,14 +376,14 @@ export const MonitoringConfigSchema = z.object({
    * Monitoring integrations
    */
   integrations: z.array(z.string()).optional().describe('Monitoring service integrations'),
-});
+}));
 
 export type MonitoringConfig = z.infer<typeof MonitoringConfigSchema>;
 
 /**
  * Development Configuration
  */
-export const DevelopmentConfigSchema = z.object({
+export const DevelopmentConfigSchema = lazySchema(() => z.object({
   /**
    * ObjectStack specification source
    */
@@ -415,14 +416,14 @@ export const DevelopmentConfigSchema = z.object({
     autoFormat: z.boolean().optional().default(true),
     config: z.record(z.string(), z.unknown()).optional(),
   }).optional().describe('Code formatting configuration'),
-});
+}));
 
 export type DevelopmentConfig = z.infer<typeof DevelopmentConfigSchema>;
 
 /**
  * GitHub Integration Configuration
  */
-export const GitHubIntegrationSchema = z.object({
+export const GitHubIntegrationSchema = lazySchema(() => z.object({
   /**
    * GitHub connector reference
    */
@@ -450,14 +451,14 @@ export const GitHubIntegrationSchema = z.object({
     requireReviews: z.boolean().optional().default(true).describe('Require reviews before merge'),
     deleteBranchOnMerge: z.boolean().optional().default(true).describe('Delete feature branch after merge'),
   }).optional().describe('Pull request settings'),
-});
+}));
 
 export type GitHubIntegration = z.infer<typeof GitHubIntegrationSchema>;
 
 /**
  * Vercel Integration Configuration
  */
-export const VercelIntegrationSchema = z.object({
+export const VercelIntegrationSchema = lazySchema(() => z.object({
   /**
    * Vercel connector reference
    */
@@ -484,14 +485,14 @@ export const VercelIntegrationSchema = z.object({
     autoDeployPreview: z.boolean().optional().default(true).describe('Auto-deploy preview environments'),
     requireApproval: z.boolean().optional().default(true).describe('Require approval for production deployments'),
   }).optional().describe('Deployment settings'),
-});
+}));
 
 export type VercelIntegration = z.infer<typeof VercelIntegrationSchema>;
 
 /**
  * Integration Configuration
  */
-export const IntegrationConfigSchema = z.object({
+export const IntegrationConfigSchema = lazySchema(() => z.object({
   /**
    * GitHub integration
    */
@@ -506,7 +507,7 @@ export const IntegrationConfigSchema = z.object({
    * Additional integrations
    */
   additional: z.record(z.string(), z.unknown()).optional().describe('Additional integration configurations'),
-});
+}));
 
 export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
 
@@ -514,7 +515,7 @@ export type IntegrationConfig = z.infer<typeof IntegrationConfigSchema>;
  * DevOps Agent Schema
  * Complete autonomous DevOps agent configuration
  */
-export const DevOpsAgentSchema = AgentSchema.extend({
+export const DevOpsAgentSchema = lazySchema(() => AgentSchema.extend({
   /**
    * Development configuration
    */
@@ -560,7 +561,7 @@ export const DevOpsAgentSchema = AgentSchema.extend({
     ])).optional().describe('Optimization goals'),
     learningMode: z.enum(['conservative', 'balanced', 'aggressive']).optional().default('balanced').describe('Learning mode'),
   }).optional().describe('Self-iteration configuration'),
-});
+}));
 
 export type DevOpsAgent = z.infer<typeof DevOpsAgentSchema>;
 
@@ -568,7 +569,7 @@ export type DevOpsAgent = z.infer<typeof DevOpsAgentSchema>;
  * DevOps Tools Extension
  * Additional tools available to DevOps agents
  */
-export const DevOpsToolSchema = AIToolSchema.extend({
+export const DevOpsToolSchema = lazySchema(() => AIToolSchema.extend({
   type: z.enum([
     'action',
     'flow',
@@ -581,7 +582,7 @@ export const DevOpsToolSchema = AIToolSchema.extend({
     'deployment',
     'monitoring',
   ]),
-});
+}));
 
 export type DevOpsTool = z.infer<typeof DevOpsToolSchema>;
 

@@ -5,6 +5,7 @@ import { z } from 'zod';
 /**
  * Metric Type Classification
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const LicenseMetricType = z.enum([
   'boolean',   // Feature Flag (Enabled/Disabled)
   'counter',   // Usage Count (e.g. API Calls, Records Created) - Accumulates
@@ -16,7 +17,7 @@ export type LicenseMetricType = z.infer<typeof LicenseMetricType>;
  * Feature/Limit Definition Schema
  * Defines a controllable capability of the system.
  */
-export const FeatureSchema = z.object({
+export const FeatureSchema = lazySchema(() => z.object({
   code: z.string().regex(/^[a-z_][a-z0-9_.]*$/).describe('Feature code (e.g. core.api_access)'),
   label: z.string(),
   description: z.string().optional(),
@@ -28,13 +29,13 @@ export const FeatureSchema = z.object({
   
   /** Dependencies (e.g. 'audit_log' requires 'enterprise_tier') */
   requires: z.array(z.string()).optional(),
-});
+}));
 
 /**
  * Subscription Plan Schema
  * Defines a tier of service (e.g. "Free", "Pro", "Enterprise").
  */
-export const PlanSchema = z.object({
+export const PlanSchema = lazySchema(() => z.object({
   code: z.string().describe('Plan code (e.g. pro_v1)'),
   label: z.string(),
   active: z.boolean().default(true),
@@ -49,14 +50,14 @@ export const PlanSchema = z.object({
   currency: z.string().default('USD').optional(),
   priceMonthly: z.number().optional(),
   priceYearly: z.number().optional(),
-});
+}));
 
 /**
  * License Schema
  * The actual entitlement object assigned to a Space.
  * Often signed as a JWT.
  */
-export const LicenseSchema = z.object({
+export const LicenseSchema = lazySchema(() => z.object({
   /** Identity */
   spaceId: z.string().describe('Target Space ID'),
   planCode: z.string(),
@@ -77,7 +78,7 @@ export const LicenseSchema = z.object({
 
   /** Signature */
   signature: z.string().optional().describe('Cryptographic signature of the license'),
-});
+}));
 
 export type Feature = z.infer<typeof FeatureSchema>;
 export type FeatureInput = z.input<typeof FeatureSchema>;

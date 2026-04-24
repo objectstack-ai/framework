@@ -27,7 +27,8 @@ import { FieldMappingSchema as BaseFieldMappingSchema } from '../shared/mapping.
  * }
  * ```
  */
-export const ExternalDataSourceSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ExternalDataSourceSchema = lazySchema(() => z.object({
   /**
    * Unique identifier for the external data source
    */
@@ -63,7 +64,7 @@ export const ExternalDataSourceSchema = z.object({
      */
     config: z.record(z.string(), z.unknown()).describe('Auth configuration'),
   }).describe('Authentication'),
-});
+}));
 
 /**
  * Field Mapping Schema for External Lookups
@@ -82,7 +83,7 @@ export const ExternalDataSourceSchema = z.object({
  * }
  * ```
  */
-export const ExternalFieldMappingSchema = BaseFieldMappingSchema.extend({
+export const ExternalFieldMappingSchema = lazySchema(() => BaseFieldMappingSchema.extend({
   /**
    * Field data type
    */
@@ -93,7 +94,7 @@ export const ExternalFieldMappingSchema = BaseFieldMappingSchema.extend({
    * @default true
    */
   readonly: z.boolean().optional().default(true).describe('Read-only field'),
-});
+}));
 
 /**
  * External Lookup Schema
@@ -145,7 +146,7 @@ export const ExternalFieldMappingSchema = BaseFieldMappingSchema.extend({
  * }
  * ```
  */
-export const ExternalLookupSchema = z.object({
+export const ExternalLookupSchema = lazySchema(() => z.object({
   /**
    * Name of the field that uses external lookup
    */
@@ -302,7 +303,7 @@ export const ExternalLookupSchema = z.object({
     /** Maximum pages to fetch */
     maxPages: z.number().optional().describe('Maximum number of pages to fetch'),
   }).optional().describe('Pagination configuration for external data'),
-});
+}));
 
 // Type exports
 export type ExternalLookup = z.infer<typeof ExternalLookupSchema>;

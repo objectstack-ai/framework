@@ -20,19 +20,20 @@ import { z } from 'zod';
  * Permission Scope
  * Defines the scope of a permission
  */
-export const PermissionScopeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const PermissionScopeSchema = lazySchema(() => z.enum([
   'global',      // Applies to entire system
   'tenant',      // Applies to specific tenant
   'user',        // Applies to specific user
   'resource',    // Applies to specific resource
   'plugin',      // Applies within plugin boundaries
-]).describe('Scope of permission application');
+]).describe('Scope of permission application'));
 
 /**
  * Permission Action
  * Standard CRUD + extended actions
  */
-export const PermissionActionSchema = z.enum([
+export const PermissionActionSchema = lazySchema(() => z.enum([
   'create',      // Create new resources
   'read',        // Read existing resources
   'update',      // Update existing resources
@@ -44,13 +45,13 @@ export const PermissionActionSchema = z.enum([
   'export',      // Export data
   'import',      // Import data
   'admin',       // Administrative access
-]).describe('Type of action being permitted');
+]).describe('Type of action being permitted'));
 
 /**
  * Resource Type
  * Types of resources that can be accessed
  */
-export const ResourceTypeSchema = z.enum([
+export const ResourceTypeSchema = lazySchema(() => z.enum([
   'data.object',         // ObjectQL objects
   'data.record',         // Individual records
   'data.field',          // Specific fields
@@ -67,13 +68,13 @@ export const ResourceTypeSchema = z.enum([
   'network.websocket',  // WebSocket connections
   'process.spawn',      // Process spawning
   'process.env',        // Environment variables
-]).describe('Type of resource being accessed');
+]).describe('Type of resource being accessed'));
 
 /**
  * Permission Definition
  * Defines a single permission requirement
  */
-export const PermissionSchema = z.object({
+export const PermissionSchema = lazySchema(() => z.object({
   /**
    * Permission identifier
    */
@@ -128,13 +129,13 @@ export const PermissionSchema = z.object({
    * Justification for permission
    */
   justification: z.string().optional().describe('Why this permission is needed'),
-});
+}));
 
 /**
  * Permission Set
  * Collection of permissions for a plugin
  */
-export const PermissionSetSchema = z.object({
+export const PermissionSetSchema = lazySchema(() => z.object({
   /**
    * All permissions required by plugin
    */
@@ -158,13 +159,13 @@ export const PermissionSetSchema = z.object({
     'deny',        // Deny by default
     'inherit',     // Inherit from parent
   ]).default('prompt'),
-});
+}));
 
 /**
  * Runtime Configuration
  * Defines the execution environment for plugin isolation
  */
-export const RuntimeConfigSchema = z.object({
+export const RuntimeConfigSchema = lazySchema(() => z.object({
   /**
    * Runtime engine type
    */
@@ -282,13 +283,13 @@ export const RuntimeConfigSchema = z.object({
     timeout: z.number().int().min(0).optional()
       .describe('Maximum execution time'),
   }).optional(),
-});
+}));
 
 /**
  * Sandbox Configuration
  * Defines how plugin is isolated
  */
-export const SandboxConfigSchema = z.object({
+export const SandboxConfigSchema = lazySchema(() => z.object({
   /**
    * Enable sandboxing
    */
@@ -365,13 +366,13 @@ export const SandboxConfigSchema = z.object({
     allowedVars: z.array(z.string()).optional(),
     deniedVars: z.array(z.string()).optional(),
   }).optional(),
-});
+}));
 
 /**
  * Security Vulnerability
  * Represents a known security vulnerability
  */
-export const KernelSecurityVulnerabilitySchema = z.object({
+export const KernelSecurityVulnerabilitySchema = lazySchema(() => z.object({
   /**
    * CVE identifier
    */
@@ -456,13 +457,13 @@ export const KernelSecurityVulnerabilitySchema = z.object({
    * Published date
    */
   publishedDate: z.string().datetime().optional(),
-});
+}));
 
 /**
  * Security Scan Result
  * Result of security scanning
  */
-export const KernelSecurityScanResultSchema = z.object({
+export const KernelSecurityScanResultSchema = lazySchema(() => z.object({
   /**
    * Scan timestamp
    */
@@ -530,13 +531,13 @@ export const KernelSecurityScanResultSchema = z.object({
     lowCount: z.number().int(),
     infoCount: z.number().int(),
   }),
-});
+}));
 
 /**
  * Security Policy
  * Defines security policies for plugin
  */
-export const KernelSecurityPolicySchema = z.object({
+export const KernelSecurityPolicySchema = lazySchema(() => z.object({
   /**
    * Content Security Policy
    */
@@ -593,25 +594,25 @@ export const KernelSecurityPolicySchema = z.object({
     events: z.array(z.string()).optional().describe('Events to log'),
     retention: z.number().int().optional().describe('Log retention in days'),
   }).optional(),
-});
+}));
 
 /**
  * Plugin Trust Level
  * Indicates trust level of plugin
  */
-export const PluginTrustLevelSchema = z.enum([
+export const PluginTrustLevelSchema = lazySchema(() => z.enum([
   'verified',      // Official/verified plugin
   'trusted',       // Trusted third-party
   'community',     // Community plugin
   'untrusted',     // Unverified plugin
   'blocked',       // Blocked/malicious
-]).describe('Trust level of the plugin');
+]).describe('Trust level of the plugin'));
 
 /**
  * Plugin Security Manifest
  * Complete security information for plugin
  */
-export const PluginSecurityManifestSchema = z.object({
+export const PluginSecurityManifestSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -686,7 +687,7 @@ export const PluginSecurityManifestSchema = z.object({
     responseTime: z.number().int().optional().describe('Expected response time in hours'),
     bugBounty: z.boolean().default(false),
   }).optional(),
-});
+}));
 
 // Export types
 export type PermissionScope = z.infer<typeof PermissionScopeSchema>;

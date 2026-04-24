@@ -9,6 +9,7 @@ import { FeedItemType, FeedFilterMode } from '../data/feed.zod';
 /**
  * Empty Properties Schema
  */
+import { lazySchema } from '../shared/lazy-schema';
 const EmptyProps = z.object({});
 
 /**
@@ -171,7 +172,7 @@ export const AIChatWindowProps = z.object({
  * ----------------------------------------------------------------------
  */
 
-export const ElementTextPropsSchema = z.object({
+export const ElementTextPropsSchema = lazySchema(() => z.object({
   content: z.string().describe('Text or Markdown content'),
   variant: z.enum(['heading', 'subheading', 'body', 'caption'])
     .optional().default('body').describe('Text style variant'),
@@ -179,9 +180,9 @@ export const ElementTextPropsSchema = z.object({
     .optional().default('left').describe('Text alignment'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
-export const ElementNumberPropsSchema = z.object({
+export const ElementNumberPropsSchema = lazySchema(() => z.object({
   object: z.string().describe('Source object'),
   field: z.string().optional().describe('Field to aggregate'),
   aggregate: z.enum(['count', 'sum', 'avg', 'min', 'max'])
@@ -192,9 +193,9 @@ export const ElementNumberPropsSchema = z.object({
   suffix: z.string().optional().describe('Suffix text (e.g. "%")'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
-export const ElementImagePropsSchema = z.object({
+export const ElementImagePropsSchema = lazySchema(() => z.object({
   src: z.string().describe('Image URL or attachment field'),
   alt: z.string().optional().describe('Alt text for accessibility'),
   fit: z.enum(['cover', 'contain', 'fill'])
@@ -202,7 +203,7 @@ export const ElementImagePropsSchema = z.object({
   height: z.number().optional().describe('Fixed height in pixels'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
 /**
  * ----------------------------------------------------------------------
@@ -210,7 +211,7 @@ export const ElementImagePropsSchema = z.object({
  * ----------------------------------------------------------------------
  */
 
-export const ElementButtonPropsSchema = z.object({
+export const ElementButtonPropsSchema = lazySchema(() => z.object({
   label: I18nLabelSchema.describe('Button display label'),
   variant: z.enum(['primary', 'secondary', 'danger', 'ghost', 'link'])
     .optional().default('primary').describe('Button visual variant'),
@@ -222,9 +223,9 @@ export const ElementButtonPropsSchema = z.object({
   disabled: z.boolean().optional().default(false).describe('Disable the button'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
-export const ElementFilterPropsSchema = z.object({
+export const ElementFilterPropsSchema = lazySchema(() => z.object({
   object: z.string().describe('Object to filter'),
   fields: z.array(z.string()).describe('Filterable field names'),
   targetVariable: z.string().optional().describe('Page variable to store filter state'),
@@ -233,9 +234,9 @@ export const ElementFilterPropsSchema = z.object({
   showSearch: z.boolean().optional().default(true).describe('Show search input'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
-export const ElementFormPropsSchema = z.object({
+export const ElementFormPropsSchema = lazySchema(() => z.object({
   object: z.string().describe('Object for the form'),
   fields: z.array(z.string()).optional().describe('Fields to display (defaults to all editable fields)'),
   mode: z.enum(['create', 'edit']).optional().default('create').describe('Form mode'),
@@ -243,9 +244,9 @@ export const ElementFormPropsSchema = z.object({
   onSubmit: z.string().optional().describe('Action expression on form submit'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
-export const ElementRecordPickerPropsSchema = z.object({
+export const ElementRecordPickerPropsSchema = lazySchema(() => z.object({
   object: z.string().describe('Object to pick records from'),
   displayField: z.string().describe('Field to display as the record label'),
   searchFields: z.array(z.string()).optional().describe('Fields to search against'),
@@ -255,7 +256,7 @@ export const ElementRecordPickerPropsSchema = z.object({
   placeholder: I18nLabelSchema.optional().describe('Placeholder text'),
   /** ARIA accessibility */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
-});
+}));
 
 /**
  * ----------------------------------------------------------------------

@@ -11,7 +11,8 @@ import { z } from 'zod';
 /**
  * OAuth2 Authentication Schema
  */
-export const ConnectorOAuth2Schema = z.object({
+import { lazySchema } from './lazy-schema';
+export const ConnectorOAuth2Schema = lazySchema(() => z.object({
   type: z.literal('oauth2'),
   authorizationUrl: z.string().url().describe('OAuth2 authorization endpoint'),
   tokenUrl: z.string().url().describe('OAuth2 token endpoint'),
@@ -21,51 +22,51 @@ export const ConnectorOAuth2Schema = z.object({
   redirectUri: z.string().url().optional().describe('OAuth2 redirect URI'),
   refreshToken: z.string().optional().describe('Refresh token for token renewal'),
   tokenExpiry: z.number().optional().describe('Token expiry timestamp'),
-});
+}));
 
 /**
  * API Key Authentication Schema
  */
-export const ConnectorAPIKeySchema = z.object({
+export const ConnectorAPIKeySchema = lazySchema(() => z.object({
   type: z.literal('api-key'),
   key: z.string().describe('API key value'),
   headerName: z.string().default('X-API-Key').describe('HTTP header name for API key'),
   paramName: z.string().optional().describe('Query parameter name (alternative to header)'),
-});
+}));
 
 /**
  * Basic Authentication Schema
  */
-export const ConnectorBasicAuthSchema = z.object({
+export const ConnectorBasicAuthSchema = lazySchema(() => z.object({
   type: z.literal('basic'),
   username: z.string().describe('Username'),
   password: z.string().describe('Password'),
-});
+}));
 
 /**
  * Bearer Token Authentication Schema
  */
-export const ConnectorBearerAuthSchema = z.object({
+export const ConnectorBearerAuthSchema = lazySchema(() => z.object({
   type: z.literal('bearer'),
   token: z.string().describe('Bearer token'),
-});
+}));
 
 /**
  * No Authentication Schema
  */
-export const ConnectorNoAuthSchema = z.object({
+export const ConnectorNoAuthSchema = lazySchema(() => z.object({
   type: z.literal('none'),
-});
+}));
 
 /**
  * Unified Connector Auth Configuration Schema
  */
-export const ConnectorAuthConfigSchema = z.discriminatedUnion('type', [
+export const ConnectorAuthConfigSchema = lazySchema(() => z.discriminatedUnion('type', [
   ConnectorOAuth2Schema,
   ConnectorAPIKeySchema,
   ConnectorBasicAuthSchema,
   ConnectorBearerAuthSchema,
   ConnectorNoAuthSchema,
-]);
+]));
 
 export type ConnectorAuthConfig = z.infer<typeof ConnectorAuthConfigSchema>;

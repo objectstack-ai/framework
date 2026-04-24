@@ -17,7 +17,8 @@ import { z } from 'zod';
  * Code Generation Request
  * Request for AI to generate plugin code
  */
-export const CodeGenerationRequestSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const CodeGenerationRequestSchema = lazySchema(() => z.object({
   /**
    * Natural language description of desired functionality
    */
@@ -172,13 +173,13 @@ export const CodeGenerationRequestSchema = z.object({
      */
     optimizationLevel: z.enum(['none', 'basic', 'aggressive']).default('basic'),
   }).optional(),
-});
+}));
 
 /**
  * Generated Code
  * Result of code generation
  */
-export const GeneratedCodeSchema = z.object({
+export const GeneratedCodeSchema = lazySchema(() => z.object({
   /**
    * Output format used
    */
@@ -266,13 +267,13 @@ export const GeneratedCodeSchema = z.object({
    * Warnings or caveats
    */
   warnings: z.array(z.string()).optional(),
-});
+}));
 
 /**
  * Plugin Scaffolding Template
  * Template for plugin structure
  */
-export const PluginScaffoldingTemplateSchema = z.object({
+export const PluginScaffoldingTemplateSchema = lazySchema(() => z.object({
   /**
    * Template identifier
    */
@@ -324,13 +325,13 @@ export const PluginScaffoldingTemplateSchema = z.object({
     description: z.string().optional(),
     optional: z.boolean().default(false),
   })).optional(),
-});
+}));
 
 /**
  * AI Code Review Result
  * Result of AI-powered code review
  */
-export const AICodeReviewResultSchema = z.object({
+export const AICodeReviewResultSchema = lazySchema(() => z.object({
   /**
    * Overall assessment
    */
@@ -408,13 +409,13 @@ export const AICodeReviewResultSchema = z.object({
     })).optional(),
     score: z.number().min(0).max(100).optional(),
   }).optional(),
-});
+}));
 
 /**
  * Plugin Composition Request
  * Request for AI to compose multiple plugins together
  */
-export const PluginCompositionRequestSchema = z.object({
+export const PluginCompositionRequestSchema = lazySchema(() => z.object({
   /**
    * Desired outcome
    */
@@ -468,13 +469,13 @@ export const PluginCompositionRequestSchema = z.object({
     'cost',
     'security',
   ]).optional(),
-});
+}));
 
 /**
  * Plugin Composition Result
  * AI-generated plugin composition
  */
-export const PluginCompositionResultSchema = z.object({
+export const PluginCompositionResultSchema = lazySchema(() => z.object({
   /**
    * Selected plugins
    */
@@ -540,13 +541,13 @@ export const PluginCompositionResultSchema = z.object({
    * Warnings and considerations
    */
   warnings: z.array(z.string()).optional(),
-});
+}));
 
 /**
  * Plugin Recommendation Request
  * Request for plugin recommendations
  */
-export const PluginRecommendationRequestSchema = z.object({
+export const PluginRecommendationRequestSchema = lazySchema(() => z.object({
   /**
    * User context
    */
@@ -608,13 +609,13 @@ export const PluginRecommendationRequestSchema = z.object({
      */
     maxResults: z.number().int().min(1).max(50).default(10),
   }).optional(),
-});
+}));
 
 /**
  * Plugin Recommendation
  * AI-generated plugin recommendation
  */
-export const PluginRecommendationSchema = z.object({
+export const PluginRecommendationSchema = lazySchema(() => z.object({
   /**
    * Recommended plugins
    */
@@ -649,7 +650,7 @@ export const PluginRecommendationSchema = z.object({
     reason: z.string(),
     resources: z.array(z.string()).optional(),
   })).optional(),
-});
+}));
 
 // Export types
 export type CodeGenerationRequest = z.infer<typeof CodeGenerationRequestSchema>;

@@ -17,6 +17,7 @@ import { z } from 'zod';
  * Metric Type Enum
  * Standard Prometheus metric types
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const MetricType = z.enum([
   'counter',    // Monotonically increasing value
   'gauge',      // Value that can go up and down
@@ -90,7 +91,7 @@ export type MetricAggregationType = z.infer<typeof MetricAggregationType>;
 /**
  * Histogram Bucket Configuration
  */
-export const HistogramBucketConfigSchema = z.object({
+export const HistogramBucketConfigSchema = lazySchema(() => z.object({
   /**
    * Bucket type
    */
@@ -120,7 +121,7 @@ export const HistogramBucketConfigSchema = z.object({
   explicit: z.object({
     boundaries: z.array(z.number()).describe('Bucket boundaries'),
   }).optional(),
-}).describe('Histogram bucket configuration');
+}).describe('Histogram bucket configuration'));
 
 export type HistogramBucketConfig = z.infer<typeof HistogramBucketConfigSchema>;
 
@@ -128,14 +129,14 @@ export type HistogramBucketConfig = z.infer<typeof HistogramBucketConfigSchema>;
  * Metric Labels Schema
  * Key-value pairs for metric dimensions
  */
-export const MetricLabelsSchema = z.record(z.string(), z.string()).describe('Metric labels');
+export const MetricLabelsSchema = lazySchema(() => z.record(z.string(), z.string()).describe('Metric labels'));
 
 export type MetricLabels = z.infer<typeof MetricLabelsSchema>;
 
 /**
  * Metric Definition Schema
  */
-export const MetricDefinitionSchema = z.object({
+export const MetricDefinitionSchema = lazySchema(() => z.object({
   /**
    * Metric name (snake_case)
    */
@@ -197,7 +198,7 @@ export const MetricDefinitionSchema = z.object({
    * Enabled flag
    */
   enabled: z.boolean().optional().default(true),
-}).describe('Metric definition');
+}).describe('Metric definition'));
 
 export type MetricDefinition = z.infer<typeof MetricDefinitionSchema>;
 
@@ -205,7 +206,7 @@ export type MetricDefinition = z.infer<typeof MetricDefinitionSchema>;
  * Metric Data Point Schema
  * A single metric observation
  */
-export const MetricDataPointSchema = z.object({
+export const MetricDataPointSchema = lazySchema(() => z.object({
   /**
    * Metric name
    */
@@ -254,14 +255,14 @@ export const MetricDataPointSchema = z.object({
       value: z.number().describe('Quantile value'),
     })).describe('Summary quantiles'),
   }).optional(),
-}).describe('Metric data point');
+}).describe('Metric data point'));
 
 export type MetricDataPoint = z.infer<typeof MetricDataPointSchema>;
 
 /**
  * Time Series Data Point Schema
  */
-export const TimeSeriesDataPointSchema = z.object({
+export const TimeSeriesDataPointSchema = lazySchema(() => z.object({
   /**
    * Timestamp (ISO 8601)
    */
@@ -276,14 +277,14 @@ export const TimeSeriesDataPointSchema = z.object({
    * Labels/tags
    */
   labels: z.record(z.string(), z.string()).optional().describe('Labels'),
-}).describe('Time series data point');
+}).describe('Time series data point'));
 
 export type TimeSeriesDataPoint = z.infer<typeof TimeSeriesDataPointSchema>;
 
 /**
  * Time Series Schema
  */
-export const TimeSeriesSchema = z.object({
+export const TimeSeriesSchema = lazySchema(() => z.object({
   /**
    * Series name
    */
@@ -308,14 +309,14 @@ export const TimeSeriesSchema = z.object({
    * End time
    */
   endTime: z.string().datetime().optional().describe('End time'),
-}).describe('Time series');
+}).describe('Time series'));
 
 export type TimeSeries = z.infer<typeof TimeSeriesSchema>;
 
 /**
  * Metric Aggregation Configuration
  */
-export const MetricAggregationConfigSchema = z.object({
+export const MetricAggregationConfigSchema = lazySchema(() => z.object({
   /**
    * Aggregation type
    */
@@ -350,14 +351,14 @@ export const MetricAggregationConfigSchema = z.object({
    * Filters
    */
   filters: z.record(z.string(), z.unknown()).optional().describe('Filter criteria'),
-}).describe('Metric aggregation configuration');
+}).describe('Metric aggregation configuration'));
 
 export type MetricAggregationConfig = z.infer<typeof MetricAggregationConfigSchema>;
 
 /**
  * Service Level Indicator (SLI) Schema
  */
-export const ServiceLevelIndicatorSchema = z.object({
+export const ServiceLevelIndicatorSchema = lazySchema(() => z.object({
   /**
    * SLI name
    */
@@ -431,14 +432,14 @@ export const ServiceLevelIndicatorSchema = z.object({
    * Enabled flag
    */
   enabled: z.boolean().optional().default(true),
-}).describe('Service Level Indicator');
+}).describe('Service Level Indicator'));
 
 export type ServiceLevelIndicator = z.infer<typeof ServiceLevelIndicatorSchema>;
 
 /**
  * Service Level Objective (SLO) Schema
  */
-export const ServiceLevelObjectiveSchema = z.object({
+export const ServiceLevelObjectiveSchema = lazySchema(() => z.object({
   /**
    * SLO name
    */
@@ -543,14 +544,14 @@ export const ServiceLevelObjectiveSchema = z.object({
    * Enabled flag
    */
   enabled: z.boolean().optional().default(true),
-}).describe('Service Level Objective');
+}).describe('Service Level Objective'));
 
 export type ServiceLevelObjective = z.infer<typeof ServiceLevelObjectiveSchema>;
 
 /**
  * Metric Export Configuration
  */
-export const MetricExportConfigSchema = z.object({
+export const MetricExportConfigSchema = lazySchema(() => z.object({
   /**
    * Export type
    */
@@ -601,14 +602,14 @@ export const MetricExportConfigSchema = z.object({
    * Additional configuration
    */
   config: z.record(z.string(), z.unknown()).optional().describe('Additional configuration'),
-}).describe('Metric export configuration');
+}).describe('Metric export configuration'));
 
 export type MetricExportConfig = z.infer<typeof MetricExportConfigSchema>;
 
 /**
  * Metrics Configuration Schema
  */
-export const MetricsConfigSchema = z.object({
+export const MetricsConfigSchema = lazySchema(() => z.object({
   /**
    * Configuration name
    */
@@ -701,6 +702,6 @@ export const MetricsConfigSchema = z.object({
      */
     onLimitExceeded: z.enum(['drop', 'sample', 'alert']).optional().default('alert'),
   }).optional(),
-}).describe('Metrics configuration');
+}).describe('Metrics configuration'));
 
 export type MetricsConfig = z.infer<typeof MetricsConfigSchema>;

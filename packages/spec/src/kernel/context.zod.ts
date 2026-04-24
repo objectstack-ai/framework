@@ -7,6 +7,7 @@ import { TenantQuotaSchema } from '../system/tenant.zod.js';
  * Runtime Mode Enum
  * Defines the operating mode of the kernel
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const RuntimeMode = z.enum([
   'development', // Hot-reload, verbose logging
   'production',  // Optimized, strict security
@@ -44,7 +45,7 @@ export type RuntimeMode = z.infer<typeof RuntimeMode>;
  * });
  * ```
  */
-export const PreviewModeConfigSchema = z.object({
+export const PreviewModeConfigSchema = lazySchema(() => z.object({
   /**
    * Automatically log in as a simulated user on startup.
    * When enabled, the frontend skips login/registration screens entirely.
@@ -85,7 +86,7 @@ export const PreviewModeConfigSchema = z.object({
    */
   bannerMessage: z.string().optional()
     .describe('Banner message displayed in the UI during preview mode'),
-});
+}));
 
 export type PreviewModeConfig = z.infer<typeof PreviewModeConfigSchema>;
 
@@ -93,7 +94,7 @@ export type PreviewModeConfig = z.infer<typeof PreviewModeConfigSchema>;
  * Kernel Context Schema
  * Defines the static environment information available to the Kernel at boot.
  */
-export const KernelContextSchema = z.object({
+export const KernelContextSchema = lazySchema(() => z.object({
   /**
    * Instance Identity
    */
@@ -129,7 +130,7 @@ export const KernelContextSchema = z.object({
    */
   previewMode: PreviewModeConfigSchema.optional()
     .describe('Preview/demo mode configuration (used when mode is "preview")'),
-});
+}));
 
 export type KernelContext = z.infer<typeof KernelContextSchema>;
 
@@ -145,7 +146,7 @@ export type KernelContext = z.infer<typeof KernelContextSchema>;
  * Provides the tenant identity, plan, region, and database URL to all
  * downstream services during request processing.
  */
-export const TenantRuntimeContextSchema = KernelContextSchema.extend({
+export const TenantRuntimeContextSchema = lazySchema(() => KernelContextSchema.extend({
   /** Unique tenant identifier resolved from the current session */
   tenantId: z.string().min(1).describe('Resolved tenant identifier'),
 
@@ -160,6 +161,6 @@ export const TenantRuntimeContextSchema = KernelContextSchema.extend({
 
   /** Optional tenant quotas for the current plan */
   tenantQuotas: TenantQuotaSchema.optional().describe('Tenant resource quotas'),
-}).describe('Tenant-aware kernel runtime context');
+}).describe('Tenant-aware kernel runtime context'));
 
 export type TenantRuntimeContext = z.infer<typeof TenantRuntimeContextSchema>;

@@ -52,10 +52,11 @@ import {
 /**
  * GitHub Provider Type
  */
-export const GitHubProviderSchema = z.enum([
+import { lazySchema } from '../../shared/lazy-schema';
+export const GitHubProviderSchema = lazySchema(() => z.enum([
   'github',            // GitHub.com
   'github_enterprise', // GitHub Enterprise Server
-]).describe('GitHub provider type');
+]).describe('GitHub provider type'));
 
 export type GitHubProvider = z.infer<typeof GitHubProviderSchema>;
 
@@ -63,7 +64,7 @@ export type GitHubProvider = z.infer<typeof GitHubProviderSchema>;
  * GitHub Repository Configuration
  * Defines a repository to integrate with
  */
-export const GitHubRepositorySchema = z.object({
+export const GitHubRepositorySchema = lazySchema(() => z.object({
   /**
    * Repository owner (organization or user)
    */
@@ -99,14 +100,14 @@ export const GitHubRepositorySchema = z.object({
    * Repository topics/tags
    */
   topics: z.array(z.string()).optional().describe('Repository topics'),
-});
+}));
 
 export type GitHubRepository = z.infer<typeof GitHubRepositorySchema>;
 
 /**
  * GitHub Commit Configuration
  */
-export const GitHubCommitConfigSchema = z.object({
+export const GitHubCommitConfigSchema = lazySchema(() => z.object({
   /**
    * Commit author name
    */
@@ -131,14 +132,14 @@ export const GitHubCommitConfigSchema = z.object({
    * Conventional commits format
    */
   useConventionalCommits: z.boolean().optional().default(true).describe('Use conventional commits format'),
-});
+}));
 
 export type GitHubCommitConfig = z.infer<typeof GitHubCommitConfigSchema>;
 
 /**
  * GitHub Pull Request Configuration
  */
-export const GitHubPullRequestConfigSchema = z.object({
+export const GitHubPullRequestConfigSchema = lazySchema(() => z.object({
   /**
    * Default PR title template
    */
@@ -173,14 +174,14 @@ export const GitHubPullRequestConfigSchema = z.object({
    * Auto-delete head branch after merge
    */
   deleteHeadBranch: z.boolean().optional().default(true).describe('Delete head branch after merge'),
-});
+}));
 
 export type GitHubPullRequestConfig = z.infer<typeof GitHubPullRequestConfigSchema>;
 
 /**
  * GitHub Actions Workflow Configuration
  */
-export const GitHubActionsWorkflowSchema = z.object({
+export const GitHubActionsWorkflowSchema = lazySchema(() => z.object({
   /**
    * Workflow name
    */
@@ -217,14 +218,14 @@ export const GitHubActionsWorkflowSchema = z.object({
    * Secrets required
    */
   secrets: z.array(z.string()).optional().describe('Required secrets'),
-});
+}));
 
 export type GitHubActionsWorkflow = z.infer<typeof GitHubActionsWorkflowSchema>;
 
 /**
  * GitHub Release Configuration
  */
-export const GitHubReleaseConfigSchema = z.object({
+export const GitHubReleaseConfigSchema = lazySchema(() => z.object({
   /**
    * Tag name pattern
    */
@@ -254,14 +255,14 @@ export const GitHubReleaseConfigSchema = z.object({
    * Create draft releases
    */
   draftByDefault: z.boolean().optional().default(false).describe('Create draft releases by default'),
-});
+}));
 
 export type GitHubReleaseConfig = z.infer<typeof GitHubReleaseConfigSchema>;
 
 /**
  * GitHub Issue Tracking Configuration
  */
-export const GitHubIssueTrackingSchema = z.object({
+export const GitHubIssueTrackingSchema = lazySchema(() => z.object({
   /**
    * Enable issue tracking
    */
@@ -291,7 +292,7 @@ export const GitHubIssueTrackingSchema = z.object({
     daysBeforeClose: z.number().int().min(1).optional().default(7),
     staleLabel: z.string().optional().default('stale'),
   }).optional().describe('Auto-close stale issues configuration'),
-});
+}));
 
 export type GitHubIssueTracking = z.infer<typeof GitHubIssueTrackingSchema>;
 
@@ -299,7 +300,7 @@ export type GitHubIssueTracking = z.infer<typeof GitHubIssueTrackingSchema>;
  * GitHub Connector Schema
  * Complete GitHub integration configuration
  */
-export const GitHubConnectorSchema = ConnectorSchema.extend({
+export const GitHubConnectorSchema = lazySchema(() => ConnectorSchema.extend({
   type: z.literal('saas'),
   
   /**
@@ -363,7 +364,7 @@ export const GitHubConnectorSchema = ConnectorSchema.extend({
     'check_suite',
     'status',
   ])).optional().describe('Webhook events to subscribe to'),
-});
+}));
 
 export type GitHubConnector = z.infer<typeof GitHubConnectorSchema>;
 

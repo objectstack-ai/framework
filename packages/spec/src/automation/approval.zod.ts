@@ -6,6 +6,7 @@ import { SnakeCaseIdentifierSchema } from '../shared/identifiers.zod';
 /**
  * Approval Step Approver Type
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const ApproverType = z.enum([
   'user',           // Specific user(s)
   'role',           // Users with specific role
@@ -29,7 +30,7 @@ export const ApprovalActionType = z.enum([
 /**
  * definition of an action to perform
  */
-export const ApprovalActionSchema = z.object({
+export const ApprovalActionSchema = lazySchema(() => z.object({
   type: ApprovalActionType,
   name: z.string().describe('Action name'),
   config: z.record(z.string(), z.unknown()).describe('Action configuration'),
@@ -37,12 +38,12 @@ export const ApprovalActionSchema = z.object({
   /** For connector actions */
   connectorId: z.string().optional(),
   actionId: z.string().optional(),
-});
+}));
 
 /**
  * Approval Process Step
  */
-export const ApprovalStepSchema = z.object({
+export const ApprovalStepSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Step machine name'),
   label: z.string().describe('Step display label'),
   description: z.string().optional(),
@@ -67,7 +68,7 @@ export const ApprovalStepSchema = z.object({
   /** Actions */
   onApprove: z.array(ApprovalActionSchema).optional().describe('Actions on step approval'),
   onReject: z.array(ApprovalActionSchema).optional().describe('Actions on step rejection'),
-});
+}));
 
 /**
  * Approval Process Protocol
@@ -75,7 +76,7 @@ export const ApprovalStepSchema = z.object({
  * Defines a complex review and approval cycle for a record.
  * Manages state locking, notifications, and transition logic.
  */
-export const ApprovalProcessSchema = z.object({
+export const ApprovalProcessSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Unique process name'),
   label: z.string().describe('Human readable label'),
   object: z.string().describe('Target Object Name'),
@@ -106,7 +107,7 @@ export const ApprovalProcessSchema = z.object({
   onFinalApprove: z.array(ApprovalActionSchema).optional().describe('Actions on final approval'),
   onFinalReject: z.array(ApprovalActionSchema).optional().describe('Actions on final rejection'),
   onRecall: z.array(ApprovalActionSchema).optional().describe('Actions on recall'),
-});
+}));
 
 export const ApprovalProcess = Object.assign(ApprovalProcessSchema, {
   create: <T extends z.input<typeof ApprovalProcessSchema>>(config: T) => config,

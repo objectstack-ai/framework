@@ -82,6 +82,7 @@ import { FieldType } from '../data/field.zod';
  * 
  * Built-in scalar types in GraphQL plus custom scalars.
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const GraphQLScalarType = z.enum([
   // Built-in GraphQL Scalars
   'ID',
@@ -116,7 +117,7 @@ export type GraphQLScalarType = z.infer<typeof GraphQLScalarType>;
  * 
  * Configuration for generating GraphQL types from Object definitions.
  */
-export const GraphQLTypeConfigSchema = z.object({
+export const GraphQLTypeConfigSchema = lazySchema(() => z.object({
   /** Type name in GraphQL schema */
   name: z.string().describe('GraphQL type name (PascalCase recommended)'),
   
@@ -155,7 +156,7 @@ export const GraphQLTypeConfigSchema = z.object({
     name: z.string().describe('Directive name'),
     args: z.record(z.string(), z.unknown()).optional().describe('Directive arguments'),
   })).optional().describe('GraphQL directives'),
-});
+}));
 
 export type GraphQLTypeConfig = z.infer<typeof GraphQLTypeConfigSchema>;
 export type GraphQLTypeConfigInput = z.input<typeof GraphQLTypeConfigSchema>;
@@ -169,7 +170,7 @@ export type GraphQLTypeConfigInput = z.input<typeof GraphQLTypeConfigSchema>;
  * 
  * Configuration for auto-generating query fields from Objects.
  */
-export const GraphQLQueryConfigSchema = z.object({
+export const GraphQLQueryConfigSchema = lazySchema(() => z.object({
   /** Query name */
   name: z.string().describe('Query field name (camelCase recommended)'),
   
@@ -240,7 +241,7 @@ export const GraphQLQueryConfigSchema = z.object({
     ttl: z.number().int().min(0).optional().describe('Cache TTL in seconds'),
     key: z.string().optional().describe('Cache key template'),
   }).optional().describe('Query caching'),
-});
+}));
 
 export type GraphQLQueryConfig = z.infer<typeof GraphQLQueryConfigSchema>;
 export type GraphQLQueryConfigInput = z.input<typeof GraphQLQueryConfigSchema>;
@@ -254,7 +255,7 @@ export type GraphQLQueryConfigInput = z.input<typeof GraphQLQueryConfigSchema>;
  * 
  * Configuration for auto-generating mutation fields from Objects.
  */
-export const GraphQLMutationConfigSchema = z.object({
+export const GraphQLMutationConfigSchema = lazySchema(() => z.object({
   /** Mutation name */
   name: z.string().describe('Mutation field name (camelCase recommended)'),
   
@@ -313,7 +314,7 @@ export const GraphQLMutationConfigSchema = z.object({
     before: z.array(z.string()).optional().describe('Pre-mutation hooks'),
     after: z.array(z.string()).optional().describe('Post-mutation hooks'),
   }).optional().describe('Lifecycle hooks'),
-});
+}));
 
 export type GraphQLMutationConfig = z.infer<typeof GraphQLMutationConfigSchema>;
 export type GraphQLMutationConfigInput = z.input<typeof GraphQLMutationConfigSchema>;
@@ -327,7 +328,7 @@ export type GraphQLMutationConfigInput = z.input<typeof GraphQLMutationConfigSch
  * 
  * Configuration for real-time GraphQL subscriptions.
  */
-export const GraphQLSubscriptionConfigSchema = z.object({
+export const GraphQLSubscriptionConfigSchema = lazySchema(() => z.object({
   /** Subscription name */
   name: z.string().describe('Subscription field name (camelCase recommended)'),
   
@@ -368,7 +369,7 @@ export const GraphQLSubscriptionConfigSchema = z.object({
     maxSubscriptionsPerUser: z.number().int().min(1).default(10).describe('Max concurrent subscriptions per user'),
     throttleMs: z.number().int().min(0).optional().describe('Throttle interval in milliseconds'),
   }).optional().describe('Subscription rate limiting'),
-});
+}));
 
 export type GraphQLSubscriptionConfig = z.infer<typeof GraphQLSubscriptionConfigSchema>;
 export type GraphQLSubscriptionConfigInput = z.input<typeof GraphQLSubscriptionConfigSchema>;
@@ -382,7 +383,7 @@ export type GraphQLSubscriptionConfigInput = z.input<typeof GraphQLSubscriptionC
  * 
  * Configuration for custom resolver logic.
  */
-export const GraphQLResolverConfigSchema = z.object({
+export const GraphQLResolverConfigSchema = lazySchema(() => z.object({
   /** Field path (e.g., "Query.users", "Mutation.createUser") */
   path: z.string().describe('Resolver path (Type.field)'),
   
@@ -413,7 +414,7 @@ export const GraphQLResolverConfigSchema = z.object({
     ttl: z.number().int().min(0).optional().describe('Cache TTL in seconds'),
     keyArgs: z.array(z.string()).optional().describe('Arguments to include in cache key'),
   }).optional().describe('Resolver caching'),
-});
+}));
 
 export type GraphQLResolverConfig = z.infer<typeof GraphQLResolverConfigSchema>;
 export type GraphQLResolverConfigInput = z.input<typeof GraphQLResolverConfigSchema>;
@@ -428,7 +429,7 @@ export type GraphQLResolverConfigInput = z.input<typeof GraphQLResolverConfigSch
  * Configuration for batching and caching with DataLoader pattern.
  * Prevents N+1 query problems in GraphQL.
  */
-export const GraphQLDataLoaderConfigSchema = z.object({
+export const GraphQLDataLoaderConfigSchema = lazySchema(() => z.object({
   /** Loader name */
   name: z.string().describe('DataLoader name'),
   
@@ -472,7 +473,7 @@ export const GraphQLDataLoaderConfigSchema = z.object({
     /** Maximum cache size */
     maxCacheSize: z.number().int().min(0).optional().describe('Max cache entries'),
   }).optional().describe('DataLoader options'),
-});
+}));
 
 export type GraphQLDataLoaderConfig = z.infer<typeof GraphQLDataLoaderConfigSchema>;
 export type GraphQLDataLoaderConfigInput = z.input<typeof GraphQLDataLoaderConfigSchema>;
@@ -518,7 +519,7 @@ export type GraphQLDirectiveLocation = z.infer<typeof GraphQLDirectiveLocation>;
  * 
  * Custom directives for schema metadata and behavior.
  */
-export const GraphQLDirectiveConfigSchema = z.object({
+export const GraphQLDirectiveConfigSchema = lazySchema(() => z.object({
   /** Directive name */
   name: z.string().regex(/^[a-z][a-zA-Z0-9]*$/).describe('Directive name (camelCase)'),
   
@@ -546,7 +547,7 @@ export const GraphQLDirectiveConfigSchema = z.object({
     /** Handler function */
     handler: z.string().optional().describe('Handler function name or script'),
   }).optional().describe('Directive implementation'),
-});
+}));
 
 export type GraphQLDirectiveConfig = z.infer<typeof GraphQLDirectiveConfigSchema>;
 export type GraphQLDirectiveConfigInput = z.input<typeof GraphQLDirectiveConfigSchema>;
@@ -560,7 +561,7 @@ export type GraphQLDirectiveConfigInput = z.input<typeof GraphQLDirectiveConfigS
  * 
  * Prevents deeply nested queries that could cause performance issues.
  */
-export const GraphQLQueryDepthLimitSchema = z.object({
+export const GraphQLQueryDepthLimitSchema = lazySchema(() => z.object({
   /** Enable depth limiting */
   enabled: z.boolean().default(true).describe('Enable query depth limiting'),
   
@@ -575,7 +576,7 @@ export const GraphQLQueryDepthLimitSchema = z.object({
   
   /** Custom error message */
   errorMessage: z.string().optional().describe('Custom error message for depth violations'),
-});
+}));
 
 export type GraphQLQueryDepthLimit = z.infer<typeof GraphQLQueryDepthLimitSchema>;
 export type GraphQLQueryDepthLimitInput = z.input<typeof GraphQLQueryDepthLimitSchema>;
@@ -590,7 +591,7 @@ export type GraphQLQueryDepthLimitInput = z.input<typeof GraphQLQueryDepthLimitS
  * Assigns complexity scores to fields and limits total query complexity.
  * Prevents expensive queries from overloading the server.
  */
-export const GraphQLQueryComplexitySchema = z.object({
+export const GraphQLQueryComplexitySchema = lazySchema(() => z.object({
   /** Enable complexity limiting */
   enabled: z.boolean().default(true).describe('Enable query complexity limiting'),
   
@@ -623,7 +624,7 @@ export const GraphQLQueryComplexitySchema = z.object({
   
   /** Custom error message */
   errorMessage: z.string().optional().describe('Custom error message for complexity violations'),
-});
+}));
 
 export type GraphQLQueryComplexity = z.infer<typeof GraphQLQueryComplexitySchema>;
 export type GraphQLQueryComplexityInput = z.input<typeof GraphQLQueryComplexitySchema>;
@@ -637,7 +638,7 @@ export type GraphQLQueryComplexityInput = z.input<typeof GraphQLQueryComplexityS
  * 
  * Rate limiting for GraphQL operations.
  */
-export const GraphQLRateLimitSchema = z.object({
+export const GraphQLRateLimitSchema = lazySchema(() => z.object({
   /** Enable rate limiting */
   enabled: z.boolean().default(true).describe('Enable rate limiting'),
   
@@ -691,7 +692,7 @@ export const GraphQLRateLimitSchema = z.object({
   
   /** Headers to include in response */
   includeHeaders: z.boolean().default(true).describe('Include rate limit headers in response'),
-});
+}));
 
 export type GraphQLRateLimit = z.infer<typeof GraphQLRateLimitSchema>;
 export type GraphQLRateLimitInput = z.input<typeof GraphQLRateLimitSchema>;
@@ -706,7 +707,7 @@ export type GraphQLRateLimitInput = z.input<typeof GraphQLRateLimitSchema>;
  * Only allow pre-registered queries to execute (allow list approach).
  * Improves security and performance.
  */
-export const GraphQLPersistedQuerySchema = z.object({
+export const GraphQLPersistedQuerySchema = lazySchema(() => z.object({
   /** Enable persisted queries */
   enabled: z.boolean().default(false).describe('Enable persisted queries'),
   
@@ -767,7 +768,7 @@ export const GraphQLPersistedQuerySchema = z.object({
     /** Reject introspection in production */
     rejectIntrospection: z.boolean().default(false).describe('Reject introspection queries'),
   }).optional().describe('Security configuration'),
-});
+}));
 
 export type GraphQLPersistedQuery = z.infer<typeof GraphQLPersistedQuerySchema>;
 export type GraphQLPersistedQueryInput = z.input<typeof GraphQLPersistedQuerySchema>;
@@ -784,13 +785,13 @@ export type GraphQLPersistedQueryInput = z.input<typeof GraphQLPersistedQuerySch
  * 
  * @see https://www.apollographql.com/docs/federation/entities
  */
-export const FederationEntityKeySchema = z.object({
+export const FederationEntityKeySchema = lazySchema(() => z.object({
   /** Fields composing the key (e.g., "id" or "sku packageId") */
   fields: z.string().describe('Selection set of fields composing the entity key'),
 
   /** Whether this key can be used for resolution across subgraphs */
   resolvable: z.boolean().optional().default(true).describe('Whether entities can be resolved from this subgraph'),
-});
+}));
 
 export type FederationEntityKey = z.infer<typeof FederationEntityKeySchema>;
 
@@ -799,13 +800,13 @@ export type FederationEntityKey = z.infer<typeof FederationEntityKeySchema>;
  * 
  * Marks a field as owned by another subgraph (`@external`).
  */
-export const FederationExternalFieldSchema = z.object({
+export const FederationExternalFieldSchema = lazySchema(() => z.object({
   /** Field name */
   field: z.string().describe('Field name marked as external'),
 
   /** The subgraph that owns this field */
   ownerSubgraph: z.string().optional().describe('Subgraph that owns this field'),
-});
+}));
 
 export type FederationExternalField = z.infer<typeof FederationExternalFieldSchema>;
 
@@ -816,13 +817,13 @@ export type FederationExternalField = z.infer<typeof FederationExternalFieldSche
  * before resolving a computed field.
  * Corresponds to the `@requires` directive in Apollo Federation.
  */
-export const FederationRequiresSchema = z.object({
+export const FederationRequiresSchema = lazySchema(() => z.object({
   /** The field that has this requirement */
   field: z.string().describe('Field with the requirement'),
 
   /** Selection set of external fields required for resolution */
   fields: z.string().describe('Selection set of required fields (e.g., "price weight")'),
-});
+}));
 
 export type FederationRequires = z.infer<typeof FederationRequiresSchema>;
 
@@ -833,13 +834,13 @@ export type FederationRequires = z.infer<typeof FederationRequiresSchema>;
  * of a returned entity type.
  * Corresponds to the `@provides` directive in Apollo Federation.
  */
-export const FederationProvidesSchema = z.object({
+export const FederationProvidesSchema = lazySchema(() => z.object({
   /** The field that provides additional data */
   field: z.string().describe('Field that provides additional entity fields'),
 
   /** Selection set of fields provided during resolution */
   fields: z.string().describe('Selection set of provided fields (e.g., "name price")'),
-});
+}));
 
 export type FederationProvides = z.infer<typeof FederationProvidesSchema>;
 
@@ -849,7 +850,7 @@ export type FederationProvides = z.infer<typeof FederationProvidesSchema>;
  * Configures a type as a federated entity that can be referenced
  * and extended across multiple subgraphs.
  */
-export const FederationEntitySchema = z.object({
+export const FederationEntitySchema = lazySchema(() => z.object({
   /** Type/Object name */
   typeName: z.string().describe('GraphQL type name for this entity'),
 
@@ -867,7 +868,7 @@ export const FederationEntitySchema = z.object({
 
   /** Whether this subgraph owns this entity */
   owner: z.boolean().optional().default(false).describe('Whether this subgraph is the owner of this entity'),
-});
+}));
 
 export type FederationEntity = z.infer<typeof FederationEntitySchema>;
 
@@ -876,7 +877,7 @@ export type FederationEntity = z.infer<typeof FederationEntitySchema>;
  * 
  * Configuration for an individual subgraph in a federated architecture.
  */
-export const SubgraphConfigSchema = z.object({
+export const SubgraphConfigSchema = lazySchema(() => z.object({
   /** Subgraph name */
   name: z.string().describe('Unique subgraph identifier'),
 
@@ -901,7 +902,7 @@ export const SubgraphConfigSchema = z.object({
 
   /** Request headers to forward */
   forwardHeaders: z.array(z.string()).optional().describe('HTTP headers to forward to this subgraph'),
-});
+}));
 
 export type SubgraphConfig = z.infer<typeof SubgraphConfigSchema>;
 export type SubgraphConfigInput = z.input<typeof SubgraphConfigSchema>;
@@ -912,7 +913,7 @@ export type SubgraphConfigInput = z.input<typeof SubgraphConfigSchema>;
  * Root-level gateway configuration for Apollo Federation or similar.
  * Manages query planning, routing, and composition across subgraphs.
  */
-export const FederationGatewaySchema = z.object({
+export const FederationGatewaySchema = lazySchema(() => z.object({
   /** Enable federation mode */
   enabled: z.boolean().default(false).describe('Enable GraphQL Federation gateway mode'),
 
@@ -963,7 +964,7 @@ export const FederationGatewaySchema = z.object({
     /** Partial error behavior */
     partialErrors: z.enum(['propagate', 'nullify', 'reject']).default('propagate').describe('Behavior when a subgraph returns partial errors'),
   }).optional().describe('Error handling configuration'),
-});
+}));
 
 export type FederationGateway = z.infer<typeof FederationGatewaySchema>;
 export type FederationGatewayInput = z.input<typeof FederationGatewaySchema>;
@@ -977,7 +978,7 @@ export type FederationGatewayInput = z.input<typeof FederationGatewaySchema>;
  * 
  * Root configuration for GraphQL API generation and security.
  */
-export const GraphQLConfigSchema = z.object({
+export const GraphQLConfigSchema = lazySchema(() => z.object({
   /** Enable GraphQL API */
   enabled: z.boolean().default(true).describe('Enable GraphQL API'),
   
@@ -1034,7 +1035,7 @@ export const GraphQLConfigSchema = z.object({
 
   /** Federation configuration */
   federation: FederationGatewaySchema.optional().describe('GraphQL Federation gateway configuration'),
-});
+}));
 
 export const GraphQLConfig = Object.assign(GraphQLConfigSchema, {
   create: <T extends z.input<typeof GraphQLConfigSchema>>(config: T) => config,

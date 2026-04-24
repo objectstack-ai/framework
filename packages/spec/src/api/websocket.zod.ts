@@ -5,6 +5,7 @@ import { EventNameSchema } from '../shared/identifiers.zod';
 import { PresenceStatus } from './realtime-shared.zod';
 
 // Re-export shared PresenceStatus for backward compatibility
+import { lazySchema } from '../shared/lazy-schema';
 export { PresenceStatus } from './realtime-shared.zod';
 
 /**
@@ -86,12 +87,12 @@ export const EventFilterSchema: z.ZodType<{
   and?: EventFilter[];
   or?: EventFilter[];
   not?: EventFilter;
-}> = z.object({
+}> = lazySchema(() => z.object({
   conditions: z.array(EventFilterCondition).optional().describe('Array of filter conditions'),
   and: z.lazy(() => z.array(EventFilterSchema)).optional().describe('AND logical combination of filters'),
   or: z.lazy(() => z.array(EventFilterSchema)).optional().describe('OR logical combination of filters'),
   not: z.lazy(() => EventFilterSchema).optional().describe('NOT logical negation of filter'),
-});
+}));
 
 export type EventFilter = z.infer<typeof EventFilterSchema>;
 
@@ -99,13 +100,13 @@ export type EventFilter = z.infer<typeof EventFilterSchema>;
  * Event Pattern Schema
  * Event name pattern that supports wildcards for subscriptions
  */
-export const EventPatternSchema = z
+export const EventPatternSchema = lazySchema(() => z
   .string()
   .min(1)
   .regex(/^[a-z*][a-z0-9_.*]*$/, {
     message: 'Event pattern must be lowercase and may contain letters, numbers, underscores, dots, or wildcards (e.g., "record.*", "*.created", "user.login")',
   })
-  .describe('Event pattern (supports wildcards like "record.*" or "*.created")');
+  .describe('Event pattern (supports wildcards like "record.*" or "*.created")'));
 
 export type EventPattern = z.infer<typeof EventPatternSchema>;
 
@@ -113,13 +114,13 @@ export type EventPattern = z.infer<typeof EventPatternSchema>;
  * Event Subscription Config
  * Configuration for subscribing to specific events
  */
-export const EventSubscriptionSchema = z.object({
+export const EventSubscriptionSchema = lazySchema(() => z.object({
   subscriptionId: z.string().uuid().describe('Unique subscription identifier'),
   events: z.array(EventPatternSchema).describe('Event patterns to subscribe to (supports wildcards, e.g., "record.*", "user.created")'),
   objects: z.array(z.string()).optional().describe('Object names to filter events by (e.g., ["account", "contact"])'),
   filters: EventFilterSchema.optional().describe('Advanced filter conditions for event payloads'),
   channels: z.array(z.string()).optional().describe('Channel names for scoped subscriptions'),
-});
+}));
 
 export type EventSubscription = z.infer<typeof EventSubscriptionSchema>;
 
@@ -127,9 +128,9 @@ export type EventSubscription = z.infer<typeof EventSubscriptionSchema>;
  * Unsubscribe Request
  * Request to unsubscribe from events
  */
-export const UnsubscribeRequestSchema = z.object({
+export const UnsubscribeRequestSchema = lazySchema(() => z.object({
   subscriptionId: z.string().uuid().describe('Subscription ID to unsubscribe from'),
-});
+}));
 
 export type UnsubscribeRequest = z.infer<typeof UnsubscribeRequestSchema>;
 
@@ -149,7 +150,7 @@ export type WebSocketPresenceStatus = z.infer<typeof WebSocketPresenceStatus>;
  * Presence State Schema
  * Tracks real-time user presence and activity
  */
-export const PresenceStateSchema = z.object({
+export const PresenceStateSchema = lazySchema(() => z.object({
   userId: z.string().describe('User identifier'),
   sessionId: z.string().uuid().describe('Unique session identifier'),
   status: WebSocketPresenceStatus.describe('Current presence status'),
@@ -158,7 +159,7 @@ export const PresenceStateSchema = z.object({
   device: z.enum(['desktop', 'mobile', 'tablet', 'other']).optional().describe('Device type'),
   customStatus: z.string().optional().describe('Custom user status message'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional custom presence data'),
-});
+}));
 
 export type PresenceState = z.infer<typeof PresenceStateSchema>;
 
@@ -166,12 +167,12 @@ export type PresenceState = z.infer<typeof PresenceStateSchema>;
  * Presence Update Request
  * Client request to update presence status
  */
-export const PresenceUpdateSchema = z.object({
+export const PresenceUpdateSchema = lazySchema(() => z.object({
   status: WebSocketPresenceStatus.optional().describe('Updated presence status'),
   currentLocation: z.string().optional().describe('Updated current location'),
   customStatus: z.string().optional().describe('Updated custom status message'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Updated metadata'),
-});
+}));
 
 export type PresenceUpdate = z.infer<typeof PresenceUpdateSchema>;
 
@@ -183,7 +184,7 @@ export type PresenceUpdate = z.infer<typeof PresenceUpdateSchema>;
  * Cursor Position Schema
  * Represents a cursor position in a document
  */
-export const CursorPositionSchema = z.object({
+export const CursorPositionSchema = lazySchema(() => z.object({
   userId: z.string().describe('User identifier'),
   sessionId: z.string().uuid().describe('Session identifier'),
   documentId: z.string().describe('Document identifier being edited'),
@@ -204,7 +205,7 @@ export const CursorPositionSchema = z.object({
   color: z.string().optional().describe('Cursor color for visual representation'),
   userName: z.string().optional().describe('Display name of user'),
   lastUpdate: z.string().datetime().describe('ISO 8601 datetime of last cursor update'),
-});
+}));
 
 export type CursorPosition = z.infer<typeof CursorPositionSchema>;
 
@@ -225,7 +226,7 @@ export type EditOperationType = z.infer<typeof EditOperationType>;
  * Represents a single edit operation on a document
  * Supports Operational Transformation (OT) for conflict resolution
  */
-export const EditOperationSchema = z.object({
+export const EditOperationSchema = lazySchema(() => z.object({
   operationId: z.string().uuid().describe('Unique operation identifier'),
   documentId: z.string().describe('Document identifier'),
   userId: z.string().describe('User who performed the edit'),
@@ -243,7 +244,7 @@ export const EditOperationSchema = z.object({
   version: z.number().int().nonnegative().describe('Document version before this operation'),
   timestamp: z.string().datetime().describe('ISO 8601 datetime when operation was created'),
   baseOperationId: z.string().uuid().optional().describe('Previous operation ID this builds upon (for OT)'),
-});
+}));
 
 export type EditOperation = z.infer<typeof EditOperationSchema>;
 
@@ -251,14 +252,14 @@ export type EditOperation = z.infer<typeof EditOperationSchema>;
  * Document State Schema
  * Represents the current state of a collaborative document
  */
-export const DocumentStateSchema = z.object({
+export const DocumentStateSchema = lazySchema(() => z.object({
   documentId: z.string().describe('Document identifier'),
   version: z.number().int().nonnegative().describe('Current document version'),
   content: z.string().describe('Current document content'),
   lastModified: z.string().datetime().describe('ISO 8601 datetime of last modification'),
   activeSessions: z.array(z.string().uuid()).describe('Active editing session IDs'),
   checksum: z.string().optional().describe('Content checksum for integrity verification'),
-});
+}));
 
 export type DocumentState = z.infer<typeof DocumentStateSchema>;
 
@@ -280,10 +281,10 @@ const BaseWebSocketMessage = z.object({
  * Subscribe Message
  * Client sends this to subscribe to events
  */
-export const SubscribeMessageSchema = BaseWebSocketMessage.extend({
+export const SubscribeMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('subscribe'),
   subscription: EventSubscriptionSchema.describe('Subscription configuration'),
-});
+}));
 
 export type SubscribeMessage = z.infer<typeof SubscribeMessageSchema>;
 
@@ -291,10 +292,10 @@ export type SubscribeMessage = z.infer<typeof SubscribeMessageSchema>;
  * Unsubscribe Message
  * Client sends this to unsubscribe from events
  */
-export const UnsubscribeMessageSchema = BaseWebSocketMessage.extend({
+export const UnsubscribeMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('unsubscribe'),
   request: UnsubscribeRequestSchema.describe('Unsubscribe request'),
-});
+}));
 
 export type UnsubscribeMessage = z.infer<typeof UnsubscribeMessageSchema>;
 
@@ -302,14 +303,14 @@ export type UnsubscribeMessage = z.infer<typeof UnsubscribeMessageSchema>;
  * Event Message
  * Server sends this when a subscribed event occurs
  */
-export const EventMessageSchema = BaseWebSocketMessage.extend({
+export const EventMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('event'),
   subscriptionId: z.string().uuid().describe('Subscription ID this event belongs to'),
   eventName: EventNameSchema.describe('Event name'),
   object: z.string().optional().describe('Object name the event relates to'),
   payload: z.unknown().describe('Event payload data'),
   userId: z.string().optional().describe('User who triggered the event'),
-});
+}));
 
 export type EventMessage = z.infer<typeof EventMessageSchema>;
 
@@ -317,10 +318,10 @@ export type EventMessage = z.infer<typeof EventMessageSchema>;
  * Presence Message
  * Presence update message
  */
-export const PresenceMessageSchema = BaseWebSocketMessage.extend({
+export const PresenceMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('presence'),
   presence: PresenceStateSchema.describe('Presence state'),
-});
+}));
 
 export type PresenceMessage = z.infer<typeof PresenceMessageSchema>;
 
@@ -328,10 +329,10 @@ export type PresenceMessage = z.infer<typeof PresenceMessageSchema>;
  * Cursor Message
  * Cursor position update for collaborative editing
  */
-export const CursorMessageSchema = BaseWebSocketMessage.extend({
+export const CursorMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('cursor'),
   cursor: CursorPositionSchema.describe('Cursor position'),
-});
+}));
 
 export type CursorMessage = z.infer<typeof CursorMessageSchema>;
 
@@ -339,10 +340,10 @@ export type CursorMessage = z.infer<typeof CursorMessageSchema>;
  * Edit Message
  * Document edit operation for collaborative editing
  */
-export const EditMessageSchema = BaseWebSocketMessage.extend({
+export const EditMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('edit'),
   operation: EditOperationSchema.describe('Edit operation'),
-});
+}));
 
 export type EditMessage = z.infer<typeof EditMessageSchema>;
 
@@ -350,12 +351,12 @@ export type EditMessage = z.infer<typeof EditMessageSchema>;
  * Acknowledgment Message
  * Server acknowledges receipt of a message
  */
-export const AckMessageSchema = BaseWebSocketMessage.extend({
+export const AckMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('ack'),
   ackMessageId: z.string().uuid().describe('ID of the message being acknowledged'),
   success: z.boolean().describe('Whether the operation was successful'),
   error: z.string().optional().describe('Error message if operation failed'),
-});
+}));
 
 export type AckMessage = z.infer<typeof AckMessageSchema>;
 
@@ -363,12 +364,12 @@ export type AckMessage = z.infer<typeof AckMessageSchema>;
  * Error Message
  * Server sends error information
  */
-export const ErrorMessageSchema = BaseWebSocketMessage.extend({
+export const ErrorMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('error'),
   code: z.string().describe('Error code'),
   message: z.string().describe('Error message'),
   details: z.unknown().optional().describe('Additional error details'),
-});
+}));
 
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 
@@ -376,9 +377,9 @@ export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
  * Ping Message
  * Keepalive ping from client or server
  */
-export const PingMessageSchema = BaseWebSocketMessage.extend({
+export const PingMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('ping'),
-});
+}));
 
 export type PingMessage = z.infer<typeof PingMessageSchema>;
 
@@ -386,10 +387,10 @@ export type PingMessage = z.infer<typeof PingMessageSchema>;
  * Pong Message
  * Keepalive pong response
  */
-export const PongMessageSchema = BaseWebSocketMessage.extend({
+export const PongMessageSchema = lazySchema(() => BaseWebSocketMessage.extend({
   type: z.literal('pong'),
   pingMessageId: z.string().uuid().optional().describe('ID of ping message being responded to'),
-});
+}));
 
 export type PongMessage = z.infer<typeof PongMessageSchema>;
 
@@ -397,7 +398,7 @@ export type PongMessage = z.infer<typeof PongMessageSchema>;
  * WebSocket Message Union
  * Discriminated union of all WebSocket message types
  */
-export const WebSocketMessageSchema = z.discriminatedUnion('type', [
+export const WebSocketMessageSchema = lazySchema(() => z.discriminatedUnion('type', [
   SubscribeMessageSchema,
   UnsubscribeMessageSchema,
   EventMessageSchema,
@@ -408,7 +409,7 @@ export const WebSocketMessageSchema = z.discriminatedUnion('type', [
   ErrorMessageSchema,
   PingMessageSchema,
   PongMessageSchema,
-]);
+]));
 
 export type WebSocketMessage = z.infer<typeof WebSocketMessageSchema>;
 
@@ -420,7 +421,7 @@ export type WebSocketMessage = z.infer<typeof WebSocketMessageSchema>;
  * WebSocket Connection Config
  * Configuration for WebSocket connections
  */
-export const WebSocketConfigSchema = z.object({
+export const WebSocketConfigSchema = lazySchema(() => z.object({
   url: z.string().url().describe('WebSocket server URL'),
   protocols: z.array(z.string()).optional().describe('WebSocket sub-protocols'),
   reconnect: z.boolean().optional().default(true).describe('Enable automatic reconnection'),
@@ -429,7 +430,7 @@ export const WebSocketConfigSchema = z.object({
   pingInterval: z.number().int().positive().optional().default(30000).describe('Ping interval in milliseconds'),
   timeout: z.number().int().positive().optional().default(5000).describe('Message timeout in milliseconds'),
   headers: z.record(z.string(), z.string()).optional().describe('Custom headers for WebSocket handshake'),
-});
+}));
 
 export type WebSocketConfig = z.infer<typeof WebSocketConfigSchema>;
 
@@ -463,7 +464,7 @@ export type WebSocketConfig = z.infer<typeof WebSocketConfigSchema>;
  * }
  * ```
  */
-export const WebSocketEventSchema = z.object({
+export const WebSocketEventSchema = lazySchema(() => z.object({
   type: z.enum([
     'subscribe',       // Client subscribes to channel
     'unsubscribe',     // Client unsubscribes from channel
@@ -475,7 +476,7 @@ export const WebSocketEventSchema = z.object({
   channel: z.string().describe('Channel identifier (e.g., "record.account.123", "user.456")'),
   payload: z.unknown().describe('Event payload data'),
   timestamp: z.number().describe('Unix timestamp in milliseconds'),
-});
+}));
 
 export type WebSocketEvent = z.infer<typeof WebSocketEventSchema>;
 
@@ -499,13 +500,13 @@ export type WebSocketEvent = z.infer<typeof WebSocketEventSchema>;
  * }
  * ```
  */
-export const SimplePresenceStateSchema = z.object({
+export const SimplePresenceStateSchema = lazySchema(() => z.object({
   userId: z.string().describe('User identifier'),
   userName: z.string().describe('User display name'),
   status: z.enum(['online', 'away', 'offline']).describe('User presence status'),
   lastSeen: z.number().describe('Unix timestamp of last activity in milliseconds'),
   metadata: z.record(z.string(), z.unknown()).optional().describe('Additional presence metadata (e.g., current page, custom status)'),
-});
+}));
 
 export type SimplePresenceState = z.infer<typeof SimplePresenceStateSchema>;
 
@@ -529,7 +530,7 @@ export type SimplePresenceState = z.infer<typeof SimplePresenceStateSchema>;
  * }
  * ```
  */
-export const SimpleCursorPositionSchema = z.object({
+export const SimpleCursorPositionSchema = lazySchema(() => z.object({
   userId: z.string().describe('User identifier'),
   recordId: z.string().describe('Record identifier being edited'),
   fieldName: z.string().describe('Field name being edited'),
@@ -538,7 +539,7 @@ export const SimpleCursorPositionSchema = z.object({
     start: z.number().describe('Selection start position'),
     end: z.number().describe('Selection end position'),
   }).optional().describe('Text selection range (if text is selected)'),
-});
+}));
 
 export type SimpleCursorPosition = z.infer<typeof SimpleCursorPositionSchema>;
 
@@ -560,13 +561,13 @@ export type SimpleCursorPosition = z.infer<typeof SimpleCursorPositionSchema>;
  * }
  * ```
  */
-export const WebSocketServerConfigSchema = z.object({
+export const WebSocketServerConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable WebSocket server'),
   path: z.string().default('/ws').describe('WebSocket endpoint path'),
   heartbeatInterval: z.number().default(30000).describe('Heartbeat interval in milliseconds'),
   reconnectAttempts: z.number().default(5).describe('Maximum reconnection attempts for clients'),
   presence: z.boolean().default(false).describe('Enable presence tracking'),
   cursorSharing: z.boolean().default(false).describe('Enable collaborative cursor sharing'),
-});
+}));
 
 export type WebSocketServerConfig = z.infer<typeof WebSocketServerConfigSchema>;

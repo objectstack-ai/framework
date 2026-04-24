@@ -6,21 +6,22 @@ import { z } from 'zod';
  * Metadata Scope Enum
  * Defines the lifecycle and mutability of a metadata item.
  */
-export const MetadataScopeSchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const MetadataScopeSchema = lazySchema(() => z.enum([
   'system',   // Defined in Code (Files). Read-only at runtime. Upgraded via deployment.
   'platform', // Defined in DB (Global). admin-configured. Overrides system.
   'user',     // Defined in DB (Personal). User-configured. Overrides platform/system.
-]);
+]));
 
 /**
  * Metadata Lifecycle State
  */
-export const MetadataStateSchema = z.enum([
+export const MetadataStateSchema = lazySchema(() => z.enum([
   'draft',    // Work in progress, not active
   'active',   // Live and running
   'archived', // Soft deleted
   'deprecated' // Running but flagged for removal
-]);
+]));
 
 /**
  * Unified Metadata Persistence Protocol
@@ -30,7 +31,7 @@ export const MetadataStateSchema = z.enum([
  * 
  * This treats "Metadata as Data".
  */
-export const MetadataRecordSchema = z.object({
+export const MetadataRecordSchema = lazySchema(() => z.object({
   /** Primary Key (UUID) */
   id: z.string(),
   
@@ -130,7 +131,7 @@ export const MetadataRecordSchema = z.object({
   createdAt: z.string().datetime().optional().describe('Creation timestamp'),
   updatedBy: z.string().optional(),
   updatedAt: z.string().datetime().optional().describe('Last update timestamp'),
-});
+}));
 
 export type MetadataRecord = z.infer<typeof MetadataRecordSchema>;
 export type MetadataScope = z.infer<typeof MetadataScopeSchema>;
@@ -139,7 +140,7 @@ export type MetadataScope = z.infer<typeof MetadataScopeSchema>;
  * Package Publish Result
  * Returned by `publishPackage()` after a package-level metadata publish operation.
  */
-export const PackagePublishResultSchema = z.object({
+export const PackagePublishResultSchema = lazySchema(() => z.object({
   success: z.boolean().describe('Whether the publish succeeded'),
   packageId: z.string().describe('The package ID that was published'),
   version: z.number().int().describe('New version number after publish'),
@@ -150,7 +151,7 @@ export const PackagePublishResultSchema = z.object({
     name: z.string().describe('Item name that failed validation'),
     message: z.string().describe('Validation error message'),
   })).optional().describe('Validation errors if publish failed'),
-});
+}));
 
 export type PackagePublishResult = z.infer<typeof PackagePublishResultSchema>;
 
@@ -158,16 +159,16 @@ export type PackagePublishResult = z.infer<typeof PackagePublishResultSchema>;
  * Metadata Format
  * Supported file formats for metadata serialization.
  */
-export const MetadataFormatSchema = z.enum([
+export const MetadataFormatSchema = lazySchema(() => z.enum([
   'json', 'yaml', 'yml', 'ts', 'js',
   'typescript', 'javascript' // Aliases
-]);
+]));
 
 /**
  * Metadata Stats
  * Statistics about a metadata item.
  */
-export const MetadataStatsSchema = z.object({
+export const MetadataStatsSchema = lazySchema(() => z.object({
   path: z.string().optional(),
   size: z.number().optional(),
   mtime: z.string().datetime().optional(),
@@ -175,13 +176,13 @@ export const MetadataStatsSchema = z.object({
   etag: z.string().optional(), // Required by local cache
   modifiedAt: z.string().datetime().optional(), // Alias for mtime
   format: MetadataFormatSchema.optional(), // Required for serialization
-});
+}));
 
 /**
  * Metadata Loader Contract
  * Describes the capabilities and identity of a metadata loader.
  */
-export const MetadataLoaderContractSchema = z.object({
+export const MetadataLoaderContractSchema = lazySchema(() => z.object({
   name: z.string(),
   protocol: z.enum(['file:', 'http:', 's3:', 'datasource:', 'memory:']).describe('Loader protocol identifier'),
   description: z.string().optional(),
@@ -195,12 +196,12 @@ export const MetadataLoaderContractSchema = z.object({
     watch: z.boolean().default(false),
     list: z.boolean().default(true),
   }),
-});
+}));
 
 /**
  * Metadata Load Options
  */
-export const MetadataLoadOptionsSchema = z.object({
+export const MetadataLoadOptionsSchema = lazySchema(() => z.object({
   scope: MetadataScopeSchema.optional(),
   namespace: z.string().optional(),
   raw: z.boolean().optional().describe('Return raw file content instead of parsed JSON'),
@@ -212,12 +213,12 @@ export const MetadataLoadOptionsSchema = z.object({
   limit: z.number().optional(),
   patterns: z.array(z.string()).optional(),
   loader: z.string().optional().describe('Specific loader to use (e.g. filesystem, database)'),
-});
+}));
 
 /**
  * Metadata Load Result
  */
-export const MetadataLoadResultSchema = z.object({
+export const MetadataLoadResultSchema = lazySchema(() => z.object({
   data: z.unknown(),
   stats: MetadataStatsSchema.optional(),
   format: MetadataFormatSchema.optional(),
@@ -226,12 +227,12 @@ export const MetadataLoadResultSchema = z.object({
   etag: z.string().optional(),
   notModified: z.boolean().optional(),
   loadTime: z.number().optional(),
-});
+}));
 
 /**
  * Metadata Save Options
  */
-export const MetadataSaveOptionsSchema = z.object({
+export const MetadataSaveOptionsSchema = lazySchema(() => z.object({
   format: MetadataFormatSchema.optional(),
   create: z.boolean().default(true),
   overwrite: z.boolean().default(true),
@@ -242,12 +243,12 @@ export const MetadataSaveOptionsSchema = z.object({
   backup: z.boolean().optional(),
   atomic: z.boolean().optional(),
   loader: z.string().optional().describe('Specific loader to use (e.g. filesystem, database)'),
-});
+}));
 
 /**
  * Metadata Save Result
  */
-export const MetadataSaveResultSchema = z.object({
+export const MetadataSaveResultSchema = lazySchema(() => z.object({
   success: z.boolean(),
   path: z.string().optional(),
   stats: MetadataStatsSchema.optional(),
@@ -255,12 +256,12 @@ export const MetadataSaveResultSchema = z.object({
   size: z.number().optional(),
   saveTime: z.number().optional(),
   backupPath: z.string().optional(),
-});
+}));
 
 /**
  * Metadata Watch Event
  */
-export const MetadataWatchEventSchema = z.object({
+export const MetadataWatchEventSchema = lazySchema(() => z.object({
   type: z.enum(['add', 'change', 'unlink', 'added', 'changed', 'deleted']),
   path: z.string(),
   name: z.string().optional(),
@@ -268,53 +269,53 @@ export const MetadataWatchEventSchema = z.object({
   metadataType: z.string().optional(),
   data: z.unknown().optional(),
   timestamp: z.string().datetime().optional(),
-});
+}));
 
 /**
  * Metadata Collection Info
  */
-export const MetadataCollectionInfoSchema = z.object({
+export const MetadataCollectionInfoSchema = lazySchema(() => z.object({
   type: z.string(),
   count: z.number(),
   namespaces: z.array(z.string()),
-});
+}));
 
 /**
  * Metadata Export/Import Options
  */
-export const MetadataExportOptionsSchema = z.object({
+export const MetadataExportOptionsSchema = lazySchema(() => z.object({
   types: z.array(z.string()).optional(),
   namespaces: z.array(z.string()).optional(),
   output: z.string().describe('Output directory or file'),
   format: MetadataFormatSchema.default('json'),
-});
+}));
 
-export const MetadataImportOptionsSchema = z.object({
+export const MetadataImportOptionsSchema = lazySchema(() => z.object({
   source: z.string().describe('Input directory or file'),
   strategy: z.enum(['merge', 'replace', 'skip']).default('merge'),
   validate: z.boolean().default(true),
-});
+}));
 
 /**
  * Metadata Fallback Strategy
  * Determines behavior when the primary datasource is unavailable.
  */
-export const MetadataFallbackStrategySchema = z.enum([
+export const MetadataFallbackStrategySchema = lazySchema(() => z.enum([
   'filesystem', // Fall back to filesystem-based loading
   'memory',     // Fall back to in-memory storage
   'none',       // No fallback — fail immediately
-]);
+]));
 
 /**
  * Metadata Source Origin
  * Indicates where a metadata record was loaded from.
  */
-export const MetadataSourceSchema = z.enum([
+export const MetadataSourceSchema = lazySchema(() => z.enum([
   'filesystem', // Loaded from local files
   'database',   // Loaded from database via datasource
   'api',        // Loaded from remote API
   'migration',  // Created during a migration process
-]);
+]));
 
 /**
  * Metadata Manager Config
@@ -323,7 +324,7 @@ export const MetadataSourceSchema = z.enum([
  * Supports datasource-backed persistence via `datasource` field,
  * which references a DatasourceSchema.name resolved at runtime.
  */
-export const MetadataManagerConfigSchema = z.object({
+export const MetadataManagerConfigSchema = lazySchema(() => z.object({
   /**
    * Datasource Name Reference
    * References a DatasourceSchema.name (e.g. 'default').
@@ -371,7 +372,7 @@ export const MetadataManagerConfigSchema = z.object({
     ignored: z.array(z.string()).optional().describe('Patterns to ignore'),
     persistent: z.boolean().default(true).describe('Keep process running'),
   }).optional().describe('File watcher options'),
-});
+}));
 
 export type MetadataFormat = z.infer<typeof MetadataFormatSchema>;
 export type MetadataStats = z.infer<typeof MetadataStatsSchema>;
@@ -394,7 +395,7 @@ export type MetadataSource = z.infer<typeof MetadataSourceSchema>;
  * Represents a single version snapshot in the metadata change history.
  * Stored in the sys_metadata_history table for version tracking and rollback.
  */
-export const MetadataHistoryRecordSchema = z.object({
+export const MetadataHistoryRecordSchema = lazySchema(() => z.object({
   /** Primary Key (UUID) */
   id: z.string(),
 
@@ -466,7 +467,7 @@ export const MetadataHistoryRecordSchema = z.object({
 
   /** Audit: when was this version recorded */
   recordedAt: z.string().datetime().describe('Timestamp when this version was recorded'),
-});
+}));
 
 export type MetadataHistoryRecord = z.infer<typeof MetadataHistoryRecordSchema>;
 
@@ -474,7 +475,7 @@ export type MetadataHistoryRecord = z.infer<typeof MetadataHistoryRecordSchema>;
  * Metadata History Query Options
  * Options for retrieving metadata version history.
  */
-export const MetadataHistoryQueryOptionsSchema = z.object({
+export const MetadataHistoryQueryOptionsSchema = lazySchema(() => z.object({
   /** Limit number of history records returned */
   limit: z.number().int().positive().optional().describe('Maximum number of history records to return'),
 
@@ -492,7 +493,7 @@ export const MetadataHistoryQueryOptionsSchema = z.object({
 
   /** Include full metadata payload in results (default: true) */
   includeMetadata: z.boolean().optional().default(true).describe('Include full metadata payload'),
-});
+}));
 
 export type MetadataHistoryQueryOptions = z.infer<typeof MetadataHistoryQueryOptionsSchema>;
 
@@ -500,7 +501,7 @@ export type MetadataHistoryQueryOptions = z.infer<typeof MetadataHistoryQueryOpt
  * Metadata History Query Result
  * Result of querying metadata version history.
  */
-export const MetadataHistoryQueryResultSchema = z.object({
+export const MetadataHistoryQueryResultSchema = lazySchema(() => z.object({
   /** Array of history records */
   records: z.array(MetadataHistoryRecordSchema),
 
@@ -509,7 +510,7 @@ export const MetadataHistoryQueryResultSchema = z.object({
 
   /** Whether there are more records available */
   hasMore: z.boolean(),
-});
+}));
 
 export type MetadataHistoryQueryResult = z.infer<typeof MetadataHistoryQueryResultSchema>;
 
@@ -517,7 +518,7 @@ export type MetadataHistoryQueryResult = z.infer<typeof MetadataHistoryQueryResu
  * Metadata Diff Result
  * Result of comparing two versions of metadata.
  */
-export const MetadataDiffResultSchema = z.object({
+export const MetadataDiffResultSchema = lazySchema(() => z.object({
   /** Metadata type */
   type: z.string(),
 
@@ -544,7 +545,7 @@ export const MetadataDiffResultSchema = z.object({
 
   /** Human-readable diff summary */
   summary: z.string().optional().describe('Human-readable summary of changes'),
-});
+}));
 
 export type MetadataDiffResult = z.infer<typeof MetadataDiffResultSchema>;
 
@@ -552,7 +553,7 @@ export type MetadataDiffResult = z.infer<typeof MetadataDiffResultSchema>;
  * Metadata History Retention Policy
  * Configuration for automatic cleanup of old history records.
  */
-export const MetadataHistoryRetentionPolicySchema = z.object({
+export const MetadataHistoryRetentionPolicySchema = lazySchema(() => z.object({
   /** Maximum number of versions to keep per metadata item */
   maxVersions: z.number().int().positive().optional().describe('Maximum number of versions to retain'),
 
@@ -564,6 +565,6 @@ export const MetadataHistoryRetentionPolicySchema = z.object({
 
   /** Cleanup interval in hours */
   cleanupIntervalHours: z.number().int().positive().default(24).describe('How often to run cleanup (in hours)'),
-});
+}));
 
 export type MetadataHistoryRetentionPolicy = z.infer<typeof MetadataHistoryRetentionPolicySchema>;

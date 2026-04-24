@@ -13,7 +13,8 @@ import { RowLevelSecurityPolicySchema } from './rls.zod';
  * - Restore (Soft delete recovery)
  * - Purge (Hard delete / Compliance)
  */
-export const ObjectPermissionSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ObjectPermissionSchema = lazySchema(() => z.object({
   /** C: Create */
   allowCreate: z.boolean().default(false).describe('Create permission'),
   /** R: Read (Owned records or Shared records) */
@@ -41,17 +42,17 @@ export const ObjectPermissionSchema = z.object({
    * Equivalent to Microsoft Dataverse "Organization" level write access.
    */
   modifyAllRecords: z.boolean().default(false).describe('Modify All Data (Bypass Sharing)'),
-});
+}));
 
 /**
  * Field Level Security (FLS)
  */
-export const FieldPermissionSchema = z.object({
+export const FieldPermissionSchema = lazySchema(() => z.object({
   /** Can see this field */
   readable: z.boolean().default(true).describe('Field read access'),
   /** Can edit this field */
   editable: z.boolean().default(false).describe('Field edit access'),
-});
+}));
 
 /**
  * Permission Set Schema
@@ -76,7 +77,7 @@ export const FieldPermissionSchema = z.object({
  * - 'SystemAdmin' (mixed case)
  * - 'Read Only' (spaces)
  */
-export const PermissionSetSchema = z.object({
+export const PermissionSetSchema = lazySchema(() => z.object({
   /** Unique permission set name */
   name: SnakeCaseIdentifierSchema.describe('Permission set unique name (lowercase snake_case)'),
   
@@ -159,7 +160,7 @@ export const PermissionSetSchema = z.object({
    * ```
    */
   contextVariables: z.record(z.string(), z.unknown()).optional().describe('Context variables for RLS evaluation'),
-});
+}));
 
 export type PermissionSet = z.infer<typeof PermissionSetSchema>;
 export type ObjectPermission = z.infer<typeof ObjectPermissionSchema>;

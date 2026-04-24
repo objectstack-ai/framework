@@ -43,7 +43,8 @@ import { HttpMethod } from '../shared/http.zod';
  *   }
  * }
  */
-export const RestApiConfigSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const RestApiConfigSchema = lazySchema(() => z.object({
   /**
    * API version identifier
    */
@@ -129,7 +130,7 @@ export const RestApiConfigSchema = z.object({
     includeMetadata: z.boolean().default(true).describe('Include response metadata (timestamp, requestId)'),
     includePagination: z.boolean().default(true).describe('Include pagination info in list responses'),
   }).optional().describe('Response format options'),
-});
+}));
 
 export type RestApiConfig = z.infer<typeof RestApiConfigSchema>;
 export type RestApiConfigInput = z.input<typeof RestApiConfigSchema>;
@@ -164,7 +165,7 @@ export type CrudOperation = z.infer<typeof CrudOperation>;
  *   "list": { "method": "GET", "path": "/data/{object}" }
  * }
  */
-export const CrudEndpointPatternSchema = z.object({
+export const CrudEndpointPatternSchema = lazySchema(() => z.object({
   /**
    * HTTP method
    */
@@ -184,7 +185,7 @@ export const CrudEndpointPatternSchema = z.object({
    * Operation description
    */
   description: z.string().optional().describe('Operation description'),
-});
+}));
 
 export type CrudEndpointPattern = z.infer<typeof CrudEndpointPatternSchema>;
 
@@ -192,7 +193,7 @@ export type CrudEndpointPattern = z.infer<typeof CrudEndpointPatternSchema>;
  * CRUD Endpoints Configuration Schema
  * Configuration for automatic CRUD endpoint generation
  */
-export const CrudEndpointsConfigSchema = z.object({
+export const CrudEndpointsConfigSchema = lazySchema(() => z.object({
   /**
    * Enable/disable specific CRUD operations
    */
@@ -220,7 +221,7 @@ export const CrudEndpointsConfigSchema = z.object({
    */
   objectParamStyle: z.enum(['path', 'query']).default('path')
     .describe('How object name is passed (path param or query param)'),
-});
+}));
 
 export type CrudEndpointsConfig = z.infer<typeof CrudEndpointsConfigSchema>;
 export type CrudEndpointsConfigInput = z.input<typeof CrudEndpointsConfigSchema>;
@@ -244,7 +245,7 @@ export type CrudEndpointsConfigInput = z.input<typeof CrudEndpointsConfigSchema>
  *   }
  * }
  */
-export const MetadataEndpointsConfigSchema = z.object({
+export const MetadataEndpointsConfigSchema = lazySchema(() => z.object({
   /**
    * Path prefix for metadata operations
    */
@@ -269,7 +270,7 @@ export const MetadataEndpointsConfigSchema = z.object({
     item: z.boolean().default(true).describe('GET /meta/:type/:name - Get specific item'),
     schema: z.boolean().default(true).describe('GET /meta/:type/:name/schema - Get JSON schema'),
   }).optional().describe('Enable/disable specific endpoints'),
-});
+}));
 
 export type MetadataEndpointsConfig = z.infer<typeof MetadataEndpointsConfigSchema>;
 export type MetadataEndpointsConfigInput = z.input<typeof MetadataEndpointsConfigSchema>;
@@ -291,7 +292,7 @@ export type MetadataEndpointsConfigInput = z.input<typeof MetadataEndpointsConfi
  *   "enableDeleteMany": true
  * }
  */
-export const BatchEndpointsConfigSchema = z.object({
+export const BatchEndpointsConfigSchema = lazySchema(() => z.object({
   /**
    * Maximum batch size
    */
@@ -319,7 +320,7 @@ export const BatchEndpointsConfigSchema = z.object({
    */
   defaultAtomic: z.boolean().default(true)
     .describe('Default atomic/transaction mode for batch operations'),
-});
+}));
 
 export type BatchEndpointsConfig = z.infer<typeof BatchEndpointsConfigSchema>;
 export type BatchEndpointsConfigInput = z.input<typeof BatchEndpointsConfigSchema>;
@@ -332,7 +333,7 @@ export type BatchEndpointsConfigInput = z.input<typeof BatchEndpointsConfigSchem
  * Route Generation Configuration Schema
  * Controls automatic route generation for objects
  */
-export const RouteGenerationConfigSchema = z.object({
+export const RouteGenerationConfigSchema = lazySchema(() => z.object({
   /**
    * Objects to include (if empty, include all)
    */
@@ -360,7 +361,7 @@ export const RouteGenerationConfigSchema = z.object({
     operations: z.record(CrudOperation, z.boolean()).optional()
       .describe('Enable/disable specific operations'),
   })).optional().describe('Per-object route customization'),
-});
+}));
 
 export type RouteGenerationConfig = z.infer<typeof RouteGenerationConfigSchema>;
 export type RouteGenerationConfigInput = z.input<typeof RouteGenerationConfigSchema>;
@@ -373,7 +374,7 @@ export type RouteGenerationConfigInput = z.input<typeof RouteGenerationConfigSch
  * Webhook Event Schema
  * Defines an event that can trigger a webhook delivery
  */
-export const WebhookEventSchema = z.object({
+export const WebhookEventSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Webhook event identifier (snake_case)'),
   description: z.string().describe('Human-readable event description'),
   method: HttpMethod.default('POST').describe('HTTP method for webhook delivery'),
@@ -382,7 +383,7 @@ export const WebhookEventSchema = z.object({
   security: z.array(
     z.enum(['hmac_sha256', 'basic', 'bearer', 'api_key'])
   ).describe('Supported authentication methods for webhook verification'),
-});
+}));
 
 export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
 
@@ -390,7 +391,7 @@ export type WebhookEvent = z.infer<typeof WebhookEventSchema>;
  * Webhook Configuration Schema
  * Top-level webhook configuration for the REST API
  */
-export const WebhookConfigSchema = z.object({
+export const WebhookConfigSchema = lazySchema(() => z.object({
   enabled: z.boolean().default(false).describe('Enable webhook support'),
   events: z.array(WebhookEventSchema).describe('Registered webhook events'),
   deliveryConfig: z.object({
@@ -400,7 +401,7 @@ export const WebhookConfigSchema = z.object({
     signatureHeader: z.string().default('X-Signature-256').describe('Header name for webhook signature'),
   }).describe('Webhook delivery configuration'),
   registrationEndpoint: z.string().default('/webhooks').describe('URL path for webhook registration'),
-});
+}));
 
 export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
 
@@ -408,12 +409,12 @@ export type WebhookConfig = z.infer<typeof WebhookConfigSchema>;
  * Callback Schema
  * OpenAPI 3.1 callback definition for asynchronous API responses
  */
-export const CallbackSchema = z.object({
+export const CallbackSchema = lazySchema(() => z.object({
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Callback identifier (snake_case)'),
   expression: z.string().describe('Runtime expression (e.g., {$request.body#/callbackUrl})'),
   method: HttpMethod.describe('HTTP method for callback request'),
   url: z.string().describe('Callback URL template with runtime expressions'),
-});
+}));
 
 export type Callback = z.infer<typeof CallbackSchema>;
 
@@ -421,7 +422,7 @@ export type Callback = z.infer<typeof CallbackSchema>;
  * OpenAPI 3.1 Extensions Schema
  * Extensions specific to OpenAPI 3.1 specification
  */
-export const OpenApi31ExtensionsSchema = z.object({
+export const OpenApi31ExtensionsSchema = lazySchema(() => z.object({
   webhooks: z.record(z.string(), WebhookEventSchema).optional()
     .describe('OpenAPI 3.1 webhooks (top-level webhook definitions)'),
   callbacks: z.record(z.string(), z.array(CallbackSchema)).optional()
@@ -430,7 +431,7 @@ export const OpenApi31ExtensionsSchema = z.object({
     .describe('JSON Schema dialect for schema definitions'),
   pathItemReferences: z.boolean().default(false)
     .describe('Allow $ref in path items (OpenAPI 3.1 feature)'),
-});
+}));
 
 export type OpenApi31Extensions = z.infer<typeof OpenApi31ExtensionsSchema>;
 
@@ -466,7 +467,7 @@ export type OpenApi31Extensions = z.infer<typeof OpenApi31ExtensionsSchema>;
  *   }
  * }
  */
-export const RestServerConfigSchema = z.object({
+export const RestServerConfigSchema = lazySchema(() => z.object({
   /**
    * API configuration
    */
@@ -496,7 +497,7 @@ export const RestServerConfigSchema = z.object({
    * OpenAPI 3.1 extensions (webhooks, callbacks)
    */
   openApi31: OpenApi31ExtensionsSchema.optional().describe('OpenAPI 3.1 extensions configuration'),
-});
+}));
 
 export type RestServerConfig = z.infer<typeof RestServerConfigSchema>;
 export type RestServerConfigInput = z.input<typeof RestServerConfigSchema>;
@@ -509,7 +510,7 @@ export type RestServerConfigInput = z.input<typeof RestServerConfigSchema>;
  * Generated Endpoint Schema
  * Represents a generated REST endpoint
  */
-export const GeneratedEndpointSchema = z.object({
+export const GeneratedEndpointSchema = lazySchema(() => z.object({
   /**
    * Endpoint identifier
    */
@@ -549,7 +550,7 @@ export const GeneratedEndpointSchema = z.object({
     tags: z.array(z.string()).optional(),
     deprecated: z.boolean().optional(),
   }).optional(),
-});
+}));
 
 export type GeneratedEndpoint = z.infer<typeof GeneratedEndpointSchema>;
 
@@ -557,7 +558,7 @@ export type GeneratedEndpoint = z.infer<typeof GeneratedEndpointSchema>;
  * Endpoint Registry Schema
  * Registry of all generated endpoints
  */
-export const EndpointRegistrySchema = z.object({
+export const EndpointRegistrySchema = lazySchema(() => z.object({
   /**
    * Generated endpoints
    */
@@ -579,7 +580,7 @@ export const EndpointRegistrySchema = z.object({
    */
   byOperation: z.record(z.string(), z.array(GeneratedEndpointSchema)).optional()
     .describe('Endpoints grouped by operation'),
-});
+}));
 
 export type EndpointRegistry = z.infer<typeof EndpointRegistrySchema>;
 

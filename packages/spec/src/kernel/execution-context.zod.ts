@@ -17,7 +17,8 @@ import { z } from 'zod';
  * Usage:
  *   engine.find('account', { context: { userId: '...', tenantId: '...' } })
  */
-export const ExecutionContextSchema = z.object({
+import { lazySchema } from '../shared/lazy-schema';
+export const ExecutionContextSchema = lazySchema(() => z.object({
   /** Current user ID (resolved from session) */
   userId: z.string().optional(),
   
@@ -41,6 +42,6 @@ export const ExecutionContextSchema = z.object({
   
   /** Request trace ID (for distributed tracing) */
   traceId: z.string().optional(),
-});
+}));
 
 export type ExecutionContext = z.infer<typeof ExecutionContextSchema>;

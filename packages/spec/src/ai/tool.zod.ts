@@ -10,7 +10,8 @@ import { z } from 'zod';
  * Tool Category
  * Classifies the tool by its operational domain.
  */
-export const ToolCategorySchema = z.enum([
+import { lazySchema } from '../shared/lazy-schema';
+export const ToolCategorySchema = lazySchema(() => z.enum([
   'data',           // CRUD / query operations
   'action',         // Side-effect actions (send email, create record)
   'flow',           // Trigger a visual flow
@@ -18,7 +19,7 @@ export const ToolCategorySchema = z.enum([
   'vector_search',  // RAG / vector search
   'analytics',      // Aggregation & reporting
   'utility',        // Formatters, parsers, helpers
-]).describe('Tool operational category');
+]).describe('Tool operational category'));
 
 export type ToolCategory = z.infer<typeof ToolCategorySchema>;
 
@@ -57,7 +58,7 @@ export type ToolCategory = z.infer<typeof ToolCategorySchema>;
  * });
  * ```
  */
-export const ToolSchema = z.object({
+export const ToolSchema = lazySchema(() => z.object({
   /** Machine name (snake_case, globally unique) */
   name: z.string().regex(/^[a-z_][a-z0-9_]*$/).describe('Tool unique identifier (snake_case)'),
 
@@ -100,7 +101,7 @@ export const ToolSchema = z.object({
 
   /** Whether this is a platform built-in tool (vs. user-defined) */
   builtIn: z.boolean().default(false).describe('Platform built-in tool flag'),
-});
+}));
 
 export type Tool = z.infer<typeof ToolSchema>;
 

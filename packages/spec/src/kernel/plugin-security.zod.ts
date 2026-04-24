@@ -24,6 +24,7 @@ import { z } from 'zod';
 /**
  * Vulnerability Severity
  */
+import { lazySchema } from '../shared/lazy-schema';
 export const VulnerabilitySeverity = z.enum([
   'critical',
   'high',
@@ -37,7 +38,7 @@ export type VulnerabilitySeverity = z.infer<typeof VulnerabilitySeverity>;
 /**
  * Security Vulnerability
  */
-export const SecurityVulnerabilitySchema = z.object({
+export const SecurityVulnerabilitySchema = lazySchema(() => z.object({
   /**
    * CVE identifier (if applicable)
    */
@@ -109,14 +110,14 @@ export const SecurityVulnerabilitySchema = z.object({
    * Mitigation advice
    */
   mitigation: z.string().optional().describe('Recommended steps to mitigate the vulnerability'),
-}).describe('A known security vulnerability in a package dependency');
+}).describe('A known security vulnerability in a package dependency'));
 
 export type SecurityVulnerability = z.infer<typeof SecurityVulnerabilitySchema>;
 
 /**
  * Security Scan Result
  */
-export const SecurityScanResultSchema = z.object({
+export const SecurityScanResultSchema = lazySchema(() => z.object({
   /**
    * Scan identifier
    */
@@ -193,14 +194,14 @@ export const SecurityScanResultSchema = z.object({
    * Next scan scheduled
    */
   nextScanAt: z.string().datetime().optional().describe('ISO 8601 timestamp for the next scheduled scan'),
-}).describe('Result of a security scan performed on a plugin');
+}).describe('Result of a security scan performed on a plugin'));
 
 export type SecurityScanResult = z.infer<typeof SecurityScanResultSchema>;
 
 /**
  * Security Policy
  */
-export const SecurityPolicySchema = z.object({
+export const SecurityPolicySchema = lazySchema(() => z.object({
   /**
    * Policy identifier
    */
@@ -295,7 +296,7 @@ export const SecurityPolicySchema = z.object({
      */
     maxCPUSeconds: z.number().int().positive().optional().describe('Maximum CPU time allowed in seconds'),
   }).optional().describe('Sandbox restrictions for plugin execution'),
-}).describe('Security policy governing plugin scanning and enforcement');
+}).describe('Security policy governing plugin scanning and enforcement'));
 
 export type SecurityPolicy = z.infer<typeof SecurityPolicySchema>;
 
@@ -306,7 +307,7 @@ export type SecurityPolicy = z.infer<typeof SecurityPolicySchema>;
 /**
  * Package Dependency
  */
-export const PackageDependencySchema = z.object({
+export const PackageDependencySchema = lazySchema(() => z.object({
   /**
    * Package name/ID
    */
@@ -326,14 +327,14 @@ export const PackageDependencySchema = z.object({
    * Resolved version (filled during resolution)
    */
   resolvedVersion: z.string().optional().describe('Concrete version resolved during dependency resolution'),
-}).describe('A package dependency with its version constraint');
+}).describe('A package dependency with its version constraint'));
 
 export type PackageDependency = z.infer<typeof PackageDependencySchema>;
 
 /**
  * Dependency Graph Node
  */
-export const DependencyGraphNodeSchema = z.object({
+export const DependencyGraphNodeSchema = lazySchema(() => z.object({
   /**
    * Package identifier
    */
@@ -368,14 +369,14 @@ export const DependencyGraphNodeSchema = z.object({
     license: z.string().optional().describe('SPDX license identifier of the package'),
     homepage: z.string().url().optional().describe('Homepage URL of the package'),
   }).optional().describe('Additional metadata about the package'),
-}).describe('A node in the dependency graph representing a resolved package');
+}).describe('A node in the dependency graph representing a resolved package'));
 
 export type DependencyGraphNode = z.infer<typeof DependencyGraphNodeSchema>;
 
 /**
  * Dependency Graph
  */
-export const DependencyGraphSchema = z.object({
+export const DependencyGraphSchema = lazySchema(() => z.object({
   /**
    * Root package
    */
@@ -406,7 +407,7 @@ export const DependencyGraphSchema = z.object({
     directDependencies: z.number().int().min(0).describe('Number of direct (top-level) dependencies'),
     maxDepth: z.number().int().min(0).describe('Maximum depth of the dependency tree'),
   }).describe('Summary statistics for the dependency graph'),
-}).describe('Complete dependency graph for a package and its transitive dependencies');
+}).describe('Complete dependency graph for a package and its transitive dependencies'));
 
 export type DependencyGraph = z.infer<typeof DependencyGraphSchema>;
 
@@ -419,7 +420,7 @@ export type DependencyGraph = z.infer<typeof DependencyGraphSchema>;
  * @see kernel/plugin-versioning.zod.ts DependencyConflictSchema for kernel-level plugin conflicts
  *      which models plugin-to-plugin conflicts with richer resolution strategies.
  */
-export const PackageDependencyConflictSchema = z.object({
+export const PackageDependencyConflictSchema = lazySchema(() => z.object({
   /**
    * Package with conflict
    */
@@ -447,14 +448,14 @@ export const PackageDependencyConflictSchema = z.object({
    * Severity
    */
   severity: z.enum(['error', 'warning', 'info']).describe('Severity level of the dependency conflict'),
-}).describe('A detected conflict between dependency version requirements');
+}).describe('A detected conflict between dependency version requirements'));
 
 export type PackageDependencyConflict = z.infer<typeof PackageDependencyConflictSchema>;
 
 /**
  * Dependency Resolution Result
  */
-export const PackageDependencyResolutionResultSchema = z.object({
+export const PackageDependencyResolutionResultSchema = lazySchema(() => z.object({
   /**
    * Resolution status
    */
@@ -487,7 +488,7 @@ export const PackageDependencyResolutionResultSchema = z.object({
    * Resolution time (ms)
    */
   resolvedIn: z.number().int().min(0).optional().describe('Time taken to resolve dependencies in milliseconds'),
-}).describe('Result of a dependency resolution process');
+}).describe('Result of a dependency resolution process'));
 
 export type PackageDependencyResolutionResult = z.infer<typeof PackageDependencyResolutionResultSchema>;
 
@@ -498,7 +499,7 @@ export type PackageDependencyResolutionResult = z.infer<typeof PackageDependency
 /**
  * SBOM (Software Bill of Materials) Entry
  */
-export const SBOMEntrySchema = z.object({
+export const SBOMEntrySchema = lazySchema(() => z.object({
   /**
    * Component name
    */
@@ -542,14 +543,14 @@ export const SBOMEntrySchema = z.object({
     type: z.enum(['website', 'repository', 'documentation', 'issue-tracker']).describe('Type of external reference'),
     url: z.string().url().describe('URL of the external reference'),
   })).default([]).describe('External references related to the component'),
-}).describe('A single entry in a Software Bill of Materials');
+}).describe('A single entry in a Software Bill of Materials'));
 
 export type SBOMEntry = z.infer<typeof SBOMEntrySchema>;
 
 /**
  * Software Bill of Materials (SBOM)
  */
-export const SBOMSchema = z.object({
+export const SBOMSchema = lazySchema(() => z.object({
   /**
    * SBOM format
    */
@@ -586,7 +587,7 @@ export const SBOMSchema = z.object({
     name: z.string().describe('Name of the SBOM generator tool'),
     version: z.string().describe('Version of the SBOM generator tool'),
   }).optional().describe('Tool used to generate this SBOM'),
-}).describe('Software Bill of Materials for a plugin');
+}).describe('Software Bill of Materials for a plugin'));
 
 export type SBOM = z.infer<typeof SBOMSchema>;
 
@@ -594,7 +595,7 @@ export type SBOM = z.infer<typeof SBOMSchema>;
  * Plugin Provenance
  * Verifiable chain of custody for plugin artifacts
  */
-export const PluginProvenanceSchema = z.object({
+export const PluginProvenanceSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -671,7 +672,7 @@ export const PluginProvenanceSchema = z.object({
     url: z.string().url().optional().describe('URL with details about the attestation'),
     timestamp: z.string().datetime().describe('ISO 8601 timestamp when the attestation was issued'),
   })).default([]).describe('Verification attestations for the plugin'),
-}).describe('Verifiable provenance and chain of custody for a plugin artifact');
+}).describe('Verifiable provenance and chain of custody for a plugin artifact'));
 
 export type PluginProvenance = z.infer<typeof PluginProvenanceSchema>;
 
@@ -682,7 +683,7 @@ export type PluginProvenance = z.infer<typeof PluginProvenanceSchema>;
 /**
  * Plugin Trust Score
  */
-export const PluginTrustScoreSchema = z.object({
+export const PluginTrustScoreSchema = lazySchema(() => z.object({
   /**
    * Plugin identifier
    */
@@ -744,7 +745,7 @@ export const PluginTrustScoreSchema = z.object({
    * Last updated
    */
   updatedAt: z.string().datetime().describe('ISO 8601 timestamp when the trust score was last updated'),
-}).describe('Trust score and verification status for a plugin');
+}).describe('Trust score and verification status for a plugin'));
 
 export type PluginTrustScore = z.infer<typeof PluginTrustScoreSchema>;
 
