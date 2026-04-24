@@ -134,8 +134,8 @@ const leads: DatasetInput = {
       email: 'alice@nextgenretail.example.com',
       phone: '+1-503-555-0600',
       status: 'new',
-      source: 'website',
-      industry: 'Retail',
+      lead_source: 'web',
+      industry: 'retail',
     },
     {
       first_name: 'David',
@@ -144,8 +144,8 @@ const leads: DatasetInput = {
       email: 'dkim@edutechlabs.example.com',
       phone: '+1-408-555-0700',
       status: 'contacted',
-      source: 'referral',
-      industry: 'Education',
+      lead_source: 'referral',
+      industry: 'education',
     },
     {
       first_name: 'Lisa',
@@ -154,8 +154,8 @@ const leads: DatasetInput = {
       email: 'lisa.t@cloudfirst.example.com',
       phone: '+1-206-555-0800',
       status: 'qualified',
-      source: 'trade_show',
-      industry: 'Technology',
+      lead_source: 'event',
+      industry: 'technology',
     },
   ]
 };
