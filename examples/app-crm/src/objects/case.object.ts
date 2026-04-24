@@ -89,7 +89,6 @@ export const Case = ObjectSchema.create({
     // Assignment
     owner: Field.lookup('user', {
       label: 'Case Owner',
-      required: true,
     }),
     
     // SLA and Metrics

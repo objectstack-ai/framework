@@ -173,7 +173,6 @@ export const Campaign = ObjectSchema.create({
     
     owner: Field.lookup('user', {
       label: 'Campaign Owner',
-      required: true,
     }),
     
     // Campaign Assets

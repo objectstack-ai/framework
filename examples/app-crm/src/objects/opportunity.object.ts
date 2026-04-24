@@ -46,7 +46,6 @@ export const Opportunity = ObjectSchema.create({
 
     owner: Field.lookup('user', {
       label: 'Opportunity Owner',
-      required: true,
       group: 'basic',
     }),
 

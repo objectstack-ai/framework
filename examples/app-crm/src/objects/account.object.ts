@@ -113,7 +113,6 @@ export const Account = ObjectSchema.create({
     // Relationship fields
     owner: Field.lookup('user', {
       label: 'Account Owner',
-      required: true,
       group: 'ownership',
     }),
 

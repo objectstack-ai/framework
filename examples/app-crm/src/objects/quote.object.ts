@@ -53,7 +53,6 @@ export const Quote = ObjectSchema.create({
     
     owner: Field.lookup('user', {
       label: 'Quote Owner',
-      required: true,
     }),
     
     // Status

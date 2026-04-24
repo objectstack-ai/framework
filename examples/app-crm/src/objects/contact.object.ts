@@ -96,7 +96,6 @@ export const Contact = ObjectSchema.create({
 
     owner: Field.lookup('user', {
       label: 'Contact Owner',
-      required: true,
       group: 'account_info',
     }),
 

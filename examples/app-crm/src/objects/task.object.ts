@@ -75,7 +75,6 @@ export const Task = ObjectSchema.create({
     // Assignment
     owner: Field.lookup('user', {
       label: 'Assigned To',
-      required: true,
     }),
     
     // Related To (Polymorphic relationship - can link to multiple object types)

@@ -45,7 +45,6 @@ export const Contract = ObjectSchema.create({
     
     owner: Field.lookup('user', {
       label: 'Contract Owner',
-      required: true,
     }),
     
     // Status

@@ -143,7 +143,6 @@ export const Lead = ObjectSchema.create({
     // Assignment
     owner: Field.lookup('user', {
       label: 'Lead Owner',
-      required: true,
       group: 'assignment',
     }),
 
