@@ -420,13 +420,8 @@ export default class Serve extends Command {
         studioPath: STUDIO_PATH,
       });
 
-      // Keep process alive
-      process.on('SIGINT', async () => {
-        console.warn(chalk.yellow(`\n\n⏹  Stopping server...`));
-        await runtime.getKernel().shutdown();
-        console.log(chalk.green(`✅ Server stopped`));
-        process.exit(0);
-      });
+      // Kernel already registers SIGINT/SIGTERM handlers during bootstrap.
+      // No duplicate handler needed here — just keep the process alive.
 
     } catch (error: any) {
       restoreOutput();

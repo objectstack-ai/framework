@@ -239,8 +239,13 @@ export class HonoHttpServer implements IHttpServer {
     }
 
     async close() {
-        if (this.server && typeof this.server.close === 'function') {
-            this.server.close();
+        if (!this.server) return;
+        // Destroy all keep-alive sockets so the server stops immediately
+        if (typeof this.server.closeAllConnections === 'function') {
+            this.server.closeAllConnections();
         }
+        await new Promise<void>((resolve, reject) => {
+            this.server.close((err: any) => (err ? reject(err) : resolve()));
+        });
     }
 }
