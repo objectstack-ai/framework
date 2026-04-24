@@ -5,6 +5,9 @@ import { RouteManager } from './route-manager.js';
 import { RestServerConfig, RestApiConfig, CrudEndpointsConfig, MetadataEndpointsConfig, BatchEndpointsConfig, RouteGenerationConfig } from '@objectstack/spec/api';
 import { ObjectStackProtocol } from '@objectstack/spec/api';
 
+// Node-safe logger — avoids importing 'console' which is absent from ES2020 lib typings.
+const logError = (...args: unknown[]) => (globalThis as any).console?.error(...args);
+
 /**
  * Structural subset of `KernelManager` that RestServer needs in order to
  * resolve a per-project protocol at request time. Typed locally to avoid
@@ -318,6 +321,7 @@ export class RestServer {
 
                     res.json(discovery);
                 } catch (error: any) {
+                    logError("[REST] Unhandled error:", error);
                     res.status(500).json({ error: error.message });
                 }
             };
@@ -365,6 +369,7 @@ export class RestServer {
                         const types = await p.getMetaTypes();
                         res.json(types);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(500).json({ error: error.message });
                     }
                 },
@@ -391,6 +396,7 @@ export class RestServer {
                         } as any);
                         res.json(items);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(404).json({ error: error.message });
                     }
                 },
@@ -458,6 +464,7 @@ export class RestServer {
                             res.json(item);
                         }
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(404).json({ error: error.message });
                     }
                 },
@@ -490,6 +497,7 @@ export class RestServer {
                     } as any);
                     res.json(result);
                 } catch (error: any) {
+                    logError("[REST] Unhandled error:", error);
                     res.status(400).json({ error: error.message });
                 }
             },
@@ -525,6 +533,7 @@ export class RestServer {
                         res.status(501).json({ error: 'UI View resolution not supported by protocol implementation' });
                     }
                 } catch (error: any) {
+                    logError("[REST] Unhandled error:", error);
                     res.status(404).json({ error: error.message });
                 }
             },
@@ -560,6 +569,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -588,6 +598,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(404).json({ error: error.message });
                     }
                 },
@@ -613,6 +624,7 @@ export class RestServer {
                         } as any);
                         res.status(201).json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -639,6 +651,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -664,6 +677,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -700,6 +714,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -725,6 +740,7 @@ export class RestServer {
                         } as any);
                         res.status(201).json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -750,6 +766,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
@@ -775,6 +792,7 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
                         res.status(400).json({ error: error.message });
                     }
                 },
