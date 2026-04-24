@@ -17,8 +17,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * @see MetadataHistoryRecordSchema in metadata-persistence.zod.ts
  */
 export const SysMetadataHistoryObject = ObjectSchema.create({
-  namespace: 'sys',
-  name: 'metadata_history',
+  name: 'sys_metadata_history',
   label: 'Metadata History',
   pluralLabel: 'Metadata History',
   icon: 'history',

@@ -66,7 +66,6 @@ export class MetadataPlugin implements Plugin {
                 version: '1.0.0',
                 type: 'plugin',
                 scope: 'platform',
-                namespace: 'sys',
                 objects: [SysMetadataObject, SysMetadataHistoryObject],
             });
 
@@ -82,7 +81,7 @@ export class MetadataPlugin implements Plugin {
             });
 
             ctx.logger.info('Registered system metadata objects', {
-                metadata: ['sys__metadata', 'sys__metadata_history'],
+                metadata: ['sys_metadata', 'sys_metadata_history'],
                 objectos: Object.keys(SystemObjects).map((name) => `sys__${name}`),
             });
         } catch {
