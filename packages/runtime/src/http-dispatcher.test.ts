@@ -1394,7 +1394,7 @@ describe('HttpDispatcher', () => {
             const memberQL = {
                 ...mockObjectQL,
                 find: vi.fn().mockImplementation(async (name: string) => {
-                    if (name === 'sys__project_member') return opts.memberRows ?? [];
+                    if (name === 'sys_project_member') return opts.memberRows ?? [];
                     return [];
                 }),
             };
@@ -1442,7 +1442,7 @@ describe('HttpDispatcher', () => {
             expect(result).not.toBeNull();
             expect(result.status).toBe(403);
             expect(result.body.error.details.type).toBe('PROJECT_MEMBERSHIP_REQUIRED');
-            expect(memberQL.find).toHaveBeenCalledWith('sys__project_member', expect.objectContaining({
+            expect(memberQL.find).toHaveBeenCalledWith('sys_project_member', expect.objectContaining({
                 where: { project_id: 'proj-private', user_id: 'user-1' },
             }));
         });

@@ -68,7 +68,7 @@ database table and exposes automatic CRUD APIs.
 |:---------|:--------|:------------|
 | `label` | Auto from `name` | Human-readable singular label |
 | `pluralLabel` | — | Plural form (e.g., "Accounts") |
-| `namespace` | — | Domain prefix; auto-derives `tableName` as `{namespace}_{name}` |
+| `namespace` | — | Logical domain (e.g. `'crm'`). Metadata only — does not affect physical table name |
 | `datasource` | `'default'` | Target datasource ID for virtualized data |
 | `displayNameField` | `'name'` | Field used as record display name |
 | `enable` | — | Capability flags (trackHistory, searchable, apiEnabled, etc.) |

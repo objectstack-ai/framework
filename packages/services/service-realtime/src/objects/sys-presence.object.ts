@@ -15,8 +15,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * @see PresenceStateSchema in packages/spec/src/api/websocket.zod.ts
  */
 export const SysPresence = ObjectSchema.create({
-  namespace: 'sys',
-  name: 'presence',
+  name: 'sys_presence',
   label: 'Presence',
   pluralLabel: 'Presences',
   icon: 'wifi',

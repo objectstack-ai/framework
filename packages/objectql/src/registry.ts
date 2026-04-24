@@ -323,39 +323,39 @@ export class SchemaRegistry {
   }
 
   /**
-   * Get object by name (FQN, short name, or physical table name).
+   * Get object by name (short name canonical, FQN supported for disambiguation).
+   *
+   * Short names are canonical for user code, AI generation, and most lookups.
+   * FQN is accepted as an explicit fallback for cross-package disambiguation
+   * when two packages contribute objects with the same short name.
    *
    * Resolution order:
-   * 1. Exact FQN match (e.g., 'crm__account')
-   * 2. Short name fallback (e.g., 'account' → 'crm__account')
-   * 3. Physical table name match (e.g., 'sys_user' → 'sys__user')
-   *    ObjectSchema.create() auto-derives tableName as {namespace}_{name},
-   *    which uses a single underscore — different from the FQN double underscore.
+   * 1. Short name match (e.g., 'account' → 'crm__account'). Returns first match.
+   *    If multiple packages contribute the same short name, a warning is logged
+   *    and the first match wins — disambiguate by passing the FQN explicitly.
+   * 2. Exact FQN match (e.g., 'crm__account').
    */
   getObject(name: string): ServiceObject | undefined {
-    // Direct FQN lookup
-    const direct = this.resolveObject(name);
-    if (direct) return direct;
-
-    // Fallback: scan for objects ending with the short name
-    // This handles legacy code that doesn't use FQN
+    // Canonical: short name lookup
+    const matches: string[] = [];
     for (const fqn of this.objectContributors.keys()) {
       const { shortName } = parseFQN(fqn);
       if (shortName === name) {
-        return this.resolveObject(fqn);
+        matches.push(fqn);
       }
     }
-
-    // Fallback: match by physical table name (e.g., 'sys_user' → FQN 'sys__user')
-    // This bridges the gap between protocol names (SystemObjectName) and FQN.
-    for (const fqn of this.objectContributors.keys()) {
-      const resolved = this.resolveObject(fqn);
-      if (resolved?.tableName === name) {
-        return resolved;
+    if (matches.length > 0) {
+      if (matches.length > 1) {
+        console.warn(
+          `[SchemaRegistry] Ambiguous short name "${name}" matches: ${matches.join(', ')}. ` +
+          `Returning first match. Use FQN to disambiguate.`
+        );
       }
+      return this.resolveObject(matches[0]);
     }
 
-    return undefined;
+    // Fallback: explicit FQN
+    return this.resolveObject(name);
   }
 
   /**

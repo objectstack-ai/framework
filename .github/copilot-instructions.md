@@ -25,6 +25,7 @@
     - Benchmark against industry leaders (Salesforce, ServiceNow, Kubernetes) for structural decisions.
     - Philosophy: "Data as Code", Idempotency, and Immutable Infrastructure are the defaults.
 6. **Long-Term Architecture:** Do NOT use simplified or temporary workarounds. Always adopt sustainable, well-architected solutions.
+7. **Short Object Names Are Canonical:** Always write **short** object names (e.g. `account`, `task`) in user code, examples, queries, REST URLs, formulas, hooks, and lookups. **Never** type FQN (`{namespace}__name`, e.g. `crm__account`) in user-facing code, docs, or AI-generated output. **Never** set `tableName` on an object schema — the field has been removed; the physical table name is always derived from the short name. FQN is an internal-only mechanic used by the registry for cross-package disambiguation, marketplace publishing, and customization `baseName` references.
 
 ---
 

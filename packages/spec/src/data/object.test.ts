@@ -270,7 +270,6 @@ describe('ObjectSchema', () => {
         description: 'Sales opportunities tracking',
         icon: 'target',
         datasource: 'salesforce',
-        tableName: 'sf_opportunities',
         isSystem: false,
         nameField: 'opportunity_name',
         fields: {
@@ -284,10 +283,9 @@ describe('ObjectSchema', () => {
       expect(() => ObjectSchema.parse(fullObject)).not.toThrow();
     });
 
-    it('should accept object with tableName and field-level columnName for storage decoupling', () => {
+    it('should accept object with field-level columnName for storage decoupling', () => {
       const object = ObjectSchema.parse({
         name: 'user',
-        tableName: 'ba_users',
         fields: {
           email: {
             type: 'email',
@@ -301,7 +299,6 @@ describe('ObjectSchema', () => {
       });
 
       expect(object.name).toBe('user');
-      expect(object.tableName).toBe('ba_users');
       expect(object.fields.email.columnName).toBe('email_address');
       expect(object.fields.created_at.columnName).toBe('createdAt');
     });
@@ -801,50 +798,34 @@ describe('ObjectSchema namespace', () => {
   });
 });
 
-describe('ObjectSchema.create() namespace auto-derivation', () => {
-  it('should auto-derive tableName from namespace + name', () => {
+describe('ObjectSchema.create() namespace handling', () => {
+  it('should accept namespace without setting any tableName field', () => {
     const obj = ObjectSchema.create({
       namespace: 'sys',
       name: 'user',
       fields: {},
     });
-    expect(obj.tableName).toBe('sys_user');
+    expect(obj.namespace).toBe('sys');
+    expect(obj.name).toBe('user');
+    expect((obj as any).tableName).toBeUndefined();
   });
 
-  it('should auto-derive tableName for multi-word name', () => {
+  it('should accept multi-word names with namespace', () => {
     const obj = ObjectSchema.create({
       namespace: 'sys',
       name: 'audit_log',
       fields: {},
     });
-    expect(obj.tableName).toBe('sys_audit_log');
+    expect(obj.name).toBe('audit_log');
   });
 
-  it('should prefer explicit tableName over auto-derived', () => {
-    const obj = ObjectSchema.create({
-      namespace: 'sys',
-      name: 'user',
-      tableName: 'custom_users',
-      fields: {},
-    });
-    expect(obj.tableName).toBe('custom_users');
-  });
-
-  it('should not set tableName when namespace is absent', () => {
+  it('should accept object without namespace', () => {
     const obj = ObjectSchema.create({
       name: 'account',
       fields: {},
     });
-    expect(obj.tableName).toBeUndefined();
-  });
-
-  it('should auto-derive tableName for business namespace', () => {
-    const obj = ObjectSchema.create({
-      namespace: 'crm',
-      name: 'deal',
-      fields: {},
-    });
-    expect(obj.tableName).toBe('crm_deal');
+    expect(obj.name).toBe('account');
+    expect(obj.namespace).toBeUndefined();
   });
 });
 

@@ -9,6 +9,7 @@
 
 import type { QueryAST, DriverOptions } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
+import { StorageNameMapping } from '@objectstack/spec/system';
 import knex, { Knex } from 'knex';
 import { nanoid } from 'nanoid';
 
@@ -566,9 +567,9 @@ export class SqlDriver implements IDataDriver {
 
   async syncSchema(object: string, schema: unknown, _options?: DriverOptions): Promise<void> {
     const objectDef = schema as { name: string; fields?: Record<string, any> };
-    // Use the physical table name (`object`) for DDL operations. The caller
-    // (e.g. syncRegisteredSchemas) passes the resolved tableName (e.g. 'sys_user')
-    // while objectDef.name may contain the FQN (e.g. 'sys__user').
+    // The caller passes the resolved physical table name as `object`. Override
+    // the def's `name` to ensure DDL targets the physical table even if the
+    // schema's `name` is an FQN (e.g. 'crm__account').
     await this.initObjects([{ ...objectDef, name: object }]);
   }
 
@@ -579,12 +580,11 @@ export class SqlDriver implements IDataDriver {
   /**
    * Batch-initialise tables from an array of object definitions.
    */
-  async initObjects(objects: Array<{ name: string; tableName?: string; fields?: Record<string, any> }>): Promise<void> {
+  async initObjects(objects: Array<{ name: string; fields?: Record<string, any> }>): Promise<void> {
     await this.ensureDatabaseExists();
 
     for (const obj of objects) {
-      // Prefer explicit tableName (physical name) over obj.name (which may be a FQN).
-      const tableName = obj.tableName || obj.name;
+      const tableName = StorageNameMapping.resolveTableName(obj);
 
       const jsonCols: string[] = [];
       const booleanCols: string[] = [];

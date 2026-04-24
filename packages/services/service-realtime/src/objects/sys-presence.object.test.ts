@@ -2,15 +2,15 @@
 
 import { describe, it, expect } from 'vitest';
 import { SysPresence } from './sys-presence.object';
+import { StorageNameMapping } from '@objectstack/spec/system';
 
 describe('SysPresence object definition', () => {
-  it('should have correct namespace and name', () => {
-    expect(SysPresence.namespace).toBe('sys');
-    expect(SysPresence.name).toBe('presence');
+  it('should use the literal sys_presence short name', () => {
+    expect(SysPresence.name).toBe('sys_presence');
   });
 
-  it('should auto-derive tableName as sys_presence', () => {
-    expect(SysPresence.tableName).toBe('sys_presence');
+  it('should resolve to physical table name sys_presence', () => {
+    expect(StorageNameMapping.resolveTableName(SysPresence)).toBe('sys_presence');
   });
 
   it('should be a system object', () => {

@@ -369,8 +369,8 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
 
       // Assert - syncSchema should have been called for each object
       const syncedObjects = synced.map((s) => s.object).sort();
-      expect(syncedObjects).toContain('sys__user');
-      expect(syncedObjects).toContain('sys__role');
+      expect(syncedObjects).toContain('user');
+      expect(syncedObjects).toContain('role');
       expect(synced.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -495,7 +495,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       await expect(kernel.bootstrap()).resolves.not.toThrow();
 
       // Assert - the good object should still have been synced
-      expect(synced).toContain('mix__good');
+      expect(synced).toContain('good');
     });
 
     it('should work without any registered objects', async () => {
@@ -529,7 +529,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       await expect(kernel.bootstrap()).resolves.not.toThrow();
     });
 
-    it('should use tableName for syncSchema when objects have auto-derived tableName', async () => {
+    it('should use the short table name (FQN namespace stripped) for syncSchema', async () => {
       // Arrange - driver that tracks syncSchema calls
       const synced: Array<{ object: string; schema: any }> = [];
       const mockDriver = {
@@ -556,7 +556,8 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
         },
       });
 
-      // Objects with tableName (simulating ObjectSchema.create() output)
+      // System objects use the literal `sys_` prefix as part of their short name
+      // (no FQN namespace). Physical table name is derived from the short name.
       const appManifest = {
         id: 'com.test.system',
         name: 'system',
@@ -564,19 +565,15 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
         version: '1.0.0',
         objects: [
           {
-            name: 'user',
+            name: 'sys_user',
             label: 'User',
-            namespace: 'sys',
-            tableName: 'sys_user',
             fields: {
               email: { name: 'email', label: 'Email', type: 'text' },
             },
           },
           {
-            name: 'session',
+            name: 'sys_session',
             label: 'Session',
-            namespace: 'sys',
-            tableName: 'sys_session',
             fields: {
               token: { name: 'token', label: 'Token', type: 'text' },
             },
@@ -599,7 +596,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Act
       await kernel.bootstrap();
 
-      // Assert - syncSchema should use tableName (single underscore) not FQN (double underscore)
+      // Assert - syncSchema should be called with the short name (which IS the physical table name)
       const syncedNames = synced.map((s) => s.object).sort();
       expect(syncedNames).toContain('sys_user');
       expect(syncedNames).toContain('sys_session');
@@ -682,9 +679,9 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Assert - syncSchemasBatch should have been called once with all objects
       expect(batchCalls.length).toBe(1);
       const batchedObjects = batchCalls[0].map((s) => s.object).sort();
-      expect(batchedObjects).toContain('bat__alpha');
-      expect(batchedObjects).toContain('bat__beta');
-      expect(batchedObjects).toContain('bat__gamma');
+      expect(batchedObjects).toContain('alpha');
+      expect(batchedObjects).toContain('beta');
+      expect(batchedObjects).toContain('gamma');
       // syncSchema should NOT have been called individually
       expect(singleCalls.length).toBe(0);
     });
@@ -756,8 +753,8 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
 
       // Assert - sequential fallback should have been used
       const syncedObjects = singleCalls.map((s) => s.object).sort();
-      expect(syncedObjects).toContain('fb__one');
-      expect(syncedObjects).toContain('fb__two');
+      expect(syncedObjects).toContain('one');
+      expect(syncedObjects).toContain('two');
     });
 
     it('should not use batch when driver does not support batchSchemaSync', async () => {
@@ -817,7 +814,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       await kernel.bootstrap();
 
       // Assert - sequential syncSchema should have been used
-      expect(singleCalls).toContain('nb__item');
+      expect(singleCalls).toContain('item');
     });
   });
 

@@ -12,6 +12,7 @@
  */
 
 import type { IDataDriver, IDataEngine } from '@objectstack/spec/contracts';
+import { StorageNameMapping } from '@objectstack/spec/system';
 
 /**
  * Configuration for the MetadataProjector
@@ -162,7 +163,7 @@ export class MetadataProjector {
       is_system: data.isSystem || false,
       abstract: data.abstract || false,
       datasource: data.datasource || 'default',
-      table_name: data.tableName || name,
+      table_name: data.name ? StorageNameMapping.resolveTableName({ name: data.name }) : name,
       // Serialize complex structures as JSON
       fields_json: data.fields ? JSON.stringify(data.fields) : null,
       indexes_json: data.indexes ? JSON.stringify(data.indexes) : null,

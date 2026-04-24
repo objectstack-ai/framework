@@ -7,8 +7,8 @@
  * All API calls, SDK references, permissions checks, and metadata lookups MUST use
  * these names instead of hardcoded strings or physical table names.
  *
- * The actual storage table name may differ via `ObjectSchema.tableName`.
- * The mapping between protocol name and storage name is handled by the
+ * The actual storage table name is derived from the object name; the mapping
+ * between protocol name and storage name is handled by the
  * ObjectQL Engine / Driver layer.
  *
  * @example
@@ -111,13 +111,21 @@ export type SystemFieldName = typeof SystemFieldName[keyof typeof SystemFieldNam
 export const StorageNameMapping = {
   /**
    * Resolve the physical table name for an object.
-   * Priority: explicit `tableName` → auto-derived `{namespace}_{name}` → `name`.
    *
-   * @param object - Object definition (at minimum `{ name: string; namespace?: string; tableName?: string }`)
+   * The short name is canonical for storage. If the object's `name` is an FQN
+   * (`{namespace}__{shortName}`), the namespace prefix is stripped. Otherwise the
+   * `name` is used as-is. Per-project database isolation removes the need for a
+   * namespace-based physical prefix.
+   *
+   * @param object - Object definition (at minimum `{ name: string }`)
    * @returns The physical table / collection name to use in storage operations.
+   *
+   * @example resolveTableName({ name: 'crm__account' }) // 'account'
+   * @example resolveTableName({ name: 'sys_user' })     // 'sys_user'
    */
-  resolveTableName(object: { name: string; namespace?: string; tableName?: string }): string {
-    return object.tableName ?? (object.namespace ? `${object.namespace}_${object.name}` : object.name);
+  resolveTableName(object: { name: string }): string {
+    const idx = object.name.indexOf('__');
+    return idx === -1 ? object.name : object.name.slice(idx + 2);
   },
 
   /**

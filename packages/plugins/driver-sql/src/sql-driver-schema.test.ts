@@ -291,11 +291,10 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
     expect(columns).toHaveProperty('display_name');
   });
 
-  it('should prefer tableName over name in initObjects for defense-in-depth', async () => {
+  it('should derive physical table name from FQN in initObjects', async () => {
     const objects = [
       {
         name: 'crm__deal',
-        tableName: 'crm_deal',
         fields: {
           amount: { type: 'number' },
         },
@@ -304,7 +303,7 @@ describe('SqlDriver Schema Sync (SQLite)', () => {
 
     await driver.initObjects(objects);
 
-    const existsPhysical = await knexInstance.schema.hasTable('crm_deal');
+    const existsPhysical = await knexInstance.schema.hasTable('deal');
     expect(existsPhysical).toBe(true);
 
     const existsFqn = await knexInstance.schema.hasTable('crm__deal');

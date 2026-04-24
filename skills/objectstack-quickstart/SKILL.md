@@ -473,13 +473,13 @@ export default defineStack({
     new ObjectQLPlugin(),
     new DriverPlugin(new SqlDriver({ ... })),
     new AuthPlugin({ secret: process.env.AUTH_SECRET }),
-    new AppPlugin(CrmApp),     // → crm__account, crm__lead, ...
-    new AppPlugin(TodoApp),    // → todo__task, ...
+    new AppPlugin(CrmApp),     // contributes objects under namespace 'crm' (account, lead, ...)
+    new AppPlugin(TodoApp),    // contributes objects under namespace 'todo' (task, ...)
   ],
 });
 ```
 
-Each app's objects are prefixed by its `namespace` to prevent collisions.
+Each app declares a `namespace` for package provenance, but you reference its objects by their short name (`account`, `task`) everywhere — in queries, hooks, formulas, REST URLs, and physical tables. Namespace only surfaces (as the FQN `crm__account`) when two packages happen to contribute the same short name, which the registry warns about at load time.
 
 ---
 

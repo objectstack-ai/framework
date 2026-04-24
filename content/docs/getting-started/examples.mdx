@@ -296,24 +296,24 @@ export default defineStack({
   plugins: [
     new ObjectQLPlugin(),
     new DriverPlugin(new InMemoryDriver()),
-    new AppPlugin(CrmApp),      // CRM objects get namespace: crm__account, crm__lead, ...
-    new AppPlugin(TodoApp),     // Todo objects get namespace: todo__task
-    new AppPlugin(BiPlugin),    // BI plugin objects get namespace: bi__*
+    new AppPlugin(CrmApp),      // CRM app contributes objects under namespace 'crm'
+    new AppPlugin(TodoApp),     // Todo app contributes objects under namespace 'todo'
+    new AppPlugin(BiPlugin),    // BI plugin contributes objects under namespace 'bi'
   ],
 });
 ```
 
-### Namespace Isolation
+### Short Names Are Canonical
 
-Each app declares a `namespace` in its manifest. When loaded by a host, object names become **Fully Qualified Names (FQN)**:
+Each app declares a `namespace` in its manifest, but **the short object name is what you use everywhere** — in `engine.find()`, hooks, formulas, lookups, REST URLs, and physical tables. The namespace is internal metadata used only for package provenance and cross-package disambiguation.
 
-| App | Namespace | Object → FQN |
-|:----|:----------|:-------------|
-| Todo | `todo` | `task` → `todo__task` |
-| CRM | `crm` | `account` → `crm__account` |
-| BI | `bi` | `report` → `bi__report` |
+| App | Namespace | Object name | Physical table |
+|:----|:----------|:------------|:---------------|
+| Todo | `todo` | `task` | `task` |
+| CRM | `crm` | `account` | `account` |
+| BI | `bi` | `report` | `report` |
 
-The double-underscore `__` separator prevents collisions when multiple apps define objects with the same short name.
+If two packages contribute objects with the same short name, the registry logs a warning. In that rare case, callers can disambiguate by passing the FQN (`crm__account`) — but this is the only situation where FQN appears in user code.
 
 ### Run It
 
@@ -350,7 +350,7 @@ my-app/
 **Naming conventions:**
 - **Directories:** plural (`objects/`, `actions/`, `flows/`)
 - **Files:** `{name}.object.ts`, `{name}.actions.ts`, `{name}.flow.ts`
-- **Object names:** `snake_case` (`task`, `sales_order`, `crm__account`)
+- **Object names:** `snake_case` short names (`task`, `sales_order`, `account`)
 - **Config keys:** `camelCase` (`maxLength`, `defaultValue`, `pluralLabel`)
 
 ## What's Next

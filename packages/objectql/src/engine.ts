@@ -11,7 +11,7 @@ import {
 } from '@objectstack/spec/data';
 import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kernel';
 import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack/core';
-import { CoreServiceName } from '@objectstack/spec/system';
+import { CoreServiceName, StorageNameMapping } from '@objectstack/spec/system';
 import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
 import { pluralToSingular } from '@objectstack/spec/shared';
 import { SchemaRegistry, computeFQN } from './registry.js';
@@ -608,22 +608,16 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
-   * Resolve an object name to its Fully Qualified Name (FQN).
-   * 
-   * Short names like 'task' are resolved to FQN like 'todo__task'
-   * via SchemaRegistry lookup. If no match is found, the name is
-   * returned as-is (for ad-hoc / unregistered objects).
-   * 
-   * This ensures that all driver operations use a consistent key
-   * regardless of whether the caller uses the short name or FQN.
+   * Resolve any object identifier to the physical storage name used by drivers.
+   *
+   * Accepts the canonical short name (e.g., 'account') or, for explicit
+   * cross-package disambiguation, the FQN (e.g., 'crm__account'). The result is
+   * the physical table name derived via `StorageNameMapping.resolveTableName`.
    */
   private resolveObjectName(name: string): string {
     const schema = this._registry.getObject(name);
     if (schema) {
-      // Prefer the physical table name (e.g., 'sys_user') over the FQN
-      // (e.g., 'sys__user'). ObjectSchema.create() auto-derives tableName
-      // as {namespace}_{name} which matches the storage convention.
-      return schema.tableName || schema.name;
+      return StorageNameMapping.resolveTableName(schema);
     }
     return name; // Ad-hoc object, keep as-is
   }
@@ -1422,7 +1416,7 @@ export class ObjectQL implements IDataEngine {
     for (const obj of allObjects) {
       const driver = this.getDriverForObject(obj.name);
       if (!driver) continue;
-      const tableName = (obj as any).tableName || obj.name;
+      const tableName = StorageNameMapping.resolveTableName(obj);
       if (typeof (driver as any).syncSchemasBatch === 'function' && (driver as any).supports?.batchSchemaSync) {
         // Already handled per-driver below; skip individual call
       }

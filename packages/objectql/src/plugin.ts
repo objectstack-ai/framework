@@ -3,6 +3,7 @@
 import { ObjectQL } from './engine.js';
 import { ObjectStackProtocolImplementation } from './protocol.js';
 import { Plugin, PluginContext } from '@objectstack/core';
+import { StorageNameMapping } from '@objectstack/spec/system';
 
 export type { Plugin, PluginContext };
 
@@ -343,7 +344,7 @@ export class ObjectQLPlugin implements Plugin {
         continue;
       }
 
-      const tableName = obj.tableName || obj.name;
+      const tableName = StorageNameMapping.resolveTableName(obj);
 
       let group = driverGroups.get(driver);
       if (!group) {

@@ -37,18 +37,18 @@ export const ManifestSchema = z.object({
   
   /**
    * Short namespace identifier for metadata scoping.
-   * Used as a prefix for objects and other metadata to prevent naming collisions
-   * across packages from different vendors.
-   * 
+   *
+   * **Internal mechanic only.** Users and AI write objects using **short names**
+   * (e.g. `account`, `deal`). The namespace is used internally by the registry
+   * to compute a Fully Qualified Name (FQN, `{namespace}__{shortName}`) for
+   * cross-package disambiguation, marketplace publishing, and customization
+   * baseName references. It is **not** part of the physical table name and
+   * should not appear in user-facing code, queries, REST URLs, or formulas.
+   *
    * Rules:
    * - 2-20 characters, lowercase letters, digits, and underscores only.
    * - Must be unique within a running instance.
-   * - Platform-reserved namespaces (no prefix applied): "base", "system".
-   * - FQN (Fully Qualified Name) = `{namespace}__{short_name}` (double underscore separator).
-   * 
-   * @example "crm"       → objects become crm__account, crm__deal
-   * @example "todo"      → objects become todo__task
-   * @example "base"      → objects keep short name (platform reserved)
+   * - Platform-reserved namespaces: "base", "system".
    */
   namespace: z.string()
     .regex(/^[a-z][a-z0-9_]{1,19}$/, 'Namespace must be 2-20 chars, lowercase alphanumeric + underscore')

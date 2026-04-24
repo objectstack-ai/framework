@@ -199,29 +199,26 @@ describe('SchemaRegistry', () => {
             expect(registry.getObject('task')).toBeDefined();
         });
 
-        it('should resolve by tableName (protocol name fallback)', () => {
-            // Simulates ObjectSchema.create() which auto-derives tableName
-            // as {namespace}_{name} (single underscore)
-            const obj = { name: 'user', tableName: 'sys_user', namespace: 'sys', fields: {} };
+        it('should resolve system objects by their literal short name', () => {
+            // System objects use sys_ prefix as part of the short name itself.
+            const obj = { name: 'sys_user', fields: {} };
             registry.registerObject(obj as any, 'com.objectstack.system', 'sys', 'own');
-            
-            // FQN is 'sys__user' (double underscore)
-            expect(registry.getObject('sys__user')).toBeDefined();
-            
-            // Protocol name 'sys_user' (single underscore) should also resolve
-            const resolved = registry.getObject('sys_user');
-            expect(resolved).toBeDefined();
-            expect(resolved?.name).toBe('sys__user');
-            expect((resolved as any).tableName).toBe('sys_user');
+
+            // Both FQN and short-name lookup should resolve
+            expect(registry.getObject('sys__sys_user')).toBeDefined();
+            expect(registry.getObject('sys_user')).toBeDefined();
         });
 
-        it('should resolve by tableName for any namespace', () => {
-            const obj = { name: 'account', tableName: 'crm_account', namespace: 'crm', fields: {} };
+        it('should resolve namespaced objects by FQN or short name, not by single-underscore concatenation', () => {
+            const obj = { name: 'account', fields: {} };
             registry.registerObject(obj as any, 'com.crm', 'crm', 'own');
-            
-            // FQN: 'crm__account', tableName: 'crm_account'
+
+            // FQN works (cross-package disambiguation)
             expect(registry.getObject('crm__account')).toBeDefined();
-            expect(registry.getObject('crm_account')).toBeDefined();
+            // Short name works (canonical user-facing form)
+            expect(registry.getObject('account')).toBeDefined();
+            // Single-underscore concatenation must NOT resolve — that ambiguity is the whole reason for FQN
+            expect(registry.getObject('crm_account')).toBeUndefined();
         });
 
         it('should cache merged objects', () => {

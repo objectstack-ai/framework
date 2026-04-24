@@ -92,32 +92,20 @@ describe('SystemFieldName', () => {
 
 describe('StorageNameMapping', () => {
   describe('resolveTableName', () => {
-    it('should return tableName when specified', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'user', tableName: 'ba_users' })).toBe('ba_users');
-    });
-
-    it('should fall back to name when tableName is not set', () => {
+    it('should return short name when name is not FQN', () => {
       expect(StorageNameMapping.resolveTableName({ name: 'user' })).toBe('user');
     });
 
-    it('should fall back to name when tableName is undefined', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'session', tableName: undefined })).toBe('session');
+    it('should strip namespace from FQN to get short name', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'crm__account' })).toBe('account');
     });
 
-    it('should auto-derive table name from namespace + name', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'user', namespace: 'sys' })).toBe('sys_user');
+    it('should keep system table names as-is (single underscore)', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'sys_user' })).toBe('sys_user');
     });
 
-    it('should prefer explicit tableName over namespace derivation', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'user', namespace: 'sys', tableName: 'custom_users' })).toBe('custom_users');
-    });
-
-    it('should derive multi-word name with namespace', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'audit_log', namespace: 'sys' })).toBe('sys_audit_log');
-    });
-
-    it('should fall back to name when namespace is undefined', () => {
-      expect(StorageNameMapping.resolveTableName({ name: 'account', namespace: undefined })).toBe('account');
+    it('should derive multi-word short name from FQN', () => {
+      expect(StorageNameMapping.resolveTableName({ name: 'sys__audit_log' })).toBe('audit_log');
     });
   });
 

@@ -80,6 +80,13 @@ export const FieldChangeSchema = z.object({
  * 2. New package version (theirs)
  * 3. Customer customizations (ours)
  * 
+ * **Note on `baseName`:** customization records reference metadata by its
+ * Fully Qualified Name (FQN, `{namespace}__{shortName}`). FQN is used here
+ * because customizations cross package boundaries and need to disambiguate
+ * objects with the same short name from different packages. This is one of
+ * the few internal contexts where FQN is appropriate — user-facing code and
+ * AI-generated examples should always use short names instead.
+ *
  * @example
  * ```yaml
  * # Package delivers: object "crm__account" with field "status" label "Status"
