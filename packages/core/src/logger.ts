@@ -2,354 +2,181 @@
 
 import type { LoggerConfig, LogLevel } from '@objectstack/spec/system';
 import type { Logger } from '@objectstack/spec/contracts';
-import { isNode } from './utils/env.js';
 
-/**
- * Universal Logger Implementation
- * 
- * A configurable logger that works in both browser and Node.js environments.
- * - Node.js: Uses Pino for high-performance structured logging
- * - Browser: Simple console-based implementation
- * 
- * Features:
- * - Structured logging with multiple formats (json, text, pretty)
- * - Log level filtering
- * - Sensitive data redaction
- * - File logging with rotation (Node.js only via Pino)
- * - Browser console integration
- * - Distributed tracing support (traceId, spanId)
- */
+const LEVEL_ORDER: Record<LogLevel, number> = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3,
+    fatal: 4,
+    silent: 5,
+};
+
+const LEVEL_COLORS: Record<LogLevel, string> = {
+    debug: '\x1b[36m',
+    info: '\x1b[32m',
+    warn: '\x1b[33m',
+    error: '\x1b[31m',
+    fatal: '\x1b[35m',
+    silent: '',
+};
+
+const RESET = '\x1b[0m';
+
 export class ObjectLogger implements Logger {
-    private config: Required<Omit<LoggerConfig, 'file' | 'rotation' | 'name'>> & { file?: string; rotation?: { maxSize: string; maxFiles: number }; name?: string };
-    private isNode: boolean;
-    private pinoLogger?: any; // Pino logger instance for Node.js
-    private pinoInstance?: any; // Base Pino instance for creating child loggers
-    private require?: any; // CommonJS require function for Node.js
+    private config: Required<Omit<LoggerConfig, 'file' | 'rotation' | 'name'>> & {
+        file?: string;
+        rotation?: { maxSize: string; maxFiles: number };
+        name?: string;
+    };
+    private bindings: Record<string, any>;
+    private fileStream?: any;
 
-    constructor(config: Partial<LoggerConfig> = {}) {
-        // Detect runtime environment
-        this.isNode = isNode;
-
-        // Set defaults
+    constructor(config: Partial<LoggerConfig> = {}, bindings: Record<string, any> = {}) {
         this.config = {
             name: config.name,
             level: config.level ?? 'info',
-            format: config.format ?? (this.isNode ? 'json' : 'pretty'),
+            format: config.format ?? 'pretty',
             redact: config.redact ?? ['password', 'token', 'secret', 'key'],
             sourceLocation: config.sourceLocation ?? false,
             file: config.file,
-            rotation: config.rotation ?? {
-                maxSize: '10m',
-                maxFiles: 5
-            }
+            rotation: config.rotation ?? { maxSize: '10m', maxFiles: 5 },
         };
+        this.bindings = bindings;
 
-        // Initialize Pino logger for Node.js
-        if (this.isNode) {
-            this.initPinoLogger();
+        if (this.config.file && typeof process !== 'undefined') {
+            this.openFileStream(this.config.file);
         }
     }
 
-    /**
-     * Initialize Pino logger for Node.js
-     */
-    private async initPinoLogger() {
-        if (!this.isNode) return;
-
+    private openFileStream(path: string) {
         try {
-            // Create require function dynamically for Node.js (avoids bundling issues in browser)
-            // @ts-ignore - dynamic import of Node.js module
-            const { createRequire } = await import('module');
-            this.require = createRequire(import.meta.url);
-            
-            // Synchronous import for Pino using createRequire (works in ESM)
-            const pino = this.require('pino');
-            
-            // Build Pino options
-            const pinoOptions: any = {
-                level: this.config.level,
-                redact: {
-                    paths: this.config.redact,
-                    censor: '***REDACTED***'
-                }
-            };
-
-            // Add name if provided
-            if (this.config.name) {
-                pinoOptions.name = this.config.name;
-            }
-
-            // Transport configuration for pretty printing or file output
-            const targets: any[] = [];
-
-            // Console transport
-            if (this.config.format === 'pretty') {
-                // Check if pino-pretty is available
-                let hasPretty = false;
-                try {
-                    this.require.resolve('pino-pretty');
-                    hasPretty = true;
-                } catch (e) {
-                    // ignore
-                }
-
-                if (hasPretty) {
-                    targets.push({
-                        target: 'pino-pretty',
-                        options: {
-                            colorize: true,
-                            translateTime: 'SYS:standard',
-                            ignore: 'pid,hostname'
-                        },
-                        level: this.config.level
-                    });
-                } else {
-                     console.warn('[Logger] pino-pretty not found. Install it for pretty logging: pnpm add -D pino-pretty');
-                     // Fallback to text/simple
-                     targets.push({
-                        target: 'pino/file',
-                        options: { destination: 1 },
-                        level: this.config.level
-                    });
-                }
-            } else if (this.config.format === 'json') {
-                // JSON to stdout
-                targets.push({
-                    target: 'pino/file',
-                    options: { destination: 1 }, // stdout
-                    level: this.config.level
-                });
-            } else {
-                // text format (simple)
-                targets.push({
-                    target: 'pino/file',
-                    options: { destination: 1 },
-                    level: this.config.level
-                });
-            }
-
-            // File transport (if configured)
-            if (this.config.file) {
-                targets.push({
-                    target: 'pino/file',
-                    options: {
-                        destination: this.config.file,
-                        mkdir: true
-                    },
-                    level: this.config.level
-                });
-            }
-
-            // Create transport
-            if (targets.length > 0) {
-                pinoOptions.transport = targets.length === 1 ? targets[0] : { targets };
-            }
-
-            // Create Pino logger
-            this.pinoInstance = pino(pinoOptions);
-            this.pinoLogger = this.pinoInstance;
-
-        } catch (error) {
-            // Fallback to console if Pino is not available
-            console.warn('[Logger] Pino not available, falling back to console:', error);
-            this.pinoLogger = null;
+            // Lazy require to avoid bundling issues
+            const fs = require('fs');
+            const dir = require('path').dirname(path);
+            fs.mkdirSync(dir, { recursive: true });
+            this.fileStream = fs.createWriteStream(path, { flags: 'a' });
+        } catch {
+            // ignore — file logging is optional
         }
     }
 
-    /**
-     * Redact sensitive keys from context object (for browser)
-     */
+    private isEnabled(level: LogLevel): boolean {
+        return LEVEL_ORDER[level] >= LEVEL_ORDER[this.config.level];
+    }
+
     private redactSensitive(obj: any): any {
         if (!obj || typeof obj !== 'object') return obj;
-
         const redacted = Array.isArray(obj) ? [...obj] : { ...obj };
-
         for (const key in redacted) {
-            const lowerKey = key.toLowerCase();
-            const shouldRedact = this.config.redact.some((pattern: string) => 
-                lowerKey.includes(pattern.toLowerCase())
-            );
-
-            if (shouldRedact) {
+            const lower = key.toLowerCase();
+            if (this.config.redact.some((p: string) => lower.includes(p.toLowerCase()))) {
                 redacted[key] = '***REDACTED***';
             } else if (typeof redacted[key] === 'object' && redacted[key] !== null) {
                 redacted[key] = this.redactSensitive(redacted[key]);
             }
         }
-
         return redacted;
     }
 
-    /**
-     * Format log entry for browser
-     */
-    private formatBrowserLog(level: LogLevel, message: string, context?: Record<string, any>): string {
+    private write(level: LogLevel, message: string, meta?: Record<string, any>, error?: Error) {
+        if (!this.isEnabled(level)) return;
+
+        const context = this.redactSensitive({
+            ...this.bindings,
+            ...meta,
+            ...(error ? { error: { message: error.message, stack: error.stack } } : {}),
+        });
+
+        const hasContext = Object.keys(context).length > 0;
+        const ts = new Date().toISOString();
+
+        let line: string;
+
         if (this.config.format === 'json') {
-            return JSON.stringify({
-                timestamp: new Date().toISOString(),
+            line = JSON.stringify({
+                time: ts,
                 level,
-                message,
-                ...context
+                ...(this.config.name ? { name: this.config.name } : {}),
+                msg: message,
+                ...context,
             });
-        }
-
-        if (this.config.format === 'text') {
-            const parts = [new Date().toISOString(), level.toUpperCase(), message];
-            if (context && Object.keys(context).length > 0) {
-                parts.push(JSON.stringify(context));
-            }
-            return parts.join(' | ');
-        }
-
-        // Pretty format
-        const levelColors: Record<LogLevel, string> = {
-            debug: '\x1b[36m',   // Cyan
-            info: '\x1b[32m',    // Green
-            warn: '\x1b[33m',    // Yellow
-            error: '\x1b[31m',   // Red
-            fatal: '\x1b[35m',   // Magenta
-            silent: ''
-        };
-        const reset = '\x1b[0m';
-        const color = levelColors[level] || '';
-
-        let output = `${color}[${level.toUpperCase()}]${reset} ${message}`;
-        
-        if (context && Object.keys(context).length > 0) {
-            output += ` ${JSON.stringify(context, null, 2)}`;
-        }
-
-        return output;
-    }
-
-    /**
-     * Log using browser console
-     */
-    private logBrowser(level: LogLevel, message: string, context?: Record<string, any>, error?: Error) {
-        const redactedContext = context ? this.redactSensitive(context) : undefined;
-        const mergedContext = error ? { ...redactedContext, error: { message: error.message, stack: error.stack } } : redactedContext;
-        
-        const formatted = this.formatBrowserLog(level, message, mergedContext);
-        
-        const consoleMethod = level === 'debug' ? 'debug' :
-                            level === 'info' ? 'log' :
-                            level === 'warn' ? 'warn' :
-                            level === 'error' || level === 'fatal' ? 'error' :
-                            'log';
-        
-        console[consoleMethod](formatted);
-    }
-
-    /**
-     * Public logging methods
-     */
-    debug(message: string, meta?: Record<string, any>): void {
-        if (this.isNode && this.pinoLogger) {
-            this.pinoLogger.debug(meta || {}, message);
+        } else if (this.config.format === 'text') {
+            const parts = [ts, level.toUpperCase(), message];
+            if (hasContext) parts.push(JSON.stringify(context));
+            line = parts.join(' | ');
         } else {
-            this.logBrowser('debug', message, meta);
+            // pretty
+            const color = LEVEL_COLORS[level] || '';
+            const label = this.config.name ? `[${this.config.name}] ` : '';
+            line = `${color}${ts} ${level.toUpperCase()}${RESET} ${label}${message}`;
+            if (hasContext) line += ` ${JSON.stringify(context)}`;
         }
+
+        const out = line + '\n';
+
+        if (level === 'error' || level === 'fatal') {
+            process.stderr?.write(out);
+        } else {
+            process.stdout?.write(out);
+        }
+
+        if (this.fileStream) {
+            this.fileStream.write(out);
+        }
+    }
+
+    debug(message: string, meta?: Record<string, any>): void {
+        this.write('debug', message, meta);
     }
 
     info(message: string, meta?: Record<string, any>): void {
-        if (this.isNode && this.pinoLogger) {
-            this.pinoLogger.info(meta || {}, message);
-        } else {
-            this.logBrowser('info', message, meta);
-        }
+        this.write('info', message, meta);
     }
 
     warn(message: string, meta?: Record<string, any>): void {
-        if (this.isNode && this.pinoLogger) {
-            this.pinoLogger.warn(meta || {}, message);
-        } else {
-            this.logBrowser('warn', message, meta);
-        }
+        this.write('warn', message, meta);
     }
 
     error(message: string, errorOrMeta?: Error | Record<string, any>, meta?: Record<string, any>): void {
-        let error: Error | undefined;
-        let context: Record<string, any> = {};
-
         if (errorOrMeta instanceof Error) {
-            error = errorOrMeta;
-            context = meta || {};
+            this.write('error', message, meta, errorOrMeta);
         } else {
-             context = errorOrMeta || {};
-        }
-
-        if (this.isNode && this.pinoLogger) {
-            const errorContext = error ? { err: error, ...context } : context;
-            this.pinoLogger.error(errorContext, message);
-        } else {
-            this.logBrowser('error', message, context, error);
+            this.write('error', message, errorOrMeta);
         }
     }
 
     fatal(message: string, errorOrMeta?: Error | Record<string, any>, meta?: Record<string, any>): void {
-        let error: Error | undefined;
-        let context: Record<string, any> = {};
-
         if (errorOrMeta instanceof Error) {
-            error = errorOrMeta;
-            context = meta || {};
+            this.write('fatal', message, meta, errorOrMeta);
         } else {
-             context = errorOrMeta || {};
-        }
-
-        if (this.isNode && this.pinoLogger) {
-            const errorContext = error ? { err: error, ...context } : context;
-            this.pinoLogger.fatal(errorContext, message);
-        } else {
-            this.logBrowser('fatal', message, context, error);
+            this.write('fatal', message, errorOrMeta);
         }
     }
 
-    /**
-     * Create a child logger with additional context
-     * Note: Child loggers share the parent's Pino instance
-     */
+    log(message: string, ...args: any[]): void {
+        this.info(message, args.length > 0 ? { args } : undefined);
+    }
+
     child(context: Record<string, any>): ObjectLogger {
-        const childLogger = new ObjectLogger(this.config);
-        
-        // For Node.js with Pino, create a Pino child logger
-        if (this.isNode && this.pinoInstance) {
-            childLogger.pinoLogger = this.pinoInstance.child(context);
-            childLogger.pinoInstance = this.pinoInstance;
-        }
-
-        return childLogger;
+        const child = new ObjectLogger(this.config, { ...this.bindings, ...context });
+        // Share the file stream — no double-open
+        child.fileStream = this.fileStream;
+        return child;
     }
 
-    /**
-     * Set trace context for distributed tracing
-     */
     withTrace(traceId: string, spanId?: string): ObjectLogger {
         return this.child({ traceId, spanId });
     }
 
-    /**
-     * Cleanup resources
-     */
     async destroy(): Promise<void> {
-        if (this.pinoLogger && this.pinoLogger.flush) {
-            await new Promise<void>((resolve) => {
-                this.pinoLogger.flush(() => resolve());
-            });
+        if (this.fileStream) {
+            await new Promise<void>((resolve) => this.fileStream.end(resolve));
+            this.fileStream = undefined;
         }
-    }
-
-    /**
-     * Compatibility method for console.log usage
-     */
-    log(message: string, ...args: any[]): void {
-        this.info(message, args.length > 0 ? { args } : undefined);
     }
 }
 
-/**
- * Create a logger instance
- */
 export function createLogger(config?: Partial<LoggerConfig>): ObjectLogger {
     return new ObjectLogger(config);
 }

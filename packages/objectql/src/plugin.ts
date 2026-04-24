@@ -70,7 +70,7 @@ export class ObjectQLPlugin implements Plugin {
 
   init = async (ctx: PluginContext) => {
     if (!this.ql) {
-        // Pass kernel logger to engine to avoid creating a separate pino instance
+        // Pass kernel logger to engine to avoid creating a separate logger instance
         const hostCtx = { ...this.hostContext, logger: ctx.logger };
         this.ql = new ObjectQL(hostCtx);
     }

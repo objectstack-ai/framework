@@ -405,7 +405,7 @@ export default class Serve extends Command {
       // Boot the runtime
       await runtime.start();
 
-      // Wait briefly for pino worker thread buffers to flush, then restore
+      // Brief delay to allow logger writes to flush before restoring stdout
       await new Promise(r => setTimeout(r, 100));
       restoreOutput();
 
