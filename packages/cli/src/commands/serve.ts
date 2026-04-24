@@ -60,7 +60,7 @@ export default class Serve extends Command {
   static override flags = {
     port: Flags.string({ char: 'p', description: 'Server port', default: '3000' }),
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
-    ui: Flags.boolean({ description: 'Enable Studio UI at /_studio/ (default: true in dev mode)' }),
+    ui: Flags.boolean({ description: 'Enable Studio UI at /_studio/ (default: true in dev mode)', allowNo: true }),
     server: Flags.boolean({ description: 'Start HTTP server plugin', default: true, allowNo: true }),
   };
 
@@ -391,7 +391,7 @@ export default class Serve extends Command {
       // ── Studio UI ─────────────────────────────────────────────────
       // In dev mode, Studio UI is enabled by default (use --no-ui to disable).
       // Always serves the pre-built dist/ — no Vite dev server, no extra port.
-      const enableUI = flags.ui || isDev;
+      const enableUI = flags.ui ?? isDev;
 
       if (enableUI) {
         const studioPath = resolveStudioPath();
