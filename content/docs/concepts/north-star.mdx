@@ -1,9 +1,9 @@
 ---
 title: North Star
-description: The product shape of ObjectStack — cloud dashboard, org/project/branch hierarchy, per-project ObjectOS, and compiled app artifacts. Every architecture decision aligns here first.
+description: The product shape of ObjectStack - code-first metadata authoring, control-plane artifacts, Studio observability, and stateless ObjectOS runtimes.
 ---
 
-import { Cloud, Cpu, GitBranch, Globe, Layers, Terminal, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Cloud, Cpu, Globe, Layers, Terminal } from 'lucide-react';
 
 # North Star
 
@@ -14,57 +14,66 @@ import { Cloud, Cpu, GitBranch, Globe, Layers, Terminal, AlertTriangle } from 'l
 
 ## 1. Mission
 
-ObjectStack is a **metadata-driven Post-SaaS Operating System**. Users define
-data shape, business logic, and UI as **declarative metadata** in a cloud dashboard.
-The platform compiles that metadata into running applications — no glue code, no
-hand-written CRUD, no separate frontend/backend codebases.
+ObjectStack is a **metadata-driven Post-SaaS Operating System**. Users author
+data shape, business logic, and UI as **declarative metadata** in a local
+TypeScript workspace. The platform compiles that metadata into JSON artifacts,
+stores them in the control plane, and serves running applications from those
+artifacts - no glue code, no hand-written CRUD, no separate frontend/backend
+codebases.
+
+Phase 1 is deliberately **code-first**:
+
+- The local TypeScript workspace is the only metadata authoring surface.
+- The CLI compiles and publishes metadata to the control plane.
+- Studio is a hosted control-plane dashboard and metadata/artifact viewer. It
+  does **not** modify user metadata in Phase 1.
+- ObjectOS runtimes are stateless consumers of compiled artifacts.
 
 Five non-negotiable tenets:
 
-- **Data as Code** — objects, fields, functions, views, flows are all metadata artifacts
-- **Centralized Metadata, Stateless Runtime** — metadata is the single source of truth in the control plane; ObjectOS runtimes are stateless consumers that pull a compiled artifact and serve it
-- **TS-Authored, JSON-Stored** — TypeScript is the authoring form (type safety, IDE intelligence, AI-assisted editing); JSON is the wire and storage form (DB payload, Artifact API response body). Zod schemas are the only bridge between the two.
-- **Local-First** — every project can run against local drivers; cloud is an enhancement, not a dependency
-- **Open Core** — the runtime and protocols are MIT-licensed; only hosted cloud features are proprietary
+- **Data as Code** - objects, fields, functions, views, flows are all metadata artifacts
+- **Centralized Metadata, Stateless Runtime** - metadata is the single source of truth in the control plane; ObjectOS runtimes pull compiled artifacts and serve them
+- **TS-Authored, JSON-Stored** - TypeScript is the authoring form (type safety, IDE intelligence, AI-assisted editing); JSON is the wire and storage form (DB payload, Artifact API response body). Zod schemas are the only bridge between the two.
+- **Local-First** - every project can run against local drivers; cloud is an enhancement, not a dependency
+- **Open Core** - the runtime and protocols are MIT-licensed; only hosted cloud features are proprietary
 
-## 2. The Product Metaphor
+## 2. Product Shape
 
-ObjectStack is **Git + Supabase, applied to metadata**. Git gives us branching
-and versioning semantics on metadata; Supabase gives us the hosted-project
-developer experience. The runtime is a consumer of compiled artifacts, not a
-living editor.
+ObjectStack's first production shape is **code-first metadata deployment**:
+developers author a TypeScript metadata tree locally, compile it to JSON, publish
+it to the control plane, inspect it in Studio, and run it through ObjectOS.
+
+Branching, visual metadata editing, pull/merge workflows, and immutable release
+tags are future phases. The Phase 1 goal is smaller and more important: make the
+artifact boundary real.
 
 <Cards>
-  <Card icon={<Terminal />} title="Local Workspace + CLI" description="TS-authored project tree. `compile` turns it into JSON; `publish` pushes to a control-plane branch." />
-  <Card icon={<Cloud />} title="Studio Dashboard" description="Create orgs, projects, branches. Edit metadata visually. All writes land in control plane." />
-  <Card icon={<Globe />} title="Artifact API" description="Control plane endpoint that returns a branch's compiled artifact. HTTP today, S3-backed tomorrow." />
-  <Card icon={<Cpu />} title="ObjectOS Runtime" description="Stateless artifact consumer. Pulls once, caches, serves API + UI. Survives control-plane outages." />
+  <Card icon={<Terminal />} title="Local Workspace + CLI" description="TS-authored project tree. `compile` turns it into JSON; `publish` uploads the current project metadata state." />
+  <Card icon={<Cloud />} title="Studio Dashboard" description="Create orgs and projects. Browse metadata, artifacts, publish history, logs, and health. Phase 1 is read-only for user metadata." />
+  <Card icon={<Globe />} title="Artifact API" description="Control-plane endpoint that returns a project's current compiled artifact. HTTP today, S3-backed tomorrow." />
+  <Card icon={<Cpu />} title="ObjectOS Runtime" description="Stateless artifact consumer. Pulls once, caches, serves API + UI, and survives control-plane outages." />
 </Cards>
 
-| Git / Supabase        | ObjectStack                                              |
-| :-------------------- | :------------------------------------------------------- |
-| Organization          | Organization                                             |
-| Repo                  | Project                                                  |
-| Branch                | Branch — metadata version line in control plane          |
-| Working tree          | Local TS file tree (`objectstack.config.ts` + `src/objects/*.ts` + …) |
-| `git commit`          | `objectstack compile` — validates TS, writes `dist/objectstack.json` |
-| `git push`            | `objectstack publish --branch X` — uploads JSON to control plane on that branch |
-| `git pull`            | `objectstack pull --branch X` *(not yet implemented — see §7 Missing)* |
-| Edit via Studio       | Studio visual editor writes JSON directly to the **same** control-plane table |
-| Tag / Release         | Published App Artifact *(designed now, implemented next round)* |
-| `git pull` + run      | ObjectOS pulls artifact → boots                          |
-| Postgres schema       | User metadata (Objects/Fields/Functions/…) in control plane (JSON payload) |
-| Postgres rows         | Business data in per-project DB                          |
-| Project URL           | Project / Branch Hostname                                |
-| Dashboard             | Studio                                                   |
+| Developer / Cloud Concept | ObjectStack Phase 1 |
+| :------------------------ | :------------------ |
+| Organization              | Organization        |
+| Hosted project            | Project             |
+| Working tree              | Local TS file tree (`objectstack.config.ts` + `src/objects/*.ts` + ... ) |
+| Build                     | `objectstack compile` - validates TS, writes `dist/objectstack.json` |
+| Deploy                    | `objectstack publish` - uploads compiled JSON to the control plane for one project |
+| Dashboard                 | Studio - project management, artifact inspection, metadata browsing, logs, health |
+| Runtime boot              | ObjectOS pulls artifact -> hydrates kernel -> serves app |
+| Metadata storage          | Control-plane JSON payloads, validated by Zod |
+| Business rows             | Per-project business DB, never the control-plane DB |
+| Project URL               | Project hostname    |
 
-The analogy isn't cosmetic — the developer workflow (branch to develop, merge to
-main, publish to production) is the same pattern, applied to **metadata** instead
-of Postgres schemas. Unlike Supabase, **branches do not fork business data**:
-they fork *metadata only*. Business rows live in the project's own DB,
-independent of which branch is currently serving. And unlike a typical Git repo,
-a branch has **two equal-weight writers**: the CLI (compiled from local TS) and
-Studio (visual editor). Both land in the same control-plane rows.
+The deliberate simplification is that Phase 1 has **one writer** for user
+metadata: the CLI publishing from the local TypeScript workspace. Studio can show
+metadata and artifacts, but it cannot edit them. This keeps the core loop tight:
+
+```
+TS authoring -> compile -> publish -> control-plane artifact -> ObjectOS runtime
+```
 
 ## 3. Primary Surfaces
 
@@ -72,69 +81,70 @@ Four user-facing surfaces. Everything else is infrastructure.
 
 ### <Terminal className="inline" /> Local Workspace + CLI
 
-Author-side creation surface. A scaffolded TypeScript file tree driven by the
-`objectstack` CLI. Exists because AI coding assistants, IDE intellisense, and
-Zod type inference only work correctly when metadata is authored in TS —
-JSON is a poor editing format for anything non-trivial.
+Authoring surface. A scaffolded TypeScript file tree driven by the `objectstack`
+CLI. Exists because AI coding assistants, IDE intellisense, and Zod type
+inference work best when metadata is authored in TS. JSON is a storage and wire
+format, not the human authoring format.
 
 **Shape:**
 - `objectstack.config.ts` calling `defineStack({...})`
 - Object / view / flow / agent files under `src/*/` using `ObjectSchema.create()`, `Field.*`, `defineView()`, `defineAgent()` etc.
-- Scaffolded via `npx create-objectstack`. See [packages/create-objectstack/src/index.ts:27](packages/create-objectstack/src/index.ts).
+- Scaffolded via `npx create-objectstack`. See [packages/create-objectstack/src/index.ts](packages/create-objectstack/src/index.ts).
 
 **Core commands:**
-- `objectstack dev` — boots a local ObjectOS against the local TS tree, fully offline (no control-plane call)
-- `objectstack compile` — validates TS against `ObjectStackDefinitionSchema` and emits `dist/objectstack.json`. See [packages/cli/src/commands/compile.ts:22](packages/cli/src/commands/compile.ts).
-- `objectstack publish --branch X` — POSTs the JSON to the control plane under `(projectId, branchId=X)`. Today routes to `/api/v1/packages` (legacy) — see [packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts); needs to evolve to a per-branch endpoint (Drift in §7).
-- `objectstack pull --branch X` — reverse-hydrate control-plane state back into local TS files. *(Not yet implemented — Missing in §7.)*
+- `objectstack dev` - boots a local ObjectOS against the local TS tree, fully offline (no control-plane call)
+- `objectstack compile` - validates TS against `ObjectStackDefinitionSchema` and emits `dist/objectstack.json`. See [packages/cli/src/commands/compile.ts](packages/cli/src/commands/compile.ts).
+- `objectstack publish` - POSTs the compiled JSON to the control plane for the current project. Today routes to `/api/v1/packages` (legacy) - see [packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts); it must evolve to `POST /api/v1/apps/:projectId/metadata` (Drift in §7).
 
-**Relationship to Studio:** the CLI and Studio are **equal-weight bidirectional writers** to the same control-plane JSON store. A branch can receive commits from either direction.
+**Relationship to Studio:** the CLI is the Phase 1 metadata writer. Studio is a
+reader for metadata, artifacts, publish history, runtime health, logs, and usage
+signals. Bidirectional CLI/Studio editing is intentionally deferred.
 
-**Conflict model — optimistic concurrency via `commit_id`:** every write to a
-branch (CLI `publish` or Studio edit) carries the `commit_id` the writer was
-based on. The control plane rejects the write if the branch has advanced past
-that id. On rejection the writer must `objectstack pull` (CLI) or re-sync
-(Studio) to fast-forward, then retry. This is intentionally Git-shaped: no
-silent last-write-wins, no bespoke merge algorithm — just "your parent must
-match the current tip." Studio auto-generates a `commit_id` on every save; the
-CLI captures the latest known `commit_id` at `pull` time and sends it back on
-the next `publish`.
+**Revision model:** every successful publish creates a project metadata revision
+(`commit_id`) and a content checksum. In Phase 1 these identify artifact state
+and power ETag/cache validation. They are not yet a collaborative merge or
+bidirectional write protocol.
 
 ### <Cloud className="inline" /> Studio Dashboard
 
-Cloud-hosted web UI. **One of two** human authoring surfaces (the other is the
-CLI + local TS files above); both write to the same control-plane JSON store
-on a given `(project, branch)`.
+Cloud-hosted web UI. In Phase 1 Studio is the **control-plane console**, not a
+metadata authoring surface.
 
 **Responsibilities:**
 - Org / member / billing management
 - Project lifecycle (create, configure, delete)
-- Branch lifecycle (create, switch, diff, merge, delete)
-- Visual metadata editors (Object / Field / Function / View / Flow / Agent) — writes to control-plane metadata tables
-- API console, logs, usage metrics
-- Publish button — today: marks a branch state as serving; *next round*: freezes an artifact tag
+- Project metadata browser (Objects / Fields / Functions / Views / Flows / Agents)
+- Artifact inspector (schema version, checksum, commit id, publish time, payload preview)
+- API console, logs, usage metrics, runtime health
+- Publish history and diagnostics
 
-**Status:** ~70% built (org/project/member UI). Branch UI and Publish flow not yet started. See [apps/studio/src/routes/](apps/studio/src/routes/).
+**Explicit Phase 1 boundary:** Studio does not edit user metadata. Visual
+metadata editors, Studio writes, and collaborative conflict handling belong to a
+future phase after the artifact-based runtime path is stable.
+
+**Status:** ~70% built for org/project/member UI. Metadata/artifact viewer and
+runtime observability need to be added. See [apps/studio/src/routes/](apps/studio/src/routes/).
 
 ### <Globe className="inline" /> Control Plane Artifact API
 
-The **protocol boundary** between the control plane and ObjectOS runtimes.
-A single well-known HTTP endpoint — everything ObjectOS needs to boot a project
-is returned here.
+The **protocol boundary** between the control plane and ObjectOS runtimes. A
+single well-known HTTP endpoint returns everything ObjectOS needs to boot a
+project.
 
 ```
-GET /api/v1/apps/:projectId/artifact?branch=main
-→ { metadata, functions, manifest, checksum }
+GET /api/v1/apps/:projectId/artifact
+-> { schemaVersion, projectId, commitId, checksum, metadata, functions, manifest }
 ```
 
-**Today:** the control plane assembles the artifact on-the-fly by querying its
-own metadata tables filtered by `project_id` + `branch_id`.
-**Tomorrow:** the same endpoint returns a redirect or signed URL pointing at an
-S3 object (frozen at Publish time). The interface is stable; the backend swaps.
+**Today:** not yet built. Metadata still loads from project DBs.
+**Phase 1 target:** the control plane assembles the current project artifact
+from control-plane metadata payloads scoped by `organization_id` + `project_id`.
+**Future:** the same endpoint can return a redirect or signed URL pointing at an
+S3 object. The interface is stable; the backend swaps.
 
 **Responsibilities:**
-- Serve a branch's current metadata + inlined function code as a single consumable blob
-- Expose a content hash/ETag so runtimes can detect drift and decide when to refetch
+- Serve the current project's metadata + inlined function code as a single consumable blob
+- Expose `commitId`, content hash, and ETag so runtimes can detect drift and decide when to refetch
 - Leave room in the response shape for future `{ url, expiresAt, checksum }` indirection
 - Be cacheable at the CDN edge (future; read-heavy by design)
 
@@ -142,14 +152,14 @@ S3 object (frozen at Publish time). The interface is stable; the backend swaps.
 
 ### <Cpu className="inline" /> ObjectOS Runtime
 
-The per-project runtime kernel. **Stateless** with respect to metadata —
+The per-project runtime kernel. **Stateless** with respect to metadata -
 everything it knows comes from an artifact pulled over HTTP from the control
-plane. Connects to an **independent business database** for the project's
-actual data rows.
+plane. Connects to an **independent business database** for the project's actual
+data rows.
 
 **Responsibilities:**
-- Resolve incoming request → correct (project, branch) kernel via hostname
-- On first request for a branch: pull artifact from Artifact API → deserialize into kernel
+- Resolve incoming request -> project kernel via hostname
+- On first request for a project: pull artifact from Artifact API -> deserialize into kernel
 - Cache artifact locally; continue serving even if the control plane is unreachable
 - Auto-generate REST API from the artifact's object schemas
 - Auto-generate UI schemas (Amis/React-renderable)
@@ -157,52 +167,57 @@ actual data rows.
 - Query/mutate the project's **business DB** (not the control-plane DB) through ObjectQL
 - Enforce permissions, emit audit events back to the control plane (best-effort)
 
-**Status:** Multi-project kernel + hostname routing built. Metadata still loads from the **project DB** via `MetadataPlugin` — this is the biggest Drift under §7. See [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts) and [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts).
+**Status:** Multi-project kernel + hostname routing built. Metadata still loads
+from the **project DB** via `MetadataPlugin` - this is the biggest Drift under
+§7. See [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
+and [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts).
 
 ## 4. Core Entity Hierarchy
 
-Everything in the control plane; business data lives alongside but isolated per project.
+Everything in the control plane; business data lives alongside but isolated per
+project.
 
 ```
-Organization                            ← control plane
+Organization                            <- control plane
   ├── Members (with roles)
   ├── Billing
-  └── Project                           ← control plane; binds primary hostname
-        ├── Branch                      ← control plane; Git-style version line
-        │    ├── Hostname (e.g. feature-x.proj.app)
-        │    └── Metadata records       ← control plane
+  └── Project                           <- control plane; binds primary hostname
+        ├── Metadata State              <- control plane
+        │    ├── commit_id
+        │    ├── checksum
+        │    └── Metadata records
         │         Objects / Fields / Functions / Views / Flows / Agents
-        │         (rows scoped by project_id + branch_id)
-        ├── Release / Tag               ← control plane (next round)
-        │    └── Frozen artifact snapshot of a branch at Publish time
-        └── Business DB                 ← per-project, independent
-             └── Rows of user objects (customer, order, …)
-             ⚠ Does NOT store metadata. Does NOT fork per branch.
+        │         (rows scoped by organization_id + project_id)
+        ├── Artifact                     <- control-plane response shape
+        │    └── Current compiled JSON document for the project
+        └── Business DB                 <- per-project, independent
+             └── Rows of user objects (customer, order, ...)
+             !! Does NOT store metadata.
 ```
 
-| Entity          | Location / Table                                   | Status                                           |
-| :-------------- | :------------------------------------------------- | :----------------------------------------------- |
-| Organization    | Control plane `sys_organization`                   | Built                                            |
-| Project         | Control plane `sys_project` (hostname binding)     | Built                                            |
-| Branch          | Control plane `sys_branch`                         | **To build** — metadata version line; main always exists |
-| Metadata        | Control plane — JSON payload in `sys_metadata.metadata` (textarea column), filtered by `project_id` + `branch_id`. See [packages/metadata/src/objects/sys-metadata.object.ts:91-95](packages/metadata/src/objects/sys-metadata.object.ts). | **To migrate** — today the `sys_metadata` table lives in each project DB; needs to move to control plane |
-| Release / Tag   | Control plane `sys_release`                        | **Next round** — freezes a branch's artifact at Publish time |
-| Business DB     | Per-project dedicated DB (Turso / SQL / memory)    | Built (driver provisioning), but currently shares space with metadata |
+| Entity | Location / Table | Status |
+| :----- | :--------------- | :----- |
+| Organization | Control plane `sys_organization` | Built |
+| Project | Control plane `sys_project` (hostname binding) | Built |
+| Metadata State | Control-plane metadata payloads + project revision (`commit_id`, checksum), scoped by `organization_id` + `project_id` | To migrate - today `sys_metadata` lives in each project DB |
+| Artifact | `GET /api/v1/apps/:projectId/artifact` response | To build |
+| Business DB | Per-project dedicated DB (Turso / SQL / memory) | Built (driver provisioning), but currently shares space with metadata |
+| Branch / Release | Future control-plane entities | Deferred |
 
-See [packages/services/service-tenant/src/objects/sys-project.object.ts](packages/services/service-tenant/src/objects/sys-project.object.ts) for the current Project schema.
+See [packages/services/service-tenant/src/objects/sys-project.object.ts](packages/services/service-tenant/src/objects/sys-project.object.ts)
+for the current Project schema.
 
 ### Authoring vs Storage
 
 Metadata has two physical forms in ObjectStack, and the boundary between them is
 strict:
 
-- **Authoring form — TypeScript.** Whether the author is Studio's visual editor
-  (which maintains an in-memory TS-shaped model) or a developer editing
-  `src/objects/*.ts` locally, the thing humans and AI agents interact with is
-  typed TypeScript backed by Zod schemas.
-- **Storage / wire form — JSON.** Everything that hits a disk or a network —
+- **Authoring form - TypeScript.** Developers edit `objectstack.config.ts` and
+  `src/*` files locally. The thing humans and AI agents interact with is typed
+  TypeScript backed by Zod schemas.
+- **Storage / wire form - JSON.** Everything that hits a disk or a network -
   the `sys_metadata.metadata` column, the Artifact API response body, the local
-  artifact cache — is JSON. It is small, portable, and has no dependency on the
+  artifact cache - is JSON. It is small, portable, and has no dependency on the
   TypeScript compiler.
 
 The bridge between the two is **Zod**, nothing else:
@@ -210,84 +225,102 @@ The bridge between the two is **Zod**, nothing else:
 - CLI `compile` validates the local TS tree against `ObjectStackDefinitionSchema.safeParse` and emits JSON.
 - The control plane validates incoming JSON with the same Zod schemas before writing to `sys_metadata`.
 - ObjectOS validates the artifact with Zod on load.
-- JSON Schema (published via `z.toJSONSchema()` in [packages/spec/scripts/build-schemas.ts:188](packages/spec/scripts/build-schemas.ts)) powers IDE validation and CLI error messages.
+- JSON Schema (published via `z.toJSONSchema()` in [packages/spec/scripts/build-schemas.ts](packages/spec/scripts/build-schemas.ts)) powers IDE validation and CLI error messages.
 
-Any serializer that bypasses Zod is an anti-pattern — see §8. The Zod schema
+Any serializer that bypasses Zod is an anti-pattern - see §8. The Zod schema
 **is** the protocol.
 
-## 5. Operational Architecture — Three Vertices, One Protocol
+## 5. Operational Architecture - Three Vertices, One Protocol
 
 This is **how the platform runs**, not how the code is organized. The control
-plane sits at the center of a triangle: **Local Workspace** (TS authoring)
-pushes compiled JSON in; **Studio** writes JSON directly; **ObjectOS runtimes**
+plane sits at the center of a triangle: **Local Workspace** pushes compiled JSON
+in; **Studio** reads and visualizes control-plane state; **ObjectOS runtimes**
 pull the compiled artifact out over HTTP. One HTTP contract (the Artifact API)
-carries everything that leaves the control plane.
+carries everything that leaves the control plane for runtime boot.
 
 ```
 ┌─ Local Workspace ──────────┐         ┌─ Studio (UI) ─────────┐
-│ objectstack.config.ts (TS) │         │ Visual editor         │
-│ src/objects/*.ts      (TS) │         │  (writes JSON direct) │
-│ src/views/*.ts        (TS) │         │                       │
-│                            │         │                       │
+│ objectstack.config.ts (TS) │         │ Project dashboard     │
+│ src/objects/*.ts      (TS) │         │ Metadata browser      │
+│ src/views/*.ts        (TS) │         │ Artifact inspector    │
+│                            │         │ Logs / health         │
 │ objectstack compile        │         │                       │
-│   → dist/objectstack.json  │         │                       │
-└─────┬────────────────┬─────┘         └───────────┬───────────┘
-      │ publish        │ pull                      │ direct write
-      │ (+commit_id)   │                           │ (+commit_id)
-      ▼                ▲                           ▼
+│   -> dist/objectstack.json │         │                       │
+└────────────┬───────────────┘         └───────────▲───────────┘
+             │ publish                            │ read-only APIs
+             ▼                                    │
 ┌─────────────────────────────────────────────────────────────┐
 │ Control Plane  (singleton, cloud-hosted)                    │
 │ ──────────────────────────────────────                      │
 │ Studio UI (React) + Hono backend                            │
 │                                                             │
 │ Platform metadata:                                          │
-│   sys_organization · sys_project · sys_branch · sys_release │
-│   sys_user · sys_app · Auth · Billing · Audit               │
+│   sys_organization · sys_project · sys_user · sys_app       │
+│   Auth · Billing · Audit                                    │
 │                                                             │
-│ User metadata (ALL projects, ALL branches):                 │
+│ User metadata (all projects):                               │
 │   Objects / Fields / Functions / Views / Flows / Agents     │
-│   — JSON payload in sys_metadata.metadata,                  │
-│     scoped by project_id + branch_id,                       │
-│     guarded by optimistic commit_id check                   │
+│   - JSON payload in sys_metadata.metadata                   │
+│   - scoped by organization_id + project_id                  │
+│   - revisioned by commit_id + checksum                      │
 │                                                             │
 │ Artifact API:                                               │
-│   GET /api/v1/apps/:projectId/artifact?branch=…             │
+│   GET /api/v1/apps/:projectId/artifact                      │
 │   today : assembles live from control-plane DB              │
 │   future: returns S3 redirect / signed URL                  │
 │                                                             │
-│ Hostname routing: (host) → (project, branch)                │
+│ Hostname routing: host -> project                           │
 └──────────────────────────┬──────────────────────────────────┘
-                           │ Artifact over HTTP   ← the protocol
+                           │ Artifact over HTTP   <- the protocol
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ ObjectOS Runtimes  (one ObjectKernel per active branch)     │
+│ ObjectOS Runtimes  (one ObjectKernel per active project)    │
 │ ──────────────────────────────────────                      │
 │ Two boot paths, one kernel:                                 │
-│   (a) from-artifact-api — production, cloud ObjectOS        │
-│       pull JSON over HTTP → hydrate kernel → cache locally  │
-│   (b) from-local-file — `objectstack dev`, fully offline    │
-│       read dist/objectstack.json (or in-memory TS) → run    │
+│   (a) from-artifact-api - production, cloud ObjectOS        │
+│       pull JSON over HTTP -> hydrate kernel -> cache locally│
+│   (b) from-local-file - `objectstack dev`, fully offline    │
+│       read dist/objectstack.json (or in-memory TS) -> run   │
 │                                                             │
 │ Serve: auto-generated REST + UI schema from metadata        │
-│ Data : business driver → per-project business DB            │
+│ Data : business driver -> per-project business DB           │
 │        (no metadata queries; business rows only)            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-The **immutability of the artifact** is not a separate layer — it is a property
-of the HTTP contract: a given `(projectId, branch, version)` URL always returns
-the same bytes. When Tag/Release ships next round, the `version` parameter will
-point at a frozen S3 object. Until then it points at "current state of the
-branch in control-plane DB."
+The **immutability of the artifact** is not a separate layer in Phase 1. The
+current project artifact is mutable because each publish creates a new current
+state. `commitId` and `checksum` identify exactly which bytes a runtime loaded.
+Freezing a state into an immutable Release/Tag is deferred.
 
-Note that both the CLI push arrow and the Studio direct-write arrow land on the
-*same* `sys_metadata` row for a given `(project_id, branch_id, name)`. There is
-no CLI-only shadow copy, no Studio-only shadow copy — one source of truth per
-branch, protected by `commit_id` (see §3 Local Workspace).
+**Two vertices, two apps, one framework.** The Control Plane vertex and the
+ObjectOS Runtime vertex are both realized as ObjectStack-framework apps booted
+from their own `objectstack.config.ts`. They share the same `ObjectKernel`,
+spec, and adapter stack - they differ **only in the plugin manifest they
+register**. Today [apps/server/objectstack.config.ts](apps/server/objectstack.config.ts)
+is a hybrid that loads both manifests in one process; the target shape is two apps:
+
+| Plugin | `apps/cloud` (Control Plane) | `apps/server` (ObjectOS) |
+|:---|:---:|:---:|
+| `createControlPlanePlugins(...)` (ObjectQL on control DB + driver + system-project + sys_* metadata) | Yes | - |
+| `MultiProjectPlugin` (`env-registry`, `kernel-manager`, `template-seeder`) | Yes | - |
+| `AuthPlugin` | Yes | Yes |
+| `createTenantPlugin(...)` | Yes | Yes |
+| `SecurityPlugin` | Yes | Yes |
+| `AuditPlugin` | Yes | Yes |
+| `SetupPlugin` (Studio bootstrap) | Yes (optional) | - |
+| `ObjectQLPlugin` (project-scoped) | - | Yes |
+| `MetadataPlugin` (artifact-loader mode) | - | Yes |
+| User-app `AppPlugin` (compiled app) | - | Yes |
+
+Identity plugins (Auth/Tenant/Security/Audit) are installed on **both** sides:
+a request to either vertex must resolve the same user/org/role. Splitting
+identity would require federated auth, which is out of scope.
 
 **Key code anchors:**
-- Control-plane entry: [apps/studio/src/routes/](apps/studio/src/routes/)
-- Hostname → project resolver: [packages/runtime/src/environment-registry.ts](packages/runtime/src/environment-registry.ts)
+- Control-plane app (target): `apps/cloud/objectstack.config.ts` (not yet created - see ROADMAP D8)
+- ObjectOS app (target): [apps/server/objectstack.config.ts](apps/server/objectstack.config.ts) (currently hybrid; will be reduced to ObjectOS manifest)
+- Hostname -> project resolver: [packages/runtime/src/environment-registry.ts](packages/runtime/src/environment-registry.ts)
 - Per-project kernel factory: [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
 - HTTP dispatch: [packages/runtime/src/http-dispatcher.ts](packages/runtime/src/http-dispatcher.ts)
 - Org-scoped proxy: [packages/runtime/src/control-plane-proxy-driver.ts](packages/runtime/src/control-plane-proxy-driver.ts)
@@ -301,79 +334,61 @@ branch, protected by `commit_id` (see §3 Local Workspace).
 ```
 npx create-objectstack my-app          # scaffold TS file tree (objectstack.config.ts + src/*)
 cd my-app
-objectstack dev                         # boot ObjectOS from local TS — no control-plane call
-  ⋯ iterate: edit src/objects/*.ts, Fast Refresh ⋯
-objectstack compile                     # validate TS → emit dist/objectstack.json
+objectstack dev                         # boot ObjectOS from local TS - no control-plane call
+  ... iterate: edit src/objects/*.ts, Fast Refresh ...
+objectstack compile                     # validate TS -> emit dist/objectstack.json
 objectstack login                       # obtain auth token for the target control plane
-objectstack publish --branch feature-x  # POST JSON to (project_id, branch_id=feature-x)
-                                        #   server checks commit_id; reject if branch advanced
-  ⋯ Studio user on feature-x sees the same rows, keeps editing ⋯
-objectstack pull --branch feature-x     # (not yet implemented) pull control-plane → local TS
+objectstack publish                     # POST JSON to project metadata state
+                                        # returns commitId + checksum
 ```
 
 Two things to notice:
 
 1. **`objectstack dev` is fully offline.** The local ObjectOS reads the TS tree
-   (or the compiled `dist/objectstack.json`) directly — it does not hit the
-   Artifact API, and it does not need login/network. Production ObjectOS uses
-   the Artifact API path; dev and prod share the same kernel code with
-   different boot paths.
-2. **`publish` carries a `commit_id`.** The CLI remembers the last known
-   `commit_id` from the previous `pull` (or `publish`) and sends it with the
-   next push. The control plane accepts only if the branch tip still matches;
-   on mismatch the CLI must `pull` first. This is Git-shaped optimistic
-   concurrency — see §3.
+   (or the compiled `dist/objectstack.json`) directly. It does not hit the
+   Artifact API, and it does not need login/network.
+2. **`publish` creates a project metadata revision.** In Phase 1 the local TS
+   workspace is the only metadata writer, so `commitId` is primarily a revision,
+   audit, and cache-validation identifier.
 
 ### 6.1 Onboarding
 
 ```
-signup → create org → create project
-  → control plane creates "main" branch row + allocates primary hostname
-  → control plane provisions per-project business DB (Turso / SQL / memory)
-  → Studio lands on the project overview (main branch)
-  → ObjectOS does NOT boot yet — it boots lazily on first request
+signup -> create org -> create project
+  -> control plane allocates primary hostname
+  -> control plane provisions per-project business DB (Turso / SQL / memory)
+  -> Studio lands on the project overview
+  -> ObjectOS does NOT boot yet - it boots lazily on first request
 ```
 
-### 6.2 Development (with Branch)
+### 6.2 Publish and Inspect
 
 ```
-open project
-  → create branch "feature-x"
-       → control plane copies all metadata rows from main, re-stamped with branch_id=feature-x
-       → allocates branch hostname: feature-x.proj.app
-       → business DB is NOT forked (branches share business data by default)
-  → Studio edits metadata on feature-x (writes land in control-plane DB)
-  → browse feature-x.proj.app → ObjectOS pulls feature-x artifact → preview
-  → diff feature-x ↔ main (SQL-level comparison in control plane)
-  → merge feature-x → main (control-plane metadata rewrite)
-  → (next round) click Publish on main → freeze artifact as tag v1.3
+developer runs objectstack publish
+  -> control plane validates JSON with Zod
+  -> writes metadata payloads scoped by organization_id + project_id
+  -> records commitId + checksum
+  -> Studio shows metadata, artifact envelope, publish history, and validation state
+  -> ObjectOS pulls the current project artifact on next boot/refetch
 ```
 
-Under this model, Branch is a **metadata-only construct** in the control-plane
-DB. There is no cross-branch data migration problem for business rows because
-branches share the same business DB. If a feature branch needs isolated data
-for testing, that is modeled as a separate "environment" (see Open Questions).
-
-A branch can receive commits from either writer: Studio (direct JSON writes
-from the visual editor) or CLI (`publish` with compiled JSON from the local
-TS tree). Both land in the same `sys_metadata` rows and both go through the
-`commit_id` optimistic-concurrency check — there is no "CLI branch" vs
-"Studio branch" distinction.
+Studio is intentionally a viewer here. If a user sees bad metadata in Studio,
+the fix is to edit the local TS files and publish again.
 
 ### 6.3 Runtime Request
 
 ```
-GET https://feature-x.proj.app/api/v1/data/customer
+GET https://proj.app/api/v1/data/customer
   ↓
-Control plane receives request → EnvironmentDriverRegistry resolves
-  hostname → (projectId, branchId=feature-x)
+Control plane receives request -> EnvironmentDriverRegistry resolves
+  hostname -> projectId
   ↓
-KernelManager looks up ObjectKernel for (projectId, feature-x)
+KernelManager looks up ObjectKernel for projectId
   ↓
 If kernel has no artifact loaded:
-    GET /api/v1/apps/:projectId/artifact?branch=feature-x
-    → hydrate metadata + function code into kernel
-    → cache artifact locally (survives control-plane downtime)
+    GET /api/v1/apps/:projectId/artifact
+    -> hydrate metadata + function code into kernel
+    -> cache artifact locally (survives control-plane downtime)
   ↓
 REST plugin auto-generates `customer` handler from artifact schema
   ↓
@@ -382,42 +397,41 @@ ObjectQL runs query against the project's BUSINESS DB (not control plane)
 Response flows back; audit event emitted to control plane (best-effort)
 ```
 
-Subsequent requests on the same branch reuse the cached artifact. Cache
-invalidation strategy (push / poll / ETag) is an Open Question.
+Subsequent requests reuse the cached artifact. Cache invalidation strategy
+(push / poll / ETag) is an Open Question.
 
 ## 7. Alignment Check
 
-Honest state of the platform as of 2026-04-25, **re-classified under the new
-centralized-metadata model**. Every future architectural decision should
-preserve column 1, reduce column 2, and advance column 3.
+Honest state of the platform as of 2026-04-25, **re-classified under the Phase
+1 code-first model**. Every future architectural decision should preserve Built,
+reduce Drift, and advance Missing.
 
 ### <Layers className="inline" /> Built (Aligned)
 
-- Organization CRUD + member/invitation system — [apps/studio/src/hooks/useSession.ts](apps/studio/src/hooks/useSession.ts)
-- Project CRUD + per-project Turso/memory DB provisioning — [packages/services/service-tenant/](packages/services/service-tenant/)
-- Per-project ObjectKernel with LRU cache — [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
-- Hostname-based routing: `sys_project.hostname` → kernel resolution — [packages/runtime/src/environment-registry.ts](packages/runtime/src/environment-registry.ts)
-- ControlPlaneProxyDriver for org-scoped data isolation — [packages/runtime/src/control-plane-proxy-driver.ts](packages/runtime/src/control-plane-proxy-driver.ts)
-- AppCatalogService (per-project app events → org-scoped `sys_app` catalog) — [packages/services/service-tenant/src/services/app-catalog.service.ts](packages/services/service-tenant/src/services/app-catalog.service.ts)
-- **TS → JSON compile pipeline.** `objectstack compile` validates a local TS stack against `ObjectStackDefinitionSchema` and writes `dist/objectstack.json` — [packages/cli/src/commands/compile.ts:22](packages/cli/src/commands/compile.ts).
-- **Zod → JSON Schema publishing pipeline.** The bridge that makes TS/JSON interchangeable — [packages/spec/scripts/build-schemas.ts:188](packages/spec/scripts/build-schemas.ts).
-- **Scaffolded TS file tree.** `create-objectstack` emits a `defineStack()` entry point plus split-out `src/objects/*.ts`, `src/views/*.ts` etc. — [packages/create-objectstack/src/index.ts:27](packages/create-objectstack/src/index.ts).
-- **JSON-payload metadata storage.** `sys_metadata.metadata` column is already a textarea-shaped JSON payload column — [packages/metadata/src/objects/sys-metadata.object.ts:91-95](packages/metadata/src/objects/sys-metadata.object.ts). (The *location* of the table still needs to move to the control plane — see Drift.)
-- **CLI `publish` link.** The end-to-end "local JSON → remote server" wire is alive, even though the endpoint shape is wrong — [packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts).
+- Organization CRUD + member/invitation system - [apps/studio/src/hooks/useSession.ts](apps/studio/src/hooks/useSession.ts)
+- Project CRUD + per-project Turso/memory DB provisioning - [packages/services/service-tenant/](packages/services/service-tenant/)
+- Per-project ObjectKernel with LRU cache - [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
+- Hostname-based routing: `sys_project.hostname` -> kernel resolution - [packages/runtime/src/environment-registry.ts](packages/runtime/src/environment-registry.ts)
+- ControlPlaneProxyDriver for org-scoped data isolation - [packages/runtime/src/control-plane-proxy-driver.ts](packages/runtime/src/control-plane-proxy-driver.ts)
+- AppCatalogService (per-project app events -> org-scoped `sys_app` catalog) - [packages/services/service-tenant/src/services/app-catalog.service.ts](packages/services/service-tenant/src/services/app-catalog.service.ts)
+- **TS -> JSON compile pipeline.** `objectstack compile` validates a local TS stack against `ObjectStackDefinitionSchema` and writes `dist/objectstack.json` - [packages/cli/src/commands/compile.ts](packages/cli/src/commands/compile.ts).
+- **Zod -> JSON Schema publishing pipeline.** The bridge that makes TS/JSON interchangeable - [packages/spec/scripts/build-schemas.ts](packages/spec/scripts/build-schemas.ts).
+- **Scaffolded TS file tree.** `create-objectstack` emits a `defineStack()` entry point plus split-out `src/objects/*.ts`, `src/views/*.ts` etc. - [packages/create-objectstack/src/index.ts](packages/create-objectstack/src/index.ts).
+- **JSON-payload metadata storage.** `sys_metadata.metadata` column is already a textarea-shaped JSON payload column - [packages/metadata/src/objects/sys-metadata.object.ts](packages/metadata/src/objects/sys-metadata.object.ts). (The *location* of the table still needs to move to the control plane - see Drift.)
+- **CLI `publish` link.** The end-to-end "local JSON -> remote server" wire is alive, even though the endpoint shape is wrong - [packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts).
 
 ### <AlertTriangle className="inline" /> Drift (Needs Cleanup)
 
-- **🔴 Biggest drift: `MetadataPlugin` loads metadata from the project DB.**
+- **Biggest drift: `MetadataPlugin` loads metadata from the project DB.**
   Today [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts)
-  reads `sys_metadata` rows from each project's own database. Under the new
+  reads `sys_metadata` rows from each project's own database. Under the Phase 1
   model, metadata is centralized in the control plane and delivered to the
   runtime via the Artifact API. The project DB should contain business rows
-  only. This is the single largest architectural drift to fix.
-- **`env_id` semantics blurred with branch.** `env_id` was introduced as a
-  branch-like scoping column on metadata rows in the project DB. Under the new
-  model, branch scoping lives on control-plane metadata tables via a dedicated
-  `branch_id`. `env_id` needs to be repurposed (e.g. "deployment environment"
-  ≠ branch) or removed — not left ambiguous.
+  only.
+- **`env_id` should be removed from metadata storage.** In Phase 1 metadata is
+  scoped by `organization_id` + `project_id`; deployment target differences are
+  runtime/deployment configuration, not metadata row partitioning. Branch-like
+  variants are deferred rather than modeled through `env_id`.
 - **`namespace` residue**: deprecated in favor of embedding prefix in object
   `name`, but leftovers remain. Schema should be single-sourced on `name` for
   identity.
@@ -432,168 +446,93 @@ preserve column 1, reduce column 2, and advance column 3.
   Should converge on one home.
 - **`objectstack publish` uses the legacy `/api/v1/packages` endpoint.** Today
   it POSTs a "package" payload ([packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts))
-  which is neither project-scoped nor branch-scoped — a residue of the
-  pre-Branch "one project, one package" model. Under the new model this needs
-  to become `POST /api/v1/apps/:projectId/branches/:branchId/metadata` with a
-  `commit_id` header for optimistic concurrency. Both endpoint shape and
-  payload structure need to change.
+  which is not the Phase 1 project metadata endpoint. It needs to become
+  `POST /api/v1/apps/:projectId/metadata`.
 
-### <GitBranch className="inline" /> Missing (Not Started)
+### <Globe className="inline" /> Missing (Not Started)
 
-- **`sys_branch` entity** in the control plane — Branch CRUD + `branch_id`
-  column on every metadata table + default-create `main` per project.
-- **Metadata migration to control plane** — move all user-metadata tables out
-  of the project DB into the control-plane DB, scoped by `project_id` + `branch_id`.
-- **Artifact API endpoint** — `GET /api/v1/apps/:projectId/artifact?branch=…`
-  that assembles a branch's metadata + inlined function code into a single
-  consumable blob, with a content hash/ETag for cache validation.
-- **ObjectOS artifact loader** — swap `MetadataPlugin`'s data source from
-  project-DB reads to HTTP fetch against the Artifact API; add local artifact
-  cache with durability across control-plane outages.
-- **Studio branch management UI** — create, switch, diff, merge branches in
-  the dashboard.
-- **Compile-to-App pipeline specification** — exact serialization format for
-  the artifact (JSON document? tarball + manifest?), function-code packaging,
-  driver/plugin requirement declaration.
-- **UI auto-generation** — artifact schemas → Amis/React components without
-  hand-wiring.
-- **Versioning / Release / Tag** — *deferred to next round.* Publish currently
-  means "mark branch state as serving"; tagging/freezing will come with the
-  release entity.
-- **Studio Publish UI** — Publish button, artifact browser, rollback flow
-  (blocked on the Release entity above).
-- **`objectstack pull`** — JSON → TS codegen that reverse-hydrates a branch's
-  control-plane state back into a local TS file tree. Not trivial: round-trip
-  fidelity depends on whether authors use features that cannot survive
-  serialization (computed expressions, helper imports, generics). Zod schemas
-  guide the shape, but the emitter is net-new code.
-- **Per-branch push endpoint.** The control-plane side of
-  `POST /api/v1/apps/:projectId/branches/:branchId/metadata` — receives the
-  compiled JSON, validates with Zod, checks the `commit_id`, and writes to
-  `sys_metadata` scoped by `(project_id, branch_id)`.
-- **`objectstack dev` offline boot path.** `from-local-file` kernel boot —
-  ObjectOS reads `dist/objectstack.json` (or an in-memory TS definition) and
-  runs fully without a control-plane connection. The code path is close to the
-  existing bootstrap but needs to be wired as a distinct boot mode.
-- **`commit_id` machinery.** A `commit_id` column on the metadata branch-state
-  row (or a separate `sys_branch_commit` ledger), a server-side check on every
-  write, and CLI + Studio code to round-trip it. This is the substrate for the
-  conflict resolution described in §3; without it, bidirectional writes are
-  unsafe.
+- **Artifact format v0** - Zod schema for `{ schemaVersion, projectId, commitId, checksum, metadata, functions, manifest }`.
+- **Metadata migration to control plane** - move user metadata out of project DBs into the control-plane DB, scoped by `organization_id` + `project_id`.
+- **Project Artifact API** - `GET /api/v1/apps/:projectId/artifact` assembles the current project metadata + inlined function code into a single consumable blob, with content hash/ETag for cache validation.
+- **ObjectOS artifact loader** - swap `MetadataPlugin`'s data source from project-DB reads to HTTP fetch against the Artifact API; add local artifact cache with durability across control-plane outages.
+- **Project publish endpoint** - `POST /api/v1/apps/:projectId/metadata` receives compiled JSON, validates with Zod, writes the current project metadata state, and returns `commitId` + checksum.
+- **Studio metadata/artifact viewer** - browse published metadata, artifact envelope, commit id, checksum, publish history, logs, and runtime health. No metadata editing.
+- **`objectstack dev` offline boot path** - `from-local-file` kernel boot. ObjectOS reads `dist/objectstack.json` (or an in-memory TS definition) and runs fully without a control-plane connection.
+- **UI auto-generation** - artifact schemas -> Amis/React components without hand-wiring.
 
 ## 8. Non-Goals and Anti-Patterns
 
-Decisions the platform has already rejected. Do not relitigate without explicit
-user buy-in at the project level.
+Decisions the platform has already rejected for Phase 1. Do not relitigate
+without explicit project-level buy-in.
+
+### Phase 1 non-goals
+
+- <AlertTriangle className="inline" /> **No branches in this round.** `sys_branch`, `branch_id`, branch hostnames, branch diff/merge, and branch-scoped publish endpoints are deferred.
+- <AlertTriangle className="inline" /> **Studio does not edit user metadata in this round.** It is a dashboard, metadata viewer, artifact inspector, and observability surface.
+- <AlertTriangle className="inline" /> **No bidirectional CLI/Studio write model.** The local TS workspace is the only Phase 1 metadata authoring source.
+- <AlertTriangle className="inline" /> **No `objectstack pull` in this round.** Reverse-hydrating JSON back into TS is deferred until Studio or other control-plane writers exist.
+- <AlertTriangle className="inline" /> **No merge/conflict UX in this round.** `commitId` identifies revisions and artifacts; it is not yet a collaborative merge protocol.
+- <AlertTriangle className="inline" /> **No versioning / Tag / Release entity in this round.** Freezing an artifact into an immutable release is deferred.
+- <AlertTriangle className="inline" /> **No S3 in this round.** The Artifact API's backend is the control-plane DB today. Design the response shape to accommodate a future `{ url, expiresAt, checksum }` indirection without building the S3 path now.
 
 ### Architectural boundaries
 
-- <AlertTriangle className="inline" /> **ObjectOS runtimes don't talk to the control-plane DB.** The only
-  coupling surface is the Artifact API (HTTP). Runtimes never open a connection
-  to the control-plane database, even for "just a quick lookup." Keep the
-  contract on HTTP so S3 can swap in later without touching runtime code.
-- <AlertTriangle className="inline" /> **Branches don't fork business data.** A branch forks *metadata only*
-  (control-plane rows). Business rows live in the per-project business DB and
-  are shared across branches by default. If a branch needs isolated data, use
-  a separate "environment" concept — don't overload Branch.
-- <AlertTriangle className="inline" /> **No S3 in this round.** The Artifact API's backend is the
-  control-plane DB today. Design the response shape to accommodate a future
-  `{ url, expiresAt, checksum }` indirection (S3 signed URLs) without a
-  breaking change, but don't build the S3 path now.
-- <AlertTriangle className="inline" /> **No versioning / Tag / Release this round.** Branch ships first.
-  Freezing a branch state into an immutable tag (the "Publish" action) is
-  deferred. Until then, the `version` parameter on the Artifact API always
-  resolves to "branch's current state."
+- <AlertTriangle className="inline" /> **ObjectOS runtimes don't talk to the control-plane DB.** The only coupling surface is the Artifact API (HTTP). Runtimes never open a connection to the control-plane database, even for "just a quick lookup."
+- <AlertTriangle className="inline" /> **Project business data is not metadata.** Business rows live in the per-project business DB. Metadata lives in the control plane.
 
 ### Representation-form boundaries
 
-- <AlertTriangle className="inline" /> **JSON is not an authoring form.** Studio's visual editor emits JSON as
-  a byproduct of its in-memory TS-shaped model, but **hand-writing JSON
-  metadata is an anti-pattern.** Authors always produce metadata via TS (local
-  CLI flow) or the Studio UI. If you find yourself editing a JSON payload
-  directly in `sys_metadata`, you are patching around a missing Studio feature
-  or a missing CLI affordance — fix that instead.
-- <AlertTriangle className="inline" /> **TS is not a wire form.** ObjectOS runtimes never consume `.ts` files
-  directly. The only inputs to a kernel are: (a) a compiled
-  `dist/objectstack.json`, or (b) the control plane's Artifact API response
-  (also JSON). Zod `safeParse` is the sole entry-point validator for both.
-- <AlertTriangle className="inline" /> **No bypassing Zod for TS ↔ JSON conversion.** Any hand-rolled
-  "faster" serializer will diverge from the schema on the Nth protocol bump
-  and silently corrupt data. `z.toJSONSchema()` + `schema.parse()` **is** the
-  contract; treat the Zod definitions in `packages/spec` as source code for
-  the wire format, not just type annotations.
+- <AlertTriangle className="inline" /> **JSON is not an authoring form.** Phase 1 authors produce metadata via TypeScript and the CLI. If you find yourself editing JSON payloads directly in `sys_metadata`, you are patching around a missing CLI affordance.
+- <AlertTriangle className="inline" /> **TS is not a wire form.** ObjectOS runtimes never consume `.ts` files directly. The only runtime inputs are a compiled `dist/objectstack.json` or the control plane's Artifact API response (also JSON).
+- <AlertTriangle className="inline" /> **No bypassing Zod for TS <-> JSON conversion.** Any hand-rolled serializer will diverge from the schema on the Nth protocol bump and silently corrupt data. `z.toJSONSchema()` + `schema.parse()` **is** the contract.
 
 ### Prior anti-patterns (still in force)
 
-- <AlertTriangle className="inline" /> **No escape hatch for non-metadata logic.** All business logic lives in
-  declared Object Functions or Flows. "Just add a raw endpoint" is not a supported pattern.
-- <AlertTriangle className="inline" /> **`packages/spec` stays logic-free.** Schemas, types, constants only. Runtime
-  logic belongs in `core` / `runtime` / `services`. (Prime Directive #2.)
-- <AlertTriangle className="inline" /> **No `namespace` prefix mechanism.** If a module needs a prefix, embed it in
-  the object `name` (`sys_user`, `crm_account`). The field is deprecated. (Prime Directive #7.)
-- <AlertTriangle className="inline" /> **No direct-DB SDK.** Every client access goes through ObjectQL — no bypass,
-  no "just for perf" exception.
-- <AlertTriangle className="inline" /> **No one-way scaffolds.** `create-objectstack` produces projects that remain
-  fully editable via Studio. Never emit code that can't be round-tripped back to metadata.
-- <AlertTriangle className="inline" /> **No deprecated-alias enums.** When refactoring enums (plugin scope, metadata
-  types, etc.), break cleanly with a migration. Do not ship "old value still accepted" aliases.
-- <AlertTriangle className="inline" /> **No hand-written content in `content/docs/references/`.** That tree is
-  regenerated from Zod schemas.
+- <AlertTriangle className="inline" /> **No escape hatch for non-metadata logic.** All business logic lives in declared Object Functions or Flows. "Just add a raw endpoint" is not a supported pattern.
+- <AlertTriangle className="inline" /> **`packages/spec` stays logic-free.** Schemas, types, constants only. Runtime logic belongs in `core` / `runtime` / `services`. (Prime Directive #2.)
+- <AlertTriangle className="inline" /> **No `namespace` prefix mechanism.** If a module needs a prefix, embed it in the object `name` (`sys_user`, `crm_account`). The field is deprecated. (Prime Directive #7.)
+- <AlertTriangle className="inline" /> **No direct-DB SDK.** Every client access goes through ObjectQL - no bypass, no "just for perf" exception.
+- <AlertTriangle className="inline" /> **No deprecated-alias enums.** When refactoring enums (plugin scope, metadata types, etc.), break cleanly with a migration. Do not ship "old value still accepted" aliases.
+- <AlertTriangle className="inline" /> **No hand-written content in `content/docs/references/`.** That tree is regenerated from Zod schemas.
 
 ## 9. Open Questions
 
-Questions this document deliberately leaves unresolved. Answer them in
-follow-up design docs before building. Two previously-open items are now
-resolved: *"Branch DB fork semantics"* (branches don't fork business data —
-see §8) and *"CLI vs Studio concurrent write"* (optimistic concurrency via
-`commit_id` — see §3 and §6.0).
+Questions this document deliberately leaves unresolved. Answer them in follow-up
+design docs before building.
 
-1. **Artifact content format.** Single JSON document (all metadata + function
-   source inline) or tarball (multiple files + `manifest.json`)? Affects
-   client load complexity, CDN cache granularity, and future S3 storage.
-2. **Studio metadata write path.** Does Studio write directly to control-plane
-   metadata tables (simplest) or go through a control-plane REST API (more
-   formal, easier to audit/hook)? Trade-off between velocity and governance.
-3. **Business DB connection config ownership.** Does the Artifact include the
+1. **Artifact content format details.** Phase 1 chooses a single JSON document,
+   but the exact envelope, manifest fields, function-code packaging, and driver
+   requirement declaration still need a Zod schema.
+2. **Business DB connection config ownership.** Does the Artifact include the
    business DB connection string (simple but mixes environment into artifact),
    or is it injected into ObjectOS at boot time (artifact stays clean, but
    requires per-deployment config)?
-4. **Artifact cache invalidation.** Control-plane push notification?
+3. **Artifact cache invalidation.** Control-plane push notification?
    Periodic polling from ObjectOS? HTTP ETag on every request? Each has
    latency / chattiness / outage-resilience trade-offs.
-5. **Custom domains.** Customers bringing their own domain (`app.acme.com`) —
-   how does it map to (project, branch), and where is the TLS cert issued?
-6. **Branch vs Environment.** `env_id` already exists; under the new model,
-   Branch ≈ development version line, Environment ≈ deployment instance
-   (dev/staging/prod). Are they orthogonal (preferred) or equivalent? Needs
-   to be settled before either can stabilize.
-7. **Metadata merge-conflict UX.** When merging branch → main, what does a
-   conflict on an object's field list look like? Git-style three-way merge?
-   Last-write-wins? Does Studio need an inline diff viewer?
-8. **(Next round) Versioning / Tag implementation.** Freezing a branch state
-   into an immutable tag — is it a full metadata copy (simple, space-heavy)
-   or a reference + immutability flag (space-efficient, more plumbing)?
-9. **`objectstack pull` round-trip fidelity.** Is a lossless JSON → TS
-   emitter feasible for everything a user might write in `defineStack()`? If
-   authors use TS-only expressions (computed values, helper imports,
-   generics), the pull step either loses information or must constrain the
-   authoring surface. Where do we draw the line, and is it enforced by Zod
-   or at a lint step?
-10. **Local `dev` metadata form.** Does `objectstack dev` let ObjectOS consume
-    the in-memory TS definition directly (best DX: hot reload is trivial), or
-    does it always go through a `compile` step to JSON first (best isomorphy
-    with prod: fewer "works on my machine" bugs)? Affects the offline boot
-    path design in §7 Missing.
-11. **Commit granularity.** Does `publish` replace an entire branch's
-    metadata atomically, or does it diff at the object level and apply
-    object-granular patches? Full-branch replace is simpler and matches the
-    `commit_id` check cleanly; object-level diff is more Git-shaped and
-    enables partial rollback and richer audit logs — at the cost of a much
-    more complex server side.
+4. **Custom domains.** Customers bringing their own domain (`app.acme.com`) -
+   how does it map to project, and where is the TLS cert issued?
+5. **Local `dev` metadata form.** Does `objectstack dev` let ObjectOS consume
+   the in-memory TS definition directly (best DX: hot reload is trivial), or
+   does it always go through a `compile` step to JSON first (best isomorphy
+   with prod: fewer "works on my machine" bugs)?
+6. **Future Studio editing.** When Studio becomes a metadata authoring surface,
+   should it write through a control-plane REST API only? How does it preserve
+   round-trip expectations with TS-authored projects?
+7. **Future branch model.** When branches ship, does the current project
+   metadata state simply become `main`, with partition key evolving from
+   `(organization_id, project_id)` to `(organization_id, project_id, branch_id)`?
+8. **Future `objectstack pull` fidelity.** Is a lossless JSON -> TS emitter
+   feasible for everything users might write in `defineStack()`? If authors use
+   TS-only expressions, helper imports, or generics, the pull step either loses
+   information or must constrain the authoring surface.
+9. **Future Release / Tag implementation.** Freezing a project state into an
+   immutable tag - is it a full metadata copy (simple, space-heavy) or a
+   reference + immutability flag (space-efficient, more plumbing)?
 
 ---
 
 > **When in doubt, re-read this.** Every PR description, every commit, every
-> plan should be testable against this document: does this change advance
-> something in §7 Built, shrink something in Drift, unlock something in
-> Missing, or answer an Open Question? If none, it probably shouldn't ship.
+> plan should be testable against this document: does this change preserve
+> Built, reduce Drift, unlock Missing, or answer an Open Question? If none, it
+> probably shouldn't ship.
