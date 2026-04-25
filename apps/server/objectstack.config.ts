@@ -69,6 +69,7 @@ async function buildLocalPlugins() {
     const { ObjectQLPlugin } = await import('@objectstack/objectql');
     const { MetadataPlugin } = await import('@objectstack/metadata');
     const { AuthPlugin } = await import('@objectstack/plugin-auth');
+    const { DriverPlugin } = await import('@objectstack/runtime');
 
     // Load artifact JSON to register app bundle (objects, views, etc.) via AppPlugin.
     // AppPlugin.init() calls manifest.register() → ql.registerApp() which is the
@@ -85,9 +86,30 @@ async function buildLocalPlugins() {
         // Artifact not available yet (e.g. first run before compile) — AppPlugin skipped.
     }
 
+    // Build a database driver for local mode.
+    // Defaults to SQLite at .objectstack/data/app.db if no env var is set.
+    const dbUrl = process.env.OBJECTSTACK_DATABASE_URL?.trim()
+        || `file:${resolvePath(dirname(fileURLToPath(import.meta.url)), '.objectstack/data/app.db')}`;
+    const dbDriver = process.env.OBJECTSTACK_DATABASE_DRIVER?.trim() || 'sqlite';
+
+    let driverPlugin: any;
+    if (dbDriver === 'memory' || dbUrl.startsWith('memory://')) {
+        const { InMemoryDriver: MemoryDriver } = await import('@objectstack/driver-memory');
+        driverPlugin = new DriverPlugin(new MemoryDriver());
+    } else {
+        const { SqlDriver } = await import('@objectstack/driver-sql');
+        const filename = dbUrl.replace(/^file:(\/\/)?/, '');
+        const { mkdirSync } = await import('node:fs');
+        mkdirSync(resolvePath(filename, '..'), { recursive: true });
+        driverPlugin = new DriverPlugin(
+            new SqlDriver({ client: 'better-sqlite3', connection: { filename }, useNullAsDefault: true }),
+        );
+    }
+
     // MetadataPlugin must start before ObjectQLPlugin so that when ObjectQL's
     // start() calls loadMetadataFromService(), the artifact is already loaded.
     const plugins: any[] = [
+        driverPlugin,
         new MetadataPlugin({
             watch: false,
             environmentId: localProjectId,

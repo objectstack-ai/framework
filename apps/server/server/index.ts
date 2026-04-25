@@ -24,8 +24,8 @@ import stackConfig from '../objectstack.config.js';
 
 export interface BootResult {
     kernel: ObjectKernel;
-    kernelManager: KernelManager;
-    envRegistry: EnvironmentDriverRegistry;
+    kernelManager?: KernelManager;
+    envRegistry?: EnvironmentDriverRegistry;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,8 +72,11 @@ async function bootKernel(): Promise<BootResult> {
 
     await kernel.bootstrap();
 
-    const envRegistry = await (kernel as any).getServiceAsync('env-registry') as EnvironmentDriverRegistry;
-    const kernelManager = await (kernel as any).getServiceAsync('kernel-manager') as KernelManager;
+    const getOptionalService = async <T>(name: string): Promise<T | undefined> => {
+        try { return await (kernel as any).getServiceAsync(name) as T; } catch { return undefined; }
+    };
+    const envRegistry = await getOptionalService<EnvironmentDriverRegistry>('env-registry');
+    const kernelManager = await getOptionalService<KernelManager>('kernel-manager');
 
     return { kernel, kernelManager, envRegistry };
 }
