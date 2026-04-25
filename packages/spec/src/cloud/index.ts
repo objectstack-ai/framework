@@ -21,3 +21,4 @@ export * from './project.zod';
 export * from './package.zod';
 export * from './package-version.zod';
 export * from './project-package.zod';
+export * from './project-artifact.zod';
