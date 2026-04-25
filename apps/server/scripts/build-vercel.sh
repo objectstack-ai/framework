@@ -24,8 +24,24 @@ cd ../..
 pnpm turbo run build --filter=@objectstack/server --filter=@objectstack/studio
 cd apps/server
 
+# 1b. Compile objectstack.config.ts → dist/objectstack.json (the metadata artifact).
+# MetadataPlugin reads this file at startup in local mode. Without it the kernel
+# cannot boot ("Cannot read artifact file … ENOENT").
+echo "[build-vercel] Compiling objectstack artifact..."
+pnpm objectstack build
+echo "[build-vercel]   ✓ dist/objectstack.json generated"
+
 # 2. Bundle API serverless function
 node scripts/bundle-api.mjs
+
+# 2b. Copy the artifact into api/dist/ so Vercel includes it in the function
+# deployment package. The function runs with CWD=/var/task and resolves the
+# artifact relative to its own directory (api/), so api/dist/objectstack.json
+# maps to /var/task/apps/server/api/dist/objectstack.json at runtime.
+echo "[build-vercel] Copying artifact into api/dist/..."
+mkdir -p api/dist
+cp dist/objectstack.json api/dist/objectstack.json
+echo "[build-vercel]   ✓ api/dist/objectstack.json ready"
 
 # 3. Copy studio dist files to public/_studio/ for UI serving.
 # Studio is always mounted under /_studio/ (same convention as the CLI

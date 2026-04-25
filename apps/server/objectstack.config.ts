@@ -31,7 +31,8 @@
  *   - `http(s)://…`          → libSQL / sqld over HTTP
  */
 
-import { resolve as resolvePath } from 'node:path';
+import { resolve as resolvePath, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import type * as Contracts from '@objectstack/spec/contracts';
 import {
@@ -62,7 +63,7 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
 
 const localProjectId = process.env.OBJECTSTACK_PROJECT_ID ?? 'proj_local';
 const localArtifactPath = process.env.OBJECTSTACK_ARTIFACT_PATH
-    ?? resolvePath(process.cwd(), 'dist/objectstack.json');
+    ?? resolvePath(dirname(fileURLToPath(import.meta.url)), 'dist/objectstack.json');
 
 async function buildLocalPlugins() {
     const { ObjectQLPlugin } = await import('@objectstack/objectql');

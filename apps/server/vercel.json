@@ -13,7 +13,7 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 60,
-      "includeFiles": "api/node_modules/**"
+      "includeFiles": "api/node_modules/**,api/dist/**"
     }
   },
   "headers": [
