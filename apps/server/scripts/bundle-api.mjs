@@ -39,7 +39,7 @@ await build({
   bundle: true,
   platform: 'node',
   format: 'esm',
-  target: 'es2020',
+  target: 'es2022',
   outfile: 'api/_handler.js',
   sourcemap: true,
   external: EXTERNAL,

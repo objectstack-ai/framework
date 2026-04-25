@@ -12,8 +12,8 @@
   },
   "scripts": {
     "dev": "objectstack dev",
-    "start": "objectstack serve",
-    "build": "objectstack compile",
+    "start": "objectstack start",
+    "build": "objectstack build",
     "typecheck": "tsc --noEmit",
     "test": "objectstack test"
   },

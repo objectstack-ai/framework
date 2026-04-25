@@ -52,7 +52,6 @@ export default class Start extends Command {
       [
         binPath,
         'serve',
-        '--prebuilt',
         ...(flags.ui ? ['--ui'] : []),
         ...(flags.verbose ? ['--verbose'] : []),
       ],
