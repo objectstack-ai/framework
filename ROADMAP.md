@@ -71,7 +71,7 @@ Existing code that contradicts the intended Phase 1 architecture. Fix these befo
 [packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts) POSTs a "package" payload that is not the Phase 1 project metadata endpoint.
 
 **Required evolution:**
-- Endpoint: `POST /api/v1/apps/:projectId/metadata`
+- Endpoint: `POST /api/v1/cloud/projects/:projectId/metadata`
 - Payload: compiled `dist/objectstack.json` (output of `objectstack compile`)
 - Server behavior: validate with Zod, write current project metadata state, create `commitId`, compute checksum
 - Response: `{ projectId, commitId, checksum }`
@@ -167,7 +167,7 @@ Ordered by dependency. Items higher in the list unblock those below them.
 
 ### M3 - Project Artifact API endpoint
 
-- [ ] `GET /api/v1/apps/:projectId/artifact` - assembles the current project's metadata + inlined function code into a single consumable blob.
+- [ ] `GET /api/v1/cloud/projects/:projectId/artifact` - assembles the current project's metadata + inlined function code into a single consumable blob.
 - [ ] Validate the outgoing artifact with the M1 Zod schema.
 - [ ] Content hash / ETag for cache validation.
 - [ ] Response includes `commitId` and `checksum`.
@@ -186,7 +186,7 @@ Ordered by dependency. Items higher in the list unblock those below them.
 
 ### M5 - Project publish endpoint
 
-- [ ] `POST /api/v1/apps/:projectId/metadata` - receives compiled JSON.
+- [ ] `POST /api/v1/cloud/projects/:projectId/metadata` - receives compiled JSON.
 - [ ] Validates payload with `ObjectStackDefinitionSchema` or the canonical compiled stack schema.
 - [ ] Writes current project metadata state to control-plane storage.
 - [ ] Creates `commitId`, computes checksum, and returns `{ projectId, commitId, checksum }`.
