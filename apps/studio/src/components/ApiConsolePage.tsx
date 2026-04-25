@@ -5,7 +5,7 @@ import { useClient } from '@objectstack/client-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Globe, Play, Copy, Check, ChevronDown, ChevronRight, Clock,
-  Loader2, Search, RefreshCw, Trash2, Plus, X,
+  Loader2, Search, RefreshCw, Trash2, Plus, X, Server, FolderOpen,
 } from 'lucide-react';
 import { useApiDiscovery, type EndpointDef, type HttpMethod } from '@/hooks/use-api-discovery';
 import {
@@ -65,7 +65,10 @@ let nextParamId = 1;
 
 export function ApiConsolePage({ projectId }: { projectId?: string } = {}) {
   const client = useClient();
-  const { groups, loading: discovering, refresh } = useApiDiscovery(projectId);
+  // When a projectId is provided, allow toggling between project scope and system scope
+  const [scopeMode, setScopeMode] = useState<'project' | 'system'>(projectId ? 'project' : 'system');
+  const effectiveProjectId = projectId && scopeMode === 'project' ? projectId : undefined;
+  const { groups, loading: discovering, refresh } = useApiDiscovery(effectiveProjectId);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -246,6 +249,34 @@ export function ApiConsolePage({ projectId }: { projectId?: string } = {}) {
               <RefreshCw className={`h-3.5 w-3.5 ${discovering ? 'animate-spin' : ''}`} />
             </button>
           </div>
+
+          {/* Scope toggle — only shown when a project context is available */}
+          {projectId && (
+            <div className="flex items-center rounded-md border bg-muted/30 p-0.5 gap-0.5">
+              <button
+                onClick={() => setScopeMode('project')}
+                className={`flex-1 flex items-center justify-center gap-1 rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+                  scopeMode === 'project'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <FolderOpen className="h-3 w-3" />
+                Project API
+              </button>
+              <button
+                onClick={() => setScopeMode('system')}
+                className={`flex-1 flex items-center justify-center gap-1 rounded px-2 py-1 text-[10px] font-medium transition-colors ${
+                  scopeMode === 'system'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Server className="h-3 w-3" />
+                System API
+              </button>
+            </div>
+          )}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
