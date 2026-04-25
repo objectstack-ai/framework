@@ -10,8 +10,10 @@ export { default as InfoCommand } from './commands/info.js';
 export { default as InitCommand } from './commands/init.js';
 export { default as GenerateCommand } from './commands/generate.js';
 export { default as CreateCommand } from './commands/create.js';
+export { default as BuildCommand } from './commands/build.js';
 export { default as DevCommand } from './commands/dev.js';
 export { default as ServeCommand } from './commands/serve.js';
+export { default as StartCommand } from './commands/start.js';
 export { default as TestCommand } from './commands/test.js';
 export { default as DoctorCommand } from './commands/doctor.js';
 
