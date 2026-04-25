@@ -267,16 +267,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const whereClause: Record<string, unknown> = {
                 type: request.type,
                 state: 'active',
+                // Always filter by env_id: project kernels use their projectId,
+                // control-plane kernels use NULL (global scope only).
+                env_id: this.environmentId ?? null,
             };
-            if (this.environmentId !== undefined) whereClause.env_id = this.environmentId;
             if (packageId) whereClause._packageId = packageId;
             let records = await this.engine.find('sys_metadata', { where: whereClause });
             if ((!records || records.length === 0)) {
                 // Try alternate type name in DB using explicit mapping
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                 if (alt) {
-                    const altWhere: Record<string, unknown> = { type: alt, state: 'active' };
-                    if (this.environmentId !== undefined) altWhere.env_id = this.environmentId;
+                    const altWhere: Record<string, unknown> = { type: alt, state: 'active', env_id: this.environmentId ?? null };
                     if (packageId) altWhere._packageId = packageId;
                     records = await this.engine.find('sys_metadata', { where: altWhere });
                 }
@@ -374,9 +375,9 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     name: request.name,
                     state: 'active',
                 };
-                if (this.environmentId !== undefined) {
-                    scopedWhere.env_id = this.environmentId;
-                }
+                // Always filter by env_id: project kernels use their projectId,
+                // control-plane kernels use NULL (global scope only).
+                scopedWhere.env_id = this.environmentId ?? null;
                 const record = await this.engine.findOne('sys_metadata', {
                     where: scopedWhere,
                 });
@@ -394,7 +395,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                     if (alt) {
                         const altWhere: Record<string, unknown> = { type: alt, name: request.name, state: 'active' };
-                        if (this.environmentId !== undefined) altWhere.env_id = this.environmentId;
+                        altWhere.env_id = this.environmentId ?? null;
                         const altRecord = await this.engine.findOne('sys_metadata', { where: altWhere });
                         if (altRecord) {
                             item = typeof altRecord.metadata === 'string'
@@ -1178,13 +1179,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         let loaded = 0;
         let errors = 0;
         try {
-            // Mirror saveMetaItem's scoping: a per-project kernel only
-            // hydrates rows stamped with its env_id; a platform kernel
-            // (no environmentId) keeps the legacy global query.
-            const where: Record<string, unknown> = { state: 'active' };
-            if (this.environmentId !== undefined) {
-                where.env_id = this.environmentId;
-            }
+            // Always scope by env_id: project kernels hydrate only their own
+            // rows; control-plane kernels (no environmentId) hydrate only
+            // rows with env_id = NULL (global scope). Without this filter the
+            // control-plane registry would absorb every project's objects and
+            // expose them at the control-plane metadata endpoints.
+            const where: Record<string, unknown> = {
+                state: 'active',
+                env_id: this.environmentId ?? null,
+            };
             const records = await this.engine.find('sys_metadata', { where });
             for (const record of records) {
                 try {

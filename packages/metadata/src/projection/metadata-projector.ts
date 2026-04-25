@@ -80,9 +80,10 @@ export class MetadataProjector {
     }
 
     try {
-      // Check if projection already exists
+      // Check if projection already exists (scoped by env_id for isolation)
+      const envId = this.scope.environmentId ?? null;
       const existing = await this._findOne(targetTable, {
-        where: { name },
+        where: { name, env_id: envId },
       });
 
       if (existing) {
@@ -112,9 +113,10 @@ export class MetadataProjector {
     }
 
     try {
-      // Find the projection
+      // Find the projection (scoped by env_id for isolation)
+      const envId = this.scope.environmentId ?? null;
       const existing = await this._findOne(targetTable, {
-        where: { name },
+        where: { name, env_id: envId },
       });
 
       if (existing) {
@@ -153,6 +155,7 @@ export class MetadataProjector {
   private projectObject(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
+      env_id: this.scope.environmentId ?? null,
       label: data.label || name,
       plural_label: data.pluralLabel || data.label || name,
       description: data.description || '',
@@ -202,6 +205,7 @@ export class MetadataProjector {
   private projectView(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
+      env_id: this.scope.environmentId ?? null,
       label: data.label || name,
       description: data.description || '',
       object_name: data.object || '',
@@ -234,6 +238,7 @@ export class MetadataProjector {
   private projectAgent(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
+      env_id: this.scope.environmentId ?? null,
       label: data.label || name,
       description: data.description || '',
       agent_type: data.type || 'conversational',
@@ -269,6 +274,7 @@ export class MetadataProjector {
   private projectTool(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
+      env_id: this.scope.environmentId ?? null,
       label: data.label || name,
       description: data.description || '',
       // Parameters and implementation
@@ -293,6 +299,7 @@ export class MetadataProjector {
   private projectFlow(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
+      env_id: this.scope.environmentId ?? null,
       label: data.label || name,
       description: data.description || '',
       flow_type: data.type || 'autolaunched',

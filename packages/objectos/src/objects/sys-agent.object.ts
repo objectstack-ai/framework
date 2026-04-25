@@ -23,6 +23,12 @@ export const SysAgent = ObjectSchema.create({
       maxLength: 255,
     }),
 
+    env_id: Field.text({
+      label: 'Environment ID',
+      maxLength: 255,
+      description: 'Project/environment scope — null = control-plane global',
+    }),
+
     label: Field.text({
       label: 'Display Label',
       required: true,
@@ -129,7 +135,8 @@ export const SysAgent = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['name'], unique: true },
+    { fields: ['name', 'env_id'], unique: true },
+    { fields: ['env_id'] },
     { fields: ['agent_type'] },
     { fields: ['namespace'] },
     { fields: ['package_id'] },
