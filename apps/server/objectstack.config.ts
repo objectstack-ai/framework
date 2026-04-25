@@ -116,7 +116,7 @@ async function buildLocalPlugins() {
             artifactSource: { mode: 'local-file', path: localArtifactPath },
         }),
         new ObjectQLPlugin({ environmentId: localProjectId }),
-        new AuthPlugin({ secret: authSecret, baseUrl }),
+        new AuthPlugin({ secret: authSecret, baseUrl, plugins: { organization: true, twoFactor: false, passkeys: false, magicLink: false } }),
     ];
 
     if (artifactBundle) {
