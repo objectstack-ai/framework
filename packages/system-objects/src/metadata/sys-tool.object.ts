@@ -14,6 +14,7 @@ export const SysTool = ObjectSchema.create({
   pluralLabel: 'AI Tools',
   description: 'AI tool definitions',
   icon: 'wrench',
+  isSystem: true,
 
   fields: {
     // Core Identity

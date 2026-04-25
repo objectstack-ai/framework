@@ -7,8 +7,7 @@ import { NodeMetadataManager } from './node-metadata-manager.js';
 import { MemoryLoader } from './loaders/memory-loader.js';
 import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
 import type { MetadataPluginConfig } from '@objectstack/spec/kernel';
-import { SysMetadataObject } from './objects/sys-metadata.object.js';
-import { SysMetadataHistoryObject } from './objects/sys-metadata-history.object.js';
+import { SysMetadataObject, SysMetadataHistoryObject } from '@objectstack/system-objects/metadata';
 import { SystemObjects } from '@objectstack/objectos';
 
 // Map from ObjectStackDefinition field name to MetadataType name
@@ -122,7 +121,7 @@ export class MetadataPlugin implements Plugin {
 
             ctx.logger.info('Registered system metadata objects', {
                 metadata: ['sys_metadata', 'sys_metadata_history'],
-                objectos: Object.keys(SystemObjects).map((name) => `sys_${name}`),
+                objectos: Object.keys(SystemObjects),
             });
         } catch {
             // ObjectQL not loaded yet — objects will be discovered via legacy fallback

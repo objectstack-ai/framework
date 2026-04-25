@@ -23,6 +23,7 @@
   "dependencies": {
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
+    "@objectstack/system-objects": "workspace:*",
     "better-auth": "^1.6.5"
   },
   "devDependencies": {

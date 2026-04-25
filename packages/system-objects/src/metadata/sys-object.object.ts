@@ -15,6 +15,7 @@ export const SysObject = ObjectSchema.create({
   pluralLabel: 'Object Definitions',
   description: 'Metadata for business objects',
   icon: 'database',
+  isSystem: true,
 
   fields: {
     // Core Identity

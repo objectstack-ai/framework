@@ -14,6 +14,7 @@ export const SysAgent = ObjectSchema.create({
   pluralLabel: 'AI Agents',
   description: 'AI agent definitions',
   icon: 'bot',
+  isSystem: true,
 
   fields: {
     // Core Identity

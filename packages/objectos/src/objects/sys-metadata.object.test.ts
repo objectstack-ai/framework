@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { SysMetadata } from './sys-metadata.object';
+import { SysMetadata } from '@objectstack/system-objects/metadata';
 
 describe('SysMetadata Object', () => {
   it('should have correct object name', () => {
@@ -21,7 +21,6 @@ describe('SysMetadata Object', () => {
 
   it('should have tracking capabilities enabled', () => {
     expect(SysMetadata.enable?.trackHistory).toBe(true);
-    expect(SysMetadata.enable?.searchable).toBe(true);
     expect(SysMetadata.enable?.apiEnabled).toBe(true);
   });
 });

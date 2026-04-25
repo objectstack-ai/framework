@@ -14,6 +14,7 @@ export const SysFlow = ObjectSchema.create({
   pluralLabel: 'Flows',
   description: 'Visual logic flow definitions',
   icon: 'workflow',
+  isSystem: true,
 
   fields: {
     // Core Identity

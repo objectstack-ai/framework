@@ -19,8 +19,7 @@ import type {
   MetadataRecord,
   MetadataHistoryRecord,
 } from '@objectstack/spec/system';
-import { SysMetadataObject } from '../objects/sys-metadata.object.js';
-import { SysMetadataHistoryObject } from '../objects/sys-metadata-history.object.js';
+import { SysMetadataObject, SysMetadataHistoryObject } from '@objectstack/system-objects/metadata';
 import type { IDataDriver, IDataEngine } from '@objectstack/spec/contracts';
 import type { MetadataLoader } from './loader-interface.js';
 import { calculateChecksum } from '../utils/metadata-history-utils.js';

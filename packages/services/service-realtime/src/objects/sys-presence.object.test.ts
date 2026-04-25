@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect } from 'vitest';
-import { SysPresence } from './sys-presence.object';
+import { SysPresence } from '@objectstack/system-objects/audit';
 import { StorageNameMapping } from '@objectstack/spec/system';
 
 describe('SysPresence object definition', () => {

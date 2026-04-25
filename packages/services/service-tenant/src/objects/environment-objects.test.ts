@@ -19,14 +19,13 @@ import {
 } from './index';
 
 describe('control-plane project objects', () => {
-  it('registers all sys_ objects with correct namespaced names', () => {
-    expect(`${SysProject.namespace}_${SysProject.name}`).toBe('sys_project');
-    expect(`${SysProjectCredential.namespace}_${SysProjectCredential.name}`).toBe(
-      'sys_project_credential',
-    );
-    expect(`${SysProjectMember.namespace}_${SysProjectMember.name}`).toBe(
-      'sys_project_member',
-    );
+  it('registers all project objects with canonical sys_ short names', () => {
+    expect(SysProject.name).toBe('sys_project');
+    expect(SysProjectCredential.name).toBe('sys_project_credential');
+    expect(SysProjectMember.name).toBe('sys_project_member');
+    expect((SysProject as any).namespace).toBeUndefined();
+    expect((SysProjectCredential as any).namespace).toBeUndefined();
+    expect((SysProjectMember as any).namespace).toBeUndefined();
   });
 
   it('declares UNIQUE hostname on sys_project', () => {
@@ -74,10 +73,13 @@ describe('control-plane project objects', () => {
 });
 
 describe('control-plane package objects (ADR-0003)', () => {
-  it('registers sys_package and sys_package_version with correct namespaced names', () => {
-    expect(`${SysPackage.namespace}_${SysPackage.name}`).toBe('sys_package');
-    expect(`${SysPackageVersion.namespace}_${SysPackageVersion.name}`).toBe('sys_package_version');
-    expect(`${SysPackageInstallation.namespace}_${SysPackageInstallation.name}`).toBe('sys_package_installation');
+  it('registers package objects with canonical sys_ short names', () => {
+    expect(SysPackage.name).toBe('sys_package');
+    expect(SysPackageVersion.name).toBe('sys_package_version');
+    expect(SysPackageInstallation.name).toBe('sys_package_installation');
+    expect((SysPackage as any).namespace).toBeUndefined();
+    expect((SysPackageVersion as any).namespace).toBeUndefined();
+    expect((SysPackageInstallation as any).namespace).toBeUndefined();
   });
 
   it('marks all package objects as system objects', () => {

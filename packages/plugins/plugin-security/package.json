@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@objectstack/core": "workspace:*",
-    "@objectstack/spec": "workspace:*"
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/system-objects": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

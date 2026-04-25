@@ -14,6 +14,7 @@ export const SysView = ObjectSchema.create({
   pluralLabel: 'View Definitions',
   description: 'Metadata for UI views (grid, kanban, calendar, etc.)',
   icon: 'layout-grid',
+  isSystem: true,
 
   fields: {
     // Core Identity
