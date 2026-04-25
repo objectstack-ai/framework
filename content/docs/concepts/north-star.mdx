@@ -375,7 +375,45 @@ developer runs objectstack publish
 Studio is intentionally a viewer here. If a user sees bad metadata in Studio,
 the fix is to edit the local TS files and publish again.
 
-### 6.3 Runtime Request
+### 6.3 Runtime Inputs
+
+ObjectOS 的运行时输入分两类，**缺一不可**。把两类混在一起就破坏了 §2「Centralized Metadata, Stateless Runtime」与 §8「ObjectOS 只通过 Artifact API 接触控制面」的边界。
+
+**A. Artifact**（不可变、可缓存、随 metadata 变更而变更）
+
+`ProjectArtifactSchema` envelope，定义在 [packages/spec/src/cloud/project-artifact.zod.ts](packages/spec/src/cloud/project-artifact.zod.ts)：
+
+```
+{ schemaVersion, projectId, commitId, checksum, builtAt, builtWith, metadata }
+```
+
+`metadata` 字段就是 `objectstack compile` 产出的 `dist/objectstack.json` 整体。承载所有声明性元数据（objects、views、flows、agents、插件清单等）+ 内联函数代码。Envelope 在外面包一层 `commitId` / `checksum`，让 ObjectOS 能做 ETag 校验和缓存失效。
+
+**B. Deployment Config**（可变、不进 artifact、与元数据正交）
+
+ObjectOS 启动时必须从外部注入：
+
+1. 业务 DB 坐标（URL / driver / 凭据）
+2. 项目身份（`projectId` / `organizationId` / `hostname`）
+3. 控制面 URL（用于拉 artifact、上报 audit）
+4. 进程级密钥（`AUTH_SECRET`、KMS 密钥）
+
+**云端模式**下，B 来自控制面 `sys_project` + `sys_project_credential` + 进程 env。**本地单 project 模式**（一个 ObjectOS 进程对应一个 project，不是多租户网关）下退化为扁平 env：
+
+| Env | 用途 | 备注 |
+|:---|:---|:---|
+| `OBJECTSTACK_PROJECT_ID` | 项目身份 | 本地可固定为 `proj_local` |
+| `OBJECTSTACK_DATABASE_URL` | 业务 DB URL | 例：`file:./.data/app.db` |
+| `OBJECTSTACK_DATABASE_DRIVER` | 业务 DB driver | `turso` / `sqlite` / `memory` |
+| `OBJECTSTACK_ARTIFACT_PATH` | 本地 artifact 路径 | 默认 `./dist/objectstack.json`；填了即跳过 Artifact API |
+| `OBJECTSTACK_CLOUD_URL` | 控制面 URL | 留空即「纯本地离线」；填了即「本地 ObjectOS + 远端控制面」 |
+| `AUTH_SECRET` | 进程级密钥 | |
+
+本地模式可以用磁盘 `dist/objectstack.json` 直接喂内核（用 `commitId: 'local-dev'` 之类的占位 envelope），不需要控制面在场。
+
+**结论**：`objectstack.json` 是元数据（A）的充分输入，但**不是**运行时的充分输入。任何把业务 DB 连接、密钥、租户身份塞进 `objectstack.json` 的尝试都是反模式（见 §8）。
+
+### 6.4 Runtime Request
 
 ```
 GET https://proj.app/api/v1/data/customer
@@ -448,6 +486,11 @@ reduce Drift, and advance Missing.
   it POSTs a "package" payload ([packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts))
   which is not the Phase 1 project metadata endpoint. It needs to become
   `POST /api/v1/apps/:projectId/metadata`.
+- **`ProjectKernelFactory` 直连控制面 DB 读 `sys_project` / `sys_project_credential`，绕过 Artifact API。**
+  [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
+  在 boot 时直接查控制面表拿业务 DB 坐标和凭据，破坏了 §8「ObjectOS 只通过
+  Artifact API 接触控制面」的边界。修复方向：业务 DB 坐标和凭据归 Deployment
+  Config（§6.3 B），通过启动时注入而非控制面 DB 直连。
 
 ### <Globe className="inline" /> Missing (Not Started)
 
@@ -479,6 +522,7 @@ without explicit project-level buy-in.
 
 - <AlertTriangle className="inline" /> **ObjectOS runtimes don't talk to the control-plane DB.** The only coupling surface is the Artifact API (HTTP). Runtimes never open a connection to the control-plane database, even for "just a quick lookup."
 - <AlertTriangle className="inline" /> **Project business data is not metadata.** Business rows live in the per-project business DB. Metadata lives in the control plane.
+- <AlertTriangle className="inline" /> **Deployment Config 不进 artifact。** 业务 DB 坐标、凭据、进程密钥、租户身份等可变运行配置必须从启动环境（云端模式：控制面 `sys_project` + env；本地模式：扁平 env）注入，**绝不**写入 `objectstack.json`。把可缓存的不可变内容和易变的部署配置混在一起会同时破坏 §2 和 §8。详见 §6.3。
 
 ### Representation-form boundaries
 
@@ -503,10 +547,11 @@ design docs before building.
 1. **Artifact content format details.** Phase 1 chooses a single JSON document,
    but the exact envelope, manifest fields, function-code packaging, and driver
    requirement declaration still need a Zod schema.
-2. **Business DB connection config ownership.** Does the Artifact include the
-   business DB connection string (simple but mixes environment into artifact),
-   or is it injected into ObjectOS at boot time (artifact stays clean, but
-   requires per-deployment config)?
+2. ~~**Business DB connection config ownership.**~~ **Resolved (2026-04-25):**
+   Business DB coordinates and credentials are **Deployment Config**, never
+   part of the Artifact. See §6.3 Runtime Inputs. Cloud mode sources them from
+   control-plane `sys_project` / `sys_project_credential` + process env;
+   local single-project mode sources them from flat `OBJECTSTACK_*` env vars.
 3. **Artifact cache invalidation.** Control-plane push notification?
    Periodic polling from ObjectOS? HTTP ETag on every request? Each has
    latency / chattiness / outage-resilience trade-offs.

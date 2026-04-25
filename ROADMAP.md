@@ -155,6 +155,17 @@ Ordered by dependency. Items higher in the list unblock those below them.
 
 **Prerequisite for:** M3, M4.
 
+### M1.x - Runtime Inputs 边界化
+
+明确 ObjectOS 启动输入 = **Artifact**（不可变、可缓存的元数据信封）+ **Deployment Config**（业务 DB 坐标、凭据、项目身份、密钥；不进 artifact）。详见 [north-star.mdx §6.3](content/docs/concepts/north-star.mdx)。
+
+- [x] north-star.mdx §6.3 增补 Runtime Inputs 节（含本地单 project env 表 + 反模式说明）
+- [ ] 实现本地单 project env 路径：`OBJECTSTACK_PROJECT_ID` / `OBJECTSTACK_DATABASE_URL` / `OBJECTSTACK_DATABASE_DRIVER` / `OBJECTSTACK_ARTIFACT_PATH`（默认 `./dist/objectstack.json`）/ `OBJECTSTACK_CLOUD_URL`（可选，留空即离线）/ `AUTH_SECRET`
+- [ ] 修复 Drift：`ProjectKernelFactory` 不再直连控制面 DB 读 `sys_project` / `sys_project_credential`，改走 Artifact API + Deployment Config 注入
+- [ ] [apps/server/objectstack.config.ts](apps/server/objectstack.config.ts) 的 env 命名收敛到 `OBJECTSTACK_*` 前缀
+
+**Resolves:** Open Question §9.2（已解决）+ 新增 Drift（`ProjectKernelFactory` 绕过 Artifact API）。
+
 ### M2 - Metadata migration to control plane
 
 - [ ] Move user metadata out of project DBs into the control-plane DB.
@@ -262,6 +273,7 @@ These are intentionally outside Phase 1 but should remain compatible with the Ph
 
 ```
 M1 Artifact format v0
+├── M1.x Runtime Inputs 边界化 (Artifact + Deployment Config 分离)
 └── M2 Metadata migration to control plane
     ├── M3 Project Artifact API
     │   └── M4 ObjectOS artifact loader -> resolves D1
