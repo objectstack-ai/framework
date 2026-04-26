@@ -1731,6 +1731,54 @@ export class HttpDispatcher {
                                 }
                             }
                         }
+
+                        // Bind a third-party developer's locally compiled artifact
+                        // into this project. The caller passes
+                        // `metadata.artifact_path` (path to a compiled
+                        // ObjectStack bundle JSON) and we delegate to the same
+                        // seeder pipeline that templates use. Resolved relative
+                        // to OBJECTSTACK_PROJECT_ARTIFACT_ROOT (or process.cwd
+                        // if unset).
+                        const artifactPathRaw = (baseMetadata as any).artifact_path;
+                        if (typeof artifactPathRaw === 'string' && artifactPathRaw.length > 0) {
+                            try {
+                                const fs = await import('node:fs/promises');
+                                const path = await import('node:path');
+                                const root = process.env.OBJECTSTACK_PROJECT_ARTIFACT_ROOT
+                                    ?? process.cwd();
+                                const resolved = path.isAbsolute(artifactPathRaw)
+                                    ? artifactPathRaw
+                                    : path.resolve(root, artifactPathRaw);
+                                const text = await fs.readFile(resolved, 'utf8');
+                                const bundle = JSON.parse(text);
+                                const seeder: any = await this.resolveService('template-seeder');
+                                if (seeder?.seedBundle) {
+                                    await seeder.seedBundle({ projectId, bundle });
+                                } else {
+                                    throw new Error('template-seeder.seedBundle is unavailable');
+                                }
+                            } catch (bindErr) {
+                                const bindMessage = bindErr instanceof Error ? bindErr.message : String(bindErr);
+                                try {
+                                    const existing = await findOne(ENV, { id: projectId });
+                                    const existingMeta = typeof existing?.metadata === 'string'
+                                        ? JSON.parse(existing.metadata)
+                                        : (existing?.metadata ?? {});
+                                    await ql.update(
+                                        ENV,
+                                        {
+                                            metadata: JSON.stringify({
+                                                ...existingMeta,
+                                                artifactBindError: { message: bindMessage, artifactPath: artifactPathRaw },
+                                            }),
+                                        },
+                                        { where: { id: projectId } } as any,
+                                    );
+                                } catch {
+                                    // Best-effort metadata update — ignore secondary failure.
+                                }
+                            }
+                        }
                     } catch (err) {
                         const message = err instanceof Error ? err.message : String(err);
                         const failedAt = new Date().toISOString();

@@ -50,6 +50,7 @@ import { createSingleProjectPlugin } from './server/single-project-plugin.js';
 import { createStudioRuntimeConfigPlugin, createTemplatesRoutePlugin } from './server/multi-project-plugins.js';
 import { listTemplates } from './server/templates/registry.js';
 import { templateRegistry } from './server/templates/registry.js';
+import { createFsAppBundleResolver } from './server/fs-app-bundle-resolver.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -197,9 +198,7 @@ const basePlugins: BasePluginsFactory = async ({ projectId, project }) => {
     ];
 };
 
-const appBundles: AppBundleResolver = {
-    async resolve() { return []; },
-};
+const appBundles: AppBundleResolver = createFsAppBundleResolver();
 
 // Single shared promise — both control-plane plugins and MultiProjectPlugin
 // use the same DB connection.

@@ -57,6 +57,13 @@ export interface ProjectTemplate {
 export interface TemplateSeeder {
     listTemplates(): Array<Pick<ProjectTemplate, 'id' | 'label' | 'description' | 'category'>>;
     seed(params: { projectId: string; templateId: string }): Promise<void>;
+    /**
+     * Seed an arbitrary `ObjectStackDefinition`-shaped bundle into the
+     * given project. Used for binding a third-party developer's locally
+     * compiled artifact (e.g. `examples/app-crm/dist/objectstack.json`)
+     * into a multi-project server at provisioning time.
+     */
+    seedBundle(params: { projectId: string; bundle: any }): Promise<void>;
 }
 
 export interface MultiProjectPluginConfig {
@@ -131,6 +138,87 @@ function createTemplateSeeder(
     templates: Record<string, ProjectTemplate>,
     envRegistry: EnvironmentDriverRegistry,
 ): TemplateSeeder {
+    const seedBundleForProject = async (projectId: string, bundle: any): Promise<void> => {
+        const items = bundle ? extractMetadataItems(bundle) : [];
+        const dataSets = bundle ? namespaceDatasets(bundle) : [];
+
+        // Empty bundle (e.g. the "blank" template) → nothing to seed.
+        if (items.length === 0 && dataSets.length === 0) return;
+
+        const kernel = await kernelManager.getOrCreate(projectId);
+
+        let metadata: any;
+        try {
+            metadata = await kernel.getServiceAsync('metadata');
+        } catch (err: any) {
+            throw new Error(
+                `metadata service unavailable for project ${projectId}: ${err?.message ?? err}`,
+            );
+        }
+        if (!metadata || typeof metadata.bulkRegister !== 'function') {
+            throw new Error(
+                `metadata.bulkRegister unavailable for project ${projectId} (got ${metadata ? typeof metadata : 'null'})`,
+            );
+        }
+
+        const engine: any = await kernel.getServiceAsync('objectql').catch(() => null);
+        if (!engine) {
+            throw new Error(
+                `objectql engine unavailable for project ${projectId} — metadata persistence would be in-memory only`,
+            );
+        }
+        if (typeof metadata.setDataEngine === 'function') {
+            const cached = envRegistry.peekById(projectId);
+            const orgId = (cached?.project as any)?.organization_id as string | undefined;
+            try { metadata.setDataEngine(engine, orgId, projectId); } catch { /* already set */ }
+        }
+
+        if (items.length > 0) {
+            const result: any = await metadata.bulkRegister(items, { continueOnError: true });
+            const failed = result?.failed ?? 0;
+            if (failed > 0) {
+                const errs = (result?.errors ?? [])
+                    .slice(0, 5)
+                    .map((e: any) => `${e?.type}/${e?.name}: ${e?.error ?? 'unknown'}`)
+                    .join('; ');
+                throw new Error(
+                    `bulkRegister reported ${failed} failures for project ${projectId}: ${errs}`,
+                );
+            }
+        }
+
+        // Register the bundle into the ObjectQL engine's SchemaRegistry so that
+        // syncSchemas() can create tables for the newly-registered objects.
+        // bulkRegister() only updates MetadataManager's registry, not the engine's
+        // internal _registry — without this, syncSchemas() has no objects to create.
+        if (items.length > 0 && typeof engine?.registerApp === 'function') {
+            try { (engine as any).registerApp(bundle); } catch { /* best effort */ }
+        }
+
+        // Sync schemas so tables exist before seeding.
+        if (items.length > 0 && typeof engine?.syncSchemas === 'function') {
+            try { await engine.syncSchemas(); } catch { /* best effort */ }
+        }
+
+        if (dataSets.length > 0) {
+            const seedLoader = new SeedLoaderService(engine, metadata, console as any);
+            const config = SeedLoaderConfigSchema.parse({});
+            await seedLoader.load({ datasets: dataSets, config });
+        }
+
+        // Force a persistence flush so the per-project JSON file is
+        // written before the provisioning handler returns; otherwise
+        // the memory driver's dirty flag only saves on a 2s timer and
+        // early HTTP responses may see an empty file on disk.
+        const driverWithFlush = (kernel as any).services?.driver ?? (kernel as any).getService?.('driver');
+        const flushable = typeof driverWithFlush?.flush === 'function'
+            ? driverWithFlush
+            : null;
+        if (flushable) {
+            try { await flushable.flush(); } catch { /* best effort */ }
+        }
+    };
+
     return {
         listTemplates() {
             return Object.values(templates).map(({ id, label, description, category }) => ({
@@ -150,84 +238,11 @@ function createTemplateSeeder(
             }
 
             const bundle = await template.load();
-            const items = bundle ? extractMetadataItems(bundle) : [];
-            const dataSets = bundle ? namespaceDatasets(bundle) : [];
+            await seedBundleForProject(projectId, bundle);
+        },
 
-            // Empty bundle (e.g. the "blank" template) → nothing to seed.
-            if (items.length === 0 && dataSets.length === 0) return;
-
-            const kernel = await kernelManager.getOrCreate(projectId);
-
-            let metadata: any;
-            try {
-                metadata = await kernel.getServiceAsync('metadata');
-            } catch (err: any) {
-                throw new Error(
-                    `metadata service unavailable for project ${projectId}: ${err?.message ?? err}`,
-                );
-            }
-            if (!metadata || typeof metadata.bulkRegister !== 'function') {
-                throw new Error(
-                    `metadata.bulkRegister unavailable for project ${projectId} (got ${metadata ? typeof metadata : 'null'})`,
-                );
-            }
-
-            const engine: any = await kernel.getServiceAsync('objectql').catch(() => null);
-            if (!engine) {
-                throw new Error(
-                    `objectql engine unavailable for project ${projectId} — metadata persistence would be in-memory only`,
-                );
-            }
-            if (typeof metadata.setDataEngine === 'function') {
-                const cached = envRegistry.peekById(projectId);
-                const orgId = (cached?.project as any)?.organization_id as string | undefined;
-                try { metadata.setDataEngine(engine, orgId, projectId); } catch { /* already set */ }
-            }
-
-            if (items.length > 0) {
-                const result: any = await metadata.bulkRegister(items, { continueOnError: true });
-                const failed = result?.failed ?? 0;
-                if (failed > 0) {
-                    const errs = (result?.errors ?? [])
-                        .slice(0, 5)
-                        .map((e: any) => `${e?.type}/${e?.name}: ${e?.error ?? 'unknown'}`)
-                        .join('; ');
-                    throw new Error(
-                        `bulkRegister reported ${failed} failures for project ${projectId}: ${errs}`,
-                    );
-                }
-            }
-
-            // Register the bundle into the ObjectQL engine's SchemaRegistry so that
-            // syncSchemas() can create tables for the newly-registered objects.
-            // bulkRegister() only updates MetadataManager's registry, not the engine's
-            // internal _registry — without this, syncSchemas() has no objects to create.
-            if (items.length > 0 && typeof engine?.registerApp === 'function') {
-                try { (engine as any).registerApp(bundle); } catch { /* best effort */ }
-            }
-
-            // Sync schemas so tables exist before seeding.
-            if (items.length > 0 && typeof engine?.syncSchemas === 'function') {
-                try { await engine.syncSchemas(); } catch { /* best effort */ }
-            }
-
-            if (dataSets.length > 0) {
-                const seedLoader = new SeedLoaderService(engine, metadata, console as any);
-                const config = SeedLoaderConfigSchema.parse({});
-                await seedLoader.load({ datasets: dataSets, config });
-            }
-
-            // Force a persistence flush so the per-project JSON file is
-            // written before the provisioning handler returns; otherwise
-            // the memory driver's dirty flag only saves on a 2s timer and
-            // early HTTP responses may see an empty file on disk.
-            const driverWithFlush = (kernel as any).services?.driver ?? (kernel as any).getService?.('driver');
-            const flushable = typeof driverWithFlush?.flush === 'function'
-                ? driverWithFlush
-                : null;
-            if (flushable) {
-                try { await flushable.flush(); } catch { /* best effort */ }
-            }
+        async seedBundle({ projectId, bundle }) {
+            await seedBundleForProject(projectId, bundle);
         },
     };
 }
