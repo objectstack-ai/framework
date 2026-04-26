@@ -1,25 +1,24 @@
 ---
 title: Deployment & Multi-Project
-description: Run a single ObjectStack Server process in single-kernel, multi-project (local sqlite) or multi-project (remote turso) shape. Covers env vars, hostname routing, and Fly.io / Docker deployment.
+description: Run a single ObjectStack Server process in single-kernel or multi-project shape. Covers control-plane DB URLs, hostname routing, and Fly.io / Docker deployment.
 ---
 
 # Deployment & Multi-Project
 
-The same `apps/server` binary boots into one of three shapes. Which one you get
+The same `apps/server` binary boots into one of two shapes. Which one you get
 depends only on the environment variables you set — the code and Docker image
 are identical.
 
 | Shape                        | Control plane           | Projects    | Hostname routing | Typical use                          |
 | ---------------------------- | ----------------------- | ----------- | ---------------- | ------------------------------------ |
-| **single**                   | — (single kernel)       | 1           | ❌                | OSS single-project deploy, local dev |
-| **multi-project-local**      | Local SQLite file       | 1 – N       | ✅                | Self-hosted multi-project            |
-| **multi-project-remote**     | Remote Turso DB         | 1 – N       | ✅                | SaaS (Supabase-style, many replicas) |
+| **single**                   | — (single kernel)       | 1           | ❌                | OSS single-project deploy            |
+| **multi-project**            | `OBJECTSTACK_DATABASE_URL` | 1 – N    | ✅                | Framework Studio dev, self-hosted multi-project, SaaS |
 
-All three shapes reuse:
+Both shapes reuse:
 
 - `KernelManager` + `DefaultProjectKernelFactory` for per-project kernels
 - `DefaultEnvironmentDriverRegistry` for hostname → project resolution
-- `createControlPlanePlugins()` (multi-project shapes only) to install
+- `createControlPlanePlugins()` (multi-project only) to install
   tenant / auth / security / audit / package plugins onto the control DB.
 
 ---
@@ -35,22 +34,24 @@ One `ObjectKernel`, every plugin from `apps/server/objectstack.config.ts`, no
 per-project isolation. This is what you want on a laptop or for an OSS
 single-app install.
 
-Set no special env vars — the absence of `OBJECTSTACK_MULTI_PROJECT` and
-`OBJECTSTACK_CONTROL_PLANE_URL` selects this shape automatically.
+Leave `OBJECTSTACK_MULTI_PROJECT` unset (or set it to `false`) to use this
+shape.
 
 ---
 
-## Shape 2 — multi-project-local
+## Shape 2 — multi-project
 
 ```bash
 OBJECTSTACK_MULTI_PROJECT=true \
-OBJECTSTACK_CONTROL_DB=./.objectstack/data/control.db \
+OBJECTSTACK_DATABASE_URL=file:./.objectstack/data/control.db \
 AUTH_SECRET=$(openssl rand -hex 32) \
-pnpm --filter @objectstack/server dev:node
+pnpm --filter @objectstack/server dev
 ```
 
 - Control-plane tables (`sys_project`, `sys_project_credential`, …) live in
-  the SQLite file at `OBJECTSTACK_CONTROL_DB`.
+  the database configured by `OBJECTSTACK_DATABASE_URL`. Use `file:...` for a
+  local SQLite control plane, or `libsql://...` / `https://...` for a remote
+  Turso/libSQL control plane.
 - Projects are created through Studio / `POST /api/v1/cloud/projects`. Each
   project binds its own driver (sqlite / libsql / turso / postgres).
 - Incoming requests are routed to per-project kernels by the `Host` header
@@ -64,22 +65,19 @@ registered drivers: `memory`, `sqlite`, `turso` / `libsql`, or `postgres`.
 The factory switch lives in
 `packages/runtime/src/project-kernel-factory.ts::createDriver`.
 
----
-
-## Shape 3 — multi-project-remote
+For a remote shared control plane, only the URL changes:
 
 ```bash
-OBJECTSTACK_CONTROL_PLANE_URL=https://control.example.com \
-TURSO_DATABASE_URL=libsql://control.turso.io \
-TURSO_AUTH_TOKEN=... \
+OBJECTSTACK_MULTI_PROJECT=true \
+OBJECTSTACK_DATABASE_URL=libsql://control.turso.io \
+OBJECTSTACK_DATABASE_AUTH_TOKEN=... \
 AUTH_SECRET=$(openssl rand -hex 32) \
-pnpm --filter @objectstack/server dev:node
+pnpm --filter @objectstack/server dev
 ```
 
-Same code path as Shape 2, but the control-plane driver is a `TursoDriver`
-pointing at a shared remote DB. Multiple replicas of the Server can now share
-one sys_* schema; `DefaultEnvironmentDriverRegistry`'s per-replica cache is
-coherent within its TTL (5 min default), and credential rotation fires
+Multiple Server replicas can share the same remote `sys_*` schema;
+`DefaultEnvironmentDriverRegistry`'s per-replica cache is coherent within its
+TTL (5 min default), and credential rotation fires
 `envRegistry.invalidate(projectId)` so stale entries drop out within one TTL.
 
 ---
@@ -156,7 +154,7 @@ docker build -f apps/server/Dockerfile -t objectstack/server:local .
 docker run --rm -p 3000:3000 \
   -v $(pwd)/data:/data \
   -e OBJECTSTACK_MULTI_PROJECT=true \
-  -e OBJECTSTACK_CONTROL_DB=/data/control.db \
+  -e OBJECTSTACK_DATABASE_URL=file:/data/control.db \
   -e AUTH_SECRET=$(openssl rand -hex 32) \
   objectstack/server:local
 
@@ -172,11 +170,9 @@ point a wildcard DNS (`*.example.com`) at it. The container does the rest.
 
 | Variable                          | Shape(s)                  | Purpose                                                                          |
 | --------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
-| `OBJECTSTACK_MULTI_PROJECT`       | multi-project-local       | `true` opts into the SQLite-backed control plane.                                |
-| `OBJECTSTACK_CONTROL_DB`          | multi-project-local       | Filesystem path for the local control DB (default `./.objectstack/data/control.db`). |
-| `OBJECTSTACK_CONTROL_PLANE_URL`   | multi-project-remote      | Presence opts into remote-Turso control plane.                                   |
-| `TURSO_DATABASE_URL`              | multi-project-remote      | Turso URL for the control DB.                                                    |
-| `TURSO_AUTH_TOKEN`                | multi-project-remote      | Auth token for the control DB.                                                   |
+| `OBJECTSTACK_MULTI_PROJECT`       | all                       | `true` enables the multi-project control plane. Unset/false runs single-project mode. |
+| `OBJECTSTACK_DATABASE_URL`        | all                       | In `single`, the project business DB URL. In `multi-project`, the control-plane DB URL (`file:`, `libsql://`, or `https://`). |
+| `OBJECTSTACK_DATABASE_AUTH_TOKEN` | all                       | Auth token for `OBJECTSTACK_DATABASE_URL` when using libSQL/Turso.               |
 | `TURSO_ORG_NAME` + `TURSO_API_TOKEN` | multi-project (any)    | Used by `TursoProjectDatabaseAdapter` to provision per-project databases.        |
 | `OBJECTSTACK_KERNEL_CACHE_SIZE`   | multi-project (any)       | LRU size for per-project kernels (default 32, fly.toml defaults to 50).          |
 | `OBJECTSTACK_KERNEL_TTL_MS`       | multi-project (any)       | Idle eviction TTL in ms (default 900000, fly.toml defaults to 1800000).          |

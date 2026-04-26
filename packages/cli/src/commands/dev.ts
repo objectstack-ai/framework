@@ -64,12 +64,6 @@ export default class Dev extends Command {
         OBJECTSTACK_PROJECT_ID: process.env.OBJECTSTACK_PROJECT_ID ?? 'proj_local',
         OBJECTSTACK_ARTIFACT_PATH: process.env.OBJECTSTACK_ARTIFACT_PATH ?? artifactPath,
       };
-      // Ensure OBJECTSTACK_CLOUD_URL is absent so apps/server boots in local mode.
-      // Only delete if the user has not explicitly set it.
-      if (!process.env.OBJECTSTACK_CLOUD_URL) {
-        delete localEnv.OBJECTSTACK_CLOUD_URL;
-      }
-
       printKV('Project ID', localEnv.OBJECTSTACK_PROJECT_ID!, '🎯');
       printKV('Artifact', path.relative(process.cwd(), localEnv.OBJECTSTACK_ARTIFACT_PATH!), '📦');
 

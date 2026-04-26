@@ -7,7 +7,7 @@
  *
  * ## Boot modes
  *
- * ### Local mode  (`OBJECTSTACK_CLOUD_URL` is unset)
+ * ### Single-project mode (`OBJECTSTACK_MULTI_PROJECT` is unset or false)
  *
  * Single-project, offline-first.  No control-plane DB is required.
  * Required env vars:
@@ -22,7 +22,7 @@
  *   TURSO_DATABASE_URL            — libsql:// or https:// Turso URL (fallback alias for OBJECTSTACK_DATABASE_URL)
  *   TURSO_AUTH_TOKEN              — Turso auth token (fallback alias for OBJECTSTACK_DATABASE_AUTH_TOKEN)
  *
- * ### Cloud mode  (`OBJECTSTACK_CLOUD_URL` is set)
+ * ### Multi-project mode (`OBJECTSTACK_MULTI_PROJECT=true`)
  *
  * Multi-project, control-plane connected.
  * Required env vars:
@@ -31,7 +31,7 @@
  *   AUTH_SECRET / NEXT_PUBLIC_BASE_URL — same as local
  *
  * The control-plane driver URL accepts:
- *   - unset / `file:<path>`  → SQLite (better-sqlite3)  [default: .objectstack/data/control.db]
+ *   - unset / `file:<path>`  → local SQLite (better-sqlite3)  [default: .objectstack/data/control.db]
  *   - `libsql://…`           → libSQL / Turso
  *   - `http(s)://…`          → libSQL / sqld over HTTP
  */
@@ -50,8 +50,12 @@ import { templateRegistry } from './server/templates/registry.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
-// ── Discriminator ─────────────────────────────────────────────────────────────
-const isLocalMode = !process.env.OBJECTSTACK_CLOUD_URL;
+function envFlag(name: string): boolean {
+    return ['1', 'true', 'yes', 'on'].includes((process.env[name] ?? '').trim().toLowerCase());
+}
+
+// ── Boot mode ─────────────────────────────────────────────────────────────────
+const isLocalMode = !envFlag('OBJECTSTACK_MULTI_PROJECT');
 
 const authSecret = process.env.AUTH_SECRET
     ?? 'dev-secret-please-change-in-production-min-32-chars';

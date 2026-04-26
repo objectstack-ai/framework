@@ -40,10 +40,6 @@ export default class Start extends Command {
       ...(flags.port ? { PORT: String(flags.port) } : {}),
     };
 
-    if (!process.env.OBJECTSTACK_CLOUD_URL) {
-      delete localEnv.OBJECTSTACK_CLOUD_URL;
-    }
-
     printKV('Project ID', localEnv.OBJECTSTACK_PROJECT_ID!, '🎯');
 
     const binPath = process.argv[1];

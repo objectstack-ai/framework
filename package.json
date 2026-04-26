@@ -5,7 +5,7 @@
   "description": "ObjectStack Protocol & Specification - Monorepo for TypeScript Interfaces, JSON Schemas, and Convention Configurations",
   "scripts": {
     "build": "turbo run build --filter=!@objectstack/docs",
-    "dev": "pnpm --filter @objectstack/server dev",
+    "dev": "OBJECTSTACK_MULTI_PROJECT=true pnpm --filter @objectstack/server dev",
     "start": "pnpm --filter @objectstack/server start",
     "studio:dev": "pnpm --filter @objectstack/studio dev",
     "studio:start": "pnpm --filter @objectstack/studio start",
