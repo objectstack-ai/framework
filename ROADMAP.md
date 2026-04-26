@@ -1,6 +1,6 @@
 # ObjectStack - Road Map
 
-> **Last Updated:** 2026-04-25
+> **Last Updated:** 2026-04-26
 > **Authoritative Spec:** [content/docs/concepts/north-star.mdx](content/docs/concepts/north-star.mdx) - §7 Alignment Check is the single source of truth for Built / Drift / Missing.
 > This file is the **actionable checklist** derived from that ledger. When north-star §7 changes, update this file too.
 
@@ -55,16 +55,25 @@ Code that exists and matches the intended architecture. Do not regress these.
 
 Existing code that contradicts the intended Phase 1 architecture. Fix these before building new surface area that depends on them.
 
-### D1 - 🔴 MetadataPlugin reads from project DB (Biggest Drift)
+### D1 - 🟡 MetadataPlugin maintains a DB bridge in ObjectOS (Biggest Drift)
 
-**Priority: P0.** Today [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts) reads `sys_metadata` rows from each project's own database. Under the Phase 1 model, metadata is centralized in the control plane and delivered to the runtime via the Artifact API. The project DB should contain **business rows only**.
+**Priority: P0.** The primary startup read has been partially fixed — `local-file` mode (M1.x) lets ObjectOS boot from `dist/objectstack.json` without touching any database. However, [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts) still:
 
-**Fix path:**
-1. Define the artifact envelope schema (M1).
-2. Move metadata storage to the control plane, scoped by `organization_id` + `project_id` (M2).
-3. Implement the Artifact API endpoint (M3).
-4. Swap `MetadataPlugin`'s data source from project-DB reads to HTTP fetch against the Artifact API (M4).
-5. Remove the `sys_metadata` table from the project DB schema.
+1. Registers `SysMetadataObject` and `SysMetadataHistoryObject` into the **ObjectOS** manifest — these tables belong only in `apps/cloud` (control plane).
+2. Bridges ObjectQL to a `DatabaseLoader` via `setDataEngine()` after startup — subsequent `metadata.register()` writes persist metadata to `sys_metadata` in the project DB, and `metadata.list()` / `get()` aggregate from it.
+
+Under Phase 1 the project DB contains **business rows only**. Metadata lives in the control plane and is delivered to ObjectOS as an immutable artifact. The DB bridge breaks that boundary and undermines the `commitId` + `checksum` immutability guarantee — `sys_metadata` rows in the project DB may diverge from the published artifact.
+
+**What is already done:**
+- `local-file` artifact mode — ObjectOS boots from `dist/objectstack.json` without any DB read (M1.x). ✅
+
+**Remaining fix path:**
+1. Remove `SysMetadataObject` / `SysMetadataHistoryObject` registration from `MetadataPlugin.init()` — these tables belong in `apps/cloud` only.
+2. Remove the `setDataEngine()` / `DatabaseLoader` bridge from `MetadataPlugin.start()` — ObjectOS metadata is read-only (artifact → kernel); history and versioning are control-plane concerns.
+3. Implement the Artifact API endpoint (M3) and swap `MetadataPlugin`'s source to HTTP fetch (M4).
+4. Confirm `sys_metadata` is absent from the project DB schema after the D8 split into `apps/cloud` + `apps/server`.
+
+**Depends on:** M3, M4. **Prerequisite for:** D8 clean split.
 
 ### D2 - `objectstack publish` uses legacy `/api/v1/packages` endpoint
 

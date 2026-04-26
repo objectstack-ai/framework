@@ -167,9 +167,11 @@ data rows.
 - Query/mutate the project's **business DB** (not the control-plane DB) through ObjectQL
 - Enforce permissions, emit audit events back to the control plane (best-effort)
 
-**Status:** Multi-project kernel + hostname routing built. Metadata still loads
-from the **project DB** via `MetadataPlugin` - this is the biggest Drift under
-§7. See [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
+**Status:** Multi-project kernel + hostname routing built. `local-file` artifact
+boot (M1.x) implemented — ObjectOS can boot from `dist/objectstack.json` without
+any DB read. Remaining drift: `MetadataPlugin` still bridges ObjectQL to a
+`DatabaseLoader` after startup, persisting metadata to and reading from the
+project DB. This is D1. See [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
 and [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts).
 
 ## 4. Core Entity Hierarchy
@@ -199,7 +201,7 @@ Organization                            <- control plane
 | :----- | :--------------- | :----- |
 | Organization | Control plane `sys_organization` | Built |
 | Project | Control plane `sys_project` (hostname binding) | Built |
-| Metadata State | Control-plane metadata payloads + project revision (`commit_id`, checksum), scoped by `organization_id` + `project_id` | To migrate - today `sys_metadata` lives in each project DB |
+| Metadata State | Control-plane metadata payloads + project revision (`commit_id`, checksum), scoped by `organization_id` + `project_id` | Partially fixed: startup read now artifact-based (M1.x); `DatabaseLoader` bridge still persists metadata to project DB post-startup (D1) |
 | Artifact | `GET /api/v1/apps/:projectId/artifact` response | To build |
 | Business DB | Per-project dedicated DB (Turso / SQL / memory) | Built (driver provisioning), but currently shares space with metadata |
 | Branch / Release | Future control-plane entities | Deferred |
@@ -324,7 +326,7 @@ identity would require federated auth, which is out of scope.
 - Per-project kernel factory: [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts)
 - HTTP dispatch: [packages/runtime/src/http-dispatcher.ts](packages/runtime/src/http-dispatcher.ts)
 - Org-scoped proxy: [packages/runtime/src/control-plane-proxy-driver.ts](packages/runtime/src/control-plane-proxy-driver.ts)
-- Metadata loading (currently project-DB, needs to swap to Artifact API): [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts)
+- Metadata loading (startup read fixed for `local-file` mode; DB bridge still persists to project DB post-startup — D1): [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts)
 - App catalog sync: [packages/services/service-tenant/src/services/app-catalog.service.ts](packages/services/service-tenant/src/services/app-catalog.service.ts)
 
 ## 6. Key Lifecycles
@@ -460,12 +462,18 @@ reduce Drift, and advance Missing.
 
 ### <AlertTriangle className="inline" /> Drift (Needs Cleanup)
 
-- **Biggest drift: `MetadataPlugin` loads metadata from the project DB.**
-  Today [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts)
-  reads `sys_metadata` rows from each project's own database. Under the Phase 1
-  model, metadata is centralized in the control plane and delivered to the
-  runtime via the Artifact API. The project DB should contain business rows
-  only.
+- **Biggest drift: `MetadataPlugin` maintains a DB bridge in ObjectOS.**
+  The primary startup read has been partially fixed — `local-file` mode (M1.x)
+  lets ObjectOS boot from `dist/objectstack.json` without any DB read. However,
+  [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts) still
+  registers `sys_metadata`/`sys_metadata_history` tables into the ObjectOS
+  manifest and bridges ObjectQL to a `DatabaseLoader` after startup. This means
+  subsequent `metadata.register()` writes persist to `sys_metadata` in the
+  project DB, and `metadata.list()` / `get()` aggregate from it. Under Phase 1,
+  the project DB must contain **business rows only** — metadata lives in the
+  control plane, delivered via the Artifact API as an immutable artifact. The DB
+  bridge breaks the `commitId` / `checksum` immutability guarantee: project DB
+  rows may silently diverge from the published artifact.
 - **`env_id` should be removed from metadata storage.** In Phase 1 metadata is
   scoped by `organization_id` + `project_id`; deployment target differences are
   runtime/deployment configuration, not metadata row partitioning. Branch-like
