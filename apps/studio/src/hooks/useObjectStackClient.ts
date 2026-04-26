@@ -46,7 +46,14 @@ export function useScopedClient(
 ): ScopedProjectClient | null {
   const client = useClient();
   return useMemo(() => {
-    if (!client || !projectId) return null;
+    if (!client) return null;
+    if (config.singleProject) {
+      // Local single-project mode: REST only registers unscoped paths,
+      // so reuse the root client. ScopedProjectClient is a method-subset
+      // of ObjectStackClient at the call sites that consume this hook.
+      return client as unknown as ScopedProjectClient;
+    }
+    if (!projectId) return null;
     return client.project(projectId);
   }, [client, projectId]);
 }
