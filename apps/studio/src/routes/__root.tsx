@@ -16,7 +16,7 @@ import { SessionProvider, useSession } from '../hooks/useSession';
 import { config } from '@/lib/config';
 
 /** Routes that don't require authentication. */
-const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot-password']);
+const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot-password', '/auth/device']);
 
 /**
  * Paths that exist only in multi-project mode — login, registration, the

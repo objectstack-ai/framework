@@ -21,6 +21,7 @@ import { Route as PackageIndexRouteImport } from './routes/$package.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as OrgsNewRouteImport } from './routes/orgs.new'
 import { Route as OrgsOrgIdRouteImport } from './routes/orgs.$orgId'
+import { Route as AuthDeviceRouteImport } from './routes/auth.device'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdPackagesRouteImport } from './routes/projects.$projectId.packages'
 import { Route as ProjectsProjectIdApiConsoleRouteImport } from './routes/projects.$projectId.api-console'
@@ -91,6 +92,11 @@ const OrgsOrgIdRoute = OrgsOrgIdRouteImport.update({
   path: '/orgs/$orgId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthDeviceRoute = AuthDeviceRouteImport.update({
+  id: '/auth/device',
+  path: '/auth/device',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/packages': typeof PackagesRoute
   '/register': typeof RegisterRoute
+  '/auth/device': typeof AuthDeviceRoute
   '/orgs/$orgId': typeof OrgsOrgIdRoute
   '/orgs/new': typeof OrgsNewRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -172,6 +179,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/packages': typeof PackagesRoute
   '/register': typeof RegisterRoute
+  '/auth/device': typeof AuthDeviceRoute
   '/orgs/$orgId': typeof OrgsOrgIdRoute
   '/orgs/new': typeof OrgsNewRoute
   '/$package': typeof PackageIndexRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/packages': typeof PackagesRoute
   '/register': typeof RegisterRoute
+  '/auth/device': typeof AuthDeviceRoute
   '/orgs/$orgId': typeof OrgsOrgIdRoute
   '/orgs/new': typeof OrgsNewRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/packages'
     | '/register'
+    | '/auth/device'
     | '/orgs/$orgId'
     | '/orgs/new'
     | '/projects/$projectId'
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/packages'
     | '/register'
+    | '/auth/device'
     | '/orgs/$orgId'
     | '/orgs/new'
     | '/$package'
@@ -262,6 +273,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/packages'
     | '/register'
+    | '/auth/device'
     | '/orgs/$orgId'
     | '/orgs/new'
     | '/projects/$projectId'
@@ -286,6 +298,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PackagesRoute: typeof PackagesRoute
   RegisterRoute: typeof RegisterRoute
+  AuthDeviceRoute: typeof AuthDeviceRoute
   OrgsOrgIdRoute: typeof OrgsOrgIdRoute
   OrgsNewRoute: typeof OrgsNewRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
@@ -377,6 +390,13 @@ declare module '@tanstack/react-router' {
       path: '/orgs/$orgId'
       fullPath: '/orgs/$orgId'
       preLoaderRoute: typeof OrgsOrgIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/device': {
+      id: '/auth/device'
+      path: '/auth/device'
+      fullPath: '/auth/device'
+      preLoaderRoute: typeof AuthDeviceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/': {
@@ -504,6 +524,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PackagesRoute: PackagesRoute,
   RegisterRoute: RegisterRoute,
+  AuthDeviceRoute: AuthDeviceRoute,
   OrgsOrgIdRoute: OrgsOrgIdRoute,
   OrgsNewRoute: OrgsNewRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,

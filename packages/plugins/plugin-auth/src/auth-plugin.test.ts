@@ -138,6 +138,7 @@ describe('AuthPlugin', () => {
       const mockRawApp = {
         all: vi.fn(),
         get: vi.fn(),
+        post: vi.fn(),
       };
 
       const mockHttpServer = {
@@ -175,6 +176,7 @@ describe('AuthPlugin', () => {
       const mockRawApp = {
         all: vi.fn(),
         get: vi.fn(),
+        post: vi.fn(),
       };
 
       const mockHttpServer = {
@@ -272,7 +274,7 @@ describe('AuthPlugin', () => {
     });
 
     it('should auto-detect baseUrl from http-server port when port differs', async () => {
-      const mockRawApp = { all: vi.fn(), get: vi.fn() };
+      const mockRawApp = { all: vi.fn(), get: vi.fn(), post: vi.fn() };
       const mockHttpServer = {
         post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn(),
         patch: vi.fn(), use: vi.fn(),
@@ -308,7 +310,7 @@ describe('AuthPlugin', () => {
       (mockContext.registerService as any).mockClear();
       await localPlugin.init(mockContext);
 
-      const mockRawApp = { all: vi.fn(), get: vi.fn() };
+      const mockRawApp = { all: vi.fn(), get: vi.fn(), post: vi.fn() };
       const mockHttpServer = {
         post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn(),
         patch: vi.fn(), use: vi.fn(),
@@ -340,7 +342,7 @@ describe('AuthPlugin', () => {
       (mockContext.registerService as any).mockClear();
       await localPlugin.init(mockContext);
 
-      const mockRawApp = { all: vi.fn(), get: vi.fn() };
+      const mockRawApp = { all: vi.fn(), get: vi.fn(), post: vi.fn() };
       const mockHttpServer = {
         post: vi.fn(), get: vi.fn(), put: vi.fn(), delete: vi.fn(),
         patch: vi.fn(), use: vi.fn(),
@@ -403,6 +405,7 @@ describe('AuthPlugin', () => {
       const mockRawApp = {
         all: vi.fn(),
         get: vi.fn(),
+        post: vi.fn(),
       };
 
       const mockHttpServer = {

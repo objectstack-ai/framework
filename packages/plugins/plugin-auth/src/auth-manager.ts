@@ -438,7 +438,7 @@ export class AuthManager {
     const code = `${randomBytes(3).toString('hex').toUpperCase()}-${randomBytes(3).toString('hex').toUpperCase()}`;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
     const cleanBase = (baseUrl || this.config.baseUrl || 'http://localhost:3000').replace(/\/$/, '');
-    const verificationUrl = `${cleanBase}/auth/device?code=${code}`;
+    const verificationUrl = `${cleanBase}/_studio/auth/device?code=${code}`;
 
     this.deviceCodes.set(code, { verificationUrl, expiresAt, status: 'pending' });
 
