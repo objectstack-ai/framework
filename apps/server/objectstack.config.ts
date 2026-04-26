@@ -46,7 +46,7 @@ import {
     AppPlugin,
 } from '@objectstack/runtime';
 import { createControlPlanePlugins } from './server/control-plane-preset.js';
-import { createSingleProjectPlugin } from './server/single-project-plugin.js';
+import { createSingleProjectPlugin, createStudioRuntimeConfigPlugin } from './server/single-project-plugin.js';
 import { templateRegistry } from './server/templates/registry.js';
 
 type IDataDriver = Contracts.IDataDriver;
@@ -247,6 +247,7 @@ const config = isLocalMode
                 baseUrl,
             }),
             multiProjectPluginProxy,
+            createStudioRuntimeConfigPlugin(),
         ],
         api: {
             enableProjectScoping: true,

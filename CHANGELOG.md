@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `apps/server`: Multi-project / cloud mode now also serves `GET /api/v1/studio/runtime-config` (returns `{ singleProject: false }`) via a new `createStudioRuntimeConfigPlugin`. Eliminates the 404 the Studio SPA logged on first load when `OBJECTSTACK_MULTI_PROJECT=true` (the default for root `pnpm dev`). Single-project mode is unchanged.
+
 ### Added
 - **M1 — Project Artifact envelope schema (`@objectstack/spec`)** — Introduced the v0 `ProjectArtifactSchema` in `packages/spec/src/system/project-artifact.zod.ts`, the immutable envelope that `objectstack compile` will produce and ObjectOS will consume at boot. Required fields: `schemaVersion` (literal `'0.1'`), `projectId`, `commitId`, `checksum` (`{ algorithm, value }`), `metadata` (per-category arrays, `passthrough()` for forward compatibility), `functions` (inlined source with optional language/source/hash), and `manifest` (plugin / driver / engine requirements). Optional `builtAt`, `builtWith`, and a reserved `payloadRef` (`{ url, expiresAt, checksum }`) for future S3 indirection without an envelope bump. 14 new tests in `project-artifact.test.ts`. Resolves ROADMAP M1; unblocks M3 (Artifact API) and M4 (ObjectOS artifact loader).
 

@@ -141,6 +141,34 @@ export function createSingleProjectPlugin(options: SingleProjectPluginOptions = 
     };
 }
 
+/**
+ * Multi-project / cloud variant: only registers `/studio/runtime-config`,
+ * returning `{ singleProject: false }` so the SPA falls through to the
+ * org/project picker. Avoids a 404 in the Network panel without affecting
+ * any actual control-plane behaviour.
+ */
+export function createStudioRuntimeConfigPlugin(options: { apiPrefix?: string } = {}): any {
+    const prefix = options.apiPrefix ?? '/api/v1';
+    return {
+        name: 'com.objectstack.studio.runtime-config',
+        version: '1.0.0',
+        init: async (_ctx: AnyContext) => {},
+        start: async (ctx: AnyContext) => {
+            let server: IHttpServer | undefined;
+            try {
+                server = ctx.getService('http.server') as IHttpServer | undefined;
+            } catch {
+                return;
+            }
+            if (!server) return;
+            server.get(`${prefix}/studio/runtime-config`, async (_req: any, res: any) => {
+                res.json({ singleProject: false });
+            });
+        },
+        stop: async (_ctx: AnyContext) => {},
+    };
+}
+
 function buildLocalProjectRow(orgId: string, projectId: string, userId: string): Record<string, unknown> {
     const now = new Date().toISOString();
     return {
