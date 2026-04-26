@@ -46,6 +46,7 @@ import {
     AppPlugin,
 } from '@objectstack/runtime';
 import { createControlPlanePlugins } from './server/control-plane-preset.js';
+import { createSingleProjectPlugin } from './server/single-project-plugin.js';
 import { templateRegistry } from './server/templates/registry.js';
 
 type IDataDriver = Contracts.IDataDriver;
@@ -136,6 +137,12 @@ async function buildLocalPlugins() {
         }),
         new ObjectQLPlugin({ environmentId: localProjectId }),
         new AuthPlugin({ secret: authSecret, baseUrl, plugins: { organization: true, twoFactor: false, passkeys: false, magicLink: false } }),
+        // Short-circuits the control-plane endpoints Studio polls
+        // (`/cloud/projects*`, `/auth/get-session`, `/auth/organization/list`)
+        // and exposes `/studio/runtime-config` so the SPA can detect
+        // single-project mode. Registered before DispatcherPlugin so these
+        // routes win the match against the control-plane handlers.
+        createSingleProjectPlugin({ projectId: localProjectId }),
     ];
 
     if (artifactBundle) {

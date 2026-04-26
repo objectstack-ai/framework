@@ -20,7 +20,7 @@ export interface ConsoleConfig {
    * - 'server': Connect to real ObjectStack server
    */
   mode: RuntimeMode;
-  
+
   /**
    * Server base URL (used in 'server' mode)
    * This should be the server root, not including /api/v1
@@ -28,13 +28,39 @@ export interface ConsoleConfig {
    * @default 'http://localhost:3000'
    */
   serverUrl: string;
-  
+
   /**
    * MSW API base path (used in 'msw' mode)
    * This should be empty string since client adds /api/v1/... internally
    * @default ''
    */
   mswBasePath: string;
+
+  /**
+   * Single-project mode. When true the backend is serving exactly one
+   * synthetic project (no control plane, no org/project selection). The
+   * frontend uses this to hide the Org/Project switchers, skip the
+   * /login → /orgs → /projects funnel, and route `/` straight to the
+   * default project workspace. Driven by a server-injected flag (see
+   * `initRuntimeConfig`), which in turn reflects the server's
+   * `OBJECTSTACK_MULTI_PROJECT` environment variable.
+   */
+  singleProject: boolean;
+
+  /** Project id the frontend should land on in single-project mode. */
+  defaultProjectId: string | null;
+
+  /** Organization id the frontend should treat as active in single-project mode. */
+  defaultOrgId: string | null;
+
+  /**
+   * When true, the frontend does not redirect unauthenticated users to
+   * `/login`. The server is expected to synthesise a session so
+   * `useSession()` still returns a user. Today this tracks `singleProject`
+   * 1:1 but is kept as a separate flag to allow future decoupling
+   * (e.g. single-project + real auth).
+   */
+  skipAuth: boolean;
 }
 
 /**
@@ -84,6 +110,10 @@ const defaultConfig: ConsoleConfig = {
   mode: getRuntimeMode(),
   serverUrl: resolveServerUrl(),
   mswBasePath: '',  // Empty - client adds /api/v1/... internally
+  singleProject: false,
+  defaultProjectId: null,
+  defaultOrgId: null,
+  skipAuth: false,
 };
 
 /**
@@ -92,6 +122,56 @@ const defaultConfig: ConsoleConfig = {
 export const config: ConsoleConfig = {
   ...defaultConfig,
 };
+
+/**
+ * Runtime config the studio backend injects at `/api/v1/studio/runtime-config`.
+ * Unknown/older backends omit the endpoint entirely; in that case the
+ * frontend falls back to multi-project defaults (i.e. the original behaviour).
+ */
+interface StudioRuntimeConfig {
+  singleProject?: boolean;
+  defaultProjectId?: string | null;
+  defaultOrgId?: string | null;
+  skipAuth?: boolean;
+}
+
+/**
+ * Fetch the server-injected runtime config and merge it into `config`.
+ *
+ * Must be awaited before the app renders so `config.singleProject` is
+ * definitive by the time `__root.tsx` decides whether to redirect to
+ * `/login`. In MSW mode no fetch happens — the `VITE_STUDIO_SINGLE_PROJECT`
+ * env var is the only override available.
+ */
+export async function initRuntimeConfig(): Promise<void> {
+  if (isMswMode()) {
+    if (import.meta.env.VITE_STUDIO_SINGLE_PROJECT === 'true') {
+      config.singleProject = true;
+      config.defaultProjectId = config.defaultProjectId ?? 'proj_local';
+      config.defaultOrgId = config.defaultOrgId ?? 'org_local';
+      config.skipAuth = true;
+    }
+    return;
+  }
+
+  const base = getApiBaseUrl();
+  try {
+    const res = await fetch(`${base}/api/v1/studio/runtime-config`, {
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+    const body = (await res.json()) as StudioRuntimeConfig;
+    if (!body || typeof body !== 'object') return;
+    if (body.singleProject) {
+      config.singleProject = true;
+      config.defaultProjectId = body.defaultProjectId ?? 'proj_local';
+      config.defaultOrgId = body.defaultOrgId ?? 'org_local';
+      config.skipAuth = body.skipAuth ?? true;
+    }
+  } catch {
+    // Endpoint missing or network error → keep multi-project defaults.
+  }
+}
 
 /**
  * Check if running in MSW mode
@@ -133,6 +213,9 @@ export function logConfig(): void {
     mode: config.mode,
     apiBaseUrl: getApiBaseUrl(),
     serverUrl: config.serverUrl,
+    singleProject: config.singleProject,
+    defaultProjectId: config.defaultProjectId,
+    defaultOrgId: config.defaultOrgId,
   });
 }
 

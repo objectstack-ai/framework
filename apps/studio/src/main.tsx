@@ -17,13 +17,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { startMockServer } from './mocks/browser';
-import { isMswMode, logConfig } from './lib/config';
+import { initRuntimeConfig, isMswMode, logConfig } from './lib/config';
 
 // Bootstrap the application
 async function bootstrap() {
-  // Log current configuration
-  logConfig();
-
   // Only start MSW in MSW mode
   if (isMswMode()) {
     console.log('[Console] Starting in MSW mode (in-browser kernel)');
@@ -36,6 +33,14 @@ async function bootstrap() {
   } else {
     console.log('[Console] Starting in Server mode');
   }
+
+  // Resolve single- vs multi-project mode BEFORE rendering so route guards
+  // (see __root.tsx) make the correct decision on first paint. In server mode
+  // this fetches /api/v1/studio/runtime-config; in MSW mode it only honours
+  // the VITE_STUDIO_SINGLE_PROJECT build flag.
+  await initRuntimeConfig();
+
+  logConfig();
 
   // Render the React app
   ReactDOM.createRoot(document.getElementById('root')!).render(

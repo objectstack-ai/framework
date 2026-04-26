@@ -37,8 +37,35 @@ import { AIServicePlugin } from '@objectstack/service-ai';
 import { AutomationServicePlugin } from '@objectstack/service-automation';
 import { AnalyticsServicePlugin } from '@objectstack/service-analytics';
 import { getRequestListener } from '@hono/node-server';
-import type { Hono } from 'hono';
+import { Hono } from 'hono';
 import studioConfig from '../objectstack.config.js';
+
+/**
+ * Parse a boolean env var with the same semantics as
+ * `apps/server/objectstack.config.ts:envFlag` — we intentionally inline
+ * rather than import across apps so each app stays self-contained.
+ */
+function envFlag(name: string): boolean {
+    const raw = process.env[name];
+    if (raw == null) return false;
+    return ['1', 'true', 'yes', 'on'].includes(String(raw).trim().toLowerCase());
+}
+
+const DEFAULT_LOCAL_ORG_ID = 'org_local';
+const DEFAULT_LOCAL_PROJECT_ID = 'proj_local';
+const DEFAULT_LOCAL_USER_ID = 'user_local';
+
+/**
+ * Is the server running in single-project mode? This is the inverse of the
+ * `OBJECTSTACK_MULTI_PROJECT` flag read by `apps/server/objectstack.config.ts`:
+ * when the flag is unset/false, the kernel boots against a local data plane
+ * and there is no control-plane database for organizations/projects. Studio
+ * therefore synthesises a single virtual `org_local`/`proj_local` so the
+ * frontend can keep its uniform `/projects/:projectId/...` routing.
+ */
+function isSingleProjectMode(): boolean {
+    return !envFlag('OBJECTSTACK_MULTI_PROJECT');
+}
 
 // ---------------------------------------------------------------------------
 // Vercel origin helpers
@@ -214,13 +241,136 @@ async function seedData(kernel: ObjectKernel, configs: any[]) {
 /**
  * Get (or create) the Hono application backed by the ObjectStack kernel.
  * The prefix `/api/v1` matches the client SDK's default API path.
+ *
+ * When `OBJECTSTACK_MULTI_PROJECT` is unset/false we wrap the kernel app in
+ * a thin outer router that (a) exposes `/api/v1/studio/runtime-config` so
+ * the SPA can detect single-project mode on boot, and (b) short-circuits
+ * the handful of control-plane endpoints Studio polls (`/cloud/projects`,
+ * `/cloud/organizations`, `/auth/get-session`, `/auth/organization/list`)
+ * with synthetic responses shaped to satisfy `packages/client` and
+ * `apps/studio/src/hooks/useSession.ts`.
  */
 async function ensureApp(): Promise<Hono> {
     if (_app) return _app;
 
     const kernel = await ensureKernel();
-    _app = createHonoApp({ kernel, prefix: '/api/v1' });
+    const innerApp = createHonoApp({ kernel, prefix: '/api/v1' });
+
+    if (!isSingleProjectMode()) {
+        _app = innerApp;
+        return _app;
+    }
+
+    const outerApp = new Hono();
+    registerSingleProjectRoutes(outerApp);
+    outerApp.route('/', innerApp);
+    _app = outerApp;
     return _app;
+}
+
+/**
+ * Register the runtime-config endpoint plus synthetic control-plane
+ * responses used in single-project mode. Kept in one place so the shape
+ * changes co-locate with the helpers that produce them.
+ */
+function registerSingleProjectRoutes(app: Hono): void {
+    app.get('/api/v1/studio/runtime-config', (c) =>
+        c.json({
+            singleProject: true,
+            defaultOrgId: DEFAULT_LOCAL_ORG_ID,
+            defaultProjectId: DEFAULT_LOCAL_PROJECT_ID,
+            skipAuth: true,
+        }),
+    );
+
+    // better-auth session — synthesized so `useSession()` resolves immediately
+    // without prompting for login. `normaliseSessionResponse` in the frontend
+    // accepts both `{ user, session }` and `{ data: { user, session } }`; we
+    // emit the `data`-wrapped shape to match what better-auth returns.
+    app.get('/api/v1/auth/get-session', (c) =>
+        c.json({
+            data: {
+                user: {
+                    id: DEFAULT_LOCAL_USER_ID,
+                    email: 'local@objectstack.dev',
+                    name: 'Local',
+                    emailVerified: true,
+                },
+                session: {
+                    id: 'session_local',
+                    userId: DEFAULT_LOCAL_USER_ID,
+                    activeOrganizationId: DEFAULT_LOCAL_ORG_ID,
+                },
+            },
+        }),
+    );
+
+    // better-auth organization/list — `client.organizations.list()` accepts
+    // either a raw array or `{ data: [...] }`. We use the raw-array form so
+    // SessionProvider picks it up verbatim.
+    app.get('/api/v1/auth/organization/list', (c) =>
+        c.json([
+            {
+                id: DEFAULT_LOCAL_ORG_ID,
+                name: 'Local',
+                slug: 'local',
+            },
+        ]),
+    );
+
+    // Control-plane projects API — dispatcher-plugin shape
+    // (`{ success, data: { projects, total }, meta }`). One synthetic
+    // record is enough: the frontend derives `:projectId` from config.
+    app.get('/api/v1/cloud/projects', (c) =>
+        c.json({
+            success: true,
+            data: {
+                projects: [buildLocalProjectRow()],
+                total: 1,
+            },
+        }),
+    );
+
+    app.get('/api/v1/cloud/projects/:id', (c) => {
+        const id = c.req.param('id');
+        if (id !== DEFAULT_LOCAL_PROJECT_ID) {
+            return c.json(
+                {
+                    success: false,
+                    error: { code: 404, message: `Project ${id} not found` },
+                },
+                404,
+            );
+        }
+        return c.json({
+            success: true,
+            data: {
+                project: buildLocalProjectRow(),
+                organization: { id: DEFAULT_LOCAL_ORG_ID, name: 'Local' },
+            },
+        });
+    });
+}
+
+/**
+ * Canonical shape of the synthesized local project. Matches `ProjectRow`
+ * in `apps/studio/src/hooks/useProjects.ts` and the dispatcher's
+ * snake_case convention.
+ */
+function buildLocalProjectRow(): Record<string, unknown> {
+    const now = new Date().toISOString();
+    return {
+        id: DEFAULT_LOCAL_PROJECT_ID,
+        organization_id: DEFAULT_LOCAL_ORG_ID,
+        display_name: 'Local',
+        is_default: true,
+        is_system: false,
+        status: 'active',
+        created_by: DEFAULT_LOCAL_USER_ID,
+        created_at: now,
+        updated_at: now,
+        metadata: {},
+    };
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { useProjects } from '@/hooks/useProjects';
+import { config } from '@/lib/config';
 
 function IndexRedirect() {
   const navigate = useNavigate();
@@ -11,6 +12,16 @@ function IndexRedirect() {
   const { projects, loading: projectsLoading } = useProjects();
 
   useEffect(() => {
+    // Single-project mode: bypass the org/project picker entirely.
+    if (config.singleProject && config.defaultProjectId) {
+      navigate({
+        to: '/projects/$projectId',
+        params: { projectId: config.defaultProjectId },
+        replace: true,
+      });
+      return;
+    }
+
     if (sessionLoading || !user) return; // RequireAuth sends to /login
 
     if (!session?.activeOrganizationId) {

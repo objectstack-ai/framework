@@ -13,9 +13,29 @@ import { PluginRegistryProvider } from '../plugins';
 import { builtInPlugins } from '../plugins/built-in';
 import { useObjectStackClient } from '../hooks/useObjectStackClient';
 import { SessionProvider, useSession } from '../hooks/useSession';
+import { config } from '@/lib/config';
 
 /** Routes that don't require authentication. */
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot-password']);
+
+/**
+ * Paths that exist only in multi-project mode — login, registration, the
+ * org list, and the project chooser. In single-project mode these routes
+ * still exist as files (so the route tree is identical across modes), but
+ * hitting them redirects to the default project workspace.
+ */
+function isMultiProjectOnlyPath(pathname: string): boolean {
+  return (
+    pathname === '/login' ||
+    pathname.startsWith('/login/') ||
+    pathname === '/register' ||
+    pathname.startsWith('/register/') ||
+    pathname === '/forgot-password' ||
+    pathname === '/orgs' ||
+    pathname.startsWith('/orgs/') ||
+    pathname === '/projects'
+  );
+}
 
 /**
  * Routes where an environment selection is NOT required.
@@ -39,9 +59,24 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isPublic = PUBLIC_ROUTES.has(location.pathname);
 
+  // In single-project mode, collapse every multi-project-only entry
+  // (`/login`, `/orgs`, `/projects`) onto the default project workspace
+  // so the user never sees the org/project funnel.
+  useEffect(() => {
+    if (!config.singleProject || !config.defaultProjectId) return;
+    if (isMultiProjectOnlyPath(location.pathname)) {
+      navigate({
+        to: '/projects/$projectId',
+        params: { projectId: config.defaultProjectId },
+        replace: true,
+      });
+    }
+  }, [location.pathname, navigate]);
+
   // Redirect to environment picker when the user hits a route that requires
   // an environment context (e.g. /$package/*) but isn't already under /projects.
   useEffect(() => {
+    if (config.singleProject) return; // handled by the branch above
     if (loading || !user) return;
     if (!isEnvExemptPath(location.pathname)) {
       navigate({ to: '/projects' });
@@ -49,6 +84,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }, [user, loading, location.pathname, navigate]);
 
   useEffect(() => {
+    if (config.skipAuth) return;
     if (loading) return;
     if (!user && !isPublic) {
       navigate({ to: '/login' });
@@ -63,12 +99,15 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user && !isPublic) {
+  if (!user && !isPublic && !config.skipAuth) {
     return null;
   }
 
-  // Authenticated layout with TopBar + Content
-  if (user) {
+  // Authenticated layout with TopBar + Content.
+  // `config.skipAuth` (single-project mode) lets us render the chrome even
+  // before the synthesized session has resolved — otherwise a slow
+  // `/auth/get-session` could delay the first paint.
+  if (user || config.skipAuth) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full flex-col">

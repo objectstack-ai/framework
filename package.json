@@ -7,7 +7,7 @@
     "build": "turbo run build --filter=!@objectstack/docs",
     "dev": "OBJECTSTACK_MULTI_PROJECT=true pnpm --filter @objectstack/server dev",
     "start": "pnpm --filter @objectstack/server start",
-    "studio:dev": "pnpm --filter @objectstack/studio dev",
+    "crm:dev": "pnpm --filter @example/app-crm dev",    
     "studio:start": "pnpm --filter @objectstack/studio start",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",

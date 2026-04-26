@@ -18,6 +18,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/hooks/useSession';
+import { config } from '@/lib/config';
 
 function initials(name?: string, email?: string): string {
   const src = (name || email || '?').trim();
@@ -83,23 +84,31 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate({ to: '/orgs' })}>
-          <Building2 className="mr-2 h-3.5 w-3.5" />
-          Organizations
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate({ to: '/projects' })}>
-          <Settings className="mr-2 h-3.5 w-3.5" />
-          Projects
-        </DropdownMenuItem>
+        {!config.singleProject && (
+          <>
+            <DropdownMenuItem onSelect={() => navigate({ to: '/orgs' })}>
+              <Building2 className="mr-2 h-3.5 w-3.5" />
+              Organizations
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => navigate({ to: '/projects' })}>
+              <Settings className="mr-2 h-3.5 w-3.5" />
+              Projects
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuItem disabled>
           <UserIcon className="mr-2 h-3.5 w-3.5" />
           Account settings
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleLogout}>
-          <LogOut className="mr-2 h-3.5 w-3.5" />
-          Sign out
-        </DropdownMenuItem>
+        {!config.singleProject && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={handleLogout}>
+              <LogOut className="mr-2 h-3.5 w-3.5" />
+              Sign out
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
