@@ -284,7 +284,13 @@ export function createStudioStaticPlugin(distPath: string, options?: { isDev?: b
       // Studio is always built with `base: '/_studio/'`, so its asset URLs
       // (and runtime router basepath) are already absolute and correct. We
       // can serve the pre-built dist verbatim.
-      const indexHtml = fs.readFileSync(indexPath, 'utf-8');
+      //
+      // IMPORTANT: read index.html fresh on every fallback hit. Caching the
+      // bytes at startup means a Studio rebuild (which mints new hashed asset
+      // names) yields a server that points the browser at non-existent assets,
+      // and the SPA fallback then re-serves the stale HTML with text/html MIME
+      // — producing the "Failed to load module script" browser error.
+      const readIndexHtml = () => fs.readFileSync(indexPath, 'utf-8');
 
       // In dev mode, redirect root to Studio for convenience
       if (options?.isDev) {
@@ -311,8 +317,16 @@ export function createStudioStaticPlugin(distPath: string, options?: { isDev?: b
           });
         }
 
-        // SPA fallback: serve index.html for non-file routes
-        return new Response(indexHtml, {
+        // Hashed-asset paths must never SPA-fallback. Otherwise a stale HTML
+        // pointing at a removed asset name silently degrades into "asset URL
+        // returns text/html" and the browser refuses to execute the module.
+        // Returning a real 404 surfaces the rebuild/redeploy mismatch instead.
+        if (reqPath.startsWith('/assets/')) {
+          return c.text('Not Found', 404);
+        }
+
+        // SPA fallback: serve index.html for non-file, non-asset routes
+        return new Response(readIndexHtml(), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         });
       });
