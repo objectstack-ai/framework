@@ -24,7 +24,7 @@
     "@objectstack/runtime": "workspace:*",
     "@types/express": "^5.0.6",
     "express": "^5.2.1",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   },
   "description": "Express adapter for ObjectStack — mounts the generated REST API onto an Express app.",

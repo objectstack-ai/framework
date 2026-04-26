@@ -121,7 +121,7 @@
     "@vitest/coverage-v8": "^4.1.4",
     "ai": "^6.0.168",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   },
   "dependencies": {

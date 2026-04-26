@@ -23,7 +23,7 @@
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
     "fastify": "^5.8.5",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   },
   "description": "Fastify adapter for ObjectStack — mounts the generated REST API onto a Fastify app.",

@@ -18,7 +18,7 @@
     "@nestjs/common": "^11.1.19",
     "@nestjs/core": "^11.1.19",
     "@objectstack/runtime": "workspace:*",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   },
   "description": "NestJS adapter for ObjectStack — integrates the generated REST API into a NestJS module.",

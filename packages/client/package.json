@@ -30,7 +30,7 @@
     "@objectstack/plugin-msw": "workspace:*",
     "@objectstack/runtime": "workspace:*",
     "msw": "^2.13.4",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   },
   "keywords": [

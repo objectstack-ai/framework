@@ -23,7 +23,7 @@
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
     "h3": "^1.15.11",
-    "typescript": "^6.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.4"
   },
   "description": "Nuxt adapter for ObjectStack — Nitro server routes for the ObjectStack REST API.",
