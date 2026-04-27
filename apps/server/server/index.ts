@@ -17,6 +17,7 @@ import { ObjectKernel, createRestApiPlugin, createDispatcherPlugin, KernelManage
 import type { EnvironmentDriverRegistry } from '@objectstack/runtime';
 import type { Hono } from 'hono';
 import stackConfig from '../objectstack.config.js';
+import { listTemplates } from './templates/registry.js';
 
 // ---------------------------------------------------------------------------
 // Runtime shape returned by ensureBoot()
@@ -106,6 +107,10 @@ async function ensureBoot(): Promise<BootResult> {
 // Hono app factory
 // ---------------------------------------------------------------------------
 
+function envFlag(name: string): boolean {
+    return ['1', 'true', 'yes', 'on'].includes((process.env[name] ?? '').trim().toLowerCase());
+}
+
 async function ensureApp(): Promise<Hono> {
     if (_app) return _app;
 
@@ -114,6 +119,29 @@ async function ensureApp(): Promise<Hono> {
     // kernel's service registry (MultiProjectPlugin registered them during
     // bootKernel), so they do NOT need to be passed explicitly here.
     _app = createHonoApp({ kernel, prefix: '/api/v1' });
+
+    // Vercel entrypoint does NOT load plugin-hono-server, so the
+    // `http.server` service is never registered. The route plugins in
+    // `multi-project-plugins.ts` early-return when that service is
+    // missing, leaving `/studio/runtime-config` and `/cloud/templates`
+    // unmounted (404 / empty list). Mount them directly on the Hono
+    // instance here so multi-project deployments behave correctly.
+    if (envFlag('OBJECTSTACK_MULTI_PROJECT')) {
+        const templatesPayload = listTemplates().map(({ id, label, description, category }) => ({
+            id,
+            label,
+            description,
+            category,
+        }));
+        _app.get('/api/v1/studio/runtime-config', (c) =>
+            c.json({ singleProject: false }));
+        _app.get('/api/v1/cloud/templates', (c) =>
+            c.json({
+                success: true,
+                data: { templates: templatesPayload, total: templatesPayload.length },
+            }));
+    }
+
     return _app;
 }
 
