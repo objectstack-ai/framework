@@ -24,8 +24,8 @@ the canonical API contract.
 ## TypeScript Usage
 
 ```typescript
-import { AuthEndpoint, AuthFeaturesConfig, AuthProviderInfo, EmailPasswordConfigPublic, GetAuthConfigResponse } from '@objectstack/spec/api';
-import type { AuthEndpoint, AuthFeaturesConfig, AuthProviderInfo, EmailPasswordConfigPublic, GetAuthConfigResponse } from '@objectstack/spec/api';
+import { AuthEndpoint, AuthFeaturesConfig, AuthProviderInfo, DeviceRequestResponse, DeviceTokenResponse, EmailPasswordConfigPublic, GetAuthConfigResponse } from '@objectstack/spec/api';
+import type { AuthEndpoint, AuthFeaturesConfig, AuthProviderInfo, DeviceRequestResponse, DeviceTokenResponse, EmailPasswordConfigPublic, GetAuthConfigResponse } from '@objectstack/spec/api';
 
 // Validate data
 const result = AuthEndpoint.parse(data);
@@ -75,6 +75,61 @@ const result = AuthEndpoint.parse(data);
 | **name** | `string` | ✅ | Display name (e.g., Google, GitHub) |
 | **enabled** | `boolean` | ✅ | Whether this provider is enabled |
 | **type** | `Enum<'social' \| 'oidc'>` | ✅ | Provider type |
+
+
+---
+
+## DeviceRequestResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **code** | `string` | ✅ | Short-lived device code used for polling |
+| **verificationUrl** | `string` | ✅ | URL the user should open in a browser |
+| **expiresAt** | `string` | ✅ | ISO timestamp when the code expires |
+| **interval** | `number` | ✅ | Recommended polling interval in seconds |
+
+
+---
+
+## DeviceTokenResponse
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **status** | `string` | ✅ |  |
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **status** | `string` | ✅ |  |
+| **token** | `string` | ✅ | Bearer token to store in credentials file |
+| **user** | `Object` | ✅ |  |
+
+---
+
+#### Option 3
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **status** | `string` | ✅ |  |
+
+---
 
 
 ---
