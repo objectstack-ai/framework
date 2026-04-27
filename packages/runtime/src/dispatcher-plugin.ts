@@ -407,7 +407,16 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
             server.delete(`${prefix}/cloud/projects/:id`, async (req: any, res: any) => {
                 try {
-                    const result = await dispatcher.handleCloud(`/projects/${req.params.id}`, 'DELETE', {}, {}, { request: req });
+                    const result = await dispatcher.handleCloud(`/projects/${req.params.id}`, 'DELETE', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.delete(`${prefix}/cloud/organizations/:id`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/organizations/${req.params.id}`, 'DELETE', {}, req.query, { request: req });
                     sendResult(result, res);
                 } catch (err: any) {
                     errorResponse(err, res);

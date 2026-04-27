@@ -31,7 +31,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-import { useOrganizations, useSession } from '@/hooks/useSession';
+import { useOrganizations, useSession, useDeleteOrganization } from '@/hooks/useSession';
 import {
   useOrganizationMembers,
   useOrganizationInvitations,
@@ -64,10 +64,14 @@ function OrgDetailPage() {
 
   const { apps, loading: loadingApps } = useOrgApps(orgId);
 
+  const { remove: deleteOrganization, deleting: deletingOrg } = useDeleteOrganization();
+
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member');
   const [inviting, setInviting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   const handleSetActive = async () => {
     try {
@@ -138,6 +142,39 @@ function OrgDetailPage() {
     } catch (err) {
       toast({
         title: 'Failed to cancel invitation',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteOrganization = async () => {
+    if (!org) return;
+    if (deleteConfirmText !== org.name) {
+      toast({
+        title: 'Confirmation does not match',
+        description: `Type "${org.name}" to confirm deletion.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const result = await deleteOrganization(orgId);
+      const warnings = (result as any)?.warnings as string[] | undefined;
+      const deletedProjects = (result as any)?.deletedProjects ?? 0;
+      toast({
+        title: 'Organization deleted',
+        description: warnings?.length
+          ? `Removed ${deletedProjects} project(s). Warnings: ${warnings[0]}${warnings.length > 1 ? ` (+${warnings.length - 1} more)` : ''}`
+          : `${org.name} and ${deletedProjects} project(s) (with their databases) have been removed.`,
+        variant: warnings?.length ? 'destructive' : undefined,
+      });
+      setDeleteDialogOpen(false);
+      setDeleteConfirmText('');
+      navigate({ to: '/orgs' });
+    } catch (err) {
+      toast({
+        title: 'Failed to delete organization',
         description: (err as Error).message,
         variant: 'destructive',
       });
@@ -422,8 +459,80 @@ function OrgDetailPage() {
               Go to projects
             </Link>
           </p>
+
+          {/* Danger zone — cascade-delete the organization. */}
+          <Card className="border-destructive/40">
+            <CardHeader>
+              <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+              <CardDescription>
+                Permanently delete this organization, all of its projects, and every
+                project's underlying database. This action cannot be undone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteDialogOpen(true)}
+                disabled={deletingOrg}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete organization
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* Delete Organization Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setDeleteConfirmText('');
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete organization</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>{org?.name}</strong>, all of its
+              projects, and every project's underlying database. Members and pending
+              invitations will be removed. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm">
+                Type <code className="font-mono text-xs">{org?.name}</code> to confirm
+              </Label>
+              <Input
+                id="delete-confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={org?.name ?? ''}
+                disabled={deletingOrg}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deletingOrg}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteOrganization}
+              disabled={deletingOrg || !org || deleteConfirmText !== org.name}
+            >
+              {deletingOrg ? 'Deleting…' : 'Delete organization'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite Member Dialog */}
       <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>

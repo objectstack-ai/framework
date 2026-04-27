@@ -247,3 +247,44 @@ export function useCreateOrganization() {
 
   return { create, creating, error };
 }
+
+/**
+ * Hook: cascade-delete an organization.
+ *
+ * Wraps `client.organizations.delete(id)` (which hits
+ * `DELETE /api/v1/cloud/organizations/:id`). The server tears down every
+ * project owned by the organization (including each project's physical
+ * database) before dropping the org row itself.
+ *
+ * On success the local session + organization list are refreshed so the
+ * deleted org disappears from the switcher and `activeOrganizationId`
+ * gets cleared if it pointed at this org.
+ */
+export function useDeleteOrganization() {
+  const client = useClient() as any;
+  const { reloadOrganizations, refresh } = useSession();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const remove = useCallback(
+    async (organizationId: string) => {
+      if (!client?.organizations?.delete) throw new Error('Client not ready');
+      setDeleting(true);
+      setError(null);
+      try {
+        const result = await client.organizations.delete(organizationId);
+        await reloadOrganizations();
+        await refresh();
+        return result;
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [client, reloadOrganizations, refresh],
+  );
+
+  return { remove, deleting, error };
+}

@@ -33,7 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
-import { useProjectDetail, useRetryProvisioning, useUpdateHostname } from '@/hooks/useProjects';
+import { useProjectDetail, useRetryProvisioning, useUpdateHostname, useDeleteProject } from '@/hooks/useProjects';
 import { useClient } from '@objectstack/client-react';
 import { useProductionGuard } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
@@ -49,6 +49,7 @@ function ProjectOverviewComponent() {
   const [rotating, setRotating] = useState(false);
   const { retry, retrying } = useRetryProvisioning();
   const { updateHostname, updating: hostnameUpdating } = useUpdateHostname();
+  const { remove: deleteProject, deleting } = useDeleteProject();
   const [hostnameEditing, setHostnameEditing] = useState(false);
   const [hostnameInput, setHostnameInput] = useState('');
 
@@ -130,6 +131,38 @@ function ProjectOverviewComponent() {
       });
     } finally {
       setRotating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!project) return;
+    const ok = await guard.confirm({
+      title: `Delete project "${project.display_name}"?`,
+      description:
+        'This permanently deletes the project, its credentials, members, package installations, and the underlying physical database. This action cannot be undone.',
+      confirmLabel: 'Delete project',
+      confirmVariant: 'destructive',
+      requireTypedConfirmation: true,
+      typedConfirmationValue: project.display_name,
+    });
+    if (!ok) return;
+    try {
+      const result = await deleteProject(project.id, { force: project.is_default });
+      const warnings = (result as any)?.warnings as string[] | undefined;
+      toast({
+        title: 'Project deleted',
+        description: warnings?.length
+          ? `Completed with warnings: ${warnings[0]}${warnings.length > 1 ? ` (+${warnings.length - 1} more)` : ''}`
+          : `${project.display_name} and its database have been removed.`,
+        variant: warnings?.length ? 'destructive' : undefined,
+      });
+      navigate({ to: '/projects' });
+    } catch (err) {
+      toast({
+        title: 'Failed to delete project',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -424,9 +457,19 @@ function ProjectOverviewComponent() {
                 <Separator />
 
                 <div className="flex justify-end">
-                  <Button variant="destructive" size="sm" className="gap-2" disabled>
-                    <Trash className="h-3.5 w-3.5" />
-                    Archive project
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-2"
+                    disabled={deleting}
+                    onClick={handleDelete}
+                  >
+                    {deleting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash className="h-3.5 w-3.5" />
+                    )}
+                    {deleting ? 'Deleting…' : 'Delete project'}
                   </Button>
                 </div>
               </>

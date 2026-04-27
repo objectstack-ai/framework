@@ -670,6 +670,20 @@ export class ObjectStackClient {
     },
 
     /**
+     * Cascade-delete a project: cleans up credential/member/package_installation
+     * rows, releases the physical database via the provisioning adapter, and
+     * removes the `sys_project` row. Default projects require `force: true`.
+     */
+    delete: async (id: string, opts?: { force?: boolean }) => {
+      const qs = opts?.force ? '?force=1' : '';
+      const res = await this.fetch(
+        `${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}${qs}`,
+        { method: 'DELETE' },
+      );
+      return this.unwrapResponse<{ deleted: boolean; projectId: string; warnings: string[] }>(res);
+    },
+
+    /**
      * Activate this project for the current session. The server writes
      * `active_environment_id` on the better-auth session; subsequent requests
      * are routed to this project's database.
@@ -946,6 +960,28 @@ export class ObjectStackClient {
         body: JSON.stringify({ organizationId }),
       });
       return res.json();
+    },
+
+    /**
+     * Cascade-delete an organization: tears down every project owned by the
+     * org (including each project's physical database), then drops the
+     * organization itself (members + invitations are removed by better-auth's
+     * organization plugin, or the row is deleted directly if the plugin is
+     * not loaded).
+     *
+     * DELETE /api/v1/cloud/organizations/:id
+     */
+    delete: async (organizationId: string) => {
+      const res = await this.fetch(
+        `${this.baseUrl}/api/v1/cloud/organizations/${encodeURIComponent(organizationId)}`,
+        { method: 'DELETE' },
+      );
+      return this.unwrapResponse<{
+        deleted: boolean;
+        organizationId: string;
+        deletedProjects: number;
+        warnings: string[];
+      }>(res);
     },
   };
 
