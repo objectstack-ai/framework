@@ -48,6 +48,27 @@ The plugin uses a **direct forwarding** architecture where all authentication re
 - Easy updates when Better-Auth releases new features
 - Type-safe API access via `await authManager.getApi()`
 
+### CLI device flow
+
+`os auth login` uses a browser-based device flow in interactive terminals. The
+CLI requests a one-time code from `POST /api/v1/auth/device/request`, opens the
+Studio approval page at `/_studio/auth/device?code=...`, and polls
+`GET /api/v1/auth/device/token` until the user approves access. Device codes
+expire after five minutes.
+
+The email/password path is still supported for CI and non-interactive shells:
+
+```bash
+os auth login --email user@example.com --password secret
+```
+
+New accounts can be created with:
+
+```bash
+os auth register
+os auth register --email user@example.com --name "Jane Doe" --password secret
+```
+
 ---
 
 ## Installation

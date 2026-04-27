@@ -214,7 +214,7 @@ os validate path/to/config   # Validate specific file
 
 **Warnings checked:**
 - Missing `manifest.id` (required for deployment)
-- Missing `manifest.namespace` (required for multi-app hosting)
+- Invalid `manifest.scope` (must be `cloud`, `system`, or `project`)
 - No objects defined
 - No apps or plugins defined
 
@@ -337,6 +337,91 @@ os doctor -v        # Show fix suggestions for warnings
 - Dependencies installed
 - `@objectstack/spec` build status
 - Git availability
+
+### Authentication
+
+| Command | Description |
+|---------|-------------|
+| `os auth register` | Create an account and store local credentials |
+| `os auth login` | Sign in and store credentials in `~/.objectstack/credentials.json` |
+| `os auth whoami` | Show the current authenticated user |
+| `os auth logout` | Revoke the server session and clear local credentials |
+
+#### `os auth register`
+
+Creates a user account and stores the returned token locally.
+
+```bash
+os auth register
+os auth register --email user@example.com --name "Jane Doe" --password secret
+os auth register --url https://api.example.com
+```
+
+#### `os auth login`
+
+In an interactive terminal, login uses a browser-based device flow by default:
+the CLI prints a one-time verification URL, opens the browser, and polls until
+you approve access in Studio.
+
+```bash
+os auth login
+os auth login --url https://api.example.com
+os auth login --no-browser
+```
+
+If a valid token already exists, `os auth login` exits successfully with
+"Already logged in as <email>". Use `os auth logout` to switch users, or pass
+`--force` to re-authenticate.
+
+For CI and other non-interactive contexts, pass email/password directly:
+
+```bash
+os auth login --email user@example.com --password secret
+```
+
+#### `os auth logout`
+
+Logout calls `POST /api/v1/auth/sign-out` before deleting local credentials, so
+the server-side session is revoked as well.
+
+```bash
+os auth logout
+```
+
+### Cloud Projects
+
+| Command | Description |
+|---------|-------------|
+| `os projects list` | List projects visible to the current session |
+| `os projects show <id>` | Show one project |
+| `os projects create` | Provision a new project |
+| `os projects switch <id>` | Set the active project for later CLI calls |
+| `os projects bind <id>` | Bind a compiled local artifact to an existing project |
+
+#### Create a project from a local artifact
+
+Compile first, then create a project and bind the generated
+`dist/objectstack.json` in one call:
+
+```bash
+os compile
+os projects create --org <org-id> --name CRM --artifact ./dist/objectstack.json
+```
+
+The server stores the absolute path in `sys_project.metadata.artifact_path`.
+On project-kernel boot, ObjectOS loads the JSON bundle, registers schemas, and
+seeds records from the bundle's `data` arrays.
+
+#### Bind an existing project
+
+```bash
+os projects bind <project-id> --artifact ./dist/objectstack.json
+os projects bind <project-id> --artifact ./dist/objectstack.json --build
+```
+
+`--build` runs `objectstack compile` before updating the project. `--reseed`
+is reserved for the server-side reseed endpoint; use it only when that endpoint
+is available in your deployment.
 
 ## Configuration
 

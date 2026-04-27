@@ -10,23 +10,17 @@ To navigate the ObjectStack ecosystem effectively, it is helpful to understand t
 ## The Ecosystem
 
 ### ObjectStack
-The umbrella term for the entire suite of protocols and reference implementations. It is organized into **11 protocol namespaces** grouped into three architectural layers.
+The umbrella term for the entire suite of protocols and reference implementations. It is organized into **15 protocol namespaces** grouped into three architectural layers.
 
 ### Protocol Namespace
-A logical grouping of related schemas and types defined with Zod. ObjectStack has 11 protocol namespaces: Data, Driver, Permission, UI, System, Auth, Kernel, Hub, AI, API, and Automation.
+A logical grouping of related schemas and types defined with Zod. ObjectStack has 15 protocol namespaces: Data, UI, System, Automation, AI, API, Identity, Security, Kernel, Cloud, QA, Contracts, Integration, Studio, and Shared.
 
 ---
 
-## The 11 Protocol Namespaces
+## The 15 Protocol Namespaces
 
 ### Data Protocol
 Defines the core business data model. Includes Object schema, Field types, Validation rules, Query AST, and Filter conditions. This is the foundation of ObjectQL.
-
-### Driver Protocol
-Database adapter interface for connecting to various storage engines (PostgreSQL, MongoDB, SQLite, Redis, etc.). Drivers implement a standard interface for CRUD operations and query execution.
-
-### Permission Protocol
-Access control system including object-level permissions (CRUD), field-level security (FLS), sharing rules, and territory management. Determines who can see and modify what data.
 
 ### UI Protocol
 Server-Driven UI specification for building user interfaces. Includes App structure, Views (List/Form/Kanban/Calendar), Dashboards, Reports, Themes, and Actions.
@@ -34,14 +28,8 @@ Server-Driven UI specification for building user interfaces. Includes App struct
 ### System Protocol
 Infrastructure services including Event Bus, Job Scheduling, Translation (i18n), and Audit Logging. Manages system-level concerns.
 
-### Auth Protocol
-Identity and access management including User accounts, Sessions, Roles, Organization structure, and various authentication strategies (OAuth, SAML, LDAP, etc.).
-
 ### Kernel Protocol
 Plugin system and runtime management. Includes Plugin lifecycle, Manifest definition, Logger configuration, and Runtime Context. The core of ObjectOS.
-
-### Hub Protocol
-SaaS and marketplace features including Multi-tenancy, Licensing, Marketplace plugins, and Deployment configurations. Enables commercial distribution.
 
 ### AI Protocol
 Artificial intelligence capabilities including AI Agents, RAG pipelines, Natural Language Query (NLQ), Predictive models, Cost tracking, and Orchestration.
@@ -51,6 +39,30 @@ External communication layer including REST contracts, API discovery, Realtime s
 
 ### Automation Protocol
 Business process automation including Workflows (state machines), Flows (visual logic), and Webhooks (HTTP callbacks).
+
+### Identity Protocol
+User, organization, and profile schemas for identity management.
+
+### Security Protocol
+RBAC, permissions, policy, and access-control schemas.
+
+### Cloud Protocol
+Multi-tenant cloud, deployment, environment, and package distribution schemas.
+
+### QA Protocol
+Test, validation, and quality-assurance schemas.
+
+### Contracts Protocol
+Cross-package interface contracts shared by runtime packages and services.
+
+### Integration Protocol
+External system integration schemas and connection metadata.
+
+### Studio Protocol
+Studio UI metadata and builder-specific schemas.
+
+### Shared Protocol
+Reusable error maps, suggestions, and metadata normalization utilities.
 
 ---
 

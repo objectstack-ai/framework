@@ -313,7 +313,7 @@ Each app declares a `namespace` in its manifest, but **the short object name is 
 | CRM | `crm` | `account` | `account` |
 | BI | `bi` | `report` | `report` |
 
-If two packages contribute objects with the same short name, the registry logs a warning. In that rare case, callers can disambiguate by passing the FQN (`crm__account`) — but this is the only situation where FQN appears in user code.
+If two packages contribute objects with the same short name, the registry logs a warning. Resolve the collision by renaming one object's short `name` (for example, `crm_account`) rather than using FQN strings in user code.
 
 ### Run It
 

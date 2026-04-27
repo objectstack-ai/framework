@@ -113,6 +113,32 @@ Control-plane endpoints always live under their unscoped paths:
 
 These are not affected by `enableProjectScoping` because they operate on the control plane, not a specific project's data plane.
 
+## Binding compiled artifacts to projects
+
+Third-party apps can now bind a locally compiled bundle to a multi-project
+server without raw `curl`.
+
+```bash
+os compile
+os projects create --org <org-id> --name CRM --artifact ./dist/objectstack.json
+os projects bind <project-id> --artifact ./dist/objectstack.json --build
+```
+
+Both commands validate that the artifact file exists and resolve relative paths
+to absolute paths before calling the control plane. The path is stored in
+`sys_project.metadata.artifact_path`; if a project already exists, `bind` updates
+that metadata with `PATCH /api/v1/cloud/projects/:id`.
+
+When a per-project kernel boots, `AppBundleResolver` reads
+`metadata.artifact_path` (or `metadata.artifact_paths[]`) and hydrates the
+project from the bundle: schemas are registered, views and apps are available,
+and seed data in `data` arrays is loaded through the same pipeline used by
+built-in templates.
+
+For local development and demos, `OBJECTSTACK_PROJECT_ARTIFACTS` can override
+project bindings with a comma-separated `projectId:path` list, and
+`OBJECTSTACK_PROJECT_ARTIFACT_ROOT` resolves relative artifact paths.
+
 ## Migration checklist
 
 1. ✅ Upgrade to `@objectstack/core@≥4.x` with the Phase 2 runtime.
