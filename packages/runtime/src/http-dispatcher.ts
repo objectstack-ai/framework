@@ -1300,6 +1300,8 @@ export class HttpDispatcher {
      *  - POST   /cloud/projects                            → provision (driver: memory | turso | <any registered driver>)
      *  - GET    /cloud/projects/:id                        → detail (+ db, credential, membership)
      *  - PATCH  /cloud/projects/:id                        → update displayName / plan / status / isDefault / metadata
+     *  - DELETE /cloud/projects/:id[?force=1]              → cascade-delete the project (cred/member/package install rows + physical DB)
+     *  - DELETE /cloud/organizations/:id                   → cascade-delete every project (and its DB) for the org, then drop the org
      *  - POST   /cloud/projects/:id/retry                  → re-run provisioning for a failed environment
      *  - POST   /cloud/projects/:id/activate               → mark as active for session (stub)
      *  - POST   /cloud/projects/:id/credentials/rotate     → rotate credential
@@ -1855,6 +1857,86 @@ export class HttpDispatcher {
                     if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
                     return { handled: true, response: this.success({ project: cleanProjectRow(envRow) }) };
                 }
+
+                if (m === 'DELETE') {
+                    const force = query?.force === '1' || query?.force === 'true' || body?.force === true;
+                    const result = await this.deleteProjectCascade(id, { ql, findOne, getRealAdapter, force });
+                    if (!result.ok) {
+                        return { handled: true, response: this.error(result.error ?? 'Delete failed', result.status ?? 500) };
+                    }
+                    return { handled: true, response: this.success({ deleted: true, projectId: id, warnings: result.warnings }) };
+                }
+            }
+
+            // ----- /cloud/organizations/:id (DELETE only — cascades projects) -----
+            if (parts.length === 2 && parts[0] === 'organizations' && m === 'DELETE') {
+                const orgId = decodeURIComponent(parts[1]);
+                // Find every project owned by the organization and tear it down.
+                let projectRows: any[] = [];
+                try {
+                    let rows = await ql.find(ENV, { where: { organization_id: orgId } } as any);
+                    if (rows && (rows as any).value) rows = (rows as any).value;
+                    projectRows = Array.isArray(rows) ? rows : [];
+                } catch {
+                    projectRows = [];
+                }
+                const warnings: string[] = [];
+                let deletedProjects = 0;
+                for (const row of projectRows) {
+                    const pid = row?.id;
+                    if (!pid) continue;
+                    try {
+                        const r = await this.deleteProjectCascade(pid, { ql, findOne, getRealAdapter, force: true });
+                        if (r.ok) deletedProjects++;
+                        if (r.warnings?.length) warnings.push(...r.warnings);
+                        if (!r.ok && r.error) warnings.push(`Project ${pid}: ${r.error}`);
+                    } catch (err) {
+                        warnings.push(
+                            `Failed to delete project ${pid}: ${err instanceof Error ? err.message : String(err)}`,
+                        );
+                    }
+                }
+
+                // Now drop the organization itself. Prefer better-auth's
+                // organization plugin (which also cascades members /
+                // invitations / teams). Fall back to a direct sys_organization
+                // delete if the plugin isn't loaded.
+                let orgDeleted = false;
+                try {
+                    const authService: any = await this.getService(CoreServiceName.enum.auth);
+                    const fn = authService?.api?.deleteOrganization;
+                    if (typeof fn === 'function') {
+                        await fn.call(authService.api, {
+                            body: { organizationId: orgId },
+                            headers: _context?.request?.headers,
+                        });
+                        orgDeleted = true;
+                    }
+                } catch (err) {
+                    warnings.push(
+                        `auth.deleteOrganization failed: ${err instanceof Error ? err.message : String(err)}`,
+                    );
+                }
+                if (!orgDeleted) {
+                    try {
+                        await ql.delete('sys_organization', { where: { id: orgId } } as any);
+                        orgDeleted = true;
+                    } catch (err) {
+                        warnings.push(
+                            `Failed to delete sys_organization row: ${err instanceof Error ? err.message : String(err)}`,
+                        );
+                    }
+                }
+
+                return {
+                    handled: true,
+                    response: this.success({
+                        deleted: orgDeleted,
+                        organizationId: orgId,
+                        deletedProjects,
+                        warnings,
+                    }),
+                };
             }
 
             // ----- /cloud/projects/:id/hostname -----
@@ -2220,7 +2302,113 @@ export class HttpDispatcher {
         return { handled: false };
     }
 
+    /**
+     * Cascade-delete a project: cred / member / package_installation rows,
+     * then the physical database via the provisioning adapter, then the
+     * `sys_project` row itself. Used by both `DELETE /cloud/projects/:id`
+     * and the org-cascade in `DELETE /cloud/organizations/:id`.
+     *
+     * Idempotent and best-effort: missing rows / unreachable adapters
+     * become warnings rather than hard failures, so a half-provisioned
+     * project can still be cleaned out.
+     */
+    private async deleteProjectCascade(
+        projectId: string,
+        deps: {
+            ql: any;
+            findOne: (obj: string, where: Record<string, unknown>) => Promise<any | undefined>;
+            getRealAdapter: (driver: string) => Promise<{
+                deleteDatabase?(params: { projectId: string; databaseName: string; databaseUrl?: string }): Promise<void>;
+            } | undefined>;
+            force?: boolean;
+        },
+    ): Promise<{ ok: boolean; status?: number; error?: string; warnings: string[] }> {
+        const { ql, findOne, getRealAdapter, force } = deps;
+        const ENV = 'sys_project';
+        const warnings: string[] = [];
 
+        const row = await findOne(ENV, { id: projectId });
+        if (!row) {
+            return { ok: false, status: 404, error: `Project '${projectId}' not found`, warnings };
+        }
+        if (row.is_system === true || row.is_system === 1) {
+            return { ok: false, status: 409, error: `Project '${projectId}' is a system project and cannot be deleted`, warnings };
+        }
+        if ((row.is_default === true || row.is_default === 1) && !force) {
+            return {
+                ok: false,
+                status: 409,
+                error: `Project '${projectId}' is the default project for its organization. Pass ?force=1 to delete it.`,
+                warnings,
+            };
+        }
+
+        // Cascade-delete dependent rows.
+        const cascade: Array<{ object: string; field: string }> = [
+            { object: 'sys_project_credential', field: 'project_id' },
+            { object: 'sys_project_member', field: 'project_id' },
+            { object: 'sys_package_installation', field: 'project_id' },
+        ];
+        for (const { object, field } of cascade) {
+            try {
+                let rows = await ql.find(object, { where: { [field]: projectId } } as any);
+                if (rows && rows.value) rows = rows.value;
+                if (Array.isArray(rows)) {
+                    for (const r of rows) {
+                        if (r?.id != null) {
+                            try {
+                                await ql.delete(object, { where: { id: r.id } } as any);
+                            } catch (innerErr) {
+                                warnings.push(
+                                    `Failed to delete ${object} ${r.id}: ${innerErr instanceof Error ? innerErr.message : String(innerErr)}`,
+                                );
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                warnings.push(
+                    `Failed to enumerate ${object} for project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            }
+        }
+
+        // Tear down the physical database (best-effort).
+        const driver = (row.database_driver as string | undefined) ?? 'memory';
+        const databaseUrl = row.database_url as string | undefined;
+        const databaseName = `p-${String(projectId).replace(/-/g, '').slice(0, 24)}`;
+        try {
+            const adapter = await getRealAdapter(driver);
+            if (adapter?.deleteDatabase) {
+                await adapter.deleteDatabase({ projectId, databaseName, databaseUrl });
+            } else {
+                warnings.push(`No adapter for driver '${driver}'; physical DB for project ${projectId} not released.`);
+            }
+        } catch (err) {
+            warnings.push(
+                `Failed to delete physical database for project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+
+        // Drop the sys_project row itself.
+        try {
+            await ql.delete(ENV, { where: { id: projectId } } as any);
+        } catch (err) {
+            return {
+                ok: false,
+                status: 500,
+                error: `Failed to delete sys_project row: ${err instanceof Error ? err.message : String(err)}`,
+                warnings,
+            };
+        }
+
+        // Invalidate routing caches so subsequent requests don't resolve to a dead env.
+        if (this.envRegistry?.invalidate) {
+            try { await this.envRegistry.invalidate(projectId); } catch { /* best-effort */ }
+        }
+
+        return { ok: true, warnings };
+    }
 
     /**
      * Handles Storage requests

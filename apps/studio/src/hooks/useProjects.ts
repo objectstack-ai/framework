@@ -337,3 +337,42 @@ export function useRetryProvisioning() {
 
   return { retry, retrying, error };
 }
+
+/**
+ * Hook: cascade-delete a project (clears credential / member / package
+ * installation rows, releases the physical DB, then drops `sys_project`).
+ *
+ * Wraps `client.projects.delete(id, { force })`.
+ */
+export function useDeleteProject() {
+  const client = useClient() as any;
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const remove = useCallback(
+    async (projectId: string, opts?: { force?: boolean }) => {
+      if (!client?.projects?.delete) {
+        throw new Error('Client not ready');
+      }
+      setDeleting(true);
+      setError(null);
+      try {
+        const result = await client.projects.delete(projectId, opts);
+        // Forget the active-project pointer if it was this one.
+        if (recallActiveProject() === projectId) {
+          rememberActiveProject(null);
+          client?.setProjectId?.(undefined);
+        }
+        return result;
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setDeleting(false);
+      }
+    },
+    [client],
+  );
+
+  return { remove, deleting, error };
+}
