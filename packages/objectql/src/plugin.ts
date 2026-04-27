@@ -166,7 +166,15 @@ export class ObjectQLPlugin implements Plugin {
     await this.syncRegisteredSchemas(ctx);
 
     // Phase 2: Hydrate SchemaRegistry from sys_metadata (loads custom/template objects).
-    await this.restoreMetadataFromDb(ctx);
+    // Project kernels (environmentId set) never persist sys_metadata locally —
+    // metadata is sourced from the artifact (MetadataPlugin) or routed to the
+    // control plane via ControlPlaneProxyDriver. Skip to avoid querying a table
+    // that does not exist on local project DBs.
+    if (this.environmentId === undefined) {
+        await this.restoreMetadataFromDb(ctx);
+    } else {
+        ctx.logger.info('Project kernel — skipping sys_metadata hydration (metadata sourced from artifact)');
+    }
 
     // Phase 3: Sync any new schemas that were just hydrated from the DB
     // (e.g. CRM objects seeded via template — they must have tables before use).
@@ -176,12 +184,12 @@ export class ObjectQLPlugin implements Plugin {
     //
     // `SchemaRegistry` is a process-wide singleton, so project kernels in a
     // multi-project server would otherwise inherit every object ever
-    // registered by any sibling project (`saveMetaItem` writes to it).
-    // When this plugin was constructed with an `environmentId`, the kernel
-    // is project-scoped — its own ObjectQL.start already hydrated the
-    // project-owned schemas from sys_metadata (env_id-filtered), and the
-    // bridge would only pollute its metadata service with cross-project
-    // leakage. Skip it in that case.
+    // registered by any sibling project. When this plugin was constructed
+    // with an `environmentId`, the kernel is project-scoped — its
+    // metadata comes from the artifact (MetadataPlugin) or the
+    // control-plane proxy, not from local sys_metadata. The bridge would
+    // only pollute its metadata service with cross-project leakage, so
+    // skip it in that case.
     if (this.environmentId === undefined) {
         await this.bridgeObjectsToMetadataService(ctx);
     }

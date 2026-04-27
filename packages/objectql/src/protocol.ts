@@ -1085,6 +1085,26 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             throw new Error('Item data is required');
         }
 
+        // Project kernels (environmentId set) never persist to sys_metadata
+        // locally — runtime metadata is sourced from the artifact and writes
+        // belong to the control plane. Update the in-memory registry only.
+        if (this.environmentId !== undefined) {
+            this.engine.registry.registerItem(request.type, request.item, 'name');
+            if (request.type === 'object' || request.type === 'objects') {
+                try {
+                    this.engine.registry.registerObject(request.item as any, 'sys_metadata');
+                } catch (err: any) {
+                    console.warn(
+                        `[Protocol] registerObject failed for ${request.name}: ${err?.message ?? err}`,
+                    );
+                }
+            }
+            return {
+                success: true,
+                message: 'Saved to memory registry (project kernel — sys_metadata is control-plane only)',
+            };
+        }
+
         // 1. Always update the in-memory registry (runtime cache).
         //    For `type === 'object'` we additionally register in the
         //    dedicated objects map so that downstream calls (e.g.
@@ -1176,6 +1196,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * Safe to call repeatedly — idempotent (latest DB record wins).
      */
     async loadMetaFromDb(): Promise<{ loaded: number; errors: number }> {
+        // Project kernels never read sys_metadata locally — the table only
+        // exists on the control plane. Metadata is sourced from the artifact
+        // (MetadataPlugin) or routed via ControlPlaneProxyDriver.
+        if (this.environmentId !== undefined) {
+            return { loaded: 0, errors: 0 };
+        }
         let loaded = 0;
         let errors = 0;
         try {

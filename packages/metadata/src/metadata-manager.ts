@@ -137,6 +137,13 @@ export class MetadataManager implements IMetadataService {
    * @param environmentId - Environment ID (undefined = platform-global)
    */
   setDatabaseDriver(driver: IDataDriver, organizationId?: string, environmentId?: string): void {
+    if (environmentId !== undefined) {
+      this.logger.info('Project kernel — skipping DatabaseLoader for sys_metadata (control-plane only)', {
+        organizationId,
+        environmentId,
+      });
+      return;
+    }
     const tableName = this.config.tableName ?? 'sys_metadata';
     const dbLoader = new DatabaseLoader({
       driver,
@@ -159,6 +166,13 @@ export class MetadataManager implements IMetadataService {
    * @param environmentId - Environment ID (undefined = platform-global)
    */
   setDataEngine(engine: IDataEngine, organizationId?: string, environmentId?: string): void {
+    if (environmentId !== undefined) {
+      this.logger.info('Project kernel — skipping DatabaseLoader for sys_metadata (control-plane only)', {
+        organizationId,
+        environmentId,
+      });
+      return;
+    }
     const tableName = this.config.tableName ?? 'sys_metadata';
     const dbLoader = new DatabaseLoader({
       engine,
