@@ -483,12 +483,12 @@ function TwoFactorTab() {
 // ---------------------------------------------------------------------------
 
 function AccountPage() {
-  const { user } = useSession();
+  const { user, logout } = useSession();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     try {
-      await fetch('/api/v1/auth/sign-out', { method: 'POST', credentials: 'include' });
+      await logout();
     } finally {
       navigate({ to: '/login' });
     }

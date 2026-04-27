@@ -1,8 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { createRootRoute, Navigate, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ObjectStackProvider } from '@objectstack/client-react';
+import { ObjectStackClient } from '@objectstack/client';
 import { Toaster } from '@/components/ui/toaster';
 import { SessionProvider, useSession } from '@/hooks/useSession';
 import { getApiBaseUrl } from '@/lib/config';
@@ -55,9 +56,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const baseUrl = getApiBaseUrl();
+  const client = useMemo(() => new ObjectStackClient({ baseUrl }), [baseUrl]);
 
   return (
-    <ObjectStackProvider baseUrl={baseUrl}>
+    <ObjectStackProvider client={client}>
       <SessionProvider>
         <RequireAuth>
           <Outlet />
