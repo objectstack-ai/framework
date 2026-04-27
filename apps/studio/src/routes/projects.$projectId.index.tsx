@@ -33,6 +33,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useProjectDetail, useRetryProvisioning, useUpdateHostname, useDeleteProject } from '@/hooks/useProjects';
 import { useClient } from '@objectstack/client-react';
 import { useProductionGuard } from '@/components/production-guard';
@@ -52,6 +61,8 @@ function ProjectOverviewComponent() {
   const { remove: deleteProject, deleting } = useDeleteProject();
   const [hostnameEditing, setHostnameEditing] = useState(false);
   const [hostnameInput, setHostnameInput] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   const project = detail?.project;
   const provisioningError =
@@ -134,18 +145,16 @@ function ProjectOverviewComponent() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleConfirmDelete = async () => {
     if (!project) return;
-    const ok = await guard.confirm({
-      title: `Delete project "${project.display_name}"?`,
-      description:
-        'This permanently deletes the project, its credentials, members, package installations, and the underlying physical database. This action cannot be undone.',
-      confirmLabel: 'Delete project',
-      confirmVariant: 'destructive',
-      requireTypedConfirmation: true,
-      typedConfirmationValue: project.display_name,
-    });
-    if (!ok) return;
+    if (deleteConfirmText !== project.display_name) {
+      toast({
+        title: 'Confirmation does not match',
+        description: `Type "${project.display_name}" to confirm deletion.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       const result = await deleteProject(project.id, { force: project.is_default });
       const warnings = (result as any)?.warnings as string[] | undefined;
@@ -156,6 +165,8 @@ function ProjectOverviewComponent() {
           : `${project.display_name} and its database have been removed.`,
         variant: warnings?.length ? 'destructive' : undefined,
       });
+      setDeleteDialogOpen(false);
+      setDeleteConfirmText('');
       navigate({ to: '/projects' });
     } catch (err) {
       toast({
@@ -456,26 +467,128 @@ function ProjectOverviewComponent() {
 
                 <Separator />
 
-                <div className="flex justify-end">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="gap-2"
-                    disabled={deleting}
-                    onClick={handleDelete}
-                  >
-                    {deleting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
+                {/* Danger zone — GitHub/Vercel-style cascade-delete card. */}
+                <Card className="border-destructive/40 p-5">
+                  <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Danger zone
+                  </h2>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-sm">
+                      <p className="font-medium">Delete this project</p>
+                      <p className="text-muted-foreground">
+                        Once deleted, the project, its credentials, members, package
+                        installations, and the underlying database are gone forever.
+                      </p>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="gap-2 self-start sm:self-auto"
+                      disabled={deleting}
+                      onClick={() => setDeleteDialogOpen(true)}
+                    >
                       <Trash className="h-3.5 w-3.5" />
-                    )}
-                    {deleting ? 'Deleting…' : 'Delete project'}
-                  </Button>
-                </div>
+                      Delete project
+                    </Button>
+                  </div>
+                </Card>
               </>
             )}
           </div>
         </div>
+
+        {/* Delete Project Dialog (GitHub/Vercel-style typed confirmation) */}
+        <Dialog
+          open={deleteDialogOpen}
+          onOpenChange={(open) => {
+            if (deleting) return;
+            setDeleteDialogOpen(open);
+            if (!open) setDeleteConfirmText('');
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Delete project
+              </DialogTitle>
+              <DialogDescription>
+                This action <strong>cannot be undone</strong>. This will permanently
+                delete the <strong>{project?.display_name}</strong> project, its
+                credentials, members, package installations, and the underlying
+                physical database.
+              </DialogDescription>
+            </DialogHeader>
+
+            {project && (
+              <div className="my-2 space-y-1.5 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-muted-foreground">Project</span>
+                  <span className="font-medium">{project.display_name}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-muted-foreground">ID</span>
+                  <code className="break-all font-mono">{project.id}</code>
+                </div>
+                {project.database_url && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">Database</span>
+                    <code className="break-all font-mono">{project.database_url}</code>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="delete-project-confirm">
+                Please type{' '}
+                <code className="font-mono text-xs">{project?.display_name}</code>{' '}
+                to confirm.
+              </Label>
+              <Input
+                id="delete-project-confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={project?.display_name ?? ''}
+                autoComplete="off"
+                autoFocus
+                disabled={deleting}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setDeleteConfirmText('');
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={
+                  deleting ||
+                  !project ||
+                  deleteConfirmText !== project.display_name
+                }
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Deleting…
+                  </>
+                ) : (
+                  'I understand, delete this project'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </main>
   );
 }
