@@ -15,7 +15,7 @@ import { createOriginMatcher, hasWildcardPattern } from '@objectstack/plugin-hon
 import { getRequestListener } from '@hono/node-server';
 import { ObjectKernel, createRestApiPlugin, createDispatcherPlugin, KernelManager } from '@objectstack/runtime';
 import type { EnvironmentDriverRegistry } from '@objectstack/runtime';
-import type { Hono } from 'hono';
+import { Hono } from 'hono';
 import stackConfig from '../objectstack.config.js';
 import { listTemplates } from './templates/registry.js';
 
@@ -118,14 +118,19 @@ async function ensureApp(): Promise<Hono> {
     // envRegistry / kernelManager are resolved by HttpDispatcher from the
     // kernel's service registry (MultiProjectPlugin registered them during
     // bootKernel), so they do NOT need to be passed explicitly here.
-    _app = createHonoApp({ kernel, prefix: '/api/v1' });
+    const inner = createHonoApp({ kernel, prefix: '/api/v1' });
 
     // Vercel entrypoint does NOT load plugin-hono-server, so the
     // `http.server` service is never registered. The route plugins in
     // `multi-project-plugins.ts` early-return when that service is
     // missing, leaving `/studio/runtime-config` and `/cloud/templates`
-    // unmounted (404 / empty list). Mount them directly on the Hono
-    // instance here so multi-project deployments behave correctly.
+    // unmounted (404 / empty list).
+    //
+    // We can't simply call `inner.get(...)` after createHonoApp() because
+    // it has already registered an `app.all('${prefix}/*')` dispatcher
+    // catch-all that wins on registration order. Instead wrap `inner` in
+    // an outer Hono whose own routes are matched first, then fall
+    // through to `inner.fetch()` for everything else.
     if (envFlag('OBJECTSTACK_MULTI_PROJECT')) {
         const templatesPayload = listTemplates().map(({ id, label, description, category }) => ({
             id,
@@ -133,13 +138,18 @@ async function ensureApp(): Promise<Hono> {
             description,
             category,
         }));
-        _app.get('/api/v1/studio/runtime-config', (c) =>
+        const outer = new Hono();
+        outer.get('/api/v1/studio/runtime-config', (c) =>
             c.json({ singleProject: false }));
-        _app.get('/api/v1/cloud/templates', (c) =>
+        outer.get('/api/v1/cloud/templates', (c) =>
             c.json({
                 success: true,
                 data: { templates: templatesPayload, total: templatesPayload.length },
             }));
+        outer.all('*', (c) => inner.fetch(c.req.raw));
+        _app = outer;
+    } else {
+        _app = inner;
     }
 
     return _app;
