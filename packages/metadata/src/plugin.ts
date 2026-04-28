@@ -60,6 +60,17 @@ export interface MetadataPluginOptions {
      * reserved for M3/M4.
      */
     artifactSource?: { mode: 'local-file'; path: string } | { mode: 'artifact-api'; url: string };
+    /**
+     * Register the queryable system metadata-storage objects
+     * (`sys_object`, `sys_view`, `sys_flow`, `sys_agent`, `sys_tool`) on this
+     * kernel. Default `true` for backward compatibility.
+     *
+     * Set to `false` for **per-project** kernels: in cloud / project mode the
+     * control plane is the sole owner of metadata storage tables — exposing
+     * them inside each project kernel would leak control-plane schema into
+     * business-data namespaces.
+     */
+    registerSystemObjects?: boolean;
 }
 
 export class MetadataPlugin implements Plugin {
@@ -101,25 +112,30 @@ export class MetadataPlugin implements Plugin {
 
         // Register metadata system objects via the manifest service (if available).
         // MetadataPlugin may init before ObjectQLPlugin, so wrap in try/catch.
-        try {
-            const manifestService = ctx.getService<{ register(m: any): void }>('manifest');
+        // Skipped when `registerSystemObjects: false` (per-project kernels in
+        // cloud / project mode — sys_* live exclusively in the control plane).
+        const registerSysObjects = this.options.registerSystemObjects !== false;
+        if (registerSysObjects) {
+            try {
+                const manifestService = ctx.getService<{ register(m: any): void }>('manifest');
 
-            // Register the queryable metadata-layer platform objects.
-            manifestService.register({
-                id: 'com.objectstack.metadata-objects',
-                name: 'Metadata Platform Objects',
-                version: '1.0.0',
-                type: 'plugin',
-                scope: 'system',
-                defaultDatasource: 'cloud',
-                objects: queryableMetadataObjects,
-            });
+                // Register the queryable metadata-layer platform objects.
+                manifestService.register({
+                    id: 'com.objectstack.metadata-objects',
+                    name: 'Metadata Platform Objects',
+                    version: '1.0.0',
+                    type: 'plugin',
+                    scope: 'system',
+                    defaultDatasource: 'cloud',
+                    objects: queryableMetadataObjects,
+                });
 
-            ctx.logger.info('Registered system metadata objects', {
-                queryable: queryableMetadataObjects.map((object) => object.name),
-            });
-        } catch {
-            // ObjectQL not loaded yet — objects will be discovered via legacy fallback
+                ctx.logger.info('Registered system metadata objects', {
+                    queryable: queryableMetadataObjects.map((object) => object.name),
+                });
+            } catch {
+                // ObjectQL not loaded yet — objects will be discovered via legacy fallback
+            }
         }
 
         ctx.logger.info('MetadataPlugin providing metadata service (primary mode)', {

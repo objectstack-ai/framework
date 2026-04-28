@@ -98,7 +98,13 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
         const orgId = project.organization_id;
         return [
             new ObjectQLPlugin({ environmentId: projectId }),
-            new MetadataPlugin({ watch: false, environmentId: projectId, organizationId: orgId }),
+            new MetadataPlugin({
+                watch: false,
+                environmentId: projectId,
+                organizationId: orgId,
+                // sys_* metadata-storage tables live in the control plane only.
+                registerSystemObjects: false,
+            }),
         ];
     });
 

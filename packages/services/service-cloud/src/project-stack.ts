@@ -106,6 +106,8 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
                     watch: false,
                     environmentId: pid,
                     artifactSource: { mode: 'local-file', path: artifactPath },
+                    // sys_* metadata-storage tables live in the control plane only.
+                    registerSystemObjects: false,
                 }),
             ];
             if (artifactBundle) plugins.push(new AppPlugin(artifactBundle));
