@@ -23,7 +23,7 @@ import {
   useNavigate,
   useParams,
 } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { useProjectDetail } from '@/hooks/useProjects';
 import { useSession } from '@/hooks/useSession';
@@ -39,6 +39,9 @@ function ProjectLayoutComponent() {
   const { detail, error } = useProjectDetail(projectId);
   const registerActiveProject = useRegisterActiveProject();
   const { session, setActiveOrganization } = useSession();
+  // Track whether we already initiated an org switch for this project mount,
+  // so we don't re-trigger during the session refresh that follows the switch.
+  const orgSwitchedRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -77,10 +80,14 @@ function ProjectLayoutComponent() {
   // Sync active organization: if the project belongs to a different org than
   // the current session's active org, switch automatically so that all
   // org-scoped API calls (project list, member list, etc.) use the right org.
+  // orgSwitchedRef prevents the effect from re-firing during the session
+  // refresh that setActiveOrganization triggers internally.
   useEffect(() => {
     const projectOrgId = detail?.project?.organization_id;
     if (!projectOrgId) return;
+    if (orgSwitchedRef.current) return;
     if (session?.activeOrganizationId === projectOrgId) return;
+    orgSwitchedRef.current = true;
     setActiveOrganization(projectOrgId);
   }, [detail?.project?.organization_id, session?.activeOrganizationId, setActiveOrganization]);
 
