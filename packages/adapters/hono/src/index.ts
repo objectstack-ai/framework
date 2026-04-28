@@ -6,9 +6,22 @@ import {
   type ObjectKernel,
   HttpDispatcher,
   HttpDispatcherResult,
-  KernelManager,
-  type EnvironmentDriverRegistry,
 } from '@objectstack/runtime';
+
+/**
+ * Minimal structural interface matching KernelManager from @objectstack/service-cloud.
+ * Declared locally to avoid a circular build dependency.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type KernelManager = any;
+
+/**
+ * Opaque reference to an EnvironmentDriverRegistry from @objectstack/service-cloud.
+ * Declared locally to avoid a circular build dependency. Pass an instance
+ * of DefaultEnvironmentDriverRegistry from @objectstack/service-cloud at runtime.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type EnvironmentDriverRegistry = any;
 import { createOriginMatcher, hasWildcardPattern } from '@objectstack/plugin-hono-server';
 
 export interface ObjectStackHonoCorsOptions {

@@ -1,0 +1,65 @@
+{
+  "name": "@objectstack/service-cloud",
+  "version": "4.0.4",
+  "description": "ObjectStack Cloud Service - Multi-project orchestration, control-plane, and cloud deployment",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@objectstack/spec": "workspace:^",
+    "@objectstack/core": "workspace:^",
+    "@objectstack/runtime": "workspace:^",
+    "@objectstack/objectql": "workspace:^",
+    "@objectstack/metadata": "workspace:^",
+    "@objectstack/service-tenant": "workspace:^",
+    "@objectstack/plugin-auth": "workspace:^",
+    "@objectstack/plugin-security": "workspace:^",
+    "@objectstack/plugin-audit": "workspace:^",
+    "@objectstack/service-package": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsup": "^8.3.5",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/services/service-cloud"
+  },
+  "keywords": [
+    "objectstack",
+    "cloud",
+    "multi-project",
+    "control-plane",
+    "multi-tenant"
+  ],
+  "author": "ObjectStack Team",
+  "license": "Apache-2.0",
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
