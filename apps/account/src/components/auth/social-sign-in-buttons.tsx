@@ -13,9 +13,10 @@ interface SocialProvider {
 
 interface Props {
   mode: 'sign-in' | 'sign-up';
+  redirect?: string;
 }
 
-export function SocialSignInButtons({ mode }: Props) {
+export function SocialSignInButtons({ mode, redirect }: Props) {
   const client = useClient() as any;
   const [providers, setProviders] = useState<SocialProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,6 +38,9 @@ export function SocialSignInButtons({ mode }: Props) {
 
   const label = mode === 'sign-in' ? 'Continue with' : 'Sign up with';
 
+  const base = window.location.origin + import.meta.env.BASE_URL;
+  const loginUrl = base + 'login' + (redirect ? `?redirect=${encodeURIComponent(redirect)}` : '');
+
   return (
     <div className="flex flex-col gap-2">
       {providers.map((p) => (
@@ -47,8 +51,8 @@ export function SocialSignInButtons({ mode }: Props) {
           className="w-full"
           onClick={() =>
             client.auth.signInWithProvider(p.id, {
-              callbackURL: window.location.origin + import.meta.env.BASE_URL + 'login',
-              errorCallbackURL: window.location.origin + import.meta.env.BASE_URL + 'login',
+              callbackURL: loginUrl,
+              errorCallbackURL: loginUrl,
               type: p.type ?? 'social',
             })
           }

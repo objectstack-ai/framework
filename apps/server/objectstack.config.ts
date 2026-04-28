@@ -139,7 +139,7 @@ async function buildLocalPlugins() {
             artifactSource: { mode: 'local-file', path: localArtifactPath },
         }),
         new ObjectQLPlugin({ environmentId: localProjectId }),
-        new AuthPlugin({ secret: authSecret, baseUrl, plugins: { organization: true, twoFactor: false, passkeys: false, magicLink: false, oidcProvider: true } }),
+        new AuthPlugin({ secret: authSecret, baseUrl, plugins: { organization: true, twoFactor: true, passkeys: false, magicLink: false, oidcProvider: true } }),
         // Short-circuits the control-plane endpoints Studio polls
         // (`/cloud/projects*`, `/auth/get-session`, `/auth/organization/list`)
         // and exposes `/studio/runtime-config` so the SPA can detect

@@ -87,7 +87,7 @@ function RegisterPage() {
             <CardContent>
               <form onSubmit={handleSubmit}>
                 <div className="flex flex-col gap-4">
-                  <SocialSignInButtons mode="sign-up" />
+                  <SocialSignInButtons mode="sign-up" redirect={redirect} />
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="name">Name</Label>
                     <Input

@@ -16,6 +16,7 @@ export const Route = createFileRoute('/account/two-factor')({
 
 function TwoFactorPage() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [enablePassword, setEnablePassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [totpUri, setTotpUri] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
@@ -23,14 +24,15 @@ function TwoFactorPage() {
   const [disablePassword, setDisablePassword] = useState('');
   const [disabling, setDisabling] = useState(false);
 
-  const handleEnable = async () => {
+  const handleEnable = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     try {
       const res = await fetch('/api/v1/auth/two-factor/enable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ password: enablePassword }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -38,6 +40,7 @@ function TwoFactorPage() {
       }
       const data = await res.json();
       setTotpUri((data as any)?.totpURI ?? null);
+      setEnablePassword('');
     } catch (err) {
       toast({
         title: 'Failed to enable 2FA',
@@ -196,9 +199,23 @@ function TwoFactorPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Button onClick={handleEnable} disabled={loading}>
-          {loading ? 'Loading…' : 'Enable 2FA'}
-        </Button>
+        <form onSubmit={handleEnable} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="enable-password">Password</Label>
+            <Input
+              id="enable-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={enablePassword}
+              onChange={(e) => setEnablePassword(e.target.value)}
+              placeholder="Confirm with your account password"
+            />
+          </div>
+          <Button type="submit" disabled={loading}>
+            {loading ? 'Loading…' : 'Enable 2FA'}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

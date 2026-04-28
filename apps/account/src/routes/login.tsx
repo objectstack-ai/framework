@@ -97,7 +97,7 @@ function LoginPage() {
             <CardContent>
               <form onSubmit={handleSubmit}>
                 <div className="flex flex-col gap-4">
-                  <SocialSignInButtons mode="sign-in" />
+                  <SocialSignInButtons mode="sign-in" redirect={redirect} />
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
