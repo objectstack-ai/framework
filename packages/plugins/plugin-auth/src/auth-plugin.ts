@@ -157,7 +157,12 @@ export class AuthPlugin implements Plugin {
               const configuredOrigin = new URL(configuredUrl).origin;
               const actualUrl = `http://localhost:${actualPort}`;
 
-              if (configuredOrigin !== actualUrl) {
+              // Only auto-correct the port when the configured URL is already a
+              // localhost URL (development mode). In production (Vercel/cloud) the
+              // configured baseUrl is the real public hostname — never overwrite it
+              // with a localhost URL, which would break OAuth callback URLs.
+              const configuredIsLocalhost = configuredOrigin.startsWith('http://localhost');
+              if (configuredIsLocalhost && configuredOrigin !== actualUrl) {
                 this.authManager.setRuntimeBaseUrl(actualUrl);
                 ctx.logger.info(
                   `Auth baseUrl auto-updated to ${actualUrl} (configured: ${configuredUrl})`,
