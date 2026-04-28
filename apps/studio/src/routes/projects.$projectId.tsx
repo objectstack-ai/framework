@@ -26,6 +26,7 @@ import {
 import { useCallback, useEffect, useMemo } from 'react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { useProjectDetail } from '@/hooks/useProjects';
+import { useSession } from '@/hooks/useSession';
 import { useRegisterActiveProject } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
 import { AppSidebar } from '@/components/app-sidebar';
@@ -37,6 +38,7 @@ function ProjectLayoutComponent() {
   });
   const { detail, error } = useProjectDetail(projectId);
   const registerActiveProject = useRegisterActiveProject();
+  const { session, setActiveOrganization } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -71,6 +73,16 @@ function ProjectLayoutComponent() {
     );
     if (pkg && pkg !== selectedPackage) setSelectedPackage(pkg);
   }, [activePackageId, packages, selectedPackage, setSelectedPackage]);
+
+  // Sync active organization: if the project belongs to a different org than
+  // the current session's active org, switch automatically so that all
+  // org-scoped API calls (project list, member list, etc.) use the right org.
+  useEffect(() => {
+    const projectOrgId = detail?.project?.organization_id;
+    if (!projectOrgId) return;
+    if (session?.activeOrganizationId === projectOrgId) return;
+    setActiveOrganization(projectOrgId);
+  }, [detail?.project?.organization_id, session?.activeOrganizationId, setActiveOrganization]);
 
   const handleSelectPackage = useCallback(
     (pkg: InstalledPackage) => {
