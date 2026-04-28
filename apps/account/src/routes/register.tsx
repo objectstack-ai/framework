@@ -57,7 +57,7 @@ function RegisterPage() {
       await client.auth.register({ name, email, password });
       await refresh();
       toast({ title: 'Account created' });
-      navigate({ to: '/orgs/new' });
+      navigate({ to: '/organizations/new' });
     } catch (err) {
       toast({
         title: 'Sign up failed',

@@ -26,7 +26,7 @@ export function gotoAccountLogin(redirect?: string): void {
   window.location.assign(url);
 }
 
-/** Hard-navigate to a path under the Account SPA (e.g. `/account`, `/orgs`). */
+/** Hard-navigate to a path under the Account SPA (e.g. `/account`, `/organizations`). */
 export function gotoAccount(path: string): void {
   const clean = path.startsWith('/') ? path : `/${path}`;
   window.location.assign(`${ACCOUNT_BASE}${clean}`);

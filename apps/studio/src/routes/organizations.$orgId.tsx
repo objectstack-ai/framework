@@ -38,7 +38,7 @@ import {
 } from '@/hooks/useOrganizationMembers';
 import { useOrgApps } from '@/hooks/useOrgApps';
 
-export const Route = createFileRoute('/orgs/$orgId')({
+export const Route = createFileRoute('/organizations/$orgId')({
   component: OrgDetailPage,
 });
 
@@ -171,7 +171,7 @@ function OrgDetailPage() {
       });
       setDeleteDialogOpen(false);
       setDeleteConfirmText('');
-      navigate({ to: '/orgs' });
+      navigate({ to: '/organizations' });
     } catch (err) {
       toast({
         title: 'Failed to delete organization',
@@ -189,7 +189,7 @@ function OrgDetailPage() {
       <div className="flex-1 px-6 py-8 overflow-auto">
         <div className="mx-auto max-w-4xl space-y-6">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/orgs' })}>
+            <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/organizations' })}>
               <ArrowLeft className="mr-1 h-4 w-4" /> Back
             </Button>
             {!isActive && (

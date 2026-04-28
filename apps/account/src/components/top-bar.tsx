@@ -54,7 +54,7 @@ export function TopBar() {
       else if (p === '/account/two-factor') items.push({ label: 'Two-Factor' });
       return items;
     }
-    if (p === '/orgs/new') return [{ label: 'Organizations' }, { label: 'New' }];
+    if (p === '/organizations/new') return [{ label: 'Organizations' }, { label: 'New' }];
     if (params.orgId) {
       const tail = p.endsWith('/general')
         ? 'General'
@@ -63,7 +63,7 @@ export function TopBar() {
           : 'Settings';
       return [{ label: 'Organizations' }, { label: tail }];
     }
-    if (p === '/orgs' || p.startsWith('/orgs/')) return [{ label: 'Organizations' }];
+    if (p === '/organizations' || p.startsWith('/organizations/')) return [{ label: 'Organizations' }];
     if (p.startsWith('/accept-invitation/')) return [{ label: 'Accept invitation' }];
     if (p.startsWith('/auth/device')) return [{ label: 'Device authorization' }];
     return [{ label: 'Account' }];

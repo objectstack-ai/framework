@@ -900,6 +900,25 @@ export class ObjectStackClient {
     },
 
     /**
+     * Update an existing organization.
+     * POST /api/v1/auth/organization/update
+     *
+     * better-auth requires the caller to be an owner/admin (server-side
+     * enforcement); the body shape is `{ organizationId, data: {...} }`.
+     */
+    update: async (
+      organizationId: string,
+      data: { name?: string; slug?: string; logo?: string; metadata?: Record<string, unknown> },
+    ) => {
+      const route = this.getRoute('auth');
+      const res = await this.fetch(`${this.baseUrl}${route}/organization/update`, {
+        method: 'POST',
+        body: JSON.stringify({ organizationId, data }),
+      });
+      return res.json();
+    },
+
+    /**
      * Set the active organization on the current session. The server writes
      * `activeOrganizationId` on the better-auth session, which downstream
      * handlers (e.g. `EnvironmentProvisioningService`) consult.

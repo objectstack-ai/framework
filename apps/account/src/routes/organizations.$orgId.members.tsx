@@ -40,7 +40,7 @@ import {
   useOrganizationInvitations,
 } from '@/hooks/useOrganizationMembers';
 
-export const Route = createFileRoute('/orgs/$orgId/members')({
+export const Route = createFileRoute('/organizations/$orgId/members')({
   component: OrgMembersPage,
 });
 

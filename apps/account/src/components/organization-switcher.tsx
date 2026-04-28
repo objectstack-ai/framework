@@ -4,7 +4,7 @@
  * OrganizationSwitcher — Account portal top-bar dropdown for switching
  * between the user's organizations. Mirrors Studio's switcher.
  *
- * When the user is currently viewing `/orgs/<id>/<section>`, switching to
+ * When the user is currently viewing `/organizations/<id>/<section>`, switching to
  * another org navigates to the equivalent section on the new org so the
  * URL stays in sync with the active org.
  */
@@ -42,7 +42,7 @@ export function OrganizationSwitcher() {
     setOpen(false);
     if (id === activeId) {
       // No-op switch — but still ensure we land on the org page.
-      navigate({ to: '/orgs/$orgId/general', params: { orgId: id } });
+      navigate({ to: '/organizations/$orgId/general', params: { orgId: id } });
       return;
     }
     setSwitching(true);
@@ -52,10 +52,10 @@ export function OrganizationSwitcher() {
       toast({ title: 'Organization switched' });
 
       // Mirror the current section onto the new org when applicable.
-      const m = location.pathname.match(/^\/orgs\/[^/]+\/(general|members)\/?$/);
+      const m = location.pathname.match(/^\/organizations\/[^/]+\/(general|members)\/?$/);
       const section = m ? (m[1] as 'general' | 'members') : 'general';
       navigate({
-        to: section === 'members' ? '/orgs/$orgId/members' : '/orgs/$orgId/general',
+        to: section === 'members' ? '/organizations/$orgId/members' : '/organizations/$orgId/general',
         params: { orgId: id },
       });
     } catch (err) {
@@ -122,7 +122,7 @@ export function OrganizationSwitcher() {
           onSelect={(e) => {
             e.preventDefault();
             setOpen(false);
-            navigate({ to: '/orgs/new' });
+            navigate({ to: '/organizations/new' });
           }}
           className="gap-2 text-sm"
         >
@@ -133,7 +133,7 @@ export function OrganizationSwitcher() {
           onSelect={(e) => {
             e.preventDefault();
             setOpen(false);
-            navigate({ to: '/orgs' });
+            navigate({ to: '/organizations' });
           }}
           className="gap-2 text-sm text-muted-foreground"
         >

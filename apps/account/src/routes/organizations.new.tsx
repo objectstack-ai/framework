@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
 import { useCreateOrganization, useSession } from '@/hooks/useSession';
 
-export const Route = createFileRoute('/orgs/new')({
+export const Route = createFileRoute('/organizations/new')({
   component: NewOrgPage,
 });
 
@@ -39,7 +39,6 @@ function NewOrgPage() {
     e.preventDefault();
     try {
       const res = await create({ name, slug: slug || undefined });
-      // better-auth returns the created organization; try to pick up id.
       const created = (res as any)?.data ?? res;
       const newId = created?.id ?? created?.organization?.id;
       if (newId) {
@@ -47,7 +46,11 @@ function NewOrgPage() {
       }
       await reloadOrganizations().catch(() => {});
       toast({ title: 'Organization created' });
-      navigate({ to: '/projects' });
+      if (newId) {
+        navigate({ to: '/organizations/$orgId', params: { orgId: newId } });
+      } else {
+        navigate({ to: '/organizations' });
+      }
     } catch (err) {
       toast({
         title: 'Failed to create organization',
@@ -101,7 +104,7 @@ function NewOrgPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => navigate({ to: '/orgs' })}
+                  onClick={() => navigate({ to: '/organizations' })}
                 >
                   Cancel
                 </Button>

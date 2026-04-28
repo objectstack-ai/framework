@@ -139,16 +139,16 @@ export function GlobalSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === `/orgs/${activeOrgId}`}
+                  isActive={pathname === `/organizations/${activeOrgId}`}
                   tooltip="Settings"
                 >
                   {activeOrgId ? (
-                    <Link to="/orgs/$orgId" params={{ orgId: activeOrgId }}>
+                    <Link to="/organizations/$orgId" params={{ orgId: activeOrgId }}>
                       <Settings className="size-4" />
                       <span>Settings</span>
                     </Link>
                   ) : (
-                    <Link to="/orgs">
+                    <Link to="/organizations">
                       <Settings className="size-4" />
                       <span>Settings</span>
                     </Link>

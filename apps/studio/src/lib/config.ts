@@ -40,7 +40,7 @@ export interface ConsoleConfig {
    * Single-project mode. When true the backend is serving exactly one
    * synthetic project (no control plane, no org/project selection). The
    * frontend uses this to hide the Org/Project switchers, skip the
-   * /login → /orgs → /projects funnel, and route `/` straight to the
+   * /login → /organizations → /projects funnel, and route `/` straight to the
    * default project workspace. Driven by a server-injected flag (see
    * `initRuntimeConfig`), which in turn reflects the server's
    * `OBJECTSTACK_MULTI_PROJECT` environment variable.

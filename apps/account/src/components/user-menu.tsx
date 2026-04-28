@@ -81,7 +81,7 @@ export function UserMenu() {
           <UserIcon className="mr-2 h-3.5 w-3.5" />
           Account
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate({ to: '/orgs' })}>
+        <DropdownMenuItem onSelect={() => navigate({ to: '/organizations' })}>
           <Building2 className="mr-2 h-3.5 w-3.5" />
           Organizations
         </DropdownMenuItem>

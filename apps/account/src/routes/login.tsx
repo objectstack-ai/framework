@@ -30,7 +30,7 @@ function isSafeRedirect(target: string | undefined): target is string {
  * - Paths beginning with `/_` (e.g. `/_studio/...`, `/_account/...`) are
  *   already absolute SPA mounts — return them verbatim.
  * - Otherwise the target is an Account-internal SPA path (`/account`,
- *   `/orgs/...`) and gets prefixed with the Account SPA base URL.
+ *   `/organizations/...`) and gets prefixed with the Account SPA base URL.
  */
 function resolveRedirect(target: string): string {
   if (target.startsWith('/_')) return target;
@@ -54,7 +54,7 @@ function LoginPage() {
       return;
     }
     if (!session?.activeOrganizationId) {
-      navigate({ to: '/orgs' });
+      navigate({ to: '/organizations' });
       return;
     }
     navigate({ to: '/account' });

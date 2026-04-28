@@ -25,7 +25,7 @@ function IndexRedirect() {
     if (sessionLoading || !user) return; // RequireAuth sends to /login
 
     if (!session?.activeOrganizationId) {
-      navigate({ to: '/orgs' });
+      navigate({ to: '/organizations' });
       return;
     }
     if (projectsLoading) return;

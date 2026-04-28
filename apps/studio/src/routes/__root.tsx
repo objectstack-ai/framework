@@ -32,8 +32,8 @@ function isMultiProjectOnlyPath(pathname: string): boolean {
     pathname === '/register' ||
     pathname.startsWith('/register/') ||
     pathname === '/forgot-password' ||
-    pathname === '/orgs' ||
-    pathname.startsWith('/orgs/') ||
+    pathname === '/organizations' ||
+    pathname.startsWith('/organizations/') ||
     pathname === '/projects'
   );
 }
@@ -47,7 +47,7 @@ function isEnvExemptPath(pathname: string): boolean {
     pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/register') ||
-    pathname.startsWith('/orgs') ||
+    pathname.startsWith('/organizations') ||
     pathname.startsWith('/projects') ||
     pathname.startsWith('/auth/') ||
     pathname === '/api-console' ||
@@ -62,7 +62,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const isPublic = PUBLIC_ROUTES.has(location.pathname);
 
   // In single-project mode, collapse every multi-project-only entry
-  // (`/login`, `/orgs`, `/projects`) onto the default project workspace
+  // (`/login`, `/organizations`, `/projects`) onto the default project workspace
   // so the user never sees the org/project funnel.
   useEffect(() => {
     if (!config.singleProject || !config.defaultProjectId) return;

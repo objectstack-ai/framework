@@ -1,14 +1,14 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { Building2, Check, Plus, Settings } from 'lucide-react';
+import { Building2, Check, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
 import { useOrganizations, useSession } from '@/hooks/useSession';
 
-export const Route = createFileRoute('/orgs/')({
+export const Route = createFileRoute('/organizations/')({
   component: OrgsListPage,
 });
 
@@ -23,7 +23,7 @@ function OrgsListPage() {
       if (id !== activeId) {
         await setActiveOrganization(id);
       }
-      navigate({ to: '/projects' });
+      navigate({ to: '/organizations/$orgId', params: { orgId: id } });
     } catch (err) {
       toast({
         title: 'Failed to switch organization',
@@ -44,7 +44,7 @@ function OrgsListPage() {
                 Select an organization to work with, or create a new one.
               </p>
             </div>
-            <Button onClick={() => navigate({ to: '/orgs/new' })}>
+            <Button onClick={() => navigate({ to: '/organizations/new' })}>
               <Plus className="mr-2 h-4 w-4" /> New organization
             </Button>
           </div>
@@ -58,7 +58,7 @@ function OrgsListPage() {
               <p className="mb-4 text-sm text-muted-foreground">
                 Create your first organization to start building.
               </p>
-              <Button onClick={() => navigate({ to: '/orgs/new' })}>
+              <Button onClick={() => navigate({ to: '/organizations/new' })}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create organization
               </Button>
@@ -103,18 +103,6 @@ function OrgsListPage() {
                         </code>
                       )}
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate({ to: '/orgs/$orgId', params: { orgId: org.id } });
-                      }}
-                      aria-label="Organization settings"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
                   </div>
                 </Card>
               );

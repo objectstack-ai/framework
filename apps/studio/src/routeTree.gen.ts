@@ -16,11 +16,11 @@ import { Route as ApiConsoleRouteImport } from './routes/api-console'
 import { Route as PackageRouteImport } from './routes/$package'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
-import { Route as OrgsIndexRouteImport } from './routes/orgs.index'
+import { Route as OrganizationsIndexRouteImport } from './routes/organizations.index'
 import { Route as PackageIndexRouteImport } from './routes/$package.index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
-import { Route as OrgsNewRouteImport } from './routes/orgs.new'
-import { Route as OrgsOrgIdRouteImport } from './routes/orgs.$orgId'
+import { Route as OrganizationsNewRouteImport } from './routes/organizations.new'
+import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations.$orgId'
 import { Route as AuthDeviceRouteImport } from './routes/auth.device'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdPackagesRouteImport } from './routes/projects.$projectId.packages'
@@ -67,9 +67,9 @@ const ProjectsIndexRoute = ProjectsIndexRouteImport.update({
   path: '/projects/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrgsIndexRoute = OrgsIndexRouteImport.update({
-  id: '/orgs/',
-  path: '/orgs/',
+const OrganizationsIndexRoute = OrganizationsIndexRouteImport.update({
+  id: '/organizations/',
+  path: '/organizations/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PackageIndexRoute = PackageIndexRouteImport.update({
@@ -82,14 +82,14 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrgsNewRoute = OrgsNewRouteImport.update({
-  id: '/orgs/new',
-  path: '/orgs/new',
+const OrganizationsNewRoute = OrganizationsNewRouteImport.update({
+  id: '/organizations/new',
+  path: '/organizations/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrgsOrgIdRoute = OrgsOrgIdRouteImport.update({
-  id: '/orgs/$orgId',
-  path: '/orgs/$orgId',
+const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
+  id: '/organizations/$orgId',
+  path: '/organizations/$orgId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthDeviceRoute = AuthDeviceRouteImport.update({
@@ -157,11 +157,11 @@ export interface FileRoutesByFullPath {
   '/packages': typeof PackagesRoute
   '/register': typeof RegisterRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRoute
-  '/orgs/new': typeof OrgsNewRoute
+  '/organizations/$orgId': typeof OrganizationsOrgIdRoute
+  '/organizations/new': typeof OrganizationsNewRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/$package/': typeof PackageIndexRoute
-  '/orgs/': typeof OrgsIndexRoute
+  '/organizations/': typeof OrganizationsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/projects/$projectId/$package': typeof ProjectsProjectIdPackageRouteWithChildren
@@ -180,10 +180,10 @@ export interface FileRoutesByTo {
   '/packages': typeof PackagesRoute
   '/register': typeof RegisterRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRoute
-  '/orgs/new': typeof OrgsNewRoute
+  '/organizations/$orgId': typeof OrganizationsOrgIdRoute
+  '/organizations/new': typeof OrganizationsNewRoute
   '/$package': typeof PackageIndexRoute
-  '/orgs': typeof OrgsIndexRoute
+  '/organizations': typeof OrganizationsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/projects/$projectId/api-console': typeof ProjectsProjectIdApiConsoleRoute
@@ -203,11 +203,11 @@ export interface FileRoutesById {
   '/packages': typeof PackagesRoute
   '/register': typeof RegisterRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRoute
-  '/orgs/new': typeof OrgsNewRoute
+  '/organizations/$orgId': typeof OrganizationsOrgIdRoute
+  '/organizations/new': typeof OrganizationsNewRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/$package/': typeof PackageIndexRoute
-  '/orgs/': typeof OrgsIndexRoute
+  '/organizations/': typeof OrganizationsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/projects/$projectId/$package': typeof ProjectsProjectIdPackageRouteWithChildren
@@ -229,11 +229,11 @@ export interface FileRouteTypes {
     | '/packages'
     | '/register'
     | '/auth/device'
-    | '/orgs/$orgId'
-    | '/orgs/new'
+    | '/organizations/$orgId'
+    | '/organizations/new'
     | '/projects/$projectId'
     | '/$package/'
-    | '/orgs/'
+    | '/organizations/'
     | '/projects/'
     | '/$package/objects/$name'
     | '/projects/$projectId/$package'
@@ -252,10 +252,10 @@ export interface FileRouteTypes {
     | '/packages'
     | '/register'
     | '/auth/device'
-    | '/orgs/$orgId'
-    | '/orgs/new'
+    | '/organizations/$orgId'
+    | '/organizations/new'
     | '/$package'
-    | '/orgs'
+    | '/organizations'
     | '/projects'
     | '/$package/objects/$name'
     | '/projects/$projectId/api-console'
@@ -274,11 +274,11 @@ export interface FileRouteTypes {
     | '/packages'
     | '/register'
     | '/auth/device'
-    | '/orgs/$orgId'
-    | '/orgs/new'
+    | '/organizations/$orgId'
+    | '/organizations/new'
     | '/projects/$projectId'
     | '/$package/'
-    | '/orgs/'
+    | '/organizations/'
     | '/projects/'
     | '/$package/objects/$name'
     | '/projects/$projectId/$package'
@@ -299,10 +299,10 @@ export interface RootRouteChildren {
   PackagesRoute: typeof PackagesRoute
   RegisterRoute: typeof RegisterRoute
   AuthDeviceRoute: typeof AuthDeviceRoute
-  OrgsOrgIdRoute: typeof OrgsOrgIdRoute
-  OrgsNewRoute: typeof OrgsNewRoute
+  OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
+  OrganizationsNewRoute: typeof OrganizationsNewRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
-  OrgsIndexRoute: typeof OrgsIndexRoute
+  OrganizationsIndexRoute: typeof OrganizationsIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
 }
 
@@ -357,11 +357,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orgs/': {
-      id: '/orgs/'
-      path: '/orgs'
-      fullPath: '/orgs/'
-      preLoaderRoute: typeof OrgsIndexRouteImport
+    '/organizations/': {
+      id: '/organizations/'
+      path: '/organizations'
+      fullPath: '/organizations/'
+      preLoaderRoute: typeof OrganizationsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$package/': {
@@ -378,18 +378,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orgs/new': {
-      id: '/orgs/new'
-      path: '/orgs/new'
-      fullPath: '/orgs/new'
-      preLoaderRoute: typeof OrgsNewRouteImport
+    '/organizations/new': {
+      id: '/organizations/new'
+      path: '/organizations/new'
+      fullPath: '/organizations/new'
+      preLoaderRoute: typeof OrganizationsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orgs/$orgId': {
-      id: '/orgs/$orgId'
-      path: '/orgs/$orgId'
-      fullPath: '/orgs/$orgId'
-      preLoaderRoute: typeof OrgsOrgIdRouteImport
+    '/organizations/$orgId': {
+      id: '/organizations/$orgId'
+      path: '/organizations/$orgId'
+      fullPath: '/organizations/$orgId'
+      preLoaderRoute: typeof OrganizationsOrgIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/device': {
@@ -525,10 +525,10 @@ const rootRouteChildren: RootRouteChildren = {
   PackagesRoute: PackagesRoute,
   RegisterRoute: RegisterRoute,
   AuthDeviceRoute: AuthDeviceRoute,
-  OrgsOrgIdRoute: OrgsOrgIdRoute,
-  OrgsNewRoute: OrgsNewRoute,
+  OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
+  OrganizationsNewRoute: OrganizationsNewRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
-  OrgsIndexRoute: OrgsIndexRoute,
+  OrganizationsIndexRoute: OrganizationsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
 }
 export const routeTree = rootRouteImport

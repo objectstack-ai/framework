@@ -4,13 +4,13 @@
  * Organization layout — header + nested Outlet (General / Members).
  *
  * The actual section navigation lives in the global Account sidebar, which
- * detects `/orgs/:orgId/*` paths and renders an "Organization" group.
+ * detects `/organizations/:orgId/*` paths and renders an "Organization" group.
  */
 
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { useOrganizations } from '@/hooks/useSession';
 
-export const Route = createFileRoute('/orgs/$orgId')({
+export const Route = createFileRoute('/organizations/$orgId')({
   component: OrgLayout,
 });
 

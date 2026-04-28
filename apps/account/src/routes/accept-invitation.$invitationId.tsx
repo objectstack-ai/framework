@@ -34,7 +34,7 @@ function AcceptInvitationPage() {
       }
       await reloadOrganizations().catch(() => {});
       toast({ title: 'Invitation accepted' });
-      navigate({ to: '/orgs' });
+      navigate({ to: '/organizations' });
     } catch (err) {
       toast({
         title: 'Failed to accept invitation',
@@ -60,7 +60,7 @@ function AcceptInvitationPage() {
         throw new Error((data as any)?.message || `Request failed: ${res.status}`);
       }
       toast({ title: 'Invitation declined' });
-      navigate({ to: '/orgs' });
+      navigate({ to: '/organizations' });
     } catch (err) {
       toast({
         title: 'Failed to decline invitation',

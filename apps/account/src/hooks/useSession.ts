@@ -249,6 +249,45 @@ export function useCreateOrganization() {
 }
 
 /**
+ * Hook: update an organization (owner/admin only — server-side enforced).
+ *
+ * Wraps `client.organizations.update(id, data)` (`POST /api/v1/auth/organization/update`).
+ * On success the local organization list and session are refreshed so the
+ * top-bar switcher and the active org snapshot reflect the new name/slug.
+ */
+export function useUpdateOrganization() {
+  const client = useClient() as any;
+  const { reloadOrganizations, refresh } = useSession();
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const update = useCallback(
+    async (
+      organizationId: string,
+      data: { name?: string; slug?: string; logo?: string; metadata?: Record<string, unknown> },
+    ) => {
+      if (!client?.organizations?.update) throw new Error('Client not ready');
+      setUpdating(true);
+      setError(null);
+      try {
+        const result = await client.organizations.update(organizationId, data);
+        await reloadOrganizations();
+        await refresh();
+        return result;
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [client, reloadOrganizations, refresh],
+  );
+
+  return { update, updating, error };
+}
+
+/**
  * Hook: delete an organization via better-auth.
  *
  * Wraps `client.organizations.delete(id)` (which hits

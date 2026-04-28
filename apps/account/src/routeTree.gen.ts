@@ -16,19 +16,19 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as OrgsIndexRouteImport } from './routes/orgs.index'
+import { Route as OrganizationsIndexRouteImport } from './routes/organizations.index'
 import { Route as AccountIndexRouteImport } from './routes/account.index'
-import { Route as OrgsNewRouteImport } from './routes/orgs.new'
-import { Route as OrgsOrgIdRouteImport } from './routes/orgs.$orgId'
+import { Route as OrganizationsNewRouteImport } from './routes/organizations.new'
+import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations.$orgId'
 import { Route as AuthDeviceRouteImport } from './routes/auth.device'
 import { Route as AccountTwoFactorRouteImport } from './routes/account.two-factor'
 import { Route as AccountSessionsRouteImport } from './routes/account.sessions'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountProfileRouteImport } from './routes/account.profile'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
-import { Route as OrgsOrgIdIndexRouteImport } from './routes/orgs.$orgId.index'
-import { Route as OrgsOrgIdMembersRouteImport } from './routes/orgs.$orgId.members'
-import { Route as OrgsOrgIdGeneralRouteImport } from './routes/orgs.$orgId.general'
+import { Route as OrganizationsOrgIdIndexRouteImport } from './routes/organizations.$orgId.index'
+import { Route as OrganizationsOrgIdMembersRouteImport } from './routes/organizations.$orgId.members'
+import { Route as OrganizationsOrgIdGeneralRouteImport } from './routes/organizations.$orgId.general'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -65,9 +65,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrgsIndexRoute = OrgsIndexRouteImport.update({
-  id: '/orgs/',
-  path: '/orgs/',
+const OrganizationsIndexRoute = OrganizationsIndexRouteImport.update({
+  id: '/organizations/',
+  path: '/organizations/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
@@ -75,14 +75,14 @@ const AccountIndexRoute = AccountIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AccountRoute,
 } as any)
-const OrgsNewRoute = OrgsNewRouteImport.update({
-  id: '/orgs/new',
-  path: '/orgs/new',
+const OrganizationsNewRoute = OrganizationsNewRouteImport.update({
+  id: '/organizations/new',
+  path: '/organizations/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrgsOrgIdRoute = OrgsOrgIdRouteImport.update({
-  id: '/orgs/$orgId',
-  path: '/orgs/$orgId',
+const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
+  id: '/organizations/$orgId',
+  path: '/organizations/$orgId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthDeviceRoute = AuthDeviceRouteImport.update({
@@ -116,21 +116,23 @@ const AcceptInvitationInvitationIdRoute =
     path: '/accept-invitation/$invitationId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const OrgsOrgIdIndexRoute = OrgsOrgIdIndexRouteImport.update({
+const OrganizationsOrgIdIndexRoute = OrganizationsOrgIdIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => OrgsOrgIdRoute,
+  getParentRoute: () => OrganizationsOrgIdRoute,
 } as any)
-const OrgsOrgIdMembersRoute = OrgsOrgIdMembersRouteImport.update({
-  id: '/members',
-  path: '/members',
-  getParentRoute: () => OrgsOrgIdRoute,
-} as any)
-const OrgsOrgIdGeneralRoute = OrgsOrgIdGeneralRouteImport.update({
-  id: '/general',
-  path: '/general',
-  getParentRoute: () => OrgsOrgIdRoute,
-} as any)
+const OrganizationsOrgIdMembersRoute =
+  OrganizationsOrgIdMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
+    getParentRoute: () => OrganizationsOrgIdRoute,
+  } as any)
+const OrganizationsOrgIdGeneralRoute =
+  OrganizationsOrgIdGeneralRouteImport.update({
+    id: '/general',
+    path: '/general',
+    getParentRoute: () => OrganizationsOrgIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -146,13 +148,13 @@ export interface FileRoutesByFullPath {
   '/account/sessions': typeof AccountSessionsRoute
   '/account/two-factor': typeof AccountTwoFactorRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRouteWithChildren
-  '/orgs/new': typeof OrgsNewRoute
+  '/organizations/$orgId': typeof OrganizationsOrgIdRouteWithChildren
+  '/organizations/new': typeof OrganizationsNewRoute
   '/account/': typeof AccountIndexRoute
-  '/orgs/': typeof OrgsIndexRoute
-  '/orgs/$orgId/general': typeof OrgsOrgIdGeneralRoute
-  '/orgs/$orgId/members': typeof OrgsOrgIdMembersRoute
-  '/orgs/$orgId/': typeof OrgsOrgIdIndexRoute
+  '/organizations/': typeof OrganizationsIndexRoute
+  '/organizations/$orgId/general': typeof OrganizationsOrgIdGeneralRoute
+  '/organizations/$orgId/members': typeof OrganizationsOrgIdMembersRoute
+  '/organizations/$orgId/': typeof OrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -167,12 +169,12 @@ export interface FileRoutesByTo {
   '/account/sessions': typeof AccountSessionsRoute
   '/account/two-factor': typeof AccountTwoFactorRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/new': typeof OrgsNewRoute
+  '/organizations/new': typeof OrganizationsNewRoute
   '/account': typeof AccountIndexRoute
-  '/orgs': typeof OrgsIndexRoute
-  '/orgs/$orgId/general': typeof OrgsOrgIdGeneralRoute
-  '/orgs/$orgId/members': typeof OrgsOrgIdMembersRoute
-  '/orgs/$orgId': typeof OrgsOrgIdIndexRoute
+  '/organizations': typeof OrganizationsIndexRoute
+  '/organizations/$orgId/general': typeof OrganizationsOrgIdGeneralRoute
+  '/organizations/$orgId/members': typeof OrganizationsOrgIdMembersRoute
+  '/organizations/$orgId': typeof OrganizationsOrgIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -189,13 +191,13 @@ export interface FileRoutesById {
   '/account/sessions': typeof AccountSessionsRoute
   '/account/two-factor': typeof AccountTwoFactorRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRouteWithChildren
-  '/orgs/new': typeof OrgsNewRoute
+  '/organizations/$orgId': typeof OrganizationsOrgIdRouteWithChildren
+  '/organizations/new': typeof OrganizationsNewRoute
   '/account/': typeof AccountIndexRoute
-  '/orgs/': typeof OrgsIndexRoute
-  '/orgs/$orgId/general': typeof OrgsOrgIdGeneralRoute
-  '/orgs/$orgId/members': typeof OrgsOrgIdMembersRoute
-  '/orgs/$orgId/': typeof OrgsOrgIdIndexRoute
+  '/organizations/': typeof OrganizationsIndexRoute
+  '/organizations/$orgId/general': typeof OrganizationsOrgIdGeneralRoute
+  '/organizations/$orgId/members': typeof OrganizationsOrgIdMembersRoute
+  '/organizations/$orgId/': typeof OrganizationsOrgIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -213,13 +215,13 @@ export interface FileRouteTypes {
     | '/account/sessions'
     | '/account/two-factor'
     | '/auth/device'
-    | '/orgs/$orgId'
-    | '/orgs/new'
+    | '/organizations/$orgId'
+    | '/organizations/new'
     | '/account/'
-    | '/orgs/'
-    | '/orgs/$orgId/general'
-    | '/orgs/$orgId/members'
-    | '/orgs/$orgId/'
+    | '/organizations/'
+    | '/organizations/$orgId/general'
+    | '/organizations/$orgId/members'
+    | '/organizations/$orgId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -234,12 +236,12 @@ export interface FileRouteTypes {
     | '/account/sessions'
     | '/account/two-factor'
     | '/auth/device'
-    | '/orgs/new'
+    | '/organizations/new'
     | '/account'
-    | '/orgs'
-    | '/orgs/$orgId/general'
-    | '/orgs/$orgId/members'
-    | '/orgs/$orgId'
+    | '/organizations'
+    | '/organizations/$orgId/general'
+    | '/organizations/$orgId/members'
+    | '/organizations/$orgId'
   id:
     | '__root__'
     | '/'
@@ -255,13 +257,13 @@ export interface FileRouteTypes {
     | '/account/sessions'
     | '/account/two-factor'
     | '/auth/device'
-    | '/orgs/$orgId'
-    | '/orgs/new'
+    | '/organizations/$orgId'
+    | '/organizations/new'
     | '/account/'
-    | '/orgs/'
-    | '/orgs/$orgId/general'
-    | '/orgs/$orgId/members'
-    | '/orgs/$orgId/'
+    | '/organizations/'
+    | '/organizations/$orgId/general'
+    | '/organizations/$orgId/members'
+    | '/organizations/$orgId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -274,9 +276,9 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
   AuthDeviceRoute: typeof AuthDeviceRoute
-  OrgsOrgIdRoute: typeof OrgsOrgIdRouteWithChildren
-  OrgsNewRoute: typeof OrgsNewRoute
-  OrgsIndexRoute: typeof OrgsIndexRoute
+  OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRouteWithChildren
+  OrganizationsNewRoute: typeof OrganizationsNewRoute
+  OrganizationsIndexRoute: typeof OrganizationsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -330,11 +332,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orgs/': {
-      id: '/orgs/'
-      path: '/orgs'
-      fullPath: '/orgs/'
-      preLoaderRoute: typeof OrgsIndexRouteImport
+    '/organizations/': {
+      id: '/organizations/'
+      path: '/organizations'
+      fullPath: '/organizations/'
+      preLoaderRoute: typeof OrganizationsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account/': {
@@ -344,18 +346,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountIndexRouteImport
       parentRoute: typeof AccountRoute
     }
-    '/orgs/new': {
-      id: '/orgs/new'
-      path: '/orgs/new'
-      fullPath: '/orgs/new'
-      preLoaderRoute: typeof OrgsNewRouteImport
+    '/organizations/new': {
+      id: '/organizations/new'
+      path: '/organizations/new'
+      fullPath: '/organizations/new'
+      preLoaderRoute: typeof OrganizationsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orgs/$orgId': {
-      id: '/orgs/$orgId'
-      path: '/orgs/$orgId'
-      fullPath: '/orgs/$orgId'
-      preLoaderRoute: typeof OrgsOrgIdRouteImport
+    '/organizations/$orgId': {
+      id: '/organizations/$orgId'
+      path: '/organizations/$orgId'
+      fullPath: '/organizations/$orgId'
+      preLoaderRoute: typeof OrganizationsOrgIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/device': {
@@ -400,26 +402,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInvitationInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orgs/$orgId/': {
-      id: '/orgs/$orgId/'
+    '/organizations/$orgId/': {
+      id: '/organizations/$orgId/'
       path: '/'
-      fullPath: '/orgs/$orgId/'
-      preLoaderRoute: typeof OrgsOrgIdIndexRouteImport
-      parentRoute: typeof OrgsOrgIdRoute
+      fullPath: '/organizations/$orgId/'
+      preLoaderRoute: typeof OrganizationsOrgIdIndexRouteImport
+      parentRoute: typeof OrganizationsOrgIdRoute
     }
-    '/orgs/$orgId/members': {
-      id: '/orgs/$orgId/members'
+    '/organizations/$orgId/members': {
+      id: '/organizations/$orgId/members'
       path: '/members'
-      fullPath: '/orgs/$orgId/members'
-      preLoaderRoute: typeof OrgsOrgIdMembersRouteImport
-      parentRoute: typeof OrgsOrgIdRoute
+      fullPath: '/organizations/$orgId/members'
+      preLoaderRoute: typeof OrganizationsOrgIdMembersRouteImport
+      parentRoute: typeof OrganizationsOrgIdRoute
     }
-    '/orgs/$orgId/general': {
-      id: '/orgs/$orgId/general'
+    '/organizations/$orgId/general': {
+      id: '/organizations/$orgId/general'
       path: '/general'
-      fullPath: '/orgs/$orgId/general'
-      preLoaderRoute: typeof OrgsOrgIdGeneralRouteImport
-      parentRoute: typeof OrgsOrgIdRoute
+      fullPath: '/organizations/$orgId/general'
+      preLoaderRoute: typeof OrganizationsOrgIdGeneralRouteImport
+      parentRoute: typeof OrganizationsOrgIdRoute
     }
   }
 }
@@ -443,21 +445,20 @@ const AccountRouteChildren: AccountRouteChildren = {
 const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
-interface OrgsOrgIdRouteChildren {
-  OrgsOrgIdGeneralRoute: typeof OrgsOrgIdGeneralRoute
-  OrgsOrgIdMembersRoute: typeof OrgsOrgIdMembersRoute
-  OrgsOrgIdIndexRoute: typeof OrgsOrgIdIndexRoute
+interface OrganizationsOrgIdRouteChildren {
+  OrganizationsOrgIdGeneralRoute: typeof OrganizationsOrgIdGeneralRoute
+  OrganizationsOrgIdMembersRoute: typeof OrganizationsOrgIdMembersRoute
+  OrganizationsOrgIdIndexRoute: typeof OrganizationsOrgIdIndexRoute
 }
 
-const OrgsOrgIdRouteChildren: OrgsOrgIdRouteChildren = {
-  OrgsOrgIdGeneralRoute: OrgsOrgIdGeneralRoute,
-  OrgsOrgIdMembersRoute: OrgsOrgIdMembersRoute,
-  OrgsOrgIdIndexRoute: OrgsOrgIdIndexRoute,
+const OrganizationsOrgIdRouteChildren: OrganizationsOrgIdRouteChildren = {
+  OrganizationsOrgIdGeneralRoute: OrganizationsOrgIdGeneralRoute,
+  OrganizationsOrgIdMembersRoute: OrganizationsOrgIdMembersRoute,
+  OrganizationsOrgIdIndexRoute: OrganizationsOrgIdIndexRoute,
 }
 
-const OrgsOrgIdRouteWithChildren = OrgsOrgIdRoute._addFileChildren(
-  OrgsOrgIdRouteChildren,
-)
+const OrganizationsOrgIdRouteWithChildren =
+  OrganizationsOrgIdRoute._addFileChildren(OrganizationsOrgIdRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -469,9 +470,9 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
   AuthDeviceRoute: AuthDeviceRoute,
-  OrgsOrgIdRoute: OrgsOrgIdRouteWithChildren,
-  OrgsNewRoute: OrgsNewRoute,
-  OrgsIndexRoute: OrgsIndexRoute,
+  OrganizationsOrgIdRoute: OrganizationsOrgIdRouteWithChildren,
+  OrganizationsNewRoute: OrganizationsNewRoute,
+  OrganizationsIndexRoute: OrganizationsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

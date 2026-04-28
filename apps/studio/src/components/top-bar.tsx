@@ -91,7 +91,7 @@ export function TopBar() {
     if (pathname === '/') return 'home';
     if (pathname === '/api-console' || pathname.startsWith('/api-console/')) return 'api-console';
     if (pathname === '/projects') return 'projects';
-    if (pathname === '/orgs' || pathname === '/orgs/new' || params.orgId) return 'orgs';
+    if (pathname === '/organizations' || pathname === '/organizations/new' || params.orgId) return 'orgs';
     if (params.projectId && pathname.includes('/packages')) return 'packages';
     if (params.projectId && !params.package) return 'project-overview';
     if (params.package && params.name && !params.type) return 'object';
@@ -117,7 +117,7 @@ export function TopBar() {
         break;
       case 'orgs':
         if (params.orgId) {
-          items.push({ label: 'Organizations', href: '/orgs' });
+          items.push({ label: 'Organizations', href: '/organizations' });
           items.push({ label: 'Settings' });
         } else {
           items.push({ label: 'Organizations' });

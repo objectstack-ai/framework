@@ -112,7 +112,7 @@ export function OrganizationSwitcher() {
           onSelect={(e) => {
             e.preventDefault();
             setOpen(false);
-            navigate({ to: '/orgs/new' });
+            navigate({ to: '/organizations/new' });
           }}
           className="gap-2 text-sm"
         >
@@ -123,7 +123,7 @@ export function OrganizationSwitcher() {
           onSelect={(e) => {
             e.preventDefault();
             setOpen(false);
-            navigate({ to: '/orgs' });
+            navigate({ to: '/organizations' });
           }}
           className="gap-2 text-sm text-muted-foreground"
         >

@@ -12,9 +12,9 @@
  *   └─ Two-Factor
  *
  *   Organization
- *   ├─ Overview        (/orgs)
- *   ├─ General         (/orgs/:id/general — only when an org is active)
- *   └─ Members         (/orgs/:id/members — only when an org is active)
+ *   ├─ Overview        (/organizations)
+ *   ├─ General         (/organizations/:id/general — only when an org is active)
+ *   └─ Members         (/organizations/:id/members — only when an org is active)
  *
  * The active org's name is intentionally NOT used as a group label —
  * the top-bar OrganizationSwitcher already shows it prominently. When
@@ -53,7 +53,7 @@ interface NavItem {
     | '/account/security'
     | '/account/sessions'
     | '/account/two-factor'
-    | '/orgs';
+    | '/organizations';
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }
@@ -73,8 +73,8 @@ export function AccountSidebar() {
   // path as the profile page for active-state purposes.
   const normalised = pathname === '/account' ? '/account/profile' : pathname;
 
-  // Detect /orgs/<orgId>/* — used to surface the org-scoped sub-items.
-  const orgMatch = pathname.match(/^\/orgs\/([^/]+)(?:\/.*)?$/);
+  // Detect /organizations/<orgId>/* — used to surface the org-scoped sub-items.
+  const orgMatch = pathname.match(/^\/organizations\/([^/]+)(?:\/.*)?$/);
   const activeOrgId =
     orgMatch && organizations.some((o) => o.id === orgMatch[1]) ? orgMatch[1] : null;
 
@@ -114,10 +114,10 @@ export function AccountSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === '/orgs'}
+                  isActive={pathname === '/organizations'}
                   tooltip="Overview"
                 >
-                  <Link to="/orgs">
+                  <Link to="/organizations">
                     <Building2 className="size-4" />
                     <span>Overview</span>
                   </Link>
@@ -128,10 +128,10 @@ export function AccountSidebar() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
-                      isActive={pathname === `/orgs/${activeOrgId}/general`}
+                      isActive={pathname === `/organizations/${activeOrgId}/general`}
                       tooltip="General"
                     >
-                      <Link to="/orgs/$orgId/general" params={{ orgId: activeOrgId }}>
+                      <Link to="/organizations/$orgId/general" params={{ orgId: activeOrgId }}>
                         <Settings className="size-4" />
                         <span>General</span>
                       </Link>
@@ -140,10 +140,10 @@ export function AccountSidebar() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
-                      isActive={pathname === `/orgs/${activeOrgId}/members`}
+                      isActive={pathname === `/organizations/${activeOrgId}/members`}
                       tooltip="Members"
                     >
-                      <Link to="/orgs/$orgId/members" params={{ orgId: activeOrgId }}>
+                      <Link to="/organizations/$orgId/members" params={{ orgId: activeOrgId }}>
                         <Users className="size-4" />
                         <span>Members</span>
                       </Link>

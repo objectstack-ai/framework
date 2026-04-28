@@ -87,7 +87,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         {!config.singleProject && (
           <>
-            <DropdownMenuItem onSelect={() => gotoAccount('/orgs')}>
+            <DropdownMenuItem onSelect={() => gotoAccount('/organizations')}>
               <Building2 className="mr-2 h-3.5 w-3.5" />
               Organizations
             </DropdownMenuItem>
