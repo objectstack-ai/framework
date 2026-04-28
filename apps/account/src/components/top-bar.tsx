@@ -22,6 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserMenu } from '@/components/user-menu';
+import { OrganizationSwitcher } from '@/components/organization-switcher';
 
 function AccountBrand() {
   return (
@@ -54,7 +55,14 @@ export function TopBar() {
       return items;
     }
     if (p === '/orgs/new') return [{ label: 'Organizations' }, { label: 'New' }];
-    if (params.orgId) return [{ label: 'Organizations' }, { label: 'Settings' }];
+    if (params.orgId) {
+      const tail = p.endsWith('/general')
+        ? 'General'
+        : p.endsWith('/members')
+          ? 'Members'
+          : 'Settings';
+      return [{ label: 'Organizations' }, { label: tail }];
+    }
     if (p === '/orgs' || p.startsWith('/orgs/')) return [{ label: 'Organizations' }];
     if (p.startsWith('/accept-invitation/')) return [{ label: 'Accept invitation' }];
     if (p.startsWith('/auth/device')) return [{ label: 'Device authorization' }];
@@ -71,7 +79,9 @@ export function TopBar() {
         <AccountBrand />
         <SlashDivider />
         <span className="hidden text-sm font-medium sm:inline">ObjectStack Account</span>
-        <div className="hidden items-center gap-2 sm:flex">
+        <div className="hidden items-center gap-1 sm:flex">
+          <Separator orientation="vertical" className="mx-2 h-4" />
+          <OrganizationSwitcher />
           <Separator orientation="vertical" className="mx-2 h-4" />
           <Breadcrumb>
             <BreadcrumbList>

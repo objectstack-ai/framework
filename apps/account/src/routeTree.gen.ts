@@ -26,6 +26,9 @@ import { Route as AccountSessionsRouteImport } from './routes/account.sessions'
 import { Route as AccountSecurityRouteImport } from './routes/account.security'
 import { Route as AccountProfileRouteImport } from './routes/account.profile'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
+import { Route as OrgsOrgIdIndexRouteImport } from './routes/orgs.$orgId.index'
+import { Route as OrgsOrgIdMembersRouteImport } from './routes/orgs.$orgId.members'
+import { Route as OrgsOrgIdGeneralRouteImport } from './routes/orgs.$orgId.general'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -113,6 +116,21 @@ const AcceptInvitationInvitationIdRoute =
     path: '/accept-invitation/$invitationId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const OrgsOrgIdIndexRoute = OrgsOrgIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => OrgsOrgIdRoute,
+} as any)
+const OrgsOrgIdMembersRoute = OrgsOrgIdMembersRouteImport.update({
+  id: '/members',
+  path: '/members',
+  getParentRoute: () => OrgsOrgIdRoute,
+} as any)
+const OrgsOrgIdGeneralRoute = OrgsOrgIdGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => OrgsOrgIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -128,10 +146,13 @@ export interface FileRoutesByFullPath {
   '/account/sessions': typeof AccountSessionsRoute
   '/account/two-factor': typeof AccountTwoFactorRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRoute
+  '/orgs/$orgId': typeof OrgsOrgIdRouteWithChildren
   '/orgs/new': typeof OrgsNewRoute
   '/account/': typeof AccountIndexRoute
   '/orgs/': typeof OrgsIndexRoute
+  '/orgs/$orgId/general': typeof OrgsOrgIdGeneralRoute
+  '/orgs/$orgId/members': typeof OrgsOrgIdMembersRoute
+  '/orgs/$orgId/': typeof OrgsOrgIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -146,10 +167,12 @@ export interface FileRoutesByTo {
   '/account/sessions': typeof AccountSessionsRoute
   '/account/two-factor': typeof AccountTwoFactorRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRoute
   '/orgs/new': typeof OrgsNewRoute
   '/account': typeof AccountIndexRoute
   '/orgs': typeof OrgsIndexRoute
+  '/orgs/$orgId/general': typeof OrgsOrgIdGeneralRoute
+  '/orgs/$orgId/members': typeof OrgsOrgIdMembersRoute
+  '/orgs/$orgId': typeof OrgsOrgIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -166,10 +189,13 @@ export interface FileRoutesById {
   '/account/sessions': typeof AccountSessionsRoute
   '/account/two-factor': typeof AccountTwoFactorRoute
   '/auth/device': typeof AuthDeviceRoute
-  '/orgs/$orgId': typeof OrgsOrgIdRoute
+  '/orgs/$orgId': typeof OrgsOrgIdRouteWithChildren
   '/orgs/new': typeof OrgsNewRoute
   '/account/': typeof AccountIndexRoute
   '/orgs/': typeof OrgsIndexRoute
+  '/orgs/$orgId/general': typeof OrgsOrgIdGeneralRoute
+  '/orgs/$orgId/members': typeof OrgsOrgIdMembersRoute
+  '/orgs/$orgId/': typeof OrgsOrgIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -191,6 +217,9 @@ export interface FileRouteTypes {
     | '/orgs/new'
     | '/account/'
     | '/orgs/'
+    | '/orgs/$orgId/general'
+    | '/orgs/$orgId/members'
+    | '/orgs/$orgId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -205,10 +234,12 @@ export interface FileRouteTypes {
     | '/account/sessions'
     | '/account/two-factor'
     | '/auth/device'
-    | '/orgs/$orgId'
     | '/orgs/new'
     | '/account'
     | '/orgs'
+    | '/orgs/$orgId/general'
+    | '/orgs/$orgId/members'
+    | '/orgs/$orgId'
   id:
     | '__root__'
     | '/'
@@ -228,6 +259,9 @@ export interface FileRouteTypes {
     | '/orgs/new'
     | '/account/'
     | '/orgs/'
+    | '/orgs/$orgId/general'
+    | '/orgs/$orgId/members'
+    | '/orgs/$orgId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -240,7 +274,7 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
   AuthDeviceRoute: typeof AuthDeviceRoute
-  OrgsOrgIdRoute: typeof OrgsOrgIdRoute
+  OrgsOrgIdRoute: typeof OrgsOrgIdRouteWithChildren
   OrgsNewRoute: typeof OrgsNewRoute
   OrgsIndexRoute: typeof OrgsIndexRoute
 }
@@ -366,6 +400,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInvitationInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orgs/$orgId/': {
+      id: '/orgs/$orgId/'
+      path: '/'
+      fullPath: '/orgs/$orgId/'
+      preLoaderRoute: typeof OrgsOrgIdIndexRouteImport
+      parentRoute: typeof OrgsOrgIdRoute
+    }
+    '/orgs/$orgId/members': {
+      id: '/orgs/$orgId/members'
+      path: '/members'
+      fullPath: '/orgs/$orgId/members'
+      preLoaderRoute: typeof OrgsOrgIdMembersRouteImport
+      parentRoute: typeof OrgsOrgIdRoute
+    }
+    '/orgs/$orgId/general': {
+      id: '/orgs/$orgId/general'
+      path: '/general'
+      fullPath: '/orgs/$orgId/general'
+      preLoaderRoute: typeof OrgsOrgIdGeneralRouteImport
+      parentRoute: typeof OrgsOrgIdRoute
+    }
   }
 }
 
@@ -388,6 +443,22 @@ const AccountRouteChildren: AccountRouteChildren = {
 const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
+interface OrgsOrgIdRouteChildren {
+  OrgsOrgIdGeneralRoute: typeof OrgsOrgIdGeneralRoute
+  OrgsOrgIdMembersRoute: typeof OrgsOrgIdMembersRoute
+  OrgsOrgIdIndexRoute: typeof OrgsOrgIdIndexRoute
+}
+
+const OrgsOrgIdRouteChildren: OrgsOrgIdRouteChildren = {
+  OrgsOrgIdGeneralRoute: OrgsOrgIdGeneralRoute,
+  OrgsOrgIdMembersRoute: OrgsOrgIdMembersRoute,
+  OrgsOrgIdIndexRoute: OrgsOrgIdIndexRoute,
+}
+
+const OrgsOrgIdRouteWithChildren = OrgsOrgIdRoute._addFileChildren(
+  OrgsOrgIdRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRouteWithChildren,
@@ -398,7 +469,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
   AuthDeviceRoute: AuthDeviceRoute,
-  OrgsOrgIdRoute: OrgsOrgIdRoute,
+  OrgsOrgIdRoute: OrgsOrgIdRouteWithChildren,
   OrgsNewRoute: OrgsNewRoute,
   OrgsIndexRoute: OrgsIndexRoute,
 }

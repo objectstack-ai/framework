@@ -3,22 +3,35 @@
 /**
  * AccountSidebar — global left navigation for the Account portal.
  *
- * Structure (matches Studio's collapsible icon rail):
+ * Two semantic groups:
  *
  *   Account
- *   ├─ Profile          (/account/profile)
- *   ├─ Security         (/account/security)
- *   ├─ Sessions         (/account/sessions)
- *   └─ Two-Factor       (/account/two-factor)
+ *   ├─ Profile
+ *   ├─ Security
+ *   ├─ Sessions
+ *   └─ Two-Factor
  *
- *   Organizations       (/orgs)
+ *   Organization
+ *   ├─ Overview        (/orgs)
+ *   ├─ General         (/orgs/:id/general — only when an org is active)
+ *   └─ Members         (/orgs/:id/members — only when an org is active)
  *
- * When the sidebar collapses to icon-only mode the group labels are hidden;
- * each entry still renders as a clickable icon with a tooltip.
+ * The active org's name is intentionally NOT used as a group label —
+ * the top-bar OrganizationSwitcher already shows it prominently. When
+ * collapsed to icon-only the labels hide automatically.
  */
 
 import { Link, useLocation } from '@tanstack/react-router';
-import { Building2, Monitor, PanelLeft, Shield, ShieldCheck, User } from 'lucide-react';
+import {
+  Building2,
+  Monitor,
+  PanelLeft,
+  Settings,
+  Shield,
+  ShieldCheck,
+  User,
+  Users,
+} from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -32,6 +45,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { useOrganizations } from '@/hooks/useSession';
 
 interface NavItem {
   to:
@@ -53,10 +67,16 @@ const ACCOUNT_ITEMS: NavItem[] = [
 
 export function AccountSidebar() {
   const { pathname } = useLocation();
+  const { organizations } = useOrganizations();
 
   // /account on its own redirects to /account/profile, so treat the bare
   // path as the profile page for active-state purposes.
   const normalised = pathname === '/account' ? '/account/profile' : pathname;
+
+  // Detect /orgs/<orgId>/* — used to surface the org-scoped sub-items.
+  const orgMatch = pathname.match(/^\/orgs\/([^/]+)(?:\/.*)?$/);
+  const activeOrgId =
+    orgMatch && organizations.some((o) => o.id === orgMatch[1]) ? orgMatch[1] : null;
 
   return (
     <Sidebar collapsible="icon" className="h-full">
@@ -85,21 +105,52 @@ export function AccountSidebar() {
 
         <SidebarSeparator />
 
+        <SidebarSeparator />
+
         <SidebarGroup>
+          <SidebarGroupLabel>Organization</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === '/orgs' || pathname.startsWith('/orgs/')}
-                  tooltip="Organizations"
+                  isActive={pathname === '/orgs'}
+                  tooltip="Overview"
                 >
                   <Link to="/orgs">
                     <Building2 className="size-4" />
-                    <span>Organizations</span>
+                    <span>Overview</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {activeOrgId && (
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === `/orgs/${activeOrgId}/general`}
+                      tooltip="General"
+                    >
+                      <Link to="/orgs/$orgId/general" params={{ orgId: activeOrgId }}>
+                        <Settings className="size-4" />
+                        <span>General</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === `/orgs/${activeOrgId}/members`}
+                      tooltip="Members"
+                    >
+                      <Link to="/orgs/$orgId/members" params={{ orgId: activeOrgId }}>
+                        <Users className="size-4" />
+                        <span>Members</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
