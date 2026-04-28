@@ -1402,6 +1402,15 @@ importers:
       '@objectstack/core':
         specifier: workspace:^
         version: link:../../core
+      '@objectstack/driver-memory':
+        specifier: workspace:^
+        version: link:../../plugins/driver-memory
+      '@objectstack/driver-sql':
+        specifier: workspace:^
+        version: link:../../plugins/driver-sql
+      '@objectstack/driver-turso':
+        specifier: workspace:^
+        version: link:../../plugins/driver-turso
       '@objectstack/metadata':
         specifier: workspace:^
         version: link:../../metadata
@@ -10254,7 +10263,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.0.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@22.19.17)(@vitest/coverage-v8@4.1.4)(happy-dom@20.9.0)(msw@2.13.4(@types/node@22.19.17)(typescript@6.0.3))(vite@8.0.9(@types/node@22.19.17)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
+      vitest: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(@vitest/coverage-v8@4.1.4)(happy-dom@20.9.0)(msw@2.13.4(@types/node@25.6.0)(typescript@6.0.3))(vite@8.0.9(@types/node@25.6.0)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
   '@vitest/expect@4.1.4':
     dependencies:

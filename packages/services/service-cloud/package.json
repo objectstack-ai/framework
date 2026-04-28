@@ -32,7 +32,10 @@
     "@objectstack/plugin-auth": "workspace:^",
     "@objectstack/plugin-security": "workspace:^",
     "@objectstack/plugin-audit": "workspace:^",
-    "@objectstack/service-package": "workspace:^"
+    "@objectstack/service-package": "workspace:^",
+    "@objectstack/driver-sql": "workspace:^",
+    "@objectstack/driver-turso": "workspace:^",
+    "@objectstack/driver-memory": "workspace:^"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
