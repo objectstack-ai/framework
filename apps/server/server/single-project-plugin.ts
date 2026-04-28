@@ -1,33 +1,34 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Standalone (single-project) UX Plugin
+ * Project-mode bootstrap plugin.
  *
- * Registered when ObjectStack runs as a self-contained, single-project
- * deployment (default; `OBJECTSTACK_MODE` unset or `standalone`). Its
- * responsibility is **UI/route simplification only** — authentication is
- * handled by `plugin-auth` exactly as in multi-project mode.
+ * Registered when ObjectStack runs in `project` mode (default — single
+ * project, local SQLite, but reusing the cloud plugin stack). It is a thin
+ * companion to `createCloudStack()`:
  *
- * This plugin owns:
+ *   1. **Idempotent identity seed** — writes the local `sys_organization`
+ *      and `sys_project` rows to the control-plane DB on every boot. Once
+ *      seeded, `KernelManager` resolves `proj_local` via real database
+ *      lookups — exactly as in cloud mode.
  *
- *  - `GET /api/v1/studio/runtime-config` → `{ singleProject: true, … }`
- *    so Studio hides the org/project switcher and uses unscoped REST routes.
- *  - `GET /api/v1/cloud/projects[/:id]` → a single synthetic project row
- *    (the standalone deployment doesn't have a real control-plane).
+ *   2. **Studio runtime-config signal** — exposes
+ *      `GET /api/v1/studio/runtime-config` returning
+ *      `{ singleProject: true, defaultOrgId, defaultProjectId }`. Phase 2
+ *      of the mode refactor will replace this with a data-driven UI
+ *      (org switcher hidden when `useOrganizations()` returns one row);
+ *      until then the SPA still depends on this flag.
  *
- * It does **not** mock `/api/v1/auth/*`. There is no synthetic local user;
- * first-run flow goes through the Account SPA's `/setup` route which calls
- * better-auth's standard sign-up.
- *
- * Multi-project / cloud-mode counterparts live in `multi-project-plugins.ts`.
+ * It does NOT mock `/cloud/projects`, `/cloud/organizations`, or `/auth/*`
+ * — those routes are served by real plugins backed by the seeded control
+ * plane.
  */
 
 import type { IHttpServer } from '@objectstack/spec/contracts';
 
-// The runtime's PluginContext (with `getService`) lives in @objectstack/core,
-// which isn't a direct dep of this app. Lifecycle hooks accept the full
-// context via `any` — the surrounding plugins in this config already follow
-// the same pattern (see control-plane-preset.ts).
+// PluginContext lives in @objectstack/core which isn't a direct dep of this
+// app. Lifecycle hooks accept the full context via `any` to match the rest
+// of the host plugins (see control-plane-preset.ts).
 type AnyContext = any;
 
 export const DEFAULT_LOCAL_ORG_ID = 'org_local';
@@ -36,34 +37,60 @@ export const DEFAULT_LOCAL_PROJECT_ID = 'proj_local';
 export interface SingleProjectPluginOptions {
     orgId?: string;
     projectId?: string;
-    /**
-     * Owner user id used as the synthetic `created_by` in the `/cloud/projects`
-     * placeholder rows. The real owner is whatever user signs up via the
-     * Account SPA's `/setup` flow; this is purely cosmetic for the
-     * project-row response shape.
-     */
-    ownerUserId?: string;
-    /** Display name for the standalone organization in the project row. */
+    /** Display name written to the seeded `sys_organization`. */
     orgName?: string;
     apiPrefix?: string;
+    /** Project DB URL stored in `sys_project.database_url`. */
+    projectDatabaseUrl?: string;
+    /** Driver name for the project DB (e.g. `sqlite`, `turso`). */
+    projectDatabaseDriver?: string;
 }
 
 export function createSingleProjectPlugin(options: SingleProjectPluginOptions = {}): any {
     const orgId = options.orgId ?? DEFAULT_LOCAL_ORG_ID;
     const projectId = options.projectId ?? DEFAULT_LOCAL_PROJECT_ID;
-    const ownerUserId = options.ownerUserId ?? '';
     const orgName = options.orgName ?? 'Local';
     const prefix = options.apiPrefix ?? '/api/v1';
 
     return {
         name: 'com.objectstack.studio.single-project',
-        version: '1.0.0',
+        version: '2.0.0',
 
         init: async (_ctx: AnyContext) => {
-            // No services registered — consumer of http.server only.
+            // No services registered. Identity seed runs in `start()` once
+            // ObjectQL has finished loading the control-plane schema.
         },
 
         start: async (ctx: AnyContext) => {
+            // ── 1. Idempotent identity seed ──────────────────────────────
+            if (options.projectDatabaseUrl) {
+                let objectql: any;
+                try {
+                    objectql = ctx.getService('objectql');
+                } catch {
+                    // ObjectQL not registered yet — control-plane preset must
+                    // run first; if that's not the case we skip silently.
+                }
+                if (objectql) {
+                    const { ensureLocalIdentity } = await import('./ensure-local-identity.js');
+                    await ensureLocalIdentity({
+                        objectql,
+                        orgId,
+                        projectId,
+                        orgName,
+                        projectDatabaseUrl: options.projectDatabaseUrl,
+                        projectDatabaseDriver: options.projectDatabaseDriver ?? 'sqlite',
+                    });
+                }
+            }
+
+            // ── 2. Studio runtime-config (single-project signal) ─────────
+            //
+            // This route is registered AFTER the cloud preset's
+            // `createStudioRuntimeConfigPlugin` (which returns
+            // `{ singleProject: false }`). HttpServer route registration is
+            // last-write-wins for matching paths in our adapter, so this
+            // override correctly flips the SPA into single-project mode.
             let server: IHttpServer | undefined;
             try {
                 server = ctx.getService('http.server') as IHttpServer | undefined;
@@ -72,11 +99,6 @@ export function createSingleProjectPlugin(options: SingleProjectPluginOptions = 
             }
             if (!server) return;
 
-            // Studio runtime-config — the standalone signal tells the SPA to
-            // hide org/project switchers and use unscoped REST routes.
-            // Authentication is *not* skipped: every request still goes
-            // through better-auth. Studio always shows the real session, and
-            // unauthenticated users are redirected to the Account login page.
             server.get(`${prefix}/studio/runtime-config`, async (_req: any, res: any) => {
                 res.json({
                     singleProject: true,
@@ -84,64 +106,10 @@ export function createSingleProjectPlugin(options: SingleProjectPluginOptions = 
                     defaultProjectId: projectId,
                 });
             });
-
-            // Control-plane projects API — dispatcher-plugin shape
-            // (`{ success, data: { projects, total }, meta }`). One synthetic
-            // record is enough: the frontend derives `:projectId` from config.
-            server.get(`${prefix}/cloud/projects`, async (_req: any, res: any) => {
-                res.json({
-                    success: true,
-                    data: {
-                        projects: [buildLocalProjectRow(orgId, projectId, ownerUserId)],
-                        total: 1,
-                    },
-                });
-            });
-
-            server.get(`${prefix}/cloud/projects/:id`, async (req: any, res: any) => {
-                const id = req.params?.id;
-                if (id !== projectId) {
-                    if (typeof res.status === 'function') {
-                        res.status(404).json({
-                            success: false,
-                            error: { code: 404, message: `Project ${id} not found` },
-                        });
-                    } else {
-                        res.json({
-                            success: false,
-                            error: { code: 404, message: `Project ${id} not found` },
-                        });
-                    }
-                    return;
-                }
-                res.json({
-                    success: true,
-                    data: {
-                        project: buildLocalProjectRow(orgId, projectId, ownerUserId),
-                        organization: { id: orgId, name: orgName },
-                    },
-                });
-            });
         },
 
         stop: async (_ctx: AnyContext) => {
             // http.server routes are torn down by the server plugin.
         },
-    };
-}
-
-function buildLocalProjectRow(orgId: string, projectId: string, userId: string): Record<string, unknown> {
-    const now = new Date().toISOString();
-    return {
-        id: projectId,
-        organization_id: orgId,
-        display_name: 'Local',
-        is_default: true,
-        is_system: false,
-        status: 'active',
-        created_by: userId,
-        created_at: now,
-        updated_at: now,
-        metadata: {},
     };
 }

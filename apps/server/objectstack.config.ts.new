@@ -128,7 +128,7 @@ async function createProjectStack() {
         // except for the AppPlugin tail — we eagerly load the local
         // artifact bundle (if present) so the single project picks up
         // schema definitions without needing a control-plane app row.
-        basePlugins: async ({ projectId }: { projectId: string }) => {
+        basePlugins: async ({ projectId }) => {
             const { ObjectQLPlugin } = await import('@objectstack/objectql');
             const { MetadataPlugin } = await import('@objectstack/metadata');
             const { createTenantPlugin } = await import('@objectstack/service-tenant');
