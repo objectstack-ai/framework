@@ -24,7 +24,7 @@
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/platform-objects": "workspace:*",
-    "better-auth": "^1.6.5"
+    "better-auth": "^1.6.9"
   },
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
