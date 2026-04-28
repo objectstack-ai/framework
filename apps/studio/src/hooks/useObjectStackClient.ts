@@ -47,13 +47,10 @@ export function useScopedClient(
   const client = useClient();
   return useMemo(() => {
     if (!client) return null;
-    if (config.singleProject) {
-      // Local single-project mode: REST only registers unscoped paths,
-      // so reuse the root client. ScopedProjectClient is a method-subset
-      // of ObjectStackClient at the call sites that consume this hook.
-      return client as unknown as ScopedProjectClient;
-    }
     if (!projectId) return null;
+    // Always route through /api/v1/projects/:projectId/... so the per-project
+    // kernel returns project-scoped business metadata. Project mode boots the
+    // same cloud-stack as cloud mode, which registers scoped REST routes.
     return client.project(projectId);
   }, [client, projectId]);
 }
