@@ -5,7 +5,8 @@
   "description": "ObjectStack Protocol & Specification - Monorepo for TypeScript Interfaces, JSON Schemas, and Convention Configurations",
   "scripts": {
     "build": "turbo run build --filter=!@objectstack/docs",
-    "dev": "OBJECTSTACK_MULTI_PROJECT=true pnpm --filter @objectstack/server dev",
+    "dev": "pnpm --filter @objectstack/server dev",
+    "dev:cloud": "OBJECTSTACK_MODE=cloud pnpm --filter @objectstack/server dev",
     "start": "pnpm --filter @objectstack/server start",
     "crm:dev": "pnpm --filter @example/app-crm build && OBJECTSTACK_ARTIFACT_PATH=\"$PWD/examples/app-crm/dist/objectstack.json\" OBJECTSTACK_PROJECT_ID=proj_crm pnpm --filter @objectstack/server dev",
     "studio:start": "pnpm --filter @objectstack/studio start",

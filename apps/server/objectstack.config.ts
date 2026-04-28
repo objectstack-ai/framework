@@ -7,9 +7,19 @@
  *
  * ## Boot modes
  *
- * ### Single-project mode (`OBJECTSTACK_MULTI_PROJECT` is unset or false)
+ * Selected via the `OBJECTSTACK_MODE` environment variable:
+ *   - `standalone` (default)  — single-project, no control plane
+ *   - `cloud`                 — multi-project, control plane + per-project DBs
+ *
+ * The legacy flag `OBJECTSTACK_MULTI_PROJECT=true` is still honoured as a
+ * deprecated alias for `OBJECTSTACK_MODE=cloud` and will be removed in a
+ * future major release.
+ *
+ * ### Standalone mode (`OBJECTSTACK_MODE` unset or `standalone`)
  *
  * Single-project, offline-first.  No control-plane DB is required.
+ * Authentication is fully real — first-run users are walked through `/setup`
+ * to create the owner account; thereafter every request requires a session.
  * Required env vars:
  *   OBJECTSTACK_PROJECT_ID        — project identity (e.g. "proj_local")
  *   OBJECTSTACK_DATABASE_URL      — project business DB (file:./app.db, memory://mydb, libsql://…, https://…)
@@ -22,13 +32,12 @@
  *   TURSO_DATABASE_URL            — libsql:// or https:// Turso URL (fallback alias for OBJECTSTACK_DATABASE_URL)
  *   TURSO_AUTH_TOKEN              — Turso auth token (fallback alias for OBJECTSTACK_DATABASE_AUTH_TOKEN)
  *
- * ### Multi-project mode (`OBJECTSTACK_MULTI_PROJECT=true`)
+ * ### Cloud mode (`OBJECTSTACK_MODE=cloud`)
  *
- * Multi-project, control-plane connected.
- * Required env vars:
+ * Multi-project, control-plane connected. Required env vars:
  *   OBJECTSTACK_DATABASE_URL      — control-plane DB URL
  *   OBJECTSTACK_DATABASE_AUTH_TOKEN — optional, for libSQL/Turso URLs
- *   AUTH_SECRET / NEXT_PUBLIC_BASE_URL — same as local
+ *   AUTH_SECRET / NEXT_PUBLIC_BASE_URL — same as standalone
  *
  * The control-plane driver URL accepts:
  *   - unset / `file:<path>`  → local SQLite (better-sqlite3)  [default: .objectstack/data/control.db]
@@ -58,8 +67,35 @@ function envFlag(name: string): boolean {
     return ['1', 'true', 'yes', 'on'].includes((process.env[name] ?? '').trim().toLowerCase());
 }
 
+/**
+ * Resolve the deployment mode from environment.
+ *
+ * Primary: `OBJECTSTACK_MODE=standalone|cloud`.
+ * Legacy:  `OBJECTSTACK_MULTI_PROJECT=true` is still honoured as a deprecated
+ * alias for `cloud`. Emits a one-time deprecation warning when used so the
+ * variable can be removed in the next major release.
+ */
+function resolveMode(): 'standalone' | 'cloud' {
+    const raw = process.env.OBJECTSTACK_MODE?.trim().toLowerCase();
+    if (raw === 'cloud' || raw === 'multi-project' /* legacy alias */) return 'cloud';
+    if (raw === 'standalone' || raw === 'local' || raw === 'single-project') return 'standalone';
+    if (raw && raw.length > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(`[objectstack] Unknown OBJECTSTACK_MODE=${raw}; falling back to "standalone".`);
+    }
+    if (envFlag('OBJECTSTACK_MULTI_PROJECT')) {
+        // eslint-disable-next-line no-console
+        console.warn(
+            '[objectstack] OBJECTSTACK_MULTI_PROJECT is deprecated. Use `OBJECTSTACK_MODE=cloud` instead.',
+        );
+        return 'cloud';
+    }
+    return 'standalone';
+}
+
 // ── Boot mode ─────────────────────────────────────────────────────────────────
-const isLocalMode = !envFlag('OBJECTSTACK_MULTI_PROJECT');
+const mode = resolveMode();
+const isStandaloneMode = mode === 'standalone';
 
 const authSecret = process.env.AUTH_SECRET
     ?? 'dev-secret-please-change-in-production-min-32-chars';
@@ -72,13 +108,13 @@ const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
         : undefined)
     ?? `http://localhost:${process.env.PORT ?? 3000}`;
 
-// ── LOCAL MODE ────────────────────────────────────────────────────────────────
+// ── STANDALONE MODE ───────────────────────────────────────────────────────────
 
 const localProjectId = process.env.OBJECTSTACK_PROJECT_ID ?? 'proj_local';
 const localArtifactPath = process.env.OBJECTSTACK_ARTIFACT_PATH
     ?? resolvePath(dirname(fileURLToPath(import.meta.url)), 'dist/objectstack.json');
 
-async function buildLocalPlugins() {
+async function buildStandalonePlugins() {
     const { ObjectQLPlugin } = await import('@objectstack/objectql');
     const { MetadataPlugin } = await import('@objectstack/metadata');
     const { AuthPlugin } = await import('@objectstack/plugin-auth');
@@ -99,7 +135,7 @@ async function buildLocalPlugins() {
         // Artifact not available yet (e.g. first run before compile) — AppPlugin skipped.
     }
 
-    // Build a database driver for local mode.
+    // Build a database driver for standalone mode.
     // Defaults to SQLite at .objectstack/data/app.db relative to the server root.
     // For Vercel / serverless deployments, set OBJECTSTACK_DATABASE_URL to a
     // libsql:// or https:// Turso URL (and OBJECTSTACK_DATABASE_AUTH_TOKEN if needed).
@@ -244,9 +280,9 @@ const multiProjectPluginProxy: any = {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-const config = isLocalMode
+const config = isStandaloneMode
     ? {
-        plugins: await buildLocalPlugins(),
+        plugins: await buildStandalonePlugins(),
         api: {
             enableProjectScoping: false,
             projectResolution: 'none' as const,

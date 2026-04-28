@@ -74,7 +74,7 @@ function expect(actual: any) {
 const workdir = mkdtempSync(join(tmpdir(), 'objectstack-e2e-'));
 const controlDb = join(workdir, 'control.db');
 
-process.env.OBJECTSTACK_MULTI_PROJECT = 'true';
+process.env.OBJECTSTACK_MODE = 'cloud';
 process.env.OBJECTSTACK_DATABASE_URL = `file:${controlDb}`;
 process.env.AUTH_SECRET = 'e2e-test-secret-must-be-at-least-32-characters-long-xxxx';
 process.env.PORT = '0';

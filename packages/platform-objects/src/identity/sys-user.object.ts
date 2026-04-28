@@ -47,6 +47,13 @@ export const SysUser = ObjectSchema.create({
       group: 'Identity',
     }),
 
+    two_factor_enabled: Field.boolean({
+      label: 'Two-Factor Enabled',
+      defaultValue: false,
+      group: 'Identity',
+      description: 'Whether two-factor authentication is enabled for this user. Maintained by the better-auth `twoFactor` plugin.',
+    }),
+
     // ── Profile ──────────────────────────────────────────────────
     image: Field.url({
       label: 'Profile Image',

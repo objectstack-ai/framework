@@ -43,7 +43,8 @@ export interface ConsoleConfig {
    * /login → /organizations → /projects funnel, and route `/` straight to the
    * default project workspace. Driven by a server-injected flag (see
    * `initRuntimeConfig`), which in turn reflects the server's
-   * `OBJECTSTACK_MULTI_PROJECT` environment variable.
+   * `OBJECTSTACK_MODE` environment variable (or the deprecated
+   * `OBJECTSTACK_MULTI_PROJECT` legacy alias).
    */
   singleProject: boolean;
 
@@ -52,15 +53,6 @@ export interface ConsoleConfig {
 
   /** Organization id the frontend should treat as active in single-project mode. */
   defaultOrgId: string | null;
-
-  /**
-   * When true, the frontend does not redirect unauthenticated users to
-   * `/login`. The server is expected to synthesise a session so
-   * `useSession()` still returns a user. Today this tracks `singleProject`
-   * 1:1 but is kept as a separate flag to allow future decoupling
-   * (e.g. single-project + real auth).
-   */
-  skipAuth: boolean;
 }
 
 /**
@@ -113,7 +105,6 @@ const defaultConfig: ConsoleConfig = {
   singleProject: false,
   defaultProjectId: null,
   defaultOrgId: null,
-  skipAuth: false,
 };
 
 /**
@@ -132,7 +123,6 @@ interface StudioRuntimeConfig {
   singleProject?: boolean;
   defaultProjectId?: string | null;
   defaultOrgId?: string | null;
-  skipAuth?: boolean;
 }
 
 /**
@@ -149,7 +139,6 @@ export async function initRuntimeConfig(): Promise<void> {
       config.singleProject = true;
       config.defaultProjectId = config.defaultProjectId ?? 'proj_local';
       config.defaultOrgId = config.defaultOrgId ?? 'org_local';
-      config.skipAuth = true;
     }
     return;
   }
@@ -166,7 +155,6 @@ export async function initRuntimeConfig(): Promise<void> {
       config.singleProject = true;
       config.defaultProjectId = body.defaultProjectId ?? 'proj_local';
       config.defaultOrgId = body.defaultOrgId ?? 'org_local';
-      config.skipAuth = body.skipAuth ?? true;
     }
   } catch {
     // Endpoint missing or network error → keep multi-project defaults.

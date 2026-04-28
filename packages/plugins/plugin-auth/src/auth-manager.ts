@@ -527,4 +527,13 @@ export class AuthManager {
       features,
     };
   }
+
+  /**
+   * Returns the data engine wired into this auth manager. Used by route
+   * handlers (e.g. bootstrap-status) that need to query identity tables
+   * directly without going through better-auth.
+   */
+  public getDataEngine(): IDataEngine | undefined {
+    return this.config.dataEngine;
+  }
 }

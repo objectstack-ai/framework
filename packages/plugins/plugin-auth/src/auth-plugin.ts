@@ -251,6 +251,27 @@ export class AuthPlugin implements Plugin {
       }
     });
 
+    // Bootstrap status — does an owner exist yet? Used by the Account SPA's
+    // root route to decide between rendering /login (normal flow) and
+    // /setup (first-run owner creation). Public, unauthenticated; only
+    // returns a boolean so it can be polled before the user has any
+    // credentials.
+    rawApp.get(`${basePath}/bootstrap-status`, async (c: any) => {
+      try {
+        const dataEngine = this.authManager!.getDataEngine();
+        if (!dataEngine) {
+          // No data engine wired (e.g. MSW/mock mode) — assume bootstrapped
+          // so the SPA falls through to its normal login flow.
+          return c.json({ hasOwner: true });
+        }
+        const count = await dataEngine.count('sys_user', {});
+        return c.json({ hasOwner: (count ?? 0) > 0 });
+      } catch (error) {
+        ctx.logger.warn('[AuthPlugin] bootstrap-status check failed; assuming bootstrapped', error as Error);
+        return c.json({ hasOwner: true });
+      }
+    });
+
     // Device Authorization Grant (RFC 8628) endpoints — `/device/code`,
     // `/device/token`, `/device/approve`, `/device/deny`, `/device` — are
     // provided by better-auth's `device-authorization` plugin and reach

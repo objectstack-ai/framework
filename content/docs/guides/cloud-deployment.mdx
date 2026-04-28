@@ -1,29 +1,34 @@
 ---
-title: Deployment & Multi-Project
-description: Run a single ObjectStack Server process in single-kernel or multi-project shape. Covers control-plane DB URLs, hostname routing, and Fly.io / Docker deployment.
+title: Deployment Modes (Standalone & Cloud)
+description: Run a single ObjectStack Server process in standalone (single-project) or cloud (multi-project) mode. Covers control-plane DB URLs, hostname routing, and Fly.io / Docker deployment.
 ---
 
-# Deployment & Multi-Project
+# Deployment Modes (Standalone & Cloud)
 
-The same `apps/server` binary boots into one of two shapes. Which one you get
-depends only on the environment variables you set — the code and Docker image
-are identical.
+The same `apps/server` binary boots into one of two modes. Which one you get
+depends only on the `OBJECTSTACK_MODE` environment variable — the code and
+Docker image are identical.
 
-| Shape                        | Control plane           | Projects    | Hostname routing | Typical use                          |
-| ---------------------------- | ----------------------- | ----------- | ---------------- | ------------------------------------ |
-| **single**                   | — (single kernel)       | 1           | ❌                | OSS single-project deploy            |
-| **multi-project**            | `OBJECTSTACK_DATABASE_URL` | 1 – N    | ✅                | Framework Studio dev, self-hosted multi-project, SaaS |
+| Mode               | `OBJECTSTACK_MODE` | Control plane              | Projects | Hostname routing | Typical use                                     |
+| ------------------ | ------------------ | -------------------------- | -------- | ---------------- | ----------------------------------------------- |
+| **standalone**     | unset / `standalone` | — (single kernel)        | 1        | ❌               | OSS single-app install, laptop dev              |
+| **cloud**          | `cloud`            | `OBJECTSTACK_DATABASE_URL` | 1 – N    | ✅               | Studio dev, self-hosted multi-project, SaaS    |
 
-Both shapes reuse:
+> **Legacy alias:** `OBJECTSTACK_MULTI_PROJECT=true` is still honoured as a
+> deprecated alias for `OBJECTSTACK_MODE=cloud`. The server prints a
+> deprecation warning at boot and the variable will be removed in the next
+> major release.
+
+Both modes reuse:
 
 - `KernelManager` + `DefaultProjectKernelFactory` for per-project kernels
 - `DefaultEnvironmentDriverRegistry` for hostname → project resolution
-- `createControlPlanePlugins()` (multi-project only) to install
+- `createControlPlanePlugins()` (cloud only) to install
   tenant / auth / security / audit / package plugins onto the control DB.
 
 ---
 
-## Shape 1 — single
+## Mode 1 — standalone
 
 ```bash
 pnpm --filter @objectstack/server dev
@@ -34,15 +39,14 @@ One `ObjectKernel`, every plugin from `apps/server/objectstack.config.ts`, no
 per-project isolation. This is what you want on a laptop or for an OSS
 single-app install.
 
-Leave `OBJECTSTACK_MULTI_PROJECT` unset (or set it to `false`) to use this
-shape.
+Leave `OBJECTSTACK_MODE` unset (or set it to `standalone`) to use this mode.
 
 ---
 
-## Shape 2 — multi-project
+## Mode 2 — cloud
 
 ```bash
-OBJECTSTACK_MULTI_PROJECT=true \
+OBJECTSTACK_MODE=cloud \
 OBJECTSTACK_DATABASE_URL=file:./.objectstack/data/control.db \
 AUTH_SECRET=$(openssl rand -hex 32) \
 pnpm --filter @objectstack/server dev
@@ -68,7 +72,7 @@ The factory switch lives in
 For a remote shared control plane, only the URL changes:
 
 ```bash
-OBJECTSTACK_MULTI_PROJECT=true \
+OBJECTSTACK_MODE=cloud \
 OBJECTSTACK_DATABASE_URL=libsql://control.turso.io \
 OBJECTSTACK_DATABASE_AUTH_TOKEN=... \
 AUTH_SECRET=$(openssl rand -hex 32) \
@@ -153,7 +157,7 @@ docker build -f apps/server/Dockerfile -t objectstack/server:local .
 
 docker run --rm -p 3000:3000 \
   -v $(pwd)/data:/data \
-  -e OBJECTSTACK_MULTI_PROJECT=true \
+  -e OBJECTSTACK_MODE=cloud \
   -e OBJECTSTACK_DATABASE_URL=file:/data/control.db \
   -e AUTH_SECRET=$(openssl rand -hex 32) \
   objectstack/server:local
@@ -168,22 +172,23 @@ point a wildcard DNS (`*.example.com`) at it. The container does the rest.
 
 ## Environment variable reference
 
-| Variable                          | Shape(s)                  | Purpose                                                                          |
+| Variable                          | Mode(s)                   | Purpose                                                                          |
 | --------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
-| `OBJECTSTACK_MULTI_PROJECT`       | all                       | `true` enables the multi-project control plane. Unset/false runs single-project mode. |
-| `OBJECTSTACK_DATABASE_URL`        | all                       | In `single`, the project business DB URL. In `multi-project`, the control-plane DB URL (`file:`, `libsql://`, or `https://`). |
+| `OBJECTSTACK_MODE`                | all                       | `standalone` (default) or `cloud`. Selects whether a control plane is mounted. |
+| `OBJECTSTACK_MULTI_PROJECT`       | all (deprecated)          | Legacy alias: `=true` is treated as `OBJECTSTACK_MODE=cloud`. Removed in next major. |
+| `OBJECTSTACK_DATABASE_URL`        | all                       | In `standalone`, the project business DB URL. In `cloud`, the control-plane DB URL (`file:`, `libsql://`, or `https://`). |
 | `OBJECTSTACK_DATABASE_AUTH_TOKEN` | all                       | Auth token for `OBJECTSTACK_DATABASE_URL` when using libSQL/Turso.               |
-| `TURSO_ORG_NAME` + `TURSO_API_TOKEN` | multi-project (any)    | Used by `TursoProjectDatabaseAdapter` to provision per-project databases.        |
-| `OBJECTSTACK_KERNEL_CACHE_SIZE`   | multi-project (any)       | LRU size for per-project kernels (default 32, fly.toml defaults to 50).          |
-| `OBJECTSTACK_KERNEL_TTL_MS`       | multi-project (any)       | Idle eviction TTL in ms (default 900000, fly.toml defaults to 1800000).          |
-| `OBJECTSTACK_ENV_CACHE_TTL_MS`    | multi-project (any)       | TTL for the envRegistry's hostname/id cache (default 300000).                    |
-| `OBJECTSTACK_COOKIE_DOMAIN`       | multi-project (any)       | Shared cookie domain for cross-subdomain sessions (e.g. `.objectstack.app`).     |
+| `TURSO_ORG_NAME` + `TURSO_API_TOKEN` | cloud                  | Used by `TursoProjectDatabaseAdapter` to provision per-project databases.        |
+| `OBJECTSTACK_KERNEL_CACHE_SIZE`   | cloud                     | LRU size for per-project kernels (default 32, fly.toml defaults to 50).          |
+| `OBJECTSTACK_KERNEL_TTL_MS`       | cloud                     | Idle eviction TTL in ms (default 900000, fly.toml defaults to 1800000).          |
+| `OBJECTSTACK_ENV_CACHE_TTL_MS`    | cloud                     | TTL for the envRegistry's hostname/id cache (default 300000).                    |
+| `OBJECTSTACK_COOKIE_DOMAIN`       | cloud                     | Shared cookie domain for cross-subdomain sessions (e.g. `.objectstack.app`).     |
 | `AUTH_SECRET`                     | all                       | Better-Auth session secret (≥ 32 chars).                                         |
 | `PORT` / `HOST`                   | all (node-entry)          | HTTP bind. Defaults to `3000` / `0.0.0.0`.                                       |
 
 ---
 
-## Smoke test (multi-project)
+## Smoke test (cloud mode)
 
 ```bash
 # 1. Create a project

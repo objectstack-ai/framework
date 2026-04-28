@@ -86,7 +86,6 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }, [user, loading, location.pathname, navigate]);
 
   useEffect(() => {
-    if (config.skipAuth) return;
     if (loading) return;
     if (!user && !isPublic) {
       // Use the raw browser path (includes the `/_studio` base) so
@@ -103,15 +102,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user && !isPublic && !config.skipAuth) {
+  if (!user && !isPublic) {
     return null;
   }
 
   // Authenticated layout with TopBar + Content.
-  // `config.skipAuth` (single-project mode) lets us render the chrome even
-  // before the synthesized session has resolved — otherwise a slow
-  // `/auth/get-session` could delay the first paint.
-  if (user || config.skipAuth) {
+  if (user) {
     return (
       <SidebarProvider>
         <div className="flex min-h-screen w-full flex-col">

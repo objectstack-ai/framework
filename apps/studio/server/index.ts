@@ -56,14 +56,19 @@ const DEFAULT_LOCAL_PROJECT_ID = 'proj_local';
 const DEFAULT_LOCAL_USER_ID = 'user_local';
 
 /**
- * Is the server running in single-project mode? This is the inverse of the
- * `OBJECTSTACK_MULTI_PROJECT` flag read by `apps/server/objectstack.config.ts`:
- * when the flag is unset/false, the kernel boots against a local data plane
- * and there is no control-plane database for organizations/projects. Studio
- * therefore synthesises a single virtual `org_local`/`proj_local` so the
- * frontend can keep its uniform `/projects/:projectId/...` routing.
+ * Is the server running in standalone (single-project) mode?
+ *
+ * Reads `OBJECTSTACK_MODE` (primary) with fallback to the deprecated
+ * `OBJECTSTACK_MULTI_PROJECT` flag for backwards compatibility. When the
+ * server is not in cloud mode, Studio synthesises a single virtual
+ * `org_local`/`proj_local` so the frontend can keep its uniform
+ * `/projects/:projectId/...` routing without a control plane.
  */
 function isSingleProjectMode(): boolean {
+    const mode = process.env.OBJECTSTACK_MODE?.trim().toLowerCase();
+    if (mode === 'cloud' || mode === 'multi-project') return false;
+    if (mode === 'standalone' || mode === 'local' || mode === 'single-project') return true;
+    // Legacy fallback: honour the old `OBJECTSTACK_MULTI_PROJECT=true` flag.
     return !envFlag('OBJECTSTACK_MULTI_PROJECT');
 }
 
@@ -242,13 +247,11 @@ async function seedData(kernel: ObjectKernel, configs: any[]) {
  * Get (or create) the Hono application backed by the ObjectStack kernel.
  * The prefix `/api/v1` matches the client SDK's default API path.
  *
- * When `OBJECTSTACK_MULTI_PROJECT` is unset/false we wrap the kernel app in
- * a thin outer router that (a) exposes `/api/v1/studio/runtime-config` so
- * the SPA can detect single-project mode on boot, and (b) short-circuits
- * the handful of control-plane endpoints Studio polls (`/cloud/projects`,
- * `/cloud/organizations`, `/auth/get-session`, `/auth/organization/list`)
- * with synthetic responses shaped to satisfy `packages/client` and
- * `apps/studio/src/hooks/useSession.ts`.
+ * When the server is in standalone mode (`OBJECTSTACK_MODE` unset or
+ * `standalone`) we wrap the kernel app in a thin outer router that
+ * exposes `/api/v1/studio/runtime-config` so the SPA can detect
+ * single-project mode on boot, plus a synthetic `/cloud/projects[/:id]`
+ * row shaped to satisfy `packages/client` and `useProjects`.
  */
 async function ensureApp(): Promise<Hono> {
     if (_app) return _app;
@@ -272,6 +275,11 @@ async function ensureApp(): Promise<Hono> {
  * Register the runtime-config endpoint plus synthetic control-plane
  * responses used in single-project mode. Kept in one place so the shape
  * changes co-locate with the helpers that produce them.
+ *
+ * Note: standalone (single-project) mode does NOT mock `/api/v1/auth/*`.
+ * Authentication is real — every request flows through plugin-auth and
+ * better-auth. Unauthenticated visitors are redirected to the Account
+ * SPA's login (or `/setup` on first run).
  */
 function registerSingleProjectRoutes(app: Hono): void {
     app.get('/api/v1/studio/runtime-config', (c) =>
@@ -279,43 +287,7 @@ function registerSingleProjectRoutes(app: Hono): void {
             singleProject: true,
             defaultOrgId: DEFAULT_LOCAL_ORG_ID,
             defaultProjectId: DEFAULT_LOCAL_PROJECT_ID,
-            skipAuth: true,
         }),
-    );
-
-    // better-auth session — synthesized so `useSession()` resolves immediately
-    // without prompting for login. `normaliseSessionResponse` in the frontend
-    // accepts both `{ user, session }` and `{ data: { user, session } }`; we
-    // emit the `data`-wrapped shape to match what better-auth returns.
-    app.get('/api/v1/auth/get-session', (c) =>
-        c.json({
-            data: {
-                user: {
-                    id: DEFAULT_LOCAL_USER_ID,
-                    email: 'local@objectstack.dev',
-                    name: 'Local',
-                    emailVerified: true,
-                },
-                session: {
-                    id: 'session_local',
-                    userId: DEFAULT_LOCAL_USER_ID,
-                    activeOrganizationId: DEFAULT_LOCAL_ORG_ID,
-                },
-            },
-        }),
-    );
-
-    // better-auth organization/list — `client.organizations.list()` accepts
-    // either a raw array or `{ data: [...] }`. We use the raw-array form so
-    // SessionProvider picks it up verbatim.
-    app.get('/api/v1/auth/organization/list', (c) =>
-        c.json([
-            {
-                id: DEFAULT_LOCAL_ORG_ID,
-                name: 'Local',
-                slug: 'local',
-            },
-        ]),
     );
 
     // Control-plane projects API — dispatcher-plugin shape

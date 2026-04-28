@@ -411,7 +411,8 @@ ObjectOS 启动时必须从外部注入：
 | `OBJECTSTACK_DATABASE_URL` | 业务 DB URL | 例：`file:./.data/app.db` |
 | `OBJECTSTACK_DATABASE_DRIVER` | 业务 DB driver | `turso` / `sqlite` / `memory` |
 | `OBJECTSTACK_ARTIFACT_PATH` | 本地 artifact 路径 | 默认 `./dist/objectstack.json`；填了即跳过 Artifact API |
-| `OBJECTSTACK_MULTI_PROJECT` | 多项目开关 | `true` 时 `OBJECTSTACK_DATABASE_URL` 解释为控制面 DB URL |
+| `OBJECTSTACK_MODE` | 部署模式 | `standalone`（默认）/ `cloud`；`cloud` 时 `OBJECTSTACK_DATABASE_URL` 解释为控制面 DB URL |
+| `OBJECTSTACK_MULTI_PROJECT` | 多项目开关（已废弃） | 旧别名：`=true` 等价 `OBJECTSTACK_MODE=cloud`，将于下个 major 移除 |
 | `AUTH_SECRET` | 进程级密钥 | |
 
 本地模式可以用磁盘 `dist/objectstack.json` 直接喂内核（用 `commitId: 'local-dev'` 之类的占位 envelope），不需要控制面在场。
