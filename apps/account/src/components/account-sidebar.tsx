@@ -18,7 +18,7 @@
  */
 
 import { Link, useLocation } from '@tanstack/react-router';
-import { Building2, Monitor, Shield, ShieldCheck, User } from 'lucide-react';
+import { Building2, Monitor, PanelLeft, Shield, ShieldCheck, User } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -30,7 +30,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
-  SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 
 interface NavItem {
@@ -107,10 +107,24 @@ export function AccountSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarTrigger />
+            <CollapseButton />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+function CollapseButton() {
+  const { state, toggleSidebar } = useSidebar();
+  const collapsed = state === 'collapsed';
+  return (
+    <SidebarMenuButton
+      onClick={toggleSidebar}
+      tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+    >
+      <PanelLeft className="size-4" />
+    </SidebarMenuButton>
   );
 }

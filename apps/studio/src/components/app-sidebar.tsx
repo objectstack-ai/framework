@@ -28,6 +28,7 @@ import {
   Anchor,
   UserCog,
   ChevronRight,
+  PanelLeft,
   Settings,
   Wrench,
   Sparkles,
@@ -56,6 +57,7 @@ import {
   SidebarMenuSubItem,
   SidebarMenuSubButton,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import {
   Collapsible,
@@ -566,10 +568,24 @@ export function AppSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarTrigger />
+            <CollapseButton />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  )
+}
+
+function CollapseButton() {
+  const { state, toggleSidebar } = useSidebar()
+  const collapsed = state === 'collapsed'
+  return (
+    <SidebarMenuButton
+      onClick={toggleSidebar}
+      tooltip={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+    >
+      <PanelLeft className="size-4" />
+    </SidebarMenuButton>
   )
 }

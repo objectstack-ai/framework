@@ -5,7 +5,7 @@ import { useEffect, useMemo } from 'react';
 import { ObjectStackProvider } from '@objectstack/client-react';
 import { ObjectStackClient } from '@objectstack/client';
 import { Toaster } from '@/components/ui/toaster';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { TopBar } from '@/components/top-bar';
 import { AccountSidebar } from '@/components/account-sidebar';
 import { SessionProvider, useSession } from '@/hooks/useSession';
@@ -59,18 +59,16 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return <div className="flex min-h-screen w-full">{children}</div>;
   }
 
-  // Authenticated layout: TopBar + Sidebar + main content.
+  // Authenticated layout: full-height Sidebar + SidebarInset (TopBar + main).
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full flex-col">
+      <AccountSidebar />
+      <SidebarInset className="flex h-svh min-w-0 flex-col overflow-hidden">
         <TopBar />
-        <div className="flex w-full flex-1 overflow-hidden">
-          <AccountSidebar />
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-            {children}
-          </main>
-        </div>
-      </div>
+        <main className="flex min-h-0 flex-1 flex-col overflow-auto bg-background">
+          {children}
+        </main>
+      </SidebarInset>
     </SidebarProvider>
   );
 }
