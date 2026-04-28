@@ -71,7 +71,8 @@ export function useRegisterOAuthApplication() {
 
   const register = useCallback(
     async (req: {
-      client_name: string;
+      name?: string;
+      client_name?: string;
       redirect_uris: string[];
       token_endpoint_auth_method?: 'none' | 'client_secret_basic' | 'client_secret_post';
       grant_types?: string[];
@@ -113,12 +114,12 @@ export function useDeleteOAuthApplication() {
   const [error, setError] = useState<Error | null>(null);
 
   const remove = useCallback(
-    async (id: string) => {
+    async (clientId: string) => {
       if (!client?.oauth?.applications?.delete) throw new Error('Client not ready');
       setDeleting(true);
       setError(null);
       try {
-        return await client.oauth.applications.delete(id);
+        return await client.oauth.applications.delete(clientId);
       } catch (err) {
         setError(err as Error);
         throw err;
@@ -141,7 +142,7 @@ export function useOAuthConsent() {
   const [error, setError] = useState<Error | null>(null);
 
   const submit = useCallback(
-    async (req: { accept: boolean; consent_code?: string }) => {
+    async (req: { accept: boolean; scope?: string; oauth_query?: string }) => {
       if (!client?.oauth?.consent) throw new Error('Client not ready');
       setSubmitting(true);
       setError(null);

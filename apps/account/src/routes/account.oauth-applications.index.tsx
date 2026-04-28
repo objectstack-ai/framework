@@ -39,7 +39,7 @@ function OAuthApplicationsListPage() {
   const handleDelete = async () => {
     if (!pendingDelete) return;
     try {
-      await remove(pendingDelete.id);
+      await remove(pendingDelete.client_id);
       toast({ title: 'OAuth application deleted' });
       setPendingDelete(null);
       await reload();

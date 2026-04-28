@@ -71,7 +71,7 @@ function OAuthApplicationDetailPage() {
   const handleDelete = async () => {
     if (!app) return;
     try {
-      await remove(app.id);
+      await remove(app.client_id);
       toast({ title: 'OAuth application deleted' });
       await reload();
       navigate({ to: '/account/oauth-applications' });

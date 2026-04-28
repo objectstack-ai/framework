@@ -3,18 +3,17 @@
 /**
  * /oauth/consent — OAuth/OIDC consent screen.
  *
- * The better-auth `oidc-provider` plugin redirects unauthorized users here
- * with the following query parameters when an OAuth client requests
- * consent:
- *   - consent_code   — opaque token identifying the pending request
- *   - client_id      — the requesting application
- *   - scope          — space-separated requested scopes
+ * The `@better-auth/oauth-provider` plugin redirects the user here when an
+ * OAuth client requests consent. The full query string (including the
+ * signed `sig`/`exp` carrier) is the canonical authorization request and
+ * must be forwarded back to the consent endpoint as `oauth_query` so the
+ * server can verify and re-issue an authorization code.
  *
  * After the user accepts or denies, we POST to `/api/v1/auth/oauth2/consent`
- * which redirects the user back to the client's redirect_uri.
+ * which returns `{ redirect_uri }` pointing at the OAuth client's callback.
  */
 
-import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Check, KeyRound, X } from 'lucide-react';
 import { useClient } from '@objectstack/client-react';
@@ -24,29 +23,30 @@ import { toast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
 import { useOAuthConsent } from '@/hooks/useOAuthApplications';
 
-interface ConsentSearch {
-  consent_code?: string;
-  client_id?: string;
-  scope?: string;
-}
-
 export const Route = createFileRoute('/oauth/consent')({
-  validateSearch: (s: Record<string, unknown>): ConsentSearch => ({
-    consent_code: typeof s.consent_code === 'string' ? s.consent_code : undefined,
-    client_id: typeof s.client_id === 'string' ? s.client_id : undefined,
-    scope: typeof s.scope === 'string' ? s.scope : undefined,
-  }),
+  // Accept arbitrary query params — the consent page receives the full
+  // authorization-request query string and forwards it back as
+  // `oauth_query` to the consent endpoint.
+  validateSearch: (s: Record<string, unknown>) => s,
   component: OAuthConsentPage,
 });
 
 function OAuthConsentPage() {
-  const search = useSearch({ from: '/oauth/consent' });
   const navigate = useNavigate();
   const client = useClient() as any;
   const { user, loading: sessionLoading } = useSession();
   const { submit, submitting } = useOAuthConsent();
 
   const [clientInfo, setClientInfo] = useState<{ name?: string; icon?: string } | null>(null);
+
+  // Read raw query directly so we can forward it verbatim. The router's
+  // typed `useSearch` would coerce / re-serialize and risks breaking the
+  // signature on `sig=`.
+  const rawSearch = typeof window !== 'undefined' ? window.location.search : '';
+  const oauthQuery = rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch;
+  const params = new URLSearchParams(oauthQuery);
+  const clientId = params.get('client_id') ?? undefined;
+  const scope = params.get('scope') ?? '';
 
   // If unauthenticated, bounce to login with a return-to that brings the
   // user back here once signed in.
@@ -60,30 +60,27 @@ function OAuthConsentPage() {
 
   // Best-effort lookup of the client app's display name + icon.
   useEffect(() => {
-    if (!search.client_id || !client?.oauth?.applications?.get) return;
+    if (!clientId || !client?.oauth?.applications?.getPublic) return;
     let cancelled = false;
-    client.oauth.applications.get(search.client_id).then(
+    client.oauth.applications.getPublic(clientId).then(
       (res: any) => {
         if (cancelled) return;
         const data = res?.data ?? res;
-        setClientInfo({ name: data?.name, icon: data?.icon });
+        setClientInfo({ name: data?.name ?? data?.client_name, icon: data?.icon ?? data?.logo_uri });
       },
       () => {},
     );
     return () => {
       cancelled = true;
     };
-  }, [client, search.client_id]);
+  }, [client, clientId]);
 
-  const scopes = (search.scope ?? '').split(/\s+/).filter(Boolean);
+  const scopes = scope.split(/\s+/).filter(Boolean);
 
   const handleDecision = async (accept: boolean) => {
     try {
-      const res: any = await submit({
-        accept,
-        ...(search.consent_code ? { consent_code: search.consent_code } : {}),
-      });
-      const redirect = res?.redirectURI ?? res?.redirect_uri ?? res?.url;
+      const res: any = await submit({ accept, oauth_query: oauthQuery });
+      const redirect = res?.redirect_uri ?? res?.redirectURI ?? res?.url;
       if (redirect) {
         window.location.href = redirect;
         return;
@@ -102,7 +99,7 @@ function OAuthConsentPage() {
     }
   };
 
-  const appName = clientInfo?.name ?? search.client_id ?? 'an application';
+  const appName = clientInfo?.name ?? clientId ?? 'an application';
 
   return (
     <div className="flex min-h-svh w-full flex-1 items-center justify-center bg-background px-4">
