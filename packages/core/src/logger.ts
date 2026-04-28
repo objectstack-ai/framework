@@ -3,6 +3,11 @@
 import type { LoggerConfig, LogLevel } from '@objectstack/spec/system';
 import type { Logger } from '@objectstack/spec/contracts';
 
+// Re-export the contract type so consumers can do
+// `import type { Logger } from '@objectstack/core/logger'` without also
+// pulling `@objectstack/spec` into their bundle graph manually.
+export type { Logger };
+
 const LEVEL_ORDER: Record<LogLevel, number> = {
     debug: 0,
     info: 1,
@@ -115,10 +120,23 @@ export class ObjectLogger implements Logger {
 
         const out = line + '\n';
 
-        if (level === 'error' || level === 'fatal') {
-            process.stderr?.write(out);
-        } else {
-            process.stdout?.write(out);
+        // Browser-safe output: prefer process streams when available, otherwise
+        // fall back to console. The previous unguarded `process.stderr?.write`
+        // throws `ReferenceError: process is not defined` in browsers because
+        // `process` itself is the missing global, not just its `stderr` field.
+        if (typeof process !== 'undefined' && (process as any).stderr) {
+            if (level === 'error' || level === 'fatal') {
+                (process as any).stderr.write(out);
+            } else {
+                (process as any).stdout?.write(out);
+            }
+        } else if (typeof console !== 'undefined') {
+            const fn =
+                level === 'error' || level === 'fatal' ? console.error
+                : level === 'warn' ? console.warn
+                : level === 'debug' ? console.debug
+                : console.log;
+            fn(line);
         }
 
         if (this.fileStream) {

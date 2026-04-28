@@ -87,7 +87,7 @@ import {
   WellKnownCapabilities,
   ApiRoutes,
 } from '@objectstack/spec/api';
-import { Logger, createLogger } from '@objectstack/core';
+import { Logger, createLogger } from '@objectstack/core/logger';
 import { RealtimeAPI } from './realtime-api';
 
 /**
