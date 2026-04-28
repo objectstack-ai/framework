@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @objectstack/server dev",
     "dev:cloud": "OBJECTSTACK_MODE=cloud pnpm --filter @objectstack/server dev",
     "start": "pnpm --filter @objectstack/server start",
-    "dev:crm": "pnpm --filter @example/app-crm build && OBJECTSTACK_MODE=project OBJECTSTACK_PROJECT_ID=proj_crm pnpm --filter @example/app-crm dev",
+    "dev:crm": "pnpm --filter @example/app-crm build && OBJECTSTACK_PROJECT_ID=proj_crm pnpm --filter @example/app-crm dev",
     "studio:start": "pnpm --filter @objectstack/studio start",
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",

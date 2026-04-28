@@ -175,56 +175,21 @@ export default class Serve extends Command {
         throw new Error(`No default export found in ${args.config}`);
       }
 
-      // If the user's config is a bare defineStack() and OBJECTSTACK_MODE is
-      // set (or config.bootMode is set), build the full project/cloud/
-      // standalone stack via @objectstack/service-cloud. The package is
-      // resolved by walking up node_modules from the user's cwd, so it
-      // picks up the consumer's installation regardless of where the CLI
-      // itself lives.
+      // Project mode is the canonical OS dev workflow. Every bare
+      // `defineStack()` is booted via `@objectstack/service-cloud`'s
+      // `createBootStack()` (project / cloud / standalone are selected
+      // by `OBJECTSTACK_MODE`, default `project`). Set
+      // `OBJECTSTACK_MODE=off` to fall back to the legacy lightweight
+      // assembler.
       if (shouldBootWithLibrary(config)) {
-        try {
-          const { pathToFileURL } = await import('node:url');
-          let dir = process.cwd();
-          let cloudPkgDir: string | null = null;
-          // Walk upward from cwd looking for node_modules/@objectstack/service-cloud
-          while (true) {
-            const candidate = path.join(dir, 'node_modules', '@objectstack', 'service-cloud');
-            if (fs.existsSync(path.join(candidate, 'package.json'))) {
-              cloudPkgDir = candidate;
-              break;
-            }
-            const parent = path.dirname(dir);
-            if (parent === dir) break;
-            dir = parent;
-          }
-          if (!cloudPkgDir) {
-            throw new Error('@objectstack/service-cloud not found in any node_modules from cwd upward');
-          }
-          const pkg = JSON.parse(
-            fs.readFileSync(path.join(cloudPkgDir, 'package.json'), 'utf8'),
-          );
-          const entry =
-            pkg.exports?.['.']?.import ??
-            pkg.exports?.['.']?.default ??
-            pkg.module ??
-            pkg.main ??
-            'dist/index.js';
-          const cloudEntry = path.join(cloudPkgDir, entry);
-          const cloudMod: any = await import(pathToFileURL(cloudEntry).href);
-          const bootResult = await cloudMod.createBootStack({
-            mode: config.bootMode,
-            project: config.project,
-            cloud: config.cloud,
-            standalone: config.standalone,
-          });
-          config = bootResult as any;
-        } catch (err) {
-          console.error(
-            'OBJECTSTACK_MODE is set but @objectstack/service-cloud cannot be loaded.',
-            'Install it with: pnpm add @objectstack/service-cloud',
-          );
-          throw err;
-        }
+        const { createBootStack } = await import('@objectstack/service-cloud');
+        const bootResult = await createBootStack({
+          mode: config.bootMode,
+          project: config.project,
+          cloud: config.cloud,
+          standalone: config.standalone,
+        });
+        config = bootResult as any;
       }
 
       // ── Resolve plugin tiers ──────────────────────────────────────

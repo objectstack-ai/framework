@@ -49,6 +49,7 @@
     "@objectstack/rest": "workspace:*",
     "@objectstack/runtime": "workspace:^",
     "@objectstack/service-ai": "workspace:*",
+    "@objectstack/service-cloud": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@oclif/core": "^4.10.5",
     "bundle-require": "^5.1.0",

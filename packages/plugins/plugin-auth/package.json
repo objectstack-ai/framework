@@ -15,10 +15,7 @@
   },
   "scripts": {
     "build": "tsup --config ../../../tsup.config.ts",
-    "test": "vitest run",
-    "validate": "objectstack validate",
-    "compile": "objectstack compile",
-    "info": "objectstack info"
+    "test": "vitest run"
   },
   "dependencies": {
     "@better-auth/oauth-provider": "^1.6.9",
@@ -28,7 +25,6 @@
     "better-auth": "^1.6.9"
   },
   "devDependencies": {
-    "@objectstack/cli": "workspace:*",
     "@types/node": "^25.6.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.4"
