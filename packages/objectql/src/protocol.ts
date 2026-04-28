@@ -1237,7 +1237,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 }
             }
         } catch (e: any) {
-            console.warn(`[Protocol] DB hydration skipped: ${e.message}`);
+            // "no such table" is expected on first run before migrations execute — not an error.
+            if (!/no such table/i.test(e.message ?? '')) {
+                console.warn(`[Protocol] DB hydration skipped: ${e.message}`);
+            }
         }
         return { loaded, errors };
     }
