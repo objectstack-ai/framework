@@ -77,25 +77,25 @@
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
     "@playwright/test": "^1.59.1",
-    "@tailwindcss/postcss": "^4.2.2",
+    "@tailwindcss/postcss": "^4.2.4",
     "@tanstack/router-devtools": "^1.91.6",
-    "@tanstack/router-plugin": "^1.91.5",
+    "@tanstack/router-plugin": "^1.167.28",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitest/coverage-v8": "^4.1.4",
+    "@vitest/coverage-v8": "^4.1.5",
     "autoprefixer": "^10.4.27",
     "esbuild": "^0.28.0",
     "happy-dom": "^20.8.9",
     "msw": "^2.13.4",
-    "postcss": "^8.5.10",
-    "tailwindcss": "^4.2.2",
+    "postcss": "^8.5.12",
+    "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
-    "vite": "^8.0.9",
-    "vitest": "^4.1.4"
+    "vite": "^8.0.10",
+    "vitest": "^4.1.5"
   },
   "msw": {
     "workerDirectory": [
