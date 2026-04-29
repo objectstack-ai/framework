@@ -40,9 +40,15 @@ export function usePackages(options: UsePackagesOptions = {}) {
           return pkgScope !== 'platform';
         });
         console.log('[App] Fetched packages:', items.map((p) => p.manifest?.name || p.manifest?.id));
-        if (mounted && items.length > 0) {
+        if (mounted) {
           setPackages(items);
-          setSelectedPackage(items[0]);
+          setSelectedPackage((prev) =>
+            items.length === 0
+              ? null
+              : prev && items.some((p) => p.manifest?.id === prev.manifest?.id)
+                ? prev
+                : items[0],
+          );
         }
       } catch (err) {
         console.error('[App] Failed to fetch packages:', err);
