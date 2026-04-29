@@ -19,7 +19,7 @@
 
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { ChevronsUpDown, Plus, Search, Check } from 'lucide-react';
+import { ChevronsUpDown, Plus, Search, Check, Server } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,11 +32,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useProjects } from '@/hooks/useProjects';
 import { NewProjectDialog } from '@/components/new-project-dialog';
+import { config } from '@/lib/config';
 
 export function ProjectSwitcher() {
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { projectId?: string };
   const activeId = params.projectId;
+  const isPlatform = activeId === 'platform';
   const { projects, loading, reload } = useProjects();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -75,13 +77,18 @@ export function ProjectSwitcher() {
             size="sm"
             className="h-8 gap-2 px-2 text-sm font-medium"
           >
-            {active ? (
+            {isPlatform ? (
+              <span className="flex items-center gap-1.5 max-w-[160px] truncate">
+                <Server className="h-3 w-3 shrink-0" />
+                Platform
+              </span>
+            ) : active ? (
               <span className="max-w-[160px] truncate">
                 {active.display_name}
               </span>
             ) : (
               <span className="text-muted-foreground">
-                {loading ? 'Loading projects…' : 'Select project'}
+                {loading ? 'Loading…' : 'Select project'}
               </span>
             )}
             <ChevronsUpDown className="h-3 w-3 opacity-50" />
@@ -92,20 +99,42 @@ export function ProjectSwitcher() {
           className="w-[340px] p-0"
           sideOffset={4}
         >
-          <div className="p-2 border-b">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                autoFocus
-                placeholder="Search projects…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-8 pl-7 text-sm"
-              />
+          {!config.singleProject && (
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  placeholder="Search projects…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 pl-7 text-sm"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="max-h-[340px] overflow-y-auto py-1">
+            {/* Platform — fixed system entry */}
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                setSearch('');
+                navigate({
+                  to: '/projects/$projectId',
+                  params: { projectId: 'platform' },
+                });
+              }}
+              className="flex items-center gap-2"
+            >
+              <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="flex-1 font-medium">Platform</span>
+              <span className="text-[11px] text-muted-foreground">system</span>
+              {isPlatform && <Check className="h-3.5 w-3.5 text-primary" />}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1" />
+
             {projects.length === 0 && !loading && (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                 No projects yet.
@@ -148,28 +177,32 @@ export function ProjectSwitcher() {
             ))}
           </div>
 
-          <DropdownMenuSeparator className="m-0" />
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              setOpen(false);
-              setCreateOpen(true);
-            }}
-            className="gap-2 text-sm"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New project…
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              setOpen(false);
-              navigate({ to: '/projects' });
-            }}
-            className="gap-2 text-sm text-muted-foreground"
-          >
-            Manage all projects
-          </DropdownMenuItem>
+          {!config.singleProject && (
+            <>
+              <DropdownMenuSeparator className="m-0" />
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  setCreateOpen(true);
+                }}
+                className="gap-2 text-sm"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New project…
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                  navigate({ to: '/projects' });
+                }}
+                className="gap-2 text-sm text-muted-foreground"
+              >
+                Manage all projects
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

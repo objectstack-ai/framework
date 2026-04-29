@@ -31,6 +31,7 @@ import { useRegisterActiveProject } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
 import { AppSidebar } from '@/components/app-sidebar';
 import { useEnvAwarePackages } from '@/hooks/useProjectAwarePackages';
+import { isPlatformProject } from '@/lib/platform-project';
 
 function ProjectLayoutComponent() {
   const { projectId } = useParams({
@@ -82,14 +83,16 @@ function ProjectLayoutComponent() {
   // org-scoped API calls (project list, member list, etc.) use the right org.
   // orgSwitchedRef prevents the effect from re-firing during the session
   // refresh that setActiveOrganization triggers internally.
+  // The platform pseudo-project is org-agnostic — skip the switch entirely.
   useEffect(() => {
+    if (isPlatformProject(projectId)) return;
     const projectOrgId = detail?.project?.organization_id;
     if (!projectOrgId) return;
     if (orgSwitchedRef.current) return;
     if (session?.activeOrganizationId === projectOrgId) return;
     orgSwitchedRef.current = true;
     setActiveOrganization(projectOrgId);
-  }, [detail?.project?.organization_id, session?.activeOrganizationId, setActiveOrganization]);
+  }, [projectId, detail?.project?.organization_id, session?.activeOrganizationId, setActiveOrganization]);
 
   const handleSelectPackage = useCallback(
     (pkg: InstalledPackage) => {
@@ -115,8 +118,11 @@ function ProjectLayoutComponent() {
   }, [detail, registerActiveProject]);
 
   // Persist last-used project so legacy /$package/* redirects can restore context.
+  // Don't persist the platform pseudo-project — those redirects expect a real id.
   useEffect(() => {
-    if (projectId) localStorage.setItem('objectstack.lastProjectId', projectId);
+    if (projectId && !isPlatformProject(projectId)) {
+      localStorage.setItem('objectstack.lastProjectId', projectId);
+    }
   }, [projectId]);
 
   useEffect(() => {

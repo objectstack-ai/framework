@@ -4,10 +4,20 @@ import { useState, useEffect } from 'react';
 import { useClient } from '@objectstack/client-react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
+export interface UsePackagesOptions {
+  /**
+   * When `'project'` (default), exclude platform-scoped packages (they are
+   * runtime-global, not env-installable). When `'platform'`, return ONLY
+   * platform-scoped packages — used by the platform pseudo-project surface.
+   */
+  scope?: 'project' | 'platform';
+}
+
 /**
  * Hook to fetch and manage installed packages
  */
-export function usePackages() {
+export function usePackages(options: UsePackagesOptions = {}) {
+  const { scope = 'project' } = options;
   const client = useClient();
   const [packages, setPackages] = useState<InstalledPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<InstalledPackage | null>(null);
@@ -20,13 +30,15 @@ export function usePackages() {
       try {
         const result = await client.packages.list();
         const all: InstalledPackage[] = result?.packages || [];
-        // Filter out dev-workspace (monorepo aggregator) and platform-scoped packages (runtime-global, not env-installable)
-        const items = all.filter(
-          (p) =>
-            p.manifest?.version !== '0.0.0' &&
-            p.manifest?.id !== 'dev-workspace' &&
-            (p.manifest as any)?.scope !== 'platform',
-        );
+        // Always exclude dev-workspace (monorepo aggregator) and unversioned packages.
+        // Then narrow by scope.
+        const items = all.filter((p) => {
+          if (p.manifest?.version === '0.0.0') return false;
+          if (p.manifest?.id === 'dev-workspace') return false;
+          const pkgScope = (p.manifest as any)?.scope;
+          if (scope === 'platform') return pkgScope === 'platform';
+          return pkgScope !== 'platform';
+        });
         console.log('[App] Fetched packages:', items.map((p) => p.manifest?.name || p.manifest?.id));
         if (mounted && items.length > 0) {
           setPackages(items);
@@ -39,7 +51,7 @@ export function usePackages() {
 
     loadPackages();
     return () => { mounted = false; };
-  }, [client]);
+  }, [client, scope]);
 
   return { packages, selectedPackage, setSelectedPackage };
 }

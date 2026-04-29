@@ -319,7 +319,14 @@ export function AppSidebar({
                 <SidebarMenuButton
                   isActive={!!params.package && !params.name && !params.type}
                   onClick={() => {
-                    const pkgId = selectedPackage?.manifest?.id || 'default';
+                    const pkgId =
+                      selectedPackage?.manifest?.id ?? packages[0]?.manifest?.id;
+                    if (!pkgId) {
+                      console.warn(
+                        '[AppSidebar] No package available for overview navigation.',
+                      );
+                      return;
+                    }
                     if (projectId) {
                       navigate({ to: `/projects/${projectId}/${pkgId}/` });
                     } else {
@@ -419,8 +426,19 @@ export function AppSidebar({
                                   ? selectedObject === itemName
                                   : selectedMeta?.type === type && selectedMeta?.name === itemName;
 
-                                const packagePath = selectedPackage?.manifest?.id || 'default';
-                                const handleClick = isObjectType
+                                const packagePath =
+                                  selectedPackage?.manifest?.id ??
+                                  item._packageId ??
+                                  item.packageId ??
+                                  item.package ??
+                                  packages[0]?.manifest?.id;
+                                const handleClick = !packagePath
+                                  ? () => {
+                                      console.warn(
+                                        '[AppSidebar] Ignoring metadata click: no package available.',
+                                      );
+                                    }
+                                  : isObjectType
                                   ? () => projectId
                                       ? navigate({ to: `/projects/${projectId}/${packagePath}/objects/${itemName}` })
                                       : navigate({ to: `/${packagePath}/objects/${itemName}` })

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useClient } from '@objectstack/client-react';
+import { isPlatformProject } from '@/lib/platform-project';
 
 export interface EnvPackage {
   id: string;
@@ -27,6 +28,31 @@ export function useProjectPackages(projectId: string | undefined) {
     setLoading(true);
     setError(null);
     try {
+      // Platform pseudo-project: synthesize install records from the global
+      // registry's platform-scoped packages. There is no per-project install
+      // table for platform — these are runtime-global definitions.
+      if (isPlatformProject(projectId)) {
+        const result = await client.packages.list();
+        const all: any[] = result?.packages ?? [];
+        const rows: EnvPackage[] = all
+          .filter(
+            (p) =>
+              (p.manifest as any)?.scope === 'platform' &&
+              p.manifest?.id !== 'dev-workspace' &&
+              p.manifest?.version !== '0.0.0',
+          )
+          .map((p) => ({
+            id: p.manifest?.id ?? '',
+            projectId,
+            packageId: p.manifest?.id ?? '',
+            version: p.manifest?.version ?? '0.0.0',
+            status: 'active',
+            enabled: true,
+            installedAt: '',
+          }));
+        setPackages(rows);
+        return;
+      }
       const result = await client.projects.packages.list(projectId);
       // Normalize snake_case DB fields to camelCase interface
       const rows = (result?.packages ?? []).map((r: any) => ({

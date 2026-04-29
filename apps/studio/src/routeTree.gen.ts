@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PackagesRouteImport } from './routes/packages'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiConsoleRouteImport } from './routes/api-console'
@@ -35,6 +36,11 @@ import { Route as ProjectsProjectIdPackageMetadataTypeNameRouteImport } from './
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlatformRoute = PlatformRouteImport.update({
+  id: '/platform',
+  path: '/platform',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PackagesRoute = PackagesRouteImport.update({
@@ -155,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/api-console': typeof ApiConsoleRoute
   '/login': typeof LoginRoute
   '/packages': typeof PackagesRoute
+  '/platform': typeof PlatformRoute
   '/register': typeof RegisterRoute
   '/auth/device': typeof AuthDeviceRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
@@ -178,6 +185,7 @@ export interface FileRoutesByTo {
   '/api-console': typeof ApiConsoleRoute
   '/login': typeof LoginRoute
   '/packages': typeof PackagesRoute
+  '/platform': typeof PlatformRoute
   '/register': typeof RegisterRoute
   '/auth/device': typeof AuthDeviceRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
@@ -201,6 +209,7 @@ export interface FileRoutesById {
   '/api-console': typeof ApiConsoleRoute
   '/login': typeof LoginRoute
   '/packages': typeof PackagesRoute
+  '/platform': typeof PlatformRoute
   '/register': typeof RegisterRoute
   '/auth/device': typeof AuthDeviceRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/api-console'
     | '/login'
     | '/packages'
+    | '/platform'
     | '/register'
     | '/auth/device'
     | '/organizations/$orgId'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/api-console'
     | '/login'
     | '/packages'
+    | '/platform'
     | '/register'
     | '/auth/device'
     | '/organizations/$orgId'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/api-console'
     | '/login'
     | '/packages'
+    | '/platform'
     | '/register'
     | '/auth/device'
     | '/organizations/$orgId'
@@ -297,6 +309,7 @@ export interface RootRouteChildren {
   ApiConsoleRoute: typeof ApiConsoleRoute
   LoginRoute: typeof LoginRoute
   PackagesRoute: typeof PackagesRoute
+  PlatformRoute: typeof PlatformRoute
   RegisterRoute: typeof RegisterRoute
   AuthDeviceRoute: typeof AuthDeviceRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
@@ -313,6 +326,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/platform': {
+      id: '/platform'
+      path: '/platform'
+      fullPath: '/platform'
+      preLoaderRoute: typeof PlatformRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/packages': {
@@ -523,6 +543,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiConsoleRoute: ApiConsoleRoute,
   LoginRoute: LoginRoute,
   PackagesRoute: PackagesRoute,
+  PlatformRoute: PlatformRoute,
   RegisterRoute: RegisterRoute,
   AuthDeviceRoute: AuthDeviceRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,

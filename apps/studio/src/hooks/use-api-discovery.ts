@@ -198,7 +198,7 @@ export function useApiDiscovery(projectId?: string) {
   const [error, setError] = useState<string | null>(null);
 
   const discover = useCallback(async () => {
-    // When projectId is provided but the scoped client hasn't resolved yet,
+    // When a projectId is provided but the scoped client hasn't resolved yet,
     // defer until the next render.
     if (projectId && !scopedClient) return;
 
@@ -361,7 +361,7 @@ export function useApiDiscovery(projectId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [client, projectId, scopedClient]);
+  }, [client, effectiveProjectId, scopedClient]);
 
   useEffect(() => { discover(); }, [discover]);
 

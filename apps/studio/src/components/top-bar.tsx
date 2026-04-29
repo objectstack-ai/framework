@@ -92,6 +92,7 @@ export function TopBar() {
     if (pathname === '/api-console' || pathname.startsWith('/api-console/')) return 'api-console';
     if (pathname === '/projects') return 'projects';
     if (pathname === '/organizations' || pathname === '/organizations/new' || params.orgId) return 'orgs';
+    if (params.projectId === 'platform') return 'platform';
     if (params.projectId && pathname.includes('/packages')) return 'packages';
     if (params.projectId && !params.package) return 'project-overview';
     if (params.package && params.name && !params.type) return 'object';
@@ -114,6 +115,9 @@ export function TopBar() {
         break;
       case 'projects':
         items.push({ label: 'Projects' });
+        break;
+      case 'platform':
+        items.push({ label: 'Platform' });
         break;
       case 'orgs':
         if (params.orgId) {
@@ -173,18 +177,12 @@ export function TopBar() {
           <SidebarTrigger className="h-9 w-9" />
         </div>
         <StudioBrand />
-        {!config.singleProject && <SlashDivider />}
-        {!config.singleProject && (
-          <div className="hidden sm:flex items-center gap-1.5">
-            <OrganizationSwitcher />
-            {activeOrgId && (
-              <>
-                <SlashDivider />
-                <ProjectSwitcher />
-              </>
-            )}
-          </div>
-        )}
+        <SlashDivider />
+        <div className="hidden sm:flex items-center gap-1.5">
+          {!config.singleProject && <OrganizationSwitcher />}
+          {(!config.singleProject && activeOrgId) && <SlashDivider />}
+          <ProjectSwitcher />
+        </div>
         {/* Mobile: Show only current page breadcrumb */}
         <div className="sm:hidden min-w-0 flex-1">
           {breadcrumbs.length > 0 && (

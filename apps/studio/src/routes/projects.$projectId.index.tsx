@@ -46,11 +46,23 @@ import { useProjectDetail, useRetryProvisioning, useUpdateHostname, useDeletePro
 import { useClient } from '@objectstack/client-react';
 import { useProductionGuard } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
+import { isPlatformProject } from '@/lib/platform-project';
+import { PlatformOverview } from '@/components/platform-overview';
 
 function ProjectOverviewComponent() {
   const { projectId } = useParams({
     from: '/projects/$projectId',
   });
+  // Platform pseudo-project has its own overview surface — bail early so the
+  // rest of the hook chain (useProjectDetail, deletion guards, etc.) never
+  // runs for an id that doesn't correspond to a real project row.
+  if (isPlatformProject(projectId)) {
+    return <PlatformOverview />;
+  }
+  return <RealProjectOverview projectId={projectId} />;
+}
+
+function RealProjectOverview({ projectId }: { projectId: string }) {
   const { detail, loading, reload } = useProjectDetail(projectId);
   const client = useClient() as any;
   const navigate = useNavigate();

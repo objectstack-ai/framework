@@ -19,9 +19,11 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
 import { useProjectPackages } from '@/hooks/useProjectPackages';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
+import { isPlatformProject } from '@/lib/platform-project';
 
 function ProjectPackagesComponent() {
   const { projectId } = useParams({ from: '/projects/$projectId' });
+  const isPlatform = isPlatformProject(projectId);
   const client = useScopedClient(projectId) as any;
   const navigate = useNavigate();
 
@@ -34,6 +36,11 @@ function ProjectPackagesComponent() {
 
   const loadAvailable = useCallback(async () => {
     if (!client) return;
+    // Platform packages are runtime-global, not installable from a marketplace.
+    if (isPlatform) {
+      setAvailablePkgs([]);
+      return;
+    }
     setLoadingAvailable(true);
     try {
       const result = await client.packages.list();
@@ -52,7 +59,7 @@ function ProjectPackagesComponent() {
     } finally {
       setLoadingAvailable(false);
     }
-  }, [client]);
+  }, [client, isPlatform]);
 
   useEffect(() => { loadAvailable(); }, [loadAvailable]);
 
@@ -106,12 +113,22 @@ function ProjectPackagesComponent() {
             {/* Installed packages */}
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Installed in this project</h2>
+                <h2 className="text-lg font-semibold">
+                  {isPlatform ? 'Platform packages' : 'Installed in this project'}
+                </h2>
                 <Button variant="outline" size="sm" onClick={reload} disabled={loading} className="gap-1.5">
                   <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
               </div>
+
+              {isPlatform && (
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Platform packages are runtime-global and shared across every
+                  project. They are loaded by the host process and cannot be
+                  installed, uninstalled, or toggled per project.
+                </p>
+              )}
 
               {error && (
                 <p className="mb-4 text-sm text-destructive">
@@ -160,26 +177,30 @@ function ProjectPackagesComponent() {
                             <ArrowRight className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title={pkg.enabled ? 'Disable' : 'Enable'}
-                          onClick={() => handleToggle(pkg.packageId, pkg.enabled)}
-                        >
-                          {pkg.enabled
-                            ? <PowerOff className="h-3.5 w-3.5" />
-                            : <Power className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          title="Uninstall"
-                          onClick={() => handleUninstall(pkg.packageId)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {!isPlatform && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title={pkg.enabled ? 'Disable' : 'Enable'}
+                              onClick={() => handleToggle(pkg.packageId, pkg.enabled)}
+                            >
+                              {pkg.enabled
+                                ? <PowerOff className="h-3.5 w-3.5" />
+                                : <Power className="h-3.5 w-3.5" />}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              title="Uninstall"
+                              onClick={() => handleUninstall(pkg.packageId)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -188,9 +209,10 @@ function ProjectPackagesComponent() {
               </div>
             </section>
 
-            <Separator />
+            {!isPlatform && <Separator />}
 
             {/* Marketplace / Available packages */}
+            {!isPlatform && (
             <section>
               <h2 className="mb-4 text-lg font-semibold">Available packages</h2>
 
@@ -236,6 +258,7 @@ function ProjectPackagesComponent() {
                 })}
               </div>
             </section>
+            )}
           </div>
         </div>
     </main>

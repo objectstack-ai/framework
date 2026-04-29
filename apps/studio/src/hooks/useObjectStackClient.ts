@@ -36,10 +36,11 @@ export function useObjectStackClient() {
  * resolved.
  *
  * The scoped client routes every request through
- * `/api/v1/projects/:projectId/...`, which is the canonical URL shape once
- * `enableProjectScoping` is enabled on the server. The dual-mode routing in
- * Phase 2 keeps the unscoped routes working under `projectResolution: 'auto'`,
- * so this migration is safe to ship incrementally.
+ * `/api/v1/projects/:projectId/...`. The reserved virtual id `platform`
+ * is also valid here — the server's RestServer/HttpDispatcher recognise
+ * it and serve those requests from the control-plane protocol, so callers
+ * can use a single uniform URL family for both real projects and the
+ * platform surface.
  */
 export function useScopedClient(
   projectId: string | undefined,
@@ -48,9 +49,6 @@ export function useScopedClient(
   return useMemo(() => {
     if (!client) return null;
     if (!projectId) return null;
-    // Always route through /api/v1/projects/:projectId/... so the per-project
-    // kernel returns project-scoped business metadata. Project mode boots the
-    // same cloud-stack as cloud mode, which registers scoped REST routes.
     return client.project(projectId);
   }, [client, projectId]);
 }

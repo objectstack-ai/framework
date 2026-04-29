@@ -216,7 +216,16 @@ export class MetadataPlugin implements Plugin {
         // both `loadMany()` (used by ObjectQL's sync path) and `list()` (used
         // by REST meta endpoints). `register()` alone only writes to the in-memory
         // registry Map which `loadMany()` does not read.
+        //
+        // The artifact format flattens packages into top-level arrays
+        // (`objects`, `views`, …) without per-item provenance. The package id
+        // lives only on `metadata.manifest.id`. We tag each item with
+        // `_packageId` here so REST list responses can carry it through —
+        // Studio's metadata sidebar uses this tag to compute the package
+        // path needed for record navigation.
         const memLoader = new MemoryLoader();
+        const manifestPackageId =
+            (metadata as any)?.manifest?.id ?? (metadata as any)?.id ?? undefined;
 
         let totalRegistered = 0;
         for (const [field, metaType] of Object.entries(ARTIFACT_FIELD_TO_TYPE)) {
@@ -225,6 +234,10 @@ export class MetadataPlugin implements Plugin {
             for (const item of items) {
                 const name = (item as any)?.name;
                 if (!name) continue;
+                // Tag with owning package id (idempotent: respect existing tag).
+                if (manifestPackageId && (item as any)._packageId === undefined) {
+                    (item as any)._packageId = manifestPackageId;
+                }
                 await memLoader.save(metaType, name, item);
                 await this.manager.register(metaType, name, item);
                 totalRegistered++;

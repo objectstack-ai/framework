@@ -13,6 +13,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useClient } from '@objectstack/client-react';
 import { useActiveOrganizationId } from '@/hooks/useSession';
+import { config } from '@/lib/config';
+import {
+  PLATFORM_PROJECT_ID,
+  PLATFORM_PROJECT_DISPLAY_NAME,
+  isPlatformProject,
+} from '@/lib/platform-project';
 
 /**
  * Snake_case database metadata as returned by the HTTP dispatcher under
@@ -99,14 +105,15 @@ export function useProjects() {
 
   const load = useCallback(async () => {
     if (!client?.projects) return;
-    if (!activeOrgId) {
+    const orgId = activeOrgId ?? config.defaultOrgId;
+    if (!orgId) {
       setProjects([]);
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const result = await client.projects.list({ organization_id: activeOrgId });
+      const result = await client.projects.list({ organization_id: orgId });
       setProjects((result?.projects as ProjectRow[]) ?? []);
     } catch (err) {
       setError(err as Error);
@@ -146,6 +153,23 @@ export function useProjectDetail(projectId: string | undefined) {
     if (!projectId || !client?.projects) {
       setDetail(null);
       client?.setProjectId?.(undefined);
+      return;
+    }
+    // The platform pseudo-project does not exist as a row in the projects
+    // table; it represents the unscoped control plane. Synthesize a detail
+    // record and clear X-Project-Id so meta calls hit the platform endpoints.
+    if (isPlatformProject(projectId)) {
+      client?.setProjectId?.(undefined);
+      setDetail({
+        project: {
+          id: PLATFORM_PROJECT_ID,
+          organization_id: '',
+          display_name: PLATFORM_PROJECT_DISPLAY_NAME,
+          status: 'active',
+        } as ProjectRow,
+      } as ProjectDetail);
+      setLoading(false);
+      setError(null);
       return;
     }
     setLoading(true);

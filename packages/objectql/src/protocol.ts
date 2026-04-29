@@ -239,22 +239,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 if (alt) items = [...this.engine.registry.listItems(alt, packageId)];
             }
         } else {
-            // For project kernels, include system-scope objects from SchemaRegistry.
-            const systemPkgIds = this.engine.registry
-                .listItems<{ manifest: { scope?: string; id: string } }>('package')
-                .filter(p => p.manifest?.scope === 'system')
-                .map(p => p.manifest.id);
-            for (const sysId of systemPkgIds) {
-                const sysItems = this.engine.registry.listItems<unknown>(request.type, sysId);
-                items.push(...sysItems);
-            }
+            // For project kernels: the SchemaRegistry is owned by THIS
+            // kernel's ObjectQL instance (not shared across projects in the
+            // process), so we can safely include every package — system
+            // plugins (auth/security/audit) and the project's own app
+            // package alike. The `_packageId` tag added by `listItems`
+            // (registry.ts) is preserved for the sidebar to compute the
+            // correct navigation URL.
+            items = [...this.engine.registry.listItems(request.type, packageId)];
             if (items.length === 0) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) {
-                    for (const sysId of systemPkgIds) {
-                        items.push(...this.engine.registry.listItems<unknown>(alt, sysId));
-                    }
-                }
+                if (alt) items = [...this.engine.registry.listItems(alt, packageId)];
             }
         }
 

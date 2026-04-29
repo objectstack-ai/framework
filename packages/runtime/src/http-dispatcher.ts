@@ -2800,14 +2800,17 @@ export class HttpDispatcher {
         // When a KernelManager is wired in, per-request routing targets the
         // project's dedicated kernel. Self-hosted / legacy deployments leave
         // `kernelManager` unset and continue using the constructor kernel.
-        if (this.kernelManager && context.projectId) {
+        // Reserved virtual id 'platform' addresses the control plane through
+        // the regular project URL family — never spin up a per-project kernel
+        // for it (there is no projects row to look up).
+        if (this.kernelManager && context.projectId && context.projectId !== 'platform') {
             this.kernel = await this.kernelManager.getOrCreate(context.projectId);
         } else {
             this.kernel = this.defaultKernel;
         }
 
         // Touch scope for TTL/LRU tracking in shared-kernel mode
-        if (this.scopeManager && context.projectId) {
+        if (this.scopeManager && context.projectId && context.projectId !== 'platform') {
             this.scopeManager.touch(context.projectId);
         }
 

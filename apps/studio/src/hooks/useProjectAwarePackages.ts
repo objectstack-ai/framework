@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { usePackages } from './usePackages';
 import { useProjectPackages } from './useProjectPackages';
+import { isPlatformProject } from '@/lib/platform-project';
 
 /**
  * Returns the subset of the global package registry that is installed in the
@@ -13,14 +14,24 @@ import { useProjectPackages } from './useProjectPackages';
  *
  * The cross-reference is fuzzy: a record with `packageId = "crm"` matches a
  * manifest with `id = "com.example.crm"` (last dot-segment equality).
+ *
+ * For the platform pseudo-project, returns platform-scoped global packages
+ * directly without any per-env install join.
  */
 export function useEnvAwarePackages(envId: string | undefined) {
-  const { packages: globalPkgs } = usePackages();
+  const isPlatform = isPlatformProject(envId);
+  const { packages: globalPkgs } = usePackages({
+    scope: isPlatform ? 'platform' : 'project',
+  });
   const { packages: installedRecords } = useProjectPackages(envId);
 
   const [selectedPackage, setSelectedPackage] = useState<InstalledPackage | null>(null);
 
   const packages = useMemo<InstalledPackage[]>(() => {
+    if (isPlatform) {
+      // Every platform-scoped global package is implicitly "installed".
+      return globalPkgs;
+    }
     if (!installedRecords.length || !globalPkgs.length) return [];
 
     // Build a set of all installed identifiers (full + short segment)
@@ -43,7 +54,7 @@ export function useEnvAwarePackages(envId: string | undefined) {
       const seg = mid.split('.').pop();
       return seg ? installedIds.has(seg) : false;
     });
-  }, [globalPkgs, installedRecords]);
+  }, [isPlatform, globalPkgs, installedRecords]);
 
   return { packages, selectedPackage, setSelectedPackage };
 }

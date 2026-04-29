@@ -132,9 +132,17 @@ export class RestServer {
      * `protocol` service so metadata / data / UI reads hit the project's
      * own registry and datastore. Otherwise fall back to the control-kernel
      * protocol captured at boot.
+     *
+     * Special case: `projectId === 'platform'` is a reserved virtual id used
+     * by Studio to address the control plane through the regular project
+     * URL shape (`/projects/platform/...`). It is NOT a row in the projects
+     * table, so we must never call `KernelManager.getOrCreate('platform')`.
+     * Instead, return the control-plane protocol directly. This lets Studio
+     * (and any other client) speak a single, uniform URL family without
+     * duplicating route logic for the platform surface.
      */
     private async resolveProtocol(projectId?: string): Promise<ObjectStackProtocol> {
-        if (!projectId || !this.kernelManager) return this.protocol;
+        if (!projectId || projectId === 'platform' || !this.kernelManager) return this.protocol;
         const kernel = await this.kernelManager.getOrCreate(projectId);
         return kernel.getServiceAsync<ObjectStackProtocol>('protocol');
     }
