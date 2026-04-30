@@ -15,6 +15,7 @@ import { useObjectStackClient } from '../hooks/useObjectStackClient';
 import { SessionProvider, useSession } from '../hooks/useSession';
 import { config } from '@/lib/config';
 import { gotoAccountLogin } from '@/lib/auth-redirect';
+import { PLATFORM_PROJECT_ID } from '@/lib/platform-project';
 
 /** Routes that don't require authentication. */
 const PUBLIC_ROUTES = new Set(['/login', '/register', '/forgot-password', '/auth/device']);
@@ -62,14 +63,14 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const isPublic = PUBLIC_ROUTES.has(location.pathname);
 
   // In single-project mode, collapse every multi-project-only entry
-  // (`/login`, `/organizations`, `/projects`) onto the default project workspace
-  // so the user never sees the org/project funnel.
+  // (`/login`, `/organizations`, `/projects`) onto the platform metadata
+  // workspace so the user never sees the org/project funnel.
   useEffect(() => {
-    if (!config.singleProject || !config.defaultProjectId) return;
+    if (!config.singleProject) return;
     if (isMultiProjectOnlyPath(location.pathname)) {
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: config.defaultProjectId },
+        params: { projectId: PLATFORM_PROJECT_ID },
         replace: true,
       });
     }

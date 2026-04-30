@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { useProjects } from '@/hooks/useProjects';
 import { config } from '@/lib/config';
+import { PLATFORM_PROJECT_ID } from '@/lib/platform-project';
 
 function IndexRedirect() {
   const navigate = useNavigate();
@@ -12,11 +13,13 @@ function IndexRedirect() {
   const { projects, loading: projectsLoading } = useProjects();
 
   useEffect(() => {
-    // Single-project mode: bypass the org/project picker entirely.
-    if (config.singleProject && config.defaultProjectId) {
+    // Single-project (local dev) mode: there is no org/project picker and
+    // no per-project control plane; route straight to the platform metadata
+    // view, which renders the unified registry of every loaded package.
+    if (config.singleProject) {
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: config.defaultProjectId },
+        params: { projectId: PLATFORM_PROJECT_ID },
         replace: true,
       });
       return;
