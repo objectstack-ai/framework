@@ -70,15 +70,33 @@ async function createHostEnginePlugins(): Promise<Plugin[]> {
         version: '0.0.0',
         async init(ctx: PluginContext) {
             const plugin = new ObjectQLPlugin();
-            oqlRef.ql = (plugin as any).ql ?? plugin;
             (this as any)._inner = plugin;
             if ((plugin as any).init) await (plugin as any).init(ctx);
+            // Capture the engine instance AFTER init() — ObjectQLPlugin
+            // creates its `ql` lazily inside init(), so reading `plugin.ql`
+            // before that returns undefined and breaks the
+            // datasource-mapping wiring below.
+            oqlRef.ql = (plugin as any).ql ?? plugin;
+        },
+        async start(ctx: PluginContext) {
+            const plugin = (this as any)._inner;
+            // Forward start() so ObjectQLPlugin can discover `driver.*`
+            // services (registered by DriverPlugin.init) and wire them
+            // into the engine via `ql.registerDriver(...)`. Without this
+            // the engine has zero drivers at request time, causing
+            // `[ObjectQL] No driver available for object '...'` errors.
+            if (plugin?.start) await plugin.start(ctx);
+        },
+        async stop(ctx: PluginContext) {
+            const plugin = (this as any)._inner;
+            if (plugin?.stop) await plugin.stop(ctx);
         },
     };
 
     const datasourceMapping: Plugin = {
         name: 'objectos-host-datasource-mapping',
         version: '0.0.0',
+        dependencies: ['com.objectstack.engine.objectql'],
         async init() {
             const ql = oqlRef.ql;
             if (ql?.setDatasourceMapping) {
