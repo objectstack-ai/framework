@@ -1,16 +1,21 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Project-mode stack factory.
+ * Runtime-mode stack factory.
  *
- * Reuses `createCloudStack()` with two local SQLite files
- * (`control.db` for the control plane and `<project_id>.db` for
- * the single project's business data). The cloud preset's per-project
- * factory is replaced with one that registers only the engines needed
- * to materialize business data — identity, auth, security, audit,
- * tenant catalogs and packages live in the control plane.
+ * Default behavior — boots a "runtime node" connected to ObjectStack
+ * Cloud (`https://cloud.objectstack.ai`). The node fetches per-project
+ * artifacts over HTTP and routes incoming requests to the matching
+ * project kernel; no local control-plane database is provisioned.
  *
- * The dataset:
+ * Local opt-out — set `OBJECTSTACK_CLOUD_URL=local` (or
+ * `cloudUrl: 'local'`) to fall back to the legacy single-control-plane
+ * shape, which mirrors `createCloudStack()` with two SQLite files
+ * (`control.db` for the control plane and `<project_id>.db` for the
+ * single project's business data). Used by self-hosted single-machine
+ * dev workflows that don't want to depend on a remote control plane.
+ *
+ * The legacy local dataset:
  *
  *   <dataDir>/
  *   ├── control.db       — control plane (sys_organization, sys_project, …)
@@ -30,23 +35,23 @@ import { createObjectOSStack } from './objectos-stack.js';
 /**
  * Default ObjectStack Cloud base URL used when neither `cloudUrl` nor
  * `OBJECTSTACK_CLOUD_URL` is set. Override via the env var or
- * `ProjectStackConfig.cloudUrl`. Set to `local` to disable cloud routing
+ * `RuntimeStackConfig.cloudUrl`. Set to `local` to disable cloud routing
  * and boot from a local `control.db` instead.
  */
 export const DEFAULT_CLOUD_URL = 'https://cloud.objectstack.ai';
 
-export const ProjectStackConfigSchema = z.object({
-    /** Auth secret (defaults to env / dev fallback). */
+export const RuntimeStackConfigSchema = z.object({
+    /** Auth secret (defaults to env / dev fallback). Local-mode only. */
     authSecret: z.string().optional(),
-    /** Public origin used by better-auth (defaults to env). */
+    /** Public origin used by better-auth (defaults to env). Local-mode only. */
     baseUrl: z.string().optional(),
-    /** Project id used as the seeded `sys_project.id`. Default: `proj_local`. */
+    /** Project id used as the seeded `sys_project.id`. Default: `proj_local`. Local-mode only. */
     projectId: z.string().optional(),
-    /** Compiled artifact path. Default: `<cwd>/dist/objectstack.json`. */
+    /** Compiled artifact path. Default: `<cwd>/dist/objectstack.json`. Local-mode only. */
     artifactPath: z.string().optional(),
-    /** Data directory holding `control.db` + `<projectId>.db`. Default: `<cwd>/.objectstack/data`. */
+    /** Data directory holding `control.db` + `<projectId>.db`. Default: `<cwd>/.objectstack/data`. Local-mode only. */
     dataDir: z.string().optional(),
-    /** Per-project AppBundleResolver. */
+    /** Per-project AppBundleResolver. Local-mode only. */
     appBundles: z.custom<AppBundleResolver>().optional(),
     /** API prefix (passed through to the cloud preset). */
     apiPrefix: z.string().optional(),
@@ -54,10 +59,10 @@ export const ProjectStackConfigSchema = z.object({
      * ObjectStack Cloud base URL. Defaults to `https://cloud.objectstack.ai`
      * (override via the `OBJECTSTACK_CLOUD_URL` env var or this field).
      *
-     * When non-empty (the default), the project stack runs in **ObjectOS
-     * Cloud Runtime** mode: no local control-plane database, projects are
-     * resolved by hostname against ObjectStack Cloud and per-project
-     * kernels are booted from artifacts pulled over HTTP.
+     * When non-empty (the default), the runtime stack runs as a
+     * **cloud-connected runtime node**: no local control-plane database,
+     * projects are resolved by hostname against ObjectStack Cloud and
+     * per-project kernels are booted from artifacts pulled over HTTP.
      *
      * To run the legacy local-control-plane mode (single SQLite
      * `control.db` shared with one `proj_local.db`) instead, set the env
@@ -69,22 +74,22 @@ export const ProjectStackConfigSchema = z.object({
     cloudApiKey: z.string().optional(),
 });
 
-export type ProjectStackConfig = z.input<typeof ProjectStackConfigSchema>;
+export type RuntimeStackConfig = z.input<typeof RuntimeStackConfigSchema>;
 
-export interface ProjectStackResult {
+export interface RuntimeStackResult {
     plugins: any[];
     api: { enableProjectScoping: true; projectResolution: 'auto' };
 }
 
 /**
- * Build the plugin list for `project` mode. Returns the same shape as
+ * Build the plugin list for `runtime` mode. Returns the same shape as
  * `createCloudStack()` so callers can return the result directly from a
  * host config's `default export`.
  */
-export async function createProjectStack(config?: ProjectStackConfig): Promise<ProjectStackResult> {
-    const cfg = ProjectStackConfigSchema.parse(config ?? {});
+export async function createRuntimeStack(config?: RuntimeStackConfig): Promise<RuntimeStackResult> {
+    const cfg = RuntimeStackConfigSchema.parse(config ?? {});
 
-    // ── ObjectOS Cloud Runtime branch ─────────────────────────────────────
+    // ── ObjectStack Cloud-connected branch ────────────────────────────────
     // Default: route every per-project boot through ObjectStack Cloud
     // (https://cloud.objectstack.ai) — no local control-plane DB, projects
     // are resolved by hostname against the cloud API and kernels are
@@ -99,7 +104,7 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
             controlPlaneUrl: cloudUrl,
             controlPlaneApiKey: cfg.cloudApiKey ?? process.env.OBJECTSTACK_CLOUD_API_KEY,
             apiPrefix: cfg.apiPrefix,
-        }) as Promise<ProjectStackResult>;
+        }) as Promise<RuntimeStackResult>;
     }
 
     const cwd = process.cwd();
@@ -122,12 +127,6 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
         controlDriverUrl: controlDbUrl,
         appBundles: cfg.appBundles,
         apiPrefix: cfg.apiPrefix,
-        // Project-mode per-project plugins. The control plane (created by
-        // `createCloudStack`'s preset) is the sole owner of identity,
-        // authentication, security, audit, tenant catalogs, and packages —
-        // their tables live in `control.db`. Each per-project kernel only
-        // registers the engines needed to materialize that project's
-        // business data schemas + records.
         basePlugins: async ({ projectId: pid }: { projectId: string }) => {
             const { ObjectQLPlugin } = await import('@objectstack/objectql');
             const { MetadataPlugin } = await import('@objectstack/metadata');
@@ -150,7 +149,6 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
                     watch: false,
                     environmentId: pid,
                     artifactSource: { mode: 'local-file', path: artifactPath },
-                    // sys_* metadata-storage tables live in the control plane only.
                     registerSystemObjects: false,
                 }),
             ];
@@ -159,9 +157,6 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
         },
     });
 
-    // The cloud preset registers a `studio/runtime-config` route returning
-    // `{ singleProject: false }`. Drop it and substitute our own which
-    // seeds local identity AND emits `{ singleProject: true, … }`.
     const filtered = stack.plugins.filter(
         (p: any) => p?.name !== 'com.objectstack.studio.runtime-config',
     );
@@ -179,3 +174,13 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
         api: stack.api,
     };
 }
+
+// ── Deprecated aliases (renamed v4.x: `project` → `runtime`) ──────────────────
+/** @deprecated Use {@link RuntimeStackConfigSchema}. */
+export const ProjectStackConfigSchema = RuntimeStackConfigSchema;
+/** @deprecated Use {@link RuntimeStackConfig}. */
+export type ProjectStackConfig = RuntimeStackConfig;
+/** @deprecated Use {@link RuntimeStackResult}. */
+export type ProjectStackResult = RuntimeStackResult;
+/** @deprecated Use {@link createRuntimeStack}. */
+export const createProjectStack = createRuntimeStack;
