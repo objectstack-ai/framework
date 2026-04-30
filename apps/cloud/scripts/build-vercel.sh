@@ -1,77 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build script for Vercel deployment of @objectstack/server.
+# Build script for Vercel deployment of @objectstack/cloud.
 #
-# Follows the Vercel deployment pattern:
-#   - api/[[...route]].js is committed to the repo (Vercel detects it pre-build)
-#   - esbuild bundles server/index.ts → api/_handler.js (self-contained bundle)
-#   - The committed .js wrapper re-exports from _handler.js at runtime
-#   - Studio SPA is built and copied to public/ for serving the UI
-#   - External dependencies installed in api/node_modules/ (no symlinks)
+# Vercel's project root is `apps/cloud` (where vercel.json lives), so the
+# final `public/` and `api/` directories MUST end up inside this directory
+# — not inside any sibling app. Earlier this script was copy-pasted from
+# apps/server and still cd'd into apps/server, which produced
+# apps/server/public/ — Vercel then failed with:
+#   Error: No Output Directory named "public" found
 #
-# Steps:
-#   1. Build the project with turbo (includes studio)
-#   2. Bundle the API serverless function (→ api/_handler.js)
-#   3. Copy studio dist files to public/ for UI serving
-#   4. Install external deps in api/node_modules/ (resolve pnpm symlinks)
+# Pattern:
+#   - api/[[...route]].js committed in apps/cloud/api/
+#   - esbuild bundles server/index.ts → api/_handler.js (self-contained)
+#   - Studio + Account SPAs built in their own packages, copied to
+#     apps/cloud/public/_studio/ and apps/cloud/public/_account/
+#   - External native deps installed via npm into api/node_modules/
+#     (pnpm symlinks confuse @vercel/node packaging)
 
-echo "[build-vercel] Starting server build..."
+echo "[build-vercel] Starting cloud build..."
 
-# 1. Build the project with turbo (from monorepo root)
-# This builds server, studio, and the account portal.
-cd ../..
-pnpm turbo run build --filter=@objectstack/server --filter=@objectstack/studio --filter=@objectstack/account
-cd apps/server
+# Resolve repo root regardless of where Vercel invokes the script from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$APP_DIR/../.." && pwd)"
 
-# 1b. Compile objectstack.config.ts → dist/objectstack.json (the metadata artifact).
-# MetadataPlugin reads this file at startup in local mode. Without it the kernel
-# cannot boot ("Cannot read artifact file … ENOENT").
+# 1. Build the workspace packages we need (cloud + the two SPAs).
+cd "$REPO_ROOT"
+pnpm turbo run build \
+  --filter=@objectstack/cloud \
+  --filter=@objectstack/studio \
+  --filter=@objectstack/account
+
+# 1b. Compile objectstack.config.ts → dist/objectstack.json.
+cd "$APP_DIR"
 echo "[build-vercel] Compiling objectstack artifact..."
 pnpm objectstack build
 echo "[build-vercel]   ✓ dist/objectstack.json generated"
 
-# 2. Bundle API serverless function
+# 2. Bundle API serverless function (writes api/_handler.js).
 node scripts/bundle-api.mjs
 
-# 2b. Copy the artifact into api/dist/ so Vercel includes it in the function
-# deployment package. The function runs with CWD=/var/task and resolves the
-# artifact relative to its own directory (api/), so api/dist/objectstack.json
-# maps to /var/task/apps/server/api/dist/objectstack.json at runtime.
+# 2b. Ship the artifact alongside the bundled function.
 echo "[build-vercel] Copying artifact into api/dist/..."
 mkdir -p api/dist
 cp dist/objectstack.json api/dist/objectstack.json
 echo "[build-vercel]   ✓ api/dist/objectstack.json ready"
 
-# 3. Copy studio dist files to public/_studio/ for UI serving.
-# Studio is always mounted under /_studio/ (same convention as the CLI
-# static plugin). Vite builds with base: '/_studio/' so its asset URLs
-# and router basepath are already correct for this mount point.
-echo "[build-vercel] Copying studio dist to public/_studio/..."
+# 3. Assemble the static output directory.
+echo "[build-vercel] Assembling public/ output directory..."
 rm -rf public
-mkdir -p public/_studio
-if [ -d "../studio/dist" ]; then
-  cp -r ../studio/dist/. public/_studio/
+mkdir -p public/_studio public/_account
+
+if [ -d "$REPO_ROOT/apps/studio/dist" ]; then
+  cp -r "$REPO_ROOT/apps/studio/dist/." public/_studio/
   echo "[build-vercel]   ✓ Copied studio dist to public/_studio/"
 else
   echo "[build-vercel]   ⚠ Studio dist not found (skipped)"
 fi
 
-# 3b. Copy the account portal dist to public/_account/ — same pattern as
-# studio. The account SPA is always built with base: '/_account/'.
-echo "[build-vercel] Copying account dist to public/_account/..."
-mkdir -p public/_account
-if [ -d "../account/dist" ]; then
-  cp -r ../account/dist/. public/_account/
+if [ -d "$REPO_ROOT/apps/account/dist" ]; then
+  cp -r "$REPO_ROOT/apps/account/dist/." public/_account/
   echo "[build-vercel]   ✓ Copied account dist to public/_account/"
 else
   echo "[build-vercel]   ⚠ Account dist not found (skipped)"
 fi
 
-# 4. Install external dependencies in api/node_modules/ (no symlinks)
-# pnpm uses symlinks in node_modules/, which Vercel's serverless function
-# packaging cannot handle ("invalid deployment package" error).
-# We use npm to install external packages as real files next to the handler.
+# 4. Install external native deps into api/node_modules/ (no symlinks).
 echo "[build-vercel] Installing external dependencies for serverless function..."
 cat > api/_package.json << 'DEPS'
 {
@@ -90,4 +85,4 @@ rm package.json
 cd ..
 echo "[build-vercel]   ✓ External dependencies installed in api/node_modules/"
 
-echo "[build-vercel] Done. Static files in public/, serverless function in api/[[...route]].js → api/_handler.js"
+echo "[build-vercel] Done. Static files in $APP_DIR/public, function in api/[[...route]].js → api/_handler.js"
