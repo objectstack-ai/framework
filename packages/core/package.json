@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@objectstack/spec": "workspace:*",
-    "zod": "^4.3.6"
+    "zod": "^4.4.1"
   },
   "keywords": [
     "objectstack",

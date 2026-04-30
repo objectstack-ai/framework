@@ -21,7 +21,7 @@
   "dependencies": {
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "zod": "^4.3.6",
+    "zod": "^4.4.1",
     "@objectstack/service-package": "workspace:*"
   },
   "devDependencies": {
