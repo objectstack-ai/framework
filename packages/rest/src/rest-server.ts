@@ -9,6 +9,38 @@ import { ObjectStackProtocol } from '@objectstack/spec/api';
 const logError = (...args: unknown[]) => (globalThis as any).console?.error(...args);
 
 /**
+ * Map a data-layer error to a clean HTTP response. Unknown-object errors
+ * (SQLite "no such table", PG "relation does not exist", protocol
+ * "object not found", etc.) are surfaced as a 404 with `code: 'object_not_found'`
+ * so clients can distinguish "object isn't registered" from real server
+ * faults. Anything else becomes a 400 (bad request) preserving prior
+ * behavior. Genuine 500s are still logged.
+ */
+function mapDataError(error: any, object?: string): { status: number; body: Record<string, unknown> } {
+    const raw = String(error?.message ?? error ?? '');
+    const lower = raw.toLowerCase();
+    const looksLikeUnknownObject =
+        lower.includes('no such table') ||
+        lower.includes('relation') && lower.includes('does not exist') ||
+        lower.includes('table not found') ||
+        lower.includes('unknown object') ||
+        lower.includes('object not found') ||
+        lower.includes('no driver available') ||
+        (object !== undefined && lower.includes(`'${object.toLowerCase()}'`) && lower.includes('not'));
+    if (looksLikeUnknownObject) {
+        return {
+            status: 404,
+            body: {
+                error: object ? `Object '${object}' is not registered` : 'Object not found',
+                code: 'object_not_found',
+                object,
+            },
+        };
+    }
+    return { status: 400, body: { error: raw || 'Bad request' } };
+}
+
+/**
  * Structural subset of `KernelManager` that RestServer needs in order to
  * resolve a per-project protocol at request time. Typed locally to avoid
  * an @objectstack/runtime → @objectstack/rest → @objectstack/runtime
@@ -631,8 +663,13 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
-                        logError("[REST] Unhandled error:", error);
-                        res.status(400).json({ error: error.message });
+                        const mapped = mapDataError(error, req.params?.object);
+                        if (mapped.status === 404) {
+                            res.status(404).json(mapped.body);
+                        } else {
+                            logError("[REST] Unhandled error:", error);
+                            res.status(mapped.status).json(mapped.body);
+                        }
                     }
                 },
                 metadata: {
@@ -661,8 +698,9 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
-                        logError("[REST] Unhandled error:", error);
-                        res.status(404).json({ error: error.message });
+                        const mapped = mapDataError(error, req.params?.object);
+                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        res.status(mapped.status === 400 ? 404 : mapped.status).json(mapped.body);
                     }
                 },
                 metadata: {
@@ -688,8 +726,9 @@ export class RestServer {
                         } as any);
                         res.status(201).json(result);
                     } catch (error: any) {
-                        logError("[REST] Unhandled error:", error);
-                        res.status(400).json({ error: error.message });
+                        const mapped = mapDataError(error, req.params?.object);
+                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        res.status(mapped.status).json(mapped.body);
                     }
                 },
                 metadata: {
@@ -716,8 +755,9 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
-                        logError("[REST] Unhandled error:", error);
-                        res.status(400).json({ error: error.message });
+                        const mapped = mapDataError(error, req.params?.object);
+                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        res.status(mapped.status).json(mapped.body);
                     }
                 },
                 metadata: {
@@ -743,8 +783,9 @@ export class RestServer {
                         } as any);
                         res.json(result);
                     } catch (error: any) {
-                        logError("[REST] Unhandled error:", error);
-                        res.status(400).json({ error: error.message });
+                        const mapped = mapDataError(error, req.params?.object);
+                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        res.status(mapped.status).json(mapped.body);
                     }
                 },
                 metadata: {

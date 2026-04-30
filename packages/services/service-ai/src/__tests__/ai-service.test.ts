@@ -818,17 +818,15 @@ describe('AIServicePlugin', () => {
     expect(ctx.replaceService).toHaveBeenCalledWith('ai', expect.any(Object));
   });
 
-  it('exposes AI navigation entries via the static platform Setup App', async () => {
-    // Setup nav items that used to be contributed dynamically by AIServicePlugin
-    // are now part of the static SETUP_APP definition shipped by
-    // @objectstack/platform-objects/apps. Verify the entries we own are
-    // present so the Studio Setup App still shows the AI section.
+  it('SETUP_APP no longer contains an AI area (moved to dedicated AI app)', async () => {
+    // AI Conversations / Messages were originally in the platform Setup App,
+    // but per product direction the AI surface gets its own dedicated app
+    // (developed separately) — so the Setup App should NOT carry an
+    // `area_ai` block anymore. This test guards against accidental
+    // re-introduction.
     const { SETUP_APP } = await import('@objectstack/platform-objects/apps');
     const aiArea = SETUP_APP.areas?.find((a: any) => a.id === 'area_ai');
-    expect(aiArea).toBeDefined();
-    const ids = (aiArea?.navigation ?? []).map((n: any) => n.id);
-    expect(ids).toContain('nav_ai_conversations');
-    expect(ids).toContain('nav_ai_messages');
+    expect(aiArea).toBeUndefined();
   });
 
   it('should clean up on destroy', async () => {

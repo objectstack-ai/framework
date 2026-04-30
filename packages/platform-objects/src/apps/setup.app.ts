@@ -78,6 +78,8 @@ export const SETUP_APP: App = {
       navigation: [
         { id: 'nav_sessions', type: 'object', label: 'Sessions', objectName: 'sys_session', icon: 'monitor', order: 10 },
         { id: 'nav_audit_logs', type: 'object', label: 'Audit Logs', objectName: 'sys_audit_log', icon: 'scroll-text', order: 20 },
+        { id: 'nav_activity', type: 'object', label: 'Activity', objectName: 'sys_activity', icon: 'activity', order: 30 },
+        { id: 'nav_comments', type: 'object', label: 'Comments', objectName: 'sys_comment', icon: 'message-square', order: 40 },
       ],
     },
   ].filter((a) => a.navigation.length > 0),

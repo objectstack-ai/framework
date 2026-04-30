@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import { SysAuditLog } from '@objectstack/platform-objects/audit';
+import { SysAuditLog, SysActivity, SysComment } from '@objectstack/platform-objects/audit';
 
 /**
  * AuditPlugin
@@ -25,7 +25,7 @@ export class AuditPlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysAuditLog],
+      objects: [SysAuditLog, SysActivity, SysComment],
     });
 
     ctx.logger.info('Audit Plugin initialized');
