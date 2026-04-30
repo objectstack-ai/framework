@@ -177,11 +177,11 @@ export function TopBar() {
           <SidebarTrigger className="h-9 w-9" />
         </div>
         <StudioBrand />
-        <SlashDivider />
+        {!config.singleProject && <SlashDivider />}
         <div className="hidden sm:flex items-center gap-1.5">
           {!config.singleProject && <OrganizationSwitcher />}
           {(!config.singleProject && activeOrgId) && <SlashDivider />}
-          <ProjectSwitcher />
+          {!config.singleProject && <ProjectSwitcher />}
         </div>
         {/* Mobile: Show only current page breadcrumb */}
         <div className="sm:hidden min-w-0 flex-1">
