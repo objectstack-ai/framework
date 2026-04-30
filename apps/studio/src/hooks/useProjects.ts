@@ -172,6 +172,24 @@ export function useProjectDetail(projectId: string | undefined) {
       setError(null);
       return;
     }
+    // Single-project mode (e.g. `objectstack dev` for a vanilla user stack)
+    // has no control plane and therefore no `sys_project` table to query.
+    // Synthesize a stub detail so the project page renders without a 500.
+    if (config.singleProject && projectId === config.defaultProjectId) {
+      client?.setProjectId?.(projectId);
+      rememberActiveProject(projectId);
+      setDetail({
+        project: {
+          id: projectId,
+          organization_id: config.defaultOrgId ?? '',
+          display_name: projectId,
+          status: 'active',
+        } as ProjectRow,
+      } as ProjectDetail);
+      setLoading(false);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     client.setProjectId(projectId);

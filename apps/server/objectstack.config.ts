@@ -7,31 +7,22 @@
  *
  * ## Boot modes
  *
- * Selected via the `OBJECTSTACK_MODE` environment variable. Default:
- * `standalone`.
+ * Default: single-project **local** mode. `pnpm dev` runs a self-contained
+ * server with one control DB on disk and Studio UI in single-project mode
+ * (no org/project picker — platform metadata only).
  *
- *   - `standalone` (default) — Runtime-only (ObjectQL + REST + Driver).
- *                              Single artifact, no control plane, no
- *                              auth. Best for embedding ObjectStack into
- *                              another framework or running headless.
- *   - `runtime`              — Cloud-connected runtime node. Resolves
- *                              projects by hostname against ObjectStack
- *                              Cloud (`apps/cloud` on
- *                              `http://localhost:4000` by default — start
- *                              that service first) and boots per-project
- *                              kernels from artifacts pulled over HTTP.
- *                              Override the cloud URL via
- *                              `OBJECTSTACK_CLOUD_URL`. Set it to
- *                              `local` for the legacy two-SQLite shape
- *                              (`control.db` + `proj_local.db`).
- *                              Aliases: `project`, `local`,
- *                              `single-project` (deprecated).
+ * Override via env:
+ *   - `OBJECTSTACK_CLOUD_URL=http://localhost:4000`         — connect to a
+ *     locally-running `apps/cloud` (multi-project control plane).
+ *   - `OBJECTSTACK_CLOUD_URL=https://cloud.objectstack.ai`  — hosted
+ *     control plane.
+ *   - `OBJECTSTACK_MODE=cloud`                              — boot the
+ *     multi-project control plane in this very process (lives in
+ *     `apps/cloud`).
  *
- * The `cloud` (multi-project control plane) mode lives in `apps/cloud`.
- *
- * All boot orchestration lives in `@objectstack/service-cloud`. This
- * file only supplies the apps/server-specific knobs (filesystem app
- * bundle resolution).
+ * All boot orchestration lives in `@objectstack/service-cloud`. This file
+ * only supplies the apps/server-specific knobs (filesystem app bundle
+ * resolution).
  */
 
 import { resolve as resolvePath, dirname } from 'node:path';
@@ -49,17 +40,18 @@ const config = await createBootStack({
         dataDir,
         artifactPath: localArtifactPath,
         appBundles: createFsAppBundleResolver(),
-        // Default: connect to the local apps/cloud (port 4000). Override
-        // with `OBJECTSTACK_CLOUD_URL=https://cloud.objectstack.ai` for
-        // the hosted control plane, or `OBJECTSTACK_CLOUD_URL=local` to
-        // fall back to a single-machine `control.db` shape.
-        cloudUrl: process.env.OBJECTSTACK_CLOUD_URL,
+        // Default to single-project local mode (`cloudUrl: 'local'`) so
+        // `pnpm dev` boots a self-contained server: one project, one
+        // control DB on disk, Studio UI in single-project mode (no
+        // org/project picker — platform metadata only).
+        //
+        // Override with:
+        //   - `OBJECTSTACK_CLOUD_URL=http://localhost:4000` to connect to
+        //     a locally-running `apps/cloud` (multi-project control plane)
+        //   - `OBJECTSTACK_CLOUD_URL=https://cloud.objectstack.ai` for the
+        //     hosted control plane
+        cloudUrl: process.env.OBJECTSTACK_CLOUD_URL ?? 'local',
         cloudApiKey: process.env.OBJECTSTACK_CLOUD_API_KEY,
-    },
-    standalone: {
-        artifactPath: localArtifactPath,
-        databaseUrl: process.env.OBJECTSTACK_DATABASE_URL
-            ?? `file:${resolvePath(dataDir, 'standalone.db')}`,
     },
 });
 

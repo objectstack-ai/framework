@@ -352,6 +352,41 @@ export default class Serve extends Command {
         }
       }
 
+      // 5a. Auto-register Studio single-project signal in dev mode.
+      //
+      // `objectstack dev` runs a vanilla user stack (e.g. examples/app-crm)
+      // as a single project — there is no apps/cloud control plane and no
+      // org/project picker is meaningful. Without this plugin Studio would
+      // fall back to its multi-project default and ask the user to "Create
+      // organization" before showing any platform metadata.
+      //
+      // The plugin only registers `GET /api/v1/studio/runtime-config`
+      // (returning `{ singleProject: true, defaultOrgId, defaultProjectId }`)
+      // — no identity seed, since CLI dev mode has no sys_organization /
+      // sys_project tables to write into. Skipped when the user config
+      // already carries a single-project / multi-project plugin.
+      const hasProjectModePlugin = plugins.some((p: any) => {
+        const n = p?.name ?? p?.constructor?.name ?? '';
+        return n === 'com.objectstack.studio.single-project'
+          || n === 'com.objectstack.multi-project'
+          || n === 'com.objectstack.studio.runtime-config';
+      });
+      if (isDev && !hasProjectModePlugin) {
+        try {
+          const cloudPkg = '@objectstack/service-cloud';
+          const { createSingleProjectPlugin } = await import(/* webpackIgnore: true */ cloudPkg);
+          await kernel.use(createSingleProjectPlugin({
+            projectId: process.env.OBJECTSTACK_PROJECT_ID ?? 'proj_local',
+            orgId: process.env.OBJECTSTACK_ORG_ID ?? 'org_local',
+            orgName: 'Local',
+          }));
+          trackPlugin('SingleProject');
+        } catch {
+          // @objectstack/service-cloud not installed — Studio falls back
+          // to multi-project mode (org/project picker visible).
+        }
+      }
+
       // 5b. Auto-register AuthPlugin (and paired Security/Audit) when the
       // 'auth' tier is enabled and no auth plugin is already configured.
       // The Studio + Account portals expect /api/v1/auth/* to be served by
