@@ -805,9 +805,18 @@ importers:
       '@objectstack/objectql':
         specifier: workspace:^
         version: link:../objectql
+      '@objectstack/plugin-audit':
+        specifier: workspace:*
+        version: link:../plugins/plugin-audit
+      '@objectstack/plugin-auth':
+        specifier: workspace:*
+        version: link:../plugins/plugin-auth
       '@objectstack/plugin-hono-server':
         specifier: workspace:*
         version: link:../plugins/plugin-hono-server
+      '@objectstack/plugin-security':
+        specifier: workspace:*
+        version: link:../plugins/plugin-security
       '@objectstack/plugin-setup':
         specifier: workspace:*
         version: link:../plugins/plugin-setup

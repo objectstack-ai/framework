@@ -82,8 +82,8 @@ export default class Serve extends Command {
    */
   static readonly TIER_PRESETS: Record<string, string[]> = {
     minimal: ['core'],
-    default: ['core', 'i18n', 'ui'],
-    full: ['core', 'i18n', 'ui', 'ai'],
+    default: ['core', 'i18n', 'ui', 'auth'],
+    full: ['core', 'i18n', 'ui', 'ai', 'auth'],
   };
 
   async run(): Promise<void> {
@@ -349,6 +349,75 @@ export default class Serve extends Command {
           trackPlugin('Setup');
         } catch {
           // @objectstack/plugin-setup not installed — setup app unavailable
+        }
+      }
+
+      // 5b. Auto-register AuthPlugin (and paired Security/Audit) when the
+      // 'auth' tier is enabled and no auth plugin is already configured.
+      // The Studio + Account portals expect /api/v1/auth/* to be served by
+      // better-auth via @objectstack/plugin-auth. Without this block,
+      // running `objectstack dev` on a vanilla user stack would 404 on
+      // login/register flows.
+      const hasAuthPlugin = plugins.some(
+        (p: any) => p?.name === 'com.objectstack.auth' || p?.constructor?.name === 'AuthPlugin'
+      );
+      if (!hasAuthPlugin && tierEnabled('auth')) {
+        try {
+          const authPkg = '@objectstack/plugin-auth';
+          const { AuthPlugin } = await import(/* webpackIgnore: true */ authPkg);
+
+          // In dev, fall back to a stable local secret so users don't have
+          // to set AUTH_SECRET just to try the login/register flow.
+          const secret = process.env.AUTH_SECRET
+            ?? process.env.OBJECTSTACK_AUTH_SECRET
+            ?? (isDev ? 'dev-only-insecure-secret-change-me-in-production' : undefined);
+
+          if (!secret) {
+            console.warn(chalk.yellow('  ⚠ AuthPlugin skipped — set AUTH_SECRET to enable authentication in production'));
+          } else {
+            const baseUrl = process.env.AUTH_BASE_URL
+              ?? process.env.OBJECTSTACK_BASE_URL
+              ?? `http://localhost:${port}`;
+
+            const socialProviders: Record<string, { clientId: string; clientSecret: string }> = {};
+            if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+              socialProviders.google = { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET };
+            if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
+              socialProviders.github = { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET };
+
+            await kernel.use(new AuthPlugin({
+              secret,
+              baseUrl,
+              socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
+            }));
+            trackPlugin('Auth');
+
+            // Pair: SecurityPlugin (RBAC) — optional
+            try {
+              const securityPkg = '@objectstack/plugin-security';
+              const { SecurityPlugin } = await import(/* webpackIgnore: true */ securityPkg);
+              await kernel.use(new SecurityPlugin());
+              trackPlugin('Security');
+            } catch {
+              // optional
+            }
+
+            // Pair: AuditPlugin — optional
+            try {
+              const auditPkg = '@objectstack/plugin-audit';
+              const { AuditPlugin } = await import(/* webpackIgnore: true */ auditPkg);
+              await kernel.use(new AuditPlugin());
+              trackPlugin('Audit');
+            } catch {
+              // optional
+            }
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+            console.warn(chalk.yellow(`  ⚠ AuthPlugin failed to load: ${msg}`));
+          }
+          // @objectstack/plugin-auth not installed — login/register endpoints unavailable
         }
       }
 
