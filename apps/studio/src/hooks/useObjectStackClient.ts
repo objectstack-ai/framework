@@ -5,6 +5,7 @@ import { ObjectStackClient, type ScopedProjectClient } from '@objectstack/client
 import { useClient } from '@objectstack/client-react';
 import { getApiBaseUrl, config } from '../lib/config';
 import { recallActiveProject } from './useProjects';
+import { isPlatformProject } from '../lib/platform-project';
 
 /**
  * Hook to create and manage the ObjectStack client instance.
@@ -49,6 +50,9 @@ export function useScopedClient(
   return useMemo(() => {
     if (!client) return null;
     if (!projectId) return null;
+    // The platform pseudo-project uses unscoped control-plane endpoints;
+    // returning null here lets every caller fall back to the unscoped client.
+    if (isPlatformProject(projectId)) return null;
     return client.project(projectId);
   }, [client, projectId]);
 }

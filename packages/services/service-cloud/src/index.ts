@@ -67,7 +67,7 @@ export {
 } from './boot-env.js';
 export type { BootMode, BootEnv } from './boot-env.js';
 
-export { createProjectStack, ProjectStackConfigSchema } from './project-stack.js';
+export { createProjectStack, ProjectStackConfigSchema, DEFAULT_CLOUD_URL } from './project-stack.js';
 export type { ProjectStackConfig, ProjectStackResult } from './project-stack.js';
 
 export { createStandaloneStack, StandaloneStackConfigSchema } from './standalone-stack.js';

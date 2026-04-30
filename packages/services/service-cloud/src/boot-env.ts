@@ -32,7 +32,7 @@ export const BootEnvSchema = z.object({
 });
 
 export type BootEnv = z.infer<typeof BootEnvSchema>;
-export type BootMode = 'project' | 'cloud' | 'standalone';
+export type BootMode = 'runtime' | 'cloud' | 'standalone';
 
 const DEV_AUTH_SECRET_FALLBACK =
     'dev-secret-please-change-in-production-min-32-chars';
@@ -49,24 +49,36 @@ function pickEnv(env?: Record<string, string | undefined>): Record<string, strin
  * Resolve the deployment mode from environment.
  *
  * Recognised values:
- *   - `project`, `local`, `single-project`     → `'project'` (default)
- *   - `cloud`, `multi-project`                 → `'cloud'`
- *   - `standalone`                             → `'standalone'`
+ *   - `standalone`                                            → `'standalone'` (default)
+ *   - `runtime`, `project`, `local`, `single-project`         → `'runtime'`
+ *   - `cloud`, `multi-project`                                → `'cloud'`
  *
- * Falls back to `'project'` when unset; logs a warning and falls back to
- * `'project'` when the value is unrecognised. The legacy
+ * Falls back to `'standalone'` when unset; logs a warning and falls back
+ * to `'standalone'` when the value is unrecognised. The legacy
  * `OBJECTSTACK_MULTI_PROJECT=true` flag is still honoured (with a
  * deprecation warning) when `OBJECTSTACK_MODE` is unset.
+ *
+ * The `project` value continues to be accepted as a deprecated alias for
+ * `runtime` — that mode was renamed in the v4.x series to better reflect
+ * its role (a runtime node connected to ObjectStack Cloud) and to leave
+ * "project" available as a domain term.
  */
 export function resolveMode(env?: Record<string, string | undefined>): BootMode {
     const e = pickEnv(env);
     const raw = e.OBJECTSTACK_MODE?.trim().toLowerCase();
     if (raw === 'cloud' || raw === 'multi-project') return 'cloud';
     if (raw === 'standalone') return 'standalone';
-    if (raw === 'project' || raw === 'local' || raw === 'single-project') return 'project';
+    if (raw === 'runtime') return 'runtime';
+    if (raw === 'project' || raw === 'local' || raw === 'single-project') {
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[objectstack] OBJECTSTACK_MODE=${raw} is a deprecated alias for "runtime"; please update your config.`,
+        );
+        return 'runtime';
+    }
     if (raw && raw.length > 0) {
         // eslint-disable-next-line no-console
-        console.warn(`[objectstack] Unknown OBJECTSTACK_MODE=${raw}; falling back to "project".`);
+        console.warn(`[objectstack] Unknown OBJECTSTACK_MODE=${raw}; falling back to "standalone".`);
     }
     if (envFlag(e.OBJECTSTACK_MULTI_PROJECT)) {
         // eslint-disable-next-line no-console
@@ -75,7 +87,7 @@ export function resolveMode(env?: Record<string, string | undefined>): BootMode 
         );
         return 'cloud';
     }
-    return 'project';
+    return 'standalone';
 }
 
 /**

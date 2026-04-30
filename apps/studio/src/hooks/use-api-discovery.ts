@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useClient } from '@objectstack/client-react';
 import { useScopedClient } from './useObjectStackClient';
+import { isPlatformProject } from '../lib/platform-project';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -191,22 +192,23 @@ export function buildServiceEndpoints(serviceName: string, routePrefix: string):
 export function useApiDiscovery(projectId?: string) {
   const unscopedClient = useClient();
   const scopedClient = useScopedClient(projectId);
-  const client: any = projectId ? scopedClient : unscopedClient;
+  const client: any = scopedClient ?? unscopedClient;
   const [groups, setGroups] = useState<EndpointGroup[]>([]);
   const [allEndpoints, setAllEndpoints] = useState<EndpointDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const discover = useCallback(async () => {
-    // When a projectId is provided but the scoped client hasn't resolved yet,
-    // defer until the next render.
-    if (projectId && !scopedClient) return;
+    // When a real projectId is provided but the scoped client hasn't resolved
+    // yet, defer until the next render. The platform pseudo-project intentionally
+    // returns null from useScopedClient and must not be deferred.
+    if (projectId && !isPlatformProject(projectId) && !scopedClient) return;
 
     setLoading(true);
     setError(null);
 
     // Scope prefix for system endpoints; discovery already handles its own routes.
-    const scopePrefix = projectId ? `/api/v1/projects/${projectId}` : '/api/v1';
+    const scopePrefix = (projectId && !isPlatformProject(projectId)) ? `/api/v1/projects/${projectId}` : '/api/v1';
     const discoveryUrl = `${scopePrefix}/discovery`;
     const systemEndpoints: EndpointDef[] = [
       { method: 'GET', path: discoveryUrl, desc: 'API Discovery', group: 'System' },
@@ -361,7 +363,7 @@ export function useApiDiscovery(projectId?: string) {
     } finally {
       setLoading(false);
     }
-  }, [client, effectiveProjectId, scopedClient]);
+  }, [client, projectId, scopedClient]);
 
   useEffect(() => { discover(); }, [discover]);
 

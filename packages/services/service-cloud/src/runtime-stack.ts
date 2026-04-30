@@ -27,6 +27,14 @@ import { resolveAuthSecret, resolveBaseUrl } from './boot-env.js';
 import type { AppBundleResolver } from './project-kernel-factory.js';
 import { createObjectOSStack } from './objectos-stack.js';
 
+/**
+ * Default ObjectStack Cloud base URL used when neither `cloudUrl` nor
+ * `OBJECTSTACK_CLOUD_URL` is set. Override via the env var or
+ * `ProjectStackConfig.cloudUrl`. Set to `local` to disable cloud routing
+ * and boot from a local `control.db` instead.
+ */
+export const DEFAULT_CLOUD_URL = 'https://cloud.objectstack.ai';
+
 export const ProjectStackConfigSchema = z.object({
     /** Auth secret (defaults to env / dev fallback). */
     authSecret: z.string().optional(),
@@ -43,15 +51,22 @@ export const ProjectStackConfigSchema = z.object({
     /** API prefix (passed through to the cloud preset). */
     apiPrefix: z.string().optional(),
     /**
-     * Control-plane base URL. When set (or `OBJECTSTACK_CONTROL_PLANE_URL`
-     * is exported), the project stack runs in **ObjectOS Cloud Runtime**
-     * mode: no local control-plane database, projects are resolved by
-     * hostname against the control plane and per-project kernels are
-     * booted from artifacts pulled over HTTP.
+     * ObjectStack Cloud base URL. Defaults to `https://cloud.objectstack.ai`
+     * (override via the `OBJECTSTACK_CLOUD_URL` env var or this field).
+     *
+     * When non-empty (the default), the project stack runs in **ObjectOS
+     * Cloud Runtime** mode: no local control-plane database, projects are
+     * resolved by hostname against ObjectStack Cloud and per-project
+     * kernels are booted from artifacts pulled over HTTP.
+     *
+     * To run the legacy local-control-plane mode (single SQLite
+     * `control.db` shared with one `proj_local.db`) instead, set the env
+     * var to the sentinel value `local` (`OBJECTSTACK_CLOUD_URL=local`)
+     * or pass `cloudUrl: 'local'`.
      */
-    controlPlaneUrl: z.string().optional(),
-    /** Optional bearer token for the control-plane API. */
-    controlPlaneApiKey: z.string().optional(),
+    cloudUrl: z.string().optional(),
+    /** Bearer token for the ObjectStack Cloud API (defaults to `OBJECTSTACK_CLOUD_API_KEY`). */
+    cloudApiKey: z.string().optional(),
 });
 
 export type ProjectStackConfig = z.input<typeof ProjectStackConfigSchema>;
@@ -70,13 +85,19 @@ export async function createProjectStack(config?: ProjectStackConfig): Promise<P
     const cfg = ProjectStackConfigSchema.parse(config ?? {});
 
     // ── ObjectOS Cloud Runtime branch ─────────────────────────────────────
-    // When a control-plane URL is configured, skip the local control DB and
-    // boot every project from a remote-fetched artifact. See objectos-stack.ts.
-    const controlPlaneUrl = cfg.controlPlaneUrl ?? process.env.OBJECTSTACK_CONTROL_PLANE_URL;
-    if (controlPlaneUrl) {
+    // Default: route every per-project boot through ObjectStack Cloud
+    // (https://cloud.objectstack.ai) — no local control-plane DB, projects
+    // are resolved by hostname against the cloud API and kernels are
+    // booted from remote-fetched artifacts. To opt out and use the legacy
+    // single-control-DB local mode, set OBJECTSTACK_CLOUD_URL=local
+    // (or `cloudUrl: 'local'`). See objectos-stack.ts.
+    const rawCloudUrl = cfg.cloudUrl ?? process.env.OBJECTSTACK_CLOUD_URL ?? DEFAULT_CLOUD_URL;
+    const cloudUrl = rawCloudUrl.trim();
+    const localOptOut = cloudUrl === '' || cloudUrl.toLowerCase() === 'local' || cloudUrl.toLowerCase() === 'off';
+    if (!localOptOut) {
         return createObjectOSStack({
-            controlPlaneUrl,
-            controlPlaneApiKey: cfg.controlPlaneApiKey ?? process.env.OBJECTSTACK_CONTROL_PLANE_API_KEY,
+            controlPlaneUrl: cloudUrl,
+            controlPlaneApiKey: cfg.cloudApiKey ?? process.env.OBJECTSTACK_CLOUD_API_KEY,
             apiPrefix: cfg.apiPrefix,
         }) as Promise<ProjectStackResult>;
     }

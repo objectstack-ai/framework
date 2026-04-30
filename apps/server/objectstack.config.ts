@@ -39,8 +39,11 @@ const config = await createBootStack({
         dataDir,
         artifactPath: localArtifactPath,
         appBundles: createFsAppBundleResolver(),
-        controlPlaneUrl: process.env.OBJECTSTACK_CONTROL_PLANE_URL,
-        controlPlaneApiKey: process.env.OBJECTSTACK_CONTROL_PLANE_API_KEY,
+        // ObjectStack Cloud runtime is the default; set
+        // `OBJECTSTACK_CLOUD_URL=local` to fall back to a local control
+        // DB for offline / single-machine development.
+        cloudUrl: process.env.OBJECTSTACK_CLOUD_URL,
+        cloudApiKey: process.env.OBJECTSTACK_CLOUD_API_KEY,
     },
     standalone: {
         artifactPath: localArtifactPath,
