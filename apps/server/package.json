@@ -19,7 +19,7 @@
     "@example/app-crm": "workspace:*",
     "@example/app-todo": "workspace:*",
     "@hono/node-server": "^1.19.14",
-    "@libsql/client": "^0.17.2",
+    "@libsql/client": "^0.17.3",
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/driver-sql": "workspace:*",
     "@objectstack/driver-turso": "workspace:*",
@@ -39,7 +39,7 @@
     "@objectstack/service-package": "workspace:*",
     "@objectstack/service-tenant": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "hono": "^4.12.14"
+    "hono": "^4.12.16"
   },
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
