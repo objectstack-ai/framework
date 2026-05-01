@@ -15,6 +15,48 @@ import { CoreServiceName, StorageNameMapping } from '@objectstack/spec/system';
 import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
 import { pluralToSingular } from '@objectstack/spec/shared';
 import { SchemaRegistry, computeFQN } from './registry.js';
+import { compileFormula, evaluateFormula } from './formula.js';
+
+interface FormulaPlanEntry { name: string; expression: string; }
+
+function planFormulaProjection(
+  schema: any,
+  requestedFields: string[] | undefined
+): { plan: FormulaPlanEntry[]; projected?: string[] } {
+  if (!schema?.fields || !Array.isArray(requestedFields) || requestedFields.length === 0) {
+    return { plan: [] };
+  }
+  const plan: FormulaPlanEntry[] = [];
+  const projected = new Set<string>();
+  for (const f of requestedFields) {
+    const def = (schema.fields as any)[f];
+    if (def?.type === 'formula' && def.expression) {
+      plan.push({ name: f, expression: def.expression });
+      try {
+        for (const dep of compileFormula(def.expression).dependencies) {
+          if ((schema.fields as any)[dep]) projected.add(dep);
+        }
+      } catch {
+        // ignore broken formulas at planning stage
+      }
+    } else {
+      projected.add(f);
+    }
+  }
+  if (plan.length === 0) return { plan: [] };
+  if (!projected.has('id')) projected.add('id');
+  return { plan, projected: Array.from(projected) };
+}
+
+function applyFormulaPlan(plan: FormulaPlanEntry[], records: any[]): void {
+  if (!plan.length) return;
+  for (const rec of records) {
+    if (rec == null) continue;
+    for (const fp of plan) {
+      rec[fp.name] = evaluateFormula(fp.expression, rec);
+    }
+  }
+}
 
 export type HookHandler = (context: HookContext) => Promise<void> | void;
 
@@ -939,6 +981,13 @@ export class ObjectQL implements IDataEngine {
     }
     delete (ast as any).top;
 
+    // Plan formula projection: rewrite ast.fields to drop virtual formula
+    // names and inject their dependencies, so the driver returns the raw
+    // fields needed to compute the formulas after fetch.
+    const _findSchema = this._registry.getObject(object);
+    const _findFormula = planFormulaProjection(_findSchema, ast.fields as string[] | undefined);
+    if (_findFormula.projected) ast.fields = _findFormula.projected;
+
     const opCtx: OperationContext = {
       object,
       operation: 'find',
@@ -960,6 +1009,9 @@ export class ObjectQL implements IDataEngine {
 
       try {
           let result = await driver.find(object, hookContext.input.ast as QueryAST, hookContext.input.options as any);
+
+          // Post-process: evaluate formula virtual fields against the raw rows
+          if (Array.isArray(result)) applyFormulaPlan(_findFormula.plan, result);
 
           // Post-process: expand related records if expand is requested
           if (ast.expand && Object.keys(ast.expand).length > 0 && Array.isArray(result)) {
@@ -989,6 +1041,12 @@ export class ObjectQL implements IDataEngine {
     delete (ast as any).context;
     delete (ast as any).top;
 
+    // Plan formula projection (same as find): rewrite ast.fields so the driver
+    // returns the raw dependency fields, then evaluate formulas after fetch.
+    const _findOneSchema = this._registry.getObject(objectName);
+    const _findOneFormula = planFormulaProjection(_findOneSchema, ast.fields as string[] | undefined);
+    if (_findOneFormula.projected) ast.fields = _findOneFormula.projected;
+
     const opCtx: OperationContext = {
       object: objectName,
       operation: 'findOne',
@@ -999,6 +1057,9 @@ export class ObjectQL implements IDataEngine {
 
     await this.executeWithMiddleware(opCtx, async () => {
       let result = await driver.findOne(objectName, opCtx.ast as QueryAST);
+
+      // Post-process: evaluate formula virtual fields against the raw row
+      if (result != null) applyFormulaPlan(_findOneFormula.plan, [result]);
 
       // Post-process: expand related records if expand is requested
       if (ast.expand && Object.keys(ast.expand).length > 0 && result != null) {
