@@ -106,9 +106,20 @@ export function TopBar() {
   }, [packages, params.package]);
 
   const handleSelectPackage = useCallback(
-    (pkg: InstalledPackage) => {
+    (pkg: InstalledPackage | null) => {
+      if (!params.projectId) return;
+      // "全部" — clear the package segment by navigating to the project
+      // overview. Downstream consumers treat the absence of `params.package`
+      // as "show metadata across all packages".
+      if (pkg === null) {
+        navigate({
+          to: '/projects/$projectId',
+          params: { projectId: params.projectId },
+        });
+        return;
+      }
       const nextId = pkg.manifest?.id;
-      if (!nextId || !params.projectId) return;
+      if (!nextId) return;
       // Switching package invalidates the current metadata path (the same
       // type/name may not exist in the target package), so land on the
       // package overview.
@@ -218,7 +229,7 @@ export function TopBar() {
           {!config.singleProject && <OrganizationSwitcher />}
           {(!config.singleProject && activeOrgId) && <SlashDivider />}
           {!config.singleProject && <ProjectSwitcher />}
-          {params.projectId && params.package && (
+          {params.projectId && (
             <>
               <SlashDivider />
               <PackageSwitcher
