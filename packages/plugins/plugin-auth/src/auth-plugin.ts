@@ -2,7 +2,17 @@
 
 import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
 import { AuthConfig } from '@objectstack/spec/system';
-import { SETUP_APP } from '@objectstack/platform-objects/apps';
+import {
+  SETUP_APP,
+  SystemOverviewDashboard,
+  SecurityOverviewDashboard,
+  UsersView,
+  OrganizationsView,
+  RolesView,
+  SessionsView,
+  AuditLogsView,
+  PackageInstallationsView,
+} from '@objectstack/platform-objects/apps';
 import { AuthManager } from './auth-manager.js';
 import {
   authIdentityObjects,
@@ -103,6 +113,19 @@ export class AuthPlugin implements Plugin {
       // owner of its registration since it loads first among the trio
       // (auth + security + audit) that supplies the underlying objects.
       apps: [SETUP_APP],
+      // Curated list views and dashboards consumed by the Setup App's
+      // navigation entries. The manifest service does NOT auto-discover
+      // these from the app definition — they must be registered as
+      // explicit top-level arrays per ObjectStackDefinitionSchema.
+      views: [
+        UsersView,
+        OrganizationsView,
+        RolesView,
+        SessionsView,
+        AuditLogsView,
+        PackageInstallationsView,
+      ],
+      dashboards: [SystemOverviewDashboard, SecurityOverviewDashboard],
     });
 
     ctx.logger.info('Auth Plugin initialized successfully');
