@@ -128,12 +128,11 @@ export const SysMetadataObject = ObjectSchema.create({
       description: 'Organization for multi-tenant isolation.',
     }),
 
-    /** Environment ID — null = platform-global, set = env-scoped */
-    env_id: Field.text({
-      label: 'Environment ID',
+    /** Project ID — null = platform-global, set = project-scoped */
+    project_id: Field.lookup('sys_project', {
+      label: 'Project',
       required: false,
-      maxLength: 255,
-      description: 'Scopes this metadata to a specific environment. Null = platform-global.',
+      description: 'Foreign key to sys_project (UUID). Null = platform-global.',
     }),
 
     /** Version number for optimistic concurrency */
@@ -188,10 +187,10 @@ export const SysMetadataObject = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['type', 'name', 'env_id'], unique: true },
+    { fields: ['type', 'name', 'project_id'], unique: true },
     { fields: ['type', 'scope'] },
     { fields: ['organization_id'] },
-    { fields: ['env_id'] },
+    { fields: ['project_id'] },
     { fields: ['package_version_id'] },
     { fields: ['state'] },
     { fields: ['namespace'] },

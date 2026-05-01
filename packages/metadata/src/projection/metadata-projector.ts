@@ -27,8 +27,8 @@ export interface MetadataProjectorOptions {
   /** Organization ID for multi-tenant isolation */
   organizationId?: string;
 
-  /** Environment ID — null = platform-global, set = env-scoped */
-  environmentId?: string;
+  /** Project ID — null = platform-global, set = project-scoped */
+  projectId?: string;
 }
 
 /**
@@ -40,7 +40,7 @@ export class MetadataProjector {
   private driver?: IDataDriver;
   private engine?: IDataEngine;
   /** Reserved for future multi-tenant projection scoping */
-  readonly scope: { organizationId?: string; environmentId?: string };
+  readonly scope: { organizationId?: string; projectId?: string };
 
   // Map of metadata types to their target table names
   private readonly typeTableMap: Record<string, string> = {
@@ -60,7 +60,7 @@ export class MetadataProjector {
     this.engine = options.engine;
     this.scope = {
       organizationId: options.organizationId,
-      environmentId: options.environmentId,
+      projectId: options.projectId,
     };
   }
 
@@ -80,10 +80,10 @@ export class MetadataProjector {
     }
 
     try {
-      // Check if projection already exists (scoped by env_id for isolation)
-      const envId = this.scope.environmentId ?? null;
+      // Check if projection already exists (scoped by project_id for isolation)
+      const projId = this.scope.projectId ?? null;
       const existing = await this._findOne(targetTable, {
-        where: { name, env_id: envId },
+        where: { name, project_id: projId },
       });
 
       if (existing) {
@@ -113,10 +113,10 @@ export class MetadataProjector {
     }
 
     try {
-      // Find the projection (scoped by env_id for isolation)
-      const envId = this.scope.environmentId ?? null;
+      // Find the projection (scoped by project_id for isolation)
+      const projId = this.scope.projectId ?? null;
       const existing = await this._findOne(targetTable, {
-        where: { name, env_id: envId },
+        where: { name, project_id: projId },
       });
 
       if (existing) {
@@ -155,7 +155,7 @@ export class MetadataProjector {
   private projectObject(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
-      env_id: this.scope.environmentId ?? null,
+      project_id: this.scope.projectId ?? null,
       label: data.label || name,
       plural_label: data.pluralLabel || data.label || name,
       description: data.description || '',
@@ -205,7 +205,7 @@ export class MetadataProjector {
   private projectView(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
-      env_id: this.scope.environmentId ?? null,
+      project_id: this.scope.projectId ?? null,
       label: data.label || name,
       description: data.description || '',
       object_name: data.object || '',
@@ -238,7 +238,7 @@ export class MetadataProjector {
   private projectAgent(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
-      env_id: this.scope.environmentId ?? null,
+      project_id: this.scope.projectId ?? null,
       label: data.label || name,
       description: data.description || '',
       agent_type: data.type || 'conversational',
@@ -274,7 +274,7 @@ export class MetadataProjector {
   private projectTool(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
-      env_id: this.scope.environmentId ?? null,
+      project_id: this.scope.projectId ?? null,
       label: data.label || name,
       description: data.description || '',
       // Parameters and implementation
@@ -299,7 +299,7 @@ export class MetadataProjector {
   private projectFlow(name: string, data: any, now: string): Record<string, any> {
     return {
       name,
-      env_id: this.scope.environmentId ?? null,
+      project_id: this.scope.projectId ?? null,
       label: data.label || name,
       description: data.description || '',
       flow_type: data.type || 'autolaunched',

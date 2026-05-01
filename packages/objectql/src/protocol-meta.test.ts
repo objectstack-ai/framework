@@ -172,7 +172,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
             expect(result.item).toEqual(sampleApp);
             expect(mockEngine.findOne).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', name: 'test_app', state: 'active', env_id: null }
+                where: { type: 'app', name: 'test_app', state: 'active', project_id: null }
             });
         });
 
@@ -272,7 +272,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             // DB *is* queried (always-merge semantics) so seeded metadata
             // surfaces even when the registry already has unrelated items.
             expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', state: 'active', env_id: null }
+                where: { type: 'app', state: 'active', project_id: null }
             });
         });
 
@@ -291,7 +291,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect(result.items).toHaveLength(1);
             expect(result.items[0]).toEqual(sampleApp);
             expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', state: 'active', env_id: null }
+                where: { type: 'app', state: 'active', project_id: null }
             });
         });
 
@@ -370,7 +370,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             await protocol.loadMetaFromDb();
 
             expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
-                where: { state: 'active', env_id: null }
+                where: { state: 'active', project_id: null }
             });
         });
 

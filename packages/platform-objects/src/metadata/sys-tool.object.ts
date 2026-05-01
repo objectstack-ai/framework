@@ -24,7 +24,7 @@ export const SysTool = ObjectSchema.create({
       maxLength: 255,
     }),
 
-    env_id: Field.text({
+    project_id: Field.text({
       label: 'Environment ID',
       maxLength: 255,
       description: 'Project/environment scope — null = control-plane global',
@@ -81,8 +81,8 @@ export const SysTool = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['name', 'env_id'], unique: true },
-    { fields: ['env_id'] },
+    { fields: ['name', 'project_id'], unique: true },
+    { fields: ['project_id'] },
     { fields: ['namespace'] },
     { fields: ['package_id'] },
   ],

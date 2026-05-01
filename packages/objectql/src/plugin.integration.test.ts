@@ -880,7 +880,7 @@ describe('ObjectQLPlugin - Metadata Service Integration', () => {
       // Assert — sys_metadata should have been queried
       const metaQuery = findCalls.find((c) => c.object === 'sys_metadata');
       expect(metaQuery).toBeDefined();
-      expect(metaQuery!.query.where).toEqual({ state: 'active', env_id: null });
+      expect(metaQuery!.query.where).toEqual({ state: 'active', project_id: null });
 
       // Assert — items should be restored into the registry
       const registry = (kernel.getService('objectql') as any).registry;

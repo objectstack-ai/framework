@@ -52,8 +52,8 @@ export interface MetadataPluginOptions {
     config?: Partial<MetadataPluginConfig>;
     /** Organization ID for metadata-scoped consumers; MetadataPlugin itself does not persist runtime metadata. */
     organizationId?: string;
-    /** Project/environment ID used by local artifact envelopes and metadata-scoped consumers. */
-    environmentId?: string;
+    /** Project ID used by local artifact envelopes and metadata-scoped consumers. */
+    projectId?: string;
     /**
      * When set, MetadataPlugin loads metadata from an artifact instead of scanning
      * the filesystem. Only `local-file` is implemented now; `artifact-api` is
@@ -200,7 +200,7 @@ export class MetadataPlugin implements Plugin {
             const def = ObjectStackDefinitionSchema.parse(obj);
             const canonical = JSON.stringify(def, Object.keys(def).sort());
             const checksum = createHash('sha256').update(canonical).digest('hex');
-            const projectId = this.options.environmentId ?? 'proj_local';
+            const projectId = this.options.projectId ?? 'proj_local';
             // Wrap into envelope and validate to confirm the structure is correct.
             ProjectArtifactSchema.parse({
                 schemaVersion: '0.1',

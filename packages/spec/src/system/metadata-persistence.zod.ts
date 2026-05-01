@@ -103,8 +103,8 @@ export const MetadataRecordSchema = lazySchema(() => z.object({
   /** Tenant ID for multi-tenant isolation (alias of organizationId in some contexts) */
   tenantId: z.string().optional().describe('Tenant identifier for multi-tenant isolation'),
 
-  /** Environment ID — null means platform-global, set means env-scoped */
-  environmentId: z.string().optional().describe('Environment ID — null = platform-global, set = env-scoped'),
+  /** Project ID — null means platform-global, set means project-scoped */
+  projectId: z.string().optional().describe('Project ID — null = platform-global, set = project-scoped'),
 
   /** Version number for optimistic concurrency */
   version: z.number().default(1).describe('Record version for optimistic concurrency control'),
@@ -459,8 +459,8 @@ export const MetadataHistoryRecordSchema = lazySchema(() => z.object({
   /** Organization ID for multi-tenant isolation */
   organizationId: z.string().optional().describe('Organization identifier for multi-tenant isolation'),
 
-  /** Environment ID — scopes this history entry to a specific environment */
-  environmentId: z.string().optional().describe('Environment ID — null = platform-global, set = env-scoped'),
+  /** Project ID — scopes this history entry to a specific environment */
+  projectId: z.string().optional().describe('Project ID — null = platform-global, set = project-scoped'),
 
   /** Audit: who made this change */
   recordedBy: z.string().optional().describe('User who made this change'),

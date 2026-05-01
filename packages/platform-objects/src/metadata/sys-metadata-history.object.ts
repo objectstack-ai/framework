@@ -112,7 +112,7 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
     }),
 
     /** Environment ID — null = platform-global, set = env-scoped */
-    env_id: Field.text({
+    project_id: Field.text({
       label: 'Environment ID',
       required: false,
       readonly: true,
@@ -142,7 +142,7 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
     { fields: ['recorded_at'] },
     { fields: ['operation_type'] },
     { fields: ['organization_id'] },
-    { fields: ['env_id'] },
+    { fields: ['project_id'] },
   ],
 
   enable: {

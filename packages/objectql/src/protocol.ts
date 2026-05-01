@@ -56,33 +56,33 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     /**
      * Project scope applied to sys_metadata reads/writes. When undefined
      * (single-kernel deployments), rows land in / come from the
-     * platform-global bucket (`env_id IS NULL`). When set, every
+     * platform-global bucket (`project_id IS NULL`). When set, every
      * saveMetaItem insert/update and loadMetaFromDb query is filtered by
-     * `env_id = environmentId`, so per-project kernels see only their own
+     * `project_id = projectId`, so per-project kernels see only their own
      * metadata even if several projects share the same physical database.
      */
-    private environmentId?: string;
+    private projectId?: string;
 
     constructor(
         engine: IDataEngine,
         getServicesRegistry?: () => Map<string, any>,
         getFeedService?: () => IFeedService | undefined,
-        environmentId?: string,
+        projectId?: string,
     ) {
         this.engine = engine as ObjectQL;
         this.getServicesRegistry = getServicesRegistry;
         this.getFeedService = getFeedService;
-        this.environmentId = environmentId;
+        this.projectId = projectId;
     }
 
     /**
      * Exposes the project scope the protocol is bound to. Consumers like
      * the HTTP dispatcher use this to decide whether to trust the process-
      * wide SchemaRegistry or whether they must route a read through the
-     * protocol's env_id-filtered lookup.
+     * protocol's project_id-filtered lookup.
      */
-    getEnvironmentId(): string | undefined {
-        return this.environmentId;
+    getProjectId(): string | undefined {
+        return this.projectId;
     }
 
     private requireFeedService(): IFeedService {
@@ -231,7 +231,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // prevent cross-project leakage, but DO include scope:'system' packages
         // (plugin-auth, plugin-security, plugin-audit, …) — those are globally
         // shared and must be visible at every project's meta endpoint.
-        if (this.environmentId === undefined) {
+        if (this.projectId === undefined) {
             items = [...this.engine.registry.listItems(request.type, packageId)];
             // Normalize singular/plural using explicit mapping
             if (items.length === 0) {
@@ -259,13 +259,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // was never surfaced whenever system-bridged items populated the
         // registry). Deduplicate against whatever the registry returned.
         // Skip on project kernels — sys_metadata is control-plane only.
-        if (this.environmentId === undefined) try {
+        if (this.projectId === undefined) try {
             const whereClause: Record<string, unknown> = {
                 type: request.type,
                 state: 'active',
-                // Always filter by env_id: project kernels use their projectId,
+                // Always filter by project_id: project kernels use their projectId,
                 // control-plane kernels use NULL (global scope only).
-                env_id: this.environmentId ?? null,
+                project_id: this.projectId ?? null,
             };
             if (packageId) whereClause._packageId = packageId;
             let records = await this.engine.find('sys_metadata', { where: whereClause });
@@ -273,7 +273,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 // Try alternate type name in DB using explicit mapping
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                 if (alt) {
-                    const altWhere: Record<string, unknown> = { type: alt, state: 'active', env_id: this.environmentId ?? null };
+                    const altWhere: Record<string, unknown> = { type: alt, state: 'active', project_id: this.projectId ?? null };
                     if (packageId) altWhere._packageId = packageId;
                     records = await this.engine.find('sys_metadata', { where: altWhere });
                 }
@@ -295,7 +295,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                     // Only hydrate the global registry for unscoped calls —
                     // scoped project entries must not leak process-wide.
-                    if (this.environmentId === undefined) {
+                    if (this.projectId === undefined) {
                         this.engine.registry.registerItem(request.type, data, 'name' as any);
                     }
                 }
@@ -353,8 +353,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // singleton) cannot be trusted — it's shared across every project
         // kernel in this process and would leak one project's definitions
         // into another's responses. Go straight to the database so the
-        // env_id filter guarantees isolation.
-        if (this.environmentId === undefined) {
+        // project_id filter guarantees isolation.
+        if (this.projectId === undefined) {
             item = this.engine.registry.getItem(request.type, request.name);
             // Normalize singular/plural using explicit mapping
             if (item === undefined) {
@@ -366,16 +366,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // Fallback to database if not in registry.
         // Skip on project kernels — sys_metadata is control-plane only;
         // project kernels source metadata from the artifact via MetadataService below.
-        if (item === undefined && this.environmentId === undefined) {
+        if (item === undefined && this.projectId === undefined) {
             try {
                 const scopedWhere: Record<string, unknown> = {
                     type: request.type,
                     name: request.name,
                     state: 'active',
                 };
-                // Always filter by env_id: project kernels use their projectId,
+                // Always filter by project_id: project kernels use their projectId,
                 // control-plane kernels use NULL (global scope only).
-                scopedWhere.env_id = this.environmentId ?? null;
+                scopedWhere.project_id = this.projectId ?? null;
                 const record = await this.engine.findOne('sys_metadata', {
                     where: scopedWhere,
                 });
@@ -385,7 +385,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         : record.metadata;
                     // Only hydrate the global registry for unscoped calls,
                     // see getMetaItem preamble for why scoped calls must not.
-                    if (this.environmentId === undefined) {
+                    if (this.projectId === undefined) {
                         this.engine.registry.registerItem(request.type, item, 'name' as any);
                     }
                 } else {
@@ -393,7 +393,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                     if (alt) {
                         const altWhere: Record<string, unknown> = { type: alt, name: request.name, state: 'active' };
-                        altWhere.env_id = this.environmentId ?? null;
+                        altWhere.project_id = this.projectId ?? null;
                         const altRecord = await this.engine.findOne('sys_metadata', { where: altWhere });
                         if (altRecord) {
                             item = typeof altRecord.metadata === 'string'
@@ -402,7 +402,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                             // Only hydrate back into the global registry
                             // when we're NOT scoped — otherwise the entry
                             // would leak into other projects in this process.
-                            if (this.environmentId === undefined) {
+                            if (this.projectId === undefined) {
                                 this.engine.registry.registerItem(request.type, item, 'name' as any);
                             }
                         }
@@ -1083,10 +1083,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             throw new Error('Item data is required');
         }
 
-        // Project kernels (environmentId set) never persist to sys_metadata
+        // Project kernels (projectId set) never persist to sys_metadata
         // locally — runtime metadata is sourced from the artifact and writes
         // belong to the control plane. Update the in-memory registry only.
-        if (this.environmentId !== undefined) {
+        if (this.projectId !== undefined) {
             this.engine.registry.registerItem(request.type, request.item, 'name');
             if (request.type === 'object' || request.type === 'objects') {
                 try {
@@ -1126,14 +1126,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         try {
             const now = new Date().toISOString();
             // Scope to the current project when configured. A missing
-            // environmentId means "platform-global" (single-kernel deploys,
+            // projectId means "platform-global" (single-kernel deploys,
             // legacy callers) — kept as the default to preserve back-compat.
             const scopedWhere: Record<string, unknown> = {
                 type: request.type,
                 name: request.name,
             };
-            if (this.environmentId !== undefined) {
-                scopedWhere.env_id = this.environmentId;
+            if (this.projectId !== undefined) {
+                scopedWhere.project_id = this.projectId;
             }
             const existing = await this.engine.findOne('sys_metadata', {
                 where: scopedWhere,
@@ -1158,17 +1158,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     name: request.name,
                     type: request.type,
                     // `scope` tracks platform vs project authorship. With
-                    // env_id now carrying the project id, 'project' is the
+                    // project_id carries the project id, 'project' is the
                     // honest label whenever we know we're inside one.
-                    scope: this.environmentId !== undefined ? 'project' : 'platform',
+                    scope: this.projectId !== undefined ? 'project' : 'platform',
                     metadata: JSON.stringify(request.item),
                     state: 'active',
                     version: 1,
                     created_at: now,
                     updated_at: now,
                 };
-                if (this.environmentId !== undefined) {
-                    row.env_id = this.environmentId;
+                if (this.projectId !== undefined) {
+                    row.project_id = this.projectId;
                 }
                 await this.engine.insert('sys_metadata', row);
             }
@@ -1197,20 +1197,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // Project kernels never read sys_metadata locally — the table only
         // exists on the control plane. Metadata is sourced from the artifact
         // (MetadataPlugin) or routed via ControlPlaneProxyDriver.
-        if (this.environmentId !== undefined) {
+        if (this.projectId !== undefined) {
             return { loaded: 0, errors: 0 };
         }
         let loaded = 0;
         let errors = 0;
         try {
-            // Always scope by env_id: project kernels hydrate only their own
-            // rows; control-plane kernels (no environmentId) hydrate only
-            // rows with env_id = NULL (global scope). Without this filter the
+            // Always scope by project_id: project kernels hydrate only their own
+            // rows; control-plane kernels (no projectId) hydrate only
+            // rows with project_id = NULL (global scope). Without this filter the
             // control-plane registry would absorb every project's objects and
             // expose them at the control-plane metadata endpoints.
             const where: Record<string, unknown> = {
                 state: 'active',
-                env_id: this.environmentId ?? null,
+                project_id: this.projectId ?? null,
             };
             const records = await this.engine.find('sys_metadata', { where });
             for (const record of records) {

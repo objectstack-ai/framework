@@ -1,96 +1,95 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import { readFile } from 'node:fs/promises';
+import { resolve as resolvePath } from 'node:path';
 import { Args, Command, Flags } from '@oclif/core';
-import { loadConfig } from '../utils/config.js';
 import { printHeader, printKV, printSuccess, printError, printStep } from '../utils/format.js';
 
 export default class Publish extends Command {
-  static override description = 'Publish package to ObjectStack server';
+  static override description = 'Publish a compiled artifact to ObjectStack Cloud';
 
   static override args = {
-    config: Args.string({ description: 'Configuration file path', required: false }),
+    artifact: Args.string({ description: 'Path to compiled artifact (default: dist/objectstack.json)', required: false }),
   };
 
   static override flags = {
     server: Flags.string({
       char: 's',
-      description: 'Server URL',
+      description: 'ObjectStack Cloud control-plane URL',
       env: 'OBJECTSTACK_CLOUD_URL',
-      default: 'http://localhost:3000',
+      default: 'http://localhost:4000',
+    }),
+    project: Flags.string({
+      char: 'p',
+      description: 'Project ID (required)',
+      env: 'OBJECTSTACK_PROJECT_ID',
+      required: true,
     }),
     token: Flags.string({
       char: 't',
-      description: 'Auth token',
-      env: 'OBJECTSTACK_AUTH_TOKEN',
+      description: 'API key for ObjectStack Cloud',
+      env: 'OBJECTSTACK_CLOUD_API_KEY',
     }),
   };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(Publish);
 
-    printHeader('Publish Package');
+    printHeader('Publish Artifact');
 
     try {
-      // 1. Load config
-      printStep('Loading configuration...');
-      const { config, absolutePath } = await loadConfig(args.config);
+      // 1. Locate the compiled artifact
+      const artifactPath = args.artifact
+        ? resolvePath(process.cwd(), args.artifact)
+        : resolvePath(process.cwd(), 'dist/objectstack.json');
 
-      if (!config || !config.manifest) {
-        printError('Invalid config: missing manifest');
+      printStep(`Loading artifact from ${artifactPath}...`);
+      let artifactRaw: string;
+      try {
+        artifactRaw = await readFile(artifactPath, 'utf-8');
+      } catch (err: any) {
+        printError(`Cannot read artifact: ${err.message}. Run \`objectstack build\` first.`);
         this.exit(1);
+        return;
       }
 
-      const manifest = config.manifest;
+      const artifact = JSON.parse(artifactRaw);
+      printSuccess(`Loaded artifact (${(artifactRaw.length / 1024).toFixed(1)} KB)`);
 
-      printSuccess(`Loaded: ${absolutePath}`);
-
-      // 2. Collect metadata
-      printStep('Collecting metadata...');
-      const metadata = {
-        objects: config.objects || [],
-        views: config.views || [],
-        apps: config.apps || [],
-        flows: config.flows || [],
-        agents: config.agents || [],
-        tools: config.tools || [],
-        translations: config.translations || [],
-      };
-
-      console.log('');
-      printKV('  Package', `${manifest.id}@${manifest.version}`);
-      printKV('  Objects', metadata.objects.length.toString());
-      printKV('  Views', metadata.views.length.toString());
-      printKV('  Apps', metadata.apps.length.toString());
-      printKV('  Flows', metadata.flows.length.toString());
-      printKV('  Agents', metadata.agents.length.toString());
-      printKV('  Tools', metadata.tools.length.toString());
-      printKV('  Translations', metadata.translations.length.toString());
-
-      // 3. Publish to server
-      const serverUrl = `${flags.server}/api/v1/packages`;
+      // 2. POST to the control-plane publish endpoint
+      const serverUrl = `${flags.server}/api/v1/cloud/projects/${flags.project}/metadata`;
       printStep(`Publishing to ${serverUrl}...`);
 
       const response = await fetch(serverUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(flags.token && { 'Authorization': `Bearer ${flags.token}` }),
+          ...(flags.token && { Authorization: `Bearer ${flags.token}` }),
         },
-        body: JSON.stringify({ manifest, metadata }),
+        body: artifactRaw,
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        printError(`Publish failed: ${error.error || response.statusText}`);
+        let errMsg: string;
+        try {
+          const errBody = await response.json() as any;
+          errMsg = errBody?.error ?? response.statusText;
+        } catch {
+          errMsg = response.statusText;
+        }
+        printError(`Publish failed (${response.status}): ${errMsg}`);
         this.exit(1);
+        return;
       }
 
-      const result = await response.json();
-      const size = (JSON.stringify(metadata).length / 1024).toFixed(2);
+      const result = await response.json() as any;
+      const data = result?.data ?? result;
 
       console.log('');
-      printSuccess(result.message);
-      printKV('  Size', `${size} KB`);
+      printSuccess('Artifact published successfully');
+      printKV('  Project', flags.project);
+      if (data?.commitId) printKV('  Commit', data.commitId);
+      if (data?.checksum?.value) printKV('  Checksum', data.checksum.value.slice(0, 16));
       printKV('  Server', flags.server);
 
     } catch (error) {

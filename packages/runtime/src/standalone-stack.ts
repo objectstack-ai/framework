@@ -96,10 +96,10 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         driverPlugin,
         new MetadataPlugin({
             watch: false,
-            environmentId: projectId,
+            projectId,
             artifactSource: { mode: 'local-file', path: artifactPath },
         }),
-        new ObjectQLPlugin({ environmentId: projectId }),
+        new ObjectQLPlugin({ projectId }),
     ];
     if (artifactBundle) plugins.push(new AppPlugin(artifactBundle));
 

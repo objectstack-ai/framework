@@ -31,8 +31,8 @@
  * speak the same protocol whether they share a process or not.
  */
 
-import { readFile } from 'node:fs/promises';
-import { resolve as resolvePath, isAbsolute } from 'node:path';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve as resolvePath, isAbsolute, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { IHttpServer } from '@objectstack/spec/contracts';
 import type { IDataDriver } from '@objectstack/spec/contracts';
@@ -302,6 +302,58 @@ export function createCloudArtifactApiPlugin(options: CloudArtifactApiPluginOpti
                     runtime,
                 };
                 return res.json(ok(envelope));
+            });
+
+            // ---- POST /cloud/projects/:id/metadata --------------------------------
+            // Receives a compiled artifact (objectstack compile output) and stores
+            // it on the project row so the GET /artifact endpoint can serve it.
+            server.post(`${prefix}/cloud/projects/:id/metadata`, async (req: any, res: any) => {
+                const auth = checkAuth(req);
+                if (!auth.ok) return res.status(auth.status).json(auth.body);
+                const projectId = String(req.params?.id ?? '').trim();
+                if (!projectId) return res.status(400).json({ success: false, error: 'project id required' });
+
+                const driver = await getDriver();
+                if (!driver) return res.status(503).json({ success: false, error: 'control plane unavailable' });
+
+                const project = (await (driver.findOne as any)('sys_project', { where: { id: projectId } })) as SysProjectRow | null;
+                if (!project) return res.status(404).json({ success: false, error: `Project '${projectId}' not found` });
+
+                // Accept the raw artifact body (output of `objectstack compile`).
+                const body = req.body ?? {};
+                if (typeof body !== 'object' || Array.isArray(body)) {
+                    return res.status(400).json({ success: false, error: 'Request body must be a JSON object' });
+                }
+
+                // Persist the artifact as a file under artifactRoot/<projectId>/artifact.json
+                // and update sys_project.metadata.artifact_path so GET /artifact can find it.
+                const artifactDir = resolvePath(artifactRoot, projectId);
+                const artifactFile = resolvePath(artifactDir, 'artifact.json');
+
+                try {
+                    await mkdir(artifactDir, { recursive: true });
+                    await writeFile(artifactFile, JSON.stringify(body, null, 2), 'utf-8');
+                } catch (err: any) {
+                    console.error('[CloudArtifactAPI] Failed to write artifact:', err?.message ?? err);
+                    return res.status(500).json({ success: false, error: 'Failed to persist artifact' });
+                }
+
+                // Update the project row's metadata to point at the new file.
+                const existingMeta = parseMetadata(project.metadata);
+                const updatedMeta = { ...existingMeta, artifact_path: artifactFile };
+                try {
+                    await (driver.update as any)('sys_project', { id: projectId }, { metadata: JSON.stringify(updatedMeta) });
+                } catch (err: any) {
+                    console.error('[CloudArtifactAPI] Failed to update project metadata:', err?.message ?? err);
+                    // Non-fatal — artifact file is already written; GET /artifact will work next boot.
+                }
+
+                // Compute commitId / checksum for the response.
+                const bodyStr = JSON.stringify(body);
+                const commitId = (body as any).commitId ?? sha256Hex(bodyStr).slice(0, 16);
+                const checksum = (body as any).checksum ?? { algorithm: 'sha256', value: sha256Hex(bodyStr) };
+
+                return res.json(ok({ projectId, commitId, checksum }));
             });
         },
         stop: async (_ctx: AnyContext) => {},

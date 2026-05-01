@@ -134,13 +134,13 @@ export class MetadataManager implements IMetadataService {
    *
    * @param driver - An IDataDriver instance for database operations
    * @param organizationId - Organization ID for multi-tenant isolation
-   * @param environmentId - Environment ID (undefined = platform-global)
+   * @param projectId - Project ID (undefined = platform-global)
    */
-  setDatabaseDriver(driver: IDataDriver, organizationId?: string, environmentId?: string): void {
-    if (environmentId !== undefined) {
+  setDatabaseDriver(driver: IDataDriver, organizationId?: string, projectId?: string): void {
+    if (projectId !== undefined) {
       this.logger.info('Project kernel — skipping DatabaseLoader for sys_metadata (control-plane only)', {
         organizationId,
-        environmentId,
+        projectId,
       });
       return;
     }
@@ -149,7 +149,7 @@ export class MetadataManager implements IMetadataService {
       driver,
       tableName,
       organizationId,
-      environmentId,
+      projectId,
     });
     this.registerLoader(dbLoader);
     this.logger.info('DatabaseLoader configured', { datasource: this.config.datasource, tableName });
@@ -163,13 +163,13 @@ export class MetadataManager implements IMetadataService {
    *
    * @param engine - An IDataEngine instance (typically the ObjectQL service)
    * @param organizationId - Organization ID for multi-tenant isolation
-   * @param environmentId - Environment ID (undefined = platform-global)
+   * @param projectId - Project ID (undefined = platform-global)
    */
-  setDataEngine(engine: IDataEngine, organizationId?: string, environmentId?: string): void {
-    if (environmentId !== undefined) {
+  setDataEngine(engine: IDataEngine, organizationId?: string, projectId?: string): void {
+    if (projectId !== undefined) {
       this.logger.info('Project kernel — skipping DatabaseLoader for sys_metadata (control-plane only)', {
         organizationId,
-        environmentId,
+        projectId,
       });
       return;
     }
@@ -178,7 +178,7 @@ export class MetadataManager implements IMetadataService {
       engine,
       tableName,
       organizationId,
-      environmentId,
+      projectId,
     });
     this.registerLoader(dbLoader);
     this.logger.info('DatabaseLoader configured via DataEngine', { tableName });

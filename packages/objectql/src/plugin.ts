@@ -29,11 +29,11 @@ function hasLoadMetaFromDb(service: unknown): service is ProtocolWithDbRestore {
 /**
  * Options for ObjectQLPlugin.
  *
- * `environmentId` scopes all metadata writes + reads to a specific project.
- * When set, `protocol.saveMetaItem` stamps `env_id = <environmentId>` on
+ * `projectId` scopes all metadata writes + reads to a specific project.
+ * When set, `protocol.saveMetaItem` stamps `project_id = <projectId>` on
  * new sys_metadata rows, and `protocol.loadMetaFromDb` filters by the same
  * column. Leave undefined in single-kernel / self-hosted mode — rows land
- * in the legacy platform-global scope (env_id IS NULL).
+ * in the platform-global scope (project_id IS NULL).
  */
 export interface ObjectQLPluginOptions {
   /** Optional pre-built engine. When absent, one is lazily created in init. */
@@ -41,7 +41,7 @@ export interface ObjectQLPluginOptions {
   /** Passed to `new ObjectQL(...)` when `ql` is not supplied. */
   hostContext?: Record<string, any>;
   /** Scope sys_metadata reads/writes to this project. */
-  environmentId?: string;
+  projectId?: string;
 }
 
 export class ObjectQLPlugin implements Plugin {
@@ -51,7 +51,7 @@ export class ObjectQLPlugin implements Plugin {
 
   private ql: ObjectQL | undefined;
   private hostContext?: Record<string, any>;
-  private environmentId?: string;
+  private projectId?: string;
 
   constructor(qlOrOptions?: ObjectQL | ObjectQLPluginOptions, hostContext?: Record<string, any>) {
     // Back-compat: legacy callers passed `(ObjectQL, hostContext)` positionally.
@@ -66,7 +66,7 @@ export class ObjectQLPlugin implements Plugin {
       this.ql = opts.ql;
     }
     this.hostContext = opts.hostContext ?? hostContext;
-    this.environmentId = opts.environmentId;
+    this.projectId = opts.projectId;
   }
 
   init = async (ctx: PluginContext) => {
@@ -103,7 +103,7 @@ export class ObjectQLPlugin implements Plugin {
       this.ql,
       () => ctx.getServices ? ctx.getServices() : new Map(),
       undefined,
-      this.environmentId,
+      this.projectId,
     );
 
     ctx.registerService('protocol', protocolShim);
@@ -166,11 +166,11 @@ export class ObjectQLPlugin implements Plugin {
     await this.syncRegisteredSchemas(ctx);
 
     // Phase 2: Hydrate SchemaRegistry from sys_metadata (loads custom/template objects).
-    // Project kernels (environmentId set) never persist sys_metadata locally —
+    // Project kernels (projectId set) never persist sys_metadata locally —
     // metadata is sourced from the artifact (MetadataPlugin) or routed to the
     // control plane via ControlPlaneProxyDriver. Skip to avoid querying a table
     // that does not exist on local project DBs.
-    if (this.environmentId === undefined) {
+    if (this.projectId === undefined) {
         await this.restoreMetadataFromDb(ctx);
     } else {
         ctx.logger.info('Project kernel — skipping sys_metadata hydration (metadata sourced from artifact)');
@@ -185,12 +185,12 @@ export class ObjectQLPlugin implements Plugin {
     // `SchemaRegistry` is a process-wide singleton, so project kernels in a
     // multi-project server would otherwise inherit every object ever
     // registered by any sibling project. When this plugin was constructed
-    // with an `environmentId`, the kernel is project-scoped — its
+    // with a `projectId`, the kernel is project-scoped — its
     // metadata comes from the artifact (MetadataPlugin) or the
     // control-plane proxy, not from local sys_metadata. The bridge would
     // only pollute its metadata service with cross-project leakage, so
     // skip it in that case.
-    if (this.environmentId === undefined) {
+    if (this.projectId === undefined) {
         await this.bridgeObjectsToMetadataService(ctx);
     }
 

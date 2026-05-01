@@ -77,10 +77,10 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
         const kernel = new ObjectKernel(this.kernelConfig);
 
         await kernel.use(new DriverPlugin(driver));
-        await kernel.use(new ObjectQLPlugin({ environmentId: projectId }));
+        await kernel.use(new ObjectQLPlugin({ projectId: projectId }));
         await kernel.use(new MetadataPlugin({
             watch: false,
-            environmentId: projectId,
+            projectId: projectId,
             organizationId: project.organization_id,
             registerSystemObjects: false,
         }));

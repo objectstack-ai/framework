@@ -154,10 +154,10 @@ export async function createRuntimeStack(config?: RuntimeStackConfig): Promise<R
             }
 
             const plugins: any[] = [
-                new ObjectQLPlugin({ environmentId: pid }),
+                new ObjectQLPlugin({ projectId: pid }),
                 new MetadataPlugin({
                     watch: false,
-                    environmentId: pid,
+                    projectId: pid,
                     artifactSource: { mode: 'local-file', path: artifactPath },
                     registerSystemObjects: false,
                 }),

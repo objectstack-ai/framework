@@ -342,27 +342,27 @@ describe('DatabaseLoader', () => {
   });
 
   describe('multi-tenant isolation', () => {
-    it('should filter by organizationId and environmentId when configured', async () => {
+    it('should filter by organizationId and projectId when configured', async () => {
       const tenantLoader = new DatabaseLoader({
         driver: mockDriver,
         organizationId: 'org-1',
-        environmentId: 'env-1',
+        projectId: 'env-1',
       });
 
       await tenantLoader.save('object', 'account', { name: 'account' });
 
-      // The create call should include organization_id and env_id
+      // The create call should include organization_id and project_id
       expect(mockDriver.create).toHaveBeenCalledWith(
         'sys_metadata',
-        expect.objectContaining({ organization_id: 'org-1', env_id: 'env-1' })
+        expect.objectContaining({ organization_id: 'org-1', project_id: 'env-1' })
       );
 
-      // The find calls should filter by organization_id and env_id
+      // The find calls should filter by organization_id and project_id
       await tenantLoader.load('object', 'account');
       expect(mockDriver.findOne).toHaveBeenCalledWith(
         'sys_metadata',
         expect.objectContaining({
-          where: expect.objectContaining({ organization_id: 'org-1', env_id: 'env-1' }),
+          where: expect.objectContaining({ organization_id: 'org-1', project_id: 'env-1' }),
         })
       );
     });

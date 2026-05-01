@@ -64,7 +64,7 @@ export class HistoryCleanupManager {
     const driver = (this.dbLoader as any).driver as IDataDriver;
     const historyTableName = (this.dbLoader as any).historyTableName as string;
     const organizationId = (this.dbLoader as any).organizationId as string | undefined;
-    const environmentId = (this.dbLoader as any).environmentId as string | undefined;
+    const projectId = (this.dbLoader as any).projectId as string | undefined;
 
     let deleted = 0;
     let errors = 0;
@@ -83,8 +83,8 @@ export class HistoryCleanupManager {
         if (organizationId) {
           filter.organization_id = organizationId;
         }
-        if (environmentId !== undefined) {
-          filter.env_id = environmentId;
+        if (projectId !== undefined) {
+          filter.project_id = projectId;
         }
 
         try {
@@ -102,7 +102,7 @@ export class HistoryCleanupManager {
           // Get all unique metadata IDs
           const baseWhere: Record<string, unknown> = {};
           if (organizationId) baseWhere.organization_id = organizationId;
-          if (environmentId !== undefined) baseWhere.env_id = environmentId;
+          if (projectId !== undefined) baseWhere.project_id = projectId;
 
           const metadataIds = await driver.find(historyTableName, {
             object: historyTableName,
@@ -218,7 +218,7 @@ export class HistoryCleanupManager {
     const driver = (this.dbLoader as any).driver as IDataDriver;
     const historyTableName = (this.dbLoader as any).historyTableName as string;
     const organizationId = (this.dbLoader as any).organizationId as string | undefined;
-    const environmentId = (this.dbLoader as any).environmentId as string | undefined;
+    const projectId = (this.dbLoader as any).projectId as string | undefined;
 
     let recordsByAge = 0;
     let recordsByCount = 0;
@@ -226,7 +226,7 @@ export class HistoryCleanupManager {
     try {
       const baseWhere: Record<string, unknown> = {};
       if (organizationId) baseWhere.organization_id = organizationId;
-      if (environmentId !== undefined) baseWhere.env_id = environmentId;
+      if (projectId !== undefined) baseWhere.project_id = projectId;
 
       // Count records that would be deleted by age
       if (this.policy.maxAgeDays) {

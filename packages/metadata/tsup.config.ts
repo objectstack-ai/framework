@@ -6,6 +6,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/node.ts',
+    'src/migrations/migrate-env-id-to-project-id.ts',
   ],
   splitting: false,
   sourcemap: true,

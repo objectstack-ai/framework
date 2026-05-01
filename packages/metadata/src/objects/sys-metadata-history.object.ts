@@ -113,13 +113,13 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
       description: 'Organization identifier for multi-tenant isolation.',
     }),
 
-    /** Environment ID — null = platform-global, set = env-scoped */
-    env_id: Field.text({
-      label: 'Environment ID',
+    /** Project ID — null = platform-global, set = project-scoped */
+    project_id: Field.text({
+      label: 'Project ID',
       required: false,
       readonly: true,
       maxLength: 255,
-      description: 'Scopes this history entry to a specific environment.',
+      description: 'Scopes this history entry to a specific project.',
     }),
 
     /** User who made this change */
@@ -145,7 +145,7 @@ export const SysMetadataHistoryObject = ObjectSchema.create({
     { fields: ['recorded_at'] },
     { fields: ['operation_type'] },
     { fields: ['organization_id'] },
-    { fields: ['env_id'] },
+    { fields: ['project_id'] },
   ],
 
   enable: {

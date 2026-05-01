@@ -794,13 +794,13 @@ export class HttpDispatcher {
                     // the process-wide SchemaRegistry is unsafe to query
                     // directly — it would return objects that other projects
                     // wrote in this same process. Route through the Protocol
-                    // service (which filters sys_metadata by env_id) in that
+                    // service (which filters sys_metadata by project_id) in that
                     // case, and fall back to the registry only for the
                     // unscoped (single-kernel / control-plane) path.
                     const protocol = await this.resolveService('protocol') as any;
-                    const scopedEnv = typeof protocol?.getEnvironmentId === 'function'
-                        ? protocol.getEnvironmentId()
-                        : protocol?.environmentId;
+                    const scopedEnv = typeof protocol?.getProjectId === 'function'
+                        ? protocol.getProjectId()
+                        : protocol?.projectId;
                     const scoped = scopedEnv !== undefined;
 
                     if (scoped && typeof protocol.getMetaItem === 'function') {
