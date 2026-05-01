@@ -119,15 +119,15 @@ Anchors:
 - [packages/plugins/plugin-security/src/manifest.ts](packages/plugins/plugin-security/src/manifest.ts)
 - [packages/services/service-tenant/src/manifest.ts](packages/services/service-tenant/src/manifest.ts)
 
-### D8 - `apps/server` is a hybrid (Control Plane + ObjectOS in one process)
+### D8 - `apps/objectos` is a hybrid (Control Plane + ObjectOS in one process)
 
-[apps/server/objectstack.config.ts](apps/server/objectstack.config.ts) currently registers control-plane and ObjectOS concerns on the same `ObjectKernel`. North-star §5 names these as two separate vertices; implementation should follow.
+[apps/objectos/objectstack.config.ts](apps/objectos/objectstack.config.ts) currently registers control-plane and ObjectOS concerns on the same `ObjectKernel`. North-star §5 names these as two separate vertices; implementation should follow.
 
-**Decision:** split into **`apps/cloud`** (Control Plane Server) and **`apps/server`** (ObjectOS Runtime). Both are ObjectStack-framework apps booted from their own `objectstack.config.ts`. They share the same `ObjectKernel`, spec, and adapter stack. They differ only in their plugin manifest.
+**Decision:** split into **`apps/cloud`** (Control Plane Server) and **`apps/objectos`** (ObjectOS Runtime). Both are ObjectStack-framework apps booted from their own `objectstack.config.ts`. They share the same `ObjectKernel`, spec, and adapter stack. They differ only in their plugin manifest.
 
 **Plugin partition:**
 
-| Plugin | `apps/cloud` (Control Plane) | `apps/server` (ObjectOS) |
+| Plugin | `apps/cloud` (Control Plane) | `apps/objectos` (ObjectOS) |
 |:---|:---:|:---:|
 | `createControlPlanePlugins(...)` (ObjectQL on control DB + driver + system-project + sys_* metadata) | Yes | - |
 | `MultiProjectPlugin` (`env-registry`, `kernel-manager`, `template-seeder`) | Yes | - |
@@ -142,10 +142,10 @@ Anchors:
 
 **Fix path:**
 1. Create `apps/cloud/` with its own `objectstack.config.ts` carrying the Control Plane manifest above.
-2. Strip control-plane plugins out of [apps/server/objectstack.config.ts](apps/server/objectstack.config.ts); reduce it to the ObjectOS manifest.
+2. Strip control-plane plugins out of [apps/objectos/objectstack.config.ts](apps/objectos/objectstack.config.ts); reduce it to the ObjectOS manifest.
 3. Decide deployment topology (separate Vercel projects vs. one repo / two entrypoints).
 
-**Depends on:** M3, M4. Until ObjectOS can boot from Artifact API, `apps/server` cannot run standalone.
+**Depends on:** M3, M4. Until ObjectOS can boot from Artifact API, `apps/objectos` cannot run standalone.
 
 ---
 
@@ -173,7 +173,7 @@ Tests: [packages/spec/src/system/project-artifact.test.ts](packages/spec/src/sys
 - [x] north-star.mdx §6.3 增补 Runtime Inputs 节（含本地单 project env 表 + 反模式说明）
 - [x] 实现本地 standalone / cloud env 路径：`OBJECTSTACK_MODE` (旧 `OBJECTSTACK_MULTI_PROJECT`) / `OBJECTSTACK_PROJECT_ID` / `OBJECTSTACK_DATABASE_URL` / `OBJECTSTACK_DATABASE_DRIVER` / `OBJECTSTACK_ARTIFACT_PATH`（默认 `./dist/objectstack.json`）/ `AUTH_SECRET`
 - [x] 修复 Drift：`ProjectKernelFactory` 不再直连控制面 DB 读 `sys_project` / `sys_project_credential`，改走 Artifact API + Deployment Config 注入（`localProject` 分支）
-- [x] [apps/server/objectstack.config.ts](apps/server/objectstack.config.ts) 的 env 命名收敛到 `OBJECTSTACK_*` 前缀，`isLocalMode` 分流本地/云端路径
+- [x] [apps/objectos/objectstack.config.ts](apps/objectos/objectstack.config.ts) 的 env 命名收敛到 `OBJECTSTACK_*` 前缀，`isLocalMode` 分流本地/云端路径
 
 **Resolves:** Open Question §9.2（已解决）+ 新增 Drift（`ProjectKernelFactory` 绕过 Artifact API）。
 
@@ -294,7 +294,7 @@ M1 Artifact format v0
 M7 objectstack dev offline boot  (parallel after M1)
 M8 UI auto-generation            (long tail after artifact schema stabilizes)
 D3 remove env_id                 (after M2 ownership columns exist)
-D8 split apps/cloud + apps/server(after M3/M4 make ObjectOS standalone)
+D8 split apps/cloud + apps/objectos(after M3/M4 make ObjectOS standalone)
 ```
 
 ---

@@ -189,7 +189,7 @@ os doctor         # Check environment health
 | :--- | :--- | :--- |
 | [`@example/app-todo`](examples/app-todo) | Task management app — objects, views, dashboards, flows | Beginner |
 | [`@example/app-crm`](examples/app-crm) | Enterprise CRM — accounts, contacts, opportunities, leads | Intermediate |
-| [`@objectstack/server`](apps/server) | Production server — multi-app orchestration with plugins | Advanced |
+| [`@objectstack/objectos`](apps/objectos) | ObjectOS Runtime — multi-app orchestration with plugins | Advanced |
 
 ## Codebase Metrics
 
