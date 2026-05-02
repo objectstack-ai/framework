@@ -1,6 +1,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { defineStack } from '@objectstack/spec';
+import {
+  AutomationServicePlugin,
+  ScreenNodesPlugin,
+  CrudNodesPlugin,
+  LogicNodesPlugin,
+  HttpConnectorPlugin,
+} from '@objectstack/service-automation';
 
 // ─── Barrel Imports (one per metadata type) ─────────────────────────
 import * as objects from './src/objects';
@@ -47,6 +54,17 @@ export default defineStack({
     name: 'Enterprise CRM',
     description: 'Comprehensive enterprise CRM demonstrating all ObjectStack Protocol features including AI, security, and automation',
   },
+
+  // Runtime plugins — register the AutomationEngine and its node executors so
+  // server-side flows (e.g. `lead_conversion`) can run end-to-end. CLI serve
+  // does NOT auto-register automation; it must be opted-in here.
+  plugins: [
+    new AutomationServicePlugin(),
+    new CrudNodesPlugin(),
+    new LogicNodesPlugin(),
+    new HttpConnectorPlugin(),
+    new ScreenNodesPlugin(),
+  ],
 
   // Auto-collected from barrel index files via Object.values()
   objects: Object.values(objects),

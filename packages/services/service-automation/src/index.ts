@@ -12,3 +12,4 @@ export type { AutomationServicePluginOptions } from './plugin.js';
 export { CrudNodesPlugin } from './plugins/crud-nodes-plugin.js';
 export { LogicNodesPlugin } from './plugins/logic-nodes-plugin.js';
 export { HttpConnectorPlugin } from './plugins/http-connector-plugin.js';
+export { ScreenNodesPlugin } from './plugins/screen-nodes-plugin.js';
