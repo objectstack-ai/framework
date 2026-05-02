@@ -25,25 +25,31 @@ export const OpportunityApprovalFlow: Flow = {
     },
     {
       id: 'approval_step_manager', type: 'connector_action', label: 'Sales Manager Approval',
-      config: {
-        actionType: 'approval',
-        approver: '{oppRecord.owner.manager}',
-        emailTemplate: 'opportunity_approval_request',
-        comments: 'required',
+      connectorConfig: {
+        connectorId: 'approval',
+        actionId: 'request_approval',
+        input: {
+          approver: '{oppRecord.owner.manager}',
+          emailTemplate: 'opportunity_approval_request',
+          comments: 'required',
+        },
       },
-    },
+    } as any,
     {
       id: 'decision_manager', type: 'decision', label: 'Manager Approved?',
       config: { condition: '{approval_step_manager.result} == "approved"' },
     },
     {
       id: 'approval_step_director', type: 'connector_action', label: 'Sales Director Approval',
-      config: {
-        actionType: 'approval',
-        approver: '{oppRecord.owner.manager.manager}',
-        emailTemplate: 'opportunity_approval_request',
+      connectorConfig: {
+        connectorId: 'approval',
+        actionId: 'request_approval',
+        input: {
+          approver: '{oppRecord.owner.manager.manager}',
+          emailTemplate: 'opportunity_approval_request',
+        },
       },
-    },
+    } as any,
     {
       id: 'decision_director', type: 'decision', label: 'Director Approved?',
       config: { condition: '{approval_step_director.result} == "approved"' },
