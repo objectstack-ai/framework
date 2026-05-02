@@ -255,10 +255,22 @@ export default class Serve extends Command {
       }
 
       // 3. Auto-register AppPlugin if config contains app definitions
-      // Skip if config is a host/aggregator config that already contains
-      // instantiated plugins — wrapping it would cause duplicate registration
-      // and startup failures (e.g. plugin.app.dev-workspace).
-      if (!isHostConfig(config) && (config.objects || config.manifest || config.apps)) {
+      // (objects / manifest / apps / flows / apis). Even host/aggregator
+      // configs (those whose `plugins` array contains instantiated plugins)
+      // need this wrap when they ALSO carry top-level metadata — otherwise
+      // top-level `flows`, `objects`, etc. never reach the ObjectQL registry
+      // and downstream services like AutomationServicePlugin start with 0 flows.
+      //
+      // To avoid double-registration when the host already wraps itself with
+      // an AppPlugin (e.g. apps/objectos's dev-workspace stack), we skip if
+      // any plugin in `plugins[]` is already an AppPlugin instance.
+      const hasAppPluginAlready = plugins.some(
+        (p: any) => p && (p.type === 'app' || p.constructor?.name === 'AppPlugin' || (p.name && typeof p.name === 'string' && p.name.startsWith('plugin.app.')))
+      );
+      const configHasMetadata = !!(
+        config.objects || config.manifest || config.apps || config.flows || config.apis
+      );
+      if (!hasAppPluginAlready && configHasMetadata) {
         try {
             const { AppPlugin } = await import('@objectstack/runtime');
             await kernel.use(new AppPlugin(config));

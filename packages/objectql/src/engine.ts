@@ -374,6 +374,7 @@ export class ObjectQL implements IDataEngine {
       const id = manifest.id || manifest.name;
       const namespace = manifest.namespace as string | undefined;
       this.logger.debug('Registering package manifest', { id, namespace });
+      console.warn(`[ObjectQL:registerApp] id=${id} flows=${Array.isArray(manifest.flows) ? manifest.flows.length : typeof manifest.flows} keys=${Object.keys(manifest).join(',')}`);
 
       // Store manifest for defaultDatasource lookup
       if (id) {

@@ -88,8 +88,11 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         artifactBundle = (parsed?.schemaVersion != null && parsed?.metadata !== undefined)
             ? parsed.metadata
             : parsed;
-    } catch {
-        // No artifact yet — AppPlugin skipped.
+        console.warn(
+            `[StandaloneStack] artifact loaded: path=${artifactPath} keys=${artifactBundle ? Object.keys(artifactBundle).join(',') : '(null)'} flows=${Array.isArray(artifactBundle?.flows) ? artifactBundle.flows.length : 'n/a'}`,
+        );
+    } catch (err: any) {
+        console.warn(`[StandaloneStack] artifact load FAILED: path=${artifactPath} error=${err?.message}`);
     }
 
     const plugins: any[] = [

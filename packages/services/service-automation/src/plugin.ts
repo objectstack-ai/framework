@@ -68,7 +68,11 @@ export class AutomationServicePlugin implements Plugin {
     }
 
     async start(ctx: PluginContext): Promise<void> {
-        if (!this.engine) return;
+        console.warn('[Automation:start] entering start()');
+        if (!this.engine) {
+            console.warn('[Automation:start] engine missing, bailing');
+            return;
+        }
 
         // Trigger hook to notify engine is ready — other plugins can start registering nodes
         await ctx.trigger('automation:ready', this.engine);
@@ -87,14 +91,14 @@ export class AutomationServicePlugin implements Plugin {
                 registry?: { listItems?: (type: string) => unknown[] };
             }>('objectql');
             if (!ql) {
-                ctx.logger.warn('[Automation] objectql service not found at start()');
+                console.warn('[Automation] objectql service not found at start()');
             } else if (!ql.registry) {
-                ctx.logger.warn('[Automation] objectql.registry is undefined at start()');
+                console.warn('[Automation] objectql.registry is undefined at start()');
             } else if (typeof ql.registry.listItems !== 'function') {
-                ctx.logger.warn('[Automation] objectql.registry.listItems is not a function');
+                console.warn('[Automation] objectql.registry.listItems is not a function');
             }
             const flows = ql?.registry?.listItems?.('flow') ?? [];
-            ctx.logger.warn(`[Automation] flow pull: registry returned ${flows.length} flow(s)`);
+            console.warn(`[Automation] flow pull: registry returned ${flows.length} flow(s)`);
             let registered = 0;
             for (const f of flows) {
                 const def = f as { name?: string };

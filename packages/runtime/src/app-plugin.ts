@@ -65,6 +65,10 @@ export class AppPlugin implements Plugin {
             ? { ...this.bundle.manifest, ...this.bundle }
             : this.bundle;
 
+        console.warn(
+            `[AppPlugin:init] appId=${appId} keys=${Object.keys(servicePayload).join(',')} flows=${Array.isArray((servicePayload as any).flows) ? (servicePayload as any).flows.length : 'n/a'}`,
+        );
+
         ctx.getService<{ register(m: any): void }>('manifest').register(servicePayload);
     }
 
