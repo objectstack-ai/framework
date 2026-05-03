@@ -67,7 +67,7 @@
     "@objectstack/service-i18n": "workspace:*",
     "@types/node": "^25.6.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.5"
   },
   "keywords": [
     "objectstack",
