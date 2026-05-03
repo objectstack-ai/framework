@@ -11,7 +11,7 @@ export const EscalateCaseAction: Action = {
   type: 'modal',
   target: 'escalate_case_modal',
   locations: ['record_header', 'list_item'],
-  visible: 'is_escalated = false AND is_closed = false',
+  visible: 'is_escalated == false AND is_closed == false',
   params: [
     {
       name: 'reason',
@@ -34,7 +34,7 @@ export const CloseCaseAction: Action = {
   type: 'modal',
   target: 'close_case_modal',
   locations: ['record_header'],
-  visible: 'is_closed = false',
+  visible: 'is_closed == false',
   params: [
     {
       name: 'resolution',

@@ -1,0 +1,193 @@
+---
+title: Formula Expressions
+description: Salesforce-style formula language for computed fields and flow conditions
+---
+
+# Formula Expressions
+
+ObjectStack ships a small, **safe** formula language used in three places:
+
+1. **Computed fields** — `type: 'formula'` fields whose `formula` property is
+   evaluated on read.
+2. **Flow decision conditions** — the `expression` of a `decision` node's
+   `conditions[]`.
+3. **`visible_on` / `required_on` field rules** — UI-time conditional logic.
+
+The evaluator lives in `@objectstack/objectql` (`packages/objectql/src/formula.ts`).
+No `eval` / `Function` is used — formulas are tokenised, parsed into a tiny
+AST, and walked by an interpreter, so untrusted strings are safe to evaluate.
+
+---
+
+## Quick example
+
+```typescript
+import { defineObject } from '@objectstack/spec';
+
+export const order = defineObject({
+  name: 'order',
+  label: 'Order',
+  fields: [
+    { name: 'subtotal', type: 'currency' },
+    { name: 'tax_rate', type: 'percent' },
+    {
+      name: 'total',
+      label: 'Total',
+      type: 'formula',
+      formula: 'subtotal + (subtotal * tax_rate)',
+      result_type: 'currency',
+    },
+    {
+      name: 'is_high_value',
+      label: 'High Value?',
+      type: 'formula',
+      formula: 'IF(total >= 10000, "Yes", "No")',
+      result_type: 'text',
+    },
+  ],
+});
+```
+
+---
+
+## Syntax
+
+### Field references
+
+Bareword identifiers reference fields on the current record. Dotted paths
+walk relationship lookups:
+
+```
+account_name                  // top-level field
+owner.email                   // master-detail / lookup nav
+account.owner.organization.label
+```
+
+### Literals
+
+| Kind | Example |
+|:---|:---|
+| Number | `42`, `3.14`, `.5` |
+| String | `"hello"`, `'world'`, `"escape \"this\""` |
+| Boolean | `TRUE`, `FALSE` (case-insensitive) |
+| Null    | `NULL` (treated as empty string in concat, `0` in math) |
+
+### Operators
+
+| Category | Operators | Notes |
+|:---|:---|:---|
+| Arithmetic | `+`  `-`  `*`  `/` | `+` becomes string-concat if either operand is a string |
+| Comparison | `=`  `==`  `!=`  `<>`  `<`  `>`  `<=`  `>=` | `=` and `==` are equivalent; `!=` and `<>` are equivalent |
+| Unary      | `-`  `+` | |
+| Grouping   | `( … )` | Standard precedence: unary > `*` `/` > `+` `-` > comparison |
+
+### Function calls
+
+Function names are case-insensitive. Arguments are comma-separated.
+
+---
+
+## Built-in functions
+
+### Text
+
+| Function | Description |
+|:---|:---|
+| `CONCAT(a, b, …)` | Concatenate values as strings (alias: `CONCATENATE`) |
+| `UPPER(s)` | Uppercase |
+| `LOWER(s)` | Lowercase |
+| `TEXT(v)` | Coerce to string |
+| `LEN(s)` | String length |
+
+### Math
+
+| Function | Description |
+|:---|:---|
+| `SUM(a, b, …)` | Sum (numeric coercion) |
+| `AVERAGE(a, b, …)` | Mean |
+| `ROUND(n, digits?)` | Round to `digits` places (default `0`) |
+| `CEILING(n)` | Round up |
+| `FLOOR(n)` | Round down |
+
+### Date
+
+| Function | Description |
+|:---|:---|
+| `TODAY()` | Today at 00:00 local |
+| `NOW()` | Current `Date` |
+| `YEAR(d)` | Year of date |
+| `MONTH(d)` | 1–12 |
+| `DAY(d)` | Day of month |
+| `ADDDAYS(d, n)` | Add `n` days |
+
+### Logical
+
+| Function | Description |
+|:---|:---|
+| `IF(cond, then, else)` | Branch (both branches are evaluated — see "Strict eval" below) |
+| `AND(a, b, …)` | All truthy |
+| `OR(a, b, …)` | Any truthy |
+| `NOT(v)` | Logical negation |
+| `ISBLANK(v)` | `true` if undefined / null / `''` |
+
+> **Strict eval.** All function arguments are evaluated eagerly. `IF` does
+> *not* short-circuit, so make sure both branches are safe to compute against
+> the current record (e.g. don't divide by a possibly-zero field in the
+> "else" branch — wrap it in another `IF`).
+
+---
+
+## Coercion rules
+
+| Source | Number | String | Boolean |
+|:---|:---|:---|:---|
+| `undefined` / `null` / `''` | `0` | `''` | `false` |
+| `number` | as-is | `String(n)` | `n !== 0` |
+| `boolean` | `1` / `0` | `'true'` / `'false'` | as-is |
+| `string` | `Number(s)` (or `0` if NaN) | as-is | `s !== ''` |
+
+`+` is the only "polymorphic" operator: if either operand is a string the
+result is a string, otherwise both sides are coerced to numbers. All other
+arithmetic operators force numeric coercion.
+
+---
+
+## Programmatic API
+
+```typescript
+import { compileFormula, evaluateFormula } from '@objectstack/objectql/formula';
+
+// One-shot
+evaluateFormula('subtotal + tax', { subtotal: 100, tax: 8 }); // => 108
+
+// Pre-compile (cached) for hot paths — also exposes the dependency list,
+// which the field engine uses to invalidate computed-field caches when
+// upstream fields change.
+const compiled = compileFormula('IF(total >= 10000, "VIP", "Std")');
+compiled.dependencies; // => ['total']
+```
+
+`evaluateFormula` returns `undefined` on parse / runtime error rather than
+throwing, so a malformed formula in one row never crashes the rest of the
+query.
+
+---
+
+## Limitations & non-goals
+
+- No user-defined functions. Add new helpers by extending the `FUNCTIONS`
+  map in `packages/objectql/src/formula.ts`; keep them pure and synchronous.
+- No async / IO. Use a flow `script` node when you need network calls or
+  cross-record aggregation.
+- No regex / string slicing helpers yet (`MID`, `LEFT`, `RIGHT`, `SUBSTITUTE`
+  are on the roadmap — track them in `packages/spec/docs/formula-functions.md`).
+- No locale-aware date/number formatting — `TEXT(d)` returns the raw `Date`
+  string. Use the i18n service for presentation.
+
+---
+
+## Related
+
+- [Field Metadata](./metadata/field) — declaring `type: 'formula'` fields
+- [Flow Metadata](./metadata/flow) — `decision` nodes consume the same expression syntax
+- `packages/spec/docs/formula-functions.md` — canonical function library reference

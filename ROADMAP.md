@@ -49,6 +49,12 @@ Code that exists and matches the intended architecture. Do not regress these.
 | JSON-payload metadata column (`sys_metadata.metadata` textarea) | [packages/metadata/src/objects/sys-metadata.object.ts](packages/metadata/src/objects/sys-metadata.object.ts) |
 | CLI `publish` - local JSON -> remote server wire (endpoint shape still wrong, see D2) | [packages/cli/src/commands/publish.ts](packages/cli/src/commands/publish.ts) |
 | **M1** Project Artifact envelope schema (`schemaVersion / projectId / commitId / checksum / metadata / functions / manifest`) | [packages/spec/src/system/project-artifact.zod.ts](packages/spec/src/system/project-artifact.zod.ts) |
+| **M3 / M4** Cloud Artifact API + runtime loader (`/cloud/resolve-hostname`, `/cloud/projects/:id/artifact`, `/cloud/projects/:id/metadata` + `ArtifactKernelFactory`) | [packages/services/service-cloud/src/cloud-artifact-api-plugin.ts](packages/services/service-cloud/src/cloud-artifact-api-plugin.ts) |
+| Single-project boot mode (`OS_MODE=standalone`) — `createSingleProjectPlugin` seeds local org/project + serves `studio/runtime-config` | [packages/services/service-cloud/src/single-project-plugin.ts](packages/services/service-cloud/src/single-project-plugin.ts) |
+| Static Setup App (no runtime `SetupPlugin`) — fixed `App` artifact registered by `plugin-auth` | [packages/platform-objects/src/apps/setup.app.ts](packages/platform-objects/src/apps/setup.app.ts) |
+| Formula expression evaluator (text / math / date / logical) | [packages/objectql/src/formula.ts](packages/objectql/src/formula.ts) |
+| Studio Flow Viewer + Flow Test Runner + Flow Runs panel | [apps/studio/src/components/FlowViewer.tsx](apps/studio/src/components/FlowViewer.tsx) |
+| Automation: flow auto-discovery from ObjectQL registry | [packages/services/service-automation/src/plugin.ts](packages/services/service-automation/src/plugin.ts) |
 | **D1** ObjectOS metadata DB bridge removed - `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` or auto-bridges ObjectQL to `DatabaseLoader` | [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts) |
 
 ---
@@ -187,28 +193,33 @@ Tests: [packages/spec/src/system/project-artifact.test.ts](packages/spec/src/sys
 
 **Prerequisite for:** M3, D3.
 
-### M3 - Project Artifact API endpoint
+### M3 - ✅ Project Artifact API endpoint (resolved 2026-04-30)
 
-- [ ] `GET /api/v1/cloud/projects/:projectId/artifact` - assembles the current project's metadata + inlined function code into a single consumable blob.
-- [ ] Validate the outgoing artifact with the M1 Zod schema.
-- [ ] Content hash / ETag for cache validation.
-- [ ] Response includes `commitId` and `checksum`.
-- [ ] Reserve response shape for future `{ url, expiresAt, checksum }` indirection, but do not build S3 yet.
+- [x] `GET /api/v1/cloud/projects/:projectId/artifact` - assembles the current project's metadata + inlined function code into a single consumable blob.
+- [x] Validate the outgoing artifact with the M1 Zod schema.
+- [x] Content hash / ETag for cache validation. (Synthetic `sha256`-prefixed `commitId` + `checksum` minted when the source bundle does not provide them.)
+- [x] Response includes `commitId` and `checksum`.
+- [x] Reserve response shape for future `{ url, expiresAt, checksum }` indirection, but do not build S3 yet.
+
+Code anchor: [packages/services/service-cloud/src/cloud-artifact-api-plugin.ts](packages/services/service-cloud/src/cloud-artifact-api-plugin.ts).
+Docs: [content/docs/concepts/cloud-artifact-api.mdx](content/docs/concepts/cloud-artifact-api.mdx).
 
 **Prerequisite for:** M4.
 
-### M4 - ObjectOS artifact loader
+### M4 - ✅ ObjectOS artifact loader (resolved 2026-04-30)
 
-- [ ] Add `MetadataPlugin` production source: HTTP fetch against Artifact API.
-- [ ] Validate artifact with Zod before hydrating kernel.
-- [ ] Local artifact cache with durability across control-plane outages.
-- [ ] Cache key by `projectId` + `commitId`/`checksum`.
+- [x] `MetadataPlugin` production source: HTTP fetch against Artifact API. (`ArtifactApiClient` + `ArtifactKernelFactory`.)
+- [x] Validate artifact with Zod before hydrating kernel.
+- [x] Local artifact cache with durability across control-plane outages. (TTL cache in `ArtifactApiClient`.)
+- [x] Cache key by `projectId` + `commitId`/`checksum`.
+
+Code anchor: [packages/services/service-cloud/src/artifact-kernel-factory.ts](packages/services/service-cloud/src/artifact-kernel-factory.ts).
 
 **Completes:** production ObjectOS artifact source.
 
 ### M5 - Project publish endpoint
 
-- [ ] `POST /api/v1/cloud/projects/:projectId/metadata` - receives compiled JSON.
+- [x] `POST /api/v1/cloud/projects/:projectId/metadata` - receives compiled JSON. *(server side shipped 2026-04-30 alongside M3; see `cloud-artifact-api-plugin.ts`.)*
 - [ ] Validates payload with `ObjectStackDefinitionSchema` or the canonical compiled stack schema.
 - [ ] Writes current project metadata state to control-plane storage.
 - [ ] Creates `commitId`, computes checksum, and returns `{ projectId, commitId, checksum }`.

@@ -1,0 +1,178 @@
+---
+title: Single-Project Mode
+description: Run ObjectStack as a one-project local stack (no control plane, no project switcher)
+---
+
+# Single-Project Mode
+
+Single-project mode is the **zero-config** boot shape of `apps/objectos`
+(and any host using `@objectstack/service-cloud`'s standalone preset). It
+runs the entire stack — kernel + driver + REST + Studio — against a single
+named project, with no organization picker and no control-plane HTTP hops.
+
+It is the default mode for:
+
+- `os dev` / `os serve` against a fresh project
+- `apps/objectos` deployed to Vercel / Fly with `OS_MODE` unset or `=standalone`
+- the docker example image in `apps/objectos/Dockerfile`
+
+For multi-tenant deployments use [Cloud Mode](./cloud-deployment) instead.
+
+---
+
+## How it differs from cloud mode
+
+| Concern | Single-project | Cloud (multi-project) |
+|:---|:---|:---|
+| Control plane | Same DB as the project, seeded with one `sys_organization` + one `sys_project` row | Separate `control.db` (or Turso) holding many projects |
+| Project resolution | Constant `proj_local` (or your override) | Per-request hostname → `sys_project.hostname` lookup |
+| Studio top-bar | No project / org switcher, no slash divider | Org switcher + project switcher visible |
+| `/api/v1/studio/runtime-config` | `{ singleProject: true, defaultOrgId, defaultProjectId }` | `{ singleProject: false }` |
+| Routes | Use the literal `PLATFORM_PROJECT_ID` constant | `/$projectId/...` patterns |
+| Per-project DB provisioning | n/a — one DB | Optional Turso provisioning via `TURSO_*` env vars |
+
+---
+
+## Boot mode selection
+
+`OS_MODE` is the single source of truth:
+
+```bash
+# Default — same as unset
+OS_MODE=standalone
+
+# Multi-tenant control plane
+OS_MODE=cloud
+```
+
+Aliases: `local` and `single-project` map to `standalone`; `multi-project`
+maps to `cloud`. The legacy `OS_MULTI_PROJECT=true` flag still works as a
+deprecated alias and warns once at boot.
+
+> **Migrating from `OBJECTSTACK_*`.** All `OBJECTSTACK_*` env vars were
+> renamed to `OS_*` (see CHANGELOG). Old names are still accepted for one
+> release with a one-shot warning.
+
+---
+
+## Environment variables
+
+```bash
+# Boot mode
+OS_MODE=standalone
+
+# Project identity (defaults shown)
+OS_PROJECT_ID=proj_local
+
+# Project DB
+OS_DATABASE_URL=file:./.objectstack/data/app.db
+OS_DATABASE_DRIVER=sqlite          # sqlite | turso | postgres
+
+# Compiled artifact (optional — defaults to ./dist/objectstack.json)
+OS_ARTIFACT_PATH=./dist/objectstack.json
+
+# Auth (required outside dev)
+AUTH_SECRET=<random 32-byte secret>
+```
+
+The literal **`PLATFORM_PROJECT_ID`** is exported from
+`@objectstack/runtime` and equals `OS_PROJECT_ID` (or `proj_local`). Studio
+routes use it instead of a per-request param so links stay stable across
+boots.
+
+---
+
+## What `createSingleProjectPlugin()` does
+
+`@objectstack/service-cloud` exports `createSingleProjectPlugin(options?)`
+which is registered last in the standalone plugin chain. It performs two
+jobs and nothing else:
+
+1. **Idempotent identity seed.** On every boot it calls `ensureLocalIdentity()`
+   to upsert one `sys_organization` row (`org_local`) and one `sys_project`
+   row (`proj_local` by default) into the control-plane DB. After that,
+   `KernelManager` resolves the local project through the same code path
+   the cloud uses — single-project mode is *not* a separate kernel
+   factory.
+2. **Studio runtime-config.** Registers `GET /api/v1/studio/runtime-config`
+   returning `{ singleProject: true, defaultOrgId, defaultProjectId }`.
+   The Studio shell reads this once on load and conditionally hides the
+   project / org switchers and the slash divider.
+
+```typescript
+import { createSingleProjectPlugin } from '@objectstack/service-cloud';
+
+kernel.use(createSingleProjectPlugin({
+  orgId: 'org_local',
+  projectId: 'proj_local',
+  orgName: 'Local',
+  projectDatabaseUrl: 'file:./.objectstack/data/app.db',
+  projectDatabaseDriver: 'sqlite',
+}));
+```
+
+There is no synthetic `/cloud/projects` mock route — both modes serve
+real DB-backed records.
+
+---
+
+## Project templates
+
+`apps/objectos/server/templates/` ships four ready-to-use templates that
+the provisioning seeder can fan out into a freshly-created project:
+
+| Id      | Source                | Notes |
+|:--------|:----------------------|:------|
+| `blank` | `blank.ts`            | Empty project — only platform objects |
+| `crm`   | `crm.ts`              | Loads `examples/app-crm` bundle |
+| `todo`  | `todo.ts`             | Loads `examples/app-todo` bundle |
+| `extract` | `extract.ts`        | Reads from a local `dist/objectstack.json` (used by `os projects bind --artifact`) |
+
+Templates are lazy: each template's `load()` is only invoked when selected,
+so a Zod drift in one example bundle cannot crash control-plane bootstrap.
+List the registry:
+
+```typescript
+import { listTemplates, templateRegistry } from 'apps/objectos/server/templates/registry';
+listTemplates();           // -> [{ id, label, description, category }]
+templateRegistry['crm'];   // -> ProjectTemplate
+```
+
+In **single-project mode** templates are not directly user-selectable
+(there is only one project). They are mostly relevant in cloud mode and
+for `os projects create --template crm`.
+
+---
+
+## Studio behaviour in single-project mode
+
+`apps/studio/src/components/top-bar.tsx`:
+
+- The **project switcher** and **slash divider** are rendered only when
+  `runtime-config.singleProject === false`.
+- The **package switcher** is always visible and now supports clearing the
+  filter (the `×` button emits an "All packages" reset).
+
+`apps/studio/src/lib/config.ts` exposes `useRuntimeConfig()` so any
+component can branch on `singleProject` without re-fetching.
+
+---
+
+## Limitations
+
+- No project-level isolation — every signed-in user sees the same data.
+- No org / member management UI (the `Setup → Organizations` page still
+  lists the seeded `Local` org but invitation flows are no-ops without a
+  real control plane).
+- Per-project DB provisioning (`Turso`) is disabled — `OS_DATABASE_URL`
+  hard-pins the one project DB.
+- Tenant boundaries are advisory; **do not** put production tenant data
+  behind single-project mode.
+
+---
+
+## Related
+
+- [Cloud Deployment](./cloud-deployment) — multi-project + control plane
+- [Project Scoping](./project-scoping) — how `projectId` is propagated through requests
+- [`os` CLI reference](../getting-started/cli) — `os run` / `os serve` / `os studio` flags

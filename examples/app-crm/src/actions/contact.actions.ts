@@ -11,7 +11,7 @@ export const MarkPrimaryContactAction: Action = {
   type: 'script',
   target: 'markAsPrimaryContact',
   locations: ['record_header', 'list_item'],
-  visible: 'is_primary = false',
+  visible: 'is_primary == false',
   confirmText: 'Mark this contact as the primary contact for the account?',
   successMessage: 'Contact marked as primary!',
   refreshAfter: true,
@@ -26,6 +26,6 @@ export const SendEmailAction: Action = {
   type: 'modal',
   target: 'email_composer',
   locations: ['record_header', 'list_item'],
-  visible: 'email_opt_out = false',
+  visible: 'email_opt_out == false',
   refreshAfter: false,
 };

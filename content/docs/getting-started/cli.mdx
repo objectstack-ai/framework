@@ -110,6 +110,10 @@ Starts the ObjectStack server with automatic plugin discovery:
 - Auto-loads **InMemory Driver** in dev mode
 - Auto-loads **App Plugin** for metadata
 - Auto-loads **Hono HTTP Server** for REST APIs
+- Auto-loads the **`auth` tier** plugins (`@objectstack/plugin-auth`,
+  `@objectstack/plugin-security`, `@objectstack/plugin-audit`) when the
+  preset includes the `auth` tier and the user did not pin them in
+  `objectstack.config.ts`
 
 ```bash
 os serve                   # Default: port 3000
@@ -117,13 +121,47 @@ os serve -p 4000           # Custom port
 os serve --dev             # Development mode (pretty logs, devPlugins)
 os serve --dev --ui        # Dev mode with Console UI
 os serve --no-server       # Skip HTTP server (kernel only)
+os serve --preset minimal  # Skip auto-loaded auth/i18n/ui plugins
 ```
 
 **Options:**
-- `-p, --port <port>` — Server port (default: `3000`)
+- `-p, --port <port>` — Server port (default: env `PORT` or `3000`)
 - `--dev` — Development mode (loads devPlugins, pretty logging)
-- `--ui` — Enable Console UI at `/_studio/` (dev: Vite proxy, prod: static files)
-- `--no-server` — Skip starting HTTP server plugin
+- `--ui / --no-ui` — Toggle Console UI at `/_studio/` (default `on`)
+- `--server / --no-server` — Toggle HTTP server plugin
+- `--prebuilt` — Skip esbuild / `bundle-require` and load the config as
+  native ESM (use this in production builds where the config is already
+  pre-compiled)
+- `--preset minimal | default | full` — Override the auto-registration
+  tier (see below)
+
+**Tier presets**
+
+`os serve` decides which optional plugins to auto-register from a tier
+list. Any plugin already present in `config.plugins` always wins; tiers
+only gate the **automatic** registration of optional plugins.
+
+| Preset | Tiers | Auto-loaded optional plugins |
+|:---|:---|:---|
+| `minimal` | `core` | none |
+| `default` *(default)* | `core`, `i18n`, `ui`, `auth` | i18n service, Studio UI, Auth + Security + Audit |
+| `full` | `core`, `i18n`, `ui`, `ai`, `auth` | adds the AI service tier |
+
+The `auth` tier requires `AUTH_SECRET` to be set; otherwise `AuthPlugin`
+is skipped with a yellow warning and the `/api/v1/auth/*` endpoints will
+return 404. To take full control, set `tiers` on the stack config:
+
+```typescript
+import { defineStack } from '@objectstack/spec';
+
+export default defineStack({
+  manifest: { /* ... */ },
+  tiers: ['core'],            // disable all optional auto-registration
+  plugins: [
+    // ... only what you explicitly want
+  ],
+});
+```
 
 #### `os studio`
 

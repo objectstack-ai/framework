@@ -1,0 +1,200 @@
+---
+title: Cloud Artifact API
+description: HTTP contract between the cloud control plane and runtime ObjectOS nodes
+---
+
+# Cloud Artifact API
+
+The **Cloud Artifact API** is the HTTP contract between an ObjectStack
+**control plane** (a deployment of `apps/cloud` running
+`@objectstack/service-cloud`) and a **runtime node** (any ObjectOS process
+running in `OS_MODE=runtime`). Runtime nodes contain no project metadata
+of their own — every request is resolved through this API.
+
+The API is served by `createCloudArtifactApiPlugin` and is wired into
+`createCloudStack()` automatically. It is also re-served by
+`apps/cloud/objectstack.config.ts` as part of the cloud preset.
+
+> **Spec anchor.** The artifact envelope itself is defined by
+> `ProjectArtifactSchema` in `packages/spec/src/system/project-artifact.zod.ts`
+> (M1 in the [ROADMAP](https://github.com/objectstack-ai/framework/blob/main/ROADMAP.md)).
+> This page documents the *transport*; the envelope shape is normative.
+
+---
+
+## Authentication
+
+If `OS_CLOUD_API_KEY` is set on the cloud side, every endpoint requires
+the same value as a bearer token:
+
+```
+Authorization: Bearer <OS_CLOUD_API_KEY>
+```
+
+When unset, endpoints are open to any caller (intended for
+loopback / docker-internal calls only — **do not** expose an unauthenticated
+control plane on the public internet).
+
+Runtime nodes pass the matching token via `OS_CLOUD_API_KEY`
+(consumed by `ArtifactApiClient`).
+
+---
+
+## Endpoints
+
+All endpoints live under the configured prefix — default `/api/v1`.
+
+### `GET /api/v1/cloud/resolve-hostname`
+
+Resolve a public hostname to its owning project. Used by
+`ArtifactEnvironmentRegistry` to map the inbound `Host:` header before
+fetching the artifact.
+
+**Query parameters**
+
+| Name       | Required | Notes |
+|:-----------|:--------:|:------|
+| `host`     | ✅ | The hostname to resolve. `hostname` is accepted as an alias. |
+
+**Response** — `200 OK`
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "projectId": "proj_01h…",
+    "organizationId": "org_01h…",
+    "runtime": {
+      "datasource": {
+        "driver": "turso",
+        "url":    "libsql://example.turso.io",
+        "authToken": "…"
+      }
+    }
+  }
+}
+```
+
+**Lookup rules**
+
+1. Exact match against `sys_project.hostname`.
+2. The wildcard marker `*` matches any host (used by the system project
+   when one project is intentionally global).
+3. `404` if neither matches.
+
+The `runtime` block is assembled from `sys_project_credential` (preferred)
+or from `sys_project.database_*` columns (fallback). It is the same
+structure consumed by `DriverPlugin` on the runtime node.
+
+---
+
+### `GET /api/v1/cloud/projects/:id/artifact`
+
+Returns the **v0 ProjectArtifact envelope** for a project, ready to hand
+off to `ArtifactKernelFactory`.
+
+**Path parameters**
+
+| Name | Required | Notes |
+|:-----|:--------:|:------|
+| `id` | ✅ | The `sys_project.id` value. |
+
+**Response** — `200 OK`
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "schemaVersion": "0.1",
+    "projectId":     "proj_01h…",
+    "commitId":      "a1b2c3d4e5f6g7h8",
+    "checksum":      { "algorithm": "sha256", "value": "…" },
+    "metadata":      { "objects": [...], "apps": [...], "flows": [...], … },
+    "functions":     [{ "name": "calc_total", "language": "ts", "code": "…" }],
+    "manifest":      { "plugins": [...], "drivers": [...], "engines": {} },
+    "builtAt":       "2026-04-12T08:00:00.000Z",
+    "builtWith":     "objectstack-cli@2.x",
+    "runtime":       { "datasource": { "driver": "turso", "url": "…" } }
+  }
+}
+```
+
+**Assembly rules**
+
+1. Read `sys_project.metadata.artifact_path` (or `artifact_paths[]` for
+   multi-bundle projects). Relative paths are resolved against
+   `artifactRoot` (defaults to `process.cwd()`; override via plugin
+   options).
+2. For each path, load the JSON file. Both shapes are accepted:
+   - **v0 nested** — `{ metadata: { objects: [...] }, functions, manifest, … }`
+   - **`objectstack compile` flat** — top-level `objects`, `apps`,
+     `dashboards`, …
+3. Merge each bundle's `metadata.*` arrays into one envelope; `functions`
+   from every bundle are concatenated.
+4. `commitId` / `checksum` / `builtAt` / `builtWith` / `manifest` are
+   carried forward from the **first** bundle. If the first bundle does
+   not provide them, a deterministic synthetic `commitId` (16-char
+   `sha256` prefix of the merged content) and `checksum` are minted so
+   downstream caches still rev correctly.
+5. The `runtime` block is appended exactly as in `resolve-hostname`.
+
+`404` if the project does not exist; `503` if the control-plane DB is
+unavailable.
+
+---
+
+### `POST /api/v1/cloud/projects/:id/metadata`
+
+Receives a compiled artifact (the JSON output of `os compile` /
+`objectstack compile`) and persists it so subsequent
+`GET .../artifact` calls return it.
+
+**Body** — the raw artifact JSON (a JSON object — arrays are rejected).
+
+**Behaviour**
+
+1. Validates that the body is a plain JSON object.
+2. Writes the artifact to `<artifactRoot>/<projectId>/artifact.json`.
+3. Updates `sys_project.metadata.artifact_path` to that file so the GET
+   endpoint can serve it on the next request.
+4. Returns `{ success: true, data: { projectId, commitId, checksum, ... } }`
+   echoing the same fields the GET endpoint would assemble.
+
+This is the endpoint that **M5 — Project publish endpoint**
+(see `ROADMAP.md`) will eventually graduate `os publish` onto. Until then
+it accepts any compiled JSON.
+
+---
+
+## Caching contract
+
+`ArtifactApiClient` (the runtime client used by `ArtifactKernelFactory`)
+caches responses with a TTL keyed by the response content. Servers
+should:
+
+- Keep `commitId` stable across rebuilds when the underlying metadata is
+  unchanged. If you rebuild without metadata changes, reuse the previous
+  `commitId` so kernels can short-circuit.
+- Use the synthetic `sha256` derivation if you do not have a real CI
+  commit id — it is deterministic over the merged metadata content.
+- Treat the `runtime` block as **mutable** independently of `commitId` —
+  the client is allowed to invalidate the runtime block separately when
+  `resolve-hostname` returns a different `runtime`.
+
+---
+
+## Reference implementation
+
+| File | Purpose |
+|:---|:---|
+| `packages/services/service-cloud/src/cloud-artifact-api-plugin.ts` | Server: registers all three endpoints, performs DB reads, assembles envelopes |
+| `packages/services/service-cloud/src/artifact-api-client.ts` | Client: TTL-cached HTTP wrapper used by runtime nodes |
+| `packages/services/service-cloud/src/artifact-environment-registry.ts` | Maps `Host:` header → `projectId` via `resolve-hostname` |
+| `packages/services/service-cloud/src/artifact-kernel-factory.ts` | Boots a kernel from a returned artifact (no `ControlPlaneProxyDriver`) |
+| `packages/spec/src/system/project-artifact.zod.ts` | Normative envelope schema |
+
+## Related
+
+- [North Star — §6.3 Runtime Inputs](./north-star)
+- [Cloud Deployment](../guides/cloud-deployment) — `OS_MODE=runtime` setup
+- [Single-Project Mode](../guides/single-project-mode) — alternative for local / one-tenant workloads

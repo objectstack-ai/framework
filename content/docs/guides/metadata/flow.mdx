@@ -264,6 +264,59 @@ errorHandling: {
 | `retryDelayMs` | `number` | Delay between retries (ms) |
 | `fallbackNodeId` | `string` | Node to execute on failure |
 
+## Discovery & Registration
+
+You almost never call `engine.registerFlow()` directly. The
+`AutomationServicePlugin` (`@objectstack/service-automation`) auto-discovers
+every inline flow definition during its `start()` phase by reading the
+ObjectQL schema registry:
+
+```typescript
+// inside AutomationServicePlugin.start()
+const ql = ctx.getService('objectql');
+const flows = ql.registry.listItems('flow');
+for (const flow of flows) {
+  engine.registerFlow(flow.name, flow);
+}
+```
+
+Any flow attached via the `defineStack` / `manifest.register()` pipeline is
+picked up automatically:
+
+```typescript
+import { defineStack } from '@objectstack/spec';
+import { approvalFlow } from './flows/approval';
+
+export default defineStack({
+  manifest: { id: 'com.example.crm', version: '1.0.0', type: 'app', name: 'CRM' },
+  objects: [...],
+  flows: [approvalFlow],   // ← registered with the engine on boot
+});
+```
+
+The plugin is a **soft dependency** on `metadata` — it tolerates running
+without `MetadataPlugin` and it logs (not throws) on per-flow registration
+failures so one broken flow does not abort startup.
+
+## Studio Flow Viewer & Test Runner
+
+Every flow surfaces in Studio at
+`/_studio/apps/setup/sys_flow/<flow-name>` (or via the metadata browser).
+The `flow-viewer-plugin` (registered in
+`apps/studio/src/plugins/built-in/index.ts`) replaces the default JSON
+inspector with three rich tabs:
+
+| Tab | Component | Purpose |
+|:---|:---|:---|
+| **Overview** | `FlowViewer` | Renders trigger type, variables, nodes, edges, and `errorHandling` as inspector cards |
+| **Run** | `FlowTestRunner` | Auto-generates a form for every `isInput: true` variable (with type-aware coercion for `number` / `boolean` / `object` / `list`), executes the flow against the per-project kernel, and shows the returned outputs + run id |
+| **Runs** | `FlowRunsPanel` | Lists historical executions for the selected flow with status, duration, and a deep-link to the run record |
+
+The runner posts to the standard automation execute endpoint, scoped to
+the active project. All three components participate in the Studio
+authentication / project-scope context, so they work identically in
+single-project mode and in cloud mode.
+
 ## Related
 
 - [Workflow Metadata](./workflow) — Event-triggered automation rules
