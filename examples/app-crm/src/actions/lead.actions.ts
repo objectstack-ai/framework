@@ -11,7 +11,7 @@ export const ConvertLeadAction: Action = {
   type: 'flow',
   target: 'lead_conversion',
   locations: ['record_header', 'list_item'],
-  visible: 'status == "qualified" AND is_converted == false',
+  visible: 'status == "qualified" && is_converted == false',
   confirmText: 'Are you sure you want to convert this lead?',
   successMessage: 'Lead converted successfully!',
   refreshAfter: true,
@@ -24,7 +24,7 @@ export const CreateCampaignAction: Action = {
   objectName: 'lead',
   icon: 'send',
   type: 'modal',
-  target: 'add_to_campaign_modal',
+  target: 'addToCampaign',
   locations: ['list_toolbar'],
   params: [
     {

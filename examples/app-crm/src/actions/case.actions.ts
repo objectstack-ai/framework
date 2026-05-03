@@ -9,9 +9,9 @@ export const EscalateCaseAction: Action = {
   objectName: 'case',
   icon: 'alert-triangle',
   type: 'modal',
-  target: 'escalate_case_modal',
+  target: 'escalateCase',
   locations: ['record_header', 'list_item'],
-  visible: 'is_escalated == false AND is_closed == false',
+  visible: 'is_escalated == false && is_closed == false',
   params: [
     {
       name: 'reason',
@@ -32,7 +32,7 @@ export const CloseCaseAction: Action = {
   objectName: 'case',
   icon: 'check-circle',
   type: 'modal',
-  target: 'close_case_modal',
+  target: 'closeCase',
   locations: ['record_header'],
   visible: 'is_closed == false',
   params: [

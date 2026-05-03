@@ -8,7 +8,7 @@ export const LogCallAction: Action = {
   label: 'Log a Call',
   icon: 'phone',
   type: 'modal',
-  target: 'call_log_modal',
+  target: 'logCall',
   locations: ['record_header', 'list_item', 'record_related'],
   params: [
     {

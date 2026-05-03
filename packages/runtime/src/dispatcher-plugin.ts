@@ -700,15 +700,40 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 });
             };
 
+            // ── Actions (server-registered handlers, e.g. CRM convertLead) ───
+            // Bridges UI `script` / `modal` actions to ObjectQL handlers
+            // registered via `engine.registerAction(object, action, fn)`.
+            const registerActionRoutes = (base: string) => {
+                server!.post(`${base}/actions/:object/:action`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleActions(`/${req.params.object}/${req.params.action}`, 'POST', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
+                server!.post(`${base}/actions/:object/:action/:recordId`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.handleActions(`/${req.params.object}/${req.params.action}/${req.params.recordId}`, 'POST', req.body, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
+            };
+
             const enableProjectScoping = config.scoping?.enableProjectScoping ?? false;
             const projectResolution = config.scoping?.projectResolution ?? 'auto';
 
             if (enableProjectScoping && projectResolution === 'required') {
                 registerAutomationRoutes(`${prefix}/projects/:projectId`);
+                registerActionRoutes(`${prefix}/projects/:projectId`);
             } else {
                 registerAutomationRoutes(prefix);
+                registerActionRoutes(prefix);
                 if (enableProjectScoping) {
                     registerAutomationRoutes(`${prefix}/projects/:projectId`);
+                    registerActionRoutes(`${prefix}/projects/:projectId`);
                 }
             }
 

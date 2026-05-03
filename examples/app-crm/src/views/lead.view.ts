@@ -654,7 +654,7 @@ export const LeadViews = defineView({
             {
               field: 'owner',
               required: true,
-              visibleOn: 'status == "contacted" OR status == "qualified"',
+              visibleOn: 'status == "contacted" || status == "qualified"',
             },
             {
               field: 'notes',

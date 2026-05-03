@@ -179,7 +179,10 @@ describe('HttpDispatcher', () => {
         it('should trigger a flow via POST /:name/trigger', async () => {
             const result = await dispatcher.handleAutomation('flow_a/trigger', 'POST', { key: 'val' }, { request: {} });
             expect(result.handled).toBe(true);
-            expect(mockAutomationService.execute).toHaveBeenCalledWith('flow_a', { key: 'val' });
+            expect(mockAutomationService.execute).toHaveBeenCalledWith('flow_a', expect.objectContaining({
+                params: expect.objectContaining({ key: 'val' }),
+                event: 'manual',
+            }));
         });
 
         it('should toggle a flow via POST /:name/toggle', async () => {

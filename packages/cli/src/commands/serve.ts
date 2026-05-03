@@ -175,6 +175,20 @@ export default class Serve extends Command {
         throw new Error(`No default export found in ${args.config}`);
       }
 
+      // Preserve module-level named exports (e.g. `onEnable`, `onDisable`
+      // lifecycle hooks) that would otherwise be dropped when we unwrap
+      // `mod.default`. Without this AppPlugin can never invoke runtime hooks
+      // declared as `export const onEnable = ...` alongside the default
+      // `defineStack(...)` export.
+      if (mod.default != null && config !== mod) {
+        const merged: any = { ...config };
+        for (const key of Object.keys(mod)) {
+          if (key === 'default' || key in merged) continue;
+          merged[key] = (mod as any)[key];
+        }
+        config = merged;
+      }
+
       // Boot-mode dispatch: standalone goes directly through
       // `@objectstack/runtime` (no cloud dependencies). runtime/cloud
       // modes go through `@objectstack/service-cloud`.

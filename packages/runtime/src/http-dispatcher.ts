@@ -2726,7 +2726,45 @@ export class HttpDispatcher {
             // POST /:name/trigger → execute
             if (parts[1] === 'trigger' && m === 'POST') {
                 if (typeof automationService.execute === 'function') {
-                    const result = await automationService.execute(name, body);
+                    const ctxBody = body && typeof body === 'object' ? body : {};
+                    // Translate UI/SDK request shape `{recordId, objectName, params}`
+                    // into the canonical AutomationContext shape expected by the engine.
+                    // Key transformations:
+                    //  - `recordId` is exposed in `params.recordId` AND aliased to
+                    //    `<objectName>Id` (camelCase) so flow variables like `leadId`,
+                    //    `caseId`, `opportunityId` resolve from a single REST contract.
+                    //  - `objectName` is mapped to the canonical `object` field.
+                    //  - The user identity from the auth context (if any) is forwarded
+                    //    as `userId` so node executors / template interpolation can
+                    //    expand `{$User.Id}`.
+                    const recordId = ctxBody.recordId;
+                    const objectName = ctxBody.objectName ?? ctxBody.object;
+                    const baseParams = (ctxBody.params && typeof ctxBody.params === 'object') ? { ...ctxBody.params } : {};
+                    // Back-compat: when callers POST a flat body (no `params` wrapper),
+                    // forward unknown top-level keys as flow params so the original
+                    // `{ foo: 'bar' }` payload is not silently dropped.
+                    if (!ctxBody.params) {
+                        const reserved = new Set(['recordId', 'objectName', 'object', 'event', 'params']);
+                        for (const [k, v] of Object.entries(ctxBody)) {
+                            if (reserved.has(k)) continue;
+                            if (baseParams[k] === undefined) baseParams[k] = v;
+                        }
+                    }
+                    if (recordId !== undefined && baseParams.recordId === undefined) {
+                        baseParams.recordId = recordId;
+                    }
+                    if (recordId !== undefined && objectName) {
+                        const alias = `${String(objectName).replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase())}Id`;
+                        if (baseParams[alias] === undefined) baseParams[alias] = recordId;
+                    }
+                    const automationContext: any = {
+                        params: baseParams,
+                        object: objectName,
+                        event: ctxBody.event ?? 'manual',
+                    };
+                    const userIdFromAuth = (context as any)?.user?.id ?? (context as any)?.userId;
+                    if (userIdFromAuth) automationContext.userId = userIdFromAuth;
+                    const result = await automationService.execute(name, automationContext);
                     return { handled: true, response: this.success(result) };
                 }
             }
@@ -2855,6 +2893,111 @@ export class HttpDispatcher {
             if (svc?.registry) return svc;
         } catch { /* service not available */ }
         return null;
+    }
+
+    /**
+     * Handle action invocation routes (`/actions/...`).
+     *
+     * Dispatches a named, server-registered action handler (registered via
+     * `engine.registerAction(objectName, actionName, handler)`) over HTTP.
+     * Three URL shapes are accepted to keep the client contract flexible:
+     *
+     *  - `POST /actions/:object/:action`              — record-scoped action
+     *  - `POST /actions/:object/:action/:recordId`    — record-scoped action with id in URL
+     *  - `POST /actions/global/:action`               — wildcard ("*") action
+     *
+     * Body shape: `{ recordId?: string, params?: Record<string, unknown> }`.
+     * The handler is invoked with an `ActionContext` of:
+     *   `{ record, user, engine, params }`
+     * where `engine` exposes the slimmed CRUD surface used by CRM handlers
+     * (`insert`, `update`, `delete`, `find`).
+     */
+    async handleActions(path: string, method: string, body: any, _context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        if (method.toUpperCase() !== 'POST') {
+            return { handled: true, response: this.error('Method not allowed', 405) };
+        }
+        const parts = path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+        if (parts.length < 2) {
+            return { handled: true, response: this.error('Path must be /actions/:object/:action', 400) };
+        }
+        const objectName = parts[0];
+        const actionName = parts[1];
+        const recordIdFromPath = parts[2];
+
+        const ql: any = await this.getObjectQLService(_context?.projectId);
+        if (!ql || typeof ql.executeAction !== 'function') {
+            return { handled: true, response: this.error('Data engine not available', 503) };
+        }
+
+        // Resolve the handler — fall back to wildcard '*' if the object-specific key is missing.
+        // Since engine.executeAction throws when the key is unknown, we probe via the internal
+        // map by attempting the call inside a try/catch and rotating to '*'.
+        const tryExecute = async (obj: string) => {
+            return ql.executeAction(obj, actionName, actionContext);
+        };
+
+        const reqBody = body && typeof body === 'object' ? body : {};
+        const recordId = recordIdFromPath ?? reqBody.recordId;
+        const reqParams = (reqBody.params && typeof reqBody.params === 'object') ? reqBody.params : {};
+
+        // Load the record (best-effort) so handlers can rely on `ctx.record`.
+        let record: Record<string, unknown> = {};
+        if (recordId && objectName !== 'global') {
+            try {
+                const got = await this.callData('get', { object: objectName, id: recordId }, _context.dataDriver, _context.projectId);
+                if (got?.record) record = got.record;
+            } catch { /* record may not exist for new-record actions; pass empty */ }
+        }
+        if (record && (record as any).id == null && recordId) (record as any).id = recordId;
+
+        // Slim engine facade matching the ActionContext.engine shape used by CRM handlers.
+        const engineFacade = {
+            async insert(object: string, data: Record<string, unknown>): Promise<{ id: string }> {
+                const res = await ql.insert(object, data);
+                const id = (res && (res as any).id) ?? (data as any).id;
+                return { id };
+            },
+            async update(object: string, id: string, data: Record<string, unknown>): Promise<void> {
+                await ql.update(object, data, { where: { id } });
+            },
+            async delete(object: string, id: string): Promise<void> {
+                await ql.delete(object, { where: { id } });
+            },
+            async find(object: string, query: Record<string, unknown>): Promise<Array<Record<string, unknown>>> {
+                const opts = query && Object.keys(query).length ? { where: query } : undefined;
+                const rows = await ql.find(object, opts as any);
+                return Array.isArray(rows) ? rows : ((rows as any)?.value ?? []);
+            },
+        };
+
+        const userIdFromAuth = (_context as any)?.user?.id ?? (_context as any)?.userId ?? 'system';
+        const userFromAuth = (_context as any)?.user ?? { id: userIdFromAuth, name: userIdFromAuth };
+
+        const actionContext: any = {
+            record,
+            user: userFromAuth,
+            engine: engineFacade,
+            params: { ...reqParams, recordId, objectName },
+        };
+
+        try {
+            // Try object-specific first; on "not found" error, fall back to wildcard.
+            let result: any;
+            try {
+                result = await tryExecute(objectName);
+            } catch (err: any) {
+                const msg = String(err?.message ?? err ?? '');
+                if (/not found/i.test(msg) && objectName !== '*') {
+                    result = await tryExecute('*');
+                } else {
+                    throw err;
+                }
+            }
+            return { handled: true, response: this.success({ success: true, data: result }) };
+        } catch (err: any) {
+            const msg = err?.message ?? String(err);
+            return { handled: true, response: this.success({ success: false, error: msg }) };
+        }
     }
 
     /**
@@ -3060,6 +3203,10 @@ export class HttpDispatcher {
 
         if (cleanPath.startsWith('/automation')) {
              return this.handleAutomation(cleanPath.substring(11), method, body, context, query);
+        }
+
+        if (cleanPath.startsWith('/actions')) {
+             return this.handleActions(cleanPath.substring(8), method, body, context);
         }
         
         if (cleanPath.startsWith('/analytics')) {

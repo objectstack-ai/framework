@@ -24,8 +24,12 @@ export const SendEmailAction: Action = {
   objectName: 'contact',
   icon: 'mail',
   type: 'modal',
-  target: 'email_composer',
+  target: 'sendEmail',
   locations: ['record_header', 'list_item'],
   visible: 'email_opt_out == false',
+  params: [
+    { name: 'subject', label: 'Subject', type: 'text', required: true },
+    { name: 'body', label: 'Body', type: 'textarea', required: true },
+  ],
   refreshAfter: false,
 };

@@ -106,8 +106,15 @@ export class AppPlugin implements Plugin {
             ql.setDatasourceMapping(this.bundle.datasourceMapping);
         }
 
-        const runtime = this.bundle.default || this.bundle;
-        
+        // Resolve the runtime hook owner. Modules that declare both a
+        // `default` (defineStack(...)) export and a named `onEnable` export
+        // hide the named export from `bundle.default`, so we fall back to the
+        // top-level bundle when the default doesn't carry the hook.
+        const stackBundle = this.bundle.default || this.bundle;
+        const runtime: any = (stackBundle && typeof stackBundle.onEnable === 'function')
+            ? stackBundle
+            : this.bundle;
+
         if (runtime && typeof runtime.onEnable === 'function') {
              ctx.logger.info('Executing runtime.onEnable', { 
                  appName: this.name,

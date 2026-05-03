@@ -22,7 +22,7 @@ export const MassUpdateStageAction: Action = {
   objectName: 'opportunity',
   icon: 'layers',
   type: 'modal',
-  target: 'mass_update_stage_modal',
+  target: 'massUpdateStage',
   locations: ['list_toolbar'],
   params: [
     {
