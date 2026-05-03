@@ -62,7 +62,7 @@ const TYPE_LABELS: Record<string, string> = {
   sharingRules: 'Sharing Rule',
 };
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(text);
@@ -84,7 +84,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 /** Recursively render an object as a collapsible tree */
-function JsonTree({ data, depth = 0 }: { data: any; depth?: number }) {
+export function JsonTree({ data, depth = 0 }: { data: any; depth?: number }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   if (data === null || data === undefined) {

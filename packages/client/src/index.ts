@@ -1513,6 +1513,50 @@ export class ObjectStackClient {
               return this.unwrapResponse(res);
           },
       },
+
+      /**
+       * Flat aliases mirroring the ScopedProjectClient.automation surface so
+       * Studio (and other consumers) can use the same call shape regardless of
+       * whether they hold a scoped or unscoped client.
+       */
+      /** Alias for `automation.get` — fetch a flow definition by name. */
+      getFlow: async <T = any>(name: string): Promise<T> => {
+          const route = this.getRoute('automation');
+          const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(name)}`);
+          return this.unwrapResponse(res) as Promise<T>;
+      },
+      /** Execute (trigger) a flow with an execution context. */
+      execute: async <T = any>(name: string, ctx?: Record<string, any>): Promise<T> => {
+          const route = this.getRoute('automation');
+          const res = await this.fetch(`${this.baseUrl}${route}/${encodeURIComponent(name)}/trigger`, {
+              method: 'POST',
+              body: JSON.stringify(ctx ?? {}),
+          });
+          return this.unwrapResponse(res) as Promise<T>;
+      },
+      /** Alias for `automation.runs.list`. */
+      listRuns: async <T = any>(
+          flowName: string,
+          opts?: { limit?: number; cursor?: string },
+      ): Promise<T> => {
+          const route = this.getRoute('automation');
+          const params = new URLSearchParams();
+          if (opts?.limit != null) params.set('limit', String(opts.limit));
+          if (opts?.cursor) params.set('cursor', opts.cursor);
+          const qs = params.toString();
+          const res = await this.fetch(
+              `${this.baseUrl}${route}/${encodeURIComponent(flowName)}/runs${qs ? `?${qs}` : ''}`,
+          );
+          return this.unwrapResponse(res) as Promise<T>;
+      },
+      /** Alias for `automation.runs.get`. */
+      getRun: async <T = any>(flowName: string, runId: string): Promise<T> => {
+          const route = this.getRoute('automation');
+          const res = await this.fetch(
+              `${this.baseUrl}${route}/${encodeURIComponent(flowName)}/runs/${encodeURIComponent(runId)}`,
+          );
+          return this.unwrapResponse(res) as Promise<T>;
+      },
   };
 
   /**
@@ -2638,6 +2682,54 @@ export class ScopedProjectClient {
       const qs = version ? `?version=${encodeURIComponent(version)}` : '';
       const res = await this.parent._fetch(this.url(`/packages/${encodeURIComponent(id)}${qs}`));
       return this.parent._unwrap<{ package: any }>(res);
+    },
+  };
+
+  /**
+   * Automation (Flow) operations scoped to this project.
+   *
+   * Thin wrapper around the dispatcher's automation routes, mounted under
+   * `/api/v1/projects/:projectId/automation/...`. Surface mirrors the methods
+   * needed by Studio's Flow viewer: read flow definition, execute (trigger),
+   * list runs, fetch a single run.
+   */
+  automation = {
+    /** Fetch a flow definition by name. */
+    getFlow: async <T = any>(name: string): Promise<T> => {
+      const res = await this.parent._fetch(this.url(`/automation/${encodeURIComponent(name)}`));
+      return this.parent._unwrap<T>(res);
+    },
+    /**
+     * Execute (trigger) a flow by name. The request body is forwarded as the
+     * automation execution context (e.g. `{ params, trigger }`).
+     */
+    execute: async <T = any>(name: string, ctx?: Record<string, any>): Promise<T> => {
+      const res = await this.parent._fetch(this.url(`/automation/${encodeURIComponent(name)}/trigger`), {
+        method: 'POST',
+        body: JSON.stringify(ctx ?? {}),
+      });
+      return this.parent._unwrap<T>(res);
+    },
+    /** List recent runs for a flow. */
+    listRuns: async <T = any>(
+      flowName: string,
+      opts?: { limit?: number; cursor?: string },
+    ): Promise<T> => {
+      const params = new URLSearchParams();
+      if (opts?.limit != null) params.set('limit', String(opts.limit));
+      if (opts?.cursor) params.set('cursor', opts.cursor);
+      const qs = params.toString();
+      const res = await this.parent._fetch(
+        this.url(`/automation/${encodeURIComponent(flowName)}/runs${qs ? `?${qs}` : ''}`),
+      );
+      return this.parent._unwrap<T>(res);
+    },
+    /** Fetch a single run (with step log) for a flow. */
+    getRun: async <T = any>(flowName: string, runId: string): Promise<T> => {
+      const res = await this.parent._fetch(
+        this.url(`/automation/${encodeURIComponent(flowName)}/runs/${encodeURIComponent(runId)}`),
+      );
+      return this.parent._unwrap<T>(res);
     },
   };
 }
