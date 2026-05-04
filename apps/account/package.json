@@ -44,7 +44,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.4",
-    "@tanstack/router-plugin": "^1.167.29",
+    "@tanstack/router-plugin": "^1.167.32",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
@@ -54,7 +54,7 @@
     "@vitest/coverage-v8": "^4.1.5",
     "autoprefixer": "^10.4.27",
     "happy-dom": "^20.8.9",
-    "postcss": "^8.5.12",
+    "postcss": "^8.5.13",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "vite": "^8.0.10",

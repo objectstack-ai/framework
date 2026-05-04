@@ -18,11 +18,11 @@
   },
   "peerDependencies": {
     "@objectstack/runtime": "workspace:^",
-    "@sveltejs/kit": "^2.58.0"
+    "@sveltejs/kit": "^2.59.0"
   },
   "devDependencies": {
     "@objectstack/runtime": "workspace:*",
-    "@sveltejs/kit": "^2.58.0",
+    "@sveltejs/kit": "^2.59.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
