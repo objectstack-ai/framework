@@ -13,9 +13,9 @@
     "postinstall": "fumadocs-mdx"
   },
   "dependencies": {
-    "fumadocs-core": "16.8.5",
+    "fumadocs-core": "16.8.7",
     "fumadocs-mdx": "14.3.2",
-    "fumadocs-ui": "16.8.5",
+    "fumadocs-ui": "16.8.7",
     "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "react": "^19.2.5",
@@ -34,7 +34,7 @@
     "postcss": "^8.5.12",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
-    "zod": "4.4.1"
+    "zod": "4.4.2"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -18,10 +18,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^3.0.9",
+    "@ai-sdk/provider": "^3.0.10",
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "ai": "^6.0.170"
+    "ai": "^6.0.174"
   },
   "peerDependencies": {
     "@ai-sdk/anthropic": "^3.0.0",

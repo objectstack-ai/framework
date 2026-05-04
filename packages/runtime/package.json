@@ -23,7 +23,7 @@
     "@objectstack/rest": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
-    "zod": "^4.4.1"
+    "zod": "^4.4.2"
   },
   "devDependencies": {
     "@objectstack/driver-memory": "workspace:*",

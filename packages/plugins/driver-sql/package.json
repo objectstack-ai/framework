@@ -20,8 +20,8 @@
   "dependencies": {
     "@objectstack/core": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "knex": "^3.2.9",
-    "nanoid": "^5.1.9"
+    "knex": "^3.2.10",
+    "nanoid": "^5.1.11"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
