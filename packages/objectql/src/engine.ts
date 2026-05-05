@@ -457,6 +457,17 @@ export class ObjectQL implements IDataEngine {
   }
 
   /**
+   * Build a HookContext.api: a ScopedContext that hooks can use to
+   * read/write other objects within the same execution context.
+   * Falls back to a system-elevated empty context when no execCtx
+   * is supplied (e.g. system-triggered hooks).
+   */
+  private buildHookApi(execCtx?: ExecutionContext): ScopedContext {
+    const safeCtx: ExecutionContext = execCtx ?? ({ isSystem: true } as any);
+    return new ScopedContext(safeCtx, this as unknown as IDataEngine);
+  }
+
+  /**
    * Register contribution (Manifest)
    * 
    * Installs the manifest as a Package (the unit of installation),
@@ -1099,6 +1110,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeFind',
           input: { ast: opCtx.ast, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
       };
@@ -1189,6 +1201,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeInsert',
           input: { data: opCtx.data, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
       };
@@ -1283,6 +1296,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeUpdate',
           input: { id, data: opCtx.data, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
        };
@@ -1359,6 +1373,7 @@ export class ObjectQL implements IDataEngine {
           event: 'beforeDelete',
           input: { id, options: opCtx.options },
           session: this.buildSession(opCtx.context),
+          api: this.buildHookApi(opCtx.context),
           transaction: opCtx.context?.transaction,
           ql: this
       };

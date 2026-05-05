@@ -170,18 +170,116 @@ export function wrapDeclarativeHook(
       }
     }
 
-    // 2. Fire-and-forget for declarative async after* hooks
-    if (fireAndForget) {
-      void runWithErrorPolicy(ctx).catch((err) => {
-        logger.error('[hook] async handler error (fire-and-forget)', {
-          hook: meta.name,
-          error: (err as any)?.message,
-        });
-      });
-      return;
-    }
+    // Normalise ctx.input for declarative hooks. The engine wraps
+    // write payloads as `{ data, options, id? }`, but `HookContextSchema`
+    // and every example hook treats `input` as the flat record. We
+    // temporarily swap `ctx.input` for a Proxy that reads/writes through
+    // to `data` for ordinary fields and to the wrapper for `id`/`options`.
+    // We must mutate ctx in place (not shallow-clone) so that earlier
+    // hooks in the chain that write to `ctx.previous`/`ctx.result` are
+    // visible to this handler too.
+    const restore = installFlatInput(ctx);
 
-    await runWithErrorPolicy(ctx);
+    try {
+      // 2. Fire-and-forget for declarative async after* hooks
+      if (fireAndForget) {
+        // For fire-and-forget we can't keep ctx.input swapped while the
+        // engine moves on — copy what we need, restore, and run async.
+        void runWithErrorPolicy(ctx).catch((err) => {
+          logger.error('[hook] async handler error (fire-and-forget)', {
+            hook: meta.name,
+            error: (err as any)?.message,
+          });
+        });
+        return;
+      }
+
+      await runWithErrorPolicy(ctx);
+    } finally {
+      restore();
+    }
+  };
+}
+
+/**
+ * Swap `ctx.input` in place for a Proxy that exposes a flat record view
+ * over the engine's `{ data, options, id? }` wrapper. Returns a function
+ * that restores the original `ctx.input` reference. Reads of
+ * `id` / `options` / `ast` / `data` fall through to the wrapper; reads
+ * of any other key fall through to `data`. Writes always go to `data`
+ * (creating it if missing) so the engine's downstream `input.data`
+ * read picks up mutations made by user code as `input.field = value`.
+ */
+function installFlatInput(ctx: HookContext): () => void {
+  const raw: any = ctx.input ?? {};
+  const looksWrapped =
+    raw && typeof raw === 'object' &&
+    ('data' in raw || 'options' in raw || 'id' in raw || 'ast' in raw);
+  if (!looksWrapped) return () => {};
+
+  const ensureData = (): Record<string, unknown> => {
+    if (!raw.data || typeof raw.data !== 'object') {
+      raw.data = {};
+    }
+    return raw.data as Record<string, unknown>;
+  };
+
+  const proxy = new Proxy(raw, {
+    get(target, prop, receiver) {
+      if (prop === 'id' || prop === 'options' || prop === 'ast' || prop === 'data') {
+        return Reflect.get(target, prop, receiver);
+      }
+      const data = target.data;
+      if (data && typeof data === 'object' && prop in data) {
+        return (data as any)[prop];
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+    set(target, prop, value) {
+      if (prop === 'id' || prop === 'options' || prop === 'ast' || prop === 'data') {
+        (target as any)[prop] = value;
+        return true;
+      }
+      ensureData()[prop as string] = value;
+      return true;
+    },
+    has(target, prop) {
+      if (prop === 'id' || prop === 'options' || prop === 'ast' || prop === 'data') {
+        return prop in target;
+      }
+      const data = target.data;
+      if (data && typeof data === 'object' && prop in data) return true;
+      return prop in target;
+    },
+    ownKeys(target) {
+      // Only enumerate the flat record fields. Wrapper keys
+      // (id/options/ast/data) remain accessible via dot/bracket notation
+      // but are hidden from Object.keys/for-in so user code that does
+      // `Object.keys(input).filter(k => input[k] !== previous[k])` only
+      // sees actual record fields.
+      const dataKeys = target.data && typeof target.data === 'object'
+        ? Object.keys(target.data)
+        : [];
+      return Array.from(new Set(dataKeys));
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      const data = target.data;
+      if (data && typeof data === 'object' && prop in data) {
+        return { configurable: true, enumerable: true, writable: true, value: (data as any)[prop] };
+      }
+      // Wrapper keys: still descriptors so `prop in input` works, but
+      // marked non-enumerable so they don't appear in Object.keys().
+      if (prop === 'id' || prop === 'options' || prop === 'ast' || prop === 'data') {
+        const desc = Object.getOwnPropertyDescriptor(target, prop);
+        return desc ? { ...desc, enumerable: false } : undefined;
+      }
+      return Object.getOwnPropertyDescriptor(target, prop);
+    },
+  });
+
+  (ctx as any).input = proxy;
+  return () => {
+    (ctx as any).input = raw;
   };
 }
 
