@@ -494,7 +494,25 @@ This schema accepts one of the following structures:
 
 #### Option 9
 
-Reference: [__schema0](./__schema0)
+**Type:** `conditional`
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Unique rule name (snake_case) |
+| **label** | `string` | optional | Human-readable label for the rule listing |
+| **description** | `string` | optional | Administrative notes explaining the business reason |
+| **active** | `boolean` | ✅ |  |
+| **events** | `Enum<'insert' \| 'update' \| 'delete'>[]` | ✅ | Validation contexts |
+| **priority** | `integer` | ✅ | Execution priority (lower runs first, default: 100) |
+| **tags** | `string[]` | optional | Categorization tags (e.g., "compliance", "billing") |
+| **severity** | `Enum<'error' \| 'warning' \| 'info'>` | ✅ |  |
+| **message** | `string` | ✅ | Error message to display to the user |
+| **type** | `string` | ✅ |  |
+| **when** | `string` | ✅ | Condition formula (e.g. "type = 'enterprise'") |
+| **then** | `[#](./#)` | ✅ | Validation rule to apply when condition is true |
+| **otherwise** | `[#](./#)` | optional | Validation rule to apply when condition is false |
 
 ---
 

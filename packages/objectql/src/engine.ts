@@ -16,6 +16,7 @@ import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contra
 import { pluralToSingular } from '@objectstack/spec/shared';
 import { SchemaRegistry, computeFQN } from './registry.js';
 import { compileFormula, evaluateFormula } from './formula.js';
+import { bindHooksToEngine } from './hook-binder.js';
 
 interface FormulaPlanEntry { name: string; expression: string; }
 
@@ -67,6 +68,20 @@ export interface HookEntry {
   handler: HookHandler;
   object?: string | string[];  // undefined = global hook
   priority: number;
+  packageId?: string;
+  /**
+   * Original metadata-form `Hook` definition this entry was bound from
+   * (when registered via `bindHooksToEngine`). Pure code-paths that call
+   * `engine.registerHook` directly leave this undefined.
+   */
+  meta?: any;
+  /** Hook `name` from metadata; used for diagnostics & deduplication. */
+  hookName?: string;
+}
+
+/** Function registry entry — see `registerFunction`. */
+interface FunctionEntry {
+  handler: HookHandler;
   packageId?: string;
 }
 
@@ -143,6 +158,12 @@ export class ObjectQL implements IDataEngine {
 
   // Action registry: key = "objectName:actionName"
   private actions = new Map<string, { handler: (ctx: any) => Promise<any> | any; package?: string }>();
+
+  // Function registry: name → handler. Used by `bindHooksToEngine` to
+  // resolve string-named hook handlers (the JSON-safe form). Populated by
+  // `defineStack({ functions })` via `AppPlugin`, or directly via
+  // `engine.registerFunction(...)`.
+  private functions = new Map<string, FunctionEntry>();
 
   // Host provided context additions (e.g. Server router)
   private hostContext: Record<string, any> = {};
@@ -235,6 +256,10 @@ export class ObjectQL implements IDataEngine {
     object?: string | string[];
     priority?: number;
     packageId?: string;
+    /** Original metadata Hook definition (set by `bindHooksToEngine`). */
+    meta?: any;
+    /** Stable name from metadata (set by `bindHooksToEngine`). */
+    hookName?: string;
   }) {
     if (!this.hooks.has(event)) {
         this.hooks.set(event, []);
@@ -245,10 +270,81 @@ export class ObjectQL implements IDataEngine {
       object: options?.object,
       priority: options?.priority ?? 100,
       packageId: options?.packageId,
+      meta: options?.meta,
+      hookName: options?.hookName,
     });
     // Sort by priority (lower runs first)
     entries.sort((a, b) => a.priority - b.priority);
     this.logger.debug('Registered hook', { event, object: options?.object, priority: options?.priority ?? 100, totalHandlers: entries.length });
+  }
+
+  /**
+   * Remove all hooks registered under a given `packageId`. Used by
+   * `bindHooksToEngine` to make re-binding (hot reload, app reinstall)
+   * idempotent, and by app uninstall flows.
+   */
+  unregisterHooksByPackage(packageId: string): number {
+    if (!packageId) return 0;
+    let removed = 0;
+    for (const [event, entries] of this.hooks.entries()) {
+      const before = entries.length;
+      const kept = entries.filter((e) => e.packageId !== packageId);
+      if (kept.length !== before) {
+        this.hooks.set(event, kept);
+        removed += before - kept.length;
+      }
+    }
+    if (removed > 0) {
+      this.logger.debug('Unregistered hooks by package', { packageId, removed });
+    }
+    return removed;
+  }
+
+  /**
+   * Register a named function handler that can later be referenced by
+   * string from a `Hook.handler` field. This is the JSON-safe form of
+   * handler binding — declarative metadata persisted to disk or shipped
+   * over the wire only carries the name.
+   */
+  registerFunction(name: string, handler: HookHandler, packageId?: string): void {
+    if (!name || typeof handler !== 'function') return;
+    this.functions.set(name, { handler, packageId });
+    this.logger.debug('Registered function', { name, packageId });
+  }
+
+  /** Look up a registered function by name. */
+  resolveFunction(name: string): HookHandler | undefined {
+    return this.functions.get(name)?.handler;
+  }
+
+  /** Remove all functions registered under a given `packageId`. */
+  unregisterFunctionsByPackage(packageId: string): number {
+    if (!packageId) return 0;
+    let removed = 0;
+    for (const [name, entry] of this.functions.entries()) {
+      if (entry.packageId === packageId) {
+        this.functions.delete(name);
+        removed += 1;
+      }
+    }
+    if (removed > 0) {
+      this.logger.debug('Unregistered functions by package', { packageId, removed });
+    }
+    return removed;
+  }
+
+  /**
+   * Bind a list of declarative `Hook` metadata definitions to this engine.
+   *
+   * Convenience proxy to the canonical `bindHooksToEngine` so callers do
+   * not need a separate import. Use `import { bindHooksToEngine } from
+   * '@objectstack/objectql'` directly when you want the result object.
+   */
+  bindHooks(hooks: any[] | undefined, opts?: {
+    packageId?: string;
+    functions?: Record<string, HookHandler>;
+  }): void {
+    bindHooksToEngine(this, hooks, { ...(opts ?? {}), logger: this.logger });
   }
 
   public async triggerHooks(event: string, context: HookContext) {

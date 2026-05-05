@@ -36,13 +36,24 @@ import {
 // is called by the kernel's AppPlugin after the engine is ready.
 // See: src/actions/register-handlers.ts for the full registration flow.
 import { registerCrmActionHandlers } from './src/actions/register-handlers';
+import { allHooks } from './src/hooks';
 
 /**
  * Plugin lifecycle hook — called by AppPlugin when the engine is ready.
- * This is where action handlers are registered on the ObjectQL engine.
+ *
+ * Action handlers are still wired imperatively because actions reference
+ * their handler via a string `target` and the function registry binding
+ * happens here. Lifecycle hooks (`*.hook.ts`) are now metadata: they are
+ * picked up automatically from `defineStack({ hooks: allHooks })` below
+ * and bound to the ObjectQL engine by `AppPlugin`. No manual
+ * `registerHook(...)` wiring is needed for hooks any more.
  */
-export const onEnable = async (ctx: { ql: { registerAction: (...args: unknown[]) => void } }) => {
-  registerCrmActionHandlers(ctx.ql);
+export const onEnable = async (ctx: {
+  ql: {
+    registerAction: (...args: unknown[]) => void;
+  };
+}) => {
+  registerCrmActionHandlers(ctx.ql as Parameters<typeof registerCrmActionHandlers>[0]);
 };
 
 export default defineStack({
@@ -77,6 +88,9 @@ export default defineStack({
   ragPipelines: Object.values(ragPipelines),
   permissions: Object.values(profiles),
   apps: Object.values(apps),
+
+  // Lifecycle hooks declared as metadata; AppPlugin auto-binds them.
+  hooks: allHooks,
 
   // Seed Data (top-level, registered as metadata)
   data: CrmSeedData,

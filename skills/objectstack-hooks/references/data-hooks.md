@@ -668,9 +668,13 @@ const maskSensitiveData: Hook = {
 
 ## Registration Methods
 
-### Method 1: Declarative (Stack Definition)
+### Method 1: Declarative (Stack Definition) — RECOMMENDED
 
-**Best for:** Application-level hooks defined in metadata.
+**Best for:** Application-level hooks defined as metadata. The `AppPlugin`
+auto-binds these onto the ObjectQL engine at startup — **no `register*Hook`
+boilerplate is required**, and all declarative fields (`condition`,
+`async`, `retryPolicy`, `timeout`, `onError`, `priority`) are honoured by
+the runtime.
 
 ```typescript
 // objectstack.config.ts
@@ -680,13 +684,29 @@ import taskHook from './objects/task.hook';
 export default defineStack({
   manifest: { /* ... */ },
   objects: [/* ... */],
-  hooks: [taskHook],  // Register hooks here
+  hooks: [taskHook],  // ← AppPlugin auto-binds; no manual registration needed
 });
 ```
 
-### Method 2: Programmatic (Runtime)
+For string-named handlers, declare them under `functions` so the binder
+can resolve them:
 
-**Best for:** Plugin-provided hooks, dynamic registration.
+```typescript
+export default defineStack({
+  hooks: [
+    { name: 'h', object: 'account', events: ['beforeInsert'], handler: 'normalize' },
+  ],
+  functions: {
+    normalize: async (ctx) => { /* ... */ },
+  },
+});
+```
+
+### Method 2: Programmatic (Runtime) — escape hatch
+
+**Best for:** Plugins that need to register hooks dynamically based on
+runtime state. Prefer Method 1 unless you actually need imperative
+control.
 
 ```typescript
 // In your plugin's onEnable()
@@ -696,9 +716,15 @@ export const onEnable = async (ctx: { ql: ObjectQL }) => {
   }, {
     object: 'account',
     priority: 100,
+    packageId: 'my-plugin', // enables clean unregister later
   });
 };
 ```
+
+> Note: hooks registered this way **do not** get the declarative
+> `condition` / `retry` / `timeout` / `onError` / `async` semantics —
+> those only apply when binding through `defineStack({ hooks })` or
+> calling `ql.bindHooks([...])` directly.
 
 ### Method 3: Hook Files (Convention)
 

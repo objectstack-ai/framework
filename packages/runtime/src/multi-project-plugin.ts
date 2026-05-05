@@ -37,6 +37,7 @@ import {
 } from './project-kernel-factory.js';
 import { KernelManager } from './kernel-manager.js';
 import { SeedLoaderService } from './seed-loader.js';
+import { collectBundleHooks, collectBundleFunctions } from './app-plugin.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -119,6 +120,7 @@ function extractMetadataItems(bundle: any): ExtractedItem[] {
     pushAll('agent', bundle?.agents);
     pushAll('app', bundle?.apps);
     pushAll('action', bundle?.actions);
+    pushAll('hook', bundle?.hooks);
 
     return items;
 }
@@ -204,6 +206,26 @@ function createTemplateSeeder(
             const seedLoader = new SeedLoaderService(engine, metadata, console as any);
             const config = SeedLoaderConfigSchema.parse({});
             await seedLoader.load({ datasets: dataSets, config });
+        }
+
+        // Bind declarative `Hook` metadata from the template bundle into
+        // the project kernel's ObjectQL engine. Mirrors AppPlugin's
+        // behaviour so single-tenant (`defineStack`) and multi-tenant
+        // (template seeding) paths share one wiring.
+        try {
+            const hooks = collectBundleHooks(bundle);
+            const functions = collectBundleFunctions(bundle);
+            if ((hooks.length > 0 || Object.keys(functions).length > 0) && typeof (engine as any).bindHooks === 'function') {
+                (engine as any).bindHooks(hooks, {
+                    packageId: `project:${projectId}`,
+                    functions,
+                });
+            }
+        } catch (err: any) {
+            // Non-fatal: hook binding failures shouldn't abort seeding.
+            // Log via console since `ctx.logger` isn't in scope here.
+            // eslint-disable-next-line no-console
+            console.warn(`[multi-project] hook binding failed for project ${projectId}: ${err?.message ?? err}`);
         }
 
         // Force a persistence flush so the per-project JSON file is

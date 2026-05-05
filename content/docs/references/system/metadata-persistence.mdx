@@ -143,7 +143,7 @@ const result = MetadataCollectionInfo.parse(data);
 | **previousChecksum** | `string` | optional | Checksum of the previous version |
 | **changeNote** | `string` | optional | Description of changes made in this version |
 | **organizationId** | `string` | optional | Organization identifier for multi-tenant isolation |
-| **environmentId** | `string` | optional | Environment ID — null = platform-global, set = env-scoped |
+| **projectId** | `string` | optional | Project ID — null = platform-global, set = project-scoped |
 | **recordedBy** | `string` | optional | User who made this change |
 | **recordedAt** | `string` | ✅ | Timestamp when this version was recorded |
 
@@ -272,7 +272,7 @@ const result = MetadataCollectionInfo.parse(data);
 | **state** | `Enum<'draft' \| 'active' \| 'archived' \| 'deprecated'>` | ✅ |  |
 | **organizationId** | `string` | optional | Organization identifier for multi-tenant isolation |
 | **tenantId** | `string` | optional | Tenant identifier for multi-tenant isolation |
-| **environmentId** | `string` | optional | Environment ID — null = platform-global, set = env-scoped |
+| **projectId** | `string` | optional | Project ID — null = platform-global, set = project-scoped |
 | **version** | `number` | ✅ | Record version for optimistic concurrency control |
 | **checksum** | `string` | optional | Content checksum for change detection |
 | **source** | `Enum<'filesystem' \| 'database' \| 'api' \| 'migration'>` | optional | Origin of this metadata record |

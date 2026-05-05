@@ -208,71 +208,111 @@ export class ObjectQLPlugin implements Plugin {
 
   /**
    * Register built-in audit hooks for auto-stamping created_by/updated_by
-   * and fetching previousData for update/delete operations.
+   * and fetching previousData for update/delete operations. These are
+   * declared as canonical `Hook` metadata and bound through the same
+   * `bindHooksToEngine` path used by `defineStack({ hooks })`, so the
+   * engine's built-ins flow through the same rails as user code
+   * (dogfooding the protocol).
    */
   private registerAuditHooks(ctx: PluginContext) {
     if (!this.ql) return;
 
-    // Auto-stamp created_by/updated_by on insert
-    this.ql.registerHook('beforeInsert', async (hookCtx) => {
-      if (hookCtx.session?.userId && hookCtx.input?.data) {
-        const data = hookCtx.input.data as Record<string, any>;
-        if (typeof data === 'object' && data !== null) {
-          data.created_by = data.created_by ?? hookCtx.session.userId;
-          data.updated_by = hookCtx.session.userId;
-          data.created_at = data.created_at ?? new Date().toISOString();
-          data.updated_at = new Date().toISOString();
-          if (hookCtx.session.tenantId) {
-            data.tenant_id = data.tenant_id ?? hookCtx.session.tenantId;
+    const stamp = new Date().toISOString;
+
+    const builtinHooks: any[] = [
+      {
+        name: 'sys_stamp_audit_insert',
+        object: '*',
+        events: ['beforeInsert'],
+        priority: 10,
+        description: 'Auto-stamp created_by / updated_by / created_at / updated_at / tenant_id on insert',
+        handler: async (hookCtx: any) => {
+          if (hookCtx.session?.userId && hookCtx.input?.data) {
+            const data = hookCtx.input.data as Record<string, any>;
+            if (typeof data === 'object' && data !== null) {
+              data.created_by = data.created_by ?? hookCtx.session.userId;
+              data.updated_by = hookCtx.session.userId;
+              data.created_at = data.created_at ?? stamp.call(new Date());
+              data.updated_at = stamp.call(new Date());
+              if (hookCtx.session.tenantId) {
+                data.tenant_id = data.tenant_id ?? hookCtx.session.tenantId;
+              }
+            }
           }
-        }
-      }
-    }, { object: '*', priority: 10 });
+        },
+      },
+      {
+        name: 'sys_stamp_audit_update',
+        object: '*',
+        events: ['beforeUpdate'],
+        priority: 10,
+        description: 'Auto-stamp updated_by / updated_at on update',
+        handler: async (hookCtx: any) => {
+          if (hookCtx.session?.userId && hookCtx.input?.data) {
+            const data = hookCtx.input.data as Record<string, any>;
+            if (typeof data === 'object' && data !== null) {
+              data.updated_by = hookCtx.session.userId;
+              data.updated_at = stamp.call(new Date());
+            }
+          }
+        },
+      },
+      {
+        name: 'sys_fetch_previous_update',
+        object: '*',
+        events: ['beforeUpdate'],
+        priority: 5,
+        description: 'Auto-fetch the previous record for update hooks',
+        handler: async (hookCtx: any) => {
+          if (hookCtx.input?.id && !hookCtx.previous) {
+            try {
+              const existing = await this.ql!.findOne(hookCtx.object, {
+                where: { id: hookCtx.input.id }
+              });
+              if (existing) hookCtx.previous = existing;
+            } catch (_e) {
+              // Non-fatal: some objects may not support findOne
+            }
+          }
+        },
+      },
+      {
+        name: 'sys_fetch_previous_delete',
+        object: '*',
+        events: ['beforeDelete'],
+        priority: 5,
+        description: 'Auto-fetch the previous record for delete hooks',
+        handler: async (hookCtx: any) => {
+          if (hookCtx.input?.id && !hookCtx.previous) {
+            try {
+              const existing = await this.ql!.findOne(hookCtx.object, {
+                where: { id: hookCtx.input.id }
+              });
+              if (existing) hookCtx.previous = existing;
+            } catch (_e) {
+              // Non-fatal
+            }
+          }
+        },
+      },
+    ];
 
-    // Auto-stamp updated_by on update
-    this.ql.registerHook('beforeUpdate', async (hookCtx) => {
-      if (hookCtx.session?.userId && hookCtx.input?.data) {
-        const data = hookCtx.input.data as Record<string, any>;
-        if (typeof data === 'object' && data !== null) {
-          data.updated_by = hookCtx.session.userId;
-          data.updated_at = new Date().toISOString();
-        }
-      }
-    }, { object: '*', priority: 10 });
-
-    // Auto-fetch previousData for update hooks
-    this.ql.registerHook('beforeUpdate', async (hookCtx) => {
-      if (hookCtx.input?.id && !hookCtx.previous) {
-        try {
-          const existing = await this.ql!.findOne(hookCtx.object, {
-            where: { id: hookCtx.input.id }
+    if (typeof (this.ql as any).bindHooks === 'function') {
+      (this.ql as any).bindHooks(builtinHooks, { packageId: 'sys:audit' });
+    } else {
+      // Defensive fallback if binder isn't available (older builds).
+      for (const h of builtinHooks) {
+        for (const event of h.events) {
+          this.ql.registerHook(event, h.handler, {
+            object: h.object,
+            priority: h.priority,
+            packageId: 'sys:audit',
           });
-          if (existing) {
-            hookCtx.previous = existing;
-          }
-        } catch (_e) {
-          // Non-fatal: some objects may not support findOne
         }
       }
-    }, { object: '*', priority: 5 });
+    }
 
-    // Auto-fetch previousData for delete hooks
-    this.ql.registerHook('beforeDelete', async (hookCtx) => {
-      if (hookCtx.input?.id && !hookCtx.previous) {
-        try {
-          const existing = await this.ql!.findOne(hookCtx.object, {
-            where: { id: hookCtx.input.id }
-          });
-          if (existing) {
-            hookCtx.previous = existing;
-          }
-        } catch (_e) {
-          // Non-fatal
-        }
-      }
-    }, { object: '*', priority: 5 });
-
-    ctx.logger.debug('Audit hooks registered (created_by/updated_by, previousData)');
+    ctx.logger.debug('Audit hooks registered via binder (created_by/updated_by, previousData)');
   }
 
   /**
@@ -534,7 +574,7 @@ export class ObjectQLPlugin implements Plugin {
     ctx.logger.info('Syncing metadata from external service into ObjectQL registry...');
     
     // Metadata types to sync
-    const metadataTypes = ['object', 'view', 'app', 'flow', 'workflow', 'function'];
+    const metadataTypes = ['object', 'view', 'app', 'flow', 'workflow', 'function', 'hook'];
     let totalLoaded = 0;
     
     for (const type of metadataTypes) {
@@ -542,8 +582,21 @@ export class ObjectQLPlugin implements Plugin {
             // Check if service has loadMany method
             if (typeof metadataService.loadMany === 'function') {
                 const items = await metadataService.loadMany(type);
-                
+
                 if (items && items.length > 0) {
+                    // Functions arrive as JSON-safe records ({name, handler})
+                    // where `handler` is a function reference or compiled code
+                    // already attached by the metadata pipeline. Register them
+                    // BEFORE binding hooks so string-named hook handlers can
+                    // resolve.
+                    if (type === 'function' && this.ql && typeof (this.ql as any).registerFunction === 'function') {
+                        for (const item of items) {
+                            if (item?.name && typeof item.handler === 'function') {
+                                (this.ql as any).registerFunction(item.name, item.handler, 'metadata-service');
+                            }
+                        }
+                    }
+
                     items.forEach((item: any) => {
                         // Determine key field (usually 'name' or 'id')
                         const keyField = item.id ? 'id' : 'name';
@@ -560,7 +613,18 @@ export class ObjectQLPlugin implements Plugin {
                             this.ql.registry.registerItem(type, item, keyField);
                         }
                     });
-                    
+
+                    // Hooks need to be wired into the execution pipeline,
+                    // not just stored in the registry. Funnel through the
+                    // canonical binder so declarative semantics (condition,
+                    // retry, timeout, async, onError, priority, packageId)
+                    // are honoured uniformly with the AppPlugin path.
+                    if (type === 'hook' && this.ql && typeof (this.ql as any).bindHooks === 'function') {
+                        (this.ql as any).bindHooks(items, {
+                            packageId: 'metadata-service',
+                        });
+                    }
+
                     totalLoaded += items.length;
                     ctx.logger.info(`Synced ${items.length} ${type}(s) from metadata service`);
                 }

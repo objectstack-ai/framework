@@ -143,6 +143,44 @@ export class AppPlugin implements Plugin {
              ctx.logger.debug('No runtime.onEnable function found', { appId });
         }
 
+        // ── Auto-bind declarative Hook metadata ─────────────────────────
+        // Hooks declared via `defineStack({ hooks })` (or attached to the
+        // bundle by other tooling) are wired into the ObjectQL execution
+        // pipeline here, with no boilerplate from user code. Inline
+        // function handlers are resolved directly; string-named handlers
+        // are looked up in `bundle.functions` (also auto-registered) or in
+        // any function previously registered on the engine.
+        //
+        // Runs AFTER `runtime.onEnable` so user code may still
+        // imperatively register additional hooks/functions for advanced
+        // cases — both will coexist on the engine.
+        try {
+            const hooks = collectBundleHooks(this.bundle);
+            const functions = collectBundleFunctions(this.bundle);
+            if (hooks.length > 0 || Object.keys(functions).length > 0) {
+                if (typeof ql.bindHooks === 'function') {
+                    ql.bindHooks(hooks, {
+                        packageId: `app:${appId}`,
+                        functions,
+                    });
+                    ctx.logger.info('[AppPlugin] Bound declarative hooks', {
+                        appId,
+                        hookCount: hooks.length,
+                        functionCount: Object.keys(functions).length,
+                    });
+                } else {
+                    ctx.logger.warn('[AppPlugin] ql.bindHooks unavailable; declarative hooks ignored', {
+                        appId,
+                        hookCount: hooks.length,
+                    });
+                }
+            }
+        } catch (err: any) {
+            ctx.logger.error('[AppPlugin] Failed to bind declarative hooks', err as Error, {
+                appId,
+            });
+        }
+
         // ── Org-Scoped App Catalog Sync ──────────────────────────────────
         // Emit `app:registered` so AppCatalogService (running on the
         // control-plane kernel) can mirror this app into `sys_app`. Skipped
@@ -358,4 +396,58 @@ export class AppPlugin implements Plugin {
             ctx.logger.info('[i18n] Loaded translation bundles', { appId, bundles: bundles.length, locales: loadedLocales });
         }
     }
+}
+
+// ─── Bundle hook & function collectors ──────────────────────────────
+// Hooks declared in `defineStack({ hooks })` end up at `bundle.hooks`;
+// some legacy bundles still nest them under `manifest.hooks`. We dedupe
+// (by reference) so the same array isn't bound twice when both shapes
+// happen to point at the same list.
+
+/** Collect declarative `Hook` definitions from a bundle (top-level + manifest). */
+export function collectBundleHooks(bundle: any): any[] {
+    const out: any[] = [];
+    const seen = new Set<any>();
+    const push = (arr: any) => {
+        if (!Array.isArray(arr)) return;
+        for (const h of arr) {
+            if (h && !seen.has(h)) {
+                seen.add(h);
+                out.push(h);
+            }
+        }
+    };
+    push(bundle?.hooks);
+    push(bundle?.manifest?.hooks);
+    return out;
+}
+
+/**
+ * Collect a name → handler map from `bundle.functions`. Accepted shapes:
+ *
+ *   - `{ functions: { foo: fn, bar: fn } }`           ← preferred map form
+ *   - `{ functions: [{ name: 'foo', handler: fn }] }` ← array of records
+ *
+ * String-named hook handlers (`Hook.handler: 'foo'`) are resolved against
+ * this map (and the engine's persistent function registry).
+ */
+export function collectBundleFunctions(bundle: any): Record<string, (ctx: any) => any> {
+    const out: Record<string, (ctx: any) => any> = {};
+    const merge = (src: any) => {
+        if (!src) return;
+        if (Array.isArray(src)) {
+            for (const item of src) {
+                if (item && typeof item.name === 'string' && typeof item.handler === 'function') {
+                    out[item.name] = item.handler;
+                }
+            }
+        } else if (typeof src === 'object') {
+            for (const [name, fn] of Object.entries(src)) {
+                if (typeof fn === 'function') out[name] = fn as any;
+            }
+        }
+    };
+    merge(bundle?.functions);
+    merge(bundle?.manifest?.functions);
+    return out;
 }

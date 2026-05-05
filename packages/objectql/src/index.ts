@@ -18,6 +18,12 @@ export { ObjectStackProtocolImplementation } from './protocol.js';
 export { ObjectQL, ObjectRepository, ScopedContext } from './engine.js';
 export type { ObjectQLHostContext, HookHandler, HookEntry, OperationContext, EngineMiddleware } from './engine.js';
 
+// Export Hook Binder & Wrappers (declarative-metadata → engine glue)
+export { bindHooksToEngine } from './hook-binder.js';
+export type { BindHooksOptions, BindHooksResult } from './hook-binder.js';
+export { wrapDeclarativeHook } from './hook-wrappers.js';
+export type { WrapDeclarativeOptions } from './hook-wrappers.js';
+
 // Export MetadataFacade
 export { MetadataFacade } from './metadata-facade.js';
 

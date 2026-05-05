@@ -237,6 +237,26 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * Hooks, mappings, and analytics cubes.
    */
   hooks: z.array(HookSchema).optional().describe('Object Lifecycle Hooks'),
+  /**
+   * Named handler functions for declarative metadata that references
+   * handlers by string name (`Hook.handler: 'my_handler'`,
+   * `Action.target: 'my_handler'`). Two accepted shapes:
+   *
+   *   - Map form (preferred): `{ my_handler: (ctx) => {...} }`
+   *   - Array form: `[{ name: 'my_handler', handler: (ctx) => {...} }]`
+   *
+   * Functions live in code only; they are not serialized into project
+   * artifacts. The `AppPlugin` registers them on the engine before
+   * binding hooks so `string` handlers resolve at startup.
+   */
+  functions: z.union([
+    z.record(z.string(), z.function()),
+    z.array(z.object({
+      name: z.string(),
+      handler: z.function(),
+      packageId: z.string().optional(),
+    })),
+  ]).optional().describe('Named handler functions referenced by hooks/actions'),
   mappings: z.array(MappingSchema).optional().describe('Data Import/Export Mappings'),
   analyticsCubes: z.array(CubeSchema).optional().describe('Analytics Semantic Layer Cubes'),
 
