@@ -19,6 +19,7 @@ export const SysUser = ObjectSchema.create({
   pluralLabel: 'Users',
   icon: 'user',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'User accounts for authentication',
   displayNameField: 'name',
   titleFormat: '{name}',

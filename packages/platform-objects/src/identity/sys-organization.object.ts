@@ -16,6 +16,7 @@ export const SysOrganization = ObjectSchema.create({
   pluralLabel: 'Organizations',
   icon: 'building-2',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Organizations for multi-tenant grouping',
   displayNameField: 'name',
   titleFormat: '{name}',

@@ -20,6 +20,7 @@ export const SysOauthRefreshToken = ObjectSchema.create({
   pluralLabel: 'OAuth Refresh Tokens',
   icon: 'refresh-cw',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Opaque OAuth refresh tokens (linked to a session)',
   compactLayout: ['client_id', 'user_id', 'expires_at'],
 

@@ -16,6 +16,7 @@ export const SysVerification = ObjectSchema.create({
   pluralLabel: 'Verifications',
   icon: 'shield-check',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Email and phone verification tokens',
   titleFormat: 'Verification for {identifier}',
   compactLayout: ['identifier', 'expires_at', 'created_at'],

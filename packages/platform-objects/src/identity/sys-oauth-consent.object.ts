@@ -22,6 +22,7 @@ export const SysOauthConsent = ObjectSchema.create({
   pluralLabel: 'OAuth Consents',
   icon: 'shield-check',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'User consent records for OAuth client applications',
   compactLayout: ['client_id', 'user_id', 'scopes'],
 

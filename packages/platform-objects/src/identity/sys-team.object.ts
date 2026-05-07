@@ -16,6 +16,7 @@ export const SysTeam = ObjectSchema.create({
   pluralLabel: 'Teams',
   icon: 'users',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Teams within organizations for fine-grained grouping',
   displayNameField: 'name',
   titleFormat: '{name}',

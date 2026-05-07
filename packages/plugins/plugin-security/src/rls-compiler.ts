@@ -80,7 +80,14 @@ export class RLSCompiler {
     if (eqMatch) {
       const [, field, prop] = eqMatch;
       const value = userCtx[prop];
-      if (value === undefined) return null;
+      // Skip when the user-context value is missing (undefined or null).
+      // A `null` `organization_id` means "no active organization" — applying
+      // the filter as `organization_id IS NULL` would silently expose every
+      // un-tenanted row across tenants and break system tables that lack the
+      // column entirely. Treating null as "skip this policy" makes the
+      // tenant_isolation rule safely opt-out for users without an active org
+      // while still applying when one is set.
+      if (value === undefined || value === null) return null;
       return { [field]: value };
     }
 
@@ -96,7 +103,7 @@ export class RLSCompiler {
     if (inMatch) {
       const [, field, prop] = inMatch;
       const value = userCtx[prop];
-      if (!Array.isArray(value)) return null;
+      if (!Array.isArray(value) || value.length === 0) return null;
       return { [field]: { $in: value } };
     }
 

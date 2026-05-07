@@ -16,6 +16,7 @@ export const SysTwoFactor = ObjectSchema.create({
   pluralLabel: 'Two Factor Credentials',
   icon: 'smartphone',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Two-factor authentication credentials',
   titleFormat: 'Two-factor for {user_id}',
   compactLayout: ['user_id', 'created_at'],

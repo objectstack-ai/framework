@@ -25,6 +25,7 @@ export const SysDeviceCode = ObjectSchema.create({
   pluralLabel: 'Device Codes',
   icon: 'key-round',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'OAuth 2.0 Device Authorization Grant (RFC 8628) pending requests',
   titleFormat: '{user_code}',
   compactLayout: ['user_code', 'status', 'client_id', 'expires_at'],

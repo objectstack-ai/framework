@@ -16,6 +16,7 @@ export const SysMember = ObjectSchema.create({
   pluralLabel: 'Members',
   icon: 'user-check',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Organization membership records',
   titleFormat: '{user_id} in {organization_id}',
   compactLayout: ['user_id', 'organization_id', 'role'],

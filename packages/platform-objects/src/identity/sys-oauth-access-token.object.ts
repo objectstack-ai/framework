@@ -21,6 +21,7 @@ export const SysOauthAccessToken = ObjectSchema.create({
   pluralLabel: 'OAuth Access Tokens',
   icon: 'ticket',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Opaque OAuth access tokens issued to client applications',
   compactLayout: ['client_id', 'user_id', 'expires_at'],
 

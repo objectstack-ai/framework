@@ -15,8 +15,30 @@ const logError = (...args: unknown[]) => (globalThis as any).console?.error(...a
  * so clients can distinguish "object isn't registered" from real server
  * faults. Anything else becomes a 400 (bad request) preserving prior
  * behavior. Genuine 500s are still logged.
+ *
+ * `PermissionDeniedError` (thrown by `SecurityPlugin`) MUST be caught
+ * before the unknown-object heuristic, otherwise its message —
+ * "[Security] Access denied: operation 'insert' on object 'sys_user' is
+ * not permitted …" — trips the `'<obj>' … not` substring check and
+ * returns a misleading 404.
  */
 function mapDataError(error: any, object?: string): { status: number; body: Record<string, unknown> } {
+    // Short-circuit: explicit security denial → 403. Match by `code` /
+    // `name` to avoid pulling a runtime dependency on plugin-security.
+    if (
+        error?.code === 'PERMISSION_DENIED' ||
+        error?.name === 'PermissionDeniedError' ||
+        (typeof error?.message === 'string' && error.message.startsWith('[Security] Access denied'))
+    ) {
+        return {
+            status: 403,
+            body: {
+                error: error?.message ?? 'Permission denied',
+                code: 'PERMISSION_DENIED',
+                ...(object ? { object } : {}),
+            },
+        };
+    }
     const raw = String(error?.message ?? error ?? '');
     const lower = raw.toLowerCase();
     const looksLikeUnknownObject =
@@ -954,7 +976,7 @@ export class RestServer {
                         res.json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);
-                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        if (mapped.status !== 404 && mapped.status !== 403) logError("[REST] Unhandled error:", error);
                         res.status(mapped.status === 400 ? 404 : mapped.status).json(mapped.body);
                     }
                 },
@@ -984,7 +1006,7 @@ export class RestServer {
                         res.status(201).json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);
-                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        if (mapped.status !== 404 && mapped.status !== 403) logError("[REST] Unhandled error:", error);
                         res.status(mapped.status).json(mapped.body);
                     }
                 },
@@ -1015,7 +1037,7 @@ export class RestServer {
                         res.json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);
-                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        if (mapped.status !== 404 && mapped.status !== 403) logError("[REST] Unhandled error:", error);
                         res.status(mapped.status).json(mapped.body);
                     }
                 },
@@ -1045,7 +1067,7 @@ export class RestServer {
                         res.json(result);
                     } catch (error: any) {
                         const mapped = mapDataError(error, req.params?.object);
-                        if (mapped.status !== 404) logError("[REST] Unhandled error:", error);
+                        if (mapped.status !== 404 && mapped.status !== 403) logError("[REST] Unhandled error:", error);
                         res.status(mapped.status).json(mapped.body);
                     }
                 },

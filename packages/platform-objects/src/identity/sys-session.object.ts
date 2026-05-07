@@ -20,6 +20,7 @@ export const SysSession = ObjectSchema.create({
   pluralLabel: 'Sessions',
   icon: 'key',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Active user sessions',
   displayNameField: 'user_id',
   titleFormat: 'Session — {user_id}',

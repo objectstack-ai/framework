@@ -19,6 +19,7 @@ export const SysApiKey = ObjectSchema.create({
   pluralLabel: 'API Keys',
   icon: 'key-round',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'API keys for programmatic access',
   displayNameField: 'name',
   titleFormat: '{name}',

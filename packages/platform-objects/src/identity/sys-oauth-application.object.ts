@@ -23,6 +23,7 @@ export const SysOauthApplication = ObjectSchema.create({
   pluralLabel: 'OAuth Applications',
   icon: 'key-round',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Registered OAuth/OIDC client applications',
   displayNameField: 'name',
   titleFormat: '{name}',

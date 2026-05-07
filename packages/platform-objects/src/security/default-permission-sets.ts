@@ -3,6 +3,56 @@
 import { PermissionSetSchema, type PermissionSet } from '@objectstack/spec/security';
 
 /**
+ * Identity tables managed by the better-auth plugin (see
+ * `packages/platform-objects/src/identity/`). Mutations to these tables
+ * MUST flow through the better-auth API endpoints (sign-up, password
+ * reset, organization invite/remove-member, api-key/create, …) rather
+ * than the generic CRUD pipeline so that password hashing, token
+ * signing, email verification, invitation flows and scope hashing all
+ * fire correctly.
+ *
+ * The default member/viewer permission sets therefore explicitly DENY
+ * `allowCreate / allowEdit / allowDelete` on these objects while still
+ * permitting reads (subject to the rest of the RLS chain). Admin
+ * permission sets keep their `*` wildcard so they can rescue data
+ * directly when needed.
+ *
+ * Each entry mirrors the `managedBy: 'better-auth'` flag declared on
+ * the corresponding object schema in `packages/platform-objects/src/identity/`.
+ */
+const BETTER_AUTH_MANAGED_OBJECTS = [
+  'sys_user',
+  'sys_account',
+  'sys_session',
+  'sys_organization',
+  'sys_member',
+  'sys_invitation',
+  'sys_team',
+  'sys_team_member',
+  'sys_api_key',
+  'sys_two_factor',
+  'sys_verification',
+  'sys_jwks',
+  'sys_device_code',
+  'sys_oauth_application',
+  'sys_oauth_access_token',
+  'sys_oauth_refresh_token',
+  'sys_oauth_consent',
+] as const;
+
+const denyWritesOnManagedObjects = (): Record<string, {
+  allowRead: boolean;
+  allowCreate: boolean;
+  allowEdit: boolean;
+  allowDelete: boolean;
+}> => Object.fromEntries(
+  BETTER_AUTH_MANAGED_OBJECTS.map((name) => [
+    name,
+    { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+  ]),
+);
+
+/**
  * Default permission sets seeded by the platform.
  *
  * These are referenced by name (`admin_full_access`, `member_default`,
@@ -18,6 +68,8 @@ import { PermissionSetSchema, type PermissionSet } from '@objectstack/spec/secur
  *
  * `objects: { '*': … }` uses the wildcard sentinel honoured by
  * `PermissionEvaluator` — admins do not need an explicit row per object.
+ * Per-object entries fully override the wildcard for that object (see
+ * `PermissionEvaluator.checkObjectPermission` — lookup, not merge).
  *
  * RLS policies use the canonical `current_user.*` placeholders compiled
  * by `RLSCompiler`. The active organization is exposed under
@@ -54,6 +106,8 @@ export const defaultPermissionSets: PermissionSet[] = [
         allowEdit: true,
         allowDelete: true,
       },
+      // Identity tables are managed by better-auth — no direct writes.
+      ...denyWritesOnManagedObjects(),
     },
     rowLevelSecurity: [
       {
@@ -101,6 +155,10 @@ export const defaultPermissionSets: PermissionSet[] = [
         allowEdit: false,
         allowDelete: false,
       },
+      // Belt-and-suspenders: explicit deny on managed objects even though
+      // the wildcard already denies — keeps the policy readable when
+      // future relaxations might widen the wildcard.
+      ...denyWritesOnManagedObjects(),
     },
     rowLevelSecurity: [
       {

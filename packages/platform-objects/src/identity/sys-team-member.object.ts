@@ -16,6 +16,7 @@ export const SysTeamMember = ObjectSchema.create({
   pluralLabel: 'Team Members',
   icon: 'user-plus',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Team membership records linking users to teams',
   titleFormat: '{user_id} in {team_id}',
   compactLayout: ['user_id', 'team_id', 'created_at'],

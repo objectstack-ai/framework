@@ -20,6 +20,7 @@ export const SysJwks = ObjectSchema.create({
   pluralLabel: 'JWKS Keys',
   icon: 'key',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Asymmetric key pairs used to sign and verify issued JWTs',
   compactLayout: ['id', 'created_at', 'expires_at'],
 

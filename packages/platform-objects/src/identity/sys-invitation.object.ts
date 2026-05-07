@@ -16,6 +16,7 @@ export const SysInvitation = ObjectSchema.create({
   pluralLabel: 'Invitations',
   icon: 'mail',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'Organization invitations for user onboarding',
   titleFormat: 'Invitation to {organization_id}',
   compactLayout: ['email', 'organization_id', 'status'],

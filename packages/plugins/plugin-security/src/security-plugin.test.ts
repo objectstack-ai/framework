@@ -317,6 +317,31 @@ describe('RLSCompiler', () => {
     expect(filter).toBeNull();
   });
 
+  it('should skip equality policy when user-context value is null', () => {
+    // Repro: a logged-in user without an active organization. The
+    // tenant_isolation rule would otherwise emit `organization_id = null`,
+    // which silently exposes un-tenanted rows or breaks queries on system
+    // tables that lack the column. Treating null as "skip" is safe because
+    // the field-existence check + most-permissive permission-set merge
+    // remain in force.
+    const compiler = new RLSCompiler();
+    const policy: any = { object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' };
+    const ctx: any = { userId: 'u1', tenantId: null, roles: [] };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toBeNull();
+  });
+
+  it('should still apply policy when only one of multiple has a usable value', () => {
+    // Same scenario as above but combined with a self-row rule. The
+    // organization_id rule should drop out, leaving only `id = current_user.id`.
+    const compiler = new RLSCompiler();
+    const tenantPolicy: any = { object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' };
+    const selfPolicy: any = { object: 'sys_user', operation: 'select', using: 'id = current_user.id' };
+    const ctx: any = { userId: 'u1', tenantId: null, roles: [] };
+    const filter = compiler.compileFilter([tenantPolicy, selfPolicy], ctx);
+    expect(filter).toEqual({ id: 'u1' });
+  });
+
   it('should get applicable policies for object and operation', () => {
     const compiler = new RLSCompiler();
     const policies: any[] = [

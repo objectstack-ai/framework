@@ -16,6 +16,7 @@ export const SysAccount = ObjectSchema.create({
   pluralLabel: 'Accounts',
   icon: 'link',
   isSystem: true,
+  managedBy: 'better-auth',
   description: 'OAuth and authentication provider accounts',
   titleFormat: '{provider_id} - {account_id}',
   compactLayout: ['provider_id', 'user_id', 'account_id'],

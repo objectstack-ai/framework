@@ -315,6 +315,32 @@ const ObjectSchemaBase = z.object({
   isSystem: z.boolean().optional().default(false).describe('Is system object (protected from deletion)'),
   abstract: z.boolean().optional().default(false).describe('Is abstract base object (cannot be instantiated)'),
 
+  /**
+   * Managed-by hint — declares that the object's data lifecycle is owned
+   * by an external subsystem rather than the generic CRUD pipeline.
+   *
+   * - `better-auth`  — Identity tables (sys_user, sys_session, sys_member,
+   *   sys_organization, sys_api_key, …). Mutations must flow through the
+   *   better-auth API (sign-up, password reset, invite-member, …) so that
+   *   password hashing, token signing, email verification, and invitation
+   *   flows fire correctly. Direct CRUD is denied at the server in the
+   *   default permission sets and the dashboard SHOULD hide the standard
+   *   New / Edit / Delete buttons in favour of custom actions that call
+   *   the better-auth endpoints.
+   * - `system`       — Platform-internal book-keeping (audit logs, JWKS,
+   *   device codes). Read-mostly; never edit directly.
+   * - `platform`     — Same as `system` but reserved for future use by
+   *   ObjectStack itself (metadata snapshots, migration ledgers, …).
+   *
+   * The flag is purely declarative — the actual deny is enforced through
+   * permission sets in {@link packages/platform-objects/src/security/default-permission-sets.ts}.
+   * UI clients are expected to honour it by suppressing generic CRUD
+   * affordances when set.
+   */
+  managedBy: z.enum(['better-auth', 'system', 'platform']).optional().describe(
+    'Hint that this object is managed by an external subsystem; clients should hide generic CRUD UI and route mutations through the corresponding API.',
+  ),
+
   /** 
    * Storage & Virtualization 
    */
