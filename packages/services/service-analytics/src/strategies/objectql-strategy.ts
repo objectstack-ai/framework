@@ -130,12 +130,32 @@ export class ObjectQLStrategy implements AnalyticsStrategy {
 
   private resolveMeasureAggregation(cube: Cube, measureName: string): { field: string; method: string } {
     const fieldName = measureName.includes('.') ? measureName.split('.')[1] : measureName;
-    const measure = cube.measures[fieldName];
-    if (!measure) return { field: '*', method: 'count' };
-    return {
-      field: measure.sql.replace(/^\$/, ''),
-      method: measure.type === 'count_distinct' ? 'count_distinct' : measure.type,
-    };
+    const direct = cube.measures[fieldName];
+    if (direct) {
+      return {
+        field: direct.sql.replace(/^\$/, ''),
+        method: direct.type === 'count_distinct' ? 'count_distinct' : direct.type,
+      };
+    }
+    // Accept `${field}_${type}` aliases (e.g. 'amount_sum') for measures whose
+    // canonical name is just `${field}` (e.g. measure 'amount' of type 'sum').
+    // This matches the convention used by clients that build measure names
+    // from (field, function) pairs (e.g. the data-objectstack adapter).
+    const aggTypes = ['count', 'sum', 'avg', 'min', 'max', 'count_distinct'];
+    for (const type of aggTypes) {
+      const suffix = `_${type}`;
+      if (fieldName.endsWith(suffix)) {
+        const baseField = fieldName.slice(0, -suffix.length);
+        const candidate = cube.measures[baseField];
+        if (candidate && candidate.type === type) {
+          return {
+            field: candidate.sql.replace(/^\$/, ''),
+            method: candidate.type === 'count_distinct' ? 'count_distinct' : candidate.type,
+          };
+        }
+      }
+    }
+    return { field: '*', method: 'count' };
   }
 
   private convertFilter(operator: string, values?: string[]): unknown {

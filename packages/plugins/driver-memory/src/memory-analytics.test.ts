@@ -264,6 +264,35 @@ describe('MemoryAnalyticsService', () => {
       expect(result.rows[1]['orders.customer']).toBe('Charlie');
     });
 
+    it('should resolve `${field}_${type}` aliases to canonical measures', async () => {
+      // Cubes commonly define measures keyed by field name (e.g. measure
+      // 'amount' of type 'sum'). Clients that build measure names from
+      // (field, function) pairs send 'amount_sum' — the resolver should
+      // accept that alias and produce the same aggregate value.
+      const aliasCube: Cube = {
+        name: 'opps',
+        title: 'Opps',
+        sql: 'orders',
+        measures: {
+          amount: { name: 'amount', label: 'Amount', type: 'sum', sql: 'amount' },
+        },
+        dimensions: {
+          status: { name: 'status', label: 'Status', type: 'string', sql: 'status' },
+        },
+      };
+      const aliasService = new MemoryAnalyticsService({ driver, cubes: [aliasCube] });
+
+      const aliased = await aliasService.query({
+        cube: 'opps',
+        measures: ['amount_sum'],
+        dimensions: ['status'],
+      });
+
+      const completed = aliased.rows.find(r => r.status === 'completed');
+      expect(completed).toBeDefined();
+      expect(completed!['amount_sum']).toBe(600); // 100 + 200 + 300
+    });
+
     it('should throw error for unknown cube', async () => {
       await expect(async () => {
         await service.query({

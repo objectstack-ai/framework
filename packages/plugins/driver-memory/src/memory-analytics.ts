@@ -363,7 +363,25 @@ export class MemoryAnalyticsService implements IAnalyticsService {
   private resolveMeasure(cube: Cube, measureName: string) {
     const parts = measureName.split('.');
     const fieldName = parts.length > 1 ? parts[1] : parts[0];
-    return cube.measures[fieldName];
+    const direct = cube.measures[fieldName];
+    if (direct) return direct;
+
+    // Accept `${field}_${type}` aliases (e.g. 'amount_sum') for measures whose
+    // canonical name is just `${field}` (e.g. measure 'amount' of type 'sum').
+    // This matches the convention used by the data-objectstack adapter and
+    // other clients that build measure names from (field, function) pairs.
+    const aggTypes = ['count', 'sum', 'avg', 'min', 'max', 'count_distinct'];
+    for (const type of aggTypes) {
+      const suffix = `_${type}`;
+      if (fieldName.endsWith(suffix)) {
+        const baseField = fieldName.slice(0, -suffix.length);
+        const candidate = cube.measures[baseField];
+        if (candidate && candidate.type === type) {
+          return candidate;
+        }
+      }
+    }
+    return undefined;
   }
 
   private resolveDimension(cube: Cube, dimensionName: string) {

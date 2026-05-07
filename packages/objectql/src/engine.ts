@@ -1564,6 +1564,14 @@ export class ObjectQL implements IDataEngine {
             aggregations: query.aggregations,
         };
 
+        // Prefer driver.aggregate() when available — driver.find() in many
+        // drivers (e.g. driver-sql) does not honor `groupBy` / `aggregations`
+        // and would silently return ungrouped raw rows. Fall back to find()
+        // for drivers that handle aggregations through their query AST.
+        const drv = driver as any;
+        if (typeof drv.aggregate === 'function') {
+            return drv.aggregate(object, ast);
+        }
         return driver.find(object, ast);
       });
 
