@@ -15,6 +15,9 @@ import '@object-ui/plugin-view';
 import '@object-ui/plugin-form';
 import '@object-ui/plugin-dashboard';
 import '@object-ui/plugin-report';
+import '@object-ui/plugin-timeline';
+import '@object-ui/plugin-gantt';
+import '@object-ui/plugin-map';
 
 import './index.css';
 import { App } from './App';
