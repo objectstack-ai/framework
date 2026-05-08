@@ -23,7 +23,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     beforeEach(() => {
         // Each test owns a fresh registry instance — the protocol reads it
         // via `engine.registry`, mirroring the real ObjectQL contract.
-        registry = new SchemaRegistry();
+        registry = new SchemaRegistry({ multiTenant: false });
 
         mockEngine = {
             registry,

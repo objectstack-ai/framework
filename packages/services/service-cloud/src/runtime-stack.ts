@@ -152,7 +152,7 @@ export async function createRuntimeStack(config?: RuntimeStackConfig): Promise<R
     // bundle is read-only and `mkdirSync('.objectstack/data')` would crash
     // at boot. The data dir (and its mkdir) is only needed for the
     // file-backed SQLite fallback paths.
-    const envControlUrl = process.env.OS_CONTROL_DATABASE_URL?.trim();
+    const envControlUrlExplicit = process.env.OS_CONTROL_DATABASE_URL?.trim();
     // Project DB. This is the user's business-data DB. When `OS_DATABASE_URL`
     // is set, honour it (and infer the driver from its scheme unless
     // `OS_DATABASE_DRIVER` overrides). On Vercel/Turso deployments the
@@ -162,6 +162,13 @@ export async function createRuntimeStack(config?: RuntimeStackConfig): Promise<R
     // file beside `control.db`.
     const envProjectDbUrl = process.env.OS_DATABASE_URL?.trim()
         || process.env.TURSO_DATABASE_URL?.trim();
+    // DX: when only the project DB URL is provided, transparently reuse
+    // it for the control plane too. This gives "set ONE Turso URL and
+    // login works" — the framework's `sys_*` tables (≈ 8 lookup tables
+    // for users / sessions / projects) just live alongside the business
+    // tables in the same DB. Operators who want a dedicated control
+    // plane can still set `OS_CONTROL_DATABASE_URL` explicitly.
+    const envControlUrl = envControlUrlExplicit || envProjectDbUrl;
 
     const needsLocalDataDir = !envControlUrl || !envProjectDbUrl;
     let dataDir = cfg.dataDir ?? '';

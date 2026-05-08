@@ -118,6 +118,82 @@ function mergeObjectDefinitions(base: ServiceObject, extension: Partial<ServiceO
  */
 export type RegistryLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
 
+/**
+ * Construction options for {@link SchemaRegistry}.
+ */
+export interface SchemaRegistryOptions {
+  /**
+   * Whether the host kernel runs in multi-tenant mode. When `true` (default),
+   * the registry auto-injects `organization_id` (lookup → sys_organization)
+   * into every registered user object that doesn't already declare it and
+   * isn't `managedBy` an external subsystem or explicitly opted-out via
+   * `systemFields: false`.
+   *
+   * Sourced from the `OS_MULTI_TENANT` env var when not explicitly set —
+   * matches how the SecurityPlugin and CLI startup banner pick the mode.
+   * Pass an explicit boolean to override (useful in tests).
+   */
+  multiTenant?: boolean;
+}
+
+/**
+ * Augment a registered object with implicit system fields.
+ *
+ * Returns a *new* schema object when fields are added; returns the input
+ * unchanged when nothing applies (the cheap path for system tables).
+ *
+ * Author-declared fields always win — we splice the system fields at the
+ * front of the field map, so any same-named author field overwrites them
+ * via the natural `{ ...sys, ...authored }` merge.
+ *
+ * Currently injects:
+ *   - `organization_id` — multi-tenant deployments. Required-false (the
+ *     SecurityPlugin populates it on insert; nullable rows are still
+ *     filtered out by the `tenant_isolation` RLS USING clause).
+ */
+export function applySystemFields(
+  schema: ServiceObject,
+  opts: { multiTenant: boolean }
+): ServiceObject {
+  // 1. Hard opt-out at object level (e.g. seed/migration tables).
+  if ((schema as any).systemFields === false) return schema;
+
+  // 2. Skip externally-managed tables. better-auth/system/platform tables
+  //    declare exactly what they need; injecting more would either collide
+  //    with the manager's expectations (better-auth migrations) or pollute
+  //    audit-grade ledgers.
+  if (schema.managedBy) return schema;
+
+  const sf =
+    typeof (schema as any).systemFields === 'object' && (schema as any).systemFields !== null
+      ? ((schema as any).systemFields as { tenant?: boolean })
+      : undefined;
+
+  const wantTenant = opts.multiTenant && sf?.tenant !== false;
+
+  const additions: Record<string, any> = {};
+
+  if (wantTenant && !schema.fields?.organization_id) {
+    additions.organization_id = {
+      type: 'lookup',
+      reference: 'sys_organization',
+      label: 'Organization',
+      required: false,
+      indexed: true,
+      hidden: true,
+      readonly: true,
+      description: 'Tenant scope (auto-populated by SecurityPlugin on insert).',
+    };
+  }
+
+  if (Object.keys(additions).length === 0) return schema;
+
+  return {
+    ...schema,
+    fields: { ...additions, ...(schema.fields ?? {}) },
+  };
+}
+
 export class SchemaRegistry {
   // ==========================================
   // Logging control
@@ -125,6 +201,19 @@ export class SchemaRegistry {
 
   /** Controls verbosity of registry console messages. Default: 'info'. */
   private _logLevel: RegistryLogLevel = 'info';
+
+  /** Whether to auto-inject multi-tenant system fields. */
+  private readonly multiTenant: boolean;
+
+  constructor(options: SchemaRegistryOptions = {}) {
+    if (options.multiTenant !== undefined) {
+      this.multiTenant = options.multiTenant;
+    } else {
+      // Mirror the SecurityPlugin / CLI banner default (env-driven, on by default).
+      this.multiTenant =
+        String(process.env.OS_MULTI_TENANT ?? 'true').toLowerCase() !== 'false';
+    }
+  }
 
   get logLevel(): RegistryLogLevel { return this._logLevel; }
   set logLevel(level: RegistryLogLevel) { this._logLevel = level; }
@@ -228,6 +317,13 @@ export class SchemaRegistry {
     ownership: ObjectOwnership = 'own',
     priority: number = ownership === 'own' ? DEFAULT_OWNER_PRIORITY : DEFAULT_EXTENDER_PRIORITY
   ): string {
+    // Apply system-field injection (multi-tenant org_id, future owner/audit)
+    // BEFORE FQN computation and contributor storage so every consumer of
+    // the registered schema (driver syncSchema, REST projector, hooks)
+    // sees the same canonical shape. Author-declared fields win — see
+    // applySystemFields().
+    schema = applySystemFields(schema, { multiTenant: this.multiTenant });
+
     const shortName = schema.name;
     const fqn = computeFQN(namespace, shortName);
 

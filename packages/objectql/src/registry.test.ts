@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SchemaRegistry, computeFQN, parseFQN, RESERVED_NAMESPACES } from './registry';
+import { SchemaRegistry, applySystemFields, computeFQN, parseFQN, RESERVED_NAMESPACES } from './registry';
 
 describe('SchemaRegistry', () => {
     let registry: SchemaRegistry;
     beforeEach(() => {
-        registry = new SchemaRegistry();
+        // Use multiTenant: false in the bulk of the suite so the existing
+        // assertions don't need to know about auto-injected system fields.
+        // applySystemFields() has its own dedicated suite below.
+        registry = new SchemaRegistry({ multiTenant: false });
     });
 
     // ==========================================
@@ -459,5 +462,67 @@ describe('SchemaRegistry', () => {
             expect(todoObjects).toHaveLength(1);
             expect((todoObjects[0] as any).name).toBe('task');
         });
+    });
+});
+
+// ==========================================
+// applySystemFields — system field auto-injection
+// ==========================================
+describe('applySystemFields', () => {
+    const baseLead: any = { name: 'lead', label: 'Lead', fields: { first_name: { type: 'text' } } };
+
+    it('injects organization_id when multiTenant is true and field is missing', () => {
+        const out = applySystemFields(baseLead, { multiTenant: true });
+        expect(out.fields.organization_id).toBeDefined();
+        expect(out.fields.organization_id.type).toBe('lookup');
+        expect(out.fields.organization_id.reference).toBe('sys_organization');
+        // author-declared field still present
+        expect(out.fields.first_name).toBeDefined();
+    });
+
+    it('skips injection when multiTenant is false', () => {
+        const out = applySystemFields(baseLead, { multiTenant: false });
+        expect(out.fields.organization_id).toBeUndefined();
+        // returns the original schema unchanged
+        expect(out).toBe(baseLead);
+    });
+
+    it('does NOT overwrite an author-declared organization_id', () => {
+        const declared: any = {
+            name: 'lead',
+            fields: { organization_id: { type: 'text', label: 'Org Code' } },
+        };
+        const out = applySystemFields(declared, { multiTenant: true });
+        // unchanged: returns original (no addition needed)
+        expect(out).toBe(declared);
+        expect(out.fields.organization_id.label).toBe('Org Code');
+    });
+
+    it('respects systemFields: false opt-out', () => {
+        const opted: any = { ...baseLead, systemFields: false };
+        const out = applySystemFields(opted, { multiTenant: true });
+        expect(out).toBe(opted);
+        expect(out.fields.organization_id).toBeUndefined();
+    });
+
+    it('respects systemFields.tenant: false opt-out', () => {
+        const opted: any = { ...baseLead, systemFields: { tenant: false } };
+        const out = applySystemFields(opted, { multiTenant: true });
+        expect(out.fields.organization_id).toBeUndefined();
+    });
+
+    it('skips externally-managed objects (managedBy set)', () => {
+        const sysUser: any = { name: 'sys_user', managedBy: 'better-auth', fields: { email: { type: 'text' } } };
+        const out = applySystemFields(sysUser, { multiTenant: true });
+        expect(out).toBe(sysUser);
+        expect(out.fields.organization_id).toBeUndefined();
+    });
+
+    it('SchemaRegistry({ multiTenant: true }) auto-injects on registerObject', () => {
+        const reg = new SchemaRegistry({ multiTenant: true });
+        reg.registerObject({ name: 'lead', fields: { first_name: { type: 'text' } } } as any, 'crm', 'crm', 'own');
+        const stored = (reg as any).objectContributors.get('lead')[0].definition;
+        expect(stored.fields.organization_id).toBeDefined();
+        expect(stored.fields.organization_id.reference).toBe('sys_organization');
     });
 });

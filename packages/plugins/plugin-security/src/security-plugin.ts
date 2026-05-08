@@ -423,13 +423,15 @@ export class SecurityPlugin implements Plugin {
     ql?: any,
   ): Promise<Set<string> | null> {
     try {
-      let obj = await metadata?.get?.('object', objectName);
-      // Fallback: in some runtimes the kernel's `metadata` service does not
-      // hold object schemas (those live on the ObjectQL registry instead).
-      // Ask ObjectQL directly so wildcard RLS filtering still works against
-      // identity tables (sys_organization, sys_user, etc.).
-      if ((!obj || !obj.fields) && typeof ql?.getSchema === 'function') {
-        obj = ql.getSchema(objectName);
+      // Prefer ObjectQL's per-engine SchemaRegistry as the source of truth
+      // for the live field set: it reflects registry-time augmentations
+      // (system-field auto-injection like `organization_id`) that the
+      // standalone metadata artifact loaded at boot may not include.
+      // Fall back to the metadata service for objects ObjectQL doesn't
+      // know about (system tables registered through other paths).
+      let obj: any = typeof ql?.getSchema === 'function' ? ql.getSchema(objectName) : null;
+      if (!obj || !obj.fields) {
+        obj = await metadata?.get?.('object', objectName);
       }
       if (!obj || !obj.fields) return null;
       const set = new Set<string>(['id']);
