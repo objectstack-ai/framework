@@ -158,19 +158,6 @@ export class SecurityPlugin implements Plugin {
       const roles = opCtx.context?.roles ?? [];
       const explicitPermissionSets = opCtx.context?.permissions ?? [];
 
-      // [DIAG] log execution context for read ops on user objects
-      if (opCtx.operation === 'find' && !opCtx.object?.startsWith('sys_')) {
-        // eslint-disable-next-line no-console
-        console.error('[security:diag]', {
-          op: opCtx.operation,
-          object: opCtx.object,
-          userId: opCtx.context?.userId,
-          tenantId: opCtx.context?.tenantId,
-          roles: opCtx.context?.roles,
-          explicitPermissionSets: opCtx.context?.permissions,
-        });
-      }
-
       // Skip security checks if no roles AND no explicit permission sets
       // AND no userId (anonymous/unauthenticated). The auth middleware
       // should handle authentication separately.
@@ -203,6 +190,29 @@ export class SecurityPlugin implements Plugin {
           metadata,
           this.bootstrapPermissionSets,
         );
+        // **Post-resolution fallback** — closes the fail-open hole that
+        // appears when a user's `roles` array is populated (e.g. a
+        // better-auth `sys_member.role` like `owner`/`admin`/`member`)
+        // but no `sys_role`→`sys_permission_set` binding exists yet, so
+        // resolution returns an empty array. Without this, both the
+        // CRUD check (`permissionSets.length > 0`) and the RLS injection
+        // (`allRlsPolicies.length > 0`) below get skipped → the user
+        // sees every tenant's data. Authenticated users with no
+        // resolved permission sets always inherit the configured
+        // baseline (default `member_default`, which carries
+        // `tenant_isolation` + `owner_only_writes`).
+        if (
+          permissionSets.length === 0 &&
+          opCtx.context?.userId &&
+          this.fallbackPermissionSet
+        ) {
+          const fallback = await this.permissionEvaluator.resolvePermissionSets(
+            [this.fallbackPermissionSet],
+            metadata,
+            this.bootstrapPermissionSets,
+          );
+          permissionSets = fallback;
+        }
       } catch (e) {
         // If metadata service is misconfigured, log and continue without permission checks
         // rather than blocking all operations

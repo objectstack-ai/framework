@@ -196,6 +196,29 @@ describe('SecurityPlugin', () => {
     await harness.run(opCtx);
     expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
   });
+
+  // Post-resolution fallback: roles is non-empty (e.g. better-auth
+  // sys_member.role = 'owner') but no sys_role binding maps that name to
+  // a permission set, so resolvePermissionSets returns []. Without the
+  // post-resolution fallback both CRUD and RLS would be skipped → users
+  // with org membership but no granted permission set could read every
+  // tenant's data. The fallback re-resolves with `member_default` so
+  // tenant_isolation still applies.
+  it('post-resolution fallback — non-empty roles resolving to no permission sets still get tenant_isolation RLS', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: true, fallbackPermissionSet: 'member_default' });
+    // The metadata only carries `member_default` (loaded via
+    // `permissionSets: [tenantPolicySet]`). The role name 'owner' is
+    // not bound anywhere, so `resolvePermissionSets(['owner'])` → [].
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'find', ast: { where: undefined },
+      context: { userId: 'u1', tenantId: 'org-1', roles: ['owner'], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+  });
 });
 
 // ---------------------------------------------------------------------------
