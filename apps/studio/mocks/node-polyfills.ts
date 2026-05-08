@@ -102,3 +102,13 @@ export const rename = async () => {};
 export const renameSync = () => {};
 export const createHash = () => ({ update: () => ({ digest: () => '' }) });
 export const randomUUID = () => '00000000-0000-0000-0000-000000000000';
+
+// node:crypto webcrypto polyfill — maps to the browser's native Web Crypto API.
+// The runtime package uses `import { webcrypto as crypto } from "crypto"` to access
+// SubtleCrypto/getRandomValues; in the browser, globalThis.crypto provides the same surface.
+export const webcrypto =
+  (typeof globalThis !== 'undefined' && (globalThis as any).crypto) || {
+    subtle: undefined,
+    getRandomValues: <T extends ArrayBufferView | null>(array: T): T => array,
+    randomUUID: () => '00000000-0000-0000-0000-000000000000',
+  };

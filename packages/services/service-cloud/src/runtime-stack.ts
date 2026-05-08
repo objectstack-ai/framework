@@ -33,6 +33,7 @@ import { createSingleProjectPlugin } from './single-project-plugin.js';
 import { resolveAuthSecret, resolveBaseUrl } from './boot-env.js';
 import type { AppBundleResolver } from './project-kernel-factory.js';
 import { createObjectOSStack } from './objectos-stack.js';
+import { resolveDefaultDataDir } from './data-dir.js';
 
 /**
  * Infer the storage driver type from a database connection-URL scheme.
@@ -144,7 +145,7 @@ export async function createRuntimeStack(config?: RuntimeStackConfig): Promise<R
     const artifactPath = cfg.artifactPath
         ?? process.env.OS_ARTIFACT_PATH
         ?? resolvePath(cwd, 'dist/objectstack.json');
-    const dataDir = cfg.dataDir ?? resolvePath(cwd, '.objectstack/data');
+    const dataDir = cfg.dataDir ?? resolveDefaultDataDir();
     mkdirSync(dataDir, { recursive: true });
 
     // Control-plane DB. In single-project local mode this is the framework's

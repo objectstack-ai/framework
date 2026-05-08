@@ -7,6 +7,7 @@ import { ControlPlaneProxyDriver } from './control-plane-proxy-driver.js';
 import type { ProjectKernelFactory } from './kernel-manager.js';
 import type { EnvironmentDriverRegistry, SecretEncryptor } from './environment-registry.js';
 import { NoopSecretEncryptor } from './environment-registry.js';
+import { resolveDefaultDataDir } from './data-dir.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -317,7 +318,7 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
         const { resolve: resolvePath } = await import('node:path');
         const dbName = databaseUrl.replace(/^memory:\/\//, '').trim();
         const filePath = dbName
-          ? resolvePath(process.cwd(), '.objectstack/data/projects', `${dbName}.json`)
+          ? resolvePath(resolveDefaultDataDir(), 'projects', `${dbName}.json`)
           : undefined;
         return new InMemoryDriver({
           persistence: filePath ? { type: 'file', path: filePath } : 'file',

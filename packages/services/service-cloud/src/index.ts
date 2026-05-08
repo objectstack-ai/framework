@@ -4,6 +4,9 @@
 export { createCloudStack } from './cloud-stack.js';
 export type { CloudStackConfig } from './cloud-stack.js';
 
+// ── Data-directory resolution ─────────────────────────────────────────────────
+export { resolveDefaultDataDir, isServerlessReadOnlyFs } from './data-dir.js';
+
 // ── Multi-project orchestration ───────────────────────────────────────────────
 export { MultiProjectPlugin } from './multi-project-plugin.js';
 export type {

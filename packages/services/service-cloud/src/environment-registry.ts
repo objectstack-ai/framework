@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type * as Contracts from '@objectstack/spec/contracts';
+import { resolveDefaultDataDir } from './data-dir.js';
 type IDataDriver = Contracts.IDataDriver;
 
 /**
@@ -284,7 +285,7 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
         const { resolve: resolvePath } = await import('node:path');
         const dbName = databaseUrl.replace(/^memory:\/\//, '').trim();
         const filePath = dbName
-          ? resolvePath(process.cwd(), '.objectstack/data/projects', `${dbName}.json`)
+          ? resolvePath(resolveDefaultDataDir(), 'projects', `${dbName}.json`)
           : undefined;
         return new InMemoryDriver({
           persistence: filePath ? { type: 'file', path: filePath } : 'file',
