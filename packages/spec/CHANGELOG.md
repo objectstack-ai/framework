@@ -1,5 +1,11 @@
 # @objectstack/spec
 
+## 4.0.5
+
+### Patch Changes
+
+- 15e0df6: chore: unify all package versions to a single patch release
+
 ## 4.0.4
 
 ### Patch Changes

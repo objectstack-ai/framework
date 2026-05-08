@@ -1,5 +1,13 @@
 # @objectstack/hono
 
+## 4.0.5
+
+### Patch Changes
+
+- 15e0df6: chore: unify all package versions to a single patch release
+- Updated dependencies [15e0df6]
+  - @objectstack/plugin-hono-server@4.0.5
+
 ## 4.0.4
 
 ### Patch Changes

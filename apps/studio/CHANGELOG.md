@@ -1,5 +1,31 @@
 # @objectstack/studio
 
+## 4.0.5
+
+### Patch Changes
+
+- 15e0df6: chore: unify all package versions to a single patch release
+- Updated dependencies [15e0df6]
+  - @objectstack/spec@4.0.5
+  - @objectstack/client@4.0.5
+  - @objectstack/client-react@4.0.5
+  - @objectstack/metadata@4.0.5
+  - @objectstack/objectql@4.0.5
+  - @objectstack/platform-objects@4.0.5
+  - @objectstack/runtime@4.0.5
+  - @objectstack/driver-memory@4.0.5
+  - @objectstack/driver-turso@4.0.5
+  - @objectstack/plugin-audit@4.0.5
+  - @objectstack/plugin-auth@4.0.5
+  - @objectstack/plugin-msw@4.0.5
+  - @objectstack/plugin-security@4.0.5
+  - @objectstack/hono@4.0.5
+  - @objectstack/service-automation@4.0.5
+  - @objectstack/service-analytics@4.0.5
+  - @objectstack/service-feed@4.0.5
+  - @objectstack/service-ai@4.0.5
+  - @objectstack/service-tenant@4.0.5
+
 ## Unreleased
 
 ### Patch Changes

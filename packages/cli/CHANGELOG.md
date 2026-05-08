@@ -1,5 +1,38 @@
 # @objectstack/cli
 
+## 4.0.5
+
+### Patch Changes
+
+- 15e0df6: chore: unify all package versions to a single patch release
+- Updated dependencies [15e0df6]
+  - @objectstack/spec@4.0.5
+  - @objectstack/core@4.0.5
+  - @objectstack/client@4.0.5
+  - @objectstack/objectql@4.0.5
+  - @objectstack/runtime@4.0.5
+  - @objectstack/rest@4.0.5
+  - @objectstack/driver-memory@4.0.5
+  - @objectstack/driver-sql@4.0.5
+  - @objectstack/driver-turso@4.0.5
+  - @objectstack/driver-mongodb@4.0.5
+  - @objectstack/plugin-audit@4.0.5
+  - @objectstack/plugin-auth@4.0.5
+  - @objectstack/plugin-hono-server@4.0.5
+  - @objectstack/plugin-security@4.0.5
+  - @objectstack/plugin-mcp-server@4.0.5
+  - @objectstack/service-automation@4.0.5
+  - @objectstack/service-analytics@4.0.5
+  - @objectstack/service-cache@4.0.5
+  - @objectstack/service-feed@4.0.5
+  - @objectstack/service-job@4.0.5
+  - @objectstack/service-queue@4.0.5
+  - @objectstack/service-realtime@4.0.5
+  - @objectstack/service-ai@4.0.5
+  - @objectstack/service-storage@4.0.5
+  - @objectstack/service-cloud@4.0.5
+  - @objectstack/service-package@4.0.5
+
 ## Unreleased
 
 ### Patch Changes
