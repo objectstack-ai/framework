@@ -116,7 +116,7 @@ export const TaskCompletionFlow: Flow = {
   ],
 
   nodes: [
-    { id: 'start', type: 'start', label: 'Start', config: { objectName: 'task', triggerCondition: 'ISCHANGED(status) AND status = "completed"' } },
+    { id: 'start', type: 'start', label: 'Start', config: { objectName: 'task', triggerCondition: 'record.status != previous.status && record.status == "completed"' } },
     {
       id: 'get_task', type: 'get_record', label: 'Get Completed Task',
       config: { objectName: 'task', filter: { id: '{taskId}' }, outputVariable: 'completedTask' },

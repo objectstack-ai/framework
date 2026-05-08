@@ -1,4 +1,4 @@
-import { P } from '@objectstack/spec';
+import { P, cel, tmpl } from '@objectstack/spec';
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
@@ -181,7 +181,7 @@ export const Task = ObjectSchema.create({
     { fields: ['category'] },
   ],
   
-  titleFormat: '{subject}',
+  titleFormat: tmpl`{{record.subject}}`,
   compactLayout: ['subject', 'status', 'priority', 'due_date', 'owner'],
   
   validations: [
@@ -213,7 +213,7 @@ export const Task = ObjectSchema.create({
           name: 'update_completed_flag',
           type: 'field_update',
           field: 'is_completed',
-          value: 'status = "completed"',
+          value: cel`record.status == "completed"`,
         }
       ],
     },
@@ -228,7 +228,7 @@ export const Task = ObjectSchema.create({
           name: 'set_date',
           type: 'field_update',
           field: 'completed_date',
-          value: 'NOW()',
+          value: cel`now()`,
         },
         {
           name: 'set_progress',

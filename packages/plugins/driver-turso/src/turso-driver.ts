@@ -558,6 +558,30 @@ export class TursoDriver extends SqlDriver {
   }
 
   /**
+   * Provision (CREATE/ALTER) physical tables for the given object definitions.
+   *
+   * In **remote** mode the base `SqlDriver.initObjects()` cannot be used because
+   * it relies on Knex (`better-sqlite3`) to introspect and emit DDL — that
+   * native binding is unavailable in serverless environments such as Vercel
+   * Lambdas. Instead we route DDL through `RemoteTransport.syncSchemasBatch()`,
+   * which uses `@libsql/client.batch()` against the Turso endpoint directly.
+   *
+   * In local / replica modes the existing Knex-based path remains in effect.
+   */
+  override async initObjects(
+    objects: Array<{ name: string; fields?: Record<string, any> }>,
+  ): Promise<void> {
+    if (this.isRemote) {
+      if (objects.length === 0) return;
+      await this.remoteTransport!.syncSchemasBatch(
+        objects.map((obj) => ({ object: obj.name, schema: obj })),
+      );
+      return;
+    }
+    return super.initObjects(objects);
+  }
+
+  /**
    * Batch-synchronize multiple schemas in a single round-trip.
    *
    * In remote mode, delegates to `RemoteTransport.syncSchemasBatch()` which
