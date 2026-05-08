@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/console",
-  "version": "0.1.0",
+  "version": "4.0.5",
   "private": true,
   "type": "module",
   "description": "ObjectStack Console - opinionated, fork-ready runtime console built on @object-ui/app-shell with the full plugin set wired up.",
