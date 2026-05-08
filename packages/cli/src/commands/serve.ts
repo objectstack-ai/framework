@@ -569,7 +569,12 @@ export default class Serve extends Command {
             try {
               const securityPkg = '@objectstack/plugin-security';
               const { SecurityPlugin } = await import(/* webpackIgnore: true */ securityPkg);
-              await kernel.use(new SecurityPlugin());
+              // `OS_MULTI_TENANT=false` disables wildcard tenant_isolation
+              // RLS policies and the `organization_id` auto-injection on
+              // insert. Keep multi-tenant on by default — most ObjectStack
+              // deployments are multi-org.
+              const multiTenant = String(process.env.OS_MULTI_TENANT ?? 'true').toLowerCase() !== 'false';
+              await kernel.use(new SecurityPlugin({ multiTenant }));
               trackPlugin('Security');
             } catch {
               // optional

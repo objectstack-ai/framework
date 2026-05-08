@@ -33,6 +33,32 @@ kernel.use(new SecurityPlugin());
 await kernel.bootstrap();
 ```
 
+### Multi-tenant vs single-tenant
+
+`SecurityPlugin` defaults to **multi-tenant** mode. In this mode it:
+
+- Auto-injects `organization_id = ctx.tenantId` on insert when the target object declares an `organization_id` field.
+- Honours the wildcard `tenant_isolation` RLS policy
+  (`organization_id = current_user.organization_id`) shipped with the
+  default `member_default` / `viewer_readonly` permission sets.
+
+For single-tenant deployments, switch it off:
+
+```typescript
+kernel.use(new SecurityPlugin({ multiTenant: false }));
+```
+
+This skips the per-insert metadata lookup that drives `organization_id`
+auto-injection (the `owner_id` injection still runs) and strips wildcard
+`current_user.organization_id` policies from the per-request policy
+set so the field-existence safety net never has to drop them
+individually. Field-Level Security, owner-based RLS, and per-object
+CRUD checks operate identically regardless of this flag.
+
+In CLI / dev-server mode the same switch is exposed via the
+`OS_MULTI_TENANT` environment variable (default `true`); set
+`OS_MULTI_TENANT=false` before `objectstack serve` / `pnpm dev` to disable.
+
 ## Key Exports
 
 | Export | Kind | Description |

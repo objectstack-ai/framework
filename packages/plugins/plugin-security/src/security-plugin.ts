@@ -30,6 +30,34 @@ export interface SecurityPluginOptions {
    * @default 'member_default'
    */
   fallbackPermissionSet?: string | null;
+  /**
+   * Whether this deployment is multi-tenant.
+   *
+   * When `true` (default), SecurityPlugin:
+   *   - Auto-injects `organization_id = ctx.tenantId` on insert when
+   *     the target object declares an `organization_id` field.
+   *   - Honours the wildcard `tenant_isolation` RLS policy
+   *     (`organization_id = current_user.organization_id`) shipped with
+   *     the default `member_default` / `viewer_readonly` permission
+   *     sets.
+   *
+   * When `false`, SecurityPlugin:
+   *   - Skips the `organization_id` auto-injection block (saves a
+   *     metadata lookup per insert; `owner_id` injection still runs).
+   *   - Strips any RLS policy whose USING expression references
+   *     `current_user.organization_id` from the per-request policy
+   *     set, so single-tenant deployments don't pay the
+   *     field-existence safety-net cost on every find.
+   *
+   * Field-Level Security, owner-based RLS, and per-object permission
+   * checks (allowRead/allowCreate/…) all operate identically regardless
+   * of this flag. Set this to `false` for single-tenant or
+   * single-organization deployments where `organization_id` carries no
+   * meaning.
+   *
+   * @default true
+   */
+  multiTenant?: boolean;
 }
 
 /**
@@ -56,6 +84,15 @@ export class SecurityPlugin implements Plugin {
   private fieldMasker = new FieldMasker();
   private readonly bootstrapPermissionSets: PermissionSet[];
   private readonly fallbackPermissionSet: string | null;
+  private readonly multiTenant: boolean;
+  /**
+   * Per-object field-name cache. Populated lazily from the metadata
+   * service / ObjectQL registry on first access per object. Schemas are
+   * effectively immutable for the lifetime of the kernel today (hot
+   * reload tears the kernel down), so we don't bother with
+   * invalidation — a kernel restart drops the cache.
+   */
+  private readonly fieldNamesCache = new Map<string, Set<string> | null>();
 
   constructor(options: SecurityPluginOptions = {}) {
     this.bootstrapPermissionSets =
@@ -64,6 +101,7 @@ export class SecurityPlugin implements Plugin {
       options.fallbackPermissionSet === undefined
         ? 'member_default'
         : options.fallbackPermissionSet;
+    this.multiTenant = options.multiTenant !== false;
   }
 
   async init(ctx: PluginContext): Promise<void> {
@@ -173,7 +211,7 @@ export class SecurityPlugin implements Plugin {
         }
       }
 
-      // 3.5. Auto-inject tenancy fields on insert.
+      // 3.5. Auto-inject tenancy/ownership fields on insert.
       //
       // When an authenticated user inserts a record, the canonical
       // tenant column (`organization_id`) and ownership column
@@ -189,28 +227,36 @@ export class SecurityPlugin implements Plugin {
       //     untouched)
       //   - aren't already set in the payload (caller wins)
       //   - have a corresponding value on the execution context.
+      //
+      // The `organization_id` half is gated on `multiTenant`; in
+      // single-tenant deployments it's pure overhead.
       if (
         opCtx.operation === 'insert' &&
         opCtx.data &&
         typeof opCtx.data === 'object' &&
         !Array.isArray(opCtx.data)
       ) {
-        const fields = await this.getObjectFieldNames(metadata, opCtx.object, ql);
-        if (fields) {
-          const data = opCtx.data as Record<string, unknown>;
-          if (
-            opCtx.context?.tenantId &&
-            fields.has('organization_id') &&
-            (data.organization_id == null || data.organization_id === '')
-          ) {
-            data.organization_id = opCtx.context.tenantId;
-          }
-          if (
-            opCtx.context?.userId &&
-            fields.has('owner_id') &&
-            (data.owner_id == null || data.owner_id === '')
-          ) {
-            data.owner_id = opCtx.context.userId;
+        const needsTenant =
+          this.multiTenant && !!opCtx.context?.tenantId;
+        const needsOwner = !!opCtx.context?.userId;
+        if (needsTenant || needsOwner) {
+          const fields = await this.getObjectFieldNames(metadata, opCtx.object, ql);
+          if (fields) {
+            const data = opCtx.data as Record<string, unknown>;
+            if (
+              needsTenant &&
+              fields.has('organization_id') &&
+              (data.organization_id == null || data.organization_id === '')
+            ) {
+              data.organization_id = opCtx.context!.tenantId;
+            }
+            if (
+              needsOwner &&
+              fields.has('owner_id') &&
+              (data.owner_id == null || data.owner_id === '')
+            ) {
+              data.owner_id = opCtx.context!.userId;
+            }
           }
         }
       }
@@ -324,7 +370,25 @@ export class SecurityPlugin implements Plugin {
 
     for (const ps of permissionSets) {
       if (ps.rowLevelSecurity) {
-        allPolicies.push(...ps.rowLevelSecurity);
+        for (const policy of ps.rowLevelSecurity) {
+          // In single-tenant mode, strip any policy that filters on
+          // `current_user.organization_id` — there is no meaningful
+          // tenant to compare against, so the policy would either drop
+          // every row (when the field exists on the object) or be
+          // dropped by the field-existence safety net. Either way it's
+          // pure overhead. Substring match is sufficient: every
+          // wildcard tenant policy in the default permission sets uses
+          // exactly this token, and authors who want a different
+          // multi-tenant story should turn `multiTenant: false` off.
+          if (
+            !this.multiTenant &&
+            policy.using &&
+            policy.using.includes('current_user.organization_id')
+          ) {
+            continue;
+          }
+          allPolicies.push(policy);
+        }
       }
     }
 
@@ -336,6 +400,24 @@ export class SecurityPlugin implements Plugin {
    * `null` if the schema can't be loaded — caller should fail-closed.
    */
   private async getObjectFieldNames(
+    metadata: any,
+    objectName: string,
+    ql?: any,
+  ): Promise<Set<string> | null> {
+    if (this.fieldNamesCache.has(objectName)) {
+      return this.fieldNamesCache.get(objectName) ?? null;
+    }
+    const result = await this.loadObjectFieldNames(metadata, objectName, ql);
+    // Only cache positive resolutions — a `null` may simply mean the
+    // schema isn't registered yet at boot, and we want subsequent calls
+    // to retry rather than be permanently denied.
+    if (result) {
+      this.fieldNamesCache.set(objectName, result);
+    }
+    return result;
+  }
+
+  private async loadObjectFieldNames(
     metadata: any,
     objectName: string,
     ql?: any,

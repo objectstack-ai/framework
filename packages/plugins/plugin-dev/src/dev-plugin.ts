@@ -554,9 +554,10 @@ export class DevPlugin implements Plugin {
     if (enabled('security')) {
       try {
         const { SecurityPlugin } = await import('@objectstack/plugin-security') as any;
-        const securityPlugin = new SecurityPlugin();
+        const multiTenant = String(process.env.OS_MULTI_TENANT ?? 'true').toLowerCase() !== 'false';
+        const securityPlugin = new SecurityPlugin({ multiTenant });
         this.childPlugins.push(securityPlugin);
-        ctx.logger.info('  ✔ Security plugin enabled (RBAC, RLS, field masking)');
+        ctx.logger.info(`  ✔ Security plugin enabled (RBAC, RLS, field masking; multiTenant=${multiTenant})`);
       } catch {
         ctx.logger.debug('  ℹ @objectstack/plugin-security not installed — skipping security');
       }

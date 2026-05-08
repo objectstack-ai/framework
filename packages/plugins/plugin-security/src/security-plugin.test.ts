@@ -90,6 +90,112 @@ describe('SecurityPlugin', () => {
     const plugin = new SecurityPlugin();
     await expect(plugin.destroy()).resolves.toBeUndefined();
   });
+
+  // -------------------------------------------------------------------------
+  // multiTenant switch — single-tenant mode strips tenant policies and skips
+  // organization_id auto-injection.
+  // -------------------------------------------------------------------------
+  const makeMiddlewareCtx = (overrides: { permissionSets: PermissionSet[]; objectFields?: string[] }) => {
+    const fields: Record<string, any> = {};
+    for (const f of overrides.objectFields ?? ['id', 'organization_id', 'owner_id', 'name']) {
+      fields[f] = { name: f };
+    }
+    let middleware: any;
+    const ql = {
+      registerMiddleware: (mw: any) => {
+        // Capture only the FIRST middleware (the security CRUD one);
+        // ignore the secondary bootstrap-replay middleware registered
+        // later in `start()`.
+        if (!middleware) middleware = mw;
+      },
+      getSchema: () => ({ name: 'task', fields }),
+    };
+    const metadata = {
+      get: async () => ({ name: 'task', fields }),
+      list: async () => overrides.permissionSets,
+    };
+    const services: Record<string, any> = {
+      manifest: { register: vi.fn() },
+      objectql: ql,
+      metadata,
+    };
+    const ctx: any = {
+      logger: { info: vi.fn(), warn: vi.fn() },
+      registerService: vi.fn(),
+      getService: (name: string) => services[name],
+    };
+    return {
+      ctx,
+      run: async (opCtx: any) => {
+        await middleware(opCtx, async () => {});
+        return opCtx;
+      },
+    };
+  };
+
+  const tenantPolicySet: PermissionSet = {
+    name: 'member_default',
+    label: 'Member',
+    isProfile: true,
+    objects: { '*': { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: true } },
+    rowLevelSecurity: [
+      { name: 'tenant_isolation', object: '*', operation: 'all', using: 'organization_id = current_user.organization_id' },
+    ],
+  } as any;
+
+  it('multiTenant: true — auto-injects organization_id on insert', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: true, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'insert', data: { name: 'A' },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.data.organization_id).toBe('org-1');
+    expect(opCtx.data.owner_id).toBe('u1');
+  });
+
+  it('multiTenant: false — does NOT auto-inject organization_id, still injects owner_id', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: false, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'insert', data: { name: 'A' },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.data.organization_id).toBeUndefined();
+    expect(opCtx.data.owner_id).toBe('u1');
+  });
+
+  it('multiTenant: false — strips tenant_isolation RLS so find applies no tenant where', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: false, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'find', ast: { where: undefined },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.ast.where).toBeUndefined();
+  });
+
+  it('multiTenant: true — applies tenant_isolation RLS to find', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: true, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({ permissionSets: [tenantPolicySet] });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'find', ast: { where: undefined },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+  });
 });
 
 // ---------------------------------------------------------------------------
