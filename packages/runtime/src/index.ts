@@ -27,7 +27,7 @@ export type { HttpProtocolContext, HttpDispatcherResult } from './http-dispatche
 export { MiddlewareManager } from './middleware.js';
 
 // Export Artifact Loader
-export { loadArtifactBundle, mergeRuntimeModule } from './load-artifact-bundle.js';
+export { loadArtifactBundle, mergeRuntimeModule, isHttpUrl, readArtifactSource } from './load-artifact-bundle.js';
 export type { LoadArtifactBundleOptions } from './load-artifact-bundle.js';
 
 // Export Sandbox (script body runner) — engine choice is quickjs-emscripten.

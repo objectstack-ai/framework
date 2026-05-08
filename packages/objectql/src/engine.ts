@@ -1192,6 +1192,27 @@ export class ObjectQL implements IDataEngine {
     const _findFormula = planFormulaProjection(_findSchema, ast.fields as string[] | undefined);
     if (_findFormula.projected) ast.fields = _findFormula.projected;
 
+    // Drop any requested field that doesn't exist on the schema. Without
+    // this, drivers (notably SqlDriver) emit `SELECT unknown_col FROM ...`
+    // which the DB rejects ("no such column") — and SqlDriver swallows
+    // that error and returns `[]`, making a frontend bug (e.g. a generic
+    // view requesting `name`/`due_date` on every object) look like "no
+    // records exist". Silently filtering matches the existing OData
+    // tolerance and Salesforce/Postgres behavior of `SELECT *` semantics.
+    if (_findSchema?.fields && Array.isArray(ast.fields) && ast.fields.length > 0) {
+      const known = new Set(Object.keys(_findSchema.fields));
+      const filtered = (ast.fields as string[]).filter(f => {
+        // Keep relationship paths like `owner.name` — the engine will
+        // resolve those via populate; only validate top-level segment.
+        const head = String(f).split('.')[0];
+        return known.has(head);
+      });
+      // Guard against an empty projection — fall back to `*` so the
+      // request still returns rows. An empty SELECT list would either
+      // 400 in Postgres or silently project nothing.
+      ast.fields = filtered.length > 0 ? filtered : undefined;
+    }
+
     const opCtx: OperationContext = {
       object,
       operation: 'find',
@@ -1251,6 +1272,13 @@ export class ObjectQL implements IDataEngine {
     const _findOneSchema = this._registry.getObject(objectName);
     const _findOneFormula = planFormulaProjection(_findOneSchema, ast.fields as string[] | undefined);
     if (_findOneFormula.projected) ast.fields = _findOneFormula.projected;
+
+    // Drop unknown fields — see equivalent block in `find()` for rationale.
+    if (_findOneSchema?.fields && Array.isArray(ast.fields) && ast.fields.length > 0) {
+      const known = new Set(Object.keys(_findOneSchema.fields));
+      const filtered = (ast.fields as string[]).filter(f => known.has(String(f).split('.')[0]));
+      ast.fields = filtered.length > 0 ? filtered : undefined;
+    }
 
     const opCtx: OperationContext = {
       object: objectName,

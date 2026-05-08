@@ -1888,12 +1888,14 @@ export class HttpDispatcher {
                         if (typeof artifactPathRaw === 'string' && artifactPathRaw.length > 0) {
                             try {
                                 const path = await import('node:path');
+                                const { isHttpUrl, loadArtifactBundle } = await import('./load-artifact-bundle.js');
                                 const root = process.env.OS_PROJECT_ARTIFACT_ROOT
                                     ?? process.cwd();
-                                const resolved = path.isAbsolute(artifactPathRaw)
+                                const resolved = isHttpUrl(artifactPathRaw)
                                     ? artifactPathRaw
-                                    : path.resolve(root, artifactPathRaw);
-                                const { loadArtifactBundle } = await import('./load-artifact-bundle.js');
+                                    : (path.isAbsolute(artifactPathRaw)
+                                        ? artifactPathRaw
+                                        : path.resolve(root, artifactPathRaw));
                                 const bundle = await loadArtifactBundle(resolved, { tag: '[bind-artifact]' });
                                 if (!bundle) {
                                     throw new Error(`failed to load artifact bundle at '${resolved}'`);

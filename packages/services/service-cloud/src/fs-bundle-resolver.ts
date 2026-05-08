@@ -11,11 +11,15 @@
  *
  *     {
  *         "artifact_path": "./examples/app-crm/dist/objectstack.json",
- *         "artifact_paths": ["./pkg-a/dist/objectstack.json", "./pkg-b/dist/objectstack.json"]
+ *         "artifact_paths": [
+ *             "./pkg-a/dist/objectstack.json",
+ *             "https://example.com/pkg-b/objectstack.json"
+ *         ]
  *     }
  *
- * Paths are resolved relative to `OS_PROJECT_ARTIFACT_ROOT`
- * (defaults to `process.cwd()`). Absolute paths are honored as-is.
+ * Local relative paths are resolved against `OS_PROJECT_ARTIFACT_ROOT`
+ * (defaults to `process.cwd()`); absolute paths are honored as-is;
+ * `http(s)://` URLs are fetched verbatim and never path-joined.
  *
  * For pure dev convenience, an env-var override is also supported:
  *
@@ -28,9 +32,8 @@
  * warning and returns `[]` for that path.
  */
 
-import { readFile } from 'node:fs/promises';
 import { resolve as resolvePath, isAbsolute } from 'node:path';
-import { loadArtifactBundle } from '@objectstack/runtime';
+import { loadArtifactBundle, isHttpUrl } from '@objectstack/runtime';
 import type { AppBundleResolver } from './project-kernel-factory.js';
 
 const ENV_MAP_VAR = 'OS_PROJECT_ARTIFACTS';
@@ -72,10 +75,12 @@ export function createFsAppBundleResolver(): AppBundleResolver {
     const cache = new Map<string, any>();
 
     async function loadOne(path: string): Promise<any | null> {
-        const abs = isAbsolute(path) ? path : resolvePath(root, path);
-        if (cache.has(abs)) return cache.get(abs);
-        const bundle = await loadArtifactBundle(abs, { tag: '[FsAppBundleResolver]' });
-        cache.set(abs, bundle);
+        const key = isHttpUrl(path)
+            ? path
+            : (isAbsolute(path) ? path : resolvePath(root, path));
+        if (cache.has(key)) return cache.get(key);
+        const bundle = await loadArtifactBundle(key, { tag: '[FsAppBundleResolver]' });
+        cache.set(key, bundle);
         return bundle;
     }
 

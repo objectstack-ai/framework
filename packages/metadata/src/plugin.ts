@@ -173,14 +173,37 @@ export class MetadataPlugin implements Plugin {
     }
 
     private async _loadFromLocalFile(ctx: PluginContext, filePath: string): Promise<void> {
-        ctx.logger.info('[MetadataPlugin] Loading metadata from local artifact file', { path: filePath });
+        const isUrl = /^https?:\/\//i.test(filePath);
+        ctx.logger.info(
+            `[MetadataPlugin] Loading metadata from ${isUrl ? 'remote URL' : 'local artifact file'}`,
+            { path: filePath },
+        );
 
         let raw: unknown;
         try {
-            const content = await readFile(filePath, 'utf8');
+            let content: string;
+            if (isUrl) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 15_000);
+                try {
+                    const res = await fetch(filePath, {
+                        redirect: 'follow',
+                        signal: controller.signal,
+                        headers: { Accept: 'application/json, */*;q=0.5' },
+                    });
+                    if (!res.ok) {
+                        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+                    }
+                    content = await res.text();
+                } finally {
+                    clearTimeout(timer);
+                }
+            } else {
+                content = await readFile(filePath, 'utf8');
+            }
             raw = JSON.parse(content);
         } catch (e: any) {
-            throw new Error(`[MetadataPlugin] Cannot read artifact file at "${filePath}": ${e.message}`);
+            throw new Error(`[MetadataPlugin] Cannot read artifact ${isUrl ? 'URL' : 'file'} at "${filePath}": ${e.message}`);
         }
 
         // Dynamically import to avoid pulling @objectstack/spec/cloud into every

@@ -9,10 +9,16 @@
  *   - `StandaloneStack`              — `objectstack serve --standalone`
  *   - `http-dispatcher.ts`           — in-flight artifact rebind
  *
- * Reads the JSON artifact and, if the bundle declares a sibling
+ * Reads the JSON artifact (from a local path *or* an `http(s)://` URL) and,
+ * for **local** artifacts only, if the bundle declares a sibling
  * `runtimeModule` (the ESM produced by `packages/cli/src/utils/build-runtime.ts`),
  * dynamic-imports it and merges its `functions` map onto the bundle so
  * declarative Hooks resolve their handlers at boot.
+ *
+ * For **remote** (`http(s)://`) artifacts the `runtimeModule` reference is
+ * intentionally ignored — Node cannot dynamic-import arbitrary URLs and we
+ * refuse to execute remote code by default. Remote artifacts are therefore
+ * expected to be fully declarative (Hooks/Flows carry their bodies inline).
  *
  * Mutates the returned bundle in place. Returns `null` on read/parse
  * failure (callers may treat as "no bundle for this project yet").
@@ -29,6 +35,42 @@ export interface LoadArtifactBundleOptions {
     tag?: string;
     /** When true, an unwrapped `{ schemaVersion, metadata }` envelope is unwrapped. */
     unwrapEnvelope?: boolean;
+    /** Optional fetch timeout in ms for `http(s)://` sources (default 15000). */
+    fetchTimeoutMs?: number;
+}
+
+/** Returns true when `pathOrUrl` looks like an `http://` or `https://` URL. */
+export function isHttpUrl(pathOrUrl: string): boolean {
+    return /^https?:\/\//i.test(pathOrUrl);
+}
+
+/**
+ * Read a JSON artifact from either a local file path or an `http(s)://` URL.
+ * Returns the raw text body. Throws on network or filesystem failure.
+ */
+export async function readArtifactSource(
+    pathOrUrl: string,
+    opts: { fetchTimeoutMs?: number } = {},
+): Promise<string> {
+    if (isHttpUrl(pathOrUrl)) {
+        const timeoutMs = opts.fetchTimeoutMs ?? 15_000;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(pathOrUrl, {
+                redirect: 'follow',
+                signal: controller.signal,
+                headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.5' },
+            });
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status} ${res.statusText} for ${pathOrUrl}`);
+            }
+            return await res.text();
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+    return readFile(pathOrUrl, 'utf-8');
 }
 
 export async function loadArtifactBundle(
@@ -36,9 +78,10 @@ export async function loadArtifactBundle(
     opts: LoadArtifactBundleOptions = {},
 ): Promise<any | null> {
     const tag = opts.tag ?? '[loadArtifactBundle]';
+    const isUrl = isHttpUrl(absArtifactPath);
     let bundle: any;
     try {
-        const raw = await readFile(absArtifactPath, 'utf-8');
+        const raw = await readArtifactSource(absArtifactPath, { fetchTimeoutMs: opts.fetchTimeoutMs });
         const parsed = JSON.parse(raw);
         bundle = opts.unwrapEnvelope && parsed?.schemaVersion != null && parsed?.metadata !== undefined
             ? parsed.metadata
@@ -47,6 +90,24 @@ export async function loadArtifactBundle(
         // eslint-disable-next-line no-console
         console.warn(`${tag} artifact read FAILED: path='${absArtifactPath}' error=${err?.message ?? err}`);
         return null;
+    }
+
+    if (isUrl) {
+        // Remote artifacts cannot dynamic-import a sibling ESM runtime module
+        // safely (Node does not allow importing arbitrary URLs and we never
+        // want to execute remote code by default). Hooks/flow handlers must
+        // be carried in the JSON itself (declarative bodies, sandbox-eval).
+        if (typeof bundle?.runtimeModule === 'string' && bundle.runtimeModule.length > 0) {
+            // eslint-disable-next-line no-console
+            console.warn(
+                `${tag} ignoring runtimeModule='${bundle.runtimeModule}' for remote artifact ${absArtifactPath} ` +
+                `(remote ESM imports are not supported; embed handlers in the JSON instead)`,
+            );
+            // Strip the reference so downstream code doesn't try to resolve it
+            // as a local path against process.cwd().
+            delete bundle.runtimeModule;
+        }
+        return bundle;
     }
 
     await mergeRuntimeModule(bundle, absArtifactPath, tag);
