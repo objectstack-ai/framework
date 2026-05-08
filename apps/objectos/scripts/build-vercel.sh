@@ -19,7 +19,7 @@ set -euo pipefail
 echo "[build-vercel] Starting server build..."
 
 # 1. Build the project with turbo (from monorepo root)
-# This builds server, studio, and the account portal.
+# This builds server, studio, account, and the dashboard portal.
 cd ../..
 pnpm turbo run build --filter=@objectstack/objectos --filter=@objectstack/studio --filter=@objectstack/account --filter=@objectstack/dashboard
 cd apps/objectos

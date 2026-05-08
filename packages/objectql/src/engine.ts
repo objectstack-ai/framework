@@ -1607,16 +1607,48 @@ export class ObjectQL implements IDataEngine {
   }
   
   async execute(command: any, options?: Record<string, any>): Promise<any> {
-      // Direct pass-through implies we know which driver to use?
-      // Usually execute is tied to a specific object context OR we need a way to select driver.
-      // If command has 'object', we use that.
+      // Driver selection priority:
+      //   1. options.object  → route via getDriver(objectName)
+      //   2. options.datasource → explicit driver name
+      //   3. default driver (set via datasourceMapping or defaultDriver)
+      // This lets system services (e.g. PackageService, AuditService) issue raw
+      // SQL against the control-plane / default DB without having to know the
+      // object name behind every CREATE TABLE / SELECT statement.
+      let driver: DriverInterface | undefined;
       if (options?.object) {
-          const driver = this.getDriver(options.object);
-          if (driver.execute) {
-              return driver.execute(command, undefined, options);
+          driver = this.getDriver(options.object);
+      } else if (options?.datasource && this.drivers.has(options.datasource)) {
+          driver = this.drivers.get(options.datasource);
+      } else if (this.defaultDriver && this.drivers.has(this.defaultDriver)) {
+          driver = this.drivers.get(this.defaultDriver);
+      } else if (this.drivers.size === 1) {
+          // Single registered driver — unambiguously the right one.
+          driver = this.drivers.values().next().value;
+      }
+
+      if (!driver) {
+          throw new Error(
+              'Execute requires options.object to select a driver, or a default driver to be configured. ' +
+              'Configure datasourceMapping with `default: true` or pass `{ object }` / `{ datasource }` in options.',
+          );
+      }
+      if (!driver.execute) {
+          throw new Error('Selected driver does not implement execute()');
+      }
+
+      // Support both call shapes:
+      //   execute('SELECT ...', { args: [...] })
+      //   execute({ sql: 'SELECT ...', args: [...] })
+      let rawCommand: any = command;
+      let params: any[] | undefined = options?.args ?? options?.params;
+      if (command && typeof command === 'object' && !Array.isArray(command) && 'sql' in command) {
+          rawCommand = command.sql;
+          if (params === undefined) {
+              params = command.args ?? command.params;
           }
       }
-      throw new Error('Execute requires options.object to select driver');
+
+      return driver.execute(rawCommand, params, options);
   }
 
   // ============================================
