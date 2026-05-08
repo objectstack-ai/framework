@@ -910,6 +910,41 @@ describe('TursoDriver Remote Mode (via @libsql/client)', () => {
   it('should handle empty batch gracefully', async () => {
     await expect(driver.syncSchemasBatch([])).resolves.not.toThrow();
   });
+
+  // ── initObjects (remote-mode override — must NOT touch better-sqlite3) ──
+  //
+  // Regression: in serverless environments (e.g. Vercel) the native
+  // `better-sqlite3` binding is unavailable. The base `SqlDriver.initObjects`
+  // uses Knex (better-sqlite3) for `hasTable`/`createTable`, which crashes
+  // with "Could not locate the bindings file". TursoDriver must route
+  // `initObjects` through RemoteTransport instead.
+  it('should provision tables via RemoteTransport (no better-sqlite3) in remote mode', async () => {
+    await driver.initObjects([
+      {
+        name: 'remote_init_a',
+        fields: {
+          title: { type: 'string' },
+          qty: { type: 'integer' },
+        },
+      },
+      {
+        name: 'remote_init_b',
+        fields: {
+          name: { type: 'string' },
+        },
+      },
+    ]);
+
+    // If routed via RemoteTransport, both tables exist on the libsql client.
+    const a = await driver.create('remote_init_a', { title: 'X', qty: 1 });
+    expect(a.title).toBe('X');
+    const b = await driver.create('remote_init_b', { name: 'Y' });
+    expect(b.name).toBe('Y');
+  });
+
+  it('should handle empty initObjects list gracefully in remote mode', async () => {
+    await expect(driver.initObjects([])).resolves.not.toThrow();
+  });
 });
 
 // ── Lazy Connect (self-healing for serverless cold starts) ───────────────────
