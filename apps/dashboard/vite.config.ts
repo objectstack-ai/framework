@@ -1,88 +1,35 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import fs from 'fs';
 
 const hmrConfig = process.env.VITE_HMR_PORT
   ? { port: parseInt(process.env.VITE_HMR_PORT), clientPort: parseInt(process.env.VITE_HMR_PORT) }
   : undefined;
 
-// Resolve @object-ui/* to the workspace `src/` folders in the sibling
-// objectui checkout when present. This is required for local development
-// because the published rolldown bundles inline their own private
-// ComponentRegistry instance per plugin — breaking cross-plugin component
-// lookup (e.g. plugin-list cannot find `object-grid` registered by
-// plugin-grid). Pointing at source ensures a single shared
-// @object-ui/core ComponentRegistry instance.
-//
-// In CI / fork-ready builds where the sibling checkout is not available,
-// we fall back to the published @object-ui/* packages from node_modules
-// (matches the official `examples/console-starter` template behaviour).
-const OBJECTUI_ROOT = path.resolve(__dirname, '../../../objectui');
-const OBJECTUI_PACKAGES_DIR = path.resolve(OBJECTUI_ROOT, 'packages');
-const useObjectUiSource = fs.existsSync(OBJECTUI_PACKAGES_DIR);
-
-const objectUiPackages = [
-  'app-shell',
-  'auth',
-  'collaboration',
-  'components',
-  'core',
-  'data-objectstack',
-  'fields',
-  'i18n',
-  'layout',
-  'mobile',
-  'permissions',
-  'plugin-calendar',
-  'plugin-charts',
-  'plugin-chatbot',
-  'plugin-dashboard',
-  'plugin-detail',
-  'plugin-form',
-  'plugin-grid',
-  'plugin-kanban',
-  'plugin-list',
-  'plugin-report',
-  'plugin-view',
-  'react',
-  'types',
-];
-
-const workspaceAliases: Record<string, string> = useObjectUiSource
-  ? Object.fromEntries(
-      objectUiPackages.map((name) => [
-        `@object-ui/${name}`,
-        path.resolve(OBJECTUI_PACKAGES_DIR, name, 'src'),
-      ]),
-    )
-  : {};
+// Match any file under node_modules belonging to a given @object-ui/* package.
+// pnpm flattens packages into paths like:
+//   node_modules/.pnpm/@object-ui+core@4.0.3_.../node_modules/@object-ui/core/dist/...
+//   node_modules/@object-ui/core/dist/...
+const objectUiPkg = (name: string) => (id: string) =>
+  id.includes(`/@object-ui/${name}/`) ||
+  id.includes(`\\@object-ui\\${name}\\`) ||
+  id.includes(`/@object-ui+${name}@`) ||
+  id.includes(`\\@object-ui+${name}@`);
 
 export default defineConfig({
   base: process.env.VITE_BASE || '/_dashboard/',
   resolve: {
     dedupe: ['react', 'react-dom', 'lucide-react', 'react-router-dom', 'react-router'],
     alias: {
-      ...workspaceAliases,
       react: path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
-      // Force a single react-router copy. When @object-ui/* are aliased to
-      // sibling source, Node's resolver finds react-router-dom in
-      // ../objectui/node_modules — a different physical install than the one
-      // dashboard's App.tsx imports from. Two copies = two Router contexts =
-      // "<Navigate> may be used only in the context of a <Router>".
       'react-router-dom': path.resolve(__dirname, './node_modules/react-router-dom'),
-      // Don't alias 'react-router' as a string (it would intercept the
-      // 'react-router/dom' subpath import inside react-router-dom). The
-      // dedupe entry above is enough to ensure a single copy.
-      // Force a single lucide-react copy. @object-ui/app-shell pulls 0.544.0
-      // while @object-ui/components and the plugins pull 1.14.0 — letting both
-      // through produces duplicate icon chunks where one references a stale
-      // `createLucideIcon` symbol from the main bundle and crashes at runtime.
-      'lucide-react': path.resolve(
-        __dirname,
-        '../../node_modules/.pnpm/lucide-react@1.14.0_react@19.2.5/node_modules/lucide-react',
-      ),
+      // Force a single lucide-react copy. @object-ui/app-shell pulls one
+      // version while @object-ui/components and the plugins pull another —
+      // letting both through produces duplicate icon chunks where one
+      // references a stale `createLucideIcon` symbol from the main bundle
+      // and crashes at runtime.
+      'lucide-react': path.resolve(__dirname, './node_modules/lucide-react'),
       '@': path.resolve(__dirname, './src'),
     },
   },
@@ -93,21 +40,19 @@ export default defineConfig({
     cssCodeSplit: true,
     // Don't auto-emit `<link rel="modulepreload">` for every chunk; with
     // Vite-Rolldown's per-icon code splitting that would inject 1700+
-    // preload tags into the HTML, defeating lazy loading. Mirrors
-    // objectui/apps/console.
+    // preload tags into the HTML, defeating lazy loading.
     modulePreload: false,
     commonjsOptions: {
-      include: [/node_modules/, /packages/],
+      include: [/node_modules/],
       transformMixedEsModules: true,
     },
     rollupOptions: {
       output: {
-        // Manual chunking ported verbatim from objectui/apps/console — the
-        // proven shape that avoids the per-leaf TDZ ("X is not a function")
-        // crashes triggered by Vite-Rolldown's default dynamic-import
-        // splitting against @object-ui's static+dynamic widget imports.
+        // Manual chunking ported from objectui/apps/console — the proven
+        // shape that avoids per-leaf TDZ ("X is not a function") crashes
+        // triggered by Vite-Rolldown's default dynamic-import splitting
+        // against @object-ui's static+dynamic widget imports.
         manualChunks(id: string) {
-          // Vendor: React ecosystem
           if (
             id.includes('node_modules/react/') ||
             id.includes('node_modules/react-dom/') ||
@@ -116,11 +61,9 @@ export default defineConfig({
           ) {
             return 'vendor-react';
           }
-          // Vendor: Radix UI primitives
           if (id.includes('node_modules/@radix-ui/')) {
             return 'vendor-radix';
           }
-          // Vendor: @objectstack/* SDK & spec
           if (
             id.includes('node_modules/@objectstack/') ||
             id.includes('/@objectstack+') ||
@@ -128,8 +71,6 @@ export default defineConfig({
           ) {
             return 'vendor-objectstack';
           }
-          // Vendor: Lucide icons — only bundle the runtime helpers; per-icon
-          // chunks then import a fully-initialized factory.
           if (
             id.includes('node_modules/lucide-react/dist/lucide-react') ||
             id.includes('node_modules/lucide-react/dist/esm/Icon') ||
@@ -139,7 +80,6 @@ export default defineConfig({
           ) {
             return 'vendor-icons-core';
           }
-          // Vendor: UI utilities
           if (
             id.includes('node_modules/class-variance-authority/') ||
             id.includes('node_modules/clsx/') ||
@@ -148,9 +88,7 @@ export default defineConfig({
           ) {
             return 'vendor-ui-utils';
           }
-          if (id.includes('node_modules/zod/')) {
-            return 'vendor-zod';
-          }
+          if (id.includes('node_modules/zod/')) return 'vendor-zod';
           if (
             id.includes('node_modules/recharts/') ||
             id.includes('node_modules/d3-') ||
@@ -158,62 +96,46 @@ export default defineConfig({
           ) {
             return 'vendor-charts';
           }
-          if (id.includes('node_modules/@dnd-kit/')) {
-            return 'vendor-dndkit';
-          }
+          if (id.includes('node_modules/@dnd-kit/')) return 'vendor-dndkit';
           if (
             id.includes('node_modules/i18next') ||
             id.includes('node_modules/react-i18next/')
           ) {
             return 'vendor-i18n';
           }
-          // @object-ui/core + @object-ui/react (framework)
-          if (
-            id.includes('/packages/core/') ||
-            id.includes('/packages/react/') ||
-            id.includes('/packages/types/')
-          ) {
+          // @object-ui framework: core + react + types
+          if (objectUiPkg('core')(id) || objectUiPkg('react')(id) || objectUiPkg('types')(id)) {
             return 'framework';
           }
-          // @object-ui/components + @object-ui/fields
-          if (
-            id.includes('/packages/components/') ||
-            id.includes('/packages/fields/') ||
-            id.includes('/@object-ui/components/') ||
-            id.includes('/@object-ui/fields/')
-          ) {
+          if (objectUiPkg('components')(id) || objectUiPkg('fields')(id)) {
             return 'ui-components';
           }
-          if (id.includes('/packages/layout/')) {
-            return 'ui-layout';
-          }
-          if (id.includes('/packages/data-objectstack/')) {
-            return 'data-adapter';
-          }
+          if (objectUiPkg('layout')(id)) return 'ui-layout';
+          if (objectUiPkg('data-objectstack')(id)) return 'data-adapter';
           if (
-            id.includes('/packages/auth/') ||
-            id.includes('/packages/permissions/') ||
-            id.includes('/packages/tenant/') ||
-            id.includes('/packages/i18n/')
+            objectUiPkg('auth')(id) ||
+            objectUiPkg('permissions')(id) ||
+            objectUiPkg('tenant')(id) ||
+            objectUiPkg('i18n')(id)
           ) {
             return 'infrastructure';
           }
-          if (id.includes('/packages/plugin-grid/')) return 'plugin-grid';
-          if (id.includes('/packages/plugin-form/')) return 'plugin-form';
-          if (id.includes('/packages/plugin-view/')) return 'plugin-view';
+          if (objectUiPkg('plugin-grid')(id)) return 'plugin-grid';
+          if (objectUiPkg('plugin-form')(id)) return 'plugin-form';
+          if (objectUiPkg('plugin-view')(id)) return 'plugin-view';
           if (
-            id.includes('/packages/plugin-detail/') ||
-            id.includes('/packages/plugin-list/') ||
-            id.includes('/packages/plugin-dashboard/') ||
-            id.includes('/packages/plugin-report/')
+            objectUiPkg('plugin-detail')(id) ||
+            objectUiPkg('plugin-list')(id) ||
+            objectUiPkg('plugin-dashboard')(id) ||
+            objectUiPkg('plugin-report')(id)
           ) {
             return 'plugins-views';
           }
-          if (id.includes('/packages/plugin-charts/')) return 'plugin-charts';
-          if (id.includes('/packages/plugin-calendar/')) return 'plugin-calendar';
-          if (id.includes('/packages/plugin-kanban/')) return 'plugin-kanban';
-          if (id.includes('/packages/plugin-chatbot/')) return 'plugin-chatbot';
-          if (id.includes('/packages/app-shell/')) return 'app-shell';
+          if (objectUiPkg('plugin-charts')(id)) return 'plugin-charts';
+          if (objectUiPkg('plugin-calendar')(id)) return 'plugin-calendar';
+          if (objectUiPkg('plugin-kanban')(id)) return 'plugin-kanban';
+          if (objectUiPkg('plugin-chatbot')(id)) return 'plugin-chatbot';
+          if (objectUiPkg('app-shell')(id)) return 'app-shell';
         },
       },
     },
@@ -221,12 +143,6 @@ export default defineConfig({
   server: {
     port: parseInt(process.env.VITE_PORT || '5175'),
     hmr: hmrConfig,
-    fs: {
-      // Allow vite to read sources outside the project root (sibling objectui).
-      allow: useObjectUiSource
-        ? [path.resolve(__dirname, '../..'), OBJECTUI_ROOT]
-        : [path.resolve(__dirname, '../..')],
-    },
     proxy: {
       '/api': {
         target: process.env.VITE_PROXY_TARGET || 'http://localhost:3000',
