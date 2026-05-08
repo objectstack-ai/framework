@@ -191,6 +191,8 @@ export interface ServerReadyOptions {
   driverLabel?: string;
   /** Resolved DB URL with credentials redacted. */
   databaseUrl?: string;
+  /** Whether the SecurityPlugin was wired in multi-tenant mode (default true). */
+  multiTenant?: boolean;
 }
 
 export function printServerReady(opts: ServerReadyOptions) {
@@ -214,6 +216,9 @@ export function printServerReady(opts: ServerReadyOptions) {
   if (opts.driverLabel) {
     const dbInfo = opts.databaseUrl ? `${opts.driverLabel}  ${chalk.dim('→')} ${opts.databaseUrl}` : opts.driverLabel;
     console.log(chalk.dim(`  Driver:  ${dbInfo}`));
+  }
+  if (opts.multiTenant !== undefined) {
+    console.log(chalk.dim(`  Tenancy: ${opts.multiTenant ? 'multi-tenant' : 'single-tenant'}`));
   }
   console.log(chalk.dim(`  Plugins: ${opts.pluginCount} loaded`));
   if (opts.pluginNames && opts.pluginNames.length > 0) {

@@ -223,7 +223,71 @@ export class ObjectQLPlugin implements Plugin {
   private registerAuditHooks(ctx: PluginContext) {
     if (!this.ql) return;
 
-    const stamp = new Date().toISOString;
+    const stamp = () => new Date().toISOString();
+
+    /**
+     * Returns true when the resolved object schema declares a field with the
+     * given name. Audit fields (`created_by`, `updated_by`, `tenant_id`) are
+     * NOT auto-injected by the SQL driver, so we must only stamp values for
+     * fields the user has explicitly declared on the object — otherwise the
+     * driver will issue an INSERT against a column that does not exist in
+     * the physical table (e.g. `table lead has no column named created_by`).
+     *
+     * `created_at`/`updated_at` are unconditional because driver-sql creates
+     * them as built-in columns on every table.
+     */
+    const hasField = (objectName: string, field: string): boolean => {
+      try {
+        const schema: any = this.ql?.getSchema?.(objectName);
+        if (!schema || typeof schema !== 'object') return false;
+        const fields = schema.fields;
+        if (!fields || typeof fields !== 'object') return false;
+        return Object.prototype.hasOwnProperty.call(fields, field);
+      } catch {
+        return false;
+      }
+    };
+
+    const applyToRecord = (
+      record: Record<string, any>,
+      objectName: string,
+      session: any,
+      isInsert: boolean,
+    ) => {
+      const now = stamp();
+      if (isInsert) {
+        record.created_at = record.created_at ?? now;
+      }
+      record.updated_at = now;
+      if (session?.userId) {
+        if (isInsert && hasField(objectName, 'created_by')) {
+          record.created_by = record.created_by ?? session.userId;
+        }
+        if (hasField(objectName, 'updated_by')) {
+          record.updated_by = session.userId;
+        }
+      }
+      if (isInsert && session?.tenantId && hasField(objectName, 'tenant_id')) {
+        record.tenant_id = record.tenant_id ?? session.tenantId;
+      }
+    };
+
+    const stampData = (
+      data: unknown,
+      objectName: string,
+      session: any,
+      isInsert: boolean,
+    ) => {
+      if (Array.isArray(data)) {
+        for (const row of data) {
+          if (row && typeof row === 'object') {
+            applyToRecord(row as Record<string, any>, objectName, session, isInsert);
+          }
+        }
+      } else if (data && typeof data === 'object') {
+        applyToRecord(data as Record<string, any>, objectName, session, isInsert);
+      }
+    };
 
     const builtinHooks: any[] = [
       {
@@ -231,19 +295,10 @@ export class ObjectQLPlugin implements Plugin {
         object: '*',
         events: ['beforeInsert'],
         priority: 10,
-        description: 'Auto-stamp created_by / updated_by / created_at / updated_at / tenant_id on insert',
+        description: 'Auto-stamp created_by / updated_by / created_at / updated_at / tenant_id on insert (only when the field exists on the object schema)',
         handler: async (hookCtx: any) => {
-          if (hookCtx.session?.userId && hookCtx.input?.data) {
-            const data = hookCtx.input.data as Record<string, any>;
-            if (typeof data === 'object' && data !== null) {
-              data.created_by = data.created_by ?? hookCtx.session.userId;
-              data.updated_by = hookCtx.session.userId;
-              data.created_at = data.created_at ?? stamp.call(new Date());
-              data.updated_at = stamp.call(new Date());
-              if (hookCtx.session.tenantId) {
-                data.tenant_id = data.tenant_id ?? hookCtx.session.tenantId;
-              }
-            }
+          if (hookCtx.input?.data) {
+            stampData(hookCtx.input.data, hookCtx.object, hookCtx.session, true);
           }
         },
       },
@@ -252,14 +307,10 @@ export class ObjectQLPlugin implements Plugin {
         object: '*',
         events: ['beforeUpdate'],
         priority: 10,
-        description: 'Auto-stamp updated_by / updated_at on update',
+        description: 'Auto-stamp updated_by / updated_at on update (only when the field exists on the object schema)',
         handler: async (hookCtx: any) => {
-          if (hookCtx.session?.userId && hookCtx.input?.data) {
-            const data = hookCtx.input.data as Record<string, any>;
-            if (typeof data === 'object' && data !== null) {
-              data.updated_by = hookCtx.session.userId;
-              data.updated_at = stamp.call(new Date());
-            }
+          if (hookCtx.input?.data) {
+            stampData(hookCtx.input.data, hookCtx.object, hookCtx.session, false);
           }
         },
       },

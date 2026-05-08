@@ -891,6 +891,24 @@ export default class Serve extends Command {
       await new Promise(r => setTimeout(r, 100));
       restoreOutput();
 
+      // ── Driver introspection ──────────────────────────────────────
+      // When the driver was registered by an app preset / per-project
+      // factory (ProjectKernelFactory) instead of serve.ts's own
+      // OS_DATABASE_URL fallback, `resolvedDriverLabel` is still
+      // unset. Probe well-known service names so the banner can show
+      // *something* useful regardless of who wired the driver.
+      if (!resolvedDriverLabel) {
+        try {
+          const probe = describeRegisteredDriver(kernel);
+          if (probe) {
+            resolvedDriverLabel = probe.label;
+            resolvedDatabaseUrl = probe.url;
+          }
+        } catch {
+          // best-effort only
+        }
+      }
+
       // ── Clean startup summary ──────────────────────────────────────
       printServerReady({
         port,
@@ -904,6 +922,7 @@ export default class Serve extends Command {
         dashboardPath: loadedPlugins.includes('DashboardUI') ? DASHBOARD_PATH : undefined,
         driverLabel: resolvedDriverLabel,
         databaseUrl: redactDbUrl(resolvedDatabaseUrl),
+        multiTenant: String(process.env.OS_MULTI_TENANT ?? 'true').toLowerCase() !== 'false',
       });
 
       // Kernel already registers SIGINT/SIGTERM handlers during bootstrap.
@@ -917,4 +936,60 @@ export default class Serve extends Command {
       this.exit(1);
     }
   }
+}
+
+/**
+ * Best-effort driver introspection.
+ *
+ * Drivers register themselves under the kernel service name
+ * `driver.{driver.name}` (see `DriverPlugin.init`). We probe a list of
+ * well-known names and return a single-line label + redacted URL so the
+ * startup banner can show *something* even when the driver wasn't
+ * registered through this command's own `OS_DATABASE_URL` fallback
+ * (e.g. when the example app's preset or `ProjectKernelFactory` wired
+ * it). Returns `null` when nothing matches; the caller treats that as
+ * "no driver info available" and skips the line.
+ */
+function describeRegisteredDriver(kernel: any): { label: string; url: string } | null {
+  const candidates = [
+    'driver.com.objectstack.driver.sql',
+    'driver.com.objectstack.driver.mongodb',
+    'driver.com.objectstack.driver.turso',
+    'driver.com.objectstack.driver.memory',
+    'driver.sql', 'driver.mongodb', 'driver.turso', 'driver.memory',
+  ];
+  for (const name of candidates) {
+    let driver: any;
+    try { driver = kernel?.getService?.(name); } catch { /* not registered */ }
+    if (!driver) continue;
+
+    // SqlDriver: `{ client, connection: string | { filename, host, ... } }`
+    const cfg = driver.config;
+    if (cfg) {
+      const client = cfg.client;
+      const conn = cfg.connection;
+      let url = '';
+      if (typeof conn === 'string') {
+        url = conn;
+      } else if (conn && typeof conn === 'object') {
+        url = conn.filename
+          ?? (conn.host ? `${conn.host}${conn.port ? `:${conn.port}` : ''}${conn.database ? `/${conn.database}` : ''}` : '');
+      }
+      const label = client ? `SqlDriver(${client})` : (driver.name ?? 'SqlDriver');
+      return { label, url: url || '(unknown)' };
+    }
+
+    // MongoDB / Turso drivers expose the URL on the instance itself.
+    if (driver.url) {
+      const label = driver.constructor?.name ?? driver.name ?? 'Driver';
+      return { label, url: String(driver.url) };
+    }
+
+    // InMemoryDriver — no URL.
+    return {
+      label: driver.constructor?.name ?? driver.name ?? 'Driver',
+      url: '(in-memory)',
+    };
+  }
+  return null;
 }
