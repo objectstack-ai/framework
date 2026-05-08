@@ -6,6 +6,7 @@ import { PermissionEvaluator } from './permission-evaluator.js';
 import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { FieldMasker } from './field-masker.js';
 import { PermissionDeniedError } from './errors.js';
+import { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 import {
   securityObjects,
   securityDefaultPermissionSets,
@@ -223,6 +224,46 @@ export class SecurityPlugin implements Plugin {
     });
 
     ctx.logger.info('Security middleware registered on ObjectQL engine');
+
+    // Defer platform admin bootstrap until all plugins finish starting —
+    // sys_user / sys_permission_set objects must be registered (by
+    // plugin-auth and platform-objects respectively) before we can
+    // insert seed rows. Falls back to immediate execution when the
+    // kernel does not expose `hook` (test stubs).
+    let bootstrapRanOnce = false;
+    const runBootstrap = async () => {
+      try {
+        const report = await bootstrapPlatformAdmin(ql, this.bootstrapPermissionSets, {
+          logger: ctx.logger,
+        });
+        bootstrapRanOnce = true;
+        ctx.logger.info('[security] platform bootstrap complete', report);
+        return report;
+      } catch (e) {
+        ctx.logger.warn('[security] platform bootstrap failed', { error: (e as Error).message });
+        return undefined;
+      }
+    };
+    if (typeof (ctx as any).hook === 'function') {
+      (ctx as any).hook('kernel:ready', runBootstrap);
+    } else {
+      void runBootstrap();
+    }
+
+    // Re-run bootstrap after a sys_user insert so the FIRST user that
+    // signs up after boot is auto-promoted to platform admin without
+    // requiring a server restart. The function itself is idempotent
+    // and bails out as soon as any platform admin exists.
+    ql.registerMiddleware(async (opCtx: any, next: () => Promise<void>) => {
+      await next();
+      if (
+        opCtx?.object === 'sys_user' &&
+        (opCtx?.operation === 'create' || opCtx?.operation === 'insert') &&
+        bootstrapRanOnce
+      ) {
+        await runBootstrap();
+      }
+    });
   }
 
   async destroy(): Promise<void> {

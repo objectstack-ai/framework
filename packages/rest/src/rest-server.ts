@@ -188,6 +188,7 @@ export class RestServer {
     private envRegistry?: RestEnvRegistry;
     private defaultProjectIdProvider?: () => string | undefined;
     private authServiceProvider?: (projectId?: string) => Promise<any | undefined>;
+    private objectQLProvider?: (projectId?: string) => Promise<any | undefined>;
 
     constructor(
         server: IHttpServer,
@@ -197,6 +198,7 @@ export class RestServer {
         envRegistry?: RestEnvRegistry,
         defaultProjectIdProvider?: () => string | undefined,
         authServiceProvider?: (projectId?: string) => Promise<any | undefined>,
+        objectQLProvider?: (projectId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -205,6 +207,7 @@ export class RestServer {
         this.envRegistry = envRegistry;
         this.defaultProjectIdProvider = defaultProjectIdProvider;
         this.authServiceProvider = authServiceProvider;
+        this.objectQLProvider = objectQLProvider;
     }
 
     /**
@@ -309,15 +312,16 @@ export class RestServer {
             // tenant kernel; for multi-project hosts we use the resolved
             // projectId.
             let authService: any;
+            let kernel: any;
             if (projectId && projectId !== 'platform' && this.kernelManager) {
-                const kernel = await this.kernelManager.getOrCreate(projectId);
+                kernel = await this.kernelManager.getOrCreate(projectId);
                 authService = await kernel.getServiceAsync('auth').catch(() => undefined);
             }
             if (!authService && this.defaultProjectIdProvider && this.kernelManager) {
                 try {
                     const def = this.defaultProjectIdProvider();
                     if (def) {
-                        const kernel = await this.kernelManager.getOrCreate(def);
+                        kernel = await this.kernelManager.getOrCreate(def);
                         authService = await kernel.getServiceAsync('auth').catch(() => undefined);
                     }
                 } catch { /* fall through */ }
@@ -357,11 +361,67 @@ export class RestServer {
 
             const session = await api.getSession({ headers });
             if (!session?.user?.id) return undefined;
+            const userId = session.user.id;
+            const tenantId = session.session?.activeOrganizationId ?? undefined;
+            const permissions: string[] = [];
+            const roles: string[] = [];
+            // Look up the link tables to surface roles + permission set names.
+            // Skipping this lookup would silently ignore admin/role grants —
+            // including the platform-admin promotion seeded by
+            // `bootstrapPlatformAdmin` — and force every authenticated user
+            // through the `member_default` fallback path.
+            try {
+                let ql: any;
+                if (kernel) {
+                    ql = await kernel.getServiceAsync('objectql').catch(() => undefined);
+                }
+                if (!ql && this.objectQLProvider) {
+                    ql = await this.objectQLProvider(projectId).catch(() => undefined);
+                }
+                if (ql && typeof ql.find === 'function') {
+                    const sysOpts = { context: { isSystem: true } };
+                    const memberRows = await ql.find('sys_member', {
+                        where: tenantId ? { user_id: userId, organization_id: tenantId } : { user_id: userId },
+                        limit: 50,
+                        ...sysOpts,
+                    } as any).catch(() => []);
+                    for (const m of (memberRows ?? []) as any[]) {
+                        if (typeof m.role === 'string') {
+                            for (const r of m.role.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+                                if (!roles.includes(r)) roles.push(r);
+                            }
+                        }
+                    }
+                    const upsRows = await ql.find('sys_user_permission_set', {
+                        where: { user_id: userId },
+                        limit: 100,
+                        ...sysOpts,
+                    } as any).catch(() => []);
+                    const psIds = new Set<string>();
+                    for (const r of (upsRows ?? []) as any[]) {
+                        const orgScope = r.organization_id ?? null;
+                        if (!orgScope || (tenantId && orgScope === tenantId)) {
+                            const pid = r.permission_set_id ?? r.permissionSetId;
+                            if (pid) psIds.add(pid);
+                        }
+                    }
+                    if (psIds.size > 0) {
+                        const psRows = await ql.find('sys_permission_set', {
+                            where: { id: { $in: Array.from(psIds) } },
+                            limit: 500,
+                            ...sysOpts,
+                        } as any).catch(() => []);
+                        for (const ps of (psRows ?? []) as any[]) {
+                            if (ps.name && !permissions.includes(ps.name)) permissions.push(ps.name);
+                        }
+                    }
+                }
+            } catch { /* fall through with empty perms */ }
             return {
-                userId: session.user.id,
-                tenantId: session.session?.activeOrganizationId,
-                roles: [],
-                permissions: ['member_default'],
+                userId,
+                tenantId,
+                roles,
+                permissions,
                 isSystem: false,
             };
         } catch {

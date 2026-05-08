@@ -374,7 +374,11 @@ export class HonoServerPlugin implements Plugin {
 
         // Helper: resolve ExecutionContext from request headers (cookie session
         // or API key). Mirrors the runtime's resolveExecutionContext but
-        // self-contained to avoid a cross-package dep.
+        // self-contained to avoid a cross-package dep. We DO query the
+        // `sys_user_permission_set` link tables because hardcoding a single
+        // permission set name (e.g. `member_default`) would silently ignore
+        // any explicit admin / role assignment — including the platform-admin
+        // promotion seeded by `bootstrapPlatformAdmin`.
         const resolveCtx = async (c: any): Promise<any | undefined> => {
             try {
                 const authService: any = ctx.getService('auth');
@@ -386,11 +390,65 @@ export class HonoServerPlugin implements Plugin {
                 if (!api?.getSession) return undefined;
                 const session = await api.getSession({ headers: c.req.raw.headers });
                 if (!session?.user?.id) return undefined;
+                const userId = session.user.id;
+                const tenantId = session.session?.activeOrganizationId ?? undefined;
+                const permissions: string[] = [];
+                const roles: string[] = [];
+                try {
+                    const ql = getObjectQL();
+                    const sysCtx = { context: { isSystem: true } };
+                    // Roles via sys_member (org-scoped if active org).
+                    const memberRows = await ql?.find?.(
+                        'sys_member',
+                        {
+                            where: tenantId
+                                ? { user_id: userId, organization_id: tenantId }
+                                : { user_id: userId },
+                            limit: 50,
+                            ...sysCtx,
+                        } as any,
+                    ).catch(() => []);
+                    for (const m of (memberRows ?? []) as any[]) {
+                        if (typeof m.role === 'string') {
+                            for (const r of m.role.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+                                if (!roles.includes(r)) roles.push(r);
+                            }
+                        }
+                    }
+                    // User-scoped permission sets — match BOTH (a) the active
+                    // org's link rows and (b) the cross-tenant rows
+                    // (organization_id IS NULL) so the platform-admin
+                    // promotion seeded by `bootstrapPlatformAdmin` applies
+                    // regardless of the user's active org.
+                    const upsRows = await ql?.find?.(
+                        'sys_user_permission_set',
+                        { where: { user_id: userId }, limit: 100, ...sysCtx } as any,
+                    ).catch(() => []);
+                    const psIds = new Set<string>();
+                    for (const r of (upsRows ?? []) as any[]) {
+                        const orgScope = r.organization_id ?? null;
+                        if (!orgScope || (tenantId && orgScope === tenantId)) {
+                            const pid = r.permission_set_id ?? r.permissionSetId;
+                            if (pid) psIds.add(pid);
+                        }
+                    }
+                    if (psIds.size > 0) {
+                        const psRows = await ql?.find?.(
+                            'sys_permission_set',
+                            { where: { id: { $in: Array.from(psIds) } }, limit: 500, ...sysCtx } as any,
+                        ).catch(() => []);
+                        for (const ps of (psRows ?? []) as any[]) {
+                            if (ps.name && !permissions.includes(ps.name)) permissions.push(ps.name);
+                        }
+                    }
+                } catch {
+                    /* fall through with whatever we resolved so far */
+                }
                 return {
-                    userId: session.user.id,
-                    tenantId: session.session?.activeOrganizationId,
-                    roles: [],
-                    permissions: ['member_default'],
+                    userId,
+                    tenantId,
+                    roles,
+                    permissions,
                     isSystem: false,
                 };
             } catch {
