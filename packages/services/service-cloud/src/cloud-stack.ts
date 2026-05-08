@@ -71,7 +71,11 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
     const {
         authSecret,
         baseUrl,
-        controlDriverUrl = `file:${resolvePath(resolveDefaultDataDir(), 'control.db')}`,
+        // NOTE: no eager default here. The file-backed fallback is computed
+        // lazily below so that serverless deployments which configure
+        // TURSO_DATABASE_URL / OS_CONTROL_DATABASE_URL never trip the
+        // resolveDefaultDataDir() throw-on-serverless guard.
+        controlDriverUrl,
         controlDriverAuthToken,
         basePlugins,
         appBundles,
@@ -89,12 +93,19 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
     //   3. OS_DATABASE_URL          (legacy alias — only used here when no
     //                                higher-priority source is set; reserved
     //                                going forward for the project's data DB)
-    //   4. TURSO_DATABASE_URL       (legacy alias)
-    //   5. file:./.objectstack/data/control.db (default)
+    //   4. TURSO_DATABASE_URL       (legacy alias — recommended on Vercel)
+    //   5. file:<resolveDefaultDataDir()>/control.db on writable filesystems.
+    //      On serverless (Vercel / Lambda / Netlify) without any of the above,
+    //      resolveDefaultDataDir() throws with a message pointing at Turso —
+    //      we never silently fall back to ephemeral /tmp SQLite.
     const explicitControlUrl = process.env.OS_CONTROL_DATABASE_URL?.trim();
     const legacyControlUrl = (process.env.OS_DATABASE_URL || process.env.TURSO_DATABASE_URL)?.trim();
+    const resolvedControlUrl = explicitControlUrl
+        || controlDriverUrl
+        || legacyControlUrl
+        || `file:${resolvePath(resolveDefaultDataDir(), 'control.db')}`;
     const controlDriverPromise = buildControlDriver(
-        explicitControlUrl || controlDriverUrl || legacyControlUrl || `file:${resolvePath(resolveDefaultDataDir(), 'control.db')}`,
+        resolvedControlUrl,
         process.env.OS_CONTROL_DATABASE_AUTH_TOKEN || process.env.OS_DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN || controlDriverAuthToken,
     );
 

@@ -1,42 +1,47 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Default data-directory resolution.
+ * Default data-directory + serverless-platform detection.
  *
  * Single source of truth for the on-disk location of the control-plane
  * SQLite file (`control.db`), per-project SQLite files, and InMemoryDriver
- * persistence JSON files. All cloud-stack / runtime-stack code paths
- * resolve their default paths through {@link resolveDefaultDataDir} so
- * that the same precedence and serverless fallback applies everywhere.
+ * persistence JSON files in **non-serverless** deployments.
  *
- * Resolution order:
+ * On serverless platforms with a read-only application bundle (Vercel,
+ * AWS Lambda, Netlify Functions, Cloudflare Workers Node compat) the
+ * file-backed default is unsupported — `/var/task` is read-only and
+ * `/tmp` is per-instance, ephemeral, and not shared between concurrent
+ * cold starts. Persisting business data there silently corrupts
+ * deployments. The recommended (and only sensible) default for these
+ * platforms is **Turso / libSQL** — set `TURSO_DATABASE_URL` (or
+ * `OS_CONTROL_DATABASE_URL=libsql://…`) and the cloud-stack driver
+ * factory will pick it up automatically.
  *
- *   1. `OS_DATA_DIR` environment variable (explicit override — wins always).
- *   2. `<cwd>/.objectstack/data` on a writable filesystem (the default for
- *      `objectstack dev`, `objectstack serve`, Docker, bare metal, …).
- *   3. `<os.tmpdir()>/.objectstack/data` when running on a serverless
- *      platform with a read-only application bundle (Vercel, AWS Lambda,
- *      Netlify Functions, Cloudflare Workers Node compat). A one-time
- *      warning is emitted because `/tmp` is ephemeral — production
- *      deployments must configure a real database via
- *      `OS_CONTROL_DATABASE_URL` (and `OS_DATABASE_URL` for project data).
+ * Resolution order for {@link resolveDefaultDataDir}:
  *
- * Centralising this logic prevents the "ENOENT: mkdir '/var/task/.objectstack'"
- * class of cold-start failures on serverless without forcing every caller
- * to re-implement detection.
+ *   1. `OS_DATA_DIR` environment variable (explicit override — wins
+ *      always, even on serverless; intended for self-managed mounts
+ *      such as a network volume or EFS share).
+ *   2. `<cwd>/.objectstack/data` on a writable filesystem (the default
+ *      for `objectstack dev`, `objectstack serve`, Docker, bare metal, …).
+ *   3. **THROWS** on a detected serverless read-only filesystem. The
+ *      error message tells the user exactly which env var to set.
+ *
+ * Centralising this logic prevents both
+ * (a) the "ENOENT: mkdir '/var/task/.objectstack'" cold-start crash, and
+ * (b) the worse failure mode where an ephemeral `/tmp` SQLite "works"
+ *     for a single cold start and silently loses data on the next one.
  */
 
 import { resolve as resolvePath } from 'node:path';
-import { tmpdir } from 'node:os';
-
-let _warned = false;
 
 /**
  * Returns `true` when the current process is running on a serverless
- * platform whose application bundle is a read-only filesystem. The set
- * of detected platforms intentionally matches the ones where ObjectStack
- * is regularly deployed today; new platforms can be added via the
- * `OS_READONLY_FS=1` escape hatch.
+ * platform whose application bundle is a read-only filesystem and whose
+ * `/tmp` is per-instance / ephemeral. The set of detected platforms
+ * intentionally matches the ones where ObjectStack is regularly deployed
+ * today; new platforms can be added via the `OS_READONLY_FS=1` escape
+ * hatch.
  */
 export function isServerlessReadOnlyFs(env: NodeJS.ProcessEnv = process.env): boolean {
     if (env.OS_READONLY_FS && ['1', 'true', 'yes', 'on'].includes(env.OS_READONLY_FS.trim().toLowerCase())) {
@@ -52,8 +57,36 @@ export function isServerlessReadOnlyFs(env: NodeJS.ProcessEnv = process.env): bo
 }
 
 /**
+ * Build the standard "configure a persistent database" error message
+ * shown when a file-backed default is requested on serverless.
+ * @internal
+ */
+export function buildServerlessPersistenceError(role: 'control' | 'project' = 'control'): Error {
+    const urlVar = role === 'control' ? 'TURSO_DATABASE_URL (or OS_CONTROL_DATABASE_URL)' : 'OS_DATABASE_URL';
+    const tokenVar = role === 'control' ? 'TURSO_AUTH_TOKEN (or OS_CONTROL_DATABASE_AUTH_TOKEN)' : 'OS_DATABASE_AUTH_TOKEN';
+    return new Error(
+        `[objectstack/service-cloud] Detected a serverless read-only filesystem ` +
+        `(Vercel / AWS Lambda / Netlify) but no persistent database is configured ` +
+        `for the ${role === 'control' ? 'control plane' : 'project data plane'}. ` +
+        `Set ${urlVar} to a libsql:// URL (recommended on Vercel — Turso is the ` +
+        `default ObjectStack pairing for serverless) and ${tokenVar} to the ` +
+        `matching auth token. ` +
+        `For self-hosted Postgres / MySQL, set the same variable to a ` +
+        `postgres:// or mysql:// URL instead. ` +
+        `If you have a writable persistent mount (EFS, network volume, …), ` +
+        `set OS_DATA_DIR to its path to opt out of this check. ` +
+        `File-backed SQLite is rejected on these platforms because /tmp is ` +
+        `per-instance and ephemeral, which silently corrupts data across ` +
+        `concurrent invocations.`,
+    );
+}
+
+/**
  * Resolve the canonical default data directory for SQLite / file-backed
  * driver persistence. See module docstring for precedence rules.
+ *
+ * Throws on serverless platforms unless `OS_DATA_DIR` is set — see
+ * {@link buildServerlessPersistenceError} for the rationale.
  *
  * @param env - Optional process-env override, primarily for tests.
  * @returns Absolute filesystem path. Never returns a trailing slash.
@@ -63,29 +96,8 @@ export function resolveDefaultDataDir(env: NodeJS.ProcessEnv = process.env): str
     if (explicit) return resolvePath(explicit);
 
     if (isServerlessReadOnlyFs(env)) {
-        const dir = resolvePath(tmpdir(), '.objectstack/data');
-        if (!_warned) {
-            _warned = true;
-            // eslint-disable-next-line no-console
-            console.warn(
-                `[objectstack] Detected serverless read-only filesystem. ` +
-                `Falling back to ephemeral data directory: ${dir}. ` +
-                `Set OS_CONTROL_DATABASE_URL (and OS_DATABASE_URL for project data) ` +
-                `to a persistent database (libsql://, postgres://, mysql://, …) for production.`,
-            );
-        }
-        return dir;
+        throw buildServerlessPersistenceError('control');
     }
 
     return resolvePath(process.cwd(), '.objectstack/data');
-}
-
-/**
- * Test-only helper: reset the one-shot warning latch so test suites can
- * assert the warning is emitted exactly once per process.
- *
- * @internal
- */
-export function __resetDataDirWarningForTests(): void {
-    _warned = false;
 }
