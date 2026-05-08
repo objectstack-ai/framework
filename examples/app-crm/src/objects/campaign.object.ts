@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
+import { F } from '@objectstack/spec';
 
 /**
  * Campaign Object
@@ -155,13 +156,13 @@ export const Campaign = ObjectSchema.create({
     // Calculated Metrics (Formula Fields)
     response_rate: Field.formula({
       label: 'Response Rate %',
-      expression: 'IF(num_sent > 0, (num_responses / num_sent) * 100, 0)',
+      expression: F`coalesce(record.num_sent, 0) > 0 ? (coalesce(record.num_responses, 0) * 100.0) / record.num_sent : 0.0`,
       scale: 2,
     }),
     
     roi: Field.formula({
       label: 'ROI %',
-      expression: 'IF(actual_cost > 0, ((actual_revenue - actual_cost) / actual_cost) * 100, 0)',
+      expression: F`coalesce(record.actual_cost, 0) > 0 ? ((coalesce(record.actual_revenue, 0) - record.actual_cost) * 100.0) / record.actual_cost : 0.0`,
       scale: 2,
     }),
     

@@ -6032,7 +6032,7 @@
           "deleteBehavior": "set_null",
           "expression": {
             "dialect": "cel",
-            "source": "IF(num_sent > 0, (num_responses / num_sent) * 100, 0)"
+            "source": "coalesce(record.num_sent, 0) > 0 ? (coalesce(record.num_responses, 0) * 100.0) / record.num_sent : 0.0"
           },
           "auditTrail": false,
           "hidden": false,
@@ -6052,7 +6052,7 @@
           "deleteBehavior": "set_null",
           "expression": {
             "dialect": "cel",
-            "source": "IF(actual_cost > 0, ((actual_revenue - actual_cost) / actual_cost) * 100, 0)"
+            "source": "coalesce(record.actual_cost, 0) > 0 ? ((coalesce(record.actual_revenue, 0) - record.actual_cost) * 100.0) / record.actual_cost : 0.0"
           },
           "auditTrail": false,
           "hidden": false,
@@ -7030,7 +7030,7 @@
           "deleteBehavior": "set_null",
           "expression": {
             "dialect": "cel",
-            "source": "CONCAT(salutation, \" \", first_name, \" \", last_name)"
+            "source": "coalesce(record.salutation, '') + ' ' + coalesce(record.first_name, '') + ' ' + coalesce(record.last_name, '')"
           },
           "auditTrail": false,
           "group": "identity",
@@ -8243,7 +8243,7 @@
           "deleteBehavior": "set_null",
           "expression": {
             "dialect": "cel",
-            "source": "CONCAT(salutation, \" \", first_name, \" \", last_name)"
+            "source": "coalesce(record.salutation, '') + ' ' + coalesce(record.first_name, '') + ' ' + coalesce(record.last_name, '')"
           },
           "auditTrail": false,
           "group": "identity",

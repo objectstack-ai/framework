@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
+import { F } from '@objectstack/spec';
 
 export const Contact = ObjectSchema.create({
   name: 'contact',
@@ -47,7 +48,7 @@ export const Contact = ObjectSchema.create({
     // Formula field - Full name
     full_name: Field.formula({
       label: 'Full Name',
-      expression: 'CONCAT(salutation, " ", first_name, " ", last_name)',
+      expression: F`coalesce(record.salutation, '') + ' ' + coalesce(record.first_name, '') + ' ' + coalesce(record.last_name, '')`,
       group: 'identity',
     }),
 

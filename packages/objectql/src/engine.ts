@@ -25,12 +25,17 @@ function planFormulaProjection(
   schema: any,
   requestedFields: string[] | undefined
 ): { plan: FormulaPlanEntry[]; projected?: string[] } {
-  if (!schema?.fields || !Array.isArray(requestedFields) || requestedFields.length === 0) {
-    return { plan: [] };
-  }
+  if (!schema?.fields) return { plan: [] };
+  const allFieldNames = Object.keys(schema.fields);
+  // When no explicit projection, evaluate every formula field on the schema —
+  // matches REST default of "return everything". Explicit projection still
+  // honours the caller's selection.
+  const targets = (Array.isArray(requestedFields) && requestedFields.length > 0)
+    ? requestedFields
+    : allFieldNames;
   const plan: FormulaPlanEntry[] = [];
   const projected = new Set<string>();
-  for (const f of requestedFields) {
+  for (const f of targets) {
     const def = (schema.fields as any)[f];
     if (def?.type === 'formula' && def.expression) {
       // Normalize string-shorthand → Expression envelope (M9 transition).
@@ -38,21 +43,25 @@ function planFormulaProjection(
         ? { dialect: 'cel', source: def.expression }
         : def.expression;
       plan.push({ name: f, expression: expr });
-      // Pre-compile to catch syntax errors at planning stage. Dependency
-      // discovery (which fields the formula reads) is no longer used —
-      // CEL uses dynamic projection via `record.<field>` lookups.
+      // Pre-compile to surface syntax errors at planning stage rather than
+      // per-row eval. Dependency discovery (which fields the formula reads)
+      // is no longer used — CEL uses dynamic projection via `record.<field>`.
       ExpressionEngine.compile(expr);
-    } else {
+    } else if (Array.isArray(requestedFields) && requestedFields.length > 0) {
       projected.add(f);
     }
   }
   if (plan.length === 0) return { plan: [] };
-  if (!projected.has('id')) projected.add('id');
-  // For formulas: project all known fields so CEL `record.<field>` lookups
-  // see complete data. Static dependency analysis on AST is M9.7 work;
-  // until then we accept a slightly wider SELECT.
-  for (const fname of Object.keys(schema.fields ?? {})) projected.add(fname);
-  return { plan, projected: Array.from(projected) };
+  // For formulas: project all schema fields so CEL `record.<field>` lookups
+  // see complete data. Static dependency analysis on AST is M9.7 work.
+  if (Array.isArray(requestedFields) && requestedFields.length > 0) {
+    if (!projected.has('id')) projected.add('id');
+    for (const fname of allFieldNames) projected.add(fname);
+    return { plan, projected: Array.from(projected) };
+  }
+  // Implicit/full projection — leave projected undefined so the driver
+  // returns its default columns (typically *).
+  return { plan };
 }
 
 function applyFormulaPlan(plan: FormulaPlanEntry[], records: any[]): void {

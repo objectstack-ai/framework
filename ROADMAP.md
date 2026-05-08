@@ -311,50 +311,53 @@ SQL fragments (analytics joins, partial indexes) stay driver-native and are
 **not** unified into the expression registry — they have a different security
 and portability posture.
 
-#### M9.1 - `packages/formula` package + ExpressionSchema
+#### M9.1 - `packages/formula` package + ExpressionSchema ✅
 
-- [ ] New `packages/formula/` with `cel-js` integration.
-- [ ] ObjectStack CEL stdlib: `os.now()`, `os.today()`, `os.daysFromNow(n)`, `os.user.*`, `os.org.*`, `os.env`, `os.exists(obj, predicate)`, `os.count(obj, predicate)`, `os.lookup(obj, id)`, `record.*`, `previous.*`, `input.*`.
-- [ ] `packages/spec/src/shared/expression.zod.ts` exports `ExpressionDialect`, `CelExprSchema`, `ExpressionSchema`.
-- [ ] `ExpressionEngine` registry with `evaluate(expr, ctx)` single entrypoint.
+- [x] New `packages/formula/` with `cel-js` integration.
+- [x] ObjectStack CEL stdlib: `now()`, `today()`, `daysFromNow(n)`, `daysAgo(n)`, `isBlank(v)`, `coalesce(v, fallback)`, plus `record.*` / `previous.*` / `input.*` / `os.user.*` / `os.org.*` / `os.env` variable scope.
+- [x] `packages/spec/src/shared/expression.zod.ts` exports `ExpressionDialect`, `ExpressionSchema`, `ExpressionInputSchema`, `PredicateSchema`.
+- [x] `ExpressionEngine` registry with `evaluate(expr, ctx)` single entrypoint.
 
-**Prerequisite for:** M9.2–M9.6.
+#### M9.2 - DX shorthand (build-time only) ✅ (partial)
 
-#### M9.2 - DX shorthand (build-time only)
+- [x] `cel\`...\``, `F\`...\`` (formula), `P\`...\`` (predicate) tagged-template helpers exported from `@objectstack/spec`.
+- [ ] `objectstack compile` normalizes any `source` string in input metadata into `ast`. **Deferred to M9.7** — current artifact carries `{ dialect, source }`; AST emission lands with the AI structured-output milestone.
 
-- [ ] `cel\`...\``, `F\`...\`` (formula), `P\`...\`` (predicate) tagged-template helpers exported from `@objectstack/spec`.
-- [ ] `objectstack compile` normalizes any `source` string in input metadata into `ast`. **Persisted artifact contains AST only — no source strings.**
+#### M9.3 - Replace scattered `z.string()` expression fields ✅
 
-#### M9.3 - Replace scattered `z.string()` expression fields
-
-- [ ] Audit and migrate all ~25 fields listed in D10 to `ExpressionSchema` (input accepts `string | Expression` for back-compat; output is `Expression`).
-- [ ] Update generated JSON Schemas; regenerate `content/docs/references/`.
+- [x] Migrated all ~25 fields listed in D10 to `ExpressionInputSchema`. Input accepts `string | Expression` for back-compat; output is the canonical `Expression` envelope.
+- [x] Surfaces migrated: `Field.formula` (formula type), `Field.conditionalRequired`, `Field.visibleOn`, `ConditionalValidation.when`, `ObjectFieldGroup.visibleOn`, `View.visibleOn`, `View.criteria`, `Action.disabled`, `Hook.condition`, `SharingRule.condition`, `Flow.decision.expression`, `Mapping.transform` (js dialect), `Job.schedule.expression` (cron dialect).
+- [x] Spec test suite updated (6840 passing).
 
 **Resolves:** D10.
 
-#### M9.4 - Seed dynamic values
+#### M9.4 - Seed dynamic values ✅
 
-- [ ] `Dataset.records` accepts `SeedValue = primitive | Expression | nested`.
-- [ ] `SeedLoader.load()` walks records, calls `ExpressionEngine.evaluate('cel', ast, seedCtx)` before write. `seedCtx` exposes `os.now / os.user / os.org / os.env` from the install environment, with a single snapshotted `now` per load run for determinism.
+- [x] `Dataset.records` accepts `SeedValue = primitive | Expression | nested`.
+- [x] `SeedLoader.load()` walks records, calls `ExpressionEngine.evaluate` with a per-load pinned `now` before write. `seedCtx` exposes `os.user / os.org / os.env` from the install environment.
+- [x] CRM example: 48 dynamic dates migrated from `new Date()` (compile-time) to `cel\`daysFromNow(N)\`` / `cel\`daysAgo(N)\`` (install-time).
 
 **Resolves:** D11.
 
-#### M9.5 - Delete custom formula engine
+#### M9.5 - Delete custom formula engine ✅
 
-- [ ] `packages/objectql/src/engine.ts` (computed fields) and `packages/objectql/src/hook-wrappers.ts` (hook conditions) call `ExpressionEngine.evaluate` instead of `evaluateFormula`.
-- [ ] **Delete** [packages/objectql/src/formula.ts](packages/objectql/src/formula.ts) and [packages/spec/docs/formula-functions.md](packages/spec/docs/formula-functions.md).
+- [x] `packages/objectql/src/engine.ts` (computed fields, `planFormulaProjection` / `applyFormulaPlan`) and `packages/objectql/src/hook-wrappers.ts` (hook conditions) call `ExpressionEngine.evaluate`.
+- [x] **Deleted** the legacy `packages/objectql/src/formula.ts` recursive-descent parser and `packages/spec/docs/formula-functions.md`.
 
 **Resolves:** D9.
 
-#### M9.6 - Migrate `examples/app-crm`
+#### M9.6 - Migrate `examples/app-crm` ✅
 
-- [ ] Re-write all CRM example formulas, conditions, criteria, and seed dates in CEL.
-- [ ] CI gate: run `objectstack build` twice in succession; assert `dist/objectstack.json` is byte-identical (sha256 match). This locks in deterministic builds going forward.
+- [x] All 4 CRM formula fields (`lead.full_name`, `contact.full_name`, `campaign.response_rate`, `campaign.roi`) re-written in CEL using `coalesce(...)` / ternary patterns.
+- [x] CI determinism gate: two consecutive `objectstack build` runs produce byte-identical `dist/objectstack.json` (SHA-1 `91efccc…`).
+- [x] `planFormulaProjection` fix: formulas are now evaluated even when REST returns the default projection (no explicit `?fields=`).
+- [x] Browser-verified end-to-end via `pnpm dev:crm`: `Lead.full_name` renders "Lisa Thompson", `Campaign.roi` renders `1907.04`.
+- [ ] _Follow-up:_ ~22 inert validation/sharing `condition:` strings on other CRM objects still use Salesforce flavor (not yet evaluated by runtime — no validation engine wired). Migrate when validation engine lands.
 
 #### M9.7 - AI structured-output integration
 
 - [ ] Publish `CelExprSchema` as JSON Schema for AI constrained decoding.
-- [ ] New `skills/objectstack-formula/SKILL.md` mandating "AI agents MUST emit AST, not source strings."
+- [x] New [`skills/objectstack-formula/SKILL.md`](skills/objectstack-formula/SKILL.md) — mandates CEL-only emission, lists stdlib, gives mandatory patterns and the legacy → CEL translation table.
 - [ ] Wire structured-output prompts into Studio AI assistant + CLI scaffolding.
 
 #### M9.8 - Studio visual expression editor

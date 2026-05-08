@@ -54,6 +54,25 @@ export function registerStdLib(
     .registerFunction(
       'daysAgo(int): google.protobuf.Timestamp',
       (n: bigint | number) => addDaysUtc(now(), -Number(n)),
+    )
+    // Returns true when `value` is null, undefined, empty string, or empty list.
+    // Matches the intent of legacy `ISBLANK()` while staying CEL-idiomatic.
+    .registerFunction(
+      'isBlank(dyn): bool',
+      (value: unknown) => {
+        if (value === null || value === undefined) return true;
+        if (typeof value === 'string') return value.length === 0;
+        if (Array.isArray(value)) return value.length === 0;
+        return false;
+      },
+    )
+    // Returns `value` when not null/undefined, otherwise the `fallback`.
+    // Use this to safely concatenate optional string fields:
+    //   coalesce(record.salutation, '') + ' ' + coalesce(record.first_name, '')
+    .registerFunction(
+      'coalesce(dyn, dyn): dyn',
+      (value: unknown, fallback: unknown) =>
+        (value === null || value === undefined) ? fallback : value,
     );
 }
 

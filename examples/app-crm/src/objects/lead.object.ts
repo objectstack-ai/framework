@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
+import { F } from '@objectstack/spec';
 import { LeadStateMachine } from './lead.state';
 
 export const Lead = ObjectSchema.create({
@@ -51,7 +52,7 @@ export const Lead = ObjectSchema.create({
 
     full_name: Field.formula({
       label: 'Full Name',
-      expression: 'CONCAT(salutation, " ", first_name, " ", last_name)',
+      expression: F`coalesce(record.salutation, '') + ' ' + coalesce(record.first_name, '') + ' ' + coalesce(record.last_name, '')`,
       group: 'identity',
     }),
 

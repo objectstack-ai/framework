@@ -1,193 +1,289 @@
 ---
-title: Formula Expressions
-description: Salesforce-style formula language for computed fields and flow conditions
+title: Expressions (CEL)
+description: Canonical CEL-based expression language for formulas, predicates, conditions, and dynamic seed values
 ---
 
-# Formula Expressions
+# Expressions
 
-ObjectStack ships a small, **safe** formula language used in three places:
+ObjectStack uses a **single canonical expression language** for every place a
+piece of metadata needs to compute a value or evaluate a condition:
 
-1. **Computed fields** — `type: 'formula'` fields whose `formula` property is
-   evaluated on read.
-2. **Flow decision conditions** — the `expression` of a `decision` node's
-   `conditions[]`.
-3. **`visible_on` / `required_on` field rules** — UI-time conditional logic.
+- **Formula fields** (`type: 'formula'`)
+- **Predicates** — validation `condition`, sharing `condition`, conditional
+  visibility (`visibleOn`), conditional required (`conditionalRequired`),
+  action `disabled`, view filter `criteria`, hook `condition`, flow decisions
+- **Dynamic seed values** — fixtures whose value depends on the install-time
+  clock or identity context
 
-The evaluator lives in `@objectstack/objectql` (`packages/objectql/src/formula.ts`).
-No `eval` / `Function` is used — formulas are tokenised, parsed into a tiny
-AST, and walked by an interpreter, so untrusted strings are safe to evaluate.
+The language is **[CEL](https://github.com/google/cel-spec)** (Google's Common
+Expression Language, Apache-2.0), evaluated through `@objectstack/formula`
+(thin wrapper over [`@marcbachmann/cel-js`](https://github.com/marcbachmann/cel-js))
+plus the ObjectStack standard library.
+
+> **Why CEL?** Formal grammar, abundant public training corpus (so AI authors
+> emit it natively), AST-first persistence, and sandboxed execution with
+> bounded cost. ObjectStack does **not** ship a Salesforce-flavor DSL — the
+> previous custom 22-function engine was deleted in M9. See
+> [north-star §8](../concepts/north-star.mdx) "No private expression DSL".
 
 ---
 
-## Quick example
+## The `Expression` envelope
 
-```typescript
-import { defineObject } from '@objectstack/spec';
+Every expression in metadata is persisted as the same envelope:
 
-export const order = defineObject({
-  name: 'order',
-  label: 'Order',
+```ts
+type Expression = {
+  dialect: 'cel' | 'js' | 'cron';
+  source?: string;          // surface syntax (CEL text)
+  ast?: unknown;            // parsed AST (filled by `objectstack compile`)
+  meta?: { rationale?: string; generatedBy?: string };
+};
+```
+
+At **input** time you may write a bare string for shorthand — the spec
+transforms it into `{ dialect: 'cel', source }`. The compiled artifact always
+contains the full envelope (and, after M9.2, the AST).
+
+```ts
+import { defineObject, F, P, cel } from '@objectstack/spec';
+
+defineObject({
+  name: 'invoice',
   fields: [
-    { name: 'subtotal', type: 'currency' },
-    { name: 'tax_rate', type: 'percent' },
     {
       name: 'total',
-      label: 'Total',
       type: 'formula',
-      formula: 'subtotal + (subtotal * tax_rate)',
+      // tagged-template — produces { dialect: 'cel', source: '...' }
+      formula: F`record.subtotal + record.subtotal * record.tax_rate`,
       result_type: 'currency',
     },
     {
-      name: 'is_high_value',
-      label: 'High Value?',
-      type: 'formula',
-      formula: 'IF(total >= 10000, "Yes", "No")',
-      result_type: 'text',
+      name: 'po_number',
+      type: 'text',
+      // bare string is shorthand for { dialect: 'cel', source }
+      conditionalRequired: P`record.amount > 10000`,
     },
   ],
 });
 ```
 
+The three tagged-template helpers — `cel`, `F` (formula alias), `P`
+(predicate alias) — are exported from `@objectstack/spec` and are
+interchangeable; pick whichever reads best at the call site.
+
 ---
 
-## Syntax
+## CEL primer
 
-### Field references
+CEL is documented at [cel-spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
+Cheat-sheet of what you'll write daily:
 
-Bareword identifiers reference fields on the current record. Dotted paths
-walk relationship lookups:
-
-```
-account_name                  // top-level field
-owner.email                   // master-detail / lookup nav
-account.owner.organization.label
-```
-
-### Literals
-
-| Kind | Example |
+| Concept | Syntax |
 |:---|:---|
-| Number | `42`, `3.14`, `.5` |
-| String | `"hello"`, `'world'`, `"escape \"this\""` |
-| Boolean | `TRUE`, `FALSE` (case-insensitive) |
-| Null    | `NULL` (treated as empty string in concat, `0` in math) |
+| Field on current record | `record.first_name` |
+| Previous (in update hooks) | `previous.status` |
+| Input to a hook | `input.amount` |
+| Equality / inequality | `==` / `!=` |
+| Logical | `&&` / `\|\|` / `!` |
+| Ternary | `cond ? then : else` |
+| String literal | `'single quotes'` |
+| Membership | `record.region in ['us', 'eu']` |
+| Field present | `has(record.foo)` (returns true even when value is `null`) |
 
-### Operators
+> **`has()` gotcha:** `has(record.x)` is true whenever the key exists, even
+> when its value is `null`. To check for "not blank" use `isBlank(...)` or
+> `record.x != null` — see stdlib below.
 
-| Category | Operators | Notes |
+---
+
+## ObjectStack CEL standard library
+
+Registered automatically into every `Environment` by `@objectstack/formula`.
+All functions are pure given a pinned `now`, which is what makes
+`objectstack build` artifacts byte-stable across runs.
+
+| Function | Returns | Description |
 |:---|:---|:---|
-| Arithmetic | `+`  `-`  `*`  `/` | `+` becomes string-concat if either operand is a string |
-| Comparison | `=`  `==`  `!=`  `<>`  `<`  `>`  `<=`  `>=` | `=` and `==` are equivalent; `!=` and `<>` are equivalent |
-| Unary      | `-`  `+` | |
-| Grouping   | `( … )` | Standard precedence: unary > `*` `/` > `+` `-` > comparison |
+| `now()` | timestamp | Pinned wall-clock at evaluation start |
+| `today()` | timestamp | `now()` truncated to UTC start-of-day |
+| `daysFromNow(n)` | timestamp | `today() + n` days |
+| `daysAgo(n)` | timestamp | `today() - n` days |
+| `isBlank(v)` | bool | True for `null`, `undefined`, `''`, `[]` |
+| `coalesce(v, fallback)` | dyn | `v` when non-null, else `fallback` |
 
-### Function calls
+Add new helpers in
+[`packages/formula/src/stdlib.ts`](https://github.com/objectstack-ai/framework/blob/main/packages/formula/src/stdlib.ts).
+Keep them pure, dependency-free, and AI-readable.
 
-Function names are case-insensitive. Arguments are comma-separated.
+### Variable scope
 
----
+`@objectstack/formula` builds the scope per evaluation:
 
-## Built-in functions
-
-### Text
-
-| Function | Description |
-|:---|:---|
-| `CONCAT(a, b, …)` | Concatenate values as strings (alias: `CONCATENATE`) |
-| `UPPER(s)` | Uppercase |
-| `LOWER(s)` | Lowercase |
-| `TEXT(v)` | Coerce to string |
-| `LEN(s)` | String length |
-
-### Math
-
-| Function | Description |
-|:---|:---|
-| `SUM(a, b, …)` | Sum (numeric coercion) |
-| `AVERAGE(a, b, …)` | Mean |
-| `ROUND(n, digits?)` | Round to `digits` places (default `0`) |
-| `CEILING(n)` | Round up |
-| `FLOOR(n)` | Round down |
-
-### Date
-
-| Function | Description |
-|:---|:---|
-| `TODAY()` | Today at 00:00 local |
-| `NOW()` | Current `Date` |
-| `YEAR(d)` | Year of date |
-| `MONTH(d)` | 1–12 |
-| `DAY(d)` | Day of month |
-| `ADDDAYS(d, n)` | Add `n` days |
-
-### Logical
-
-| Function | Description |
-|:---|:---|
-| `IF(cond, then, else)` | Branch (both branches are evaluated — see "Strict eval" below) |
-| `AND(a, b, …)` | All truthy |
-| `OR(a, b, …)` | Any truthy |
-| `NOT(v)` | Logical negation |
-| `ISBLANK(v)` | `true` if undefined / null / `''` |
-
-> **Strict eval.** All function arguments are evaluated eagerly. `IF` does
-> *not* short-circuit, so make sure both branches are safe to compute against
-> the current record (e.g. don't divide by a possibly-zero field in the
-> "else" branch — wrap it in another `IF`).
+| Binding | Source | Available in |
+|:---|:---|:---|
+| `record` | the row being evaluated | formulas, validation, sharing, visibility |
+| `previous` | row before update | hooks, validation on update |
+| `input` | hook payload | hooks |
+| `os.user` | install / request user | seed, predicates with identity |
+| `os.org` | active organization | seed, predicates |
+| `os.env` | install env (`production`, `staging`, …) | seed, predicates |
 
 ---
 
-## Coercion rules
+## Cookbook
 
-| Source | Number | String | Boolean |
-|:---|:---|:---|:---|
-| `undefined` / `null` / `''` | `0` | `''` | `false` |
-| `number` | as-is | `String(n)` | `n !== 0` |
-| `boolean` | `1` / `0` | `'true'` / `'false'` | as-is |
-| `string` | `Number(s)` (or `0` if NaN) | as-is | `s !== ''` |
+### Computed full name (handle nullable parts)
 
-`+` is the only "polymorphic" operator: if either operand is a string the
-result is a string, otherwise both sides are coerced to numbers. All other
-arithmetic operators force numeric coercion.
+```ts
+{
+  name: 'full_name',
+  type: 'formula',
+  formula: F`coalesce(record.salutation, '') + ' '
+            + coalesce(record.first_name, '') + ' '
+            + coalesce(record.last_name, '')`,
+  result_type: 'text',
+}
+```
+
+CEL throws on `null + string`, so wrap every nullable operand in
+`coalesce(..., '')`.
+
+### Conditional formula
+
+```ts
+{
+  name: 'roi',
+  type: 'formula',
+  formula: F`coalesce(record.actual_cost, 0) > 0
+             ? ((coalesce(record.actual_revenue, 0) - record.actual_cost) * 100.0) / record.actual_cost
+             : 0.0`,
+  result_type: 'percent',
+}
+```
+
+### Predicate (visibility, conditional required)
+
+```ts
+{
+  name: 'rating',
+  type: 'picklist',
+  visibleOn: P`record.status == 'qualified'`,
+}
+```
+
+### Dynamic seed dates
+
+Use CEL **inside seed records** to defer evaluation to install time. The
+SeedLoader pins a single `now` per load run, so the same dataset produces
+identical SHA-1 across builds while still being "fresh" relative to whoever
+installs the package.
+
+```ts
+import { defineDataset, cel } from '@objectstack/spec';
+
+export const opportunityDataset = defineDataset({
+  object: 'opportunity',
+  records: [
+    {
+      id: 'opp_acme',
+      name: 'Acme Q3 Renewal',
+      close_date: cel`daysFromNow(45)`,
+      created_at: cel`now()`,
+    },
+  ],
+});
+```
+
+Without CEL, `new Date()` would be evaluated at **compile** time — your
+package would ship with the timestamp from your laptop and every customer
+would see "stale" demo data. With CEL, the date resolves on the customer's
+clock at install time.
+
+### Validation rule
+
+```ts
+{
+  name: 'amount_positive',
+  type: 'expression',
+  condition: P`record.amount > 0`,
+  errorMessage: 'Amount must be positive.',
+}
+```
+
+### Hook condition
+
+```ts
+{
+  name: 'notify_on_escalation',
+  on: 'after_update',
+  condition: P`previous.status != 'escalated' && record.status == 'escalated'`,
+  handler: 'notifyOpsTeam',
+}
+```
+
+---
+
+## Determinism contract
+
+Two consecutive `objectstack build` runs with no source changes must produce
+**byte-identical** `dist/objectstack.json`. CEL plus pinned `now` is what
+makes this possible — there are zero compile-time-evaluated `Date.now()`
+calls in seed metadata. CI enforces this via SHA-1 comparison; if you add a
+new dialect or stdlib helper, ensure it preserves determinism.
+
+---
+
+## Migration from the legacy formula DSL
+
+The previous custom recursive-descent engine
+(`packages/objectql/src/formula.ts`, deleted in M9.5) had a Salesforce-style
+function set. Mechanical translation:
+
+| Legacy | CEL equivalent |
+|:---|:---|
+| `bare_field` | `record.bare_field` |
+| `=` / `<>` | `==` / `!=` |
+| `AND` / `OR` / `NOT` | `&&` / `\|\|` / `!` |
+| `"text"` | `'text'` (single quotes preferred) |
+| `IF(c, a, b)` | `c ? a : b` |
+| `ISBLANK(x)` | `isBlank(record.x)` |
+| `CONCAT(a, b, …)` | `a + b + …` (with `coalesce(...,'')`) |
+| `TODAY()` / `NOW()` | `today()` / `now()` |
+| `IN (a, b)` | `record.x in [a, b]` |
+| `ISCHANGED(x)` (in update hook) | `previous.x != record.x` |
+| `MONTH_DIFF(a, b)` | _not yet — add to stdlib_ |
+
+Salesforce compatibility is **not** a project goal. Authors targeting
+Salesforce semantics rewrite their formulas in CEL.
 
 ---
 
 ## Programmatic API
 
-```typescript
-import { compileFormula, evaluateFormula } from '@objectstack/objectql/formula';
+```ts
+import { ExpressionEngine } from '@objectstack/formula';
 
-// One-shot
-evaluateFormula('subtotal + tax', { subtotal: 100, tax: 8 }); // => 108
+// Compile + cache
+const compiled = ExpressionEngine.compile({ dialect: 'cel', source: 'record.x * 2' });
 
-// Pre-compile (cached) for hot paths — also exposes the dependency list,
-// which the field engine uses to invalidate computed-field caches when
-// upstream fields change.
-const compiled = compileFormula('IF(total >= 10000, "VIP", "Std")');
-compiled.dependencies; // => ['total']
+// Evaluate
+const result = ExpressionEngine.evaluate(
+  { dialect: 'cel', source: 'record.x * 2' },
+  { record: { x: 21 } },
+);
+// => { ok: true, value: 42 }
 ```
 
-`evaluateFormula` returns `undefined` on parse / runtime error rather than
-throwing, so a malformed formula in one row never crashes the rest of the
-query.
-
----
-
-## Limitations & non-goals
-
-- No user-defined functions. Add new helpers by extending the `FUNCTIONS`
-  map in `packages/objectql/src/formula.ts`; keep them pure and synchronous.
-- No async / IO. Use a flow `script` node when you need network calls or
-  cross-record aggregation.
-- No regex / string slicing helpers yet (`MID`, `LEFT`, `RIGHT`, `SUBSTITUTE`
-  are on the roadmap — track them in `packages/spec/docs/formula-functions.md`).
-- No locale-aware date/number formatting — `TEXT(d)` returns the raw `Date`
-  string. Use the i18n service for presentation.
+Evaluation never throws — failures return `{ ok: false, error }`. Callers
+choose whether to surface, log, or silently fall back.
 
 ---
 
 ## Related
 
 - [Field Metadata](./metadata/field) — declaring `type: 'formula'` fields
-- [Flow Metadata](./metadata/flow) — `decision` nodes consume the same expression syntax
-- `packages/spec/docs/formula-functions.md` — canonical function library reference
+- [Seed Data](./seed-data) — using `cel\`...\`` for dynamic install-time values
+- [Hook Bodies](./hook-bodies) — when to use a JS hook vs a CEL `condition`
+- [`packages/formula/`](https://github.com/objectstack-ai/framework/tree/main/packages/formula) — engine + stdlib source
+- [north-star §8](../concepts/north-star.mdx) — anti-pattern: private DSLs
