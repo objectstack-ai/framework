@@ -114,7 +114,7 @@ export default ObjectSchema.create({
   fieldGroups: [
     { key: 'contact_info', label: 'Contact Information', icon: 'user' },
     { key: 'billing',      label: 'Billing', defaultExpanded: false },
-    { key: 'system',       label: 'System',  visibleOn: '$user.isAdmin' },
+    { key: 'system',       label: 'System',  visibleOn: P`os.user.isAdmin == true` },
   ],
 
   fields: {
@@ -231,7 +231,7 @@ See [rules/naming.md](./rules/naming.md) for incorrect/correct examples.
 - **Selection:** `select`, `multiselect`, `radio`, `checkboxes`
 - **Relational:** `lookup`, `master_detail`, `tree`
 - **Media:** `image`, `file`, `avatar`, `video`, `audio`
-- **Calculated:** `formula`, `summary`, `autonumber`
+- **Calculated:** `formula`, `summary`, `autonumber` — `formula` fields take a CEL expression in `formula` (use `F\`...\`` from `@objectstack/spec`); see **objectstack-formula** skill
 - **Enhanced:** `location`, `address`, `code`, `json`, `color`, `rating`, `slider`, `signature`, `qrcode`, `progress`, `tags`, `vector`
 
 See [rules/field-types.md](./rules/field-types.md) for full reference.

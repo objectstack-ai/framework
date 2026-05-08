@@ -8,6 +8,7 @@ import { FieldMasker } from './field-masker.js';
 import { PermissionDeniedError } from './errors.js';
 import { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
 import { claimOrphanTenantRows } from './claim-orphan-tenant-rows.js';
+import { cloneTenantSeedData } from './clone-tenant-seed-data.js';
 import { ensureUserHasOrganization } from './ensure-user-has-organization.js';
 import {
   securityObjects,
@@ -387,7 +388,10 @@ export class SecurityPlugin implements Plugin {
           const newUser = opCtx?.result ?? opCtx?.data;
           if (newUser?.id) {
             try {
-              await ensureUserHasOrganization(ql, newUser, { logger: ctx.logger });
+              await ensureUserHasOrganization(ql, newUser, {
+                logger: ctx.logger,
+                cloneSeedData: cloneTenantSeedData,
+              });
             } catch (e) {
               ctx.logger.warn('[security] ensure-user-has-organization failed', {
                 error: (e as Error).message,

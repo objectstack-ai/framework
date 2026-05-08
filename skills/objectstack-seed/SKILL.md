@@ -327,6 +327,46 @@ Export datasets in dependency order.
 
 ---
 
+## Dynamic Values (CEL Expressions)
+
+Any field value in a seed record may be a CEL expression that the SeedLoader
+evaluates at install time using a single per-load pinned `now`. This is the
+**only** correct way to author dates / identity-derived values in seeds —
+`new Date()` and `Date.now()` evaluate at compile time and ship the package
+author's clock to every customer.
+
+```typescript
+import { defineDataset, cel } from '@objectstack/spec';
+
+export const opportunities = defineDataset(Opportunity, {
+  records: [
+    {
+      name: 'Acme Q3 Renewal',
+      close_date: cel`daysFromNow(45)`,
+      created_at: cel`now()`,
+      owner_id:   cel`os.user.id`,         // installer becomes owner
+      organization_id: cel`os.org.id`,
+    },
+    {
+      name: 'Lapsed deal',
+      close_date: cel`daysAgo(30)`,        // 30 days before install
+    },
+  ],
+});
+```
+
+**Available stdlib in seed context:** `now()`, `today()`, `daysFromNow(n)`,
+`daysAgo(n)`, `isBlank(v)`, `coalesce(v, fallback)`, plus the variable scope
+`os.user`, `os.org`, `os.env`. See **objectstack-formula** for the full
+contract.
+
+**Determinism gate.** Two consecutive `objectstack build` runs with no source
+changes must produce byte-identical `dist/objectstack.json`. CEL plus pinned
+`now` is what guarantees this. **Do not** use `new Date()` or `Date.now()` in
+seed records — CI will fail the SHA-1 comparison.
+
+---
+
 ## Type Safety
 
 `defineDataset()` infers valid field keys from the object definition passed as the

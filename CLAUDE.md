@@ -223,6 +223,7 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 | Automation Design | `skills/objectstack-automation/SKILL.md` | Designing Flows, Workflows, Triggers |
 | AI Agent Design | `skills/objectstack-ai/SKILL.md` | Designing Agents, Tools, RAG pipelines |
 | **I18n Design** | `skills/objectstack-i18n/SKILL.md` | Translation bundles, locale config, coverage detection |
+| **Formula (CEL)** | `skills/objectstack-formula/SKILL.md` | Formula fields, predicates, conditions, dynamic seed values |
 
 ---
 

@@ -32,6 +32,18 @@ interface EnsureOptions {
     info: (message: string, meta?: Record<string, any>) => void;
     warn: (message: string, meta?: Record<string, any>) => void;
   };
+  /**
+   * Optional hook called after a personal org is successfully created.
+   * Used by SecurityPlugin to wire in `cloneTenantSeedData` so each
+   * new workspace gets its own copy of demo data. Pulled in via DI
+   * to keep this helper free of a hard import on the cloner (which
+   * keeps the tenant-claim and ensure-org test surfaces narrow).
+   */
+  cloneSeedData?: (
+    ql: any,
+    targetOrgId: string,
+    opts: { logger?: EnsureOptions['logger'] },
+  ) => Promise<{ object: string; count: number }[]>;
 }
 
 const SYSTEM_CTX = { isSystem: true };
@@ -82,6 +94,7 @@ export async function ensureUserHasOrganization(
   options: EnsureOptions = {},
 ): Promise<{ created: boolean; organizationId?: string; reason?: string }> {
   const logger = options.logger;
+  const cloneSeedData = options.cloneSeedData;
   if (!ql || typeof ql.find !== 'function' || typeof ql.insert !== 'function') {
     return { created: false, reason: 'objectql_unavailable' };
   }
@@ -151,5 +164,27 @@ export async function ensureUserHasOrganization(
   logger?.info?.(
     `[security] created personal organization "${orgName}" (${finalOrgId}) for ${user.email ?? user.id}`,
   );
+
+  // Best-effort: clone the platform-first org's user-defined data into
+  // the new personal workspace so demo apps (CRM, etc.) stay populated
+  // for every signup. No-op when this IS the first org, when the donor
+  // has no data, or when this op fails — never blocks signup.
+  if (cloneSeedData) {
+    try {
+      const summary = await cloneSeedData(ql, finalOrgId, { logger });
+      if (summary.length > 0) {
+        const total = summary.reduce((s, c) => s + c.count, 0);
+        logger?.info?.(
+          `[security] cloned ${total} seed row(s) into personal organization ${finalOrgId}`,
+          { breakdown: summary },
+        );
+      }
+    } catch (e) {
+      logger?.warn?.('[security] cloneTenantSeedData failed', {
+        error: (e as Error).message,
+      });
+    }
+  }
+
   return { created: true, organizationId: finalOrgId };
 }

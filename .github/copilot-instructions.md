@@ -101,7 +101,8 @@ objectstack-ai/spec/
 │   ├── objectstack-automation/
 │   ├── objectstack-ai/
 │   ├── objectstack-plugin/
-│   └── objectstack-i18n/
+│   ├── objectstack-i18n/
+│   └── objectstack-formula/
 │
 └── content/docs/          # 📝 Documentation content
     ├── getting-started/
@@ -243,10 +244,7 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 | Automation Design | `skills/objectstack-automation/SKILL.md` | Designing Flows, Workflows, Triggers |
 | AI Agent Design | `skills/objectstack-ai/SKILL.md` | Designing Agents, Tools, RAG pipelines |
 | **I18n Design** | `skills/objectstack-i18n/SKILL.md` | Translation bundles, locale config, coverage detection |
-
----
-
-## 🔍 Context Routing Rules
+| **Formula (CEL)** | `skills/objectstack-formula/SKILL.md` | Formula fields, predicates (validation/sharing/visibility), conditions, dynamic seed values |
 
 When editing files matching these patterns, apply the corresponding architectural role:
 

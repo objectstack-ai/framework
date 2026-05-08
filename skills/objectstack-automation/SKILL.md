@@ -30,6 +30,14 @@ pipelines.
 - You need **scheduled automation** (daily reports, data cleanup).
 - You are designing an **ETL pipeline** for data synchronisation.
 
+> **Predicates and conditions are CEL.** Every `condition` / `guard` /
+> `entryCondition` / filter `value` in this skill is an **Expression**
+> envelope evaluated by `@objectstack/formula`. Use the `P\`...\`` and
+> `cel\`...\`` tagged templates from `@objectstack/spec`. See the
+> **objectstack-formula** skill for the full CEL contract, stdlib
+> (`now()`, `today()`, `daysFromNow(n)`, `isBlank(v)`, `coalesce(v, fb)`),
+> and the legacy → CEL translation table.
+
 ---
 
 ## Flows — Visual Logic Orchestration
@@ -125,7 +133,7 @@ variables: {
         object: 'support_case',
         filter: [
           { field: 'status', operator: 'in', value: ['new', 'open'] },
-          { field: 'due_date', operator: 'less_than', value: '$TODAY' },
+          { field: 'due_date', operator: 'less_than', value: cel`today()` },
         ],
       },
       next: 'loop_cases',
@@ -202,7 +210,7 @@ Transitions can have conditions that must be met:
   from: 'open',
   to: 'resolved',
   trigger: 'resolve',
-  guard: "resolution IS NOT NULL",    // formula condition
+  guard: P`record.resolution != null`,    // CEL predicate
   actions: ['send_resolution_email'], // side-effect actions
 }
 ```
@@ -215,7 +223,7 @@ Approvals are a specialised workflow pattern:
 {
   name: 'expense_approval',
   object: 'expense_report',
-  entryCondition: "amount > 500",
+  entryCondition: P`record.amount > 500`,
   steps: [
     {
       name: 'manager_approval',
@@ -225,7 +233,7 @@ Approvals are a specialised workflow pattern:
     },
     {
       name: 'finance_approval',
-      condition: "amount > 5000",
+      condition: P`record.amount > 5000`,
       assignTo: { type: 'role', role: 'finance_manager' },
       action: 'approve_or_reject',
     },
@@ -259,7 +267,7 @@ Triggers fire automatically when data events occur.
   name: 'notify_on_escalation',
   object: 'support_case',
   event: 'after_update',
-  condition: "OLD.status != 'escalated' AND NEW.status = 'escalated'",
+  condition: P`previous.status != 'escalated' && record.status == 'escalated'`,
   action: {
     type: 'flow',
     flow: 'send_escalation_notification',
