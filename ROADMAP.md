@@ -364,39 +364,46 @@ and portability posture.
 
 - [ ] Node-graph editor backed directly by `CelExprSchema`. No string parser needed in Studio. Deferred — depends on M6.
 
-#### M9.9 - Spec-wide Expression coverage sweep (NEW — 2026-05-08)
+#### M9.9 - Spec-wide Expression coverage sweep (NEW — 2026-05-08) ✅ COMPLETE
 
 A full audit across all 15 protocol domains identified surfaces that still
 escape the canonical envelope. M9.3 fixed the 25 obvious formula/predicate
 fields; this milestone closes the gaps in adjacent semantic categories.
 
+**Status:** All 5 sub-milestones (a–e) shipped 2026-05-08. Engines: real
+`cron-engine` + `template-engine` registered alongside `cel`. CRM example
+fully migrated (codemod) and remains byte-identical across builds
+(`e2af9e57…`). Flow runtime now routes `dialect:'cel'` conditions through
+`@objectstack/formula` with a `vars.*` scope; legacy `{var}` template syntax
+preserved for back-compat.
+
 ##### M9.9a - Bare `z.string()` predicates / formulas to migrate
 
-- [ ] `automation/workflow.zod.ts` `Task.dueDate` (documented "ISO string or formula") → `z.union([z.string(), ExpressionInputSchema])` so authors can write `cel\`daysFromNow(3)\``.
-- [ ] `api/graphql.zod.ts` `ComputedField.expression` ("Computation expression") → `ExpressionInputSchema`.
-- [ ] `ai/runtime-ops.zod.ts` `customCondition` → `ExpressionInputSchema` (predicate semantics identical to `Hook.condition`).
-- [ ] `kernel/metadata-loader.zod.ts` `filter: 'Filter predicate as string'` → `ExpressionInputSchema`.
-- [ ] `ui/component.zod.ts` `Form.onSubmit: 'Action expression on form submit'` → disambiguate: action reference vs CEL predicate; pick one shape.
+- [x] `automation/workflow.zod.ts` `Task.dueDate` (documented "ISO string or formula") → `z.union([z.string(), ExpressionInputSchema])` so authors can write `cel\`daysFromNow(3)\``.
+- [x] `api/graphql.zod.ts` `ComputedField.expression` ("Computation expression") → `ExpressionInputSchema`.
+- [x] `ai/runtime-ops.zod.ts` `customCondition` → `ExpressionInputSchema` (predicate semantics identical to `Hook.condition`).
+- [x] `kernel/metadata-loader.zod.ts` `filter: 'Filter predicate as string'` → `ExpressionInputSchema`.
+- [x] `ui/component.zod.ts` `Form.onSubmit: 'Action expression on form submit'` → disambiguate: action reference vs CEL predicate; pick one shape.
 
 ##### M9.9b - `defaultValue` accepts Expression for derived defaults
 
-- [ ] `data/field.zod.ts` `Field.defaultValue: z.unknown()` → `z.union([z.unknown(), ExpressionSchema])` so authors can write `defaultValue: cel\`today()\`` or `cel\`os.user.id\`` instead of writing a hook.
-- [ ] Same change for `data/external-lookup.zod.ts`, `ui/page.zod.ts`, `ui/dashboard.zod.ts`, `api/export.zod.ts`.
-- [ ] DataEngine on insert: when `defaultValue.dialect` is set, evaluate via `ExpressionEngine` with the request-time identity context.
+- [x] `data/field.zod.ts` `Field.defaultValue: z.unknown()` → `z.union([z.unknown(), ExpressionSchema])` so authors can write `defaultValue: cel\`today()\`` or `cel\`os.user.id\`` instead of writing a hook.
+- [x] Same change for `data/external-lookup.zod.ts`, `ui/page.zod.ts`, `ui/dashboard.zod.ts`, `api/export.zod.ts`.
+- [x] DataEngine on insert: when `defaultValue.dialect` is set, evaluate via `ExpressionEngine` with the request-time identity context.
 
 ##### M9.9c - Cron strings normalize to `{ dialect: 'cron', source }`
 
 10 sites still ship bare `z.string().describe('Cron expression…')` instead of using the canonical envelope (`Job.schedule.expression` already does it):
 
-- [ ] `integration/connector.zod.ts` `schedule`
-- [ ] `automation/etl.zod.ts` `schedule`
-- [ ] `automation/execution.zod.ts` `cronExpression`
-- [ ] `api/export.zod.ts` `cronExpression` (×2)
-- [ ] `system/disaster-recovery.zod.ts` `schedule` (×2)
-- [ ] `system/cache.zod.ts` `schedule`
-- [ ] `ai/predictive.zod.ts` `retrainSchedule`
-- [ ] `ai/orchestration.zod.ts` `cron`
-- [ ] `ai/devops-agent.zod.ts` `iterationFrequency`
+- [x] `integration/connector.zod.ts` `schedule`
+- [x] `automation/etl.zod.ts` `schedule`
+- [x] `automation/execution.zod.ts` `cronExpression`
+- [x] `api/export.zod.ts` `cronExpression` (×2)
+- [x] `system/disaster-recovery.zod.ts` `schedule` (×2)
+- [x] `system/cache.zod.ts` `schedule`
+- [x] `ai/predictive.zod.ts` `retrainSchedule`
+- [x] `ai/orchestration.zod.ts` `cron`
+- [x] `ai/devops-agent.zod.ts` `iterationFrequency`
 
 Persist as `ExpressionInputSchema` so AI authors emit one envelope shape regardless of domain. Engine wraps `cron-parser`.
 
@@ -410,18 +417,18 @@ Today every domain reinvents `{{var}}` interpolation:
 - `ai/model-registry.zod.ts` / `ai/orchestration.zod.ts` / `ai/mcp.zod.ts` — prompt templates
 - `api/graphql.zod.ts` — cache key / query templates
 
-- [ ] Add `'template'` to `ExpressionDialect` enum.
-- [ ] `@objectstack/formula` engine for `dialect: 'template'` — strict Mustache subset (`{{path.to.value}}` only, no logic), same variable scope as CEL (`record`, `os.user`, …).
-- [ ] Migrate the surfaces above to `ExpressionInputSchema`. AI authors then know: **anything templated or computed goes through `Expression`**.
+- [x] Add `'template'` to `ExpressionDialect` enum.
+- [x] `@objectstack/formula` engine for `dialect: 'template'` — strict Mustache subset (`{{path.to.value}}` only, no logic), same variable scope as CEL (`record`, `os.user`, …).
+- [x] Migrate the surfaces above to `ExpressionInputSchema`. AI authors then know: **anything templated or computed goes through `Expression`**.
 
 ##### M9.9e - Structured rule objects gain Expression escape hatch
 
 These are typed structured objects today, but power users sometimes need a raw CEL fallback. Make each `z.union([structured, ExpressionInputSchema])`:
 
-- [ ] `system/audit.zod.ts` `condition`
-- [ ] `system/metrics.zod.ts` `successCriteria`, `condition`
-- [ ] `system/tracing.zod.ts` `condition`
-- [ ] `cloud/marketplace-admin.zod.ts` `criteria`
+- [x] `system/audit.zod.ts` `condition`
+- [x] `system/metrics.zod.ts` `successCriteria`, `condition`
+- [x] `system/tracing.zod.ts` `condition`
+- [x] `cloud/marketplace-admin.zod.ts` `criteria`
 
 ##### M9.9 — Intentional non-targets (documented for clarity)
 

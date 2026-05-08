@@ -34,43 +34,61 @@ Every expression in metadata is persisted as the same envelope:
 
 ```ts
 type Expression = {
-  dialect: 'cel' | 'js' | 'cron';
-  source?: string;          // surface syntax (CEL text)
+  dialect: 'cel' | 'js' | 'cron' | 'template';
+  source?: string;          // surface syntax
   ast?: unknown;            // parsed AST (filled by `objectstack compile`)
   meta?: { rationale?: string; generatedBy?: string };
 };
 ```
 
+ObjectStack ships **four** registered dialects (M9.9):
+
+| Dialect    | Use for                                              | Helper        |
+|:-----------|:-----------------------------------------------------|:--------------|
+| `cel`      | computed values, predicates, defaults, formulas      | `` cel`...` `` / `` F`...` `` / `` P`...` `` |
+| `cron`     | recurring schedules (Job, ETL, sync, exports, jobs)  | `` cron`...` `` |
+| `template` | text interpolation (`{{path}}`) — notif/prompt/title | `` tmpl`...` `` |
+| `js`       | sandboxed L2 hook bodies (TypeScript source)         | n/a           |
+
+All dialects share the same variable scope (`record`, `previous`, `os.user`,
+`os.org`, `os.env`, `vars` for flow steps), so you author once and never have
+to relearn the syntax across surfaces.
+
 At **input** time you may write a bare string for shorthand — the spec
-transforms it into `{ dialect: 'cel', source }`. The compiled artifact always
-contains the full envelope (and, after M9.2, the AST).
+transforms it into the right envelope based on the field type. The compiled
+artifact always contains the full envelope (and, after M9.2, the AST).
 
 ```ts
-import { defineObject, F, P, cel } from '@objectstack/spec';
+import { defineObject, F, P, cel, cron, tmpl } from '@objectstack/spec';
 
 defineObject({
   name: 'invoice',
+  titleFormat: tmpl`Invoice {{record.invoice_no}} – {{record.customer.name}}`,
   fields: [
     {
       name: 'total',
       type: 'formula',
-      // tagged-template — produces { dialect: 'cel', source: '...' }
       formula: F`record.subtotal + record.subtotal * record.tax_rate`,
       result_type: 'currency',
     },
     {
       name: 'po_number',
       type: 'text',
-      // bare string is shorthand for { dialect: 'cel', source }
       conditionalRequired: P`record.amount > 10000`,
+    },
+    {
+      name: 'issued_date',
+      type: 'date',
+      // M9.9b — declarative default, evaluated at insert time
+      defaultValue: cel`today()`,
     },
   ],
 });
 ```
 
-The three tagged-template helpers — `cel`, `F` (formula alias), `P`
-(predicate alias) — are exported from `@objectstack/spec` and are
-interchangeable; pick whichever reads best at the call site.
+The three CEL tagged-template helpers — `cel`, `F` (formula alias), `P`
+(predicate alias) — are interchangeable; pick whichever reads best at the
+call site. `cron` and `tmpl` produce their respective envelopes.
 
 ---
 

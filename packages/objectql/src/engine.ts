@@ -594,11 +594,15 @@ export class ObjectQL implements IDataEngine {
     nowSnapshot?: Date,
   ): Record<string, unknown> {
     const schema = this.getSchema(object);
-    if (!schema || !Array.isArray((schema as any).fields)) return record;
-    const fields = (schema as any).fields as Array<{ name: string; defaultValue?: unknown }>;
+    const fieldsRaw = (schema as any)?.fields;
+    if (!fieldsRaw || typeof fieldsRaw !== 'object') return record;
+    // `fields` may be a Record<string, Field> (canonical) or an array (legacy).
+    const fieldEntries: Array<{ name: string; defaultValue?: unknown }> = Array.isArray(fieldsRaw)
+      ? fieldsRaw
+      : Object.entries(fieldsRaw).map(([name, def]) => ({ name, ...(def as object) }));
     const out = { ...record };
     const now = nowSnapshot ?? new Date();
-    for (const f of fields) {
+    for (const f of fieldEntries) {
       if (out[f.name] !== undefined) continue;
       if (f.defaultValue == null) continue;
       const dv = f.defaultValue;

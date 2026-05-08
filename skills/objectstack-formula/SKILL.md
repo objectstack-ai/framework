@@ -54,22 +54,31 @@ Every expression in metadata is the same envelope:
 
 ```ts
 type Expression = {
-  dialect: 'cel' | 'js' | 'cron';
+  dialect: 'cel' | 'js' | 'cron' | 'template';
   source?: string;
   ast?: unknown;
   meta?: { rationale?: string; generatedBy?: string };
 };
 ```
 
-**Authors emit `dialect: 'cel'`.** A bare string is accepted at input time as
-shorthand for `{ dialect: 'cel', source }`; the build artifact persists the
-full envelope. Prefer the tagged templates `F`, `P`, or `cel` from
-`@objectstack/spec` because they signal intent at the call site.
+**Four registered dialects** (M9.9):
+
+| Dialect    | Engine                 | Purpose                                           | Helper        | Example                                |
+|:-----------|:-----------------------|:--------------------------------------------------|:--------------|:---------------------------------------|
+| `cel`      | `@marcbachmann/cel-js` | Computed values + boolean predicates              | `` cel`...` `` / `` F`...` `` / `` P`...` `` | `` cel`record.amount * 1.1` ``         |
+| `cron`     | built-in validator     | Recurring schedules                               | `` cron`...` `` | `` cron`0 6 * * MON` ``               |
+| `template` | built-in interpolator  | `{{path}}` text interpolation (notif/prompt/title) | `` tmpl`...` `` | `` tmpl`Hello {{record.first_name}}` ``|
+| `js`       | (sandboxed, future)    | Edge cases needing arbitrary JS — avoid           | n/a           | reserved                               |
+
+**Authors emit the right dialect for the surface.** Bare strings on cron and
+template fields are auto-wrapped at validate time, but emitting the full
+envelope is preferred for clarity. `cron` and `template` use the same variable
+scope as CEL — you do **not** learn three languages.
 
 > **AI authors:** when emitting structured-output JSON for metadata, always
-> emit the full envelope `{ dialect: 'cel', source: '...' }` — do not emit
-> bare strings. After M9.7 lands, you will emit `ast` directly. Until then,
-> emit `source` and let `objectstack compile` parse it.
+> emit the full envelope `{ dialect, source }` — do not emit bare strings.
+> After M9.7 lands, you will emit `ast` directly. Until then, emit `source`
+> and let `objectstack compile` parse it.
 
 ---
 
@@ -228,11 +237,14 @@ When migrating Salesforce-flavor metadata, apply these rules in order:
 All of these spec fields accept `string | Expression`. The build normalizes
 to the envelope.
 
+### CEL surfaces (predicates + computed values)
+
 | Surface | Field | Dialect |
 |:---|:---|:---|
 | `Field` | `formula` (when `type: 'formula'`) | cel |
 | `Field` | `conditionalRequired` | cel |
 | `Field` | `visibleOn` | cel |
+| `Field` | `defaultValue` (M9.9b) | cel |
 | `ConditionalValidation` | `when` | cel |
 | `ObjectFieldGroup` | `visibleOn` | cel |
 | `View` | `visibleOn` | cel |
@@ -240,10 +252,75 @@ to the envelope.
 | `Action` | `disabled` | cel (or boolean) |
 | `Hook` | `condition` | cel |
 | `SharingRule` | `condition` | cel |
-| `Flow.decision` | `expression` | cel |
+| `Flow.decision` | `expression` / edge `condition` | cel (use `vars.<step>.<key>`) |
+| `Workflow.Task` | `dueDate` | cel (e.g. `cel\`daysFromNow(3)\``) |
+| `Workflow` | `criteria` | cel |
+| `GraphQL.ComputedField` | `expression` | cel |
 | `Dataset.records[*]` | any value | cel (via `cel\`\``) |
-| `Job.schedule` | `expression` | **cron** |
-| `Hook` body / Mapping `transform` | TS source | **js** |
+| `audit` / `metrics` / `tracing` | `condition` / `successCriteria` | structured \| cel |
+
+### Cron surfaces (recurring schedules)
+
+All accept bare strings (auto-wrapped to `{dialect:'cron', source}`) or the
+`` cron`...` `` helper. 5- or 6-field cron + aliases (`@daily`, `@hourly`, …).
+
+| Surface | Field |
+|:---|:---|
+| `Job.schedule.expression` | canonical |
+| `connector.schedule`, `etl.schedule`, `sync.schedule` | pipelines |
+| `system/cache.schedule` | warmup |
+| `system/disaster-recovery.schedule` | backup + drill |
+| `automation/execution.cronExpression` | scheduled state |
+| `api/export.cronExpression` | scheduled exports (×2) |
+| `ai/orchestration.cron` | recurring runs |
+| `ai/devops-agent.iterationFrequency` | iteration cadence |
+
+### Template surfaces (`{{path}}` interpolation)
+
+Strict Mustache subset — only `{{record.x}}`, `{{os.user.id}}`, etc. No
+conditionals, no helpers. Same scope as CEL.
+
+| Surface | Field |
+|:---|:---|
+| `Object.titleFormat` | record title |
+| `system/notification` | email subject + body, SMS message, push body + message (5 fields) |
+| `ai/model-registry` | systemPrompt, userPromptTemplate |
+| `ai/agent-action` | subject, message |
+| `ai/nlq.systemPrompt`, `ai/mcp.systemPrompt` | prompt templates |
+| `integration/connector/github` | titleTemplate, bodyTemplate (PR + release) |
+| `api/graphql` | cache key |
+
+### JS surface (sandboxed body)
+
+Reserved for L2 hook bodies / mapping transforms. Use TypeScript source.
+
+---
+
+## Cron quick reference
+
+```ts
+import { cron } from '@objectstack/spec';
+
+schedule: cron`0 6 * * MON`        // every Monday at 06:00
+schedule: cron`@daily`             // alias — every midnight
+schedule: cron`*/15 * * * *`       // every 15 minutes
+```
+
+Bare strings work too on cron-typed fields, but the `cron` helper makes intent
+explicit.
+
+---
+
+## Template quick reference
+
+```ts
+import { tmpl } from '@objectstack/spec';
+
+titleFormat: tmpl`{{record.first_name}} {{record.last_name}}`
+subject:     tmpl`Welcome to {{os.org.name}}, {{os.user.name}}!`
+```
+
+Missing paths render as empty string. `Date` instances are ISO-formatted.
 
 ---
 
