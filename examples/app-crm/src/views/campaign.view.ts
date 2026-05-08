@@ -31,10 +31,6 @@ export const CampaignViews = defineView({
       { field: 'owner', width: 150 },
     ],
     sort: [{ field: 'start_date', order: 'desc' }],
-    quickFilters: [
-      { field: 'is_active', label: 'Active', operator: 'equals', value: true },
-      { field: 'owner', label: 'My Campaigns', operator: 'equals', value: '{current_user_id}' },
-    ],
     grouping: { fields: [{ field: 'channel', order: 'asc' }] },
     pagination: { pageSize: 25 },
     selection: { type: 'multiple' },

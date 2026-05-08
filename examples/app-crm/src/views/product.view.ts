@@ -27,10 +27,6 @@ export const ProductViews = defineView({
       { field: 'is_active', width: 100, align: 'center' },
     ],
     sort: [{ field: 'name', order: 'asc' }],
-    quickFilters: [
-      { field: 'is_active', label: 'Active', operator: 'equals', value: true },
-      { field: 'is_taxable', label: 'Taxable', operator: 'equals', value: true },
-    ],
     grouping: { fields: [{ field: 'category', order: 'asc' }] },
     pagination: { pageSize: 50 },
     selection: { type: 'multiple' },

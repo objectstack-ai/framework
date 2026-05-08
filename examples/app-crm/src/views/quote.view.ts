@@ -29,11 +29,6 @@ export const QuoteViews = defineView({
       { field: 'owner', width: 150 },
     ],
     sort: [{ field: 'quote_date', order: 'desc' }],
-    quickFilters: [
-      { field: 'owner', label: 'My Quotes', operator: 'equals', value: '{current_user_id}' },
-      { field: 'status', label: 'Pending', operator: 'in', value: ['draft', 'in_review', 'presented'] },
-      { field: 'status', label: 'Accepted', operator: 'equals', value: 'accepted' },
-    ],
     pagination: { pageSize: 25 },
     selection: { type: 'multiple' },
     appearance: {

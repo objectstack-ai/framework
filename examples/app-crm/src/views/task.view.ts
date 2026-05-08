@@ -31,12 +31,6 @@ export const TaskViews = defineView({
       { field: 'is_completed', order: 'asc' },
       { field: 'due_date', order: 'asc' },
     ],
-    quickFilters: [
-      { field: 'owner', label: 'My Tasks', operator: 'equals', value: '{current_user_id}' },
-      { field: 'is_completed', label: 'Open', operator: 'equals', value: false },
-      { field: 'is_overdue', label: 'Overdue', operator: 'equals', value: true },
-      { field: 'priority', label: 'High Priority', operator: 'in', value: ['high', 'critical'] },
-    ],
     rowColor: {
       field: 'priority',
       colors: { critical: '#dc2626', high: '#f97316', medium: '#eab308', low: '#94a3b8' },

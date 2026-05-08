@@ -390,15 +390,6 @@ export const ListViewSchema = z.object({
   searchableFields: z.array(z.string()).optional().describe('Fields enabled for search'),
   filterableFields: z.array(z.string()).optional().describe('Fields enabled for end-user filtering in the top bar'),
 
-  /** Quick Filters (One-click filter chips, Salesforce ListFilter pattern) */
-  quickFilters: z.array(z.object({
-    field: z.string().describe('Field name to filter by'),
-    label: z.string().optional().describe('Display label for the chip'),
-    operator: z.enum(['equals', 'not_equals', 'contains', 'in', 'is_null', 'is_not_null']).default('equals').describe('Filter operator'),
-    value: z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.union([z.string(), z.number()]))])
-      .optional().describe('Preset filter value'),
-  })).optional().describe('One-click filter chips for quick record filtering'),
-
   /** Grid Features */
   resizable: z.boolean().optional().describe('Enable column resizing'),
   striped: z.boolean().optional().describe('Striped row styling'),

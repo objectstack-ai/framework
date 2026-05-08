@@ -80,28 +80,6 @@ export const LeadViews = defineView({
       { field: 'created_at', order: 'desc' }
     ],
     
-    // Quick Filters (Salesforce-style)
-    quickFilters: [
-      {
-        field: 'status',
-        label: 'New',
-        operator: 'equals',
-        value: 'new',
-      },
-      {
-        field: 'status',
-        label: 'Contacted',
-        operator: 'equals',
-        value: 'contacted',
-      },
-      {
-        field: 'owner',
-        label: 'My Leads',
-        operator: 'equals',
-        value: '{current_user_id}',
-      },
-    ],
-    
     // Navigation to Form
     navigation: {
       mode: 'page',

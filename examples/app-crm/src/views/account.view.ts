@@ -27,10 +27,6 @@ export const AccountViews = defineView({
       { field: 'is_active', width: 100, align: 'center' },
     ],
     sort: [{ field: 'annual_revenue', order: 'desc' }],
-    quickFilters: [
-      { field: 'owner', label: 'My Accounts', operator: 'equals', value: '{current_user_id}' },
-      { field: 'is_active', label: 'Active', operator: 'equals', value: true },
-    ],
     grouping: { fields: [{ field: 'industry', order: 'asc', collapsed: false }] },
     rowColor: { field: 'is_active', colors: { true: '#16a34a', false: '#94a3b8' } },
     selection: { type: 'multiple' },

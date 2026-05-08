@@ -129,18 +129,6 @@ Common operators: `equals`, `not_equals`, `contains`, `starts_with`,
 
 > **`$currentUser`** is a runtime variable — the logged-in user's ID.
 
-### Quick Filters
-
-One-click filter chips displayed above the list:
-
-```typescript
-quickFilters: [
-  { field: 'status', operator: 'equals', value: 'open', label: 'Open' },
-  { field: 'priority', operator: 'equals', value: 'urgent', label: '🔥 Urgent' },
-  { field: 'assigned_to', operator: 'equals', value: '$currentUser', label: 'My Cases' },
-]
-```
-
 ### Sorting
 
 ```typescript

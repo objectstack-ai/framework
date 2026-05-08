@@ -33,12 +33,6 @@ export const CaseViews = defineView({
       { field: 'priority', order: 'desc' },
       { field: 'sla_due_date', order: 'asc' },
     ],
-    quickFilters: [
-      { field: 'owner', label: 'My Queue', operator: 'equals', value: '{current_user_id}' },
-      { field: 'is_closed', label: 'Open', operator: 'equals', value: false },
-      { field: 'is_escalated', label: 'Escalated', operator: 'equals', value: true },
-      { field: 'is_sla_violated', label: 'SLA Breach', operator: 'equals', value: true },
-    ],
     rowColor: {
       field: 'priority',
       colors: { critical: '#dc2626', high: '#f97316', medium: '#eab308', low: '#94a3b8' },

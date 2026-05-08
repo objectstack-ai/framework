@@ -60,7 +60,6 @@ export const ListViewSchema = z.object({
   
   // Search
   searchFields: z.array(z.string()).optional(),
-  quickFilters: z.array(QuickFilterSchema).optional(),
 });
 
 export const FormViewSchema = z.object({

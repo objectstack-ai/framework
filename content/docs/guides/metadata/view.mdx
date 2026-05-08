@@ -56,7 +56,6 @@ const taskListView = {
 | `columns` | `ListColumn[]` | optional | Column definitions |
 | `filter` | `array` | optional | Filter criteria |
 | `sort` | `array` | optional | Sort configuration |
-| `quickFilters` | `QuickFilter[]` | optional | One-click filter chips |
 | `searchableFields` | `string[]` | optional | Fields included in search |
 | `filterableFields` | `string[]` | optional | Fields available for filtering |
 | `grouping` | `object` | optional | Row grouping configuration |
@@ -106,18 +105,6 @@ columns: [
 | `resizable` | `boolean` | Allow column resize |
 | `summary` | `object` | Footer aggregation (`count`, `sum`, `avg`, `min`, `max`) |
 | `link` | `string` | Make cell a clickable link |
-
-### Quick Filters
-
-Pre-configured one-click filter chips displayed above the list:
-
-```typescript
-quickFilters: [
-  { field: 'status', label: 'Active', operator: 'eq', value: 'active' },
-  { field: 'status', label: 'Closed', operator: 'eq', value: 'closed' },
-  { field: 'owner', label: 'My Records', operator: 'eq', value: '{currentUser}' },
-]
-```
 
 ### Data Source
 
@@ -293,9 +280,6 @@ const taskKanban = {
     { field: 'assignee', label: 'Assignee' },
     { field: 'priority', label: 'Priority' },
     { field: 'due_date', label: 'Due Date' },
-  ],
-  quickFilters: [
-    { field: 'assignee', label: 'My Tasks', operator: 'eq', value: '{currentUser}' },
   ],
   sort: [{ field: 'priority', direction: 'desc' }],
 };

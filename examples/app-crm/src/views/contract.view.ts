@@ -29,11 +29,6 @@ export const ContractViews = defineView({
       { field: 'owner', width: 150 },
     ],
     sort: [{ field: 'end_date', order: 'asc' }],
-    quickFilters: [
-      { field: 'status', label: 'Active', operator: 'equals', value: 'active' },
-      { field: 'auto_renewal', label: 'Auto-Renew', operator: 'equals', value: true },
-      { field: 'owner', label: 'My Contracts', operator: 'equals', value: '{current_user_id}' },
-    ],
     pagination: { pageSize: 25 },
     selection: { type: 'multiple' },
     appearance: {

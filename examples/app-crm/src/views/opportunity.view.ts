@@ -29,11 +29,6 @@ export const OpportunityViews = defineView({
       { field: 'owner', width: 150 },
     ],
     sort: [{ field: 'close_date', order: 'asc' }],
-    quickFilters: [
-      { field: 'owner', label: 'My Pipeline', operator: 'equals', value: '{current_user_id}' },
-      { field: 'stage', label: 'Open', operator: 'not_equals', value: 'closed_won' },
-      { field: 'forecast_category', label: 'Best Case', operator: 'equals', value: 'best_case' },
-    ],
     grouping: { fields: [{ field: 'stage', order: 'asc', collapsed: false }] },
     rowColor: {
       field: 'stage',

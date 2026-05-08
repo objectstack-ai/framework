@@ -1853,42 +1853,8 @@ describe('Airtable-style ListView enhancements', () => {
 });
 
 // ============================================================================
-// Protocol Improvement Tests: quickFilters and FormView defaultSort
+// Protocol Improvement Tests: FormView defaultSort
 // ============================================================================
-
-describe('ListViewSchema - quickFilters', () => {
-  it('should accept quickFilters configuration', () => {
-    const result = ListViewSchema.parse({
-      columns: ['name', 'status'],
-      quickFilters: [
-        { field: 'status', label: 'Active', operator: 'equals', value: 'active' },
-        { field: 'owner_id', label: 'My Records', operator: 'equals', value: '{current_user_id}' },
-        { field: 'category', operator: 'is_not_null' },
-      ],
-    });
-    expect(result.quickFilters).toHaveLength(3);
-    expect(result.quickFilters![0].field).toBe('status');
-    expect(result.quickFilters![0].operator).toBe('equals');
-    expect(result.quickFilters![2].operator).toBe('is_not_null');
-  });
-
-  it('should default quickFilter operator to equals', () => {
-    const result = ListViewSchema.parse({
-      columns: ['name'],
-      quickFilters: [
-        { field: 'status' },
-      ],
-    });
-    expect(result.quickFilters![0].operator).toBe('equals');
-  });
-
-  it('should accept list view without quickFilters (optional)', () => {
-    const result = ListViewSchema.parse({
-      columns: ['name', 'status'],
-    });
-    expect(result.quickFilters).toBeUndefined();
-  });
-});
 
 describe('FormViewSchema - defaultSort', () => {
   it('should accept defaultSort configuration', () => {

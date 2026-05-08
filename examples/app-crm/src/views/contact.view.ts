@@ -26,11 +26,6 @@ export const ContactViews = defineView({
       { field: 'owner', width: 150 },
     ],
     sort: [{ field: 'last_name', order: 'asc' }],
-    quickFilters: [
-      { field: 'owner', label: 'My Contacts', operator: 'equals', value: '{current_user_id}' },
-      { field: 'is_primary', label: 'Primary Only', operator: 'equals', value: true },
-      { field: 'do_not_call', label: 'Callable', operator: 'equals', value: false },
-    ],
     grouping: { fields: [{ field: 'account', order: 'asc', collapsed: true }] },
     selection: { type: 'multiple' },
     pagination: { pageSize: 50, pageSizeOptions: [25, 50, 100] },

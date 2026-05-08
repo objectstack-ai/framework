@@ -11539,20 +11539,6 @@
             "order": "desc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "owner",
-            "label": "My Accounts",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          },
-          {
-            "field": "is_active",
-            "label": "Active",
-            "operator": "equals",
-            "value": true
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -11883,20 +11869,6 @@
             "order": "desc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "is_active",
-            "label": "Active",
-            "operator": "equals",
-            "value": true
-          },
-          {
-            "field": "owner",
-            "label": "My Campaigns",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -12157,32 +12129,6 @@
           {
             "field": "sla_due_date",
             "order": "asc"
-          }
-        ],
-        "quickFilters": [
-          {
-            "field": "owner",
-            "label": "My Queue",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          },
-          {
-            "field": "is_closed",
-            "label": "Open",
-            "operator": "equals",
-            "value": false
-          },
-          {
-            "field": "is_escalated",
-            "label": "Escalated",
-            "operator": "equals",
-            "value": true
-          },
-          {
-            "field": "is_sla_violated",
-            "label": "SLA Breach",
-            "operator": "equals",
-            "value": true
           }
         ],
         "selection": {
@@ -12490,26 +12436,6 @@
             "order": "asc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "owner",
-            "label": "My Contacts",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          },
-          {
-            "field": "is_primary",
-            "label": "Primary Only",
-            "operator": "equals",
-            "value": true
-          },
-          {
-            "field": "do_not_call",
-            "label": "Callable",
-            "operator": "equals",
-            "value": false
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -12758,26 +12684,6 @@
             "order": "asc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "status",
-            "label": "Active",
-            "operator": "equals",
-            "value": "active"
-          },
-          {
-            "field": "auto_renewal",
-            "label": "Auto-Renew",
-            "operator": "equals",
-            "value": true
-          },
-          {
-            "field": "owner",
-            "label": "My Contracts",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -13014,26 +12920,6 @@
           {
             "field": "created_at",
             "order": "desc"
-          }
-        ],
-        "quickFilters": [
-          {
-            "field": "status",
-            "label": "New",
-            "operator": "equals",
-            "value": "new"
-          },
-          {
-            "field": "status",
-            "label": "Contacted",
-            "operator": "equals",
-            "value": "contacted"
-          },
-          {
-            "field": "owner",
-            "label": "My Leads",
-            "operator": "equals",
-            "value": "{current_user_id}"
           }
         ],
         "navigation": {
@@ -13836,26 +13722,6 @@
             "order": "asc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "owner",
-            "label": "My Pipeline",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          },
-          {
-            "field": "stage",
-            "label": "Open",
-            "operator": "not_equals",
-            "value": "closed_won"
-          },
-          {
-            "field": "forecast_category",
-            "label": "Best Case",
-            "operator": "equals",
-            "value": "best_case"
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -14234,20 +14100,6 @@
             "order": "asc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "is_active",
-            "label": "Active",
-            "operator": "equals",
-            "value": true
-          },
-          {
-            "field": "is_taxable",
-            "label": "Taxable",
-            "operator": "equals",
-            "value": true
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -14489,30 +14341,6 @@
             "order": "desc"
           }
         ],
-        "quickFilters": [
-          {
-            "field": "owner",
-            "label": "My Quotes",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          },
-          {
-            "field": "status",
-            "label": "Pending",
-            "operator": "in",
-            "value": [
-              "draft",
-              "in_review",
-              "presented"
-            ]
-          },
-          {
-            "field": "status",
-            "label": "Accepted",
-            "operator": "equals",
-            "value": "accepted"
-          }
-        ],
         "selection": {
           "type": "multiple"
         },
@@ -14723,35 +14551,6 @@
           {
             "field": "due_date",
             "order": "asc"
-          }
-        ],
-        "quickFilters": [
-          {
-            "field": "owner",
-            "label": "My Tasks",
-            "operator": "equals",
-            "value": "{current_user_id}"
-          },
-          {
-            "field": "is_completed",
-            "label": "Open",
-            "operator": "equals",
-            "value": false
-          },
-          {
-            "field": "is_overdue",
-            "label": "Overdue",
-            "operator": "equals",
-            "value": true
-          },
-          {
-            "field": "priority",
-            "label": "High Priority",
-            "operator": "in",
-            "value": [
-              "high",
-              "critical"
-            ]
           }
         ],
         "selection": {
