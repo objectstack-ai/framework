@@ -147,15 +147,49 @@ export class MetadataPlugin implements Plugin {
 
     start = async (ctx: PluginContext) => {
         const src = this.options.artifactSource;
+        const mode = this.options.config?.bootstrap ?? 'eager';
 
-        if (src?.mode === 'local-file') {
-            await this._loadFromLocalFile(ctx, src.path);
-        } else if (src?.mode === 'artifact-api') {
-            // M3/M4 — not yet implemented
-            ctx.logger.warn('[MetadataPlugin] artifact-api source is not yet implemented; falling back to file-system scan');
-            await this._loadFromFileSystem(ctx);
+        ctx.logger.info('[MetadataPlugin] Bootstrapping metadata', {
+            bootstrap: mode,
+            artifactSource: src?.mode ?? 'none',
+        });
+
+        if (mode === 'artifact-only') {
+            // Sealed-runtime mode: ONLY load from a pre-compiled artifact. Never
+            // touch the filesystem. Required for Edge / serverless / read-only
+            // production deployments where the running process must not depend
+            // on local source files.
+            if (src?.mode === 'local-file') {
+                await this._loadFromLocalFile(ctx, src.path);
+            } else if (src?.mode === 'artifact-api') {
+                ctx.logger.error('[MetadataPlugin] bootstrap=artifact-only requires an implemented artifactSource; artifact-api is not yet available');
+                throw new Error('[MetadataPlugin] artifact-only bootstrap requires artifactSource.mode="local-file" (artifact-api not yet implemented)');
+            } else {
+                throw new Error('[MetadataPlugin] bootstrap=artifact-only requires options.artifactSource to be set');
+            }
+        } else if (mode === 'lazy') {
+            // On-demand mode: skip the eager filesystem priming pass entirely.
+            // Reads go through MetadataManager.load*/list* which are backed by
+            // the DatabaseLoader read-through cache and any registered loaders.
+            // An artifact source, if present, is still honored so projects can
+            // pin a known set of metadata at boot without paying the FS scan.
+            if (src?.mode === 'local-file') {
+                await this._loadFromLocalFile(ctx, src.path);
+            } else if (src?.mode === 'artifact-api') {
+                ctx.logger.warn('[MetadataPlugin] artifact-api source is not yet implemented; lazy mode will rely on registered loaders only');
+            } else {
+                ctx.logger.info('[MetadataPlugin] lazy bootstrap — skipping filesystem priming; metadata loads on demand');
+            }
         } else {
-            await this._loadFromFileSystem(ctx);
+            // 'eager' (default): preserve historical behavior.
+            if (src?.mode === 'local-file') {
+                await this._loadFromLocalFile(ctx, src.path);
+            } else if (src?.mode === 'artifact-api') {
+                ctx.logger.warn('[MetadataPlugin] artifact-api source is not yet implemented; falling back to file-system scan');
+                await this._loadFromFileSystem(ctx);
+            } else {
+                await this._loadFromFileSystem(ctx);
+            }
         }
 
         // Bridge realtime service from kernel service registry to MetadataManager.

@@ -381,6 +381,35 @@ export const MetadataPluginConfigSchema = lazySchema(() => z.object({
    * Maximum number of metadata items to keep in memory cache.
    */
   cacheMaxItems: z.number().int().min(0).default(10000).describe('Max items in memory cache'),
+
+  /**
+   * Bootstrap Mode
+   *
+   * Controls how the MetadataPlugin populates the in-memory registry at
+   * `start()` time. Tuning this is the single most effective lever for
+   * cold-start latency in production.
+   *
+   * - `eager` (default) — Scan filesystem and prime every type listed in
+   *   `DEFAULT_METADATA_TYPE_REGISTRY` via `loadMany()` for each type.
+   *   Best DX (everything is queryable immediately) at the cost of cold-start
+   *   I/O proportional to the number of metadata files. Recommended for dev,
+   *   Studio sessions, and small/medium production deployments.
+   *
+   * - `lazy` — Skip the filesystem priming pass entirely. Metadata is loaded
+   *   on first access through `MetadataManager.load()` / `loadMany()` and
+   *   cached thereafter via the loader read-through cache. Best for
+   *   long-running servers with thousands of items where only a hot subset
+   *   is queried per request.
+   *
+   * - `artifact-only` — Load exclusively from the artifact source configured
+   *   on the plugin (`artifactSource: { mode: 'local-file' | 'artifact-api' }`).
+   *   The filesystem is not scanned, and the database loader is not consulted
+   *   during bootstrap. Required for Edge / serverless / immutable-image
+   *   deployments where the running process must not perform write-back or
+   *   open watch handles.
+   */
+  bootstrap: z.enum(['eager', 'lazy', 'artifact-only']).default('eager')
+    .describe('How metadata is primed at plugin start (eager / lazy / artifact-only)'),
 }));
 
 export type MetadataPluginConfig = z.input<typeof MetadataPluginConfigSchema>;

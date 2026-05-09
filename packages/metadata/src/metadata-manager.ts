@@ -150,6 +150,7 @@ export class MetadataManager implements IMetadataService {
       tableName,
       organizationId,
       projectId,
+      cache: this.config.cache?.databaseLoader,
     });
     this.registerLoader(dbLoader);
     this.logger.info('DatabaseLoader configured', { datasource: this.config.datasource, tableName });
@@ -179,6 +180,7 @@ export class MetadataManager implements IMetadataService {
       tableName,
       organizationId,
       projectId,
+      cache: this.config.cache?.databaseLoader,
     });
     this.registerLoader(dbLoader);
     this.logger.info('DatabaseLoader configured via DataEngine', { tableName });
@@ -214,6 +216,18 @@ export class MetadataManager implements IMetadataService {
    * should not be written to during runtime registration.
    */
   async register(type: string, name: string, data: unknown): Promise<void> {
+    // Persistence write gate: when `persistence.writable` is explicitly false
+    // we treat register() as read-only. Default `true` (or omitted) preserves
+    // historical behavior.
+    if (this.config.persistence?.writable === false) {
+      const msg = `MetadataManager is read-only (persistence.writable=false); refusing to register ${type}/${name}`;
+      if (this.config.validation?.throwOnError) {
+        throw new Error(msg);
+      }
+      this.logger.warn(msg);
+      return;
+    }
+
     if (!this.registry.has(type)) {
       this.registry.set(type, new Map());
     }
@@ -835,6 +849,16 @@ export class MetadataManager implements IMetadataService {
    * Save/update an overlay for a metadata item
    */
   async saveOverlay(overlay: MetadataOverlay): Promise<void> {
+    // Overlay write gate — independent from base writability so deployments
+    // can freeze Studio overlays while still permitting base register().
+    if (this.config.persistence?.overlayWritable === false) {
+      const msg = `MetadataManager overlays are read-only (persistence.overlayWritable=false); refusing to save overlay for ${overlay.baseType}/${overlay.baseName}`;
+      if (this.config.validation?.throwOnError) {
+        throw new Error(msg);
+      }
+      this.logger.warn(msg);
+      return;
+    }
     const key = this.overlayKey(overlay.baseType, overlay.baseName, overlay.scope);
     this.overlays.set(key, overlay);
   }

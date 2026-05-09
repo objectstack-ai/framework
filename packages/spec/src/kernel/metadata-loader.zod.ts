@@ -459,6 +459,20 @@ export const MetadataManagerConfigSchema = lazySchema(() => z.object({
     enabled: z.boolean().default(true).describe('Enable caching'),
     ttl: z.number().int().min(0).default(3600).describe('Cache TTL in seconds'),
     maxSize: z.number().int().min(0).optional().describe('Max cache size in bytes'),
+    /**
+     * DatabaseLoader read-through cache.
+     *
+     * The DatabaseLoader caches `load`/`loadMany`/`list`/`stat` results in an
+     * LRU keyed by `(type, name)`. All write paths invalidate the affected
+     * entry, so reads always observe writes made through the same loader
+     * instance. External writes (out-of-band SQL) are honored within `ttl`
+     * milliseconds.
+     */
+    databaseLoader: z.object({
+      enabled: z.boolean().default(true).describe('Enable DatabaseLoader cache'),
+      maxSize: z.number().int().min(0).default(500).describe('Max cached entries'),
+      ttl: z.number().int().min(0).default(60_000).describe('Cache TTL in milliseconds'),
+    }).optional().describe('DatabaseLoader read-through cache'),
   }).optional().describe('Cache settings'),
   
   /**
@@ -487,6 +501,27 @@ export const MetadataManagerConfigSchema = lazySchema(() => z.object({
    * Loader-specific options
    */
   loaderOptions: z.record(z.string(), z.unknown()).optional().describe('Loader-specific configuration'),
+
+  /**
+   * Persistence Write Gates
+   *
+   * Two-axis gate that controls whether the metadata layer accepts mutations
+   * at runtime. Read paths are always permitted.
+   *
+   * - `writable: false` — `MetadataManager.register()` becomes a no-op
+   *   (or throws, depending on `validation.throwOnError`). Useful for
+   *   read-only project kernels booted from a compiled artifact, where the
+   *   running process must never write back to `sys_metadata`.
+   * - `overlayWritable: false` — `MetadataManager.saveOverlay()` is rejected.
+   *   Use this for fully-frozen production deployments where Studio overlays
+   *   are disabled.
+   *
+   * Both default to `true` so existing dev / Studio flows are unaffected.
+   */
+  persistence: z.object({
+    writable: z.boolean().default(true).describe('Allow base metadata writes via register()'),
+    overlayWritable: z.boolean().default(true).describe('Allow overlay writes via saveOverlay()'),
+  }).optional().describe('Persistence write gates'),
 }));
 
 // Export types

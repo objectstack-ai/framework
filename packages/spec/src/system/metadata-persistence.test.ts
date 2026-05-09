@@ -501,7 +501,7 @@ describe('MetadataManagerConfigSchema', () => {
     const config = MetadataManagerConfigSchema.parse({
       rootDir: '/app',
       watch: true,
-      cache: true,
+      cache: { enabled: true },
       formats: ['json', 'yaml'],
     });
 

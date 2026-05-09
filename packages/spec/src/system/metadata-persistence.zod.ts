@@ -297,16 +297,6 @@ export const MetadataImportOptionsSchema = lazySchema(() => z.object({
 }));
 
 /**
- * Metadata Fallback Strategy
- * Determines behavior when the primary datasource is unavailable.
- */
-export const MetadataFallbackStrategySchema = lazySchema(() => z.enum([
-  'filesystem', // Fall back to filesystem-based loading
-  'memory',     // Fall back to in-memory storage
-  'none',       // No fallback — fail immediately
-]));
-
-/**
  * Metadata Source Origin
  * Indicates where a metadata record was loaded from.
  */
@@ -318,61 +308,19 @@ export const MetadataSourceSchema = lazySchema(() => z.enum([
 ]));
 
 /**
- * Metadata Manager Config
- * 
- * Unified configuration for the MetadataManager.
- * Supports datasource-backed persistence via `datasource` field,
- * which references a DatasourceSchema.name resolved at runtime.
+ * Metadata Fallback Strategy & Manager Config
+ *
+ * The canonical schemas live in `../kernel/metadata-loader.zod` — that file
+ * carries the richer shape (nested `cache.databaseLoader`, `persistence` write
+ * gates, `validation` flags) used by the runtime MetadataManager. This file
+ * historically declared a narrower duplicate; we re-export the kernel version
+ * here so a single TypeScript type is observed everywhere `@objectstack/spec`
+ * consumers reach for it.
  */
-export const MetadataManagerConfigSchema = lazySchema(() => z.object({
-  /**
-   * Datasource Name Reference
-   * References a DatasourceSchema.name (e.g. 'default').
-   * At runtime, resolved from kernel service `driver.{name}` to obtain the actual driver.
-   * When provided, metadata is persisted to a database table.
-   */
-  datasource: z.string().optional().describe('Datasource name reference for database persistence'),
-
-  /**
-   * Metadata Table Name
-   * The database table used for metadata storage when datasource is configured.
-   */
-  tableName: z.string().default('sys_metadata').describe('Database table name for metadata storage'),
-
-  /**
-   * Fallback Strategy
-   * Determines behavior when the primary datasource is unavailable.
-   */
-  fallback: MetadataFallbackStrategySchema.default('none').describe('Fallback strategy when datasource is unavailable'),
-
-  /**
-   * Root directory for metadata (for filesystem loaders)
-   */
-  rootDir: z.string().optional().describe('Root directory for filesystem-based metadata'),
-
-  /**
-   * Enabled serialization formats
-   */
-  formats: z.array(MetadataFormatSchema).optional().describe('Enabled metadata formats'),
-
-  /**
-   * Enable file watching
-   */
-  watch: z.boolean().optional().describe('Enable file watching for filesystem loaders'),
-
-  /**
-   * Cache configuration
-   */
-  cache: z.boolean().optional().describe('Enable metadata caching'),
-
-  /**
-   * Watch options
-   */
-  watchOptions: z.object({
-    ignored: z.array(z.string()).optional().describe('Patterns to ignore'),
-    persistent: z.boolean().default(true).describe('Keep process running'),
-  }).optional().describe('File watcher options'),
-}));
+export {
+  MetadataFallbackStrategySchema,
+  MetadataManagerConfigSchema,
+} from '../kernel/metadata-loader.zod';
 
 export type MetadataFormat = z.infer<typeof MetadataFormatSchema>;
 export type MetadataStats = z.infer<typeof MetadataStatsSchema>;
@@ -385,8 +333,7 @@ export type MetadataWatchEvent = z.infer<typeof MetadataWatchEventSchema>;
 export type MetadataCollectionInfo = z.infer<typeof MetadataCollectionInfoSchema>;
 export type MetadataExportOptions = z.infer<typeof MetadataExportOptionsSchema>;
 export type MetadataImportOptions = z.infer<typeof MetadataImportOptionsSchema>;
-export type MetadataManagerConfig = z.input<typeof MetadataManagerConfigSchema>;
-export type MetadataFallbackStrategy = z.infer<typeof MetadataFallbackStrategySchema>;
+export type { MetadataManagerConfig, MetadataFallbackStrategy } from '../kernel/metadata-loader.zod';
 export type MetadataSource = z.infer<typeof MetadataSourceSchema>;
 
 /**

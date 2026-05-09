@@ -23,7 +23,31 @@ import { SysMetadataObject, SysMetadataHistoryObject } from '@objectstack/platfo
 import type { IDataDriver, IDataEngine } from '@objectstack/spec/contracts';
 import type { MetadataLoader } from './loader-interface.js';
 import { calculateChecksum } from '../utils/metadata-history-utils.js';
+import { LRUCache } from '../utils/lru-cache.js';
 import { MetadataProjector } from '../projection/metadata-projector.js';
+
+/**
+ * Cache configuration for `DatabaseLoader`.
+ *
+ * The cache sits in front of `load()`, `loadMany()`, `exists()`, `stat()`,
+ * and `list()` so that hot read paths (REST `/meta/*`, ObjectQL plan
+ * resolution, runtime overlay merges) do not hit the database on every
+ * request. All write paths (`save`, `delete`, `registerRollback`) invalidate
+ * the relevant entries.
+ *
+ * Defaults are conservative: 500 entries, 60s TTL — chosen so that single-
+ * tenant Studio usage does not burn memory and so that an external write
+ * (out-of-band SQL update) becomes visible within a minute even without
+ * realtime invalidation.
+ */
+export interface DatabaseLoaderCacheOptions {
+  /** Whether the cache is active. Default: `true`. */
+  enabled?: boolean;
+  /** Max number of cached `(type, name)` entries. Default: `500`. */
+  maxSize?: number;
+  /** TTL in milliseconds. Set to `0` to disable expiry. Default: `60_000`. */
+  ttl?: number;
+}
 
 /**
  * Configuration for the DatabaseLoader.
@@ -57,6 +81,13 @@ export interface DatabaseLoaderOptions {
 
   /** Enable metadata projection to type-specific tables (default: true) */
   enableProjection?: boolean;
+
+  /**
+   * Read-through cache configuration. Pass `{ enabled: false }` to disable
+   * caching outright (useful in tests or when the caller wants the loader to
+   * always read fresh from the database).
+   */
+  cache?: DatabaseLoaderCacheOptions;
 }
 
 /**
@@ -90,6 +121,15 @@ export class DatabaseLoader implements MetadataLoader {
   private enableProjection: boolean;
   private projector?: MetadataProjector;
 
+  /** (type, name) → metadata payload — primes `load()` */
+  private readonly loadCache?: LRUCache<string, Record<string, unknown> | null>;
+  /** type → array of payloads — primes `loadMany()` */
+  private readonly loadManyCache?: LRUCache<string, unknown[]>;
+  /** type → list of names — primes `list()` */
+  private readonly listCache?: LRUCache<string, string[]>;
+  /** (type, name) → MetadataStats — primes `stat()` */
+  private readonly statCache?: LRUCache<string, MetadataStats | null>;
+
   constructor(options: DatabaseLoaderOptions) {
     if (!options.driver && !options.engine) {
       throw new Error('DatabaseLoader requires either a driver or engine');
@@ -112,6 +152,67 @@ export class DatabaseLoader implements MetadataLoader {
         projectId: this.projectId,
       });
     }
+
+    // Wire cache. Default: enabled with 500 entries / 60s TTL.
+    const cacheOpts = options.cache;
+    const cacheEnabled = cacheOpts?.enabled !== false;
+    if (cacheEnabled) {
+      const lruOpts = {
+        maxSize: cacheOpts?.maxSize ?? 500,
+        ttl: cacheOpts?.ttl ?? 60_000,
+      };
+      this.loadCache = new LRUCache(lruOpts);
+      this.loadManyCache = new LRUCache(lruOpts);
+      this.listCache = new LRUCache(lruOpts);
+      this.statCache = new LRUCache(lruOpts);
+    }
+  }
+
+  // ==========================================
+  // Cache helpers
+  // ==========================================
+
+  private cacheKey(type: string, name: string): string {
+    return `${type}::${name}`;
+  }
+
+  /**
+   * Invalidate all cached entries for a specific (type, name) pair plus
+   * the type-level aggregates (`loadMany`, `list`). Called from every write
+   * path (`save`, `delete`, `registerRollback`).
+   */
+  private invalidate(type: string, name: string): void {
+    if (!this.loadCache) return;
+    const key = this.cacheKey(type, name);
+    this.loadCache.delete(key);
+    this.statCache?.delete(key);
+    this.loadManyCache?.delete(type);
+    this.listCache?.delete(type);
+  }
+
+  /** Drop the entire cache — useful after bulk imports or schema changes. */
+  invalidateAll(): void {
+    this.loadCache?.clear();
+    this.loadManyCache?.clear();
+    this.listCache?.clear();
+    this.statCache?.clear();
+  }
+
+  /** Diagnostic: aggregated cache statistics for `metrics` endpoints. */
+  getCacheStats(): {
+    enabled: boolean;
+    load: ReturnType<LRUCache<string, unknown>['stats']> | null;
+    loadMany: ReturnType<LRUCache<string, unknown>['stats']> | null;
+    list: ReturnType<LRUCache<string, unknown>['stats']> | null;
+    stat: ReturnType<LRUCache<string, unknown>['stats']> | null;
+  } {
+    return {
+      enabled: this.loadCache !== undefined,
+      load: this.loadCache?.stats() ?? null,
+      loadMany: this.loadManyCache?.stats() ?? null,
+      list: this.listCache?.stats() ?? null,
+      stat: this.statCache?.stats() ?? null,
+    };
   }
 
   // ==========================================
@@ -366,12 +467,29 @@ export class DatabaseLoader implements MetadataLoader {
 
     await this.ensureSchema();
 
+    // Read-through cache. We cache `null` (not-found) results too so a barrage
+    // of misses does not hammer the database; invalidation on `save` upgrades
+    // the entry once the row exists.
+    const key = this.cacheKey(type, name);
+    if (this.loadCache) {
+      const cached = this.loadCache.get(key);
+      if (cached !== undefined) {
+        return {
+          data: cached,
+          source: 'database',
+          format: 'json',
+          loadTime: Date.now() - startTime,
+        };
+      }
+    }
+
     try {
       const row = await this._findOne(this.tableName, {
         where: this.baseFilter(type, name),
       });
 
       if (!row) {
+        this.loadCache?.set(key, null);
         return {
           data: null,
           loadTime: Date.now() - startTime,
@@ -380,6 +498,8 @@ export class DatabaseLoader implements MetadataLoader {
 
       const data = this.rowToData(row);
       const record = this.rowToRecord(row);
+
+      this.loadCache?.set(key, data);
 
       return {
         data,
@@ -402,14 +522,22 @@ export class DatabaseLoader implements MetadataLoader {
   ): Promise<T[]> {
     await this.ensureSchema();
 
+    if (this.loadManyCache) {
+      const cached = this.loadManyCache.get(type);
+      if (cached !== undefined) return cached as T[];
+    }
+
     try {
       const rows = await this._find(this.tableName, {
         where: this.baseFilter(type),
       });
 
-      return rows
+      const result = rows
         .map(row => this.rowToData(row))
         .filter((data): data is Record<string, unknown> => data !== null) as T[];
+
+      this.loadManyCache?.set(type, result);
+      return result;
     } catch {
       return [];
     }
@@ -417,6 +545,12 @@ export class DatabaseLoader implements MetadataLoader {
 
   async exists(type: string, name: string): Promise<boolean> {
     await this.ensureSchema();
+
+    // Honor cache: a cached non-null payload implies existence.
+    if (this.loadCache) {
+      const cached = this.loadCache.get(this.cacheKey(type, name));
+      if (cached !== undefined) return cached !== null;
+    }
 
     try {
       const count = await this._count(this.tableName, {
@@ -432,24 +566,35 @@ export class DatabaseLoader implements MetadataLoader {
   async stat(type: string, name: string): Promise<MetadataStats | null> {
     await this.ensureSchema();
 
+    const key = this.cacheKey(type, name);
+    if (this.statCache) {
+      const cached = this.statCache.get(key);
+      if (cached !== undefined) return cached;
+    }
+
     try {
       const row = await this._findOne(this.tableName, {
         where: this.baseFilter(type, name),
       });
 
-      if (!row) return null;
+      if (!row) {
+        this.statCache?.set(key, null);
+        return null;
+      }
 
       const record = this.rowToRecord(row);
       const metadataStr = typeof row.metadata === 'string'
         ? row.metadata as string
         : JSON.stringify(row.metadata);
 
-      return {
+      const stats: MetadataStats = {
         size: metadataStr.length,
         mtime: record.updatedAt ?? record.createdAt ?? new Date().toISOString(),
         format: 'json',
         etag: record.checksum,
       };
+      this.statCache?.set(key, stats);
+      return stats;
     } catch {
       return null;
     }
@@ -458,15 +603,23 @@ export class DatabaseLoader implements MetadataLoader {
   async list(type: string): Promise<string[]> {
     await this.ensureSchema();
 
+    if (this.listCache) {
+      const cached = this.listCache.get(type);
+      if (cached !== undefined) return cached;
+    }
+
     try {
       const rows = await this._find(this.tableName, {
         where: this.baseFilter(type),
         fields: ['name'],
       });
 
-      return rows
+      const names = rows
         .map(row => row.name as string)
         .filter(name => typeof name === 'string');
+
+      this.listCache?.set(type, names);
+      return names;
     } catch {
       return [];
     }
@@ -658,6 +811,8 @@ export class DatabaseLoader implements MetadataLoader {
       state: 'active',
     });
 
+    this.invalidate(type, name);
+
     // Write exactly one 'revert' history entry (not an 'update' entry)
     await this.createHistoryRecord(
       existing.id as string,
@@ -695,6 +850,10 @@ export class DatabaseLoader implements MetadataLoader {
         // Skip update if the content is identical (prevents phantom version bumps)
         const previousChecksum = existing.checksum as string | undefined;
         if (newChecksum === previousChecksum) {
+          // No DB write, but make sure the cached payload reflects the latest
+          // call (prior cached `null` would otherwise mask a freshly-saved
+          // record).
+          this.loadCache?.set(this.cacheKey(type, name), data as Record<string, unknown>);
           return {
             success: true,
             path: `datasource://${this.tableName}/${type}/${name}`,
@@ -713,6 +872,8 @@ export class DatabaseLoader implements MetadataLoader {
           updated_at: now,
           state: 'active',
         });
+
+        this.invalidate(type, name);
 
         // Create history record for update
         await this.createHistoryRecord(
@@ -756,6 +917,8 @@ export class DatabaseLoader implements MetadataLoader {
           created_at: now,
           updated_at: now,
         });
+
+        this.invalidate(type, name);
 
         // Create history record for creation
         await this.createHistoryRecord(
@@ -806,6 +969,8 @@ export class DatabaseLoader implements MetadataLoader {
 
     // Delete from the main metadata table using the record's ID
     await this._delete(this.tableName, existing.id as string);
+
+    this.invalidate(type, name);
 
     // Delete projection from type-specific table
     if (this.projector) {
