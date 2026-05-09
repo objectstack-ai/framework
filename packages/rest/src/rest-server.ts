@@ -969,6 +969,71 @@ export class RestServer {
                 tags: ['metadata'],
             },
         });
+
+        // GET /meta/:type/:section/:name - Get specific item with compound name
+        // Compound names express sub-resources of a type (e.g. a view of an
+        // object, a flow under an automation). The protocol layer treats
+        // `<section>/<name>` as a single opaque key.
+        if (metadata.endpoints.item !== false) {
+            this.routeManager.register({
+                method: 'GET',
+                path: `${metaPath}/:type/:section/:name`,
+                handler: async (req: any, res: any) => {
+                    try {
+                        const projectId = isScoped ? req.params?.projectId : undefined;
+                        const p = await this.resolveProtocol(projectId, req);
+                        const compoundName = `${req.params.section}/${req.params.name}`;
+                        const packageId = req.query?.package || undefined;
+                        const item = await p.getMetaItem({
+                            type: req.params.type,
+                            name: compoundName,
+                            packageId,
+                        } as any);
+                        res.header('Vary', 'Accept-Language');
+                        res.json(await this.translateMetaItem(req, req.params.type, projectId, item));
+                    } catch (error: any) {
+                        logError("[REST] Unhandled error:", error);
+                        res.status(404).json({ error: error.message });
+                    }
+                },
+                metadata: {
+                    summary: 'Get specific metadata item by compound name',
+                    tags: ['metadata'],
+                },
+            });
+        }
+
+        // PUT /meta/:type/:section/:name - Save metadata item with compound name
+        this.routeManager.register({
+            method: 'PUT',
+            path: `${metaPath}/:type/:section/:name`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const p = await this.resolveProtocol(projectId, req);
+                    if (!p.saveMetaItem) {
+                        res.status(501).json({ error: 'Save operation not supported by protocol implementation' });
+                        return;
+                    }
+
+                    const compoundName = `${req.params.section}/${req.params.name}`;
+                    const result = await p.saveMetaItem({
+                        type: req.params.type,
+                        name: compoundName,
+                        item: req.body,
+                        ...(projectId ? { projectId } : {}),
+                    } as any);
+                    res.json(result);
+                } catch (error: any) {
+                    logError("[REST] Unhandled error:", error);
+                    res.status(400).json({ error: error.message });
+                }
+            },
+            metadata: {
+                summary: 'Save specific metadata item by compound name',
+                tags: ['metadata'],
+            },
+        });
     }
 
     /**
