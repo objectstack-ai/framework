@@ -1100,7 +1100,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         // Project kernels (projectId set) never persist to sys_metadata
         // locally — runtime metadata is sourced from the artifact and writes
-        // belong to the control plane. Update the in-memory registry only.
+        // belong to the control plane. Update the in-memory registry AND the
+        // runtime MetadataService so subsequent getMetaItem calls (which on
+        // scoped kernels read exclusively from MetadataService) see the new
+        // value. Without the MetadataService.register, save/get target
+        // different stores and the write appears to vanish.
         if (this.projectId !== undefined) {
             this.engine.registry.registerItem(request.type, request.item, 'name');
             if (request.type === 'object' || request.type === 'objects') {
@@ -1111,6 +1115,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         `[Protocol] registerObject failed for ${request.name}: ${err?.message ?? err}`,
                     );
                 }
+            }
+            try {
+                const services = this.getServicesRegistry?.();
+                const metadataService = services?.get('metadata');
+                if (metadataService && typeof metadataService.register === 'function') {
+                    await metadataService.register(request.type, request.name, request.item);
+                }
+            } catch (err: any) {
+                console.warn(
+                    `[Protocol] metadataService.register failed for ${request.type}/${request.name}: ${err?.message ?? err}`,
+                );
             }
             return {
                 success: true,
