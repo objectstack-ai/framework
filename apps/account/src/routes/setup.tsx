@@ -122,40 +122,42 @@ function SetupPage() {
 
   return (
     <div className="flex min-h-svh w-full items-center justify-center bg-muted p-6">
-      <div className="flex w-full max-w-sm flex-col gap-4">
-        <a href="#" className="flex items-center gap-2 self-center text-sm font-medium">
+      <div className="flex w-full max-w-md flex-col gap-6">
+        <a href="#" className="flex items-center gap-2 self-center font-medium">
           <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <GalleryVerticalEnd className="size-4" />
           </div>
           ObjectStack
         </a>
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg">{t('auth.setup.welcomeTitle')}</CardTitle>
-            <CardDescription className="text-xs">
-              {t('auth.setup.description')}
-            </CardDescription>
+          <CardHeader className="text-center">
+            <CardTitle>{t('auth.setup.welcomeTitle')}</CardTitle>
+            <CardDescription>{t('auth.setup.description')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="name" className="text-xs">{t('auth.setup.yourName')}</Label>
-                  <Input id="name" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="orgName" className="text-xs">{t('auth.setup.orgName')}</Label>
-                  <Input
-                    id="orgName"
-                    required
-                    placeholder={t('auth.setup.orgNamePlaceholder')}
-                    value={orgName}
-                    onChange={(e) => setOrgName(e.target.value)}
-                  />
-                </div>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">{t('auth.setup.yourName')}</Label>
+                <Input
+                  id="name"
+                  autoComplete="name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email" className="text-xs">{t('auth.emailLabel')}</Label>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="orgName">{t('auth.setup.orgName')}</Label>
+                <Input
+                  id="orgName"
+                  required
+                  placeholder={t('auth.setup.orgNamePlaceholder')}
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="email">{t('auth.emailLabel')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -166,8 +168,8 @@ function SetupPage() {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password" className="text-xs">{t('auth.passwordLabel')}</Label>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -179,7 +181,7 @@ function SetupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
-              <Button type="submit" className="mt-1 w-full" disabled={submitting}>
+              <Button type="submit" className="mt-2 w-full" disabled={submitting}>
                 {submitting ? t('auth.setup.submitting') : t('auth.setup.submit')}
               </Button>
             </form>
