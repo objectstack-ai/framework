@@ -42,7 +42,11 @@ export default defineStack({
   // to hand-instantiate plugins or pass `--preset` flags. See
   // packages/cli/src/commands/serve.ts CAPABILITY_PROVIDERS for the
   // complete map; explicit `plugins: [...]` always shadows the resolver.
-  requires: ['ai', 'automation', 'analytics'],
+  // `auth` enables /api/v1/auth/* (login/register) via @objectstack/plugin-auth.
+  // `ui`   serves the Studio shell and CRM apps under /_studio/.
+  // Both are required for a clickable login flow when running `objectstack start`
+  // off the compiled artifact.
+  requires: ['ai', 'automation', 'analytics', 'auth', 'ui'],
 
   objects: Object.values(objects),
   actions: Object.values(actions),

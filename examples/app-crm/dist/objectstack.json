@@ -20613,6 +20613,8 @@
   "requires": [
     "ai",
     "automation",
-    "analytics"
+    "analytics",
+    "auth",
+    "ui"
   ]
 }
