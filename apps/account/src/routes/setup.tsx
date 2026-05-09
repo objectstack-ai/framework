@@ -81,22 +81,36 @@ function SetupPage() {
       // 2. Refresh local session (sign-up auto-issues a session cookie).
       await refresh();
 
-      // 3. Provision the default organization. Slug is derived silently
-      //    from the org name; users can rename it later from settings.
+      // 3. The Security plugin auto-creates a personal "<User>'s Workspace"
+      //    on signup so multi-tenant RLS has something to hang on. Don't
+      //    create a *second* org — rename the auto-created one to the
+      //    name the user picked. If for some reason no org was auto-created
+      //    (security plugin disabled), fall back to creating one.
       const trimmedName = orgName.trim();
       if (trimmedName) {
         try {
-          const created = await client.organizations.create({
-            name: trimmedName,
-            slug: slugify(trimmedName),
-          });
-          const createdOrgId = (created as any)?.id ?? (created as any)?.data?.id;
-          if (createdOrgId) {
-            await client.organizations.setActive(createdOrgId).catch(() => {});
+          const { organizations: existingOrgs } = await client.organizations.list();
+          const personal = existingOrgs?.[0];
+          let activeOrgId: string | undefined;
+          if (personal?.id) {
+            await client.organizations.update(personal.id, {
+              name: trimmedName,
+              slug: slugify(trimmedName),
+            });
+            activeOrgId = personal.id;
+          } else {
+            const created = await client.organizations.create({
+              name: trimmedName,
+              slug: slugify(trimmedName),
+            });
+            activeOrgId = (created as any)?.id ?? (created as any)?.data?.id;
+          }
+          if (activeOrgId) {
+            await client.organizations.setActive(activeOrgId).catch(() => {});
           }
         } catch (err) {
-          // Non-fatal: user can create an org from the dashboard.
-          console.warn('[setup] organization creation failed', err);
+          // Non-fatal: user can rename / create from settings later.
+          console.warn('[setup] organization rename/create failed', err);
         }
       }
 
