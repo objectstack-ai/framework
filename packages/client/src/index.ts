@@ -719,6 +719,59 @@ export class ObjectStackClient {
     },
 
     /**
+     * Update the visibility of this project ('private' | 'unlisted' | 'public').
+     * Controls who can read the compiled artifact via the public `/pub/v1`
+     * routes. Default is 'private'.
+     */
+    updateVisibility: async (id: string, visibility: 'private' | 'unlisted' | 'public') => {
+      const res = await this.fetch(`${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ visibility }),
+      });
+      return this.unwrapResponse<{ project: any }>(res);
+    },
+
+    /**
+     * List published artifact revisions for a project. Each revision has
+     * an immutable commitId (content-addressable) and storage_key.
+     */
+    listRevisions: async (id: string, opts?: { limit?: number; cursor?: string }) => {
+      const params = new URLSearchParams();
+      if (opts?.limit) params.set('limit', String(opts.limit));
+      if (opts?.cursor) params.set('cursor', opts.cursor);
+      const qs = params.toString();
+      const res = await this.fetch(
+        `${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}/revisions${qs ? `?${qs}` : ''}`,
+      );
+      return this.unwrapResponse<{
+        items: Array<{
+          commitId: string;
+          checksum: string;
+          storageKey: string;
+          sizeBytes: number;
+          builtAt: string;
+          publishedAt: string;
+          publishedBy: string | null;
+          note: string | null;
+          isCurrent: boolean;
+        }>;
+        nextCursor: string | null;
+      }>(res);
+    },
+
+    /**
+     * Activate (rollback to) a previously-published revision by commit id.
+     * Marks the target revision is_current=true and demotes the prior one.
+     */
+    activateRevision: async (id: string, commitId: string) => {
+      const res = await this.fetch(
+        `${this.baseUrl}/api/v1/cloud/projects/${encodeURIComponent(id)}/revisions/${encodeURIComponent(commitId)}/activate`,
+        { method: 'POST' },
+      );
+      return this.unwrapResponse<{ projectId: string; commitId: string; activated: boolean; previousCommitId: string | null }>(res);
+    },
+
+    /**
      * Retry provisioning for a project stuck in `failed` (or
      * `provisioning`) state. The server re-runs the driver handshake; on
      * success the project flips to `active`, on failure it stays

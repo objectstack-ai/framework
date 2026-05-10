@@ -292,12 +292,11 @@ export function createStudioStaticPlugin(distPath: string, options?: { isDev?: b
       // — producing the "Failed to load module script" browser error.
       const readIndexHtml = () => fs.readFileSync(indexPath, 'utf-8');
 
-      // In dev mode, redirect root to Studio for convenience — but only
-      // when no other UI (e.g. the runtime Console) has claimed `/`. The
-      // Console is the preferred default in modern deployments, so the
-      // orchestrator (CLI `serve`) passes `rootRedirect: false` whenever
-      // the Console is also mounted.
-      if (options?.isDev && options?.rootRedirect !== false) {
+      // Redirect root to Studio when the orchestrator says so. This is the
+      // case in dev mode (convenience), and also in production deployments
+      // that disable the runtime Console (e.g. control-plane hosts like
+      // `apps/cloud` set OS_DISABLE_CONSOLE=1 so Studio owns `/`).
+      if (options?.rootRedirect !== false) {
         app.get('/', (c: any) => c.redirect(`${STUDIO_PATH}/`));
       }
       // Redirect bare path

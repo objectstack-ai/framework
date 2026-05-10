@@ -1781,6 +1781,7 @@ export class HttpDispatcher {
                     storage_limit_mb: req.storage_limit_mb ?? 1024,
                     provisioned_at: null,
                     hostname: computedHostname,
+                    visibility: req.visibility ?? 'private',
                 });
 
                 // Fire-and-forget the provisioning work so the POST returns
@@ -2040,6 +2041,13 @@ export class HttpDispatcher {
                     if (body?.plan !== undefined) patch.plan = body.plan;
                     if (body?.status !== undefined) patch.status = body.status;
                     if (body?.is_default !== undefined) patch.is_default = body.is_default;
+                    if (body?.visibility !== undefined) {
+                        const v = String(body.visibility);
+                        if (!['private', 'unlisted', 'public'].includes(v)) {
+                            return { handled: true, response: this.error(`Invalid visibility '${v}' (expected private | unlisted | public)`, 400) };
+                        }
+                        patch.visibility = v;
+                    }
                     if (body?.metadata !== undefined) patch.metadata = JSON.stringify(body.metadata);
                     patch.updated_at = new Date().toISOString();
                     await ql.update(ENV, patch, { where: { id } } as any);

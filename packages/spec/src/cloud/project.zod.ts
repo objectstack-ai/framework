@@ -117,6 +117,15 @@ export const ProjectSchema = lazySchema(() => z.object({
     .string()
     .optional()
     .describe('Canonical hostname for this project (e.g. acme-dev.objectstack.app or api.acme.com). UNIQUE. Auto-set on creation; can be overridden for custom domains.'),
+
+  /**
+   * Public exposure of this project's compiled artifacts.
+   * - `private`  (default) — every read requires authentication
+   * - `unlisted` — `/pub/v1/projects/:id/artifact?commit=<id>` works (no enumeration)
+   * - `public`   — full listing + download via `/pub/v1/projects/:id/*`
+   */
+  visibility: z.enum(['private', 'unlisted', 'public']).optional().default('private')
+    .describe('Public exposure of this project artifacts (private | unlisted | public).'),
 }));
 
 export type Project = z.infer<typeof ProjectSchema>;
@@ -232,6 +241,9 @@ export const ProvisionProjectRequestSchema = lazySchema(() => z.object({
   metadata: z.record(z.string(), z.unknown()).optional().describe('Free-form metadata'),
   hostname: z.string().optional().describe('Canonical hostname for this project (auto-generated if omitted)'),
   templateId: z.string().optional().describe('Template to seed into the project on first provisioning (e.g. "crm", "todo"). Defaults to "blank".'),
+  visibility: z.enum(['private', 'unlisted', 'public']).optional().default('private').describe(
+    'Public exposure of this project artifacts. private = auth required for every read (default); unlisted = downloadable when commit id is known; public = listed and freely downloadable via /pub/v1/projects/:id/*.',
+  ),
 }));
 
 export type ProvisionProjectRequest = z.infer<typeof ProvisionProjectRequestSchema>;

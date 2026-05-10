@@ -346,6 +346,95 @@ export function useUpdateHostname() {
   return { updateHostname, updating, error };
 }
 
+export function useUpdateVisibility() {
+  const client = useClient() as any;
+  const [updating, setUpdating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const updateVisibility = useCallback(
+    async (projectId: string, visibility: 'private' | 'unlisted' | 'public') => {
+      if (!client?.projects?.updateVisibility) throw new Error('Client not ready');
+      setUpdating(true);
+      setError(null);
+      try {
+        return await client.projects.updateVisibility(projectId, visibility);
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [client],
+  );
+
+  return { updateVisibility, updating, error };
+}
+
+export interface ProjectRevisionRow {
+  commitId: string;
+  checksum: string;
+  storageKey: string;
+  sizeBytes: number;
+  builtAt: string;
+  publishedAt: string;
+  publishedBy: string | null;
+  note: string | null;
+  isCurrent: boolean;
+}
+
+export function useRevisions(projectId: string | undefined) {
+  const client = useClient() as any;
+  const [items, setItems] = useState<ProjectRevisionRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const reload = useCallback(async () => {
+    if (!projectId || !client?.projects?.listRevisions) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await client.projects.listRevisions(projectId, { limit: 100 });
+      setItems(res.items ?? []);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  }, [client, projectId]);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  return { items, loading, error, reload };
+}
+
+export function useActivateRevision() {
+  const client = useClient() as any;
+  const [activating, setActivating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const activate = useCallback(
+    async (projectId: string, commitId: string) => {
+      if (!client?.projects?.activateRevision) throw new Error('Client not ready');
+      setActivating(true);
+      setError(null);
+      try {
+        return await client.projects.activateRevision(projectId, commitId);
+      } catch (err) {
+        setError(err as Error);
+        throw err;
+      } finally {
+        setActivating(false);
+      }
+    },
+    [client],
+  );
+
+  return { activate, activating, error };
+}
+
 /**
  * Hook: retry provisioning for a project stuck in `failed` state.
  *

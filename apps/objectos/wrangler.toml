@@ -1,0 +1,77 @@
+# wrangler.toml — Cloudflare Containers deployment for ObjectOS.
+#
+# ObjectOS runs as a long-lived Node.js process (Hono + better-sqlite3 +
+# child_process), so it is incompatible with Workers V8 isolates. Cloudflare
+# Containers (GA 2025) lets us deploy the production Docker image as a
+# Durable Object-backed container, fronted by a tiny Worker that proxies
+# HTTP to it.
+#
+# ────────────────────────── Deployment workflow ──────────────────────────
+#
+# 1. Build the image from the *repository root* (the Dockerfile expects the
+#    full pnpm workspace as its build context):
+#
+#      docker build \
+#        -f apps/objectos/Dockerfile \
+#        -t registry.cloudflare.com/<account-id>/objectos:latest .
+#
+# 2. Push to the Cloudflare container registry (or any OCI registry the
+#    account is authorised against):
+#
+#      wrangler containers push \
+#        registry.cloudflare.com/<account-id>/objectos:latest
+#
+# 3. Set required secrets (Turso URL + token, auth secret, etc.):
+#
+#      wrangler secret put OS_DATABASE_URL --config apps/objectos/wrangler.toml
+#      wrangler secret put OS_DATABASE_AUTH_TOKEN --config apps/objectos/wrangler.toml
+#      wrangler secret put AUTH_SECRET --config apps/objectos/wrangler.toml
+#
+# 4. Deploy the Worker + Container binding:
+#
+#      wrangler deploy --config apps/objectos/wrangler.toml
+#
+# ─────────────────────────────────────────────────────────────────────────
+
+name = "objectos"
+main = "cloudflare/worker.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Container definition ────────────────────────────────────────────────
+# `image` points at the OCI tag pushed in step 2 above. Update <account-id>
+# to your Cloudflare account id. The image tag is the source of truth —
+# rebuild + re-push to ship a new version, then run `wrangler deploy`.
+[[containers]]
+class_name = "ObjectOSContainer"
+image = "registry.cloudflare.com/<account-id>/objectos:latest"
+max_instances = 5
+instance_type = "standard"
+
+# Non-secret environment passed to the container at start-up.
+# Secrets (OS_DATABASE_URL, AUTH_SECRET, …) are injected via
+# `wrangler secret put` and surface as env vars inside the container.
+[containers.env]
+NODE_ENV = "production"
+PORT = "3000"
+HOST = "0.0.0.0"
+OS_KERNEL_CACHE_SIZE = "50"
+OS_KERNEL_TTL_MS = "1800000"
+OS_ENV_CACHE_TTL_MS = "300000"
+# Default control-plane URL. Override in production by setting
+# OS_CLOUD_URL via `wrangler secret put` to point at apps/cloud.
+# Leave unset for single-project local mode.
+# OS_CLOUD_URL = "https://cloud.<your-domain>"
+
+# ── Durable Object binding for the container class ──────────────────────
+[[durable_objects.bindings]]
+name = "OBJECTOS"
+class_name = "ObjectOSContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ObjectOSContainer"]
+
+# ── Observability ───────────────────────────────────────────────────────
+[observability]
+enabled = true

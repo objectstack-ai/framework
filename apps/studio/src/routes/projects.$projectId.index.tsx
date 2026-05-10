@@ -26,6 +26,9 @@ import {
   Pencil,
   Check,
   X,
+  History,
+  Eye,
+  Lock,
 } from 'lucide-react';
 import { ProjectStatusBadge } from '@/components/project-status-badge';
 import { Card } from '@/components/ui/card';
@@ -35,6 +38,13 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,7 +52,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useProjectDetail, useRetryProvisioning, useUpdateHostname, useDeleteProject } from '@/hooks/useProjects';
+import {
+  useProjectDetail,
+  useRetryProvisioning,
+  useUpdateHostname,
+  useDeleteProject,
+  useUpdateVisibility,
+} from '@/hooks/useProjects';
 import { useClient } from '@objectstack/client-react';
 import { useProductionGuard } from '@/components/production-guard';
 import { toast } from '@/hooks/use-toast';
@@ -70,6 +86,7 @@ function RealProjectOverview({ projectId }: { projectId: string }) {
   const [rotating, setRotating] = useState(false);
   const { retry, retrying } = useRetryProvisioning();
   const { updateHostname, updating: hostnameUpdating } = useUpdateHostname();
+  const { updateVisibility, updating: visibilityUpdating } = useUpdateVisibility();
   const { remove: deleteProject, deleting } = useDeleteProject();
   const [hostnameEditing, setHostnameEditing] = useState(false);
   const [hostnameInput, setHostnameInput] = useState('');
@@ -209,6 +226,13 @@ function RealProjectOverview({ projectId }: { projectId: string }) {
                         <Badge variant="outline">default</Badge>
                       )}
                       <ProjectStatusBadge status={project.status} />
+                      <VisibilityControl
+                        projectId={project.id}
+                        value={(project as any).visibility ?? 'private'}
+                        onChanged={() => reload()}
+                        updating={visibilityUpdating}
+                        update={updateVisibility}
+                      />
                     </div>
                     <p className="mt-1 font-mono text-xs text-muted-foreground">
                       {project.id}
@@ -225,6 +249,18 @@ function RealProjectOverview({ projectId }: { projectId: string }) {
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                       Refresh
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => navigate({
+                        to: '/projects/$projectId/revisions',
+                        params: { projectId: project.id },
+                      })}
+                      title="View published artifact revisions"
+                    >
+                      <History className="h-4 w-4" />
+                      Revisions
                     </Button>
                     <Button
                       variant="outline"
@@ -608,3 +644,77 @@ function RealProjectOverview({ projectId }: { projectId: string }) {
 export const Route = createFileRoute('/projects/$projectId/')({
   component: ProjectOverviewComponent,
 });
+
+function VisibilityControl({
+  projectId,
+  value,
+  onChanged,
+  updating,
+  update,
+}: {
+  projectId: string;
+  value: 'private' | 'unlisted' | 'public';
+  onChanged: () => void;
+  updating: boolean;
+  update: (id: string, v: 'private' | 'unlisted' | 'public') => Promise<unknown>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const handleChange = async (next: string) => {
+    const v = next as 'private' | 'unlisted' | 'public';
+    if (v === value) {
+      setEditing(false);
+      return;
+    }
+    try {
+      await update(projectId, v);
+      toast({
+        title: 'Visibility updated',
+        description: `Project is now ${v}.`,
+      });
+      onChanged();
+    } catch (err) {
+      toast({
+        title: 'Update failed',
+        description: (err as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setEditing(false);
+    }
+  };
+  const variant =
+    value === 'public' ? 'default' : value === 'unlisted' ? 'secondary' : 'outline';
+  if (editing) {
+    return (
+      <Select value={value} onValueChange={handleChange} disabled={updating}>
+        <SelectTrigger className="h-7 w-[120px] text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="private">Private</SelectItem>
+          <SelectItem value="unlisted">Unlisted</SelectItem>
+          <SelectItem value="public">Public</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="inline-flex items-center"
+      title="Click to change visibility"
+    >
+      <Badge variant={variant} className="cursor-pointer gap-1 text-xs">
+        {value === 'public' ? (
+          <Eye className="h-3 w-3" />
+        ) : value === 'unlisted' ? (
+          <Globe className="h-3 w-3" />
+        ) : (
+          <Lock className="h-3 w-3" />
+        )}
+        {value}
+      </Badge>
+    </button>
+  );
+}

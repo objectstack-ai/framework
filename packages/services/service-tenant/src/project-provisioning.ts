@@ -420,6 +420,7 @@ export class ProjectProvisioningService {
       storageLimitMb,
       provisionedAt: nowIso,
       hostname: parsed.hostname,
+      visibility: parsed.visibility ?? 'private',
     };
 
     const credential: ProjectCredential = {
@@ -452,6 +453,7 @@ export class ProjectProvisioningService {
           provisioned_at: project.provisionedAt,
           metadata: project.metadata ? JSON.stringify(project.metadata) : null,
           hostname: project.hostname,
+          visibility: project.visibility ?? 'private',
         });
 
         await this.config.controlPlaneDriver.create('sys_project_credential', {
@@ -651,6 +653,7 @@ export class ProjectProvisioningService {
           provisioned_at: project.provisionedAt,
           metadata: project.metadata ? JSON.stringify(project.metadata) : null,
           hostname: project.hostname,
+          visibility: project.visibility ?? 'private',
         });
 
         warnings.push('System project created successfully');

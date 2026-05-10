@@ -80,6 +80,7 @@ export function NewProjectDialog({
   const [displayName, setDisplayName] = useState('');
   const [driver, setDriver] = useState<string>('');
   const [templateId, setTemplateId] = useState<string>('blank');
+  const [visibility, setVisibility] = useState<'private' | 'unlisted' | 'public'>('private');
 
   // Auto-select a sensible default once drivers load: prefer turso, then memory,
   // otherwise the first registered driver.
@@ -96,6 +97,7 @@ export function NewProjectDialog({
     setDisplayName('');
     setDriver('');
     setTemplateId('blank');
+    setVisibility('private');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,6 +118,7 @@ export function NewProjectDialog({
         display_name: displayName.trim(),
         driver: driver || undefined,
         template_id: templateId !== 'blank' ? templateId : undefined,
+        visibility,
       } as any);
       const project = (res?.project ?? res) as ProjectRow;
       toast({
@@ -224,6 +227,42 @@ export function NewProjectDialog({
                 Where this project's data will be stored. `memory` is ideal
                 for tests; `sqlite` persists to a local file; `turso`
                 persists to libSQL (local or remote).
+              </p>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label>Visibility</Label>
+              <Select
+                value={visibility}
+                onValueChange={(v) => setVisibility(v as 'private' | 'unlisted' | 'public')}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="private">
+                    <div className="flex flex-col">
+                      <span>Private</span>
+                      <span className="text-[11px] text-muted-foreground">Default. Auth required for every read.</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="unlisted">
+                    <div className="flex flex-col">
+                      <span>Unlisted</span>
+                      <span className="text-[11px] text-muted-foreground">Downloadable when commit id is known. Good for share-preview links.</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="public">
+                    <div className="flex flex-col">
+                      <span>Public</span>
+                      <span className="text-[11px] text-muted-foreground">Listed and freely downloadable via /pub/v1. For marketplace, OSS, live-doc demos.</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Controls who can read this project's compiled artifact.
+                Audit metadata for secrets before going public.
               </p>
             </div>
           </div>

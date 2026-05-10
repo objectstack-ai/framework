@@ -73,6 +73,11 @@ export default class Serve extends Command {
     port: Flags.string({ char: 'p', description: 'Server port', default: process.env.PORT ?? '3000' }),
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
     ui: Flags.boolean({ description: 'Enable Studio UI at /_studio/ (default: true)', default: true, allowNo: true }),
+    console: Flags.boolean({
+      description: 'Mount the Console UI at /_console/ when the package is installed (default: true). When disabled, Studio claims the root redirect.',
+      default: true,
+      allowNo: true,
+    }),
     server: Flags.boolean({ description: 'Start HTTP server plugin', default: true, allowNo: true }),
     prebuilt: Flags.boolean({ description: 'Skip esbuild/bundle-require — load config as native ESM (production mode)', default: false }),
     preset: Flags.string({
@@ -867,7 +872,12 @@ export default class Serve extends Command {
       if (enableUI) {
         // Pre-detect Console availability so we can demote Studio's root
         // redirect when the Console is going to claim `/`.
-        const consolePath = resolveConsolePath();
+        // The `--no-console` flag (or OS_DISABLE_CONSOLE=1 env var) lets a
+        // host (e.g. apps/cloud) opt out of the Console entirely so Studio
+        // owns `/` — useful for control-plane deployments where the
+        // runtime Console is meaningless.
+        const consoleEnabled = flags.console && process.env.OS_DISABLE_CONSOLE !== '1';
+        const consolePath = consoleEnabled ? resolveConsolePath() : null;
         const consoleWillMount = !!(consolePath && hasConsoleDist(consolePath));
 
         const studioPath = resolveStudioPath();
