@@ -103,15 +103,27 @@ function flattenCondition(cond: Record<string, unknown>, out: NormalizedAnalytic
 }
 
 /**
- * Normalize a filter (either cube-style array or MongoDB-style
- * FilterCondition object) into a uniform cube-style array.
+ * Normalize an analytics query's filters into a uniform cube-style array.
+ *
+ * Reads BOTH the canonical `where` (FilterCondition per spec/data/
+ * filter.zod.ts) AND the legacy `filters` (cube-style array) fields,
+ * combining them with logical AND. New code should use `where`; the
+ * legacy `filters` shape is kept for backward compatibility.
  */
-export function normalizeAnalyticsFilters(filters: unknown): NormalizedAnalyticsFilter[] {
-  if (!filters) return [];
+export function normalizeAnalyticsFilters(query: { where?: unknown; filters?: unknown } | unknown): NormalizedAnalyticsFilter[] {
+  if (!query || typeof query !== 'object') return [];
 
-  if (Array.isArray(filters)) {
-    const out: NormalizedAnalyticsFilter[] = [];
-    for (const f of filters) {
+  const out: NormalizedAnalyticsFilter[] = [];
+  const q = query as { where?: unknown; filters?: unknown };
+
+  // Canonical: `where` is FilterConditionSchema (MongoDB-style).
+  if (q.where && typeof q.where === 'object' && !Array.isArray(q.where)) {
+    flattenCondition(q.where as Record<string, unknown>, out);
+  }
+
+  // Legacy cube-style array of {member, operator, values}.
+  if (Array.isArray(q.filters)) {
+    for (const f of q.filters) {
       if (!f || typeof f !== 'object') continue;
       const entry = f as { member?: string; operator?: string; values?: unknown };
       if (!entry.member || !entry.operator) continue;
@@ -120,13 +132,12 @@ export function normalizeAnalyticsFilters(filters: unknown): NormalizedAnalytics
         : entry.values != null ? [String(entry.values)] : [];
       out.push({ member: entry.member, operator: entry.operator, values });
     }
-    return out;
+  } else if (q.filters && typeof q.filters === 'object' && !Array.isArray(q.filters)) {
+    // Tolerate legacy callers that placed a FilterCondition object in
+    // `filters` (the previous transitional spec briefly allowed this).
+    flattenCondition(q.filters as Record<string, unknown>, out);
   }
 
-  if (typeof filters !== 'object') return [];
-
-  const out: NormalizedAnalyticsFilter[] = [];
-  flattenCondition(filters as Record<string, unknown>, out);
   return out;
 }
 

@@ -74,7 +74,7 @@ export class MemoryAnalyticsService implements IAnalyticsService {
     //     dashboard widget metadata directly).
     // Normalize both into the cube-style array before processing so the
     // existing pipeline logic stays untouched.
-    const normalizedFilters = this.normalizeFilters(query.filters);
+    const normalizedFilters = this.normalizeFilters(query);
     if (normalizedFilters.length > 0) {
       const matchStage: Record<string, any> = {};
       for (const filter of normalizedFilters) {
@@ -314,7 +314,7 @@ export class MemoryAnalyticsService implements IAnalyticsService {
 
     // Build WHERE clause
     const whereClauses: string[] = [];
-    const normalizedFilters = this.normalizeFilters(query.filters);
+    const normalizedFilters = this.normalizeFilters(query);
     if (normalizedFilters.length > 0) {
       for (const filter of normalizedFilters) {
         const fieldPath = this.resolveFieldPath(cube, filter.member);
@@ -370,13 +370,20 @@ export class MemoryAnalyticsService implements IAnalyticsService {
    * top-level AND of fields is sufficient. `$and` clauses are flattened
    * into the same AND list.
    */
-  private normalizeFilters(filters: unknown): Array<{ member: string; operator: string; values: string[] }> {
-    if (!filters) return [];
+  private normalizeFilters(query: unknown): Array<{ member: string; operator: string; values: string[] }> {
+    if (!query || typeof query !== 'object') return [];
 
-    if (Array.isArray(filters)) {
-      // Already cube-style. Defensive copy + ensure values is array.
-      const out: Array<{ member: string; operator: string; values: string[] }> = [];
-      for (const f of filters) {
+    const out: Array<{ member: string; operator: string; values: string[] }> = [];
+    const q = query as { where?: unknown; filters?: unknown };
+
+    // Canonical: `where` is FilterConditionSchema (MongoDB-style).
+    if (q.where && typeof q.where === 'object' && !Array.isArray(q.where)) {
+      this.flattenFilterCondition(q.where as Record<string, unknown>, out);
+    }
+
+    // Legacy cube-style `filters` array.
+    if (Array.isArray(q.filters)) {
+      for (const f of q.filters) {
         if (!f || typeof f !== 'object') continue;
         const entry = f as { member?: string; operator?: string; values?: unknown };
         if (!entry.member || !entry.operator) continue;
@@ -385,13 +392,12 @@ export class MemoryAnalyticsService implements IAnalyticsService {
           : entry.values != null ? [String(entry.values)] : [];
         out.push({ member: entry.member, operator: entry.operator, values });
       }
-      return out;
+    } else if (q.filters && typeof q.filters === 'object') {
+      // Tolerate legacy callers that placed a FilterCondition object in
+      // `filters` (the previous transitional spec briefly allowed this).
+      this.flattenFilterCondition(q.filters as Record<string, unknown>, out);
     }
 
-    if (typeof filters !== 'object') return [];
-
-    const out: Array<{ member: string; operator: string; values: string[] }> = [];
-    this.flattenFilterCondition(filters as Record<string, unknown>, out);
     return out;
   }
 

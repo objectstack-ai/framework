@@ -138,33 +138,38 @@ export const AnalyticsQuerySchema = lazySchema(() => z.object({
   cube: z.string().optional().describe('Target cube name (optional when provided externally, e.g. in API request wrapper)'),
   measures: z.array(z.string()).describe('List of metrics to calculate'),
   dimensions: z.array(z.string()).optional().describe('List of dimensions to group by'),
-  
+
   /**
-   * Filters can be expressed in two equivalent ways:
+   * WHERE clause — canonical filter shape per the unified Query DSL
+   * (see {@link FilterConditionSchema} in `data/filter.zod.ts` and
+   * {@link QuerySchema} in `data/query.zod.ts`). This is the same
+   * MongoDB-style filter used by `find()`, dashboard widget `filter`,
+   * RLS conditions, etc. Use this for new code.
    *
-   * 1. **Cube-style** (legacy explicit form, kept for backward
-   *    compatibility with existing analytics consumers):
-   *    `[{ member, operator, values: string[] }, ...]`
-   *
-   * 2. **MongoDB-style FilterCondition** (canonical filter shape used
-   *    everywhere else in the spec — `find()`, dashboard widget
-   *    `filter`, etc. See {@link FilterConditionSchema}). Supports
-   *    implicit equality, `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/...`
-   *    operator wrappers, and `$and/$or/$not` logical combinators.
-   *
-   * Implementations MUST accept either shape. The two forms are
-   * semantically equivalent; the MongoDB shape is the spec-canonical
-   * one and dashboard widget metadata uses it directly.
+   * @example
+   * ```ts
+   * { where: { is_active: true, stage: { $nin: ['lost'] } } }
+   * ```
    */
-  filters: z.union([
-    z.array(z.object({
-      member: z.string().describe('Dimension or Measure'),
-      operator: z.enum(['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn', 'set', 'notSet', 'inDateRange']),
-      values: z.array(z.string()).optional(),
-    })),
-    FilterConditionSchema,
-  ]).optional(),
-  
+  where: FilterConditionSchema.optional().describe('Filtering criteria (canonical Query DSL FilterCondition)'),
+
+  /**
+   * Cube-style explicit filters — **legacy**. Retained for backward
+   * compatibility with existing Cube.dev-style consumers. New code
+   * SHOULD use {@link AnalyticsQuerySchema.shape.where} instead, which
+   * matches the rest of the Query DSL.
+   *
+   * Implementations MUST accept both `where` and `filters` and combine
+   * them with logical AND.
+   *
+   * @deprecated Prefer `where` for spec consistency.
+   */
+  filters: z.array(z.object({
+    member: z.string().describe('Dimension or Measure'),
+    operator: z.enum(['equals', 'notEquals', 'contains', 'notContains', 'gt', 'gte', 'lt', 'lte', 'in', 'notIn', 'set', 'notSet', 'inDateRange']),
+    values: z.array(z.string()).optional(),
+  })).optional().describe('Legacy cube-style filters; prefer `where`'),
+
   timeDimensions: z.array(z.object({
     dimension: z.string(),
     granularity: TimeUpdateInterval.optional(),
@@ -173,12 +178,12 @@ export const AnalyticsQuerySchema = lazySchema(() => z.object({
       z.array(z.string()) // ["2023-01-01", "2023-01-31"]
     ]).optional(),
   })).optional(),
-  
+
   order: z.record(z.string(), z.enum(['asc', 'desc'])).optional(),
-  
+
   limit: z.number().optional(),
   offset: z.number().optional(),
-  
+
   timezone: z.string().optional().default('UTC'),
 }));
 

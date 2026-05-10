@@ -64,7 +64,7 @@ export class NativeSQLStrategy implements AnalyticsStrategy {
 
     // Build WHERE clause
     const whereClauses: string[] = [];
-    const normalizedFilters = normalizeAnalyticsFilters(query.filters);
+    const normalizedFilters = normalizeAnalyticsFilters(query);
     if (normalizedFilters.length > 0) {
       for (const filter of normalizedFilters) {
         const colExpr = this.resolveFieldSql(cube, filter.member);

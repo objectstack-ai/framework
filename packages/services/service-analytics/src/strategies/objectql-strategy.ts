@@ -45,7 +45,7 @@ export class ObjectQLStrategy implements AnalyticsStrategy {
 
     // Build filter from query filters
     const filter: Record<string, unknown> = {};
-    const normalizedFilters = normalizeAnalyticsFilters(query.filters);
+    const normalizedFilters = normalizeAnalyticsFilters(query);
     if (normalizedFilters.length > 0) {
       for (const f of normalizedFilters) {
         const fieldName = this.resolveFieldName(cube, f.member, 'any');

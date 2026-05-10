@@ -304,11 +304,13 @@ export class AnalyticsService implements IAnalyticsService {
         if (dimensions[key] || measures[key]) continue;
         dimensions[key] = { name: key, label: key, type: 'string', sql: key };
       }
-    } else if (query.filters && typeof query.filters === 'object') {
-      // MongoDB-style FilterCondition: top-level keys (excluding logical
+    }
+
+    if (query.where && typeof query.where === 'object' && !Array.isArray(query.where)) {
+      // Canonical FilterCondition: top-level keys (excluding logical
       // combinators) are field names. We only need them to seed an
       // ad-hoc cube definition for free-form queries.
-      for (const key of Object.keys(query.filters)) {
+      for (const key of Object.keys(query.where as Record<string, unknown>)) {
         if (key.startsWith('$')) continue;
         const stripped = stripPrefix(key);
         if (dimensions[stripped] || measures[stripped]) continue;

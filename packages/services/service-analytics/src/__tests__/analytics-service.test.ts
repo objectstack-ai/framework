@@ -537,7 +537,7 @@ describe('AnalyticsService', () => {
     }));
   });
 
-  it('should normalize Mongo-style object filters into the array form', async () => {
+  it('should accept canonical `where` (FilterCondition) — the spec-aligned shape', async () => {
     const executeAggregate = vi.fn().mockResolvedValue([]);
     const service = new AnalyticsService({
       logger: silentLogger,
@@ -548,9 +548,8 @@ describe('AnalyticsService', () => {
     await service.query({
       cube: 'opportunity',
       measures: ['amount_sum'],
-      // Mongo-style object filter — what the dashboard plugin actually sends.
-      filters: { stage: { $nin: ['closed_won', 'closed_lost'] }, status: 'open' } as any,
-    });
+      where: { stage: { $nin: ['closed_won', 'closed_lost'] }, status: 'open' },
+    } as any);
 
     const [, opts] = executeAggregate.mock.calls[0];
     const filterObj = opts.filter || {};

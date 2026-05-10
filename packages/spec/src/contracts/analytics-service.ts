@@ -26,29 +26,32 @@ export interface AnalyticsQuery {
     /** Dimensions to group by (e.g. ['orders.status', 'orders.createdAt']) */
     dimensions?: string[];
     /**
-     * Filter conditions. Two equivalent shapes are accepted:
+     * WHERE clause — canonical filter shape per the unified Query DSL
+     * (see `FilterConditionSchema` in `spec/data/filter.zod.ts`).
+     * MongoDB-style: implicit equality, `$eq/$ne/$gt/$gte/$lt/$lte/
+     * $in/$nin/$contains/...` operator wrappers, `$and/$or/$not`
+     * logical combinators. This is the same filter shape used by
+     * `find()`, dashboard widget `filter`, RLS, etc.
      *
-     * 1. **Cube-style array**: `[{ member, operator, values: string[] }]`
-     *    (legacy explicit form).
-     *
-     * 2. **MongoDB-style FilterCondition**: a recursive object using
-     *    implicit equality and `$eq/$ne/$gt/$gte/$lt/$lte/$in/$nin/...`
-     *    operator wrappers — the canonical filter shape used elsewhere
-     *    in the spec (find queries, dashboard widget metadata, etc.).
-     *    See `spec/data/filter.zod.ts` for the full grammar.
-     *
-     * Both shapes are semantically equivalent. Implementations MUST
-     * accept either; consumers that emit the spec-canonical
-     * FilterCondition can pass it directly (e.g. dashboard widget
-     * `filter` from `dashboard.zod.ts`).
+     * @example
+     * ```ts
+     * { where: { is_active: true, stage: { $nin: ['lost'] } } }
+     * ```
      */
-    filters?:
-        | Array<{
-            member: string;
-            operator: string;
-            values?: string[];
-          }>
-        | Record<string, unknown>;
+    where?: Record<string, unknown>;
+
+    /**
+     * Legacy cube-style filters. Prefer {@link where} for new code.
+     * When both are present, implementations MUST combine them with
+     * logical AND.
+     *
+     * @deprecated Use `where` for spec consistency with the Query DSL.
+     */
+    filters?: Array<{
+        member: string;
+        operator: string;
+        values?: string[];
+    }>;
     /** Time dimension configuration */
     timeDimensions?: Array<{
         dimension: string;
