@@ -1399,11 +1399,30 @@ export class HttpDispatcher {
     private async resolveCallerUserId(context: HttpProtocolContext): Promise<string | undefined> {
         try {
             const authService: any = await this.resolveService(CoreServiceName.enum.auth);
-            const sessionData = await authService?.api?.getSession?.({
-                headers: context.request?.headers,
-            });
+            const rawHeaders = context.request?.headers;
+            // better-auth's `getSession` expects a `Headers` instance (or a plain
+            // object that the better-auth SDK happens to coerce). Hono's adapter
+            // hands us a `Record<string, string>` of lowercased header names, so
+            // convert to `Headers` to be safe.
+            let headers: any = rawHeaders;
+            if (rawHeaders && typeof rawHeaders === 'object' && typeof (rawHeaders as any).get !== 'function') {
+                try {
+                    const h = new Headers();
+                    for (const [k, v] of Object.entries(rawHeaders as Record<string, any>)) {
+                        if (v == null) continue;
+                        h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
+                    }
+                    headers = h;
+                } catch {
+                    headers = rawHeaders;
+                }
+            }
+            const sessionData = await (authService?.auth?.api?.getSession ?? authService?.api?.getSession)?.call(
+                authService?.auth?.api ?? authService?.api,
+                { headers },
+            );
             return sessionData?.user?.id ?? sessionData?.session?.userId;
-        } catch {
+        } catch (e: any) {
             return undefined;
         }
     }
@@ -2421,6 +2440,151 @@ export class HttpDispatcher {
                     user: userMap.get(String(mem.user_id)) ?? undefined,
                 }));
                 return { handled: true, response: this.success({ members: enriched }) };
+            }
+
+            // ----- POST /cloud/projects/:id/members  (invite) ---------------
+            //   body: { email | user_id, role? = 'member' }
+            // Only owner / admin may invite. Idempotent: re-inviting an
+            // existing member returns 200 with the existing row instead of
+            // creating a duplicate.
+            if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'members' && m === 'POST') {
+                const id = decodeURIComponent(parts[1]);
+                const project = await findOne(ENV, { id });
+                if (!project) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
+
+                const callerId = await this.resolveCallerUserId(_context);
+                if (!callerId) return { handled: true, response: this.error('Authentication required', 401) };
+                const callerMem = await findOne(MEM, { project_id: id, user_id: callerId });
+                if (!callerMem || !['owner', 'admin'].includes(String(callerMem.role))) {
+                    return { handled: true, response: this.error('Forbidden — owner or admin required', 403) };
+                }
+
+                const email = typeof body?.email === 'string' ? String(body.email).trim().toLowerCase() : null;
+                let inviteUserId = typeof body?.user_id === 'string' ? String(body.user_id).trim() : null;
+                let role = String(body?.role ?? 'member').trim().toLowerCase();
+                if (!['owner', 'admin', 'member', 'viewer'].includes(role)) {
+                    return { handled: true, response: this.error(`Invalid role '${role}' (expected owner | admin | member | viewer)`, 400) };
+                }
+                if (!email && !inviteUserId) {
+                    return { handled: true, response: this.error('email or user_id is required', 400) };
+                }
+                // Resolve email → user_id (best-effort across schema variants).
+                if (!inviteUserId && email) {
+                    let row: any = null;
+                    for (const tableName of ['sys_user', 'user']) {
+                        try {
+                            const u = await ql.findOne(tableName as any, { where: { email } } as any);
+                            row = (u as any)?.value ?? u;
+                            if (row) break;
+                        } catch { /* try next */ }
+                    }
+                    if (!row?.id) {
+                        return { handled: true, response: this.error(`No user found with email '${email}'`, 404) };
+                    }
+                    inviteUserId = String(row.id);
+                }
+
+                const existing = await findOne(MEM, { project_id: id, user_id: inviteUserId });
+                if (existing) {
+                    return { handled: true, response: this.success({ member: existing, alreadyMember: true }) };
+                }
+
+                try {
+                    const memberId = randomUUID();
+                    await ql.insert(MEM, {
+                        id: memberId,
+                        project_id: id,
+                        user_id: inviteUserId,
+                        role,
+                        invited_by: callerId,
+                        organization_id: (project as any).organization_id ?? null,
+                    } as any);
+                    const created = await findOne(MEM, { id: memberId });
+                    return { handled: true, response: this.success({ member: created, alreadyMember: false }) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e?.message ?? 'Failed to add member', 500) };
+                }
+            }
+
+            // ----- PATCH /cloud/projects/:id/members/:memberId (update role) ----
+            //   body: { role }
+            if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'members' && m === 'PATCH') {
+                const id = decodeURIComponent(parts[1]);
+                const memberId = decodeURIComponent(parts[3]);
+                const project = await findOne(ENV, { id });
+                if (!project) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
+
+                const callerId = await this.resolveCallerUserId(_context);
+                if (!callerId) return { handled: true, response: this.error('Authentication required', 401) };
+                const callerMem = await findOne(MEM, { project_id: id, user_id: callerId });
+                if (!callerMem || !['owner', 'admin'].includes(String(callerMem.role))) {
+                    return { handled: true, response: this.error('Forbidden — owner or admin required', 403) };
+                }
+
+                const target = await findOne(MEM, { id: memberId, project_id: id });
+                if (!target) return { handled: true, response: this.error(`Member '${memberId}' not found`, 404) };
+
+                const newRole = String(body?.role ?? '').trim().toLowerCase();
+                if (!['owner', 'admin', 'member', 'viewer'].includes(newRole)) {
+                    return { handled: true, response: this.error(`Invalid role '${newRole}'`, 400) };
+                }
+
+                // Demoting the last owner is forbidden.
+                if (target.role === 'owner' && newRole !== 'owner') {
+                    let owners = await ql.find(MEM, { where: { project_id: id, role: 'owner' } } as any);
+                    if (owners && (owners as any).value) owners = (owners as any).value;
+                    const ownerCount = Array.isArray(owners) ? owners.length : 0;
+                    if (ownerCount <= 1) {
+                        return { handled: true, response: this.error('Cannot demote the last owner', 409) };
+                    }
+                }
+
+                try {
+                    await ql.update(MEM, { role: newRole, updated_at: new Date().toISOString() } as any, { where: { id: memberId } } as any);
+                    const updated = await findOne(MEM, { id: memberId });
+                    return { handled: true, response: this.success({ member: updated }) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e?.message ?? 'Failed to update role', 500) };
+                }
+            }
+
+            // ----- DELETE /cloud/projects/:id/members/:memberId ----------------
+            // Owner / admin may remove anyone. Anyone may remove themselves
+            // unless they are the last owner.
+            if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'members' && m === 'DELETE') {
+                const id = decodeURIComponent(parts[1]);
+                const memberId = decodeURIComponent(parts[3]);
+                const project = await findOne(ENV, { id });
+                if (!project) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
+
+                const callerId = await this.resolveCallerUserId(_context);
+                if (!callerId) return { handled: true, response: this.error('Authentication required', 401) };
+
+                const target = await findOne(MEM, { id: memberId, project_id: id });
+                if (!target) return { handled: true, response: this.error(`Member '${memberId}' not found`, 404) };
+
+                const callerMem = await findOne(MEM, { project_id: id, user_id: callerId });
+                const isSelf = String(target.user_id) === String(callerId);
+                const isPrivileged = callerMem && ['owner', 'admin'].includes(String(callerMem.role));
+                if (!isSelf && !isPrivileged) {
+                    return { handled: true, response: this.error('Forbidden — owner or admin required', 403) };
+                }
+
+                if (target.role === 'owner') {
+                    let owners = await ql.find(MEM, { where: { project_id: id, role: 'owner' } } as any);
+                    if (owners && (owners as any).value) owners = (owners as any).value;
+                    const ownerCount = Array.isArray(owners) ? owners.length : 0;
+                    if (ownerCount <= 1) {
+                        return { handled: true, response: this.error('Cannot remove the last owner', 409) };
+                    }
+                }
+
+                try {
+                    await ql.delete(MEM, { where: { id: memberId } } as any);
+                    return { handled: true, response: this.success({ removed: true, memberId }) };
+                } catch (e: any) {
+                    return { handled: true, response: this.error(e?.message ?? 'Failed to remove member', 500) };
+                }
             }
 
             // ----- /cloud/projects/:envId/packages -----

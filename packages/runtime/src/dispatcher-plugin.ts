@@ -487,6 +487,33 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            server.post(`${prefix}/cloud/projects/:id/members`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members`, 'POST', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.patch(`${prefix}/cloud/projects/:id/members/:memberId`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members/${req.params.memberId}`, 'PATCH', req.body, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
+            server.delete(`${prefix}/cloud/projects/:id/members/:memberId`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members/${req.params.memberId}`, 'DELETE', req.body ?? {}, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Cloud — Per-project packages ─────────────────────────────────
             server.get(`${prefix}/cloud/projects/:id/packages`, async (req: any, res: any) => {
                 try {

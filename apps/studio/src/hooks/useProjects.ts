@@ -445,6 +445,41 @@ export function useProjectMembers(projectId: string | undefined) {
   return { items, loading, error, reload };
 }
 
+export function useMemberMutations() {
+  const client = useClient() as any;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const invite = useCallback(
+    async (projectId: string, payload: { email?: string; user_id?: string; role?: string }) => {
+      if (!client?.projects?.addMember) throw new Error('Client not ready');
+      setBusy(true); setError(null);
+      try { return await client.projects.addMember(projectId, payload); }
+      catch (e) { setError(e as Error); throw e; }
+      finally { setBusy(false); }
+    }, [client]);
+
+  const updateRole = useCallback(
+    async (projectId: string, memberId: string, role: string) => {
+      if (!client?.projects?.updateMemberRole) throw new Error('Client not ready');
+      setBusy(true); setError(null);
+      try { return await client.projects.updateMemberRole(projectId, memberId, role); }
+      catch (e) { setError(e as Error); throw e; }
+      finally { setBusy(false); }
+    }, [client]);
+
+  const remove = useCallback(
+    async (projectId: string, memberId: string) => {
+      if (!client?.projects?.removeMember) throw new Error('Client not ready');
+      setBusy(true); setError(null);
+      try { return await client.projects.removeMember(projectId, memberId); }
+      catch (e) { setError(e as Error); throw e; }
+      finally { setBusy(false); }
+    }, [client]);
+
+  return { invite, updateRole, remove, busy, error };
+}
+
 export function useActivateRevision() {
   const client = useClient() as any;
   const [activating, setActivating] = useState(false);
