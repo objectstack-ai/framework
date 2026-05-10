@@ -73,24 +73,62 @@ The plugin resolves storage in this order:
 2. Kernel-registered `file-storage` service (`@objectstack/service-storage`)
 3. Local filesystem fallback (warns at boot)
 
-To switch to S3 in production, register the storage service in your
-control-plane config:
+`createCloudStack()` in `@objectstack/service-cloud` automatically wires
+`StorageServicePlugin` based on **environment variables** — no code changes
+needed when switching backends.
 
-```ts
-// apps/cloud/objectstack.config.ts
-import { StorageServicePlugin } from '@objectstack/service-storage';
+### Env-driven configuration
 
-plugins: [
-  StorageServicePlugin({
-    adapter: 's3',
-    s3: { bucket: 'objectstack-artifacts', region: 'us-east-1', /* … */ },
-  }),
-  // … cloud plugins
-]
+| Env var                  | Required when           | Description |
+|--------------------------|-------------------------|-------------|
+| `OS_STORAGE_ADAPTER`     | always (default `local`)| `local` \| `s3` \| `none` (`none` skips registering, falls back to plugin's local-FS write — useful for tests) |
+| `OS_STORAGE_LOCAL_DIR`   | `local` adapter         | Root dir for local files (default `./storage`) |
+| `OS_S3_BUCKET`           | `s3` adapter (required) | Bucket name |
+| `OS_S3_REGION`           | `s3` adapter (required) | AWS region (e.g. `us-east-1`, `auto` for R2) |
+| `OS_S3_ENDPOINT`         | S3-compatible only      | Custom endpoint (Cloudflare R2, MinIO, B2, etc.) |
+| `OS_S3_ACCESS_KEY_ID`    | when not using SDK chain | Access key |
+| `OS_S3_SECRET_ACCESS_KEY`| when not using SDK chain | Secret key |
+| `OS_S3_FORCE_PATH_STYLE` | MinIO / self-hosted     | `1` / `true` to force path-style URLs |
+
+### Example: native AWS S3
+
+```bash
+OS_STORAGE_ADAPTER=s3
+OS_S3_BUCKET=objectstack-artifacts
+OS_S3_REGION=us-east-1
+OS_S3_ACCESS_KEY_ID=AKIA…
+OS_S3_SECRET_ACCESS_KEY=…
 ```
 
-No other code changes are required — `cloud-artifact-api-plugin` will pick it
-up automatically.
+### Example: Cloudflare R2
+
+```bash
+OS_STORAGE_ADAPTER=s3
+OS_S3_BUCKET=objectstack-artifacts
+OS_S3_REGION=auto
+OS_S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+OS_S3_ACCESS_KEY_ID=…
+OS_S3_SECRET_ACCESS_KEY=…
+```
+
+### Example: MinIO (local development against S3 protocol)
+
+```bash
+OS_STORAGE_ADAPTER=s3
+OS_S3_BUCKET=artifacts
+OS_S3_REGION=us-east-1
+OS_S3_ENDPOINT=http://localhost:9000
+OS_S3_ACCESS_KEY_ID=minioadmin
+OS_S3_SECRET_ACCESS_KEY=minioadmin
+OS_S3_FORCE_PATH_STYLE=1
+```
+
+> **Vercel (and other serverless hosts):** the local-FS fallback **does not
+> work** — Vercel functions get a read-only filesystem (only `/tmp` is
+> writable, and it is not shared across invocations). You **must** set
+> `OS_STORAGE_ADAPTER=s3` plus `OS_S3_*` in your project settings.
+> Pair it with `OS_CONTROL_DATABASE_URL` pointing at Turso / libSQL for the
+> control DB.
 
 ---
 

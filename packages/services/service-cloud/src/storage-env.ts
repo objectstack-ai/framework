@@ -25,7 +25,7 @@
  * (OS_STORAGE_ADAPTER=none/disabled). The cloud-artifact plugin will then
  * fall back to its local-FS path with a startup warning.
  */
-export function resolveStoragePluginFromEnv(): any[] {
+export async function resolveStoragePluginFromEnv(): Promise<any[]> {
     const adapter = (process.env.OS_STORAGE_ADAPTER ?? 'local').trim().toLowerCase();
 
     if (adapter === 'none' || adapter === 'disabled' || adapter === 'off') {
@@ -42,9 +42,7 @@ export function resolveStoragePluginFromEnv(): any[] {
                 'or set OS_STORAGE_ADAPTER=local for local development.',
             );
         }
-        // Lazy-require to keep the import out of paths that don't need it.
-        // Both packages are workspace deps of @objectstack/service-cloud.
-        const { StorageServicePlugin } = require('@objectstack/service-storage');
+        const { StorageServicePlugin } = await import('@objectstack/service-storage');
         return [new StorageServicePlugin({
             adapter: 's3',
             s3: {
@@ -59,7 +57,7 @@ export function resolveStoragePluginFromEnv(): any[] {
     }
 
     // 'local' (default)
-    const { StorageServicePlugin } = require('@objectstack/service-storage');
+    const { StorageServicePlugin } = await import('@objectstack/service-storage');
     return [new StorageServicePlugin({
         adapter: 'local',
         local: { rootDir: process.env.OS_STORAGE_LOCAL_DIR?.trim() || './storage' },

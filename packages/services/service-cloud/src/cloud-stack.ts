@@ -178,7 +178,7 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
         // Falls back to local-FS adapter (rooted at OS_STORAGE_LOCAL_DIR or
         // <data-dir>/storage). On serverless without S3 env vars, the cloud-
         // artifact plugin will warn — set OS_STORAGE_ADAPTER=s3 in production.
-        ...resolveStoragePluginFromEnv(),
+        ...(await resolveStoragePluginFromEnv()),
         multiProjectPluginProxy,
         createStudioRuntimeConfigPlugin({ apiPrefix }),
         createTemplatesRoutePlugin(templateList, { apiPrefix }),

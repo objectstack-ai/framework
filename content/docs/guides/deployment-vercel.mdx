@@ -349,14 +349,39 @@ Setting `VITE_SERVER_URL` to empty string tells the client SDK to use same-origi
 
 Configure these in Vercel Project Settings → Environment Variables:
 
-| Variable | Mode | Description |
+### Studio / SPA build
+
+| Variable | Description |
+| :--- | :--- |
+| `VITE_RUNTIME_MODE` | `msw` (in-browser) or `server` (real backend) |
+| `VITE_SERVER_URL` | Backend API URL (empty for same-origin) |
+
+### ObjectStack Cloud control plane (when deploying `apps/cloud`)
+
+Vercel functions have an **ephemeral, read-only filesystem** — local SQLite
+and local-FS storage will not persist between invocations. Use Turso/libSQL
+for the control DB and S3-compatible object storage for artifacts.
+
+| Variable | Required | Description |
 | :--- | :--- | :--- |
-| `VITE_RUNTIME_MODE` | MSW | Set to `msw` (build-time Vite env) |
-| `VITE_SERVER_URL` | Server | Backend API URL (empty for same-origin) |
-| `DATABASE_URL` | Server | Database connection string |
+| `OS_MODE` | yes | `cloud` |
+| `AUTH_SECRET` | yes | ≥ 32 chars |
+| `OS_CONTROL_DATABASE_URL` | yes | `libsql://…` (Turso) — control plane DB |
+| `OS_CONTROL_DATABASE_AUTH_TOKEN` | yes | Turso token (or `TURSO_AUTH_TOKEN`) |
+| `OS_STORAGE_ADAPTER` | yes | `s3` (must, on Vercel) |
+| `OS_S3_BUCKET` | yes (s3) | Bucket name |
+| `OS_S3_REGION` | yes (s3) | `us-east-1`, or `auto` for Cloudflare R2 |
+| `OS_S3_ENDPOINT` | optional | For R2 / MinIO / B2 / non-AWS |
+| `OS_S3_ACCESS_KEY_ID` | optional | Falls back to AWS SDK credential chain |
+| `OS_S3_SECRET_ACCESS_KEY` | optional | Falls back to AWS SDK credential chain |
+| `OS_S3_FORCE_PATH_STYLE` | optional | `1` for MinIO / self-hosted |
+
+> See [Publish, Versioning & Preview](./publish-and-preview) for the full
+> storage matrix (native S3, Cloudflare R2, MinIO, etc.) and what the cloud
+> control plane stores in each bucket.
 
 <Callout type="warn">
-**Never commit secrets.** Use Vercel's environment variable UI or the Vercel CLI (`vercel env add`) to configure `DATABASE_URL` and other credentials.
+**Never commit secrets.** Use Vercel's environment variable UI or the Vercel CLI (`vercel env add`) to configure tokens and S3 credentials.
 </Callout>
 
 ---
