@@ -73,7 +73,7 @@ export const SystemFile = ObjectSchema.create({
       label: 'ACL',
       options: [
         { label: 'Private', value: 'private' },
-        { label: 'Public Read', value: 'public-read' },
+        { label: 'Public Read', value: 'public_read' },
       ],
     }),
 
