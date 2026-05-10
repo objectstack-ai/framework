@@ -57,8 +57,14 @@ Common flags:
 `publish` POSTs to `/api/v1/cloud/projects/:id/metadata`. The control plane:
 
 1. Computes / verifies `commitId`.
-2. **Uploads** to object storage at `artifacts/${projectId}/${commitId}.json`
-   (no-op if the key already exists — content-addressable).
+2. **Uploads** to object storage at
+   `artifacts/orgs/${organizationId}/projects/${projectId}/${commitId}.json`
+   (no-op if the key already exists — content-addressable). Org-first prefixing
+   makes per-tenant IAM policies, billing attribution, exports and GC trivial.
+   Projects without an `organization_id` (rare, single-tenant installs) fall
+   back to the legacy `artifacts/${projectId}/${commitId}.json` shape.
+   Existing rows keep their original key in `sys_project_revision.storage_key`,
+   so historical artifacts always remain readable regardless of layout changes.
 3. **Inserts** a `sys_project_revision` row, flips the previous current row to
    `is_current = false`, and marks the new one `is_current = true`.
 4. Updates `sys_project.metadata.current_commit_id`.

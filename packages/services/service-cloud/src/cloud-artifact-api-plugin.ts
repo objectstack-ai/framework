@@ -153,8 +153,22 @@ export function createCloudArtifactApiPlugin(options: CloudArtifactApiPluginOpti
                 }
             };
 
-            const storageKey = (projectId: string, commitId: string) =>
-                `${keyPrefix}/${projectId}/${commitId}.json`;
+            // Storage key shape:
+            //   ${keyPrefix}/orgs/${orgId}/projects/${projectId}/${commitId}.json
+            //
+            // Org-first prefixing makes per-tenant cleanup, billing, IAM
+            // bucket policies (e.g. allow read-only on `orgs/<id>/*`),
+            // and data-export much easier in a multi-tenant cloud.
+            //
+            // Falls back to the legacy `${keyPrefix}/${projectId}/${commitId}.json`
+            // shape when the project has no organization_id (single-tenant
+            // installs / very old data); the GET path always reads the
+            // exact key from `sys_project_revision.storage_key` so historical
+            // rows keep working regardless of layout.
+            const storageKey = (orgId: string | null | undefined, projectId: string, commitId: string) =>
+                orgId
+                    ? `${keyPrefix}/orgs/${orgId}/projects/${projectId}/${commitId}.json`
+                    : `${keyPrefix}/${projectId}/${commitId}.json`;
 
             // ================================================================
             // GET /cloud/resolve-hostname?host=...
@@ -298,7 +312,7 @@ export function createCloudArtifactApiPlugin(options: CloudArtifactApiPluginOpti
                 const checksum = typeof incomingChecksum === 'string'
                     ? incomingChecksum
                     : (incomingChecksum?.value ?? fullHash);
-                const key = storageKey(projectId, commitId);
+                const key = storageKey(project.organization_id, projectId, commitId);
 
                 // 1. Upload to storage (content-addressable: skip if same key exists)
                 try {

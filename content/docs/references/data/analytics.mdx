@@ -57,7 +57,7 @@ const result = AggregationMetricType.parse(data);
 | **cube** | `string` | optional | Target cube name (optional when provided externally, e.g. in API request wrapper) |
 | **measures** | `string[]` | ✅ | List of metrics to calculate |
 | **dimensions** | `string[]` | optional | List of dimensions to group by |
-| **filters** | `Object[]` | optional |  |
+| **where** | `[__schema0](./__schema0)` | optional | Filtering criteria (canonical Query DSL FilterCondition) |
 | **timeDimensions** | `Object[]` | optional |  |
 | **order** | `Record<string, Enum<'asc' \| 'desc'>>` | optional |  |
 | **limit** | `number` | optional |  |
