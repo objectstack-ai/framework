@@ -364,47 +364,74 @@ export class AuthManager {
     // field so frontend gating (e.g. AppShell's `isAdmin = user.role === 'admin'`)
     // works without each consumer having to re-query permission sets.
     //
-    // Better-auth's `sys_user` table doesn't carry a `role` column; instead,
-    // platform-admin status lives in `sys_user_permission_set` rows that point
-    // at the `admin_full_access` permission set with `organization_id = null`
-    // (seeded by `bootstrapPlatformAdmin`). We resolve the link transitively
-    // and synthesize `user.role = 'admin'` for any user that holds it.
+    // Better-auth's `sys_user` table doesn't carry a `role` column. We derive
+    // it from two sources:
     //
-    // Org-scoped roles (e.g. tenant admin) are not promoted here — those are
-    // surfaced via the `organization` plugin's `member` payload instead.
+    //   1. **Platform admin** — a `sys_user_permission_set` row that points at
+    //      the `admin_full_access` permission set with `organization_id = null`
+    //      (seeded by `bootstrapPlatformAdmin`).
+    //   2. **Organization admin** — a `sys_member` row in the user's *active*
+    //      organization (`session.activeOrganizationId`) with role `owner` or
+    //      `admin`. Org owners/admins are entitled to manage org-scoped
+    //      metadata such as saved list views, dashboards, etc.
+    //
+    // Either path synthesizes `user.role = 'admin'` so the frontend can gate
+    // metadata-edit affordances uniformly. The raw membership role remains
+    // available via the `organization` plugin's `member` payload for
+    // finer-grained checks.
     const dataEngine = this.config.dataEngine;
     if (dataEngine) {
       const { customSession } = await import('better-auth/plugins/custom-session');
       plugins.push(customSession(async ({ user, session }) => {
-        try {
-          if (!user?.id) return { user, session };
-          const links = await dataEngine.find('sys_user_permission_set', {
-            where: { user_id: user.id },
-            limit: 50,
-          });
-          const platformLinks = (Array.isArray(links) ? links : []).filter(
-            (l: any) => !l.organization_id,
-          );
-          if (platformLinks.length === 0) return { user, session };
+        if (!user?.id) return { user, session };
 
-          const sets = await dataEngine.find('sys_permission_set', { limit: 50 });
-          const adminSet = (Array.isArray(sets) ? sets : []).find(
-            (r: any) => r.name === 'admin_full_access',
-          );
-          if (!adminSet) return { user, session };
+        const isPlatformAdmin = async (): Promise<boolean> => {
+          try {
+            const links = await dataEngine.find('sys_user_permission_set', {
+              where: { user_id: user.id },
+              limit: 50,
+            });
+            const platformLinks = (Array.isArray(links) ? links : []).filter(
+              (l: any) => !l.organization_id,
+            );
+            if (platformLinks.length === 0) return false;
+            const sets = await dataEngine.find('sys_permission_set', { limit: 50 });
+            const adminSet = (Array.isArray(sets) ? sets : []).find(
+              (r: any) => r.name === 'admin_full_access',
+            );
+            if (!adminSet) return false;
+            return platformLinks.some(
+              (l: any) => l.permission_set_id === adminSet.id,
+            );
+          } catch {
+            return false;
+          }
+        };
 
-          const isPlatformAdmin = platformLinks.some(
-            (l: any) => l.permission_set_id === adminSet.id,
-          );
-          if (!isPlatformAdmin) return { user, session };
+        const isActiveOrgAdmin = async (): Promise<boolean> => {
+          try {
+            const orgId = (session as any)?.activeOrganizationId;
+            if (!orgId) return false;
+            const members = await dataEngine.find('sys_member', {
+              where: { user_id: user.id, organization_id: orgId },
+              limit: 5,
+            });
+            return (Array.isArray(members) ? members : []).some((m: any) => {
+              // better-auth org plugin stores roles as either a single string
+              // or a comma-separated list (e.g. `"owner,admin"`). Treat any
+              // membership that includes `owner` or `admin` as administrative.
+              const raw = typeof m?.role === 'string' ? m.role : '';
+              const roles = raw.split(',').map((s: string) => s.trim().toLowerCase());
+              return roles.includes('owner') || roles.includes('admin');
+            });
+          } catch {
+            return false;
+          }
+        };
 
-          return {
-            user: { ...user, role: 'admin' },
-            session,
-          };
-        } catch {
-          return { user, session };
-        }
+        const promote = (await isPlatformAdmin()) || (await isActiveOrgAdmin());
+        if (!promote) return { user, session };
+        return { user: { ...user, role: 'admin' }, session };
       }));
     }
 
