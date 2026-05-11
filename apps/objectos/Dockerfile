@@ -24,20 +24,41 @@
 FROM node:22-slim AS builder
 
 # native bindings for better-sqlite3 and friends
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
   && apt-get install -y --no-install-recommends \
-       python3 make g++ ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+       python3 make g++ ca-certificates
 
 WORKDIR /repo
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json tsup.config.ts ./
+# CI=true so pnpm skips interactive prompts (e.g. node_modules cleanup
+# confirmation that fails with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+ENV CI=true
+
+# ── Layer 1: pre-fetch deps from lockfile only ──────────────────────────────
+# `pnpm fetch` populates the virtual store from `pnpm-lock.yaml` alone (no
+# package.json files needed), so this layer is reused across builds until
+# the lockfile changes. The cache mount makes the global store survive
+# across `docker buildx build` invocations.
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+COPY pnpm-lock.yaml ./
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store \
+ && pnpm fetch --prod=false
+
+# ── Layer 2: copy workspace manifests + sources, then install offline ───────
+# `--offline` forces resolution from the warm store; on a code-only change
+# (lockfile unchanged) this finishes in seconds.
+COPY package.json pnpm-workspace.yaml turbo.json tsconfig.json tsup.config.ts ./
 COPY packages ./packages
 COPY examples ./examples
 COPY apps/objectos ./apps/objectos
 
-RUN pnpm install --frozen-lockfile --prod=false
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --offline --prod=false
 
 # Build apps/objectos + all its workspace transitive deps.
 RUN pnpm --filter '@objectstack/objectos...' build
