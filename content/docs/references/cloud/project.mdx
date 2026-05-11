@@ -61,6 +61,7 @@ const result = Project.parse(data);
 | **provisionedAt** | `string` | optional | Provisioning timestamp (ISO-8601) |
 | **metadata** | `Record<string, any>` | optional | Free-form metadata |
 | **hostname** | `string` | optional | Canonical hostname for this project (e.g. acme-dev.objectstack.app or api.acme.com). UNIQUE. Auto-set on creation; can be overridden for custom domains. |
+| **visibility** | `Enum<'private' \| 'unlisted' \| 'public'>` | ✅ | Public exposure of this project artifacts (private | unlisted | public). |
 
 
 ---
@@ -211,6 +212,7 @@ Project type (prod/sandbox/dev/test/…)
 | **metadata** | `Record<string, any>` | optional | Free-form metadata |
 | **hostname** | `string` | optional | Canonical hostname for this project (auto-generated if omitted) |
 | **templateId** | `string` | optional | Template to seed into the project on first provisioning (e.g. "crm", "todo"). Defaults to "blank". |
+| **visibility** | `Enum<'private' \| 'unlisted' \| 'public'>` | ✅ | Public exposure of this project artifacts. private = auth required for every read (default); unlisted = downloadable when commit id is known; public = listed and freely downloadable via /pub/v1/projects/:id/*. |
 
 
 ---
