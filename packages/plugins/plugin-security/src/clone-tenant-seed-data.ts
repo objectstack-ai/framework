@@ -70,9 +70,15 @@ const SKIP_COPY_FIELDS = new Set<string>([
 // Computed / virtual / system-managed field types — these have no
 // physical column in the DB, so re-inserting them would fail with
 // "table X has no column named Y". `find()` returns them in the
-// projected row (formula evaluation, rollup summary, autonumber),
-// but they must NEVER be sent back to `insert()`.
-const SKIP_COPY_TYPES = new Set<string>(['formula', 'summary', 'autonumber']);
+// projected row (formula evaluation, rollup summary), but they must
+// NEVER be sent back to `insert()`.
+//
+// NOTE: `autonumber` IS a real string column in the SQL driver — it
+// has no auto-generation in this codebase, the value comes from the
+// seed file itself. Cloning it preserves the demo's "CTR-0001" /
+// "QTE-0001" identifiers so users see meaningful titleFormats and
+// the `externalId` upsert key keeps working on subsequent re-seeds.
+const SKIP_COPY_TYPES = new Set<string>(['formula', 'summary']);
 
 function fieldList(schema: ServiceObject): FieldDescriptor[] {
   const fields: any = (schema as any)?.fields;
@@ -243,6 +249,15 @@ export async function cloneTenantSeedData(
 
   // Pass B: rewrite lookup field values using the per-object remap so
   // intra-clone relationships stay intact.
+  //
+  // Cross-tenant FK hygiene: when a donor row's lookup value DOESN'T
+  // appear in `remap[reference]` (i.e. the donor itself had a stale
+  // FK pointing at another tenant's record, or the referenced object
+  // wasn't included in this clone), we NULL the field instead of
+  // leaving the orphan string in place. Otherwise every subsequent
+  // clone perpetuates the broken FK chain (donor → tenant A → tenant
+  // B → ...) and renderers display raw IDs because `find()` for the
+  // referenced ID returns no row in the current tenant.
   for (const item of inserted) {
     if (item.lookups.length === 0) continue;
     const patch: Record<string, unknown> = {};
@@ -251,16 +266,26 @@ export async function cloneTenantSeedData(
       const oldVal = item.record[f.name];
       if (oldVal == null) continue;
       const targetMap = remap[f.reference!];
-      if (!targetMap) continue;
       if (Array.isArray(oldVal)) {
-        const next = oldVal.map((v: any) => (typeof v === 'string' && targetMap[v]) || v);
-        if (next.some((v, i) => v !== oldVal[i])) {
-          patch[f.name] = next;
+        // For multi-value lookups: remap when possible, drop entries
+        // that have no remap (rather than keep an orphan string).
+        const next = oldVal
+          .map((v: any) => (typeof v === 'string' && targetMap?.[v]) || null)
+          .filter((v: any) => v != null);
+        if (next.length !== oldVal.length || next.some((v, i) => v !== oldVal[i])) {
+          patch[f.name] = next.length > 0 ? next : null;
           dirty = true;
         }
-      } else if (typeof oldVal === 'string' && targetMap[oldVal]) {
-        patch[f.name] = targetMap[oldVal];
-        dirty = true;
+      } else if (typeof oldVal === 'string') {
+        if (targetMap && targetMap[oldVal]) {
+          patch[f.name] = targetMap[oldVal];
+          dirty = true;
+        } else {
+          // Unresolvable cross-tenant reference — null it out so the
+          // UI shows "empty" rather than a dangling ID.
+          patch[f.name] = null;
+          dirty = true;
+        }
       }
     }
     if (!dirty) continue;
