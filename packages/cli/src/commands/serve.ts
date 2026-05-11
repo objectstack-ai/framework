@@ -595,10 +595,53 @@ export default class Serve extends Command {
             if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET)
               socialProviders.github = { clientId: process.env.GITHUB_CLIENT_ID, clientSecret: process.env.GITHUB_CLIENT_SECRET };
 
+            // Trusted origins (CSRF). better-auth uses a `*` glob that
+            // does NOT cross dot-separators, so `http://localhost:*` does
+            // not cover `http://<sub>.localhost:*`. Build the allow-list
+            // explicitly:
+            //   - explicit `OS_TRUSTED_ORIGINS` (comma-separated) wins
+            //   - else dev / preview defaults below
+            const trustedOrigins: string[] = [];
+            const explicitTrusted = process.env.OS_TRUSTED_ORIGINS?.trim();
+            if (explicitTrusted) {
+              explicitTrusted.split(',').map(s => s.trim()).filter(Boolean).forEach(o => {
+                if (!trustedOrigins.includes(o)) trustedOrigins.push(o);
+              });
+            }
+            // Always add the configured baseUrl so first-party redirects work.
+            try {
+              const u = new URL(baseUrl);
+              const baseOrigin = `${u.protocol}//${u.host}`;
+              if (!trustedOrigins.includes(baseOrigin)) trustedOrigins.push(baseOrigin);
+            } catch { /* ignore malformed baseUrl */ }
+            // Preview-mode subdomain wildcards (`<commit>--<pid>.<base>`).
+            // Honour `OS_PREVIEW_BASE_DOMAINS` (used by service-cloud's
+            // preview routing) and add `http://*.<base>:*` patterns.
+            const previewMode = (process.env.OS_PREVIEW_MODE ?? '').trim().toLowerCase();
+            const isPreviewMode = previewMode === '1' || previewMode === 'true' || previewMode === 'yes';
+            if (isPreviewMode) {
+              const baseDomains = (process.env.OS_PREVIEW_BASE_DOMAINS
+                ?? 'preview.objectstack.ai,localhost')
+                .split(',').map(s => s.trim()).filter(Boolean);
+              for (const dom of baseDomains) {
+                const isLoopback = dom === 'localhost' || dom.endsWith('.localhost');
+                const scheme = isLoopback ? 'http' : 'https';
+                const portSuffix = isLoopback ? ':*' : '';
+                const wildcard = `${scheme}://*.${dom}${portSuffix}`;
+                if (!trustedOrigins.includes(wildcard)) trustedOrigins.push(wildcard);
+              }
+            }
+            // Dev convenience: keep `http://localhost:*` so plain
+            // `localhost:<port>` still works for non-preview Studio/Console.
+            if (isDev && !trustedOrigins.includes('http://localhost:*')) {
+              trustedOrigins.push('http://localhost:*');
+            }
+
             await kernel.use(new AuthPlugin({
               secret,
               baseUrl,
               socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
+              trustedOrigins: trustedOrigins.length ? trustedOrigins : undefined,
             }));
             trackPlugin('Auth');
 
