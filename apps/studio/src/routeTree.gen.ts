@@ -24,8 +24,10 @@ import { Route as OrganizationsNewRouteImport } from './routes/organizations.new
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations.$orgId'
 import { Route as AuthDeviceRouteImport } from './routes/auth.device'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
+import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdRevisionsRouteImport } from './routes/projects.$projectId.revisions'
 import { Route as ProjectsProjectIdPackagesRouteImport } from './routes/projects.$projectId.packages'
+import { Route as ProjectsProjectIdMembersRouteImport } from './routes/projects.$projectId.members'
 import { Route as ProjectsProjectIdApiConsoleRouteImport } from './routes/projects.$projectId.api-console'
 import { Route as ProjectsProjectIdPackageRouteImport } from './routes/projects.$projectId.$package'
 import { Route as PackageObjectsNameRouteImport } from './routes/$package.objects.$name'
@@ -109,6 +111,12 @@ const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const ProjectsProjectIdSettingsRoute =
+  ProjectsProjectIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdRevisionsRoute =
   ProjectsProjectIdRevisionsRouteImport.update({
     id: '/revisions',
@@ -119,6 +127,12 @@ const ProjectsProjectIdPackagesRoute =
   ProjectsProjectIdPackagesRouteImport.update({
     id: '/packages',
     path: '/packages',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
+const ProjectsProjectIdMembersRoute =
+  ProjectsProjectIdMembersRouteImport.update({
+    id: '/members',
+    path: '/members',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
 const ProjectsProjectIdApiConsoleRoute =
@@ -180,8 +194,10 @@ export interface FileRoutesByFullPath {
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/projects/$projectId/$package': typeof ProjectsProjectIdPackageRouteWithChildren
   '/projects/$projectId/api-console': typeof ProjectsProjectIdApiConsoleRoute
+  '/projects/$projectId/members': typeof ProjectsProjectIdMembersRoute
   '/projects/$projectId/packages': typeof ProjectsProjectIdPackagesRoute
   '/projects/$projectId/revisions': typeof ProjectsProjectIdRevisionsRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
   '/projects/$projectId/$package/': typeof ProjectsProjectIdPackageIndexRoute
@@ -203,8 +219,10 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/projects/$projectId/api-console': typeof ProjectsProjectIdApiConsoleRoute
+  '/projects/$projectId/members': typeof ProjectsProjectIdMembersRoute
   '/projects/$projectId/packages': typeof ProjectsProjectIdPackagesRoute
   '/projects/$projectId/revisions': typeof ProjectsProjectIdRevisionsRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
   '/projects/$projectId/$package': typeof ProjectsProjectIdPackageIndexRoute
@@ -230,8 +248,10 @@ export interface FileRoutesById {
   '/$package/objects/$name': typeof PackageObjectsNameRoute
   '/projects/$projectId/$package': typeof ProjectsProjectIdPackageRouteWithChildren
   '/projects/$projectId/api-console': typeof ProjectsProjectIdApiConsoleRoute
+  '/projects/$projectId/members': typeof ProjectsProjectIdMembersRoute
   '/projects/$projectId/packages': typeof ProjectsProjectIdPackagesRoute
   '/projects/$projectId/revisions': typeof ProjectsProjectIdRevisionsRoute
+  '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
   '/projects/$projectId/$package/': typeof ProjectsProjectIdPackageIndexRoute
@@ -258,8 +278,10 @@ export interface FileRouteTypes {
     | '/$package/objects/$name'
     | '/projects/$projectId/$package'
     | '/projects/$projectId/api-console'
+    | '/projects/$projectId/members'
     | '/projects/$projectId/packages'
     | '/projects/$projectId/revisions'
+    | '/projects/$projectId/settings'
     | '/projects/$projectId/'
     | '/$package/metadata/$type/$name'
     | '/projects/$projectId/$package/'
@@ -281,8 +303,10 @@ export interface FileRouteTypes {
     | '/projects'
     | '/$package/objects/$name'
     | '/projects/$projectId/api-console'
+    | '/projects/$projectId/members'
     | '/projects/$projectId/packages'
     | '/projects/$projectId/revisions'
+    | '/projects/$projectId/settings'
     | '/projects/$projectId'
     | '/$package/metadata/$type/$name'
     | '/projects/$projectId/$package'
@@ -307,8 +331,10 @@ export interface FileRouteTypes {
     | '/$package/objects/$name'
     | '/projects/$projectId/$package'
     | '/projects/$projectId/api-console'
+    | '/projects/$projectId/members'
     | '/projects/$projectId/packages'
     | '/projects/$projectId/revisions'
+    | '/projects/$projectId/settings'
     | '/projects/$projectId/'
     | '/$package/metadata/$type/$name'
     | '/projects/$projectId/$package/'
@@ -439,6 +465,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/settings': {
+      id: '/projects/$projectId/settings'
+      path: '/settings'
+      fullPath: '/projects/$projectId/settings'
+      preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/revisions': {
       id: '/projects/$projectId/revisions'
       path: '/revisions'
@@ -451,6 +484,13 @@ declare module '@tanstack/react-router' {
       path: '/packages'
       fullPath: '/projects/$projectId/packages'
       preLoaderRoute: typeof ProjectsProjectIdPackagesRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
+    '/projects/$projectId/members': {
+      id: '/projects/$projectId/members'
+      path: '/members'
+      fullPath: '/projects/$projectId/members'
+      preLoaderRoute: typeof ProjectsProjectIdMembersRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
     '/projects/$projectId/api-console': {
@@ -543,16 +583,20 @@ const ProjectsProjectIdPackageRouteWithChildren =
 interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdPackageRoute: typeof ProjectsProjectIdPackageRouteWithChildren
   ProjectsProjectIdApiConsoleRoute: typeof ProjectsProjectIdApiConsoleRoute
+  ProjectsProjectIdMembersRoute: typeof ProjectsProjectIdMembersRoute
   ProjectsProjectIdPackagesRoute: typeof ProjectsProjectIdPackagesRoute
   ProjectsProjectIdRevisionsRoute: typeof ProjectsProjectIdRevisionsRoute
+  ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
 }
 
 const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdPackageRoute: ProjectsProjectIdPackageRouteWithChildren,
   ProjectsProjectIdApiConsoleRoute: ProjectsProjectIdApiConsoleRoute,
+  ProjectsProjectIdMembersRoute: ProjectsProjectIdMembersRoute,
   ProjectsProjectIdPackagesRoute: ProjectsProjectIdPackagesRoute,
   ProjectsProjectIdRevisionsRoute: ProjectsProjectIdRevisionsRoute,
+  ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
 }
 

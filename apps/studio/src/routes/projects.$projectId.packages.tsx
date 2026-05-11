@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { toast } from '@/hooks/use-toast';
 import { useProjectPackages } from '@/hooks/useProjectPackages';
+import { useProjectDetail } from '@/hooks/useProjects';
+import { ProjectHeader } from '@/components/projects/project-header';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { isPlatformProject } from '@/lib/platform-project';
 
@@ -107,6 +109,7 @@ function ProjectPackagesComponent() {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+      <ProjectPackagesHeader projectId={projectId} />
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-8">
 
@@ -268,3 +271,21 @@ function ProjectPackagesComponent() {
 export const Route = createFileRoute('/projects/$projectId/packages')({
   component: ProjectPackagesComponent,
 });
+
+function ProjectPackagesHeader({ projectId }: { projectId: string }) {
+  // Platform projects render without the header (no real project row exists).
+  if (isPlatformProject(projectId)) return null;
+  const { detail, loading, reload } = useProjectDetail(projectId);
+  const project = detail?.project;
+  if (!project) return null;
+  return (
+    <ProjectHeader
+      projectId={projectId}
+      project={project}
+      detail={detail}
+      onReload={reload}
+      loading={loading}
+      active="packages"
+    />
+  );
+}

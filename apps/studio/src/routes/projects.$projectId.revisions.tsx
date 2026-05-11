@@ -11,12 +11,13 @@
  *   - open a "preview" tab against the chosen commit.
  */
 
-import { createFileRoute, Link, useParams } from '@tanstack/react-router';
+import { createFileRoute, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Copy, ExternalLink, RotateCcw, Loader2, Eye } from 'lucide-react';
+import { Copy, RotateCcw, Loader2, Eye } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ProjectHeader } from '@/components/projects/project-header';
 import {
   useProjectDetail,
   useRevisions,
@@ -102,32 +103,29 @@ function ProjectRevisionsComponent() {
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-auto bg-background">
+      {project && (
+        <ProjectHeader
+          projectId={projectId}
+          project={project}
+          detail={detail}
+          onReload={reload}
+          loading={loading}
+          active="revisions"
+        />
+      )}
       <div className="mx-auto w-full max-w-6xl space-y-4 p-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/projects/$projectId" params={{ projectId }}>
-                <ArrowLeft className="mr-1 h-3.5 w-3.5" />
-                Back
-              </Link>
-            </Button>
-            <div>
-              <h1 className="text-lg font-semibold">Published revisions</h1>
-              <p className="text-xs text-muted-foreground">
-                {project?.display_name ?? projectId}
-              </p>
-            </div>
+          <div>
+            <h1 className="text-lg font-semibold">Published revisions</h1>
+            <p className="text-xs text-muted-foreground">
+              History of every artifact published for this project.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              Visibility: {visibility}
+          {currentCommit && (
+            <Badge variant="secondary" className="font-mono text-xs">
+              Current: {currentCommit.slice(0, 12)}
             </Badge>
-            {currentCommit && (
-              <Badge variant="secondary" className="font-mono text-xs">
-                Current: {currentCommit.slice(0, 12)}
-              </Badge>
-            )}
-          </div>
+          )}
         </div>
 
         {loading ? (
