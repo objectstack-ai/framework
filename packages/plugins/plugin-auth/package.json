@@ -18,11 +18,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@better-auth/oauth-provider": "^1.6.9",
+    "@better-auth/oauth-provider": "^1.6.10",
     "@objectstack/core": "workspace:*",
     "@objectstack/platform-objects": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "better-auth": "^1.6.9"
+    "better-auth": "^1.6.10"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
