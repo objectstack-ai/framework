@@ -30,7 +30,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
        python3 make g++ ca-certificates
 
 WORKDIR /repo
-RUN corepack enable
 
 # CI=true so pnpm skips interactive prompts (e.g. node_modules cleanup
 # confirmation that fails with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
@@ -41,6 +40,20 @@ RUN corepack enable
 ENV CI=true \
     COREPACK_NPM_REGISTRY=https://registry.npmmirror.com \
     npm_config_registry=https://registry.npmmirror.com
+
+# ── Layer 0: bake pnpm into the image (one-shot network fetch) ──────────────
+# Without this, every subsequent `pnpm …` invocation triggers corepack to
+# re-fetch the pinned pnpm version on demand. If the mirror has a transient
+# DNS or network blip, the build fails. Pinning to the version declared in
+# package.json downloads it ONCE per Dockerfile change, caches the layer,
+# and frees later steps from needing the corepack registry at all.
+# Fall back to the official npm registry if the mirror is unreachable.
+ARG PNPM_VERSION=10.31.0
+RUN corepack enable \
+ && (corepack prepare pnpm@${PNPM_VERSION} --activate \
+     || (echo "→ npmmirror unreachable, falling back to npmjs.org" \
+         && COREPACK_NPM_REGISTRY=https://registry.npmjs.org \
+            corepack prepare pnpm@${PNPM_VERSION} --activate))
 
 # ── Layer 1: pre-fetch deps from lockfile only ──────────────────────────────
 # `pnpm fetch` populates the virtual store from `pnpm-lock.yaml` alone (no
