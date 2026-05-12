@@ -147,11 +147,52 @@ export function createControlPlanePlugins(cfg: ControlPlanePresetConfig): any[] 
       if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET)
         socialProviders.microsoft = { clientId: process.env.MICROSOFT_CLIENT_ID, clientSecret: process.env.MICROSOFT_CLIENT_SECRET };
 
+      // ── Trusted origins (CSRF allow-list for better-auth) ────────────
+      // better-auth rejects any request whose Origin header is not in this
+      // list with `ERROR: Invalid origin`. Build it from:
+      //   1. explicit `OS_TRUSTED_ORIGINS` (comma-separated)
+      //   2. the configured baseUrl's origin (so first-party redirects work)
+      //   3. preview-mode wildcards (`<commit>--<pid>.<base>`)
+      //   4. `http://localhost:*` in dev
+      // Keep this in sync with the dev-mode logic in
+      // `packages/cli/src/commands/serve.ts` (auto-AuthPlugin block).
+      const trustedOrigins: string[] = [];
+      const explicitTrusted = process.env.OS_TRUSTED_ORIGINS?.trim();
+      if (explicitTrusted) {
+        for (const o of explicitTrusted.split(',').map(s => s.trim()).filter(Boolean)) {
+          if (!trustedOrigins.includes(o)) trustedOrigins.push(o);
+        }
+      }
+      try {
+        const u = new URL(cfg.baseUrl);
+        const baseOrigin = `${u.protocol}//${u.host}`;
+        if (!trustedOrigins.includes(baseOrigin)) trustedOrigins.push(baseOrigin);
+      } catch { /* ignore malformed baseUrl */ }
+      const previewMode = (process.env.OS_PREVIEW_MODE ?? '').trim().toLowerCase();
+      const isPreviewMode = previewMode === '1' || previewMode === 'true' || previewMode === 'yes';
+      if (isPreviewMode) {
+        const baseDomains = (process.env.OS_PREVIEW_BASE_DOMAINS
+          ?? 'preview.objectstack.ai,localhost')
+          .split(',').map(s => s.trim()).filter(Boolean);
+        for (const dom of baseDomains) {
+          const isLoopback = dom === 'localhost' || dom.endsWith('.localhost');
+          const scheme = isLoopback ? 'http' : 'https';
+          const portSuffix = isLoopback ? ':*' : '';
+          const wildcard = `${scheme}://*.${dom}${portSuffix}`;
+          if (!trustedOrigins.includes(wildcard)) trustedOrigins.push(wildcard);
+        }
+      }
+      const isDev = process.env.NODE_ENV !== 'production';
+      if (isDev && !trustedOrigins.includes('http://localhost:*')) {
+        trustedOrigins.push('http://localhost:*');
+      }
+
       return new AuthPlugin({
         secret: cfg.authSecret,
         baseUrl: cfg.baseUrl,
         plugins: (cfg.authPlugins ?? { organization: true, oidcProvider: true, deviceAuthorization: true }) as any,
         socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
+        trustedOrigins: trustedOrigins.length ? trustedOrigins : undefined,
         advanced: process.env.OS_COOKIE_DOMAIN
           ? ({
               crossSubDomainCookies: {
