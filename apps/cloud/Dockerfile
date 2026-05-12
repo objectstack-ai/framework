@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 #
 # ObjectStack Cloud — production container image
 # --------------------------------------------------
@@ -49,6 +48,8 @@ COPY package.json pnpm-workspace.yaml turbo.json tsconfig.json tsup.config.ts ./
 COPY packages ./packages
 COPY examples ./examples
 COPY apps/cloud ./apps/cloud
+COPY apps/studio ./apps/studio
+COPY apps/account ./apps/account
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prefer-offline --prod=false

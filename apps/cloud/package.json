@@ -43,6 +43,8 @@
     "@objectstack/service-package": "workspace:*",
     "@objectstack/service-tenant": "workspace:*",
     "@objectstack/spec": "workspace:*",
+    "@objectstack/studio": "workspace:*",
+    "@objectstack/account": "workspace:*",
     "hono": "^4.12.18",
     "pg": "^8.20.0"
   },

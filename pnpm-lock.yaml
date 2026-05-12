@@ -165,6 +165,9 @@ importers:
       '@libsql/client':
         specifier: ^0.17.3
         version: 0.17.3
+      '@objectstack/account':
+        specifier: workspace:*
+        version: link:../account
       '@objectstack/cli':
         specifier: workspace:*
         version: link:../../packages/cli
@@ -225,6 +228,9 @@ importers:
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../../packages/spec
+      '@objectstack/studio':
+        specifier: workspace:*
+        version: link:../studio
       hono:
         specifier: ^4.12.18
         version: 4.12.18
