@@ -49,7 +49,7 @@ export class CloudContainer extends Container {
         // Comma-separated extra origins to add to better-auth's trusted
         // list (custom domains, preview hosts, …). AUTH_BASE_URL is
         // already trusted automatically.
-        OS_TRUSTED_ORIGINS: 'https://cloud.objectstack.ai',
+        OS_TRUSTED_ORIGINS: 'https://*.objectstack.workers.dev,https://*.objectos.app',
     };
 }
 
@@ -59,3 +59,4 @@ export default {
         return container.fetch(request);
     },
 };
+// touch 1778569567
