@@ -18,6 +18,8 @@ export const BootEnvSchema = z.object({
     OS_MODE: z.string().optional(),
     OS_MULTI_PROJECT: z.string().optional(),
     AUTH_SECRET: z.string().optional(),
+    AUTH_BASE_URL: z.string().optional(),
+    OS_BASE_URL: z.string().optional(),
     NEXT_PUBLIC_BASE_URL: z.string().optional(),
     VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
     VERCEL_URL: z.string().optional(),
@@ -100,14 +102,27 @@ export function resolveAuthSecret(env?: Record<string, string | undefined>): str
 }
 
 /**
- * Public origin used by better-auth callbacks. Honors Vercel's stable
- * production URL first, then the per-deploy URL, finally falling back to
- * `http://localhost:<PORT|3000>`.
+ * Public origin used by better-auth callbacks.
+ *
+ * Resolution order (highest priority first):
+ *   1. `AUTH_BASE_URL` — explicit, framework-wide (matches what
+ *      better-auth itself reads via `BETTER_AUTH_URL`).
+ *   2. `OS_BASE_URL`   — ObjectStack-specific alias.
+ *   3. `NEXT_PUBLIC_BASE_URL` — Next.js apps that publish their public URL.
+ *   4. `VERCEL_PROJECT_PRODUCTION_URL` — Vercel stable prod URL.
+ *   5. `VERCEL_URL` — Vercel per-deploy URL.
+ *   6. `http://localhost:<PORT|3000>` — last-resort dev fallback.
+ *
+ * The CLI's `serve` command builds its trustedOrigins allow-list from
+ * the same env vars (see packages/cli/src/commands/serve.ts) — keep
+ * the precedence here in sync.
  */
 export function resolveBaseUrl(env?: Record<string, string | undefined>): string {
     const e = pickEnv(env);
     return (
-        e.NEXT_PUBLIC_BASE_URL
+        e.AUTH_BASE_URL
+        ?? e.OS_BASE_URL
+        ?? e.NEXT_PUBLIC_BASE_URL
         ?? (e.VERCEL_PROJECT_PRODUCTION_URL ? `https://${e.VERCEL_PROJECT_PRODUCTION_URL}` : undefined)
         ?? (e.VERCEL_URL ? `https://${e.VERCEL_URL}` : undefined)
         ?? `http://localhost:${e.PORT ?? 3000}`
