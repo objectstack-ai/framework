@@ -93,6 +93,11 @@ apps/*/.next/docs/
 # Local env overrides (may contain secrets)
 .env.local
 .env.*.local
+.dev.vars
+.dev.vars.*
+
+# Wrangler local dev state
+.wrangler/
 
 # Playwright
 playwright-report/
