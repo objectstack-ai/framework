@@ -182,6 +182,7 @@ const opportunities = defineDataset(Opportunity, {
       close_date: cel`daysFromNow(30)`,
       type: 'existing_business',
       forecast_category: 'pipeline',
+      lead_source: 'web',
     },
     {
       name: 'Globex Manufacturing Suite',
@@ -192,6 +193,7 @@ const opportunities = defineDataset(Opportunity, {
       close_date: cel`daysFromNow(60)`,
       type: 'new_business',
       forecast_category: 'pipeline',
+      lead_source: 'referral',
     },
     {
       name: 'Wayne Enterprise License',
@@ -202,6 +204,7 @@ const opportunities = defineDataset(Opportunity, {
       close_date: cel`daysFromNow(14)`,
       type: 'new_business',
       forecast_category: 'commit',
+      lead_source: 'partner',
     },
     {
       name: 'Initech Cloud Migration',
@@ -212,6 +215,7 @@ const opportunities = defineDataset(Opportunity, {
       close_date: cel`daysFromNow(45)`,
       type: 'existing_business',
       forecast_category: 'best_case',
+      lead_source: 'event',
     },
   ]
 });
