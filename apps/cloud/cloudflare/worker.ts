@@ -186,6 +186,62 @@ export class CloudContainer extends Container<Env> {
     enableInternet = true;
     requiredPorts = [4000];
 
+    /**
+     * Cold start budget for the Node app to bind port 4000.
+     *
+     * The default in `@cloudflare/containers` is 20s
+     * (`TIMEOUT_TO_GET_PORTS_MS`), which is not enough for a fresh
+     * boot that has to:
+     *   1. Open a Neon Postgres connection (cold start ~1–3s).
+     *   2. Run `CREATE TABLE IF NOT EXISTS` for every registered
+     *      `sys_*` object — the SQL driver does NOT batch schema sync
+     *      yet, so each table costs one network round-trip.
+     *   3. Hydrate sys_metadata, then sync any newly hydrated objects
+     *      (Phase 3 in `ObjectQLPlugin.start`).
+     *   4. Finally start the Hono server which actually opens 4000.
+     *
+     * Cold first deploy against a fresh Neon DB easily exceeds 20s;
+     * 120s gives schema sync room to breathe without wedging warm
+     * traffic noticeably (subsequent requests go straight through).
+     */
+    private readonly PORT_READY_TIMEOUT_MS = 120_000;
+
+    /**
+     * Override the auto-start path so the container has the full cold
+     * start budget to open port 4000. Without this, `containerFetch`
+     * passes only `{ abort }` and inherits the 20s default, killing
+     * the container mid-schema-sync on first boot.
+     */
+    override async startAndWaitForPorts(
+        portsOrArgs?: any,
+        cancellationOptions?: any,
+        startOptions?: any,
+    ): Promise<void> {
+        // Two call shapes: (ports, cancellationOptions, startOptions)
+        // and ({ ports, cancellationOptions, startOptions }). Inject our
+        // default timeout into whichever is in use.
+        if (
+            portsOrArgs !== null &&
+            typeof portsOrArgs === 'object' &&
+            !Array.isArray(portsOrArgs) &&
+            ('ports' in portsOrArgs || 'cancellationOptions' in portsOrArgs || 'startOptions' in portsOrArgs)
+        ) {
+            const merged = {
+                ...portsOrArgs,
+                cancellationOptions: {
+                    portReadyTimeoutMS: this.PORT_READY_TIMEOUT_MS,
+                    ...(portsOrArgs.cancellationOptions ?? {}),
+                },
+            };
+            return super.startAndWaitForPorts(merged);
+        }
+        const merged = {
+            portReadyTimeoutMS: this.PORT_READY_TIMEOUT_MS,
+            ...(cancellationOptions ?? {}),
+        };
+        return super.startAndWaitForPorts(portsOrArgs, merged, startOptions);
+    }
+
     // Default envVars baked into every Container. Worker-side secrets/vars
     // forwarded via the constructor below OVERRIDE these (e.g. you can set
     // AUTH_BASE_URL via Dashboard for a custom domain without redeploying).

@@ -42,12 +42,28 @@ export interface ObjectQLPluginOptions {
   hostContext?: Record<string, any>;
   /** Scope sys_metadata reads/writes to this project. */
   projectId?: string;
+  /**
+   * Override the kernel's default plugin-start timeout for this plugin.
+   * Defaults to 120000 (120s). Schema sync to a remote SQL backend
+   * (Neon/Postgres/Turso) is latency-bound — the SQL driver currently
+   * does NOT support `batchSchemaSync`, so it issues one round-trip per
+   * registered object × twice (Phase 1 + Phase 3 in `start()`). On a
+   * cold remote DB with N tables this can blow past the kernel's
+   * default 30s easily, even though everything is healthy.
+   */
+  startupTimeout?: number;
 }
 
 export class ObjectQLPlugin implements Plugin {
   name = 'com.objectstack.engine.objectql';
   type = 'objectql';
   version = '1.0.0';
+  /**
+   * Schema sync to remote SQL DBs is latency-bound (one round-trip per
+   * table × 2 phases). Default to 120s instead of the kernel's 30s so
+   * cold Neon/Turso starts don't get killed mid-sync.
+   */
+  startupTimeout = 120_000;
 
   private ql: ObjectQL | undefined;
   private hostContext?: Record<string, any>;
@@ -67,6 +83,9 @@ export class ObjectQLPlugin implements Plugin {
     }
     this.hostContext = opts.hostContext ?? hostContext;
     this.projectId = opts.projectId;
+    if (typeof opts.startupTimeout === 'number' && opts.startupTimeout > 0) {
+      this.startupTimeout = opts.startupTimeout;
+    }
   }
 
   init = async (ctx: PluginContext) => {
