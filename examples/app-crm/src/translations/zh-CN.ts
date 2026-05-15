@@ -12,6 +12,7 @@ export const zhCN: TranslationData = {
     account: {
       label: '客户',
       pluralLabel: '客户',
+      description: '与我们有业务往来的公司和组织',
       fields: {
         account_number: { label: '客户编号' },
         name: { label: '客户名称', help: '公司或组织的法定名称' },
@@ -51,6 +52,7 @@ export const zhCN: TranslationData = {
     contact: {
       label: '联系人',
       pluralLabel: '联系人',
+      description: '客户与商机的关键人物联系人',
       fields: {
         salutation: { label: '称谓' },
         first_name: { label: '名' },
@@ -467,6 +469,7 @@ export const zhCN: TranslationData = {
     opportunity: {
       label: '商机',
       pluralLabel: '商机',
+      description: '销售流程中的商机与交易',
       fields: {
         name: { label: '商机名称' },
         account: { label: '所属客户' },
