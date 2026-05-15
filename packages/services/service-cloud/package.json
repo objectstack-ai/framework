@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/service-cloud",
-  "version": "4.0.5",
+  "version": "4.1.0",
   "description": "ObjectStack Cloud Service - Multi-project orchestration, control-plane, and cloud deployment",
   "type": "module",
   "main": "./dist/index.js",

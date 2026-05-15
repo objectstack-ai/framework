@@ -1,5 +1,14 @@
 # @objectstack/service-tenant
 
+## 4.1.0
+
+### Patch Changes
+
+- @objectstack/spec@4.1.0
+- @objectstack/core@4.1.0
+- @objectstack/platform-objects@4.1.0
+- @objectstack/driver-turso@4.1.0
+
 ## 4.0.5
 
 ### Patch Changes

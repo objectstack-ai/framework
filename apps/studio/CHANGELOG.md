@@ -1,5 +1,31 @@
 # @objectstack/studio
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [96fb108]
+- Updated dependencies [1234920]
+  - @objectstack/runtime@4.1.0
+  - @objectstack/metadata@4.1.0
+  - @objectstack/hono@4.1.0
+  - @objectstack/client@4.1.0
+  - @objectstack/plugin-msw@4.1.0
+  - @objectstack/spec@4.1.0
+  - @objectstack/client-react@4.1.0
+  - @objectstack/objectql@4.1.0
+  - @objectstack/platform-objects@4.1.0
+  - @objectstack/driver-memory@4.1.0
+  - @objectstack/driver-turso@4.1.0
+  - @objectstack/plugin-audit@4.1.0
+  - @objectstack/plugin-auth@4.1.0
+  - @objectstack/plugin-security@4.1.0
+  - @objectstack/service-automation@4.1.0
+  - @objectstack/service-analytics@4.1.0
+  - @objectstack/service-feed@4.1.0
+  - @objectstack/service-ai@4.1.0
+  - @objectstack/service-tenant@4.1.0
+
 ## 4.0.5
 
 ### Patch Changes
