@@ -51,6 +51,10 @@ export interface MultiProjectPluginConfig {
     cacheTTLMs?: number;
     maxSize?: number;
     ttlMs?: number;
+    /** Direct storage adapter for artifact publishing. Bypasses kernel.getService('file-storage'). */
+    storage?: any;
+    /** Adapter name (e.g. 's3', 'local') — used when persisting sys_project_revision rows. */
+    storageAdapterName?: string;
 }
 
 interface ExtractedItem {
@@ -287,6 +291,7 @@ function createTemplateSeeder(
                 bundleHasObjects: Array.isArray(bundle?.objects) ? bundle.objects.length : 0,
                 bundleHasApps: Array.isArray(bundle?.apps) ? bundle.apps.length : 0,
                 bundleHasViews: Array.isArray(bundle?.views) ? bundle.views.length : 0,
+                lastServiceKeys: (publishCtx as any)._lastServiceKeys ?? null,
             };
             if (!storage) {
                 publishStatus.error = 'no-file-storage-service';
@@ -335,10 +340,12 @@ function createTemplateSeeder(
                 : (cur?.metadata ?? {});
             await (publishCtx.controlDriver as any).update(
                 'sys_project',
-                { where: { id: projectId } },
+                projectId,
                 { metadata: JSON.stringify({ ...meta, publishStatus, publishStatusAt: new Date().toISOString() }) },
             );
-        } catch { /* best-effort diagnostic */ }
+        } catch (diagErr: any) {
+            console.error('[MultiProjectPlugin] Failed to write publishStatus diagnostic:', diagErr?.message ?? diagErr);
+        }
     };
 
     return {
@@ -352,15 +359,45 @@ function createTemplateSeeder(
         },
 
         async seed({ projectId, templateId }) {
+            const writeDiag = async (stage: string, extra: any = {}) => {
+                try {
+                    const cur = await (publishCtx.controlDriver as any).findOne('sys_project', { where: { id: projectId } });
+                    const meta = cur && typeof cur.metadata === 'string' ? JSON.parse(cur.metadata) : (cur?.metadata ?? {});
+                    const seedDiag = { ...(meta.seedDiag ?? {}), [stage]: { at: new Date().toISOString(), ...extra } };
+                    await (publishCtx.controlDriver as any).update('sys_project', projectId, {
+                        metadata: JSON.stringify({ ...meta, seedDiag }),
+                    });
+                } catch (e: any) { console.error('[MultiProjectPlugin] writeDiag failed', stage, e?.message); }
+            };
+            await writeDiag('seedCalled', { templateId, templates: Object.keys(templates) });
             const template = templates[templateId];
             if (!template) {
+                await writeDiag('seedNotFound', { templateId });
                 throw new Error(
                     `Unknown template: '${templateId}'. Available: [${Object.keys(templates).join(', ')}]`,
                 );
             }
-
-            const bundle = await template.load();
-            await seedBundleForProject(projectId, bundle);
+            let bundle: any;
+            try {
+                bundle = await template.load();
+                await writeDiag('templateLoaded', {
+                    objects: Array.isArray(bundle?.objects) ? bundle.objects.length : 'n/a',
+                    apps: Array.isArray(bundle?.apps) ? bundle.apps.length : 'n/a',
+                    views: Array.isArray(bundle?.views) ? bundle.views.length : 'n/a',
+                    data: Array.isArray(bundle?.data) ? bundle.data.length : 'n/a',
+                    bundleKeys: bundle ? Object.keys(bundle) : null,
+                });
+            } catch (e: any) {
+                await writeDiag('templateLoadError', { error: e?.message, stack: e?.stack?.split('\n').slice(0,5) });
+                throw e;
+            }
+            try {
+                await seedBundleForProject(projectId, bundle);
+                await writeDiag('seedBundleDone');
+            } catch (e: any) {
+                await writeDiag('seedBundleError', { error: e?.message, stack: e?.stack?.split('\n').slice(0,5) });
+                throw e;
+            }
         },
 
         async seedBundle({ projectId, bundle }) {
@@ -515,28 +552,34 @@ export class MultiProjectPlugin implements Plugin {
         });
         this.kernelManager = kernelManager;
 
+        const directStorage = this.config.storage ?? null;
+        const directStorageAdapter = this.config.storageAdapterName
+            ?? (process.env.OS_STORAGE_ADAPTER ?? 'local').toLowerCase();
         const seeder = createTemplateSeeder(
             kernelManager,
             this.config.templates ?? {},
             envRegistry,
             {
                 controlDriver: this.config.controlDriver,
-                storageAdapter: (process.env.OS_STORAGE_ADAPTER ?? 'local').toLowerCase(),
+                storageAdapter: directStorageAdapter,
                 keyPrefix: process.env.OS_STORAGE_KEY_PREFIX ?? 'artifacts',
                 getStorage: async () => {
-                    // Resolve once-per-call so the storage plugin (registered
-                    // in parallel) is available even when MultiProjectPlugin
-                    // initialised first. Try sync getService first; fall back
-                    // to async getServiceAsync (StorageServicePlugin may register
-                    // via async lifecycle on cold start).
+                    // 1. Direct storage adapter (preferred — set by cloud-stack
+                    //    via resolveStorageFromEnv to bypass kernel.getService
+                    //    lookup which is unreliable through the proxy wrapper).
+                    if (directStorage && typeof directStorage.upload === 'function') {
+                        return directStorage;
+                    }
+                    // 2. Fallback to kernel service lookup (for any stack that
+                    //    forgot to pass `storage` in MultiProjectPluginConfig).
                     try {
                         const sync = (hostKernel as any).getService?.('file-storage');
                         if (sync && typeof sync.upload === 'function') return sync;
-                    } catch { /* fall through */ }
+                    } catch { /* ignore */ }
                     try {
                         const async = await (hostKernel as any).getServiceAsync?.('file-storage');
                         if (async && typeof async.upload === 'function') return async;
-                    } catch { /* not registered yet */ }
+                    } catch { /* ignore */ }
                     return null;
                 },
             },

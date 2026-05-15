@@ -21,7 +21,7 @@ import { createControlPlanePlugins } from './control-plane-preset.js';
 import { createStudioRuntimeConfigPlugin, createTemplatesRoutePlugin } from './multi-project-plugins.js';
 import { createCloudArtifactApiPlugin } from './cloud-artifact-api-plugin.js';
 import { resolveDefaultDataDir } from './data-dir.js';
-import { resolveStoragePluginFromEnv } from './storage-env.js';
+import { resolveStoragePluginFromEnv, resolveStorageFromEnv } from './storage-env.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -161,6 +161,12 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
         ];
     });
 
+    // Resolve storage ONCE so we can wire both StorageServicePlugin (kernel
+    // service registration + REST routes) AND pass the raw adapter directly to
+    // MultiProjectPlugin (avoids cross-plugin kernel.getService lookup which
+    // is unreliable through the proxy wrapper used here).
+    const storageEnv = await resolveStorageFromEnv();
+
     const multiProjectPluginProxy: any = {
         name: 'com.objectstack.multi-project',
         version: '0.0.0',
@@ -176,6 +182,8 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
                     maxSize: Number(process.env.OS_KERNEL_CACHE_SIZE ?? kernelCacheSize ?? 32),
                     ttlMs: Number(process.env.OS_KERNEL_TTL_MS ?? kernelTtlMs ?? 15 * 60 * 1000),
                     cacheTTLMs: Number(process.env.OS_ENV_CACHE_TTL_MS ?? envCacheTtlMs ?? 5 * 60 * 1000),
+                    storage: storageEnv.storage,
+                    storageAdapterName: storageEnv.adapterName,
                 });
                 if (this._impl.init) await this._impl.init(ctx);
             } catch (err: any) {
@@ -206,7 +214,7 @@ export async function createCloudStack(config: CloudStackConfig): Promise<{
         // Falls back to local-FS adapter (rooted at OS_STORAGE_LOCAL_DIR or
         // <data-dir>/storage). On serverless without S3 env vars, the cloud-
         // artifact plugin will warn — set OS_STORAGE_ADAPTER=s3 in production.
-        ...(await resolveStoragePluginFromEnv()),
+        ...(storageEnv.plugin ? [storageEnv.plugin] : []),
         multiProjectPluginProxy,
         createStudioRuntimeConfigPlugin({ apiPrefix }),
         createTemplatesRoutePlugin(templateList, { apiPrefix }),

@@ -26,10 +26,22 @@
  * fall back to its local-FS path with a startup warning.
  */
 export async function resolveStoragePluginFromEnv(): Promise<any[]> {
+    const r = await resolveStorageFromEnv();
+    return r.plugin ? [r.plugin] : [];
+}
+
+/**
+ * Same as {@link resolveStoragePluginFromEnv} but also returns the underlying
+ * storage adapter instance so callers can pass it to other plugins (e.g.
+ * MultiProjectPlugin's getStorage hook) without going through kernel service
+ * lookup. This avoids ordering / proxy issues where the host kernel's service
+ * registry doesn't surface 'file-storage' to closures captured during init.
+ */
+export async function resolveStorageFromEnv(): Promise<{ plugin: any | null; storage: any | null; adapterName: string }> {
     const adapter = (process.env.OS_STORAGE_ADAPTER ?? 'local').trim().toLowerCase();
 
     if (adapter === 'none' || adapter === 'disabled' || adapter === 'off') {
-        return [];
+        return { plugin: null, storage: null, adapterName: 'none' };
     }
 
     if (adapter === 's3') {
@@ -42,24 +54,24 @@ export async function resolveStoragePluginFromEnv(): Promise<any[]> {
                 'or set OS_STORAGE_ADAPTER=local for local development.',
             );
         }
-        const { StorageServicePlugin } = await import('@objectstack/service-storage');
-        return [new StorageServicePlugin({
-            adapter: 's3',
-            s3: {
-                bucket,
-                region,
-                endpoint: process.env.OS_S3_ENDPOINT?.trim() || undefined,
-                accessKeyId: process.env.OS_S3_ACCESS_KEY_ID?.trim() || undefined,
-                secretAccessKey: process.env.OS_S3_SECRET_ACCESS_KEY?.trim() || undefined,
-                forcePathStyle: /^(1|true|yes)$/i.test(process.env.OS_S3_FORCE_PATH_STYLE ?? ''),
-            },
-        })];
+        const { StorageServicePlugin, S3StorageAdapter } = await import('@objectstack/service-storage');
+        const s3Opts = {
+            bucket,
+            region,
+            endpoint: process.env.OS_S3_ENDPOINT?.trim() || undefined,
+            accessKeyId: process.env.OS_S3_ACCESS_KEY_ID?.trim() || undefined,
+            secretAccessKey: process.env.OS_S3_SECRET_ACCESS_KEY?.trim() || undefined,
+            forcePathStyle: /^(1|true|yes)$/i.test(process.env.OS_S3_FORCE_PATH_STYLE ?? ''),
+        };
+        const storage = new S3StorageAdapter(s3Opts);
+        const plugin = new StorageServicePlugin({ adapter: 's3', s3: s3Opts });
+        return { plugin, storage, adapterName: 's3' };
     }
 
     // 'local' (default)
-    const { StorageServicePlugin } = await import('@objectstack/service-storage');
-    return [new StorageServicePlugin({
-        adapter: 'local',
-        local: { rootDir: process.env.OS_STORAGE_LOCAL_DIR?.trim() || './storage' },
-    })];
+    const { StorageServicePlugin, LocalStorageAdapter } = await import('@objectstack/service-storage');
+    const rootDir = process.env.OS_STORAGE_LOCAL_DIR?.trim() || './storage';
+    const storage = new LocalStorageAdapter({ rootDir, basePath: '/api/v1/storage' });
+    const plugin = new StorageServicePlugin({ adapter: 'local', local: { rootDir } });
+    return { plugin, storage, adapterName: 'local' };
 }
