@@ -256,6 +256,7 @@ const result = MetadataBulkRegisterRequest.parse(data);
 | **description** | `string` | optional | Description of the metadata type |
 | **filePatterns** | `string[]` | ✅ | Glob patterns to discover files of this type |
 | **supportsOverlay** | `boolean` | ✅ | Whether overlay customization is supported |
+| **allowOrgOverride** | `boolean` | ✅ | Allow per-org overlay writes via runtime metadata API |
 | **allowRuntimeCreate** | `boolean` | ✅ | Allow runtime creation via API |
 | **supportsVersioning** | `boolean` | ✅ | Whether version history is tracked |
 | **loadOrder** | `integer` | ✅ | Loading priority (lower = earlier) |

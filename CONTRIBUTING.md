@@ -117,6 +117,20 @@ Adding or modifying protocol definitions in `packages/spec/src/`:
 4. **Generate Schemas** - Run `pnpm build`
 5. **Create Documentation** - Add MDX in `content/docs/references/`
 
+> **Single Source of Truth — One Zod schema per metadata type.**
+> Each metadata type (`view`, `dashboard`, `flow`, `agent`, `tool`, `object`, …)
+> has exactly **one** Zod schema under `packages/spec/src/{domain}/`. Do
+> **not** re-declare the same shape as a `*.object.ts` projection table —
+> that pattern was removed in ADR-0005 (see `docs/adr/0005-…`). Studio
+> editing forms and the overlay validator (`resolveOverlaySchema()` in
+> `packages/objectql/src/protocol.ts`) both bind to that one schema.
+>
+> **Runtime opt-in for org overlays** lives in exactly one place: the
+> `allowOrgOverride` boolean on the type's entry in
+> `DEFAULT_METADATA_TYPE_REGISTRY`
+> (`packages/spec/src/kernel/metadata-plugin.zod.ts`). Do not maintain a
+> parallel whitelist in runtime code.
+
 Example:
 ```typescript
 /**

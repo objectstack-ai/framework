@@ -24,6 +24,7 @@ import type { IDataDriver, IDataEngine } from '@objectstack/spec/contracts';
 import type { MetadataLoader } from './loader-interface.js';
 import { calculateChecksum } from '../utils/metadata-history-utils.js';
 import { LRUCache } from '../utils/lru-cache.js';
+import { addSysMetadataOverlayIndex } from '../migrations/add-sys-metadata-overlay-index.js';
 
 /**
  * Cache configuration for `DatabaseLoader`.
@@ -255,6 +256,28 @@ export class DatabaseLoader implements MetadataLoader {
     // When using engine, schema sync is handled by ObjectQL startup
     if (this.engine) {
       this.schemaReady = true;
+      // Best-effort: also ensure the overlay-uniqueness index.
+      // The engine-managed driver may still benefit from a partial UNIQUE
+      // INDEX (ADR-0005). Failures are swallowed by the migration itself.
+      try {
+        const engineAny = this.engine as any;
+        let driver: IDataDriver | undefined =
+          engineAny?.driver ?? engineAny?.getDriver?.();
+        if (!driver && engineAny?.drivers instanceof Map) {
+          for (const candidate of engineAny.drivers.values()) {
+            const c = candidate as any;
+            if (c && (typeof c.raw === 'function' || typeof c.execute === 'function')) {
+              driver = candidate as IDataDriver;
+              break;
+            }
+          }
+        }
+        if (driver) {
+          await addSysMetadataOverlayIndex(driver);
+        }
+      } catch {
+        // ignore — index is an optimization, not a correctness invariant
+      }
       return;
     }
 
@@ -264,6 +287,12 @@ export class DatabaseLoader implements MetadataLoader {
         name: this.tableName,
       });
       this.schemaReady = true;
+      // Apply ADR-0005 partial UNIQUE INDEX (best-effort, idempotent)
+      try {
+        await addSysMetadataOverlayIndex(this.driver!);
+      } catch {
+        // ignore — index is optimization
+      }
     } catch {
       // If syncSchema fails (e.g. table already exists), mark ready and continue
       this.schemaReady = true;

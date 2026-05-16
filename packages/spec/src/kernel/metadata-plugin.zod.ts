@@ -146,6 +146,21 @@ export const MetadataTypeRegistryEntrySchema = lazySchema(() => z.object({
   supportsOverlay: z.boolean().default(true).describe('Whether overlay customization is supported'),
 
   /**
+   * Whether end-user organizations may write per-org overlay rows for this
+   * type via the runtime metadata API (`PUT /api/v1/meta/:type/:name`).
+   *
+   * This is the **runtime opt-in gate** for ADR-0005 metadata customization.
+   * `supportsOverlay` describes the *capability* (the loader can merge overlays);
+   * `allowOrgOverride` is the explicit *permission* to actually accept writes
+   * from a tenant. Defaults to `false` for safety — plugin authors must
+   * deliberately opt in. The runtime returns HTTP 403 `not_overridable` when
+   * a write targets a type with this flag unset.
+   *
+   * As of ADR-0005 Phase 1, only `view` and `dashboard` opt in.
+   */
+  allowOrgOverride: z.boolean().default(false).describe('Allow per-org overlay writes via runtime metadata API'),
+
+  /**
    * Whether metadata of this type can be created at runtime via API.
    * Some types (e.g., 'object') may be restricted to deployment-only.
    */
@@ -490,41 +505,41 @@ export type MetadataPluginManifest = z.input<typeof MetadataPluginManifestSchema
  */
 export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   // Data Protocol (load first)
-  { type: 'object', label: 'Object', filePatterns: ['**/*.object.ts', '**/*.object.yml', '**/*.object.json'], supportsOverlay: true, allowRuntimeCreate: false, supportsVersioning: true, loadOrder: 10, domain: 'data' },
-  { type: 'field', label: 'Field', filePatterns: ['**/*.field.ts', '**/*.field.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 20, domain: 'data' },
-  { type: 'trigger', label: 'Trigger', filePatterns: ['**/*.trigger.ts', '**/*.trigger.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 30, domain: 'data' },
-  { type: 'validation', label: 'Validation Rule', filePatterns: ['**/*.validation.ts', '**/*.validation.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 30, domain: 'data' },
-  { type: 'hook', label: 'Hook', filePatterns: ['**/*.hook.ts', '**/*.hook.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 30, domain: 'data' },
+  { type: 'object', label: 'Object', filePatterns: ['**/*.object.ts', '**/*.object.yml', '**/*.object.json'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: true, loadOrder: 10, domain: 'data' },
+  { type: 'field', label: 'Field', filePatterns: ['**/*.field.ts', '**/*.field.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 20, domain: 'data' },
+  { type: 'trigger', label: 'Trigger', filePatterns: ['**/*.trigger.ts', '**/*.trigger.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 30, domain: 'data' },
+  { type: 'validation', label: 'Validation Rule', filePatterns: ['**/*.validation.ts', '**/*.validation.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 30, domain: 'data' },
+  { type: 'hook', label: 'Hook', filePatterns: ['**/*.hook.ts', '**/*.hook.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 30, domain: 'data' },
 
   // UI Protocol
-  { type: 'view', label: 'View', filePatterns: ['**/*.view.ts', '**/*.view.yml', '**/*.view.json'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 50, domain: 'ui' },
-  { type: 'page', label: 'Page', filePatterns: ['**/*.page.ts', '**/*.page.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 50, domain: 'ui' },
-  { type: 'dashboard', label: 'Dashboard', filePatterns: ['**/*.dashboard.ts', '**/*.dashboard.yml', '**/*.dashboard.json'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 60, domain: 'ui' },
-  { type: 'app', label: 'Application', filePatterns: ['**/*.app.ts', '**/*.app.yml', '**/*.app.json'], supportsOverlay: true, allowRuntimeCreate: false, supportsVersioning: true, loadOrder: 70, domain: 'ui' },
-  { type: 'action', label: 'Action', filePatterns: ['**/*.action.ts', '**/*.action.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 50, domain: 'ui' },
-  { type: 'report', label: 'Report', filePatterns: ['**/*.report.ts', '**/*.report.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 60, domain: 'ui' },
+  { type: 'view', label: 'View', filePatterns: ['**/*.view.ts', '**/*.view.yml', '**/*.view.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 50, domain: 'ui' },
+  { type: 'page', label: 'Page', filePatterns: ['**/*.page.ts', '**/*.page.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 50, domain: 'ui' },
+  { type: 'dashboard', label: 'Dashboard', filePatterns: ['**/*.dashboard.ts', '**/*.dashboard.yml', '**/*.dashboard.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 60, domain: 'ui' },
+  { type: 'app', label: 'Application', filePatterns: ['**/*.app.ts', '**/*.app.yml', '**/*.app.json'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: true, loadOrder: 70, domain: 'ui' },
+  { type: 'action', label: 'Action', filePatterns: ['**/*.action.ts', '**/*.action.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 50, domain: 'ui' },
+  { type: 'report', label: 'Report', filePatterns: ['**/*.report.ts', '**/*.report.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 60, domain: 'ui' },
 
   // Automation Protocol
-  { type: 'flow', label: 'Flow', filePatterns: ['**/*.flow.ts', '**/*.flow.yml', '**/*.flow.json'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 80, domain: 'automation' },
-  { type: 'workflow', label: 'Workflow', filePatterns: ['**/*.workflow.ts', '**/*.workflow.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 80, domain: 'automation' },
-  { type: 'approval', label: 'Approval Process', filePatterns: ['**/*.approval.ts', '**/*.approval.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 80, domain: 'automation' },
+  { type: 'flow', label: 'Flow', filePatterns: ['**/*.flow.ts', '**/*.flow.yml', '**/*.flow.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 80, domain: 'automation' },
+  { type: 'workflow', label: 'Workflow', filePatterns: ['**/*.workflow.ts', '**/*.workflow.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 80, domain: 'automation' },
+  { type: 'approval', label: 'Approval Process', filePatterns: ['**/*.approval.ts', '**/*.approval.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 80, domain: 'automation' },
 
   // System Protocol
-  { type: 'datasource', label: 'Datasource', filePatterns: ['**/*.datasource.ts', '**/*.datasource.yml'], supportsOverlay: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 5, domain: 'system' },
-  { type: 'translation', label: 'Translation', filePatterns: ['**/*.translation.ts', '**/*.translation.yml', '**/*.translation.json'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 90, domain: 'system' },
-  { type: 'router', label: 'Router', filePatterns: ['**/*.router.ts'], supportsOverlay: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 40, domain: 'system' },
-  { type: 'function', label: 'Function', filePatterns: ['**/*.function.ts'], supportsOverlay: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 40, domain: 'system' },
-  { type: 'service', label: 'Service', filePatterns: ['**/*.service.ts'], supportsOverlay: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 40, domain: 'system' },
+  { type: 'datasource', label: 'Datasource', filePatterns: ['**/*.datasource.ts', '**/*.datasource.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 5, domain: 'system' },
+  { type: 'translation', label: 'Translation', filePatterns: ['**/*.translation.ts', '**/*.translation.yml', '**/*.translation.json'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 90, domain: 'system' },
+  { type: 'router', label: 'Router', filePatterns: ['**/*.router.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 40, domain: 'system' },
+  { type: 'function', label: 'Function', filePatterns: ['**/*.function.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 40, domain: 'system' },
+  { type: 'service', label: 'Service', filePatterns: ['**/*.service.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, loadOrder: 40, domain: 'system' },
 
   // Security Protocol
-  { type: 'permission', label: 'Permission Set', filePatterns: ['**/*.permission.ts', '**/*.permission.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 15, domain: 'security' },
-  { type: 'profile', label: 'Profile', filePatterns: ['**/*.profile.ts', '**/*.profile.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 15, domain: 'security' },
-  { type: 'role', label: 'Role', filePatterns: ['**/*.role.ts', '**/*.role.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 15, domain: 'security' },
+  { type: 'permission', label: 'Permission Set', filePatterns: ['**/*.permission.ts', '**/*.permission.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 15, domain: 'security' },
+  { type: 'profile', label: 'Profile', filePatterns: ['**/*.profile.ts', '**/*.profile.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 15, domain: 'security' },
+  { type: 'role', label: 'Role', filePatterns: ['**/*.role.ts', '**/*.role.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 15, domain: 'security' },
 
   // AI Protocol
-  { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 90, domain: 'ai' },
-  { type: 'tool', label: 'AI Tool', filePatterns: ['**/*.tool.ts', '**/*.tool.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 85, domain: 'ai' },
-  { type: 'skill', label: 'AI Skill', filePatterns: ['**/*.skill.ts', '**/*.skill.yml'], supportsOverlay: true, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 88, domain: 'ai' },
+  { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, loadOrder: 90, domain: 'ai' },
+  { type: 'tool', label: 'AI Tool', filePatterns: ['**/*.tool.ts', '**/*.tool.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 85, domain: 'ai' },
+  { type: 'skill', label: 'AI Skill', filePatterns: ['**/*.skill.ts', '**/*.skill.yml'], supportsOverlay: true, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, loadOrder: 88, domain: 'ai' },
 ];
 
 // ==========================================

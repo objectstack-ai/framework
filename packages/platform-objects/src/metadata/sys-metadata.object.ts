@@ -187,9 +187,16 @@ export const SysMetadataObject = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['type', 'name', 'project_id'], unique: true },
+    // ADR-0005: overlay uniqueness is scoped by (type, name, organization_id, project_id, scope)
+    // restricted to active rows so resets / archived versions don't collide.
+    {
+      name: 'idx_sys_metadata_overlay_active',
+      fields: ['type', 'name', 'organization_id', 'project_id', 'scope'],
+      unique: true,
+      partial: "state = 'active'",
+    },
+    { name: 'idx_sys_metadata_org_type', fields: ['organization_id', 'type'] },
     { fields: ['type', 'scope'] },
-    { fields: ['organization_id'] },
     { fields: ['project_id'] },
     { fields: ['package_version_id'] },
     { fields: ['state'] },

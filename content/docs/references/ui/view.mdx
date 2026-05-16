@@ -16,8 +16,8 @@ Migrated to shared/http.zod.ts. Re-exported here for backward compatibility.
 ## TypeScript Usage
 
 ```typescript
-import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
-import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AddRecordConfig.parse(data);
@@ -157,6 +157,23 @@ Record grouping configuration
 | **groupByField** | `string` | ✅ | Field to group columns by (usually status/select) |
 | **summarizeField** | `string` | optional | Field to sum at top of column (e.g. amount) |
 | **columns** | `string[]` | ✅ | Fields to show on cards |
+
+
+---
+
+## ListChartConfig
+
+List chart view configuration
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **chartType** | `Enum<'bar' \| 'line' \| 'pie' \| 'area' \| 'scatter'>` | ✅ | Chart visualisation type |
+| **xAxisField** | `string` | ✅ | Field used as the X axis / category dimension |
+| **yAxisFields** | `string[]` | ✅ | Field(s) used as the Y axis / measures |
+| **aggregation** | `Enum<'sum' \| 'avg' \| 'count' \| 'min' \| 'max'>` | optional | Aggregation function applied to Y axis fields |
+| **groupByField** | `string` | optional | Optional field used to split / stack the chart |
 
 
 ---

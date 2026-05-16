@@ -28,6 +28,7 @@
     - Philosophy: "Data as Code", Idempotency, and Immutable Infrastructure are the defaults.
 6. **Long-Term Architecture:** Do NOT use simplified or temporary workarounds. Always adopt sustainable, well-architected solutions.
 7. **Short Object Names Are Canonical:** Always write **short** object names (e.g. `account`, `task`) in user code, examples, queries, REST URLs, formulas, hooks, and lookups. **Never** type FQN (`{namespace}__name`, e.g. `crm__account`) in user-facing code, docs, or AI-generated output. **Never** set `tableName` on an object schema — the field has been removed; the physical table name is always derived from the short name. FQN is an internal-only mechanic used by the registry for cross-package disambiguation, marketplace publishing, and customization `baseName` references.
+8. **One Zod Source per Metadata Type:** Each metadata type (`view`, `dashboard`, `flow`, `agent`, `tool`, `object`, …) has exactly **one** Zod schema in `packages/spec/src/{domain}/`. Do **not** re-declare the same shape as a `*.object.ts` projection table — that pattern is removed (see ADR-0005). Runtime org overlay opt-in lives in **one** place: the `allowOrgOverride` flag on the type's entry in `DEFAULT_METADATA_TYPE_REGISTRY` (`packages/spec/src/kernel/metadata-plugin.zod.ts`); never maintain a parallel whitelist. The overlay validator (`resolveOverlaySchema()` in `packages/objectql/src/protocol.ts`) and Studio editing forms both bind to the canonical Zod schema.
 
 ---
 

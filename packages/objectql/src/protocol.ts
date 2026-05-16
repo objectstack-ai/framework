@@ -14,6 +14,7 @@ import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
 import { ListViewSchema, FormViewSchema, DashboardSchema } from '@objectstack/spec/ui';
+import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
 import { z } from 'zod';
 
 /**
@@ -118,6 +119,69 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         this.getServicesRegistry = getServicesRegistry;
         this.getFeedService = getFeedService;
         this.projectId = projectId;
+    }
+
+    /**
+     * One-time guard for ensuring the overlay-uniqueness UNIQUE INDEX exists
+     * on `sys_metadata`. ADR-0005: scopes overlays by
+     * `(type, name, organization_id, project_id, scope)` for active rows only.
+     * Idempotent SQL — safe to attempt on every protocol instance.
+     *
+     * Inlined here (rather than importing from @objectstack/metadata/migrations)
+     * to avoid a circular dependency: metadata already depends on objectql.
+     */
+    private overlayIndexEnsured = false;
+    private async ensureOverlayIndex(): Promise<void> {
+        if (this.overlayIndexEnsured) return;
+        this.overlayIndexEnsured = true;
+        try {
+            const engineAny = this.engine as any;
+            let driver: any = engineAny?.driver ?? engineAny?.getDriver?.();
+            if (!driver && engineAny?.drivers instanceof Map) {
+                for (const candidate of engineAny.drivers.values()) {
+                    if (
+                        candidate &&
+                        (typeof (candidate as any).raw === 'function' ||
+                            typeof (candidate as any).execute === 'function')
+                    ) {
+                        driver = candidate;
+                        break;
+                    }
+                }
+            }
+            if (!driver) return;
+            const exec = async (sql: string): Promise<void> => {
+                if (typeof (driver as any).raw === 'function') {
+                    await (driver as any).raw(sql);
+                } else if (typeof (driver as any).execute === 'function') {
+                    await (driver as any).execute(sql);
+                } else {
+                    throw new Error('driver has neither raw nor execute');
+                }
+            };
+            const partialSql =
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_sys_metadata_overlay_active " +
+                "ON sys_metadata (type, name, organization_id, project_id, scope) " +
+                "WHERE state = 'active'";
+            const fallbackSql =
+                "CREATE INDEX IF NOT EXISTS idx_sys_metadata_overlay_active " +
+                "ON sys_metadata (type, name, organization_id, project_id, scope)";
+            try {
+                await exec(partialSql);
+            } catch (err: any) {
+                const msg = err instanceof Error ? err.message : String(err);
+                if (/partial|where clause|syntax/i.test(msg)) {
+                    try {
+                        await exec(fallbackSql);
+                    } catch {
+                        // ignore — non-essential optimization
+                    }
+                }
+                // "already exists" or anything else: best-effort
+            }
+        } catch {
+            // ignore — index is an optimization, not a correctness invariant
+        }
     }
 
     /**
@@ -1113,32 +1177,51 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
     /**
      * Metadata types that are customer-overridable via {@link saveMetaItem}/
-     * {@link deleteMetaItem} in project-kernel mode. See ADR-0005 §"Whitelist
-     * enforcement". Expand this set type-by-type as the runtime machinery
-     * (e.g. object-level schema migration on overlay) lands.
+     * {@link deleteMetaItem} in project-kernel mode. Derived from the canonical
+     * registry in {@link DEFAULT_METADATA_TYPE_REGISTRY}: a type opts in by
+     * setting `allowOrgOverride: true` on its registry entry. The set is
+     * augmented with the plural form of every singular so callers using REST
+     * conventions (`/api/v1/meta/views/...`) get the same gate. See ADR-0005
+     * §"Whitelist enforcement" for the rationale and the per-type rollout
+     * checklist.
      */
-    private static readonly OVERLAY_ALLOWED_TYPES: ReadonlySet<string> = new Set([
-        'view', 'views',
-        'dashboard', 'dashboards',
-    ]);
+    private static readonly OVERLAY_ALLOWED_TYPES: ReadonlySet<string> = (() => {
+        const out = new Set<string>();
+        for (const entry of DEFAULT_METADATA_TYPE_REGISTRY) {
+            if (!entry.allowOrgOverride) continue;
+            out.add(entry.type);
+            const plural = SINGULAR_TO_PLURAL[entry.type];
+            if (plural) out.add(plural);
+        }
+        return out;
+    })();
+
+    /** Normalize plural→singular before consulting the allow-list. */
+    private static isOverlayAllowed(type: string): boolean {
+        const singular = PLURAL_TO_SINGULAR[type] ?? type;
+        return ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES.has(singular)
+            || ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES.has(type);
+    }
 
     async saveMetaItem(request: { type: string, name: string, item?: any }) {
         if (!request.item) {
             throw new Error('Item data is required');
         }
 
-        // Phase 1 whitelist (ADR-0005): project-kernel customization is limited
-        // to view + dashboard while the safety machinery for other types is
-        // built out. Single-kernel deployments keep their pre-ADR behaviour.
+        // ADR-0005 opt-in gate: project-kernel customization is only allowed
+        // for types whose registry entry sets `allowOrgOverride: true`.
+        // Returns 403 `not_overridable` so the caller can distinguish from a
+        // generic 400 (validation) or 422 (spec mismatch).
         if (this.projectId !== undefined
-            && !ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES.has(request.type)) {
+            && !ObjectStackProtocolImplementation.isOverlayAllowed(request.type)) {
+            const allowed = Array.from(ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES).join(', ');
             const err = new Error(
-                `[customization_not_allowed] Metadata type '${request.type}' is not overridable in project-kernel mode. `
-                + `Phase 1 allow-list = ${Array.from(ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES).join(', ')}. `
-                + `See docs/adr/0005-metadata-customization-overlay.md.`
+                `[not_overridable] Metadata type '${request.type}' has not opted into per-org overlay writes. `
+                + `Set allowOrgOverride: true on its DEFAULT_METADATA_TYPE_REGISTRY entry to enable. `
+                + `Currently allowed: ${allowed}. See docs/adr/0005-metadata-customization-overlay.md.`
             );
-            (err as any).code = 'customization_not_allowed';
-            (err as any).status = 400;
+            (err as any).code = 'not_overridable';
+            (err as any).status = 403;
             throw err;
         }
 
@@ -1199,6 +1282,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         //    Both project-kernel (project_id = this.projectId) and
         //    control-plane (project_id = NULL) modes participate. Per ADR-0005
         //    we store the entire item document — no field-level patch.
+        await this.ensureOverlayIndex();
         try {
             const now = new Date().toISOString();
             const scopedWhere: Record<string, unknown> = {
@@ -1278,13 +1362,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         reset?: boolean;
     }> {
         if (this.projectId !== undefined
-            && !ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES.has(request.type)) {
+            && !ObjectStackProtocolImplementation.isOverlayAllowed(request.type)) {
             const err = new Error(
-                `[customization_not_allowed] Metadata type '${request.type}' is not overridable in project-kernel mode. `
+                `[not_overridable] Metadata type '${request.type}' has not opted into per-org overlay writes. `
                 + `See docs/adr/0005-metadata-customization-overlay.md.`
             );
-            (err as any).code = 'customization_not_allowed';
-            (err as any).status = 400;
+            (err as any).code = 'not_overridable';
+            (err as any).status = 403;
             throw err;
         }
 

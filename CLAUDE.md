@@ -64,6 +64,7 @@ Mission: Build the "Post-SaaS Operating System" — an open-core, local-first ec
     - Philosophy: "Data as Code", Idempotency, and Immutable Infrastructure are the defaults.
 6. **Long-Term Architecture:** Do NOT use simplified or temporary workarounds. Always adopt sustainable, well-architected solutions.
 7. **Object Name = Table Name:** The object `name` is the canonical identifier used everywhere — API paths, ObjectQL queries, REST URLs, SDK calls, and the physical database table. There is no namespace prefix mechanism; if a module needs a prefix, it is embedded directly in the `name` (e.g. `name: 'sys_user'`, `name: 'ai_conversations'`). **Never** set `namespace` on an object schema — the field is deprecated and ignored. **Never** set `tableName` — the physical table name always equals the object `name`.
+8. **One Zod Source per Metadata Type:** Each metadata type (`view`, `dashboard`, `flow`, `agent`, `tool`, `object`, …) has exactly **one** Zod schema in `packages/spec/src/{domain}/`. Do **not** re-declare the same shape as a `*.object.ts` projection table — that pattern is removed (see ADR-0005). Runtime org overlay opt-in lives in **one** place: the `allowOrgOverride` flag on the type's entry in `DEFAULT_METADATA_TYPE_REGISTRY` (`packages/spec/src/kernel/metadata-plugin.zod.ts`); never maintain a parallel whitelist. The overlay validator (`resolveOverlaySchema()` in `packages/objectql/src/protocol.ts`) and Studio editing forms both bind to the canonical Zod schema.
 
 ---
 

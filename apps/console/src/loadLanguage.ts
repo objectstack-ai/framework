@@ -83,6 +83,15 @@ function transformSpecTranslations(data: Record<string, unknown>): Record<string
       const obj: Record<string, unknown> = { label: objData.label };
       if (objData.pluralLabel) obj.pluralLabel = objData.pluralLabel;
       if (objData.description) obj.description = objData.description;
+      // Preserve spec-defined nested scopes that the i18n resolvers consume
+      // directly (objects.<n>._views.<v>.label, etc.) — these are NOT
+      // flattened to top-level namespaces.
+      if (objData._views) obj._views = objData._views;
+      if (objData._actions) obj._actions = objData._actions;
+      if (objData._sections) obj._sections = objData._sections;
+      if (objData._notifications) obj._notifications = objData._notifications;
+      if (objData._errors) obj._errors = objData._errors;
+      if (objData._options) obj._options = objData._options;
       objects[objName] = obj;
 
       // Flatten fields: objects.X.fields.Y.label → fields.X.Y = string

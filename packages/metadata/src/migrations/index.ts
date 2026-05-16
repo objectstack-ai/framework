@@ -8,3 +8,7 @@
 
 export { migrateEnvIdToProjectId, type MigrationResult } from './migrate-env-id-to-project-id.js';
 export { dropProjectionTables, type DropProjectionResult } from './drop-projection-tables.js';
+export {
+    addSysMetadataOverlayIndex,
+    type AddSysMetadataOverlayIndexResult,
+} from './add-sys-metadata-overlay-index.js';

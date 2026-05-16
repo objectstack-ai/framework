@@ -271,3 +271,195 @@ Tests added in `packages/objectql/src/protocol-meta.test.ts`
 (`describe('spec validation', …)`): valid view/dashboard accepted, invalid
 shapes return 422 with `issues`, unknown extras preserved, unregistered
 types fall through, plural type strings normalize correctly.
+
+---
+
+## Addendum — 2026-05-16 (d): registry-driven opt-in + overlay-uniqueness index
+
+### Registry-driven opt-in (was: hard-coded whitelist)
+
+`packages/objectql/src/protocol.ts` previously gated `PUT/DELETE
+/api/v1/meta/:type/:name` against a **hard-coded** `Set` of allowed types
+(`OVERLAY_ALLOWED_TYPES = new Set(['view', 'dashboard'])`). Any new metadata
+type that wanted to participate in the overlay system had to find and edit
+that constant — invisible coupling between the spec and the runtime.
+
+That whitelist is now derived from the **metadata type registry** (the
+single source of truth defined in
+`packages/spec/src/kernel/metadata-plugin.zod.ts`):
+
+- Added a new boolean field `allowOrgOverride: z.boolean().default(false)` to
+  `MetadataTypeRegistryEntrySchema`. TSDoc spells out the distinction:
+  - `supportsOverlay` is **capability** (the loader can merge overlays).
+  - `allowOrgOverride` is **runtime permission** (per-tenant writes via the
+    REST overlay endpoint are accepted).
+- In `DEFAULT_METADATA_TYPE_REGISTRY`, only `view` and `dashboard` opt in
+  (`allowOrgOverride: true`). Every other entry sets it explicitly to `false`
+  to keep the table self-documenting.
+- `protocol.ts` builds `OVERLAY_ALLOWED_TYPES` at module-load time by walking
+  the registry and including each opted-in singular type plus its plural form
+  (via `SINGULAR_TO_PLURAL`). A new helper `isOverlayAllowed(type)`
+  normalizes plural inputs back to singular for safety, since REST callers
+  may use either form.
+- Save/delete reject unsupported types with **HTTP 403 `not_overridable`**
+  (was `customization_not_allowed` / 400). The new code is more accurate
+  semantically — the type is definitionally not overridable, not just
+  unsupported in the current build.
+
+To extend the overlay surface to a new type (e.g. `flow`), the only edit
+required is in `metadata-plugin.zod.ts`:
+
+```ts
+{ type: 'flow', …, allowOrgOverride: true, … }
+```
+
+…plus adding the type's Zod schema to `resolveOverlaySchema()` in
+`protocol.ts` so the new payloads are validated. No `Set` editing.
+
+### Overlay-uniqueness index (`schema-index`)
+
+The `sys_metadata` schema previously declared a UNIQUE index on
+`(type, name, project_id)`. Pre-overlay this was correct; post-overlay it
+would forbid two organizations from each having their own customization of
+the same `(type, name)` within a project — the central use case ADR-0005
+exists to support.
+
+Replaced with a partial UNIQUE index that scopes uniqueness by
+organization and lifecycle state:
+
+```text
+indexes: [
+  {
+    name: 'idx_sys_metadata_overlay_active',
+    fields: ['type', 'name', 'organization_id', 'project_id', 'scope'],
+    unique: true,
+    partial: "state = 'active'",
+  },
+  …
+]
+```
+
+Drivers ignore `indexes` declarations on synced tables today, so a new
+idempotent migration is provided and run automatically by
+`DatabaseLoader.ensureSchema()`:
+
+- `addSysMetadataOverlayIndex(driver)` — exported from
+  `@objectstack/metadata/migrations`.
+- Issues `CREATE UNIQUE INDEX IF NOT EXISTS … WHERE state = 'active'`.
+- Falls back to a non-unique composite index on engines that don't support
+  partial indexes (MySQL); application code in `saveMetaItem` provides
+  upsert semantics so duplicates are still prevented.
+- Failures are non-fatal — the migration logs and returns; the app boots.
+
+### Design principle (codified)
+
+> **One Zod source per metadata type.**
+>
+> For each metadata type (view, dashboard, flow, agent, tool, …):
+>
+> 1. The **shape** lives in exactly one Zod schema under
+>    `@objectstack/spec/{domain}/*.zod.ts`.
+> 2. The **opt-in for runtime org customization** lives in exactly one
+>    place: the `allowOrgOverride` boolean on its
+>    `DEFAULT_METADATA_TYPE_REGISTRY` entry.
+> 3. The **overlay validator** lives in exactly one place:
+>    `resolveOverlaySchema()` in `packages/objectql/src/protocol.ts`.
+>
+> Do **not** re-declare the same shape as a `*.object.ts` (the
+> projection-table pattern is removed; see Addendum 2026-05-16 (b)).
+> Do **not** maintain a parallel whitelist of "types that can be edited at
+> runtime" outside the registry.
+>
+> Forms in Studio that edit metadata should ultimately be derived from the
+> Zod schema (Phase 6 — `p6-form-render-from-zod`); until then, hand-rolled
+> dialogs MUST be kept in lock-step with the canonical schema (the
+> 2026-05-16 (d) view-types fix in §14 of the working plan is what happens
+> when they drift).
+
+---
+
+## Addendum — 2026-05-16 (e): artifact source & refresh semantics
+
+ADR-0005 says the **artifact** (`dist/objectstack.json`) is the source of
+truth for built-in metadata, while `sys_metadata` carries per-org overlays.
+The artifact has multiple plausible delivery channels in production. This
+addendum nails down what each implies for overlay validity, cache
+invalidation, and upgrade behaviour. The runtime defaults to the local
+file source today; the others are forward-compatible plans.
+
+### Artifact source variants
+
+| Source | Typical environment | How runtime fetches | Mutation event |
+|---|---|---|---|
+| **Local file** (default) | Dev, single-host servers | `fs.readFile(dist/objectstack.json)` at boot | Process restart / SIGHUP |
+| **HTTP fetch** | Multi-tenant cloud, control-plane–driven rollouts | Boot-time GET against control plane (`GET /api/v1/control/artifact/:project/:version`); ETag cached on disk | Webhook from control plane → SIGHUP / hot-reload |
+| **OCI image layer** | Containerised deploys, GitOps pipelines | Image tag pin → image pull → file mounts at known path → boot reads file | Pod rollout (Kubernetes / Nomad) |
+
+All three converge on the same in-memory shape: the parsed artifact is
+loaded into `SchemaRegistry`. The differences are purely about **when** a
+new shape becomes visible and **how** the runtime is told to re-load.
+
+### Refresh model (current vs. future)
+
+- **Today (Phase 1–6):** Boot-time only. Re-reading the artifact requires
+  process restart. Overlay rows in `sys_metadata` are independent and
+  outlive restarts; they are merged on every read.
+- **Future (post-ADR-0005):** A `metadataRegistry.reload()` API that:
+  1. Re-reads the artifact (file / HTTP / OCI).
+  2. Diffs the new artifact against the in-memory baseline.
+  3. Drops the metadata cache (and the `DatabaseLoader` LRU) for any
+     `(type, name)` whose baseline changed.
+  4. Re-validates each affected overlay row against the **new** baseline
+     schema (see "Customization validation" below).
+
+### Customization validation against artifact upgrades
+
+When the artifact upgrades (a new package version of the underlying view /
+dashboard ships), an existing org overlay may reference fields the new
+schema no longer accepts (renamed columns, removed sub-configs, tightened
+enums). The runtime cannot silently merge a stale overlay — it must
+quarantine it and surface a remediation hook.
+
+**Strategy:**
+
+1. After artifact load, walk all overlay rows for affected `(type, name)`.
+2. Run them through the canonical Zod schema (the same
+   `resolveOverlaySchema()` used at write time).
+3. On failure:
+   - Set `state = 'conflict'` (existing column on `sys_metadata`).
+   - Append a `sys_metadata_history` entry with `actor='system:upgrade'`,
+     reason `artifact_schema_drift`, and the Zod issues array.
+   - Exclude the row from the read-time merge → effective metadata falls
+     back to the artifact baseline (graceful degradation, no broken UI).
+4. Studio surfaces a per-org "Conflicts" inbox listing the quarantined
+   rows so an admin can re-edit and re-save (which clears `conflict`).
+
+This bounded validation step is cheap (overlays are typically tens of
+rows per org per project) and runs only on artifact upgrade events, not
+on every request.
+
+### Cache invalidation contract
+
+| Cache | Owner | Invalidation trigger |
+|---|---|---|
+| `SchemaRegistry` (artifact data) | Kernel | Boot, explicit `reload()` |
+| `DatabaseLoader.LRUCache` (overlay rows) | `@objectstack/metadata` | Per-`(type, name, org)` on save / delete; full clear on `reload()` |
+| In-memory merged effective metadata | `protocol.ts` `getMetaItem` (no cache today) | N/A — re-merged on every call (Phase 3 deferred caching) |
+
+The merged-effective layer is intentionally uncached today. When that
+becomes a hotspot, the cache key must be `(type, name, organization_id,
+artifactVersionHash)` so that an artifact bump naturally invalidates all
+entries derived from the prior baseline.
+
+### Open questions (out of scope for this ADR)
+
+- **Atomic artifact swap on running instances** — file source can be
+  `mv` and re-read; HTTP/OCI sources need rendezvous semantics (drain
+  in-flight requests before swap?). Defer to a deployment-runtime ADR.
+- **Per-tenant artifact pinning** — if tenants must upgrade independently,
+  the registry needs a tenant-aware artifact resolver. Today's model
+  assumes one artifact per ObjectOS instance.
+- **Cross-version overlay migration scripts** — when a field is renamed in
+  a new artifact, an overlay that referenced the old name should ideally
+  be auto-rewritten rather than quarantined. Requires a migration
+  contract on the package author side; tracked separately.
