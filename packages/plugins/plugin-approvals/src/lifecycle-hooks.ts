@@ -224,13 +224,14 @@ async function tryAutoSubmit(
     }
 
     const submitterId = (ctx?.session?.userId ?? null) as string | null;
+    const submitterOrg = (ctx?.session?.tenantId ?? ctx?.session?.organizationId ?? null) as string | null;
     await service.submit({
       object: objectName,
       recordId,
       processName: process.name,
       payload: record,
       submitterId,
-    }, { ...SYSTEM_CTX, userId: submitterId ?? undefined } as any);
+    }, { ...SYSTEM_CTX, userId: submitterId ?? undefined, organizationId: submitterOrg ?? undefined, tenantId: submitterOrg ?? undefined } as any);
 
     logger?.info?.('[approvals] auto-submitted approval', {
       process: process.name,

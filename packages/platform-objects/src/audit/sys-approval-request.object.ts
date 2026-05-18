@@ -35,6 +35,13 @@ export const SysApprovalRequest = ObjectSchema.create({
   fields: {
     id: Field.text({ label: 'Request ID', required: true, readonly: true, group: 'System' }),
 
+    organization_id: Field.lookup('sys_organization', {
+      label: 'Organization',
+      required: false,
+      group: 'System',
+      description: 'Tenant that owns this approval request (propagated from submitter context)',
+    }),
+
     process_name: Field.text({
       label: 'Process',
       required: true,

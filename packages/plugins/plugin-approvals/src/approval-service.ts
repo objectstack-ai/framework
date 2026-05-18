@@ -67,6 +67,7 @@ function rowFromProcess(row: any): ApprovalProcessRow {
 function rowFromRequest(row: any): ApprovalRequestRow {
   return {
     id: String(row.id),
+    organization_id: row.organization_id ?? undefined,
     process_name: String(row.process_name ?? ''),
     object_name: String(row.object_name ?? ''),
     record_id: String(row.record_id ?? ''),
@@ -80,7 +81,7 @@ function rowFromRequest(row: any): ApprovalRequestRow {
     completed_at: row.completed_at ?? undefined,
     created_at: row.created_at ?? undefined,
     updated_at: row.updated_at ?? undefined,
-  };
+  } as any;
 }
 
 function rowFromAction(row: any): ApprovalActionRow {
@@ -311,6 +312,7 @@ export class ApprovalService implements IApprovalService {
 
     const now = this.clock.now().toISOString();
     const id = uid('areq');
+    const ctxOrg = (context as any)?.organizationId ?? (context as any)?.tenantId ?? null;
     const row: any = {
       id,
       process_name: process.name,
@@ -323,6 +325,7 @@ export class ApprovalService implements IApprovalService {
       current_step_index: 0,
       pending_approvers: approvers.join(','),
       payload_json: input.payload != null ? JSON.stringify(input.payload) : null,
+      organization_id: ctxOrg,
       created_at: now,
       updated_at: now,
     };
@@ -332,6 +335,7 @@ export class ApprovalService implements IApprovalService {
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'),
       request_id: id,
+      organization_id: ctxOrg,
       step_name: step0.name,
       step_index: 0,
       action: 'submit',
@@ -366,12 +370,20 @@ export class ApprovalService implements IApprovalService {
       approverId?: string;
       submitterId?: string;
     } | undefined,
-    _context: SharingExecutionContext,
+    context: SharingExecutionContext,
   ): Promise<ApprovalRequestRow[]> {
     const f: any = {};
     if (filter?.object) f.object_name = filter.object;
     if (filter?.recordId) f.record_id = filter.recordId;
     if (filter?.submitterId) f.submitter_id = filter.submitterId;
+    // Tenant isolation: when a caller context carries a tenant identifier
+    // (organizationId / tenantId), scope the query to that tenant. SYSTEM
+    // callers (no tenant) see all rows. This prevents the bespoke endpoint
+    // from leaking other-tenant rows since we deliberately query with
+    // SYSTEM_CTX to bypass RLS on the engine (we need CSV substring match
+    // on pending_approvers which RLS can't model cleanly).
+    const tenantOrg = (context as any)?.organizationId ?? (context as any)?.tenantId;
+    if (tenantOrg) f.organization_id = tenantOrg;
     // Status: when array, post-filter; when single, push into engine filter.
     let statusFilter: ApprovalStatus[] | undefined;
     if (Array.isArray(filter?.status)) statusFilter = filter!.status as ApprovalStatus[];
@@ -389,10 +401,13 @@ export class ApprovalService implements IApprovalService {
     return list;
   }
 
-  async getRequest(requestId: string, _context: SharingExecutionContext): Promise<ApprovalRequestRow | null> {
+  async getRequest(requestId: string, context: SharingExecutionContext): Promise<ApprovalRequestRow | null> {
     if (!requestId) return null;
+    const where: any = { id: requestId };
+    const tenantOrg = (context as any)?.organizationId ?? (context as any)?.tenantId;
+    if (tenantOrg) where.organization_id = tenantOrg;
     const rows = await this.engine.find('sys_approval_request', {
-      where: { id: requestId }, limit: 1, context: SYSTEM_CTX,
+      where, limit: 1, context: SYSTEM_CTX,
     });
     return Array.isArray(rows) && rows[0] ? rowFromRequest(rows[0]) : null;
   }
@@ -419,6 +434,7 @@ export class ApprovalService implements IApprovalService {
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'),
       request_id: req.id,
+      organization_id: (req as any).organization_id ?? null,
       step_name: step.name,
       step_index: stepIndex,
       action: 'approve',
@@ -499,6 +515,7 @@ export class ApprovalService implements IApprovalService {
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'),
       request_id: req.id,
+      organization_id: (req as any).organization_id ?? null,
       step_name: step?.name,
       step_index: stepIndex,
       action: 'reject',
@@ -551,6 +568,7 @@ export class ApprovalService implements IApprovalService {
     await this.engine.insert('sys_approval_action', {
       id: uid('aact'),
       request_id: req.id,
+      organization_id: (req as any).organization_id ?? null,
       step_name: req.current_step,
       step_index: req.current_step_index,
       action: 'recall',
@@ -576,8 +594,13 @@ export class ApprovalService implements IApprovalService {
     return { request: fresh!, finalized: true };
   }
 
-  async listActions(requestId: string, _context: SharingExecutionContext): Promise<ApprovalActionRow[]> {
+  async listActions(requestId: string, context: SharingExecutionContext): Promise<ApprovalActionRow[]> {
     if (!requestId) return [];
+    // Tenant gate: ensure the caller can see the parent request before
+    // returning its action history. Skipping this would leak history rows
+    // across tenants the same way the unscoped list-requests path did.
+    const req = await this.getRequest(requestId, context);
+    if (!req) return [];
     const rows = await this.engine.find('sys_approval_action', {
       where: { request_id: requestId },
       limit: 500,

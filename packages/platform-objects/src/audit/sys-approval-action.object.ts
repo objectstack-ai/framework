@@ -27,6 +27,13 @@ export const SysApprovalAction = ObjectSchema.create({
   fields: {
     id: Field.text({ label: 'Action ID', required: true, readonly: true, group: 'System' }),
 
+    organization_id: Field.lookup('sys_organization', {
+      label: 'Organization',
+      required: false,
+      group: 'System',
+      description: 'Tenant that owns this action (mirrors the parent request)',
+    }),
+
     request_id: Field.lookup('sys_approval_request', {
       label: 'Request',
       required: true,
