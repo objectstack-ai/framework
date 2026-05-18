@@ -648,14 +648,15 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // ── Automation ──────────────────────────────────────────────
             // Registered at both `${prefix}/automation/...` and
             // `${prefix}/projects/:projectId/automation/...` when project
-            // scoping is enabled. Handlers surface `req.params.projectId` to
-            // the HttpDispatcher through the `request` context so downstream
-            // resolution (see HttpDispatcher.resolveEnvironmentContext) can
-            // pick the right data driver.
+            // scoping is enabled. Always dispatched through
+            // `dispatcher.dispatch()` so the multi-kernel host can swap
+            // to the per-project kernel before resolving the
+            // `automation` service (which lives on the project kernel,
+            // not the host kernel, in ObjectOS multi-tenant mode).
             const registerAutomationRoutes = (base: string) => {
                 server!.get(`${base}/automation`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation('', 'GET', {}, { request: req });
+                        const result = await dispatcher.dispatch('GET', '/automation', undefined, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -664,7 +665,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.post(`${base}/automation`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation('', 'POST', req.body, { request: req });
+                        const result = await dispatcher.dispatch('POST', '/automation', req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -673,7 +674,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.get(`${base}/automation/:name`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}`, 'GET', {}, { request: req });
+                        const result = await dispatcher.dispatch('GET', `/automation/${req.params.name}`, undefined, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -682,7 +683,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.put(`${base}/automation/:name`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}`, 'PUT', req.body, { request: req });
+                        const result = await dispatcher.dispatch('PUT', `/automation/${req.params.name}`, req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -691,7 +692,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.delete(`${base}/automation/:name`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}`, 'DELETE', {}, { request: req });
+                        const result = await dispatcher.dispatch('DELETE', `/automation/${req.params.name}`, undefined, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -700,7 +701,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.post(`${base}/automation/trigger/:name`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`trigger/${req.params.name}`, 'POST', req.body, { request: req });
+                        const result = await dispatcher.dispatch('POST', `/automation/trigger/${req.params.name}`, req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -709,7 +710,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.post(`${base}/automation/:name/trigger`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}/trigger`, 'POST', req.body, { request: req });
+                        const result = await dispatcher.dispatch('POST', `/automation/${req.params.name}/trigger`, req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -718,7 +719,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.post(`${base}/automation/:name/toggle`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}/toggle`, 'POST', req.body, { request: req });
+                        const result = await dispatcher.dispatch('POST', `/automation/${req.params.name}/toggle`, req.body, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -727,7 +728,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.get(`${base}/automation/:name/runs`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}/runs`, 'GET', {}, { request: req }, req.query);
+                        const result = await dispatcher.dispatch('GET', `/automation/${req.params.name}/runs`, undefined, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
@@ -736,12 +737,46 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
                 server!.get(`${base}/automation/:name/runs/:runId`, async (req: any, res: any) => {
                     try {
-                        const result = await dispatcher.handleAutomation(`${req.params.name}/runs/${req.params.runId}`, 'GET', {}, { request: req });
+                        const result = await dispatcher.dispatch('GET', `/automation/${req.params.name}/runs/${req.params.runId}`, undefined, req.query, { request: req });
                         sendResult(result, res);
                     } catch (err: any) {
                         errorResponse(err, res);
                     }
                 });
+            };
+
+            // ── AI / Assistants ─────────────────────────────────────────
+            // The AI service plugin registers a large, dynamic surface
+            // (chat, models, conversations, tools, agents, assistants)
+            // whose exact routes are built at start() time from the
+            // service's tool / agent registries. To support multi-tenant
+            // hosts where the AI service lives on per-project kernels,
+            // mount a method-wildcard catch-all that always dispatches
+            // through `dispatcher.dispatch()` — that triggers the kernel
+            // swap and then routes via `handleAI`, which looks up the
+            // AI service on the current (project) kernel.
+            const registerAIRoutes = (base: string) => {
+                const wildcards: Array<['get'|'post'|'delete'|'put', string]> = [
+                    ['get', `${base}/ai/*`],
+                    ['post', `${base}/ai/*`],
+                    ['delete', `${base}/ai/*`],
+                    ['put', `${base}/ai/*`],
+                ];
+                for (const [method, pattern] of wildcards) {
+                    (server as any)![method](pattern, async (req: any, res: any) => {
+                        try {
+                            // Reconstruct the AI subpath without the prefix
+                            // so dispatch() routes via the /ai branch.
+                            const fullPath: string = req.path ?? '';
+                            const idx = fullPath.lastIndexOf('/ai');
+                            const aiSubPath = idx >= 0 ? fullPath.slice(idx) : '/ai';
+                            const result = await dispatcher.dispatch(method.toUpperCase(), aiSubPath, req.body, req.query, { request: req });
+                            sendResult(result, res);
+                        } catch (err: any) {
+                            errorResponse(err, res);
+                        }
+                    });
+                }
             };
 
             // ── Actions (server-registered handlers, e.g. CRM convertLead) ───
@@ -776,12 +811,15 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             if (enableProjectScoping && projectResolution === 'required') {
                 registerAutomationRoutes(`${prefix}/projects/:projectId`);
                 registerActionRoutes(`${prefix}/projects/:projectId`);
+                registerAIRoutes(`${prefix}/projects/:projectId`);
             } else {
                 registerAutomationRoutes(prefix);
                 registerActionRoutes(prefix);
+                registerAIRoutes(prefix);
                 if (enableProjectScoping) {
                     registerAutomationRoutes(`${prefix}/projects/:projectId`);
                     registerActionRoutes(`${prefix}/projects/:projectId`);
+                    registerAIRoutes(`${prefix}/projects/:projectId`);
                 }
             }
 
