@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "@cloudflare/containers": "^0.3.4",
-    "@cloudflare/workers-types": "^4.20260517.1",
+    "@cloudflare/workers-types": "^4.20260518.1",
     "esbuild": "^0.28.0",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
