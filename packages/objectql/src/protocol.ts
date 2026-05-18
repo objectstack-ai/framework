@@ -1101,6 +1101,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const runConversion = async (trxCtx: any) => {
             const opCtx = trxCtx ?? ctx;
             const trxCtxOpt = opCtx !== undefined ? { context: opCtx } : undefined;
+            console.log('[convertLead] entered runConversion, trx present:', !!opCtx?.transaction);
 
             // 1) Account
             let account: any;
@@ -1124,6 +1125,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 if (lead.address)         accountPayload.billing_address = lead.address;
                 if (lead.owner)           accountPayload.owner = lead.owner;
                 account = await this.engine.insert('account', accountPayload, trxCtxOpt as any);
+                console.log('[convertLead] account inserted');
             }
 
             // 2) Contact
@@ -1150,6 +1152,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 if (lead.owner)      contactPayload.owner = lead.owner;
                 if (account?.id)     contactPayload.account = account.id;
                 contact = await this.engine.insert('contact', contactPayload, trxCtxOpt as any);
+                console.log('[convertLead] contact inserted');
             }
 
             // 3) Opportunity (optional)

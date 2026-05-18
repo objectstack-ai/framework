@@ -155,6 +155,7 @@ Seed data loader configuration
 | **batchSize** | `integer` | ✅ | Maximum records per batch insert/upsert |
 | **transaction** | `boolean` | ✅ | Wrap entire load in a transaction (all-or-nothing) |
 | **env** | `Enum<'prod' \| 'dev' \| 'test'>` | optional | Only load datasets matching this environment |
+| **organizationId** | `string` | optional | Target organization id for per-tenant seed replay |
 
 
 ---

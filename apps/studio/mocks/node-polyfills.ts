@@ -101,6 +101,7 @@ export const writeFile = async () => {};
 export const rename = async () => {};
 export const renameSync = () => {};
 export const createHash = () => ({ update: () => ({ digest: () => '' }) });
+export const createHmac = () => ({ update: () => ({ digest: () => '' }) });
 export const randomUUID = () => '00000000-0000-0000-0000-000000000000';
 
 // node:crypto webcrypto polyfill — maps to the browser's native Web Crypto API.

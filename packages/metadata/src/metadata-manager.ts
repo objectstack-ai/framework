@@ -85,6 +85,20 @@ export class MetadataManager implements IMetadataService {
   // Dependency tracking: "type:name" -> dependencies
   private dependencies = new Map<string, MetadataDependency[]>();
 
+  // Short-lived cache for list() results. Built primarily to break the
+  // deadlock that occurs when security/permission middleware calls
+  // `list('permission')` from inside a user-initiated DB transaction: the
+  // DatabaseLoader's `engine.find('sys_metadata', ...)` would then try to
+  // acquire a fresh knex connection while the transaction is still holding
+  // SQLite's single connection — knex waits the full `acquireConnectionTimeout`
+  // (60s) before returning []. The cache absorbs the repeated lookups so the
+  // loader is only hit once per TTL window.
+  //
+  // Invalidated on every `register()` / `unregister()` to keep CRUD writes
+  // visible to subsequent reads.
+  private listCache = new Map<string, { ts: number; items: unknown[] }>();
+  private static readonly LIST_CACHE_TTL_MS = 30_000;
+
   // Realtime service for event publishing
   private realtimeService?: IRealtimeService;
 
@@ -232,6 +246,7 @@ export class MetadataManager implements IMetadataService {
       this.registry.set(type, new Map());
     }
     this.registry.get(type)!.set(name, data);
+    this.invalidateListCache(type);
 
     // Persist only to database-backed loaders that declare write capability.
     // FilesystemLoader is read-only at runtime — writing to it can crash in
@@ -285,6 +300,15 @@ export class MetadataManager implements IMetadataService {
    * List all metadata items of a given type
    */
   async list(type: string): Promise<unknown[]> {
+    // Short-TTL cache: see field comment on `listCache`. Skip when called
+    // from tests / hot reloads that rely on always-fresh reads — we only
+    // cache positive (non-empty) hits or repeated hits with a stable miss
+    // signature.
+    const cached = this.listCache.get(type);
+    if (cached && Date.now() - cached.ts < MetadataManager.LIST_CACHE_TTL_MS) {
+      return cached.items;
+    }
+
     const items = new Map<string, unknown>();
 
     // From in-memory registry
@@ -310,7 +334,17 @@ export class MetadataManager implements IMetadataService {
       }
     }
 
-    return Array.from(items.values());
+    const result = Array.from(items.values());
+    this.cacheListResult(type, result);
+    return result;
+  }
+  private cacheListResult(type: string, items: unknown[]): void {
+    this.listCache.set(type, { ts: Date.now(), items });
+  }
+
+  /** Internal helper: drop the cached `list()` result for a type. */
+  private invalidateListCache(type: string): void {
+    this.listCache.delete(type);
   }
 
   /**
@@ -326,6 +360,7 @@ export class MetadataManager implements IMetadataService {
         this.registry.delete(type);
       }
     }
+    this.invalidateListCache(type);
 
     // Delete only from database-backed loaders that declare write capability
     for (const loader of this.loaders.values()) {

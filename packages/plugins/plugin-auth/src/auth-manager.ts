@@ -281,17 +281,13 @@ export class AuthManager {
       if (extra && extra.length > 0) {
         try {
           const accessMod = await import('better-auth/plugins/organization/access');
-          const stmtMod = await import('better-auth/plugins/organization/access/statement' as any).catch(() => null as any);
-          const { defaultAc, memberAc } = accessMod as any;
+          const { defaultAc, memberAc, defaultRoles: importedDefaultRoles } = accessMod as any;
           // Better-Auth's `hasPermission` does `{...options.roles || defaultRoles}`
           // (precedence: `||` then spread). When we pass our own `roles`, the
           // built-in owner/admin/member are silently dropped, so even the org
           // owner loses `invitation:create` and every mutation 403s. We must
           // re-include the defaults alongside our extras.
-          const defaultRoles =
-            (stmtMod && (stmtMod as any).defaultRoles) ||
-            (accessMod as any).defaultRoles ||
-            null;
+          const defaultRoles = importedDefaultRoles || null;
           if (defaultAc && memberAc && typeof memberAc.statements === 'object') {
             const built: Record<string, any> = defaultRoles ? { ...defaultRoles } : {};
             const stmts = memberAc.statements;
