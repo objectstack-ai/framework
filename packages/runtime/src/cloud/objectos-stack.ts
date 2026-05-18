@@ -66,7 +66,7 @@ export interface ObjectOSStackConfig {
 
 export interface ObjectOSStackResult {
     plugins: any[];
-    api: { enableProjectScoping: true; projectResolution: 'auto' };
+    api: { enableProjectScoping: true; projectResolution: 'auto'; requireAuth: true };
 }
 
 /**
@@ -237,6 +237,12 @@ export async function createObjectOSStack(config: ObjectOSStackConfig): Promise<
         api: {
             enableProjectScoping: true,
             projectResolution: 'auto',
+            // ObjectOS is multi-tenant: anonymous /api/v1/data/* must never
+            // leak per-project data across organisations. AuthProxyPlugin
+            // verifies upstream tokens and populates ctx.userId; requireAuth
+            // turns missing userId into 401 at the REST layer before the
+            // request reaches the per-project kernel.
+            requireAuth: true,
         },
     };
 }
