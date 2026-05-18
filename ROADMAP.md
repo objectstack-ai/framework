@@ -56,7 +56,7 @@ Code that exists and matches the intended architecture. Do not regress these.
 | Studio Flow Viewer + Flow Test Runner + Flow Runs panel | [apps/studio/src/components/FlowViewer.tsx](apps/studio/src/components/FlowViewer.tsx) |
 | Automation: flow auto-discovery from ObjectQL registry | [packages/services/service-automation/src/plugin.ts](packages/services/service-automation/src/plugin.ts) |
 | **D1** ObjectOS metadata DB bridge removed - `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` or auto-bridges ObjectQL to `DatabaseLoader` | [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts) |
-| **S1** REST `requireAuth` gate (resolved 2026-05-17) — anonymous `/api/v1/data/*` returns 401 when `auth` tier is enabled (CRUD + batch routes both gated); auto-enabled by CLI when `tierEnabled('auth')`. Plugs the CF data-leak reported via crm.objectos.app. | [packages/rest/src/rest-server.ts](packages/rest/src/rest-server.ts), [packages/cli/src/commands/serve.ts](packages/cli/src/commands/serve.ts) |
+| **S1** REST `requireAuth` gate (resolved 2026-05-18) — anonymous `/api/v1/data/*` returns 401 on multi-tenant ObjectOS hosts (CRUD + batch routes both gated). Auto-enabled by CLI when `tierEnabled('auth')`; force-enabled on `createObjectOSStack` since project artifacts own auth per-tenant. Verified live on crm.objectos.app / app.objectos.app — anonymous reads + writes now 401 (were leaking before). | [packages/rest/src/rest-server.ts](packages/rest/src/rest-server.ts), [packages/runtime/src/cloud/objectos-stack.ts](packages/runtime/src/cloud/objectos-stack.ts), [packages/cli/src/commands/serve.ts](packages/cli/src/commands/serve.ts) |
 
 ---
 

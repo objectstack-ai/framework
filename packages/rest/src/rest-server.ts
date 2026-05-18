@@ -366,6 +366,32 @@ export class RestServer {
      */
     private async resolveExecCtx(projectId: string | undefined, req: any): Promise<any | undefined> {
         try {
+            // For multi-tenant hosts (objectos), incoming requests on unscoped
+            // URLs like `/api/v1/data/:object` arrive with `projectId === undefined`.
+            // The route's protocol resolver already maps hostname → projectId
+            // (see resolveProtocol). We mirror that here so getSession() can
+            // find the right per-project auth service. Without this, the
+            // hostname-routed requests fall through to defaultProjectIdProvider/
+            // authServiceProvider (neither of which is wired in objectos) and
+            // every authenticated user sees 401.
+            if (!projectId && req && this.envRegistry && this.kernelManager) {
+                const host = this.extractHostname(req);
+                if (host) {
+                    try {
+                        const result = await this.envRegistry.resolveByHostname(host);
+                        if (result?.projectId) projectId = result.projectId;
+                    } catch { /* fall through */ }
+                }
+                if (!projectId && typeof this.envRegistry.resolveById === 'function') {
+                    const headerVal = this.extractProjectIdHeader(req);
+                    if (headerVal) {
+                        try {
+                            const driver = await this.envRegistry.resolveById(headerVal);
+                            if (driver) projectId = headerVal;
+                        } catch { /* fall through */ }
+                    }
+                }
+            }
             // Look up the auth service in the right kernel. For unscoped
             // single-project apps the kernelManager will hand us the lone
             // tenant kernel; for multi-project hosts we use the resolved
