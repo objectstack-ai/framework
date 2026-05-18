@@ -128,6 +128,7 @@ type NormalizedRestServerConfig = {
         enableDiscovery: boolean;
         enableProjectScoping: boolean;
         projectResolution: 'required' | 'optional' | 'auto';
+        requireAuth: boolean;
         documentation: RestApiConfig['documentation'];
         responseFormat: RestApiConfig['responseFormat'];
     };
@@ -335,6 +336,26 @@ export class RestServer {
         } catch {
             return undefined;
         }
+    }
+
+    /**
+     * Reject anonymous requests with HTTP 401 when `api.requireAuth` is set.
+     * Returns `true` if the response was sent and the caller should stop
+     * processing. Returns `false` to continue.
+     *
+     * The check is intentionally narrow: only `context?.userId` counts as
+     * "authenticated". `isSystem` flags are never set on inbound HTTP
+     * requests (they're internal-only), so they cannot bypass this gate.
+     */
+    private enforceAuth(req: any, res: any, context: any): boolean {
+        if (!this.config.api.requireAuth) return false;
+        if (context?.userId) return false;
+        if (req?.method === 'OPTIONS') return false;
+        res.status(401).json({
+            error: 'unauthenticated',
+            message: 'Authentication is required to access this endpoint.',
+        });
+        return true;
     }
 
     /**
@@ -617,6 +638,7 @@ export class RestServer {
                 enableDiscovery: api.enableDiscovery ?? true,
                 enableProjectScoping: api.enableProjectScoping ?? false,
                 projectResolution: api.projectResolution ?? 'auto',
+                requireAuth: (api as any).requireAuth ?? false,
                 documentation: api.documentation,
                 responseFormat: api.responseFormat,
             },
@@ -1145,6 +1167,7 @@ export class RestServer {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
                         const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.findData({
                             object: req.params.object,
                             query: req.query,
@@ -1180,6 +1203,7 @@ export class RestServer {
                         const p = await this.resolveProtocol(projectId, req);
                         const { select, expand } = req.query || {};
                         const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.getData({
                             object: req.params.object,
                             id: req.params.id,
@@ -1212,6 +1236,7 @@ export class RestServer {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
                         const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.createData({
                             object: req.params.object,
                             data: req.body,
@@ -1242,6 +1267,7 @@ export class RestServer {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
                         const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.updateData({
                             object: req.params.object,
                             id: req.params.id,
@@ -1273,6 +1299,7 @@ export class RestServer {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
                         const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.deleteData({
                             object: req.params.object,
                             id: req.params.id,
@@ -1313,10 +1340,13 @@ export class RestServer {
                     try {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
+                        const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.batchData!({
                             object: req.params.object,
                             request: req.body,
                             ...(projectId ? { projectId } : {}),
+                            ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
                     } catch (error: any) {
@@ -1340,10 +1370,13 @@ export class RestServer {
                     try {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
+                        const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.createManyData!({
                             object: req.params.object,
                             records: req.body || [],
                             ...(projectId ? { projectId } : {}),
+                            ...(context ? { context } : {}),
                         } as any);
                         res.status(201).json(result);
                     } catch (error: any) {
@@ -1367,10 +1400,13 @@ export class RestServer {
                     try {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
+                        const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.updateManyData!({
                             object: req.params.object,
                             ...req.body,
                             ...(projectId ? { projectId } : {}),
+                            ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
                     } catch (error: any) {
@@ -1394,10 +1430,13 @@ export class RestServer {
                     try {
                         const projectId = isScoped ? req.params?.projectId : undefined;
                         const p = await this.resolveProtocol(projectId, req);
+                        const context = await this.resolveExecCtx(projectId, req);
+                        if (this.enforceAuth(req, res, context)) return;
                         const result = await p.deleteManyData!({
                             object: req.params.object,
                             ...req.body,
                             ...(projectId ? { projectId } : {}),
+                            ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
                     } catch (error: any) {

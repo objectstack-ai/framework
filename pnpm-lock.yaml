@@ -522,9 +522,6 @@ importers:
       '@objectstack/service-automation':
         specifier: workspace:*
         version: link:../../packages/services/service-automation
-      '@objectstack/service-cloud':
-        specifier: workspace:*
-        version: link:../../packages/services/service-cloud
       '@objectstack/service-feed':
         specifier: workspace:*
         version: link:../../packages/services/service-feed
@@ -1625,9 +1622,18 @@ importers:
       '@objectstack/formula':
         specifier: workspace:*
         version: link:../formula
+      '@objectstack/plugin-auth':
+        specifier: workspace:*
+        version: link:../plugins/plugin-auth
+      '@objectstack/plugin-security':
+        specifier: workspace:*
+        version: link:../plugins/plugin-security
       '@objectstack/rest':
         specifier: workspace:*
         version: link:../rest
+      '@objectstack/service-i18n':
+        specifier: workspace:*
+        version: link:../services/service-i18n
       '@objectstack/spec':
         specifier: workspace:*
         version: link:../spec

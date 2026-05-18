@@ -34,6 +34,32 @@ export { MiddlewareManager } from './middleware.js';
 export { loadArtifactBundle, mergeRuntimeModule, isHttpUrl, readArtifactSource } from './load-artifact-bundle.js';
 export type { LoadArtifactBundleOptions } from './load-artifact-bundle.js';
 
+// ── ObjectOS Cloud Runtime (artifact-fetching shared multi-tenant host) ───────
+// Boot a host process that resolves incoming hostnames to projects and
+// dispatches every request to the matching per-project ObjectKernel. The
+// artifact is fetched either from an HTTP control plane (apps/cloud or
+// the hosted ObjectStack Cloud) or from a local JSON file for single-
+// project dev workflows. See `cloud/objectos-stack.ts`.
+export { createObjectOSStack } from './cloud/objectos-stack.js';
+export type { ObjectOSStackConfig, ObjectOSStackResult } from './cloud/objectos-stack.js';
+export { ArtifactApiClient } from './cloud/artifact-api-client.js';
+export type {
+    ArtifactApiClientConfig,
+    ProjectArtifactResponse,
+    ProjectRuntimeConfig,
+    ResolvedHostname,
+} from './cloud/artifact-api-client.js';
+export { FileArtifactApiClient } from './cloud/file-artifact-api-client.js';
+export type { FileArtifactApiClientConfig } from './cloud/file-artifact-api-client.js';
+export { ArtifactEnvironmentRegistry } from './cloud/artifact-environment-registry.js';
+export type { ArtifactEnvironmentRegistryConfig } from './cloud/artifact-environment-registry.js';
+export { ArtifactKernelFactory } from './cloud/artifact-kernel-factory.js';
+export type { ArtifactKernelFactoryConfig } from './cloud/artifact-kernel-factory.js';
+export { AuthProxyPlugin } from './cloud/auth-proxy-plugin.js';
+export { KernelManager } from './cloud/kernel-manager.js';
+export type { ProjectKernelFactory, KernelManagerConfig } from './cloud/kernel-manager.js';
+export type { EnvironmentDriverRegistry } from './cloud/environment-registry.js';
+
 // Export Sandbox (script body runner) — engine choice is quickjs-emscripten.
 // See packages/runtime/src/sandbox/script-runner.ts for the decision rationale.
 export { UnimplementedScriptRunner, QuickJSScriptRunner, SandboxError, hookBodyRunnerFactory, actionBodyRunnerFactory } from './sandbox/index.js';

@@ -103,6 +103,20 @@ export const RestApiConfigSchema = lazySchema(() => z.object({
     .describe('Project ID resolution strategy'),
 
   /**
+   * When `true`, all `/data/*` CRUD + batch endpoints reject anonymous
+   * requests with HTTP 401 before reaching ObjectQL. This is the REST-layer
+   * counterpart to the security plugin's RBAC enforcement and the
+   * **only** defense for deployments where the security plugin is not
+   * mounted (legacy bare-runtime hosts) or where it would otherwise fall
+   * through anonymous traffic. Cloud-connected per-project kernels set
+   * this to `true` automatically. Default `false` for backward compat with
+   * standalone single-project setups that have always served data
+   * publicly (e.g. demo/playground deployments).
+   */
+  requireAuth: z.boolean().default(false)
+    .describe('Reject anonymous requests on /data/* with HTTP 401'),
+
+  /**
    * API documentation configuration
    */
   documentation: z.object({

@@ -21,7 +21,10 @@
   "dependencies": {
     "@objectstack/core": "workspace:*",
     "@objectstack/formula": "workspace:*",
+    "@objectstack/plugin-auth": "workspace:*",
+    "@objectstack/plugin-security": "workspace:*",
     "@objectstack/rest": "workspace:*",
+    "@objectstack/service-i18n": "workspace:*",
     "@objectstack/spec": "workspace:*",
     "@objectstack/types": "workspace:*",
     "quickjs-emscripten": "^0.32.0",

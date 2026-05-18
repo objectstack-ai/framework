@@ -4,7 +4,12 @@ import { ObjectKernel, getEnv, resolveLocale } from '@objectstack/core';
 import { CoreServiceName } from '@objectstack/spec/system';
 import { pluralToSingular } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
-import type { KernelManager } from './kernel-manager.js';
+import type { KernelManager } from './cloud/kernel-manager.js';
+
+/** Minimal local interface — full ProjectScopeManager was removed in Phase R. */
+interface ProjectScopeManager {
+    touch(projectId: string): void;
+}
 import {
     resolveExecutionContext,
     isPermissionDeniedError,
@@ -64,7 +69,7 @@ export interface HttpDispatcherOptions {
      * Optional {@link ProjectScopeManager}. When present, `touch(projectId)` is
      * called on every scoped request so idle projects are evicted after TTL.
      */
-    scopeManager?: import('./project-scope-manager.js').ProjectScopeManager;
+    scopeManager?: ProjectScopeManager;
 }
 
 /**
@@ -81,7 +86,7 @@ export class HttpDispatcher {
     private envRegistry?: any; // EnvironmentDriverRegistry
     private defaultProject?: { projectId: string; orgId?: string };
     private kernelManager?: KernelManager;
-    private scopeManager?: import('./project-scope-manager.js').ProjectScopeManager;
+    private scopeManager?: ProjectScopeManager;
     /**
      * When `true`, scoped data-plane routes enforce a
      * `sys_project_member` lookup and return 403 for non-members.

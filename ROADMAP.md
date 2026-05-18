@@ -39,9 +39,9 @@ Code that exists and matches the intended architecture. Do not regress these.
 |:---|:---|
 | Organization CRUD + member/invitation system | [apps/studio/src/hooks/useSession.ts](apps/studio/src/hooks/useSession.ts) |
 | Project CRUD + per-project Turso/memory DB provisioning | [packages/services/service-tenant/](packages/services/service-tenant/) |
-| Per-project ObjectKernel with LRU cache | [packages/runtime/src/project-kernel-factory.ts](packages/runtime/src/project-kernel-factory.ts) |
-| Hostname-based routing: `sys_project.hostname` -> kernel resolution | [packages/runtime/src/environment-registry.ts](packages/runtime/src/environment-registry.ts) |
-| `ControlPlaneProxyDriver` - org-scoped data isolation | [packages/runtime/src/control-plane-proxy-driver.ts](packages/runtime/src/control-plane-proxy-driver.ts) |
+| Per-project ObjectKernel with LRU cache | [packages/runtime/src/cloud/kernel-manager.ts](packages/runtime/src/cloud/kernel-manager.ts) |
+| Hostname-based routing: `sys_project.hostname` -> kernel resolution | [packages/runtime/src/cloud/artifact-environment-registry.ts](packages/runtime/src/cloud/artifact-environment-registry.ts) |
+| `ControlPlaneProxyDriver` - org-scoped data isolation | [apps/cloud/src/control-plane-proxy-driver.ts](apps/cloud/src/control-plane-proxy-driver.ts) |
 | `AppCatalogService` - per-project app events -> org-scoped `sys_app` catalog | [packages/services/service-tenant/src/services/app-catalog.service.ts](packages/services/service-tenant/src/services/app-catalog.service.ts) |
 | TS -> JSON compile pipeline (`objectstack compile`) | [packages/cli/src/commands/compile.ts](packages/cli/src/commands/compile.ts) |
 | Zod -> JSON Schema publishing (`z.toJSONSchema`) - TS/JSON bridge | [packages/spec/scripts/build-schemas.ts](packages/spec/scripts/build-schemas.ts) |
@@ -56,6 +56,7 @@ Code that exists and matches the intended architecture. Do not regress these.
 | Studio Flow Viewer + Flow Test Runner + Flow Runs panel | [apps/studio/src/components/FlowViewer.tsx](apps/studio/src/components/FlowViewer.tsx) |
 | Automation: flow auto-discovery from ObjectQL registry | [packages/services/service-automation/src/plugin.ts](packages/services/service-automation/src/plugin.ts) |
 | **D1** ObjectOS metadata DB bridge removed - `MetadataPlugin` no longer registers `sys_metadata` / `sys_metadata_history` or auto-bridges ObjectQL to `DatabaseLoader` | [packages/metadata/src/plugin.ts](packages/metadata/src/plugin.ts) |
+| **S1** REST `requireAuth` gate (resolved 2026-05-17) — anonymous `/api/v1/data/*` returns 401 when `auth` tier is enabled (CRUD + batch routes both gated); auto-enabled by CLI when `tierEnabled('auth')`. Plugs the CF data-leak reported via crm.objectos.app. | [packages/rest/src/rest-server.ts](packages/rest/src/rest-server.ts), [packages/cli/src/commands/serve.ts](packages/cli/src/commands/serve.ts) |
 
 ---
 
@@ -110,6 +111,24 @@ The deprecated `'platform'` and `'environment'` aliases have been removed
 ### D6 - Half-wired abstractions
 
 `ScopedServiceManager` and `SharedProjectPlugin` were added but their integration into the request path is incomplete. Either finish them or remove them.
+
+### D6b - `packages/services/service-cloud` mixes runtime + control-plane (resolved 2026-05-17 — Phase R)
+
+The package historically housed three unrelated concerns under one name:
+
+1. **ObjectOS runtime** (artifact-fetching, per-project kernel manager, auth proxy) — used by `apps/objectos`
+2. **Cloud control plane** (multi-project orchestration, templates, local-identity seeding) — used by `apps/cloud`
+3. **Legacy single-project shells** (`single-project-plugin`, `shared-project-plugin`, `multi-project-plugin`) — pre-artifact-API code
+
+This forced `apps/objectos` to depend on `@objectstack/service-cloud` — a "cloud service" package — even though objectos only needs a runtime that pulls compiled artifacts over HTTP. The dispatcher (`boot-stack.ts`) that bridged the two was an `if/else` over `OS_MODE`.
+
+**Phase R — completed:**
+
+- Runtime-side files (`artifact-api-client`, `artifact-environment-registry`, `artifact-kernel-factory`, `auth-proxy-plugin`, `kernel-manager`, `objectos-stack`, plus new `file-artifact-api-client`) live in [`packages/runtime/src/cloud/`](packages/runtime/src/cloud/) and are exported from `@objectstack/runtime`.
+- `apps/objectos/objectstack.config.ts` now imports `createObjectOSStack` from `@objectstack/runtime` directly. No `@objectstack/service-cloud` dependency.
+- `apps/cloud/objectstack.config.ts` calls `createCloudStack` from `@objectstack/service-cloud` directly. The `createBootStack` dispatcher is removed.
+- Dead duplicates (`packages/runtime/src/{kernel-manager,multi-project-plugin,project-kernel-factory,environment-registry,control-plane-proxy-driver}.ts`) and legacy plugins in `service-cloud` (`single-project-plugin`, `shared-project-plugin`, `multi-project-plugin`, …) are deleted.
+- Result: `service-cloud` shrinks from 5 294 LOC / 27 files to the cloud-only control-plane core; the runtime no longer has a "cloud" dependency.
 
 ### D7 - ✅ Plugin-config churn converged (resolved 2026-04-26)
 

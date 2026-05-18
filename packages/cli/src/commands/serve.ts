@@ -765,11 +765,17 @@ export default class Serve extends Command {
         const apiConfig = (config as any).api ?? {};
         const enableProjectScoping = apiConfig.enableProjectScoping ?? false;
         const projectResolution = apiConfig.projectResolution ?? 'auto';
+        // `requireAuth: true` rejects anonymous requests on `/api/v1/data/*`
+        // with HTTP 401 before they reach ObjectQL. Default-on when the
+        // stack opts in OR when the resolved tier set includes `auth`
+        // (because anonymous data access is almost never desirable when
+        // auth is enabled). Apps can override via stack `api.requireAuth`.
+        const requireAuth = apiConfig.requireAuth ?? (tierEnabled('auth') ? true : false);
 
         try {
           const { createRestApiPlugin } = await import('@objectstack/rest');
           await kernel.use(
-            createRestApiPlugin({ api: { api: { enableProjectScoping, projectResolution } } as any }),
+            createRestApiPlugin({ api: { api: { enableProjectScoping, projectResolution, requireAuth } } as any }),
           );
           trackPlugin('RestAPI');
         } catch (e: any) {
