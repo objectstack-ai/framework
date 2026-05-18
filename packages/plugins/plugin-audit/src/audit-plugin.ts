@@ -2,7 +2,7 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { IDataEngine } from '@objectstack/spec/contracts';
-import { SysAuditLog, SysActivity, SysComment, SysAttachment } from '@objectstack/platform-objects/audit';
+import { SysAuditLog, SysActivity, SysComment, SysAttachment, SysNotification } from '@objectstack/platform-objects/audit';
 import { installAuditWriters } from './audit-writers.js';
 
 /**
@@ -30,7 +30,7 @@ export class AuditPlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysAuditLog, SysActivity, SysComment, SysAttachment],
+      objects: [SysAuditLog, SysActivity, SysComment, SysAttachment, SysNotification],
     });
 
     ctx.logger.info('Audit Plugin initialized');

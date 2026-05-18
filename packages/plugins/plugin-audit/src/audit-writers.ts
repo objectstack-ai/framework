@@ -204,6 +204,25 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
       const sys = api.sudo();
       await sys.object('sys_audit_log').create(auditRow);
       await sys.object('sys_activity').create(activityRow);
+      // M10.8: write per-user inbox notifications. Best-effort; never
+      // throws into the user-facing CRUD path. Covers two common cases:
+      //
+      //   1. Assignment — if owner_id / assigned_to was newly set (or
+      //      changed to a different user) on a non-system record, drop
+      //      a notification into the recipient's inbox so they can see
+      //      "Lead X was assigned to you" without polling the record.
+      //
+      //   2. (Comment mentions are handled separately by the sys_comment
+      //       hook below since SKIP_OBJECTS excludes it from this writer.)
+      await writeAssignmentNotifications(sys, {
+        object: ctx.object,
+        recordId: recordId ?? null,
+        label,
+        action,
+        before,
+        after,
+        actorId: userId ?? null,
+      });
     } catch (err) {
       // Log via engine logger if available, but never throw.
       try { (engine as any).logger?.warn?.('Audit write failed', { object: ctx.object, action, err: String((err as any)?.message ?? err) }); } catch {}
@@ -213,6 +232,116 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
   engine.registerHook('afterInsert', writeAudit, { packageId });
   engine.registerHook('afterUpdate', writeAudit, { packageId });
   engine.registerHook('afterDelete', writeAudit, { packageId });
+
+  /**
+   * M10.8: Dedicated hook on `sys_comment` afterInsert that parses the
+   * `mentions` JSON field and writes one sys_notification per mentioned
+   * user. Lives outside `writeAudit` because sys_comment is in
+   * SKIP_OBJECTS (we don't want audit/activity rows for comments —
+   * those have their own first-class feed).
+   */
+  const writeCommentMentions = async (ctx: HookContext) => {
+    if (ctx.object !== 'sys_comment') return;
+    if (ctx.event !== 'afterInsert') return;
+    const api: any = (ctx as any).api;
+    if (!api?.sudo) return;
+    const row: any = ctx.result;
+    if (!row || typeof row !== 'object') return;
+
+    // mentions is a JSON-string textarea on sys_comment. Accept either
+    // a raw array of user-ids ["u1","u2"] or an array of objects
+    // [{ id: "u1" }, ...]; tolerate parse failures silently.
+    let mentions: any = row.mentions;
+    if (typeof mentions === 'string') {
+      try { mentions = JSON.parse(mentions); } catch { mentions = null; }
+    }
+    if (!Array.isArray(mentions) || mentions.length === 0) return;
+
+    const userIds = mentions
+      .map((m: any) => (typeof m === 'string' ? m : m?.id))
+      .filter((id: any) => typeof id === 'string' && id.length > 0);
+    if (userIds.length === 0) return;
+
+    const [source_object, source_id] = String(row.thread_id ?? '').split(':');
+    const actorId = row.author_id ?? null;
+    const actorName = row.author_name ?? null;
+    const bodyPreview = String(row.body ?? '').slice(0, 240);
+
+    const sys = api.sudo();
+    for (const uid of userIds) {
+      if (uid === actorId) continue; // don't notify the mention author
+      try {
+        await sys.object('sys_notification').create({
+          recipient_id: uid,
+          type: 'mention',
+          title: actorName ? `${actorName} mentioned you` : 'You were mentioned',
+          body: bodyPreview,
+          source_object: source_object || null,
+          source_id: source_id || null,
+          actor_id: actorId,
+          actor_name: actorName,
+          is_read: false,
+        });
+      } catch (err) {
+        try { (engine as any).logger?.warn?.('Mention notification write failed', { uid, err: String((err as any)?.message ?? err) }); } catch {}
+      }
+    }
+  };
+  engine.registerHook('afterInsert', writeCommentMentions, { packageId });
+}
+
+/**
+ * Identify the assignee/owner field of a record. We accept several
+ * conventional names so this works across CRM-style objects (owner_id,
+ * assigned_to) and platform objects (recipient_id is handled separately).
+ */
+const OWNER_FIELDS = ['owner_id', 'assigned_to', 'assignee_id', 'owner', 'assignee'];
+
+function pickOwner(rec: any): string | null {
+  if (!rec || typeof rec !== 'object') return null;
+  for (const f of OWNER_FIELDS) {
+    const v = rec[f];
+    if (typeof v === 'string' && v.length > 0) return v;
+  }
+  return null;
+}
+
+async function writeAssignmentNotifications(
+  sys: any,
+  params: {
+    object: string;
+    recordId: string | null;
+    label: string;
+    action: 'create' | 'update' | 'delete';
+    before: any;
+    after: any;
+    actorId: string | null;
+  },
+): Promise<void> {
+  if (params.action === 'delete') return;
+  if (!params.recordId) return;
+
+  const newOwner = pickOwner(params.after);
+  const oldOwner = pickOwner(params.before);
+  if (!newOwner) return;
+  if (params.action === 'update' && newOwner === oldOwner) return;
+  if (newOwner === params.actorId) return; // self-assignment is silent
+
+  try {
+    await sys.object('sys_notification').create({
+      recipient_id: newOwner,
+      type: 'assignment',
+      title: `${params.object} "${params.label}" assigned to you`,
+      body: null,
+      source_object: params.object,
+      source_id: params.recordId,
+      actor_id: params.actorId,
+      actor_name: null,
+      is_read: false,
+    });
+  } catch {
+    // best-effort; never throw into CRUD path
+  }
 }
 
 // Re-export for convenience.

@@ -9,3 +9,4 @@ export { SysPresence } from './sys-presence.object.js';
 export { SysActivity } from './sys-activity.object.js';
 export { SysComment } from './sys-comment.object.js';
 export { SysAttachment } from './sys-attachment.object.js';
+export { SysNotification } from './sys-notification.object.js';
