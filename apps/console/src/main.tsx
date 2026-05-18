@@ -22,11 +22,22 @@ import '@object-ui/plugin-map';
 import './index.css';
 import { App } from './App';
 import { loadLanguage } from './loadLanguage';
+import { preflightAuth } from './lib/auth-preflight';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <I18nProvider loadLanguage={loadLanguage}>
-      <App />
-    </I18nProvider>
-  </React.StrictMode>,
-);
+const AUTH_URL = `${import.meta.env.VITE_SERVER_URL || ''}/api/v1/auth`;
+
+// Drop any stale Bearer token in localStorage BEFORE React mounts.
+// Without this, a token left by a previous user (or by sign-out via the
+// Account SPA, which doesn't touch this localStorage key) would cause
+// AuthProvider's first `get-session` to be rejected by the server, even
+// though the current cookie session is valid — producing an infinite
+// /_account/login ↔ /_console/home bounce. See auth-preflight.ts.
+preflightAuth(AUTH_URL).finally(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <I18nProvider loadLanguage={loadLanguage}>
+        <App />
+      </I18nProvider>
+    </React.StrictMode>,
+  );
+});

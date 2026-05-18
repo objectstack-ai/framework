@@ -78,6 +78,44 @@ export interface Organization {
 const SessionContext = createContext<SessionState | null>(null);
 
 /**
+ * Storage keys used by `@object-ui/auth`'s built-in Bearer fetch wrapper.
+ * The Console SPA mounts an `<AuthProvider>` from that package which reads
+ * `auth-session-token` out of localStorage and injects it as a Bearer header
+ * on every API call. We don't use that AuthProvider here in Account, but we
+ * MUST keep those keys in sync with our cookie session — otherwise a stale
+ * token left by a previous user causes the Console to think the current
+ * cookie session is invalid, bouncing it back to `/_account/login`, which
+ * Account in turn bounces back to the Console (infinite loop).
+ *
+ * On every successful session refresh / login we mirror the server token
+ * into `auth-session-token`; on logout (or when the server reports no
+ * session) we clear both keys.
+ */
+const OBJECT_UI_AUTH_TOKEN_KEY = 'auth-session-token';
+const OBJECT_UI_AUTH_ACTIVE_ORG_KEY = 'auth-active-organization-id';
+
+function syncObjectUiAuthStorage(session: SessionData | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (session?.token) {
+      localStorage.setItem(OBJECT_UI_AUTH_TOKEN_KEY, session.token);
+    } else {
+      localStorage.removeItem(OBJECT_UI_AUTH_TOKEN_KEY);
+    }
+    if (session?.activeOrganizationId) {
+      localStorage.setItem(
+        OBJECT_UI_AUTH_ACTIVE_ORG_KEY,
+        session.activeOrganizationId,
+      );
+    } else {
+      localStorage.removeItem(OBJECT_UI_AUTH_ACTIVE_ORG_KEY);
+    }
+  } catch {
+    /* localStorage unavailable (Safari private, SSR, etc.) — ignore */
+  }
+}
+
+/**
  * Normalise the better-auth `/get-session` response shape. Depending on the
  * version, the body is either `{ user, session }` directly or wrapped in
  * `{ data: { user, session } }`. Also handles the older `{ data: null }`
@@ -125,10 +163,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const { user: u, session: s } = normaliseSessionResponse(raw);
       setUser(u);
       setSession(s);
+      // Mirror cookie session → localStorage so `@object-ui/auth`'s
+      // Bearer-based AuthProvider (used by Console) doesn't see a stale
+      // token from a previous user.
+      syncObjectUiAuthStorage(u ? s : null);
     } catch (err) {
       setError(err as Error);
       setUser(null);
       setSession(null);
+      syncObjectUiAuthStorage(null);
     } finally {
       setLoading(false);
     }
@@ -156,6 +199,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setOrganizations([]);
       setOrganizationsFetched(false);
+      // Clear `@object-ui/auth`'s localStorage so the Console SPA doesn't
+      // carry a Bearer token across the sign-out boundary.
+      syncObjectUiAuthStorage(null);
     }
   }, [client]);
 
@@ -164,6 +210,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!client?.organizations) return;
       await client.organizations.setActive(organizationId);
       await refresh();
+      // `refresh()` already syncs storage with the new session's active
+      // org; this is just belt-and-braces in case `client.auth.me()` is
+      // momentarily stale.
+      try {
+        localStorage.setItem(OBJECT_UI_AUTH_ACTIVE_ORG_KEY, organizationId);
+      } catch {
+        /* ignore */
+      }
     },
     [client, refresh],
   );
