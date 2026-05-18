@@ -135,18 +135,20 @@ export const OpportunityViews = defineView({
       sort: [{ field: 'close_date', order: 'asc' }],
     },
 
-    /** Stale Opportunities — no activity for 30+ days, still open */
+    /** Stale Opportunities — still-open deals, sorted by days_in_stage desc */
     stale_opportunities: {
       name: 'stale_opportunities',
       type: 'grid',
       label: '⚠️ Stale Opportunities',
       data: { provider: 'object', object: 'opportunity' },
       columns: ['name', 'account', 'stage', 'amount', 'days_in_stage', 'close_date', 'owner'],
+      // Operator-only filter — `days_in_stage` is only populated for deals
+      // that have moved at least once, so we sort desc to surface the most
+      // stagnant first instead of filtering by a numeric threshold.
       filter: [
-        { field: 'days_in_stage', operator: 'greater_than', value: 30 },
         { field: 'stage', operator: 'not_in', value: ['closed_won', 'closed_lost'] },
       ],
-      sort: [{ field: 'days_in_stage', order: 'desc' }],
+      sort: [{ field: 'days_in_stage', order: 'desc' }, { field: 'close_date', order: 'asc' }],
     },
 
     /** Closing this quarter (commit + best_case) — sales-manager forecast */

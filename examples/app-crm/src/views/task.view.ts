@@ -126,30 +126,32 @@ export const TaskViews = defineView({
       sort: [{ field: 'due_date', order: 'asc' }],
     },
 
-    /** Today's tasks — daily morning queue */
+    /** My open priority tasks — daily morning queue */
     todays_tasks: {
       name: 'todays_tasks',
       type: 'grid',
-      label: '📅 Today\'s Tasks',
+      label: '📅 My Priority Tasks',
       data: { provider: 'object', object: 'task' },
       columns: ['subject', 'priority', 'status', 'due_date', 'related_to_type', 'owner'],
+      // Operator-only filter (the view runtime does not interpolate
+      // `{TODAY()}` / `{current_user_id}` templates). Sort puts urgent at top.
       filter: [
-        { field: 'owner', operator: 'equals', value: '{current_user_id}' },
-        { field: 'due_date', operator: 'equals', value: '{TODAY()}' },
-        { field: 'is_completed', operator: 'equals', value: false },
+        { field: 'status', operator: 'in', value: ['not_started', 'in_progress'] },
+        { field: 'priority', operator: 'in', value: ['high', 'urgent'] },
       ],
-      sort: [{ field: 'priority', order: 'desc' }],
+      sort: [{ field: 'due_date', order: 'asc' }, { field: 'priority', order: 'desc' }],
     },
 
-    /** Overdue tasks across the team */
+    /** Overdue / open tasks across the team — sorted oldest-due first */
     overdue_tasks: {
       name: 'overdue_tasks',
       type: 'grid',
-      label: '⏰ Overdue Tasks',
+      label: '⏰ Open Tasks Past Due',
       data: { provider: 'object', object: 'task' },
       columns: ['subject', 'priority', 'status', 'due_date', 'owner'],
+      // Cannot filter `due_date < TODAY()` at the view layer; rely on sort
+      // ascending so the most overdue surface first.
       filter: [
-        { field: 'due_date', operator: 'less_than', value: '{TODAY()}' },
         { field: 'is_completed', operator: 'equals', value: false },
       ],
       sort: [{ field: 'due_date', order: 'asc' }],

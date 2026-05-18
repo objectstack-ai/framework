@@ -41,7 +41,7 @@ export const accountCube: Cube = {
     owner:          { name: 'owner',          label: 'Owner',          type: 'string',  sql: 'owner' },
     is_active:      { name: 'is_active',      label: 'Active',         type: 'boolean', sql: 'is_active' },
     annual_revenue: { name: 'annual_revenue', label: 'Annual Revenue', type: 'number',  sql: 'annual_revenue' },
-    created_date:   { name: 'created_date',   label: 'Created Date',   type: 'time',    sql: 'created_date', granularities: ['day', 'week', 'month', 'quarter', 'year'] },
+    created_at:     { name: 'created_at',     label: 'Created Date',   type: 'time',    sql: 'created_at', granularities: ['day', 'week', 'month', 'quarter', 'year'] },
   },
 };
 

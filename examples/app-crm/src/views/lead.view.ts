@@ -334,10 +334,12 @@ export const LeadViews = defineView({
       label: '🔥 Hot Leads',
       data: { provider: 'object', object: 'lead' },
       columns: ['first_name', 'last_name', 'company', 'phone', 'email', 'rating', 'next_followup_date', 'owner'],
+      // High-rating, still-actionable leads — sort by next-follow-up so reps
+      // see the most urgent first. (Pure operator-based filters; no date
+      // template strings since the view runtime does not resolve them.)
       filter: [
         { field: 'rating', operator: 'greater_than_or_equal', value: 4 },
         { field: 'status', operator: 'in', value: ['new', 'contacted'] },
-        { field: 'next_followup_date', operator: 'less_than_or_equal', value: '{TODAY()}' },
       ],
       sort: [{ field: 'next_followup_date', order: 'asc' }],
     },

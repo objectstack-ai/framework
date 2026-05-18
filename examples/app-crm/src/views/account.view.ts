@@ -90,17 +90,18 @@ export const AccountViews = defineView({
       sort: [{ field: 'last_activity_date', order: 'desc' }],
     },
 
-    /** Customer-success: renewals due within 90 days */
+    /** Customer-success: upcoming renewals, sorted by date ascending */
     renewals_due: {
       name: 'renewals_due',
       type: 'grid',
-      label: '🔄 Renewals Due (90d)',
+      label: '🔄 Upcoming Renewals',
       data: { provider: 'object', object: 'account' },
       columns: ['name', 'tier', 'health_score', 'next_renewal_date', 'renewal_owner', 'annual_revenue'],
+      // Operator-only filter (no `{TODAY() + 90d}` template — sort exposes
+      // the soonest renewals at the top of the list).
       filter: [
         { field: 'type', operator: 'equals', value: 'customer' },
-        { field: 'next_renewal_date', operator: 'less_than_or_equal', value: '{TODAY() + 90d}' },
-        { field: 'next_renewal_date', operator: 'greater_than_or_equal', value: '{TODAY()}' },
+        { field: 'next_renewal_date', operator: 'is_not_null' },
       ],
       sort: [{ field: 'next_renewal_date', order: 'asc' }],
     },

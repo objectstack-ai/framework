@@ -28,6 +28,15 @@ coverage/
 .nyc_output/
 .playwright-mcp/
 test-results/
+
+# Ephemeral screenshots from local browser-verification runs.
+# Long-lived screenshots belong in docs/screenshots/.
+/crm-*.png
+/crm-*.jpeg
+/m10-*.png
+/studio-*.png
+/page-*.png
+/tmp-*.png
 playwright-report/
 
 # Temporary files
@@ -105,3 +114,4 @@ test-results/
 playwright/.cache/
 apps/cloud/artifacts/
 studio-crm.png
+examples/app-crm/storage/
