@@ -46,7 +46,7 @@ export default defineStack({
   // `ui`   serves the Studio shell and CRM apps under /_studio/.
   // Both are required for a clickable login flow when running `objectstack start`
   // off the compiled artifact.
-  requires: ['ai', 'automation', 'analytics', 'auth', 'ui'],
+  requires: ['ai', 'automation', 'analytics', 'auth', 'ui', 'storage'],
 
   objects: Object.values(objects),
   actions: Object.values(actions),
