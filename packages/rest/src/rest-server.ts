@@ -829,6 +829,7 @@ export class RestServer {
             if (this.config.api.enableSearch ?? true) {
                 this.registerSearchEndpoints(bp);
             }
+            this.registerDataActionEndpoints(bp);
             if (this.config.api.enableBatch) {
                 this.registerBatchEndpoints(bp);
             }
@@ -1415,6 +1416,57 @@ export class RestServer {
         }
     }
     
+    /**
+     * Register object-specific action endpoints that don't fit the
+     * generic CRUD shape. These are domain operations (Salesforce
+     * convertLead, etc.) where the protocol implementation does its own
+     * multi-record orchestration and we just need a thin HTTP route.
+     *
+     * POST {basePath}/data/lead/:id/convert — M10.6 lead conversion.
+     */
+    private registerDataActionEndpoints(basePath: string): void {
+        const isScoped = basePath.includes('/projects/:projectId');
+        const { crud } = this.config;
+        const dataPath = `${basePath}${crud.dataPrefix}`;
+
+        // POST /data/lead/:id/convert
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/lead/:id/convert`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const p = await this.resolveProtocol(projectId, req);
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const convertLead = (p as any).convertLead;
+                    if (typeof convertLead !== 'function') {
+                        res.status(501).json({ code: 'NOT_IMPLEMENTED', error: 'Lead convert not supported by this protocol' });
+                        return;
+                    }
+                    const body = req.body ?? {};
+                    const result = await convertLead.call(p, {
+                        leadId: req.params.id,
+                        accountId: body.accountId,
+                        contactId: body.contactId,
+                        createOpportunity: body.createOpportunity,
+                        opportunity: body.opportunity,
+                        convertedStatus: body.convertedStatus,
+                        ...(context ? { context } : {}),
+                    });
+                    res.json(result);
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, 'lead');
+                }
+            },
+            metadata: {
+                summary: 'Convert a Lead into Account + Contact (+ optional Opportunity)',
+                tags: ['data', 'lead'],
+            },
+        });
+    }
+
     /**
      * Register global cross-object search endpoint (M10.5).
      * GET {basePath}/search?q=acme&objects=lead,account&limit=20&perObject=5
