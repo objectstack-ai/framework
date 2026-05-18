@@ -1,6 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-export const ProductInfoRAG = {
+import type { RAGPipelineConfigInput } from '@objectstack/spec/ai';
+
+export const ProductInfoRAG: RAGPipelineConfigInput = {
   name: 'product_info',
   label: 'Product Information Pipeline',
   description: 'RAG pipeline for product catalog and specifications',

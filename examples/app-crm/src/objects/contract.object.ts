@@ -15,7 +15,16 @@ export const Contract = ObjectSchema.create({
   description: 'Legal contracts and agreements',
   titleFormat: '{contract_number} - {account.name}',
   compactLayout: ['contract_number', 'account', 'status', 'start_date', 'end_date'],
-  
+
+  fieldGroups: [
+    { key: 'basic',     label: 'Contract Information', icon: 'info' },
+    { key: 'parties',   label: 'Parties',              icon: 'users' },
+    { key: 'terms',     label: 'Terms & Dates',        icon: 'calendar' },
+    { key: 'value',     label: 'Contract Value',       icon: 'dollar-sign' },
+    { key: 'status',    label: 'Status & Approval',    icon: 'check-circle' },
+    { key: 'renewal',   label: 'Renewal',              icon: 'refresh-ccw', defaultExpanded: false },
+  ],
+
   fields: {
     // AutoNumber field
     contract_number: Field.autonumber({
@@ -194,9 +203,9 @@ export const Contract = ObjectSchema.create({
     {
       name: 'valid_contract_term',
       type: 'script',
-      severity: 'error',
-      message: 'Contract Term must match date range',
-      condition: P`((record.end_date - record.start_date) / 30) != record.contract_term_months`,
+      severity: 'warning',
+      message: 'Contract Term should match the date range (months between start and end)',
+      condition: P`monthsBetween(record.start_date, record.end_date) != record.contract_term_months`,
     },
   ],
   

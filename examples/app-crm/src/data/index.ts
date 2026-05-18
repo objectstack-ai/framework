@@ -84,7 +84,7 @@ const contacts = defineDataset(Contact, {
       email: 'john.smith@acme.example.com',
       phone: '+1-415-555-0101',
       title: 'VP of Engineering',
-      department: 'Engineering',
+      department: 'engineering',
       account: 'Acme Corporation',
     },
     {
@@ -94,7 +94,7 @@ const contacts = defineDataset(Contact, {
       email: 'sarah.j@globex.example.com',
       phone: '+1-312-555-0201',
       title: 'Chief Procurement Officer',
-      department: 'Executive',
+      department: 'executive',
       account: 'Globex Industries',
     },
     {
@@ -104,7 +104,7 @@ const contacts = defineDataset(Contact, {
       email: 'mchen@initech.example.com',
       phone: '+1-212-555-0301',
       title: 'Director of Operations',
-      department: 'Operations',
+      department: 'operations',
       account: 'Initech Solutions',
     },
     {
@@ -114,7 +114,7 @@ const contacts = defineDataset(Contact, {
       email: 'emily.d@starkmed.example.com',
       phone: '+1-617-555-0401',
       title: 'Head of Partnerships',
-      department: 'Sales',
+      department: 'sales',
       account: 'Stark Medical',
     },
     {
@@ -124,7 +124,7 @@ const contacts = defineDataset(Contact, {
       email: 'rwilson@wayne.example.com',
       phone: '+1-650-555-0501',
       title: 'CTO',
-      department: 'Engineering',
+      department: 'engineering',
       account: 'Wayne Enterprises',
     },
   ]
@@ -180,7 +180,7 @@ const opportunities = defineDataset(Opportunity, {
       stage: 'proposal',
       probability: 60,
       close_date: cel`daysFromNow(30)`,
-      type: 'existing_business',
+      type: 'existing_upgrade',
       forecast_category: 'pipeline',
       lead_source: 'web',
     },
@@ -213,7 +213,7 @@ const opportunities = defineDataset(Opportunity, {
       stage: 'needs_analysis',
       probability: 25,
       close_date: cel`daysFromNow(45)`,
-      type: 'existing_business',
+      type: 'existing_upgrade',
       forecast_category: 'best_case',
       lead_source: 'event',
     },

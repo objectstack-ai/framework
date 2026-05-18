@@ -312,6 +312,7 @@ export type RerankingConfig = z.infer<typeof RerankingConfigSchema>;
 export type VectorStoreConfig = z.infer<typeof VectorStoreConfigSchema>;
 export type DocumentLoaderConfig = z.infer<typeof DocumentLoaderConfigSchema>;
 export type RAGPipelineConfig = z.infer<typeof RAGPipelineConfigSchema>;
+export type RAGPipelineConfigInput = z.input<typeof RAGPipelineConfigSchema>;
 export type RAGQueryRequest = z.infer<typeof RAGQueryRequestSchema>;
 export type RAGQueryResponse = z.infer<typeof RAGQueryResponseSchema>;
 export type RAGPipelineStatus = z.infer<typeof RAGPipelineStatusSchema>;

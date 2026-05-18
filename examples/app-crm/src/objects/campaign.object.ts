@@ -232,7 +232,8 @@ export const Campaign = ObjectSchema.create({
     {
       name: 'campaign_completion_check',
       objectName: 'campaign',
-      triggerType: 'on_read',
+      triggerType: 'scheduled',
+      schedule: '0 2 * * *',
       criteria: P`record.end_date < today() && record.status == "in_progress"`,
       actions: [
         {

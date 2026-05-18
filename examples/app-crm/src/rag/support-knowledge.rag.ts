@@ -1,6 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-export const SupportKnowledgeRAG = {
+import type { RAGPipelineConfigInput } from '@objectstack/spec/ai';
+
+export const SupportKnowledgeRAG: RAGPipelineConfigInput = {
   name: 'support_knowledge',
   label: 'Support Knowledge Pipeline',
   description: 'RAG pipeline for customer support knowledge base',

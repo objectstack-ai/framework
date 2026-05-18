@@ -27,7 +27,7 @@ export const Account = ObjectSchema.create({
     // AutoNumber field - Unique account identifier
     account_number: Field.autonumber({
       label: 'Account Number',
-      format: 'ACC-{0000}',
+      format: 'ACC-{000000}',
       group: 'basic',
     }),
 
@@ -143,6 +143,51 @@ export const Account = ObjectSchema.create({
       label: 'Last Activity Date',
       readonly: true,
       group: 'system',
+    }),
+
+    // ─── Customer Success / Account Health ────────────────────────────
+    tier: Field.select({
+      label: 'Customer Tier',
+      group: 'ownership',
+      options: [
+        { label: 'Strategic',  value: 'strategic',  color: '#7C3AED' },
+        { label: 'Enterprise', value: 'enterprise', color: '#4169E1' },
+        { label: 'Mid-Market', value: 'mid_market', color: '#00AA00' },
+        { label: 'SMB',        value: 'smb',        color: '#FFA500', default: true },
+      ],
+    }),
+
+    segment: Field.select({
+      label: 'Segment',
+      group: 'ownership',
+      options: [
+        { label: 'Net New',    value: 'net_new' },
+        { label: 'Growth',     value: 'growth' },
+        { label: 'At Risk',    value: 'at_risk' },
+        { label: 'Stable',     value: 'stable' },
+      ],
+    }),
+
+    health_score: Field.select({
+      label: 'Health Score',
+      group: 'ownership',
+      description: 'CSM-maintained health indicator',
+      options: [
+        { label: 'Healthy',    value: 'healthy',    color: '#00AA00' },
+        { label: 'Watching',   value: 'watching',   color: '#FFA500' },
+        { label: 'At Risk',    value: 'at_risk',    color: '#FF4500' },
+        { label: 'Churning',   value: 'churning',   color: '#FF0000' },
+      ],
+    }),
+
+    renewal_owner: Field.lookup('user', {
+      label: 'Renewal Owner (CSM)',
+      group: 'ownership',
+    }),
+
+    next_renewal_date: Field.date({
+      label: 'Next Renewal Date',
+      group: 'ownership',
     }),
   },
   

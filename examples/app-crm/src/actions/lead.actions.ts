@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Action } from '@objectstack/spec/ui';
+import { P } from '@objectstack/spec';
 
 /**
  * Convert Lead to Account, Contact, and Opportunity.
@@ -17,7 +18,7 @@ export const ConvertLeadAction: Action = {
   type: 'flow',
   target: 'lead_conversion',
   locations: ['record_header', 'list_item'],
-  visible: 'status == "qualified" && is_converted == false',
+  visible: P`record.status == "qualified" && record.is_converted == false`,
   confirmText: 'Are you sure you want to convert this lead?',
   successMessage: 'Lead converted successfully!',
   refreshAfter: true,

@@ -183,6 +183,58 @@ export const Opportunity = ObjectSchema.create({
         { label: 'Closed', value: 'closed' },
       ]
     }),
+
+    // Approval workflow tracking
+    approval_status: Field.select({
+      label: 'Approval Status',
+      group: 'sales_process',
+      readonly: true,
+      options: [
+        { label: 'Not Required', value: 'not_required', default: true },
+        { label: 'Pending', value: 'pending', color: '#FFA500' },
+        { label: 'Approved', value: 'approved', color: '#00AA00' },
+        { label: 'Rejected', value: 'rejected', color: '#FF0000' },
+      ],
+    }),
+
+    approved_date: Field.datetime({
+      label: 'Approved Date',
+      readonly: true,
+      group: 'sales_process',
+    }),
+
+    // Win / Loss analysis — required when stage moves to closed_*
+    win_reason: Field.select({
+      label: 'Win Reason',
+      group: 'classification',
+      options: [
+        { label: 'Better Product', value: 'better_product' },
+        { label: 'Better Price', value: 'better_price' },
+        { label: 'Existing Relationship', value: 'relationship' },
+        { label: 'Better Support', value: 'better_support' },
+        { label: 'Best Fit / Features', value: 'best_fit' },
+        { label: 'Other', value: 'other' },
+      ],
+    }),
+
+    loss_reason: Field.select({
+      label: 'Loss Reason',
+      group: 'classification',
+      options: [
+        { label: 'Price Too High', value: 'price' },
+        { label: 'Lost to Competitor', value: 'competitor' },
+        { label: 'No Budget', value: 'no_budget' },
+        { label: 'No Decision', value: 'no_decision' },
+        { label: 'Bad Timing', value: 'timing' },
+        { label: 'Missing Features', value: 'features' },
+        { label: 'Other', value: 'other' },
+      ],
+    }),
+
+    loss_details: Field.textarea({
+      label: 'Loss/Win Details',
+      group: 'classification',
+    }),
   },
   
   // Database indexes for performance

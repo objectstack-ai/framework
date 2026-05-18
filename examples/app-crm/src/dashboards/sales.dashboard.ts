@@ -265,6 +265,8 @@ export const SalesDashboard: Dashboard = {
       filter: { stage: { $nin: ['closed_won', 'closed_lost'] } },
       colorVariant: 'default',
       layout: { x: 0, y: 14, w: 12, h: 4 },
+      valueField: 'amount',
+      aggregate: 'sum',
       options: {
         rowField: 'stage',
         columnField: 'lead_source',

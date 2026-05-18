@@ -1,6 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-export const CompetitiveIntelRAG = {
+import type { RAGPipelineConfigInput } from '@objectstack/spec/ai';
+
+export const CompetitiveIntelRAG: RAGPipelineConfigInput = {
   name: 'competitive_intel',
   label: 'Competitive Intelligence Pipeline',
   description: 'RAG pipeline for competitive analysis and market insights',

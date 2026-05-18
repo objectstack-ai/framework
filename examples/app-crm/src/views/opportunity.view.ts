@@ -134,6 +134,34 @@ export const OpportunityViews = defineView({
       ],
       sort: [{ field: 'close_date', order: 'asc' }],
     },
+
+    /** Stale Opportunities — no activity for 30+ days, still open */
+    stale_opportunities: {
+      name: 'stale_opportunities',
+      type: 'grid',
+      label: '⚠️ Stale Opportunities',
+      data: { provider: 'object', object: 'opportunity' },
+      columns: ['name', 'account', 'stage', 'amount', 'days_in_stage', 'close_date', 'owner'],
+      filter: [
+        { field: 'days_in_stage', operator: 'greater_than', value: 30 },
+        { field: 'stage', operator: 'not_in', value: ['closed_won', 'closed_lost'] },
+      ],
+      sort: [{ field: 'days_in_stage', order: 'desc' }],
+    },
+
+    /** Closing this quarter (commit + best_case) — sales-manager forecast */
+    closing_this_quarter: {
+      name: 'closing_this_quarter',
+      type: 'grid',
+      label: 'Closing This Quarter',
+      data: { provider: 'object', object: 'opportunity' },
+      columns: ['name', 'account', 'amount', 'forecast_category', 'probability', 'close_date', 'owner'],
+      filter: [
+        { field: 'forecast_category', operator: 'in', value: ['commit', 'best_case'] },
+        { field: 'stage', operator: 'not_in', value: ['closed_won', 'closed_lost'] },
+      ],
+      sort: [{ field: 'close_date', order: 'asc' }],
+    },
   },
 
   form: {

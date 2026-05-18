@@ -198,13 +198,6 @@ export const Contact = ObjectSchema.create({
   // Validation Rules
   validations: [
     {
-      name: 'email_required_for_opt_in',
-      type: 'script',
-      severity: 'error',
-      message: 'Email is required when Email Opt Out is not checked',
-      condition: P`record.email_opt_out == false && isBlank(record.email)`,
-    },
-    {
       name: 'email_unique_per_account',
       type: 'unique',
       severity: 'error',

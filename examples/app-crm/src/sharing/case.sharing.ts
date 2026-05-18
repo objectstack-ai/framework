@@ -8,6 +8,6 @@ export const CaseEscalationSharingRule = {
   object: 'case',
   type: 'criteria' as const,
   condition: P`record.priority == "critical" && record.is_closed == false`,
-  accessLevel: 'edit',
-  sharedWith: { type: 'role_and_subordinates', value: 'service_manager' },
+  accessLevel: 'edit' as const,
+  sharedWith: { type: 'role_and_subordinates' as const, value: 'service_manager' },
 };

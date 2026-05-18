@@ -27,7 +27,7 @@ export const CaseEscalationFlow: Flow = {
       id: 'assign_senior_agent', type: 'update_record', label: 'Assign to Senior Agent',
       config: {
         objectName: 'case', filter: { id: '{caseId}' },
-        fields: { owner: '{caseRecord.owner.manager}', is_escalated: true, escalated_date: '{NOW()}' },
+        fields: { owner: '{caseRecord.owner.manager}', is_escalated: true, escalated_date: '{NOW()}', status: 'escalated' },
       },
     },
     {
@@ -36,7 +36,9 @@ export const CaseEscalationFlow: Flow = {
         objectName: 'task',
         fields: {
           subject: 'Follow up on escalated case: {caseRecord.case_number}',
-          related_to: '{caseId}', owner: '{caseRecord.owner}',
+          related_to_type: 'case',
+          related_to_case: '{caseId}',
+          owner: '{caseRecord.owner}',
           priority: 'high', status: 'not_started', due_date: '{TODAY() + 1}',
         },
       },

@@ -1,6 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-export const SalesKnowledgeRAG = {
+import type { RAGPipelineConfigInput } from '@objectstack/spec/ai';
+
+export const SalesKnowledgeRAG: RAGPipelineConfigInput = {
   name: 'sales_knowledge',
   label: 'Sales Knowledge Pipeline',
   description: 'RAG pipeline for sales team knowledge and best practices',

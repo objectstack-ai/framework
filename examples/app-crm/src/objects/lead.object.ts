@@ -222,6 +222,33 @@ export const Lead = ObjectSchema.create({
       defaultValue: false,
       group: 'preferences',
     }),
+
+    // Follow-up & disqualification tracking
+    next_followup_date: Field.date({
+      label: 'Next Follow-up Date',
+      group: 'qualification',
+    }),
+
+    last_contacted_date: Field.datetime({
+      label: 'Last Contacted',
+      readonly: true,
+      group: 'qualification',
+    }),
+
+    disqualification_reason: Field.select({
+      label: 'Disqualification Reason',
+      group: 'qualification',
+      description: 'Required when status is Unqualified',
+      options: [
+        { label: 'Not a Fit',         value: 'not_a_fit' },
+        { label: 'No Budget',         value: 'no_budget' },
+        { label: 'Wrong Persona',     value: 'wrong_persona' },
+        { label: 'Unreachable',       value: 'unreachable' },
+        { label: 'Duplicate',         value: 'duplicate' },
+        { label: 'Competitor',        value: 'competitor' },
+        { label: 'Other',             value: 'other' },
+      ],
+    }),
   },
 
   // Lifecycle State Machine(s)
@@ -275,17 +302,18 @@ export const Lead = ObjectSchema.create({
   
   workflows: [
     {
-      name: 'auto_qualify_high_score_leads',
+      name: 'auto_flag_hot_lead',
       objectName: 'lead',
       triggerType: 'on_create_or_update',
       criteria: P`record.rating >= 4 && record.status == "new"`,
       active: true,
       actions: [
         {
-          name: 'set_status',
+          name: 'route_to_followup',
           type: 'field_update',
-          field: 'status',
-          value: 'contacted',
+          field: 'next_followup_date',
+          // Hot leads must be contacted within 24h; do NOT lie about status.
+          value: 'TODAY()',
         }
       ],
     },

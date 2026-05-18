@@ -89,6 +89,35 @@ export const AccountViews = defineView({
       filter: [{ field: 'owner', operator: 'equals', value: '{current_user_id}' }],
       sort: [{ field: 'last_activity_date', order: 'desc' }],
     },
+
+    /** Customer-success: renewals due within 90 days */
+    renewals_due: {
+      name: 'renewals_due',
+      type: 'grid',
+      label: '🔄 Renewals Due (90d)',
+      data: { provider: 'object', object: 'account' },
+      columns: ['name', 'tier', 'health_score', 'next_renewal_date', 'renewal_owner', 'annual_revenue'],
+      filter: [
+        { field: 'type', operator: 'equals', value: 'customer' },
+        { field: 'next_renewal_date', operator: 'less_than_or_equal', value: '{TODAY() + 90d}' },
+        { field: 'next_renewal_date', operator: 'greater_than_or_equal', value: '{TODAY()}' },
+      ],
+      sort: [{ field: 'next_renewal_date', order: 'asc' }],
+    },
+
+    /** At-risk customers — CSM action queue */
+    at_risk_accounts: {
+      name: 'at_risk_accounts',
+      type: 'grid',
+      label: '⚠️ At-Risk Accounts',
+      data: { provider: 'object', object: 'account' },
+      columns: ['name', 'tier', 'health_score', 'segment', 'renewal_owner', 'last_activity_date'],
+      filter: [
+        { field: 'type', operator: 'equals', value: 'customer' },
+        { field: 'health_score', operator: 'in', value: ['at_risk', 'churning'] },
+      ],
+      sort: [{ field: 'health_score', order: 'desc' }],
+    },
   },
 
   form: {

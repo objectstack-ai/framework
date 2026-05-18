@@ -324,8 +324,25 @@ export const LeadViews = defineView({
         },
       },
     },
+    /**
+     * Hot Leads — Ready for immediate follow-up
+     * (Set by the auto_flag_hot_lead workflow)
+     */
+    hot_leads: {
+      name: 'hot_leads',
+      type: 'grid',
+      label: '🔥 Hot Leads',
+      data: { provider: 'object', object: 'lead' },
+      columns: ['first_name', 'last_name', 'company', 'phone', 'email', 'rating', 'next_followup_date', 'owner'],
+      filter: [
+        { field: 'rating', operator: 'greater_than_or_equal', value: 4 },
+        { field: 'status', operator: 'in', value: ['new', 'contacted'] },
+        { field: 'next_followup_date', operator: 'less_than_or_equal', value: '{TODAY()}' },
+      ],
+      sort: [{ field: 'next_followup_date', order: 'asc' }],
+    },
   },
-  
+
   /**
    * Additional Named Form Views - Demonstrating All 6 Layout Types
    */

@@ -9,7 +9,16 @@ export const Case = ObjectSchema.create({
   pluralLabel: 'Cases',
   icon: 'life-buoy',
   description: 'Customer support cases and service requests',
-  
+
+  fieldGroups: [
+    { key: 'basic',       label: 'Case Information', icon: 'info' },
+    { key: 'origin',      label: 'Origin & Routing', icon: 'route' },
+    { key: 'sla',         label: 'SLA & Priority',   icon: 'clock' },
+    { key: 'resolution',  label: 'Resolution',       icon: 'check-circle' },
+    { key: 'escalation',  label: 'Escalation',       icon: 'alert-triangle', defaultExpanded: false },
+    { key: 'system',      label: 'System',           icon: 'database',       defaultExpanded: false },
+  ],
+
   fields: {
     // Case Information
     case_number: Field.autonumber({
@@ -128,6 +137,11 @@ export const Case = ObjectSchema.create({
     is_escalated: Field.boolean({
       label: 'Escalated',
       defaultValue: false,
+    }),
+    
+    escalated_date: Field.datetime({
+      label: 'Escalated Date',
+      readonly: true,
     }),
     
     escalation_reason: Field.textarea({

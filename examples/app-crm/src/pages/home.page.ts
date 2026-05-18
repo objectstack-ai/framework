@@ -183,7 +183,7 @@ export const SalesHomePage: Page = {
   assignedProfiles: ['sales_user', 'sales_manager'],
   
   aria: {
-    label: 'Sales Home Page',
-    description: 'Sales team home page with metrics, leads, and quick actions',
+    ariaLabel: 'Sales Home Page',
+    ariaDescribedBy: 'Sales team home page with metrics, leads, and quick actions',
   },
 };

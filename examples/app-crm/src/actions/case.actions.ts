@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Action } from '@objectstack/spec/ui';
+import { P } from '@objectstack/spec';
 
 /**
  * Escalate Case.
@@ -35,7 +36,7 @@ export const EscalateCaseAction: Action = {
     timeoutMs: 5000,
   },
   locations: ['record_header', 'list_item'],
-  visible: 'is_escalated == false && is_closed == false',
+  visible: P`record.is_escalated == false && record.is_closed == false`,
   params: [
     {
       name: 'reason',
@@ -81,7 +82,7 @@ export const CloseCaseAction: Action = {
     timeoutMs: 5000,
   },
   locations: ['record_header'],
-  visible: 'is_closed == false',
+  visible: P`record.is_closed == false`,
   params: [
     {
       name: 'resolution',

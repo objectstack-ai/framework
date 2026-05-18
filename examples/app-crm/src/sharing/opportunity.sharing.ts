@@ -8,6 +8,6 @@ export const OpportunitySalesSharingRule = {
   object: 'opportunity',
   type: 'criteria' as const,
   condition: P`!(record.stage in ["closed_won", "closed_lost"]) && record.amount >= 100000`,
-  accessLevel: 'read',
-  sharedWith: { type: 'role_and_subordinates', value: 'sales_director' },
+  accessLevel: 'read' as const,
+  sharedWith: { type: 'role_and_subordinates' as const, value: 'sales_director' },
 };

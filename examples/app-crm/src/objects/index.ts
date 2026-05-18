@@ -9,11 +9,14 @@
  */
 export { Account } from './account.object';
 export { Campaign } from './campaign.object';
+export { CampaignMember } from './campaign_member.object';
 export { Case } from './case.object';
 export { Contact } from './contact.object';
 export { Contract } from './contract.object';
 export { Lead } from './lead.object';
 export { Opportunity } from './opportunity.object';
+export { OpportunityLineItem } from './opportunity_line_item.object';
 export { Product } from './product.object';
 export { Quote } from './quote.object';
+export { QuoteLineItem } from './quote_line_item.object';
 export { Task } from './task.object';

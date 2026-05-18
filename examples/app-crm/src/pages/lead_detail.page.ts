@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Page } from '@objectstack/spec/ui';
+import { P } from '@objectstack/spec';
 
 /**
  * Lead Detail Record Page
@@ -109,7 +110,7 @@ export const LeadDetailPage: Page = {
             },
           },
           // Only show AI assistant for qualified leads
-          visibility: 'status == "qualified" OR status == "contacted"',
+          visibility: P`record.status == "qualified" || record.status == "contacted"`,
         },
       ],
     },
@@ -279,7 +280,7 @@ export const LeadDetailPage: Page = {
   
   // ARIA accessibility
   aria: {
-    label: 'Lead Detail Page',
-    description: 'Detailed view of lead information with related records and activity',
+    ariaLabel: 'Lead Detail Page',
+    ariaDescribedBy: 'Detailed view of lead information with related records and activity',
   },
 };

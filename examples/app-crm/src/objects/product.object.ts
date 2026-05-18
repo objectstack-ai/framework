@@ -15,7 +15,13 @@ export const Product = ObjectSchema.create({
   description: 'Products and services offered by the company',
   titleFormat: '{product_code} - {name}',
   compactLayout: ['product_code', 'name', 'category', 'is_active'],
-  
+
+  fieldGroups: [
+    { key: 'basic',    label: 'Product Information', icon: 'info' },
+    { key: 'pricing',  label: 'Pricing & Billing',   icon: 'dollar-sign' },
+    { key: 'metadata', label: 'Resources',           icon: 'link', defaultExpanded: false },
+  ],
+
   fields: {
     // AutoNumber field - Unique product identifier
     product_code: Field.autonumber({
@@ -112,6 +118,38 @@ export const Product = ObjectSchema.create({
     
     datasheet_url: Field.url({
       label: 'Datasheet URL',
+    }),
+
+    // Tax & billing
+    tax_rate: Field.percent({
+      label: 'Default Tax Rate %',
+      scale: 2,
+      min: 0,
+      max: 100,
+      defaultValue: 0,
+    }),
+
+    billing_type: Field.select({
+      label: 'Billing Type',
+      options: [
+        { label: 'One-Time',  value: 'one_time', default: true },
+        { label: 'Monthly',   value: 'monthly' },
+        { label: 'Quarterly', value: 'quarterly' },
+        { label: 'Annual',    value: 'annual' },
+        { label: 'Usage',     value: 'usage' },
+      ],
+    }),
+
+    unit_of_measure: Field.select({
+      label: 'Unit of Measure',
+      options: [
+        { label: 'Each',       value: 'each', default: true },
+        { label: 'License',    value: 'license' },
+        { label: 'Seat',       value: 'seat' },
+        { label: 'Hour',       value: 'hour' },
+        { label: 'Day',        value: 'day' },
+        { label: 'Month',      value: 'month' },
+      ],
     }),
   },
   

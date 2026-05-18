@@ -125,6 +125,35 @@ export const TaskViews = defineView({
       ],
       sort: [{ field: 'due_date', order: 'asc' }],
     },
+
+    /** Today's tasks — daily morning queue */
+    todays_tasks: {
+      name: 'todays_tasks',
+      type: 'grid',
+      label: '📅 Today\'s Tasks',
+      data: { provider: 'object', object: 'task' },
+      columns: ['subject', 'priority', 'status', 'due_date', 'related_to_type', 'owner'],
+      filter: [
+        { field: 'owner', operator: 'equals', value: '{current_user_id}' },
+        { field: 'due_date', operator: 'equals', value: '{TODAY()}' },
+        { field: 'is_completed', operator: 'equals', value: false },
+      ],
+      sort: [{ field: 'priority', order: 'desc' }],
+    },
+
+    /** Overdue tasks across the team */
+    overdue_tasks: {
+      name: 'overdue_tasks',
+      type: 'grid',
+      label: '⏰ Overdue Tasks',
+      data: { provider: 'object', object: 'task' },
+      columns: ['subject', 'priority', 'status', 'due_date', 'owner'],
+      filter: [
+        { field: 'due_date', operator: 'less_than', value: '{TODAY()}' },
+        { field: 'is_completed', operator: 'equals', value: false },
+      ],
+      sort: [{ field: 'due_date', order: 'asc' }],
+    },
   },
 
   form: {

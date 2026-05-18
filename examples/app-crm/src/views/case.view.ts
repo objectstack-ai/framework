@@ -108,6 +108,21 @@ export const CaseViews = defineView({
       filter: [{ field: 'is_escalated', operator: 'equals', value: true }],
       sort: [{ field: 'priority', order: 'desc' }],
     },
+
+    /** SLA-at-risk: open, not yet violated, due within 4 hours */
+    sla_at_risk: {
+      name: 'sla_at_risk',
+      type: 'grid',
+      label: '⏰ SLA at Risk',
+      data: { provider: 'object', object: 'case' },
+      columns: ['case_number', 'subject', 'account', 'priority', 'sla_due_date', 'owner'],
+      filter: [
+        { field: 'is_closed', operator: 'equals', value: false },
+        { field: 'is_sla_violated', operator: 'equals', value: false },
+        { field: 'sla_due_date', operator: 'less_than_or_equal', value: '{NOW() + 4h}' },
+      ],
+      sort: [{ field: 'sla_due_date', order: 'asc' }],
+    },
   },
 
   form: {

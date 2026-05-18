@@ -15,7 +15,15 @@ export const Quote = ObjectSchema.create({
   description: 'Price quotes for customers',
   titleFormat: '{quote_number} - {name}',
   compactLayout: ['quote_number', 'name', 'account', 'status', 'total_price'],
-  
+
+  fieldGroups: [
+    { key: 'basic',     label: 'Quote Information', icon: 'info' },
+    { key: 'pricing',   label: 'Pricing',           icon: 'dollar-sign' },
+    { key: 'terms',     label: 'Terms & Validity',  icon: 'calendar' },
+    { key: 'address',   label: 'Addresses',         icon: 'map-pin', defaultExpanded: false },
+    { key: 'system',    label: 'System',            icon: 'database', defaultExpanded: false },
+  ],
+
   fields: {
     // AutoNumber field
     quote_number: Field.autonumber({
@@ -201,7 +209,8 @@ export const Quote = ObjectSchema.create({
     {
       name: 'quote_expired_check',
       objectName: 'quote',
-      triggerType: 'on_read',
+      triggerType: 'scheduled',
+      schedule: '0 1 * * *',
       criteria: P`record.expiration_date < today() && !(record.status in ["accepted", "rejected", "expired"])`,
       actions: [
         {

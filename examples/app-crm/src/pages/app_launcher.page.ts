@@ -64,7 +64,7 @@ export const AppLauncherPage: Page = {
   assignedProfiles: ['sales_user', 'sales_manager', 'service_user', 'system_administrator'],
   
   aria: {
-    label: 'App Launcher Page',
-    description: 'Central application launcher for accessing all apps',
+    ariaLabel: 'App Launcher Page',
+    ariaDescribedBy: 'Central application launcher for accessing all apps',
   },
 };

@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Action } from '@objectstack/spec/ui';
+import { P } from '@objectstack/spec';
 
 /**
  * Mark Contact as Primary.
@@ -28,7 +29,7 @@ export const MarkPrimaryContactAction: Action = {
     timeoutMs: 2000,
   },
   locations: ['record_header', 'list_item'],
-  visible: 'is_primary == false',
+  visible: P`record.is_primary == false`,
   confirmText: 'Mark this contact as the primary contact for the account?',
   successMessage: 'Contact marked as primary!',
   refreshAfter: true,
@@ -69,7 +70,7 @@ export const SendEmailAction: Action = {
     timeoutMs: 5000,
   },
   locations: ['record_header', 'list_item'],
-  visible: 'email_opt_out == false',
+  visible: P`record.email_opt_out == false`,
   params: [
     { name: 'subject', label: 'Subject', type: 'text', required: true },
     { name: 'body', label: 'Body', type: 'textarea', required: true },

@@ -66,7 +66,7 @@ export const UtilityBarPage: Page = {
   assignedProfiles: ['sales_user', 'sales_manager', 'service_user', 'system_administrator'],
   
   aria: {
-    label: 'Utility Bar',
-    description: 'Quick access utility bar with floating tools and notifications',
+    ariaLabel: 'Utility Bar',
+    ariaDescribedBy: 'Quick access utility bar with floating tools and notifications',
   },
 };
