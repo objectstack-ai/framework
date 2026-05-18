@@ -73,6 +73,34 @@ export function registerStdLib(
       'coalesce(dyn, dyn): dyn',
       (value: unknown, fallback: unknown) =>
         (value === null || value === undefined) ? fallback : value,
+    )
+    // Trim leading/trailing ASCII whitespace from a string. Returns '' for
+    // null/undefined so it composes cleanly with `coalesce`.
+    .registerFunction(
+      'trim(dyn): string',
+      (value: unknown) => {
+        if (value === null || value === undefined) return '';
+        return String(value).trim();
+      },
+    )
+    // Join a list of values with `sep`, dropping null/undefined/empty entries
+    // first. Designed for display-name formulas like:
+    //   joinNonEmpty([record.salutation, record.first_name, record.last_name], ' ')
+    // which produces 'Alice Martinez' (no leading/trailing/internal extra
+    // spaces) when `salutation` is null.
+    .registerFunction(
+      'joinNonEmpty(list, string): string',
+      (list: unknown, sep: unknown) => {
+        const arr = Array.isArray(list) ? list : [];
+        const separator = typeof sep === 'string' ? sep : ' ';
+        const parts: string[] = [];
+        for (const item of arr) {
+          if (item === null || item === undefined) continue;
+          const s = String(item).trim();
+          if (s.length > 0) parts.push(s);
+        }
+        return parts.join(separator);
+      },
     );
 }
 
