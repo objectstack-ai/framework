@@ -172,6 +172,70 @@ function isExpectedDataStatus(status: number): boolean {
 }
 
 /**
+ * Minimal RFC-4180-style CSV parser used by the bulk-import endpoint
+ * (M10.9). Handles quoted fields (including embedded quotes via "" and
+ * embedded commas/newlines) and both CRLF and LF line endings.
+ *
+ * The first non-empty line is treated as the header row. Header names
+ * can be re-mapped to canonical field names via the optional `mapping`
+ * argument (e.g. `{ "First Name": "first_name" }`); unmapped headers
+ * pass through unchanged. Empty cells become empty strings.
+ *
+ * Kept dependency-free so REST stays runtime-portable (Hono / Express
+ * adapters both consume this without pulling a CSV lib transitively).
+ */
+function parseCsvToRows(csv: string, mapping: Record<string, string> = {}): Array<Record<string, any>> {
+    const text = csv.replace(/^\uFEFF/, ''); // strip BOM
+    const cells: string[][] = [];
+    let cur = '';
+    let row: string[] = [];
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                if (text[i + 1] === '"') { cur += '"'; i++; }
+                else { inQuotes = false; }
+            } else {
+                cur += ch;
+            }
+            continue;
+        }
+        if (ch === '"') { inQuotes = true; continue; }
+        if (ch === ',') { row.push(cur); cur = ''; continue; }
+        if (ch === '\r') { continue; }
+        if (ch === '\n') {
+            row.push(cur); cur = '';
+            cells.push(row); row = [];
+            continue;
+        }
+        cur += ch;
+    }
+    if (cur.length > 0 || row.length > 0) { row.push(cur); cells.push(row); }
+
+    // Drop fully-empty trailing rows so a stray newline at EOF doesn't
+    // produce a phantom empty record.
+    while (cells.length > 0 && cells[cells.length - 1].every(c => c === '')) cells.pop();
+    if (cells.length < 2) return [];
+
+    const header = cells[0].map(h => h.trim());
+    const fields = header.map(h => mapping[h] ?? h);
+    const out: Array<Record<string, any>> = [];
+    for (let r = 1; r < cells.length; r++) {
+        const row = cells[r];
+        const obj: Record<string, any> = {};
+        for (let c = 0; c < fields.length; c++) {
+            const key = fields[c];
+            if (!key) continue;
+            const raw = row[c] ?? '';
+            obj[key] = raw;
+        }
+        out.push(obj);
+    }
+    return out;
+}
+
+/**
  * Structural subset of `KernelManager` that RestServer needs in order to
  * resolve a per-project protocol at request time. Typed locally to avoid
  * an @objectstack/runtime → @objectstack/rest → @objectstack/runtime
@@ -1463,6 +1527,105 @@ export class RestServer {
             metadata: {
                 summary: 'Convert a Lead into Account + Contact (+ optional Opportunity)',
                 tags: ['data', 'lead'],
+            },
+        });
+        // POST /data/:object/import  — bulk CSV/JSON ingestion (M10.9)
+        //
+        // Body shapes:
+        //   { format: 'csv', csv: '...header,row,...', dryRun?: boolean, mapping?: {<csvCol>:<field>} }
+        //   { format: 'json', rows: [...], dryRun?: boolean }
+        //
+        // Returns per-row outcome so a UI can present an import report.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/:object/import`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const p = await this.resolveProtocol(projectId, req);
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const objectName = String(req.params.object || '');
+                    if (!objectName) {
+                        res.status(400).json({ code: 'INVALID_REQUEST', error: 'object is required' });
+                        return;
+                    }
+                    const body = req.body ?? {};
+                    const dryRun = body.dryRun === true;
+                    const mapping: Record<string, string> = body.mapping ?? {};
+
+                    // Build rows[] from either explicit JSON array or CSV text.
+                    let rows: Array<Record<string, any>> = [];
+                    if (body.format === 'json' && Array.isArray(body.rows)) {
+                        rows = body.rows as Array<Record<string, any>>;
+                    } else if ((body.format === 'csv' || typeof body.csv === 'string') && typeof body.csv === 'string') {
+                        rows = parseCsvToRows(body.csv, mapping);
+                    } else if (Array.isArray(body)) {
+                        // Permissive: a bare JSON array at the top level.
+                        rows = body as Array<Record<string, any>>;
+                    } else {
+                        res.status(400).json({
+                            code: 'INVALID_REQUEST',
+                            error: 'Provide either format:"csv" with csv text or format:"json" with rows[]',
+                        });
+                        return;
+                    }
+
+                    const max = 5000;
+                    if (rows.length > max) {
+                        res.status(413).json({
+                            code: 'PAYLOAD_TOO_LARGE',
+                            error: `Import limit is ${max} rows per request (got ${rows.length})`,
+                        });
+                        return;
+                    }
+
+                    const results: Array<{ row: number; ok: boolean; id?: string; error?: string; code?: string }> = [];
+                    let okCount = 0;
+                    let errCount = 0;
+
+                    for (let i = 0; i < rows.length; i++) {
+                        const data = rows[i];
+                        try {
+                            if (dryRun) {
+                                // Validate via protocol's metadata layer when available, else
+                                // best-effort: treat any non-empty row as syntactically OK.
+                                const validate = (p as any).validate;
+                                if (typeof validate === 'function') {
+                                    await validate.call(p, { object: objectName, data, context });
+                                }
+                                results.push({ row: i + 1, ok: true });
+                                okCount++;
+                            } else {
+                                const created = await (p as any).createData({ object: objectName, data, context });
+                                const id = (created as any)?.id ?? (created as any)?.record?.id;
+                                results.push({ row: i + 1, ok: true, id });
+                                okCount++;
+                            }
+                        } catch (err: any) {
+                            errCount++;
+                            const code = err?.code ?? 'IMPORT_ROW_FAILED';
+                            const message = typeof err?.message === 'string' ? err.message.slice(0, 300) : 'Row failed';
+                            results.push({ row: i + 1, ok: false, error: message, code });
+                        }
+                    }
+
+                    res.json({
+                        object: objectName,
+                        dryRun,
+                        total: rows.length,
+                        ok: okCount,
+                        errors: errCount,
+                        results,
+                    });
+                } catch (error: any) {
+                    logError('[REST] Unhandled error:', error);
+                    sendError(res, error, String(req.params?.object || ''));
+                }
+            },
+            metadata: {
+                summary: 'Bulk-import rows into an object (CSV or JSON, with optional dry-run)',
+                tags: ['data', 'import'],
             },
         });
     }
