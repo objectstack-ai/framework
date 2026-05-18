@@ -399,6 +399,7 @@ export class RestServer {
     private objectQLProvider?: (projectId?: string) => Promise<any | undefined>;
     private emailServiceProvider?: (projectId?: string) => Promise<any | undefined>;
     private sharingServiceProvider?: (projectId?: string) => Promise<any | undefined>;
+    private reportsServiceProvider?: (projectId?: string) => Promise<any | undefined>;
 
     constructor(
         server: IHttpServer,
@@ -411,6 +412,7 @@ export class RestServer {
         objectQLProvider?: (projectId?: string) => Promise<any | undefined>,
         emailServiceProvider?: (projectId?: string) => Promise<any | undefined>,
         sharingServiceProvider?: (projectId?: string) => Promise<any | undefined>,
+        reportsServiceProvider?: (projectId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -422,6 +424,7 @@ export class RestServer {
         this.objectQLProvider = objectQLProvider;
         this.emailServiceProvider = emailServiceProvider;
         this.sharingServiceProvider = sharingServiceProvider;
+        this.reportsServiceProvider = reportsServiceProvider;
     }
 
     /**
@@ -934,6 +937,7 @@ export class RestServer {
             }
             this.registerEmailEndpoints(bp);
             this.registerSharingEndpoints(bp);
+            this.registerReportsEndpoints(bp);
             this.registerDataActionEndpoints(bp);
             if (this.config.api.enableBatch) {
                 this.registerBatchEndpoints(bp);
@@ -2078,6 +2082,257 @@ export class RestServer {
                 }
             },
             metadata: { summary: 'Revoke a per-record share by id', tags: ['sharing'] },
+        });
+    }
+
+    /**
+     * Register saved-report + scheduled-digest endpoints (M11.C16).
+     *
+     * Surfaces `IReportService` over HTTP so the UI can build,
+     * run, and schedule reports without dropping to ObjectQL. Routes
+     * are mounted under the data prefix so every route honours the
+     * same auth/tenant resolution as data CRUD:
+     *
+     *   GET    {basePath}/data/reports?object=&ownerId=
+     *   POST   {basePath}/data/reports
+     *   GET    {basePath}/data/reports/:id
+     *   DELETE {basePath}/data/reports/:id
+     *   POST   {basePath}/data/reports/:id/run
+     *   POST   {basePath}/data/reports/:id/schedule
+     *   GET    {basePath}/data/reports/:id/schedules
+     *   DELETE {basePath}/data/reports/schedules/:scheduleId
+     *
+     * All routes return 501 when `reportsServiceProvider` is unset so
+     * a deployment without `@objectstack/plugin-reports` fails cleanly.
+     */
+    private registerReportsEndpoints(basePath: string): void {
+        const { crud } = this.config;
+        const dataPath = `${basePath}${crud.dataPrefix}`;
+        const isScoped = basePath.includes('/projects/:projectId');
+
+        const resolveService = async (projectId?: string) => {
+            if (!this.reportsServiceProvider) return undefined;
+            try { return await this.reportsServiceProvider(projectId); }
+            catch { return undefined; }
+        };
+        const respond501 = (res: any) => res.status(501).json({
+            code: 'NOT_IMPLEMENTED',
+            message: 'Reports service is not configured on this deployment',
+        });
+        const handleValidation = (res: any, err: any): boolean => {
+            const msg = String(err?.message ?? err ?? '');
+            if (msg.startsWith('VALIDATION_FAILED')) {
+                res.status(400).json({
+                    code: 'VALIDATION_FAILED',
+                    error: msg.replace(/^VALIDATION_FAILED:\s*/, ''),
+                });
+                return true;
+            }
+            if (msg.startsWith('REPORT_NOT_FOUND')) {
+                res.status(404).json({ code: 'REPORT_NOT_FOUND', error: msg });
+                return true;
+            }
+            return false;
+        };
+
+        // GET — list reports.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/reports`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const q = req.query ?? {};
+                    const rows = await svc.listReports({ object: q.object, ownerId: q.ownerId }, context ?? {});
+                    res.json({ data: rows });
+                } catch (error: any) {
+                    logError('[REST] List reports error:', error);
+                    res.status(500).json({ code: 'REPORTS_LIST_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'List saved reports', tags: ['reports'] },
+        });
+
+        // POST — save (upsert) a report.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/reports`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    try {
+                        const row = await svc.saveReport(req.body ?? {}, context ?? {});
+                        res.status(201).json(row);
+                    } catch (err: any) {
+                        if (handleValidation(res, err)) return;
+                        throw err;
+                    }
+                } catch (error: any) {
+                    logError('[REST] Save report error:', error);
+                    res.status(500).json({ code: 'REPORT_SAVE_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Create or update a saved report', tags: ['reports'] },
+        });
+
+        // GET — single report.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/reports/:id`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const row = await svc.getReport(req.params.id, context ?? {});
+                    if (!row) {
+                        res.status(404).json({ code: 'REPORT_NOT_FOUND', error: `Report ${req.params.id} not found` });
+                        return;
+                    }
+                    res.json(row);
+                } catch (error: any) {
+                    logError('[REST] Get report error:', error);
+                    res.status(500).json({ code: 'REPORT_GET_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Get a saved report by id', tags: ['reports'] },
+        });
+
+        // DELETE — drop report + cascade schedules.
+        this.routeManager.register({
+            method: 'DELETE',
+            path: `${dataPath}/reports/:id`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    await svc.deleteReport(req.params.id, context ?? {});
+                    res.status(204).end();
+                } catch (error: any) {
+                    logError('[REST] Delete report error:', error);
+                    res.status(500).json({ code: 'REPORT_DELETE_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Delete a saved report (cascades schedules)', tags: ['reports'] },
+        });
+
+        // POST — execute a report by id.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/reports/:id/run`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    try {
+                        const result = await svc.run(req.params.id, context ?? {});
+                        res.json(result);
+                    } catch (err: any) {
+                        if (handleValidation(res, err)) return;
+                        throw err;
+                    }
+                } catch (error: any) {
+                    logError('[REST] Run report error:', error);
+                    res.status(500).json({ code: 'REPORT_RUN_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Execute a saved report and return rendered output', tags: ['reports'] },
+        });
+
+        // POST — schedule a report.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/reports/:id/schedule`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const body = req.body ?? {};
+                    try {
+                        const row = await svc.scheduleReport({
+                            reportId: req.params.id,
+                            recipients: body.recipients ?? [],
+                            name: body.name,
+                            intervalMinutes: body.intervalMinutes ?? body.interval_minutes,
+                            cronExpression: body.cronExpression ?? body.cron_expression,
+                            timezone: body.timezone,
+                            format: body.format,
+                            subjectTemplate: body.subjectTemplate ?? body.subject_template,
+                            ownerId: body.ownerId ?? body.owner_id,
+                            active: body.active,
+                        }, context ?? {});
+                        res.status(201).json(row);
+                    } catch (err: any) {
+                        if (handleValidation(res, err)) return;
+                        throw err;
+                    }
+                } catch (error: any) {
+                    logError('[REST] Schedule report error:', error);
+                    res.status(500).json({ code: 'REPORT_SCHEDULE_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Create a recurring email schedule for a report', tags: ['reports'] },
+        });
+
+        // GET — list schedules for a report.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/reports/:id/schedules`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const rows = await svc.listSchedules({ reportId: req.params.id }, context ?? {});
+                    res.json({ data: rows });
+                } catch (error: any) {
+                    logError('[REST] List schedules error:', error);
+                    res.status(500).json({ code: 'SCHEDULES_LIST_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'List schedules for a report', tags: ['reports'] },
+        });
+
+        // DELETE — drop a schedule.
+        this.routeManager.register({
+            method: 'DELETE',
+            path: `${dataPath}/reports/schedules/:scheduleId`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    await svc.unscheduleReport(req.params.scheduleId, context ?? {});
+                    res.status(204).end();
+                } catch (error: any) {
+                    logError('[REST] Unschedule report error:', error);
+                    res.status(500).json({ code: 'SCHEDULE_DELETE_FAILED', error: String(error?.message ?? error).slice(0, 500) });
+                }
+            },
+            metadata: { summary: 'Delete a report schedule by id', tags: ['reports'] },
         });
     }
 

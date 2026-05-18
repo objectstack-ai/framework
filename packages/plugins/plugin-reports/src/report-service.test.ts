@@ -1,0 +1,322 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ReportService, renderReport, type ReportEmail } from './report-service.js';
+
+// ─── Fake engine ──────────────────────────────────────────────────
+
+interface FakeRow { [k: string]: any }
+
+function makeFakeEngine() {
+  const tables: Record<string, FakeRow[]> = {};
+  const ensure = (n: string) => (tables[n] ??= []);
+
+  function matches(row: FakeRow, filter: any): boolean {
+    if (!filter || typeof filter !== 'object') return true;
+    for (const [k, v] of Object.entries(filter)) {
+      if (row[k] !== v) return false;
+    }
+    return true;
+  }
+
+  return {
+    _tables: tables,
+    async find(object: string, options?: any) {
+      const rows = ensure(object).filter(r => matches(r, options?.filter ?? options?.where));
+      if (options?.orderBy?.[0]) {
+        const { field, direction } = options.orderBy[0];
+        rows.sort((a, b) => {
+          const av = a[field]; const bv = b[field];
+          if (av === bv) return 0;
+          const cmp = av > bv ? 1 : -1;
+          return direction === 'desc' ? -cmp : cmp;
+        });
+      }
+      return rows.slice(0, options?.limit ?? 1000);
+    },
+    async insert(object: string, data: any) {
+      ensure(object).push({ ...data });
+      return { ...data };
+    },
+    async update(object: string, idOrData: any, _opts?: any) {
+      const data = typeof idOrData === 'object' ? idOrData : _opts;
+      const id = typeof idOrData === 'object' ? idOrData.id : idOrData;
+      const table = ensure(object);
+      const i = table.findIndex(r => r.id === id);
+      if (i >= 0) table[i] = { ...table[i], ...data };
+      return table[i];
+    },
+    async delete(object: string, options?: any) {
+      const table = ensure(object);
+      const id = options?.where?.id ?? options?.id;
+      const i = table.findIndex(r => r.id === id);
+      if (i >= 0) table.splice(i, 1);
+      return { id };
+    },
+  };
+}
+
+function makeFakeEmail() {
+  const sent: any[] = [];
+  const email: ReportEmail & { _sent: any[] } = {
+    _sent: sent,
+    async send(input) { sent.push(input); return { status: 'sent' }; },
+  };
+  return email;
+}
+
+const CTX = { userId: 'u1', tenantId: 't1', roles: [], permissions: [] };
+
+// ─── Rendering ─────────────────────────────────────────────────────
+
+describe('renderReport', () => {
+  it('csv: escapes quotes / commas / newlines per RFC 4180', () => {
+    const out = renderReport(
+      [{ a: 'x,y', b: 'has "q"', c: 'line\n2' }],
+      'csv',
+      ['a', 'b', 'c'],
+    );
+    expect(out).toBe('a,b,c\r\n"x,y","has ""q""","line\n2"');
+  });
+
+  it('csv: header-only when no rows', () => {
+    expect(renderReport([], 'csv', ['a', 'b'])).toBe('a,b');
+  });
+
+  it('html_table: escapes HTML entities', () => {
+    const out = renderReport([{ name: '<script>' }], 'html_table', ['name']);
+    expect(out).toContain('&lt;script&gt;');
+    expect(out).not.toContain('<script>');
+  });
+
+  it('json: pretty-prints rows', () => {
+    const out = renderReport([{ a: 1 }], 'json');
+    expect(JSON.parse(out)).toEqual([{ a: 1 }]);
+  });
+
+  it('auto-detects fields from first 50 rows when none specified', () => {
+    const out = renderReport([{ a: 1 }, { b: 2 }], 'csv');
+    expect(out.split('\r\n')[0]).toMatch(/a|b/);
+  });
+});
+
+// ─── Service ──────────────────────────────────────────────────────
+
+describe('ReportService', () => {
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let email: ReturnType<typeof makeFakeEmail>;
+  let svc: ReportService;
+  const now = new Date('2026-01-15T10:00:00Z');
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    email = makeFakeEmail();
+    svc = new ReportService({
+      engine: engine as any,
+      email,
+      clock: { now: () => now },
+      maxRows: 5000,
+    });
+    // seed the underlying object the report will query.
+    engine._tables['lead'] = [
+      { id: 'l1', name: 'Acme', status: 'open' },
+      { id: 'l2', name: 'Beta', status: 'open' },
+      { id: 'l3', name: 'Gamma', status: 'closed' },
+    ];
+  });
+
+  it('saveReport: creates with a generated id and serialises query', async () => {
+    const r = await svc.saveReport({
+      name: 'Open leads',
+      object: 'lead',
+      query: { filter: { status: 'open' } },
+      format: 'csv',
+    }, CTX);
+    expect(r.id).toMatch(/^rpt_/);
+    expect(r.name).toBe('Open leads');
+    expect(r.object_name).toBe('lead');
+    const stored = engine._tables['sys_saved_report']?.[0];
+    expect(stored?.query_json).toBe(JSON.stringify({ filter: { status: 'open' } }));
+    expect(stored?.owner_id).toBe('u1');
+  });
+
+  it('saveReport: upserts when id matches existing row', async () => {
+    const a = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    const b = await svc.saveReport({ id: a.id, name: 'A-renamed', object: 'lead', query: {} }, CTX);
+    expect(b.id).toBe(a.id);
+    expect(b.name).toBe('A-renamed');
+    expect(engine._tables['sys_saved_report'].length).toBe(1);
+  });
+
+  it('saveReport: rejects missing required fields', async () => {
+    await expect(svc.saveReport({ name: '', object: 'lead', query: {} }, CTX))
+      .rejects.toThrow(/VALIDATION_FAILED/);
+    await expect(svc.saveReport({ name: 'x', object: '', query: {} }, CTX))
+      .rejects.toThrow(/VALIDATION_FAILED/);
+  });
+
+  it('listReports: filters by object + owner', async () => {
+    await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svc.saveReport({ name: 'B', object: 'account', query: {} }, CTX);
+    const leads = await svc.listReports({ object: 'lead' }, CTX);
+    expect(leads.length).toBe(1);
+    expect(leads[0].name).toBe('A');
+  });
+
+  it('getReport: returns null on miss', async () => {
+    expect(await svc.getReport('nope', CTX)).toBeNull();
+  });
+
+  it('deleteReport: cascades to schedules', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svc.scheduleReport({ reportId: r.id, recipients: ['x@test'] }, CTX);
+    expect(engine._tables['sys_report_schedule'].length).toBe(1);
+    await svc.deleteReport(r.id, CTX);
+    expect(engine._tables['sys_saved_report'].length).toBe(0);
+    expect(engine._tables['sys_report_schedule'].length).toBe(0);
+  });
+
+  it('run: executes query and stamps last_run_at/last_row_count', async () => {
+    const r = await svc.saveReport({
+      name: 'Open', object: 'lead', query: { filter: { status: 'open' } }, format: 'csv',
+    }, CTX);
+    const result = await svc.run(r.id, CTX);
+    expect(result.rowCount).toBe(2);
+    expect(result.format).toBe('csv');
+    expect(result.body).toContain('Acme');
+    const stored = engine._tables['sys_saved_report'][0];
+    expect(stored.last_row_count).toBe(2);
+    expect(stored.last_run_at).toBe(now.toISOString());
+  });
+
+  it('run: throws REPORT_NOT_FOUND for unknown id', async () => {
+    await expect(svc.run('nope', CTX)).rejects.toThrow(/REPORT_NOT_FOUND/);
+  });
+
+  it('runAdHoc: executes without stamping any row', async () => {
+    const result = await svc.runAdHoc({
+      name: 'temp', object: 'lead', query: {}, format: 'json',
+    }, CTX);
+    expect(result.rowCount).toBe(3);
+    expect(engine._tables['sys_saved_report']).toBeUndefined();
+  });
+
+  it('scheduleReport: requires non-empty recipients', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await expect(svc.scheduleReport({ reportId: r.id, recipients: [] }, CTX))
+      .rejects.toThrow(/VALIDATION_FAILED/);
+  });
+
+  it('scheduleReport: rejects unknown report', async () => {
+    await expect(svc.scheduleReport({ reportId: 'nope', recipients: ['x@t'] }, CTX))
+      .rejects.toThrow(/REPORT_NOT_FOUND/);
+  });
+
+  it('scheduleReport: computes next_run_at from interval', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    const s = await svc.scheduleReport({
+      reportId: r.id, recipients: ['x@t'], intervalMinutes: 60, format: 'csv',
+    }, CTX);
+    const expected = new Date(now.getTime() + 60 * 60_000).toISOString();
+    expect(s.next_run_at).toBe(expected);
+    expect(s.recipients).toBe('x@t');
+  });
+
+  it('listSchedules + unscheduleReport', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    const s = await svc.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
+    expect((await svc.listSchedules({ reportId: r.id }, CTX)).length).toBe(1);
+    await svc.unscheduleReport(s.id, CTX);
+    expect((await svc.listSchedules({ reportId: r.id }, CTX)).length).toBe(0);
+  });
+
+  it('dispatchDue: fires HTML schedule and emails inline html', async () => {
+    const r = await svc.saveReport({
+      name: 'Open leads', object: 'lead', query: { filter: { status: 'open' } },
+    }, CTX);
+    const s = await svc.scheduleReport({
+      reportId: r.id, recipients: ['ops@t'], intervalMinutes: 60, format: 'html_table',
+      subjectTemplate: '{{name}}: {{rows}} on {{date}}',
+    }, CTX);
+    // Force the schedule due.
+    engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1000).toISOString();
+
+    const result = await svc.dispatchDue();
+    expect(result).toEqual({ fired: 1, failed: 0, skipped: 0 });
+    expect(email._sent.length).toBe(1);
+    expect(email._sent[0].subject).toBe('Open leads: 2 on 2026-01-15');
+    expect(email._sent[0].html).toContain('<table');
+    expect(email._sent[0].relatedObject).toBe('sys_report_schedule');
+    expect(email._sent[0].relatedId).toBe(s.id);
+
+    const advanced = engine._tables['sys_report_schedule'][0];
+    expect(advanced.last_status).toBe('ok');
+    expect(advanced.last_sent_at).toBe(now.toISOString());
+    expect(advanced.next_run_at).toBe(new Date(now.getTime() + 60 * 60_000).toISOString());
+  });
+
+  it('dispatchDue: csv schedule attaches a file', async () => {
+    const r = await svc.saveReport({ name: 'Open', object: 'lead', query: {} }, CTX);
+    await svc.scheduleReport({
+      reportId: r.id, recipients: ['ops@t'], intervalMinutes: 60, format: 'csv',
+    }, CTX);
+    engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
+
+    await svc.dispatchDue();
+    expect(email._sent[0].attachments?.[0].filename).toMatch(/\.csv$/);
+    expect(email._sent[0].attachments?.[0].contentType).toBe('text/csv');
+    expect(email._sent[0].attachments?.[0].content).toContain('Acme');
+  });
+
+  it('dispatchDue: marks skipped when report disappeared', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svc.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
+    engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
+    // Nuke the report row out of band.
+    engine._tables['sys_saved_report'] = [];
+
+    const result = await svc.dispatchDue();
+    expect(result.skipped).toBe(1);
+    expect(result.fired).toBe(0);
+    expect(engine._tables['sys_report_schedule'][0].last_status).toBe('skipped');
+    expect(email._sent.length).toBe(0);
+  });
+
+  it('dispatchDue: skips schedules not yet due', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svc.scheduleReport({ reportId: r.id, recipients: ['x@t'], intervalMinutes: 60 }, CTX);
+    // next_run_at is now + 1h, so dispatching at `now` should skip it.
+    const result = await svc.dispatchDue();
+    expect(result.fired).toBe(0);
+    expect(email._sent.length).toBe(0);
+  });
+
+  it('dispatchDue: marks failed when engine.find throws on the target', async () => {
+    const r = await svc.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svc.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
+    engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
+
+    // Patch find to throw only for the lead object.
+    const originalFind = engine.find.bind(engine);
+    engine.find = vi.fn(async (object: string, opts: any) => {
+      if (object === 'lead') throw new Error('boom');
+      return originalFind(object, opts);
+    }) as any;
+
+    const result = await svc.dispatchDue();
+    expect(result.failed).toBe(1);
+    expect(engine._tables['sys_report_schedule'][0].last_status).toBe('failed');
+    expect(engine._tables['sys_report_schedule'][0].last_error).toContain('boom');
+  });
+
+  it('dispatchDue: still runs (no mail) when email service absent', async () => {
+    const svcNoMail = new ReportService({ engine: engine as any, clock: { now: () => now } });
+    const r = await svcNoMail.saveReport({ name: 'A', object: 'lead', query: {} }, CTX);
+    await svcNoMail.scheduleReport({ reportId: r.id, recipients: ['x@t'] }, CTX);
+    engine._tables['sys_report_schedule'][0].next_run_at = new Date(now.getTime() - 1).toISOString();
+
+    const result = await svcNoMail.dispatchDue();
+    expect(result.fired).toBe(1);
+    expect(engine._tables['sys_report_schedule'][0].last_status).toBe('ok');
+  });
+});

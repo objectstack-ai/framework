@@ -838,6 +838,131 @@ describe('RestServer', () => {
       expect(res.status).toHaveBeenCalledWith(204);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // /data/reports — IReportService bridge (M11.C16)
+  // -----------------------------------------------------------------------
+  describe('reports endpoints', () => {
+    function getReportRoutes(rest: any) {
+      const routes = rest.getRoutes();
+      return {
+        list:        routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/data/reports'),
+        save:        routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/reports'),
+        get:         routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/data/reports/:id'),
+        del:         routes.find((r: any) => r.method === 'DELETE' && r.path === '/api/v1/data/reports/:id'),
+        run:         routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/reports/:id/run'),
+        schedule:    routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/reports/:id/schedule'),
+        schedules:   routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/data/reports/:id/schedules'),
+        unschedule:  routes.find((r: any) => r.method === 'DELETE' && r.path === '/api/v1/data/reports/schedules/:scheduleId'),
+      };
+    }
+
+    function makeRest(provider?: any) {
+      const rest = new RestServer(
+        server as any, protocol as any, {},
+        undefined, undefined, undefined, undefined, undefined,
+        undefined, undefined, provider,
+      );
+      rest.registerRoutes();
+      return rest;
+    }
+
+    it('returns 501 when no reports service provider is wired', async () => {
+      const rest = makeRest();
+      const routes = getReportRoutes(rest);
+      const targets = [routes.list, routes.save, routes.get, routes.del, routes.run, routes.schedule, routes.schedules, routes.unschedule];
+      for (const route of targets) {
+        expect(route).toBeDefined();
+        const res = { json: vi.fn(), status: vi.fn().mockReturnThis(), end: vi.fn() };
+        await route!.handler({ params: { id: 'r1', scheduleId: 's1' }, body: {}, query: {} } as any, res as any);
+        expect(res.status).toHaveBeenCalledWith(501);
+      }
+    });
+
+    it('GET /reports returns rows produced by listReports()', async () => {
+      const listReports = vi.fn(async () => [{ id: 'rpt_1', name: 'Open leads' }]);
+      const rest = makeRest(async () => ({ listReports }));
+      const { list } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await list!.handler({ query: { object: 'lead' } } as any, res as any);
+      expect(listReports).toHaveBeenCalledWith({ object: 'lead', ownerId: undefined }, expect.anything());
+      expect(res.json).toHaveBeenCalledWith({ data: [{ id: 'rpt_1', name: 'Open leads' }] });
+    });
+
+    it('POST /reports creates and returns 201', async () => {
+      const saveReport = vi.fn(async (input: any) => ({ id: 'rpt_new', ...input }));
+      const rest = makeRest(async () => ({ saveReport }));
+      const { save } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await save!.handler({ body: { name: 'X', object: 'lead', query: {} } } as any, res as any);
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(saveReport).toHaveBeenCalled();
+    });
+
+    it('POST /reports surfaces VALIDATION_FAILED as 400', async () => {
+      const saveReport = vi.fn(async () => { throw new Error('VALIDATION_FAILED: name is required'); });
+      const rest = makeRest(async () => ({ saveReport }));
+      const { save } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await save!.handler({ body: {} } as any, res as any);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'VALIDATION_FAILED' }));
+    });
+
+    it('GET /reports/:id returns 404 when missing', async () => {
+      const getReport = vi.fn(async () => null);
+      const rest = makeRest(async () => ({ getReport }));
+      const { get } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await get!.handler({ params: { id: 'rpt_x' } } as any, res as any);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('POST /reports/:id/run returns rendered result', async () => {
+      const run = vi.fn(async () => ({ reportId: 'r1', rowCount: 2, format: 'csv', body: 'a,b\r\n1,2', rows: [], ranAt: 'now' }));
+      const rest = makeRest(async () => ({ run }));
+      const { run: route } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await route!.handler({ params: { id: 'r1' } } as any, res as any);
+      expect(run).toHaveBeenCalledWith('r1', expect.anything());
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ rowCount: 2, body: 'a,b\r\n1,2' }));
+    });
+
+    it('POST /reports/:id/run surfaces REPORT_NOT_FOUND as 404', async () => {
+      const run = vi.fn(async () => { throw new Error('REPORT_NOT_FOUND: r99'); });
+      const rest = makeRest(async () => ({ run }));
+      const { run: route } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await route!.handler({ params: { id: 'r99' } } as any, res as any);
+      expect(res.status).toHaveBeenCalledWith(404);
+    });
+
+    it('POST /reports/:id/schedule maps body to scheduleReport input', async () => {
+      const scheduleReport = vi.fn(async (input: any) => ({ id: 'rsch_1', ...input }));
+      const rest = makeRest(async () => ({ scheduleReport }));
+      const { schedule } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+      await schedule!.handler({
+        params: { id: 'r1' },
+        body: { recipients: ['x@t'], intervalMinutes: 60, format: 'csv' },
+      } as any, res as any);
+      expect(scheduleReport).toHaveBeenCalledWith(
+        expect.objectContaining({ reportId: 'r1', recipients: ['x@t'], intervalMinutes: 60, format: 'csv' }),
+        expect.anything(),
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+    });
+
+    it('DELETE /reports/schedules/:scheduleId returns 204', async () => {
+      const unscheduleReport = vi.fn(async () => undefined);
+      const rest = makeRest(async () => ({ unscheduleReport }));
+      const { unschedule } = getReportRoutes(rest);
+      const res = { json: vi.fn(), status: vi.fn().mockReturnThis(), end: vi.fn() };
+      await unschedule!.handler({ params: { scheduleId: 'rsch_1' } } as any, res as any);
+      expect(unscheduleReport).toHaveBeenCalledWith('rsch_1', expect.anything());
+      expect(res.status).toHaveBeenCalledWith(204);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
