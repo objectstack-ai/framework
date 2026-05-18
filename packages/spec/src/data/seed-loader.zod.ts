@@ -212,6 +212,25 @@ export const SeedLoaderConfigSchema = lazySchema(() => z.object({
    */
   env: z.enum(['prod', 'dev', 'test']).optional()
     .describe('Only load datasets matching this environment'),
+
+  /**
+   * Target organization for per-tenant seed loading.
+   *
+   * When set, the loader:
+   *   - Injects `organization_id: <id>` into every record before write
+   *     (unless the record already supplies one).
+   *   - Scopes existing-record lookups (`loadExistingRecords`,
+   *     `resolveFromDatabase`) to `organization_id = <id>`, so `upsert`
+   *     mode finds the per-org copy rather than another tenant's row.
+   *
+   * Use this from a `sys_organization` insert hook to give every new
+   * tenant a private copy of the artifact-shipped demo data (Salesforce
+   * sandbox style). Omit for cross-tenant / platform-wide seeds (e.g.
+   * `sys_permission_set`) — those rows should have `organization_id`
+   * NULL and are not filtered by the default tenant RLS.
+   */
+  organizationId: z.string().min(1).optional()
+    .describe('Target organization id for per-tenant seed replay'),
 }).describe('Seed data loader configuration'));
 
 export type SeedLoaderConfig = z.infer<typeof SeedLoaderConfigSchema>;

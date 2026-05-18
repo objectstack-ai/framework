@@ -402,13 +402,30 @@ export class SecurityPlugin implements Plugin {
       }
     });
 
-    // After a sys_organization insert, if this is the FIRST organization
-    // in the system, back-fill `organization_id` on every seed-loaded
-    // user-defined row that landed with `organization_id IS NULL`. Seeds
-    // run as `isSystem` (no auto-fill), so without this hook, demo data
-    // shipped with `defineDataset()` would be invisible to anyone with
-    // an active organization. Idempotent: only fires when row count
-    // before this insert was zero, then never again.
+    // After a sys_organization insert, give the new org its own private
+    // copy of the artifact's demo data (Salesforce-sandbox style):
+    //
+    //   1. PRIMARY PATH — replay the seed datasets registered on the
+    //      kernel's `seed-datasets` service (populated by AppPlugin at
+    //      start) with `organizationId: <newOrgId>`. SeedLoader scopes
+    //      both existing-record lookups and reference resolution to
+    //      that org, so upsert mode produces an independent copy per
+    //      tenant. This works for the FIRST org and EVERY subsequent
+    //      org, whether the org was auto-created by signup
+    //      (`ensureUserHasOrganization`) or manually via the
+    //      better-auth `createOrganization` API.
+    //
+    //   2. FALLBACK A — when no `seed-datasets` service is registered
+    //      (e.g. a plugin-shaped deployment with no AppPlugin), and
+    //      this is the FIRST org, fall back to the legacy
+    //      `claimOrphanTenantRows` path that adopts any NULL-org rows
+    //      a previous AppPlugin inline-seed may have inserted.
+    //
+    //   3. FALLBACK B — when no `seed-datasets` service is registered
+    //      and this is NOT the first org, fall back to
+    //      `cloneTenantSeedData` (donor-based row copy from the very
+    //      first org). Useful for upgrade paths where the new
+    //      service-based flow hasn't been wired yet.
     if (this.multiTenant) {
       ql.registerMiddleware(async (opCtx: any, next: () => Promise<void>) => {
         await next();
@@ -420,6 +437,20 @@ export class SecurityPlugin implements Plugin {
         }
         const newOrgId = opCtx?.result?.id ?? opCtx?.data?.id;
         if (!newOrgId) return;
+
+        // Locate the kernel via ctx — most kernel impls expose either
+        // `getService` on PluginContext directly or attach the kernel
+        // ref. Anything we can't resolve becomes `undefined` and we
+        // gracefully fall back.
+        const kernel: any = (ctx as any).kernel ?? ctx;
+        let datasets: any[] | undefined;
+        try {
+          const raw = kernel?.getService?.('seed-datasets');
+          if (Array.isArray(raw) && raw.length > 0) datasets = raw;
+        } catch { /* service not registered */ }
+
+        // Count existing orgs to pick the right fallback path.
+        let orgCount = 0;
         try {
           const allOrgs = await ql.find(
             'sys_organization',
@@ -431,19 +462,81 @@ export class SecurityPlugin implements Plugin {
             : Array.isArray(allOrgs?.records)
               ? allOrgs.records
               : [];
-          if (list.length !== 1) return;
-          const claims = await claimOrphanTenantRows(ql, newOrgId, { logger: ctx.logger });
-          if (claims.length > 0) {
-            const total = claims.reduce((s, c) => s + c.count, 0);
-            ctx.logger.info(
-              `[security] claimed ${total} orphan seed row(s) for first organization ${newOrgId}`,
-              { breakdown: claims },
-            );
-          }
+          orgCount = list.length;
         } catch (e) {
-          ctx.logger.warn('[security] claim-orphan-tenant-rows failed', {
+          ctx.logger.warn('[security] failed to count organizations', {
             error: (e as Error).message,
           });
+        }
+
+        // ── Primary path: SeedLoader replay scoped to newOrgId ─────
+        // Uses the `seed-replayer` callable that AppPlugin registers
+        // on the kernel (keeps plugin-security free of @objectstack/runtime
+        // import — runtime already depends on us, so the reverse would
+        // be circular).
+        let replayed = false;
+        try {
+          const replayer: any = kernel?.getService?.('seed-replayer');
+          if (typeof replayer === 'function') {
+            const summary = await replayer(newOrgId);
+            const total = (summary?.inserted ?? 0) + (summary?.updated ?? 0);
+            ctx.logger.info(
+              `[security] per-org seed replay for ${newOrgId}: +${summary?.inserted ?? 0} inserted, ${summary?.updated ?? 0} updated, ${summary?.errors?.length ?? 0} error(s)`,
+              {
+                organizationId: newOrgId,
+                errors: summary?.errors?.slice?.(0, 5),
+              },
+            );
+            if (total > 0) replayed = true;
+          } else if (datasets) {
+            ctx.logger.warn('[security] per-org seed: datasets present but no replayer registered', {
+              organizationId: newOrgId,
+            });
+          }
+        } catch (e) {
+          ctx.logger.warn('[security] per-org seed replay failed, falling back', {
+            organizationId: newOrgId,
+            error: (e as Error).message,
+          });
+        }
+        if (replayed) return;
+
+        // ── Fallback A: legacy claim for first org ─────────────────
+        if (orgCount === 1) {
+          try {
+            const claims = await claimOrphanTenantRows(ql, newOrgId, { logger: ctx.logger });
+            if (claims.length > 0) {
+              const total = claims.reduce((s, c) => s + c.count, 0);
+              ctx.logger.info(
+                `[security] claimed ${total} orphan seed row(s) for first organization ${newOrgId}`,
+                { breakdown: claims },
+              );
+              return;
+            }
+          } catch (e) {
+            ctx.logger.warn('[security] claim-orphan-tenant-rows failed', {
+              error: (e as Error).message,
+            });
+          }
+        }
+
+        // ── Fallback B: clone from donor org for subsequent orgs ───
+        if (orgCount > 1) {
+          try {
+            const summary = await cloneTenantSeedData(ql, newOrgId, { logger: ctx.logger });
+            if (summary.length > 0) {
+              const total = summary.reduce((s, c) => s + c.count, 0);
+              ctx.logger.info(
+                `[security] cloned ${total} seed row(s) for new organization ${newOrgId}`,
+                { breakdown: summary },
+              );
+            }
+          } catch (e) {
+            ctx.logger.warn('[security] clone-tenant-seed-data failed', {
+              organizationId: newOrgId,
+              error: (e as Error).message,
+            });
+          }
         }
       });
     }

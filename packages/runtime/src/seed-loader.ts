@@ -102,7 +102,7 @@ export class SeedLoaderService implements ISeedLoaderService {
       this.logger.info('[SeedLoader] Pass 2: resolving deferred references', {
         count: deferredUpdates.length,
       });
-      await this.resolveDeferredUpdates(deferredUpdates, insertedRecords, allResults, allErrors);
+      await this.resolveDeferredUpdates(deferredUpdates, insertedRecords, allResults, allErrors, config.organizationId);
     }
 
     // 7. Build final result
@@ -187,10 +187,17 @@ export class SeedLoaderService implements ISeedLoaderService {
       insertedRecords.set(objectName, new Map());
     }
 
-    // Pre-load existing records for upsert matching
+    // Pre-load existing records for upsert matching. When a target
+    // organization is set, scope the lookup so each tenant gets its
+    // own copy (otherwise upsert would clobber other tenants' rows
+    // that share the same natural key — e.g. `name: 'Acme Corp'`).
     let existingRecords: Map<string, any> | undefined;
     if ((mode === 'upsert' || mode === 'update' || mode === 'ignore') && !config.dryRun) {
-      existingRecords = await this.loadExistingRecords(objectName, externalId);
+      existingRecords = await this.loadExistingRecords(
+        objectName,
+        externalId,
+        config.organizationId,
+      );
     }
 
     // Get reference resolutions for this object
@@ -216,6 +223,15 @@ export class SeedLoaderService implements ISeedLoaderService {
         );
       }
 
+      // Per-tenant tagging: when a target org is set, stamp every
+      // seeded row with it (unless the record itself already supplies
+      // an explicit organization_id — respect dataset author overrides).
+      // Skipped objects that don't declare `organization_id` will have
+      // the extra key silently ignored by the engine.
+      if (config.organizationId && record['organization_id'] == null) {
+        record['organization_id'] = config.organizationId;
+      }
+
       // Resolve references
       for (const ref of objectRefs) {
         const fieldValue = record[ref.field];
@@ -233,7 +249,7 @@ export class SeedLoaderService implements ISeedLoaderService {
           referencesResolved++;
         } else if (!config.dryRun) {
           // Try to resolve from existing data in the database
-          const dbId = await this.resolveFromDatabase(ref.targetObject, ref.targetField, fieldValue);
+          const dbId = await this.resolveFromDatabase(ref.targetObject, ref.targetField, fieldValue, config.organizationId);
           if (dbId) {
             record[ref.field] = dbId;
             referencesResolved++;
@@ -339,10 +355,17 @@ export class SeedLoaderService implements ISeedLoaderService {
     targetObject: string,
     targetField: string,
     value: unknown,
+    organizationId?: string,
   ): Promise<string | null> {
     try {
+      const where: Record<string, unknown> = { [targetField]: value };
+      // Per-tenant replay: when scoping is requested, only consider
+      // rows that belong to the target tenant so cross-tenant rows
+      // never get borrowed as a "resolved" reference (would silently
+      // create a cross-org FK).
+      if (organizationId) where.organization_id = organizationId;
       const records = await this.engine.find(targetObject, {
-        where: { [targetField]: value },
+        where,
         fields: ['id'],
         limit: 1,
         context: { isSystem: true },
@@ -361,6 +384,7 @@ export class SeedLoaderService implements ISeedLoaderService {
     insertedRecords: Map<string, Map<string, string>>,
     allResults: DatasetLoadResult[],
     allErrors: ReferenceResolutionError[],
+    organizationId?: string,
   ): Promise<void> {
     for (const deferred of deferredUpdates) {
       // Try to resolve from inserted records
@@ -370,7 +394,7 @@ export class SeedLoaderService implements ISeedLoaderService {
       // Try database fallback
       if (!resolvedId) {
         resolvedId = (await this.resolveFromDatabase(
-          deferred.targetObject, deferred.targetField, deferred.attemptedValue
+          deferred.targetObject, deferred.targetField, deferred.attemptedValue, organizationId
         )) ?? undefined;
       }
 
@@ -637,13 +661,19 @@ export class SeedLoaderService implements ISeedLoaderService {
   private async loadExistingRecords(
     objectName: string,
     externalId: string,
+    organizationId?: string,
   ): Promise<Map<string, any>> {
     const map = new Map<string, any>();
     try {
-      const records = await this.engine.find(objectName, {
+      const findArgs: Record<string, unknown> = {
         fields: ['id', externalId],
         context: { isSystem: true },
-      } as any);
+      };
+      // Per-tenant replay: restrict to the target tenant's own rows
+      // so upsert key matching never returns another tenant's record
+      // (would silently steal/overwrite rows across orgs).
+      if (organizationId) findArgs.where = { organization_id: organizationId };
+      const records = await this.engine.find(objectName, findArgs as any);
       for (const record of records || []) {
         const key = String(record[externalId] ?? '');
         if (key) {

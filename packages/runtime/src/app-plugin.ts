@@ -276,6 +276,80 @@ export class AppPlugin implements Plugin {
                      object: d.object,
                  }));
 
+             // Stash datasets on a kernel service so SecurityPlugin's
+             // sys_organization insert hook can replay them per-tenant
+             // (Salesforce-sandbox style: every new org gets its own
+             // private copy of the artifact's demo data).
+             //
+             // We also register a `seed-replayer` callable so the
+             // SecurityPlugin doesn't need to import @objectstack/runtime
+             // (would create a circular workspace dep). The replayer
+             // captures the SeedLoaderService closure and exposes a
+             // narrow `(orgId) => Promise<summary>` surface.
+             try {
+                 const kernel: any = (ctx as any).kernel;
+                 const existing = (() => {
+                     try { return kernel?.getService?.('seed-datasets'); } catch { return undefined; }
+                 })();
+                 const merged = Array.isArray(existing)
+                     ? [...existing, ...normalizedDatasets]
+                     : normalizedDatasets;
+                 const registerSvc = (name: string, value: any) => {
+                     if (kernel?.registerService) kernel.registerService(name, value);
+                     else if (typeof (ctx as any).registerService === 'function') (ctx as any).registerService(name, value);
+                 };
+                 registerSvc('seed-datasets', merged);
+
+                 const metadataNow = ctx.getService('metadata') as IMetadataService | undefined;
+                 const loggerRef = ctx.logger;
+                 const replayer = async (organizationId: string) => {
+                     if (!organizationId) return { inserted: 0, updated: 0, errors: [] as any[] };
+                     const md = metadataNow ?? (ctx.getService('metadata') as IMetadataService | undefined);
+                     if (!md) {
+                         loggerRef.warn('[seed-replayer] metadata service unavailable');
+                         return { inserted: 0, updated: 0, errors: [] as any[] };
+                     }
+                     const datasetsNow = (() => {
+                         try { return kernel?.getService?.('seed-datasets'); } catch { return merged; }
+                     })() ?? merged;
+                     if (!Array.isArray(datasetsNow) || datasetsNow.length === 0) {
+                         return { inserted: 0, updated: 0, errors: [] as any[] };
+                     }
+                     const seedLoader = new SeedLoaderService(ql, md, loggerRef);
+                     const { SeedLoaderRequestSchema } = await import('@objectstack/spec/data');
+                     const request = SeedLoaderRequestSchema.parse({
+                         datasets: datasetsNow,
+                         config: {
+                             defaultMode: 'upsert',
+                             multiPass: true,
+                             organizationId,
+                         },
+                     });
+                     const result = await seedLoader.load(request);
+                     return {
+                         inserted: result.summary.totalInserted,
+                         updated: result.summary.totalUpdated,
+                         errors: result.errors,
+                     };
+                 };
+                 registerSvc('seed-replayer', replayer);
+                 ctx.logger.info(`[Seeder] Registered ${normalizedDatasets.length} datasets + replayer on kernel (total datasets: ${merged.length})`);
+             } catch (e: any) {
+                 ctx.logger.warn('[Seeder] Failed to register seed-datasets/seed-replayer service', { error: e?.message });
+             }
+
+             // Decide whether to also run the seed inline at AppPlugin
+             // start. In multi-tenant mode, the per-org replay (driven
+             // by SecurityPlugin's sys_organization middleware) is the
+             // source of truth — running it here too would create NULL-
+             // org rows that pollute reads and need a separate claim
+             // step. So we skip it. Single-tenant deployments keep the
+             // legacy behaviour: seed immediately at boot so there's
+             // always demo data without needing an org insert.
+             const multiTenant = String(process.env.OS_MULTI_TENANT ?? 'true').toLowerCase() !== 'false';
+             if (multiTenant) {
+                 ctx.logger.info('[Seeder] multi-tenant mode — skipping inline seed; per-org replay will run on sys_organization insert');
+             } else {
              // Use SeedLoaderService for metadata-driven loading with reference resolution
              try {
                  const metadata = ctx.getService('metadata') as IMetadataService | undefined;
@@ -320,6 +394,7 @@ export class AppPlugin implements Plugin {
                      }
                  }
                  ctx.logger.info('[Seeder] Data seeding complete (fallback).');
+             }
              }
         }
     }
