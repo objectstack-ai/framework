@@ -24,7 +24,7 @@
     "nanoid": "^5.1.11"
   },
   "devDependencies": {
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.0",
     "mongodb-memory-server": "^10.4.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"

@@ -42,7 +42,7 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "pg": "^8.20.0"
+    "pg": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
