@@ -46,6 +46,14 @@ export interface AuthPluginOptions extends Partial<AuthConfig> {
    * project's own database — each project owns its own users.
    */
   manifestDatasource?: string;
+
+  /**
+   * Application-specific organization roles to register with Better-Auth's
+   * organization plugin so invitations to those roles aren't rejected with
+   * ROLE_NOT_FOUND. Forwarded as-is to AuthManager. See
+   * {@link AuthManagerOptions.additionalOrgRoles} for details.
+   */
+  additionalOrgRoles?: string[];
 }
 
 /**

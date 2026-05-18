@@ -53,6 +53,26 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * Each entry is passed to better-auth's genericOAuth plugin.
    */
   oidcProviders?: OidcProvidersConfig;
+
+  /**
+   * Application-specific organization roles to register with Better-Auth's
+   * organization plugin. Each name becomes a valid role for invitations and
+   * member assignments without going through Better-Auth's default
+   * `owner|admin|member` whitelist.
+   *
+   * The ObjectStack SecurityPlugin handles real RBAC enforcement by matching
+   * these role names against `permission` metadata (PermissionSets / Profiles),
+   * so Better-Auth only needs to accept them as opaque strings. Each role is
+   * registered with the minimum access-control privileges (equivalent to
+   * Better-Auth's `member` role) so it cannot inadvertently grant org-level
+   * admin capabilities.
+   *
+   * Typical source: the union of `permission` metadata names that have
+   * `isProfile: true`, collected from the loaded stack at CLI boot.
+   *
+   * @example ['sales_rep', 'sales_manager', 'service_agent']
+   */
+  additionalOrgRoles?: string[];
 }
 
 /**
@@ -248,6 +268,44 @@ export class AuthManager {
 
     if (enabled.organization) {
       const { organization } = await import('better-auth/plugins/organization');
+      // Build a `roles` map that registers each app-supplied org role
+      // (e.g. CRM's sales_rep, sales_manager) as a valid Better-Auth role
+      // so invitations to those roles aren't rejected with ROLE_NOT_FOUND.
+      // Real RBAC enforcement is handled by ObjectStack's SecurityPlugin,
+      // which matches the role name against `permission` metadata
+      // (PermissionSets). Here we register them with minimum org-plugin
+      // capabilities (same as the built-in `member` role) so they cannot
+      // inadvertently grant org-level admin powers.
+      let customOrgRoles: Record<string, any> | undefined;
+      const extra = this.config.additionalOrgRoles;
+      if (extra && extra.length > 0) {
+        try {
+          const accessMod = await import('better-auth/plugins/organization/access');
+          const stmtMod = await import('better-auth/plugins/organization/access/statement' as any).catch(() => null as any);
+          const { defaultAc, memberAc } = accessMod as any;
+          // Better-Auth's `hasPermission` does `{...options.roles || defaultRoles}`
+          // (precedence: `||` then spread). When we pass our own `roles`, the
+          // built-in owner/admin/member are silently dropped, so even the org
+          // owner loses `invitation:create` and every mutation 403s. We must
+          // re-include the defaults alongside our extras.
+          const defaultRoles =
+            (stmtMod && (stmtMod as any).defaultRoles) ||
+            (accessMod as any).defaultRoles ||
+            null;
+          if (defaultAc && memberAc && typeof memberAc.statements === 'object') {
+            const built: Record<string, any> = defaultRoles ? { ...defaultRoles } : {};
+            const stmts = memberAc.statements;
+            for (const name of extra) {
+              if (!name) continue;
+              if (built[name]) continue;
+              built[name] = defaultAc.newRole(stmts);
+            }
+            customOrgRoles = built;
+          }
+        } catch {
+          customOrgRoles = undefined;
+        }
+      }
       plugins.push(organization({
         schema: buildOrganizationPluginSchema(),
         // Enable the team sub-feature so the framework's `sys_team` /
@@ -258,6 +316,13 @@ export class AuthManager {
         // portal exposes a Teams page; without this flag those endpoints
         // 404 and the section silently breaks.
         teams: { enabled: true },
+        // Without a mailer wired in framework, requiring email verification
+        // before accepting invitations dead-ends every invite flow with
+        // FORBIDDEN EMAIL_VERIFICATION_REQUIRED…. Default-off here keeps
+        // the built-in /accept-invitation route usable for pilots; operators
+        // who wire a real mailer can re-enable downstream.
+        requireEmailVerificationOnInvitation: false,
+        ...(customOrgRoles ? { roles: customOrgRoles } : {}),
         // No mailer is wired in framework yet — log the accept URL so
         // operators / UI can fall back to copy-paste flows. Replace this
         // with a real mail integration when available.

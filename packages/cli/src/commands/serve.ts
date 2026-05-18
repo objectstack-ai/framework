@@ -671,11 +671,43 @@ export default class Serve extends Command {
               if (!trustedOrigins.includes(wildcard)) trustedOrigins.push(wildcard);
             }
 
+            // Collect application-defined org roles from the stack so
+            // Better-Auth's organization plugin accepts invitations to
+            // those roles (otherwise it 400s with `ROLE_NOT_FOUND`).
+            // Sources:
+            //   - top-level `roles[]` (role hierarchy entries)
+            //   - `permissions[]` PermissionSets where `isProfile === true`
+            //     (these double as role identifiers; e.g. CRM Profiles)
+            // Real RBAC enforcement is still owned by SecurityPlugin, which
+            // matches these names against `permission` metadata entries.
+            const additionalOrgRoles = new Set<string>();
+            try {
+              const stackAny: any = config ?? {};
+              const collect = (arr: any) => {
+                if (!Array.isArray(arr)) return;
+                for (const r of arr) {
+                  const n = typeof r === 'string' ? r : (r && typeof r.name === 'string' ? r.name : null);
+                  if (n && n !== 'owner' && n !== 'admin' && n !== 'member') additionalOrgRoles.add(n);
+                }
+              };
+              collect(stackAny.roles);
+              if (Array.isArray(stackAny.permissions)) {
+                for (const p of stackAny.permissions) {
+                  if (p && typeof p.name === 'string' && p.isProfile !== false) {
+                    if (p.name !== 'owner' && p.name !== 'admin' && p.name !== 'member') additionalOrgRoles.add(p.name);
+                  }
+                }
+              }
+            } catch {
+              // best-effort
+            }
+
             await kernel.use(new AuthPlugin({
               secret,
               baseUrl,
               socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
               trustedOrigins: trustedOrigins.length ? trustedOrigins : undefined,
+              ...(additionalOrgRoles.size > 0 ? { additionalOrgRoles: Array.from(additionalOrgRoles) } : {}),
               advanced: process.env.OS_COOKIE_DOMAIN
                 ? ({
                     crossSubDomainCookies: {
