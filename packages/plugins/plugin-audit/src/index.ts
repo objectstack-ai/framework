@@ -8,3 +8,4 @@
  */
 
 export { AuditPlugin } from './audit-plugin.js';
+export { installAuditWriters } from './audit-writers.js';

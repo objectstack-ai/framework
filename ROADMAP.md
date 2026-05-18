@@ -533,6 +533,53 @@ D9 / D10 / D11                   (resolved through M9 sub-tasks above)
 
 ---
 
+## M10 — CRM Production-Readiness (App-Layer + Platform Gaps)
+
+> Derived from the 2026-05-18 real-customer audit of `examples/app-crm`.
+> Full report: `~/.copilot/session-state/.../files/production-readiness-assessment.md`.
+> Goal: take the CRM example from "single-user demo" to "5-20 person sales team pilot".
+
+### M10 P0 — Blockers (must-have for any paying customer)
+
+- [ ] **M10.1 — Audit / Activity auto-writers.** `plugin-audit` registers `sys_audit_log` but never writes; `sys_activity` and `sys_comment` likewise empty after CRUD. Subscribe to ObjectQL `data:*` events from `EventBus` and emit immutable audit rows + human-readable activity entries with field-level diffs. Anchor: [packages/plugins/plugin-audit/src/audit-plugin.ts](packages/plugins/plugin-audit/src/audit-plugin.ts).
+- [ ] **M10.2 — User invite + default roles.** No `/api/v1/admin/users/invite` endpoint exists. Wrap better-auth `organization.inviteMember` as a first-class REST route. Seed three default roles into `sys_role` (`admin`, `sales_manager`, `sales_rep`). Anchor: [packages/plugins/plugin-auth/](packages/plugins/plugin-auth/).
+- [ ] **M10.3 — Attachments.** No `sys_attachment` object, no upload component. Register the schema in `packages/spec/src/system/`, wire it to `service-storage`, add an `AttachmentList` view widget. P0 because every CRM contract/quote/PDF is currently un-storable.
+- [ ] **M10.4 — Validation envelope + Zod-at-rest.** Currently a malformed POST returns raw SQL text. Wrap REST handlers with a structured error envelope (`{code,message,fields[]}`) and run the canonical Zod schema inside ObjectQL `insert/update` before touching the driver. Anchors: [packages/rest/src/rest-server.ts](packages/rest/src/rest-server.ts), [packages/objectql/](packages/objectql/).
+- [ ] **M10.5 — Global search.** Header already shows `⌘K` but it is inert. Add `GET /api/v1/search?q=` (driver-side `LIKE` across registered searchable fields; FTS later) and wire the Studio command palette to it.
+
+### M10 P1 — Critical (80%+ of customers need these)
+
+- [ ] M10.6 — `POST /api/v1/data/lead/:id/convert` → atomic Lead → Account + Contact + Opportunity.
+- [ ] M10.7 — `service-email` + `sys_email` (IMAP/SMTP, OAuth Gmail/Outlook), thread linking to records.
+- [ ] M10.8 — `sys_notification` via existing `service-feed` + WebSocket via `service-realtime`; header bell badge.
+- [ ] M10.9 — `POST /api/v1/data/:obj/import` CSV/XLSX parser with dry-run + field mapping.
+- [ ] M10.10 — Comments / @mentions UI on detail pages (table `sys_comment` already exists).
+- [ ] M10.11 — Activity-timeline component (consumes M10.1 data).
+- [ ] M10.12 — `full_name` CEL formula bug (leading space when `salutation` is null).
+- [ ] M10.13 — Date / datetime column formatters in grid plugin (currently displays raw ISO).
+- [ ] M10.14 — Stop SQL error leakage in REST error responses.
+
+### M10 P2 — Important (50%+ of customers need these)
+
+- [ ] M10.15 — Workflow / approval engine (`sys_workflow`).
+- [ ] M10.16 — Saved reports + scheduled email (`sys_report`).
+- [ ] M10.17 — Record-level sharing rules (`sys_sharing_rule`) + team hierarchy (`sys_team`).
+- [ ] M10.18 — Tags (`sys_tag`).
+- [ ] M10.19 — Re-enable GraphQL (currently 501) and OpenAPI spec endpoint (currently 404).
+- [ ] M10.20 — Realtime channels (collaborative editing on the same opportunity).
+- [ ] M10.21 — Outbound webhooks + CSV export.
+- [ ] M10.22 — Mobile-optimized layouts (kanban + grid).
+- [ ] M10.23 — i18n review for CRM business terms (pipeline / forecast / SLA).
+
+### M10 P3 — Polish
+
+- [ ] M10.24 — Soft delete + recycle bin.
+- [ ] M10.25 — Dark-mode visual parity audit.
+- [ ] M10.26 — WCAG 2.1 AA accessibility audit.
+- [ ] M10.27 — 10K+ record performance (virtual scrolling, indices).
+
+---
+
 ## Related Documents
 
 | Document | Role |
