@@ -236,75 +236,6 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             });
         }
 
-        // Pre-seed the project owner. The cloud control-plane stashed the
-        // creator's identity into `sys_project.metadata.ownerSeed` at
-        // project-create time; replay it here so the owner exists as a
-        // real `sys_user` BEFORE their first SSO callback arrives.
-        //
-        // Order matters:
-        //   1. Seed the OWNING cloud org into `sys_organization` so the
-        //      project's primary workspace matches the cloud team that
-        //      owns the project at the platform level.
-        //   2. Seed the owner's `sys_user` row.
-        //   3. Seed a `sys_member(owner)` row binding the user to the
-        //      cloud org. This prevents SecurityPlugin's
-        //      `ensureUserHasOrganization` insert middleware from
-        //      auto-creating a disjoint "Alice's Workspace" personal
-        //      org (the middleware only fires when the user has zero
-        //      memberships).
-        //
-        // All three are idempotent — safe across cold-boots.
-        try {
-            const projMeta: any = typeof (project as any)?.metadata === 'string'
-                ? JSON.parse((project as any).metadata)
-                : ((project as any)?.metadata ?? {});
-            const ownerSeed = projMeta?.ownerSeed;
-            const orgSeed = projMeta?.orgSeed;
-
-            // Diagnostic: surface metadata visibility at cold-boot so we
-            // can confirm runtime is wired up correctly without needing a
-            // shell into the project DB. Drops out as soon as we're past
-            // the bring-up phase.
-            console.warn('[ArtifactKernelFactory] seed replay check', {
-                projectId,
-                hasOwnerSeed: !!ownerSeed?.userId,
-                hasOrgSeed: !!orgSeed?.id,
-                metaType: typeof (project as any)?.metadata,
-            });
-
-            if (orgSeed?.id && orgSeed?.name) {
-                const { seedProjectOrganization } = await import('./project-org-seed.js');
-                const result = await seedProjectOrganization(kernel, orgSeed, this.logger);
-                console.warn('[ArtifactKernelFactory] orgSeed →', result);
-            }
-
-            if (ownerSeed?.userId && ownerSeed?.email) {
-                const { seedProjectOwner } = await import('./project-owner-seed.js');
-                const ownerResult = await seedProjectOwner(kernel, ownerSeed, this.logger);
-                console.warn('[ArtifactKernelFactory] ownerSeed →', ownerResult);
-
-                // Bind owner → cloud org with role=owner so the
-                // auto-personal-workspace middleware skips. If no org
-                // was seeded (orgSeed missing), fall back to the
-                // legacy personal-org auto-create behaviour.
-                if (orgSeed?.id) {
-                    const { seedProjectMember } = await import('./project-org-seed.js');
-                    const memberResult = await seedProjectMember(
-                        kernel,
-                        { userId: ownerSeed.userId, organizationId: orgSeed.id, role: 'owner' },
-                        this.logger,
-                    );
-                    console.warn('[ArtifactKernelFactory] memberSeed →', memberResult);
-                }
-            }
-        } catch (err: any) {
-            this.logger.warn?.('[ArtifactKernelFactory] owner/org seed skipped', {
-                projectId,
-                error: err?.message,
-            });
-            console.warn('[ArtifactKernelFactory] seed THREW', err?.message);
-        }
-
         const projectName = project.hostname ?? projectId;
         const bundle = artifact.metadata as any;
         const sys = bundle?.manifest ?? bundle;
@@ -375,6 +306,69 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
         } as any));
 
         await kernel.bootstrap();
+
+        // Pre-seed the project owner. The cloud control-plane stashed the
+        // creator's identity into `sys_project.metadata.ownerSeed` at
+        // project-create time; replay it AFTER `kernel.bootstrap()` so
+        // ObjectQL/Security plugins have fully initialised and
+        // `kernel.getService('objectql')` resolves. Pre-bootstrap, plugins
+        // are only registered — services aren't wired yet.
+        //
+        // Order matters:
+        //   1. Seed the OWNING cloud org into `sys_organization` so the
+        //      project's primary workspace matches the cloud team that
+        //      owns the project at the platform level.
+        //   2. Seed the owner's `sys_user` row.
+        //   3. Seed a `sys_member(owner)` row binding the user to the
+        //      cloud org. This prevents SecurityPlugin's
+        //      `ensureUserHasOrganization` insert middleware from
+        //      auto-creating a disjoint "Alice's Workspace" personal
+        //      org (the middleware only fires when the user has zero
+        //      memberships).
+        //
+        // All three are idempotent — safe across cold-boots.
+        try {
+            const projMeta: any = typeof (project as any)?.metadata === 'string'
+                ? JSON.parse((project as any).metadata)
+                : ((project as any)?.metadata ?? {});
+            const ownerSeed = projMeta?.ownerSeed;
+            const orgSeed = projMeta?.orgSeed;
+
+            console.warn('[ArtifactKernelFactory] seed replay check', {
+                projectId,
+                hasOwnerSeed: !!ownerSeed?.userId,
+                hasOrgSeed: !!orgSeed?.id,
+                metaType: typeof (project as any)?.metadata,
+            });
+
+            if (orgSeed?.id && orgSeed?.name) {
+                const { seedProjectOrganization } = await import('./project-org-seed.js');
+                const result = await seedProjectOrganization(kernel, orgSeed, this.logger);
+                console.warn('[ArtifactKernelFactory] orgSeed →', result);
+            }
+
+            if (ownerSeed?.userId && ownerSeed?.email) {
+                const { seedProjectOwner } = await import('./project-owner-seed.js');
+                const ownerResult = await seedProjectOwner(kernel, ownerSeed, this.logger);
+                console.warn('[ArtifactKernelFactory] ownerSeed →', ownerResult);
+
+                if (orgSeed?.id) {
+                    const { seedProjectMember } = await import('./project-org-seed.js');
+                    const memberResult = await seedProjectMember(
+                        kernel,
+                        { userId: ownerSeed.userId, organizationId: orgSeed.id, role: 'owner' },
+                        this.logger,
+                    );
+                    console.warn('[ArtifactKernelFactory] memberSeed →', memberResult);
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn?.('[ArtifactKernelFactory] owner/org seed skipped', {
+                projectId,
+                error: err?.message,
+            });
+            console.warn('[ArtifactKernelFactory] seed THREW', err?.message);
+        }
 
         // Belt-and-braces: load translation bundles directly into the i18n
         // service after bootstrap. AppPlugin.loadTranslations should do this
