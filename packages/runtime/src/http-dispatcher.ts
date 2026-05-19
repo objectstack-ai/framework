@@ -1687,6 +1687,51 @@ export class HttpDispatcher {
                 }
             }
 
+            // ----- POST /cloud/admin/platform-sso/backfill ----------------
+            // Idempotent admin trigger: scans `sys_project` and ensures every
+            // active project has a corresponding `sys_oauth_application` row
+            // for platform SSO ("Airtable-style unified login"). Safe to call
+            // any number of times — re-running with the same project is a
+            // no-op for existing rows and only patches in missing
+            // redirect_uris. Requires the caller to bear a Bearer token
+            // equal to OS_AUTH_SECRET (the shared cloud/objectos secret),
+            // since the boot-time backfill plugin can be flaky on cold-start
+            // and operators need an out-of-band way to recover.
+            if (parts.length === 3
+                && parts[0] === 'admin'
+                && parts[1] === 'platform-sso'
+                && parts[2] === 'backfill'
+                && m === 'POST') {
+                const baseSecret = (process.env.OS_AUTH_SECRET ?? process.env.AUTH_SECRET ?? '').trim();
+                if (!baseSecret) {
+                    return { handled: true, response: this.error('OS_AUTH_SECRET not configured on this worker', 503) };
+                }
+                const rawHeaders = _context?.request?.headers;
+                let authHeader: string | undefined;
+                if (rawHeaders && typeof (rawHeaders as any).get === 'function') {
+                    authHeader = (rawHeaders as any).get('authorization') ?? undefined;
+                } else if (rawHeaders && typeof rawHeaders === 'object') {
+                    authHeader = (rawHeaders as any)['authorization'] ?? (rawHeaders as any)['Authorization'];
+                }
+                const presented = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+                    ? authHeader.slice(7).trim()
+                    : '';
+                if (!presented || presented !== baseSecret) {
+                    return { handled: true, response: this.error('forbidden: Bearer token must match OS_AUTH_SECRET', 403) };
+                }
+                try {
+                    const { backfillPlatformSsoClients } = await import('./cloud/platform-sso.js');
+                    const result = await backfillPlatformSsoClients({
+                        ql,
+                        baseSecret,
+                        logger: console,
+                    });
+                    return { handled: true, response: this.success(result) };
+                } catch (err: any) {
+                    return { handled: true, response: this.error(`backfill failed: ${err?.message ?? String(err)}`, 500) };
+                }
+            }
+
             // ----- /cloud/projects collection routes -----
             if (parts.length === 1 && parts[0] === 'projects' && m === 'GET') {
                 const where: Record<string, unknown> = {};

@@ -197,6 +197,15 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
       record_id: recordId ?? null,
       old_value: oldValue ? safeStringify(oldValue) : null,
       new_value: newValue ? safeStringify(newValue) : null,
+      // `tenant_id` is the schema-declared "tenant context" lookup; the
+      // platform-default `organization_id` column is what RLS gates on
+      // (`organization_id = current_user.organization_id`). The audit
+      // writer runs through `api.sudo()` which bypasses the
+      // SecurityPlugin's auto-stamping of `organization_id`, so we
+      // stamp both columns explicitly here. Without `organization_id`,
+      // non-admin members would see 0 rows on Setup dashboards because
+      // RLS would deny every audit row as wrong-tenant.
+      organization_id: tenantId ?? null,
       tenant_id: tenantId ?? null,
     };
 
@@ -218,6 +227,9 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
       record_id: recordId ?? null,
       record_label: label,
       metadata: newValue || oldValue ? safeStringify({ old: oldValue, new: newValue }) : null,
+      // Same rationale as auditRow: stamp the tenant column so RLS
+      // matches the recipient's organization on read.
+      organization_id: tenantId ?? null,
     };
 
     try {
@@ -242,6 +254,7 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
         before,
         after,
         actorId: userId ?? null,
+        tenantId: tenantId ?? null,
       });
     } catch (err) {
       // Log via engine logger if available, but never throw.
@@ -286,6 +299,8 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
     const actorId = row.author_id ?? null;
     const actorName = row.author_name ?? null;
     const bodyPreview = String(row.body ?? '').slice(0, 240);
+    const sess: any = (ctx as any).session ?? {};
+    const tenantId: string | null = sess.tenantId ?? row.organization_id ?? null;
 
     const sys = api.sudo();
     for (const uid of userIds) {
@@ -301,6 +316,8 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
           actor_id: actorId,
           actor_name: actorName,
           is_read: false,
+          // Stamp tenant so the recipient's RLS sees it (see writeAssignmentNotifications).
+          organization_id: tenantId,
         });
       } catch (err) {
         try { (engine as any).logger?.warn?.('Mention notification write failed', { uid, err: String((err as any)?.message ?? err) }); } catch {}
@@ -336,6 +353,7 @@ async function writeAssignmentNotifications(
     before: any;
     after: any;
     actorId: string | null;
+    tenantId: string | null;
   },
 ): Promise<void> {
   if (params.action === 'delete') return;
@@ -358,6 +376,11 @@ async function writeAssignmentNotifications(
       actor_id: params.actorId,
       actor_name: null,
       is_read: false,
+      // Stamp organization_id so the recipient (who lives in the same
+      // tenant as the action) sees the notification through RLS. Without
+      // this, sys_notification rows insert with NULL organization_id and
+      // the recipient's `tenant_isolation` policy denies them.
+      organization_id: params.tenantId,
     });
   } catch {
     // best-effort; never throw into CRUD path
