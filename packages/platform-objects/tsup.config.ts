@@ -8,7 +8,7 @@ export default defineConfig({
     'identity/index': 'src/identity/index.ts',
     'security/index': 'src/security/index.ts',
     'audit/index': 'src/audit/index.ts',
-    'tenant/index': 'src/tenant/index.ts',
+    'integration/index': 'src/integration/index.ts',
     'metadata/index': 'src/metadata/index.ts',
     'apps/index': 'src/apps/index.ts',
   },

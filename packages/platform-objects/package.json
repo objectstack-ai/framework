@@ -26,10 +26,10 @@
       "import": "./dist/audit/index.mjs",
       "require": "./dist/audit/index.js"
     },
-    "./tenant": {
-      "types": "./dist/tenant/index.d.ts",
-      "import": "./dist/tenant/index.mjs",
-      "require": "./dist/tenant/index.js"
+    "./integration": {
+      "types": "./dist/integration/index.d.ts",
+      "import": "./dist/integration/index.mjs",
+      "require": "./dist/integration/index.js"
     },
     "./metadata": {
       "types": "./dist/metadata/index.d.ts",

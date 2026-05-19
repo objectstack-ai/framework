@@ -17,7 +17,7 @@ import {
   SysPackageVersion,
   SysPackageInstallation,
   SysApp,
-} from '@objectstack/platform-objects/tenant';
+} from './objects/index.js';
 
 export const TENANT_SERVICE_ID = 'com.objectstack.service-tenant';
 export const TENANT_SERVICE_VERSION = '0.2.0';

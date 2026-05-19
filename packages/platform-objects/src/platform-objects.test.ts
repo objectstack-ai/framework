@@ -23,15 +23,7 @@ import {
   defaultPermissionSets,
 } from './security/index.js';
 import { SysAuditLog, SysPresence } from './audit/index.js';
-import {
-  SysApp,
-  SysPackage,
-  SysPackageInstallation,
-  SysPackageVersion,
-  SysProject,
-  SysProjectCredential,
-  SysProjectMember,
-} from './tenant/index.js';
+import { SysWebhook } from './integration/index.js';
 import {
   SysMetadata,
   SysMetadataHistoryObject,
@@ -56,13 +48,7 @@ const systemObjects = [
   ['SysRolePermissionSet', SysRolePermissionSet, 'sys_role_permission_set'],
   ['SysAuditLog', SysAuditLog, 'sys_audit_log'],
   ['SysPresence', SysPresence, 'sys_presence'],
-  ['SysProject', SysProject, 'sys_project'],
-  ['SysProjectCredential', SysProjectCredential, 'sys_project_credential'],
-  ['SysProjectMember', SysProjectMember, 'sys_project_member'],
-  ['SysApp', SysApp, 'sys_app'],
-  ['SysPackage', SysPackage, 'sys_package'],
-  ['SysPackageVersion', SysPackageVersion, 'sys_package_version'],
-  ['SysPackageInstallation', SysPackageInstallation, 'sys_package_installation'],
+  ['SysWebhook', SysWebhook, 'sys_webhook'],
   ['SysMetadata', SysMetadata, 'sys_metadata'],
   ['SysMetadataHistoryObject', SysMetadataHistoryObject, 'sys_metadata_history'],
 ] as const;

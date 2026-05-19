@@ -7,3 +7,4 @@ export * from './project-provisioning.js';
 export * from './turso-platform-client.js';
 export * from './tenant-schema-initializer.js';
 export * from './services/app-catalog.service.js';
+export * from './objects/index.js';
