@@ -1893,6 +1893,33 @@ export class HttpDispatcher {
                     // skip owner seed; later access flows still work via the
                     // platform-SSO JIT path.
                 }
+
+                // Also capture the OWNING cloud org so the per-project
+                // kernel can mirror it into the project's `sys_organization`
+                // table on first boot. Without this, SecurityPlugin's
+                // `ensureUserHasOrganization` middleware would auto-create a
+                // disjoint "Alice's Workspace" personal org for the owner,
+                // completely detached from the cloud team that actually
+                // owns the project at the platform level. Best-effort: a
+                // missing org row only means the project's primary
+                // workspace falls back to the personal-org pattern.
+                try {
+                    const orgRow = await ql.find('sys_organization', { where: { id: req.organization_id } } as any);
+                    const orgRows = Array.isArray(orgRow) ? orgRow : (orgRow?.value ?? []);
+                    const org = Array.isArray(orgRows) && orgRows.length > 0 ? orgRows[0] : null;
+                    if (org?.id && org?.name) {
+                        (baseMetadata as any).orgSeed = {
+                            id: String(org.id),
+                            name: String(org.name),
+                            slug: org.slug ? String(org.slug) : null,
+                            logo: org.logo ? String(org.logo) : null,
+                        };
+                    }
+                } catch {
+                    // org lookup failed — skip the mirror. Owner seed
+                    // still works; the user will land in the auto-created
+                    // personal workspace as before.
+                }
                 await ql.insert(ENV, {
                     id: projectId,
                     organization_id: req.organization_id,

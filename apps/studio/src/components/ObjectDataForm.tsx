@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Save, Loader2, AlertCircle } from "lucide-react";
+import { SharingCriteriaBuilder } from "@/components/SharingCriteriaBuilder";
 
 interface ObjectDataFormProps {
     objectApiName: string;
@@ -31,6 +32,8 @@ export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: O
     const [formData, setFormData] = useState<any>({});
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Object catalog — loaded lazily; used by sys_sharing_rule.object_name picker.
+    const [objectCatalog, setObjectCatalog] = useState<Array<{ name: string; label: string }>>([]);
 
     useEffect(() => {
         let mounted = true;
@@ -54,6 +57,33 @@ export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: O
         loadDef();
         return () => { mounted = false; };
     }, [client, objectApiName, record]);
+
+    // Load the object catalog when editing sys_sharing_rule so we can render
+    // a dropdown for `object_name` instead of a free-text input.
+    useEffect(() => {
+        if (objectApiName !== 'sys_sharing_rule') return;
+        let mounted = true;
+        (async () => {
+            try {
+                const res: any = await client.meta.getItems('object');
+                if (!mounted) return;
+                const items: any[] = Array.isArray(res) ? res : (res?.items ?? []);
+                const catalog = items
+                    .map((it) => {
+                        const item = it?.item ?? it;
+                        const name = item?.name ?? it?.name;
+                        const label = item?.label ?? item?.pluralLabel ?? name;
+                        return name ? { name, label } : null;
+                    })
+                    .filter(Boolean) as Array<{ name: string; label: string }>;
+                catalog.sort((a, b) => a.name.localeCompare(b.name));
+                setObjectCatalog(catalog);
+            } catch (err) {
+                console.error('Failed to load object catalog', err);
+            }
+        })();
+        return () => { mounted = false; };
+    }, [client, objectApiName]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -167,7 +197,42 @@ export function ObjectDataForm({ objectApiName, record, onSuccess, onCancel }: O
                                             </Badge>
                                         </div>
 
-                                        {field.type === 'boolean' ? (
+                                        {/* Sharing-rule special widgets (Object picker + Criteria builder). */}
+                                        {objectApiName === 'sys_sharing_rule' && key === 'object_name' ? (
+                                            <Select
+                                                value={formData[key] || ''}
+                                                onValueChange={(value) => {
+                                                    // Switching object resets criteria — fields differ.
+                                                    handleChange(key, value);
+                                                    if (formData['criteria_json']) {
+                                                        handleChange('criteria_json', '');
+                                                    }
+                                                }}
+                                            >
+                                                <SelectTrigger id={key}>
+                                                    <SelectValue placeholder="Select an object..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {objectCatalog.length === 0 ? (
+                                                        <SelectItem value="__loading__" disabled>Loading objects…</SelectItem>
+                                                    ) : (
+                                                        objectCatalog.map((obj) => (
+                                                            <SelectItem key={obj.name} value={obj.name}>
+                                                                {obj.label}
+                                                                <span className="ml-2 text-xs text-muted-foreground">{obj.name}</span>
+                                                            </SelectItem>
+                                                        ))
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : objectApiName === 'sys_sharing_rule' && key === 'criteria_json' ? (
+                                            <SharingCriteriaBuilder
+                                                objectName={formData['object_name']}
+                                                value={formData[key] || ''}
+                                                onChange={(next) => handleChange(key, next)}
+                                                client={client}
+                                            />
+                                        ) : field.type === 'boolean' ? (
                                             <div className="flex items-center gap-3 rounded-lg border p-3">
                                                 <Switch
                                                     id={key}
