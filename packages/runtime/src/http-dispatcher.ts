@@ -1726,7 +1726,19 @@ export class HttpDispatcher {
                         baseSecret,
                         logger: console,
                     });
-                    return { handled: true, response: this.success(result) };
+                    // Dump a few rows so we can confirm the data actually
+                    // matches what better-auth's oauth-provider expects.
+                    let sample: any[] = [];
+                    let total = 0;
+                    try {
+                        const rows = await (ql as any).find('sys_oauth_application', { limit: 5 }, { context: { isSystem: true } });
+                        const list = Array.isArray(rows) ? rows : Array.isArray(rows?.records) ? rows.records : [];
+                        sample = list;
+                        total = typeof (rows as any)?.total === 'number' ? (rows as any).total : list.length;
+                    } catch (e: any) {
+                        sample = [{ _readErr: e?.message ?? String(e) }];
+                    }
+                    return { handled: true, response: this.success({ ...result, total, sample }) };
                 } catch (err: any) {
                     return { handled: true, response: this.error(`backfill failed: ${err?.message ?? String(err)}`, 500) };
                 }

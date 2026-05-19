@@ -6,12 +6,6 @@ import {
   SETUP_APP,
   SystemOverviewDashboard,
   SecurityOverviewDashboard,
-  UsersView,
-  OrganizationsView,
-  RolesView,
-  SessionsView,
-  AuditLogsView,
-  PackageInstallationsView,
 } from '@objectstack/platform-objects/apps';
 import { AuthManager } from './auth-manager.js';
 import {
@@ -135,18 +129,15 @@ export class AuthPlugin implements Plugin {
       // owner of its registration since it loads first among the trio
       // (auth + security + audit) that supplies the underlying objects.
       apps: [SETUP_APP],
-      // Curated list views and dashboards consumed by the Setup App's
-      // navigation entries. The manifest service does NOT auto-discover
-      // these from the app definition — they must be registered as
-      // explicit top-level arrays per ObjectStackDefinitionSchema.
-      views: [
-        UsersView,
-        OrganizationsView,
-        RolesView,
-        SessionsView,
-        AuditLogsView,
-        PackageInstallationsView,
-      ],
+      // List views for each Setup-nav object are defined on the schema
+      // itself via the canonical `listViews` map (e.g.
+      // sys_user.listViews.{all_users,unverified,two_factor}). Registering
+      // top-level views here is the legacy pre-M10.30c pattern — it caused
+      // duplicate "Users"/"Roles"/"Sessions" tabs to appear alongside the
+      // schema-derived ones, sometimes referencing nonexistent fields
+      // (e.g. legacy `users.view` had phone/status/active columns that do
+      // not exist on sys_user). Schema-embedded listViews is the single
+      // source of truth.
       dashboards: [SystemOverviewDashboard, SecurityOverviewDashboard],
     });
 
