@@ -39,13 +39,6 @@ export const SysTeam = ObjectSchema.create({
       group: 'Identity',
     }),
 
-    parent_team_id: Field.lookup('sys_team', {
-      label: 'Parent Team',
-      required: false,
-      description: 'Optional parent team for hierarchical team structures. Better-auth does not require this column; ObjectStack uses it for the team graph expansion in sharing rules and approval routing.',
-      group: 'Identity',
-    }),
-
     // ── System ───────────────────────────────────────────────────
     id: Field.text({
       label: 'Team ID',

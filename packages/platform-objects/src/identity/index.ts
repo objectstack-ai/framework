@@ -19,6 +19,10 @@ export { SysInvitation } from './sys-invitation.object.js';
 export { SysTeam } from './sys-team.object.js';
 export { SysTeamMember } from './sys-team-member.object.js';
 
+// ── Org Skeleton (hierarchical, distinct from flat sys_team) ────────────────
+export { SysDepartment } from './sys-department.object.js';
+export { SysDepartmentMember } from './sys-department-member.object.js';
+
 // ── Additional Auth Objects ────────────────────────────────────────────────
 export { SysApiKey } from './sys-api-key.object.js';
 export { SysTwoFactor } from './sys-two-factor.object.js';

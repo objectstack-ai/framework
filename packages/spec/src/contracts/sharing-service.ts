@@ -123,8 +123,17 @@ export interface ISharingService {
 // (Salesforce-style "any record matching X is shared with team Y").
 // ─────────────────────────────────────────────────────────────────────
 
-/** Kinds of principals a rule can target. */
-export type SharingRuleRecipientType = 'user' | 'team' | 'role' | 'queue';
+/**
+ * Kinds of principals a rule can target.
+ *
+ * - `user`       — a specific user id (no expansion)
+ * - `team`       — a flat collaboration team (`sys_team` + `sys_team_member`)
+ * - `department` — an org-skeleton node (`sys_department` + descendants via
+ *                  `parent_department_id` + members from `sys_department_member`)
+ * - `role`       — tenant role on `sys_member.role`
+ * - `queue`      — opaque queue identifier (resolution left to caller / app)
+ */
+export type SharingRuleRecipientType = 'user' | 'team' | 'department' | 'role' | 'queue';
 
 /**
  * Stored shape of a sharing rule. Maps 1-to-1 to `sys_sharing_rule`
@@ -206,13 +215,37 @@ export interface ISharingRuleService {
 // approver references without depending on the plugin directly).
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Flat collaboration team graph (better-auth's `sys_team` semantics).
+ *
+ * Teams in this model are *not* hierarchical — they are ad-hoc groupings.
+ * For the enterprise org-chart hierarchy, see {@link IDepartmentGraphService}.
+ */
 export interface ITeamGraphService {
-  /** Return all descendant team ids (BFS, includes the seed). */
-  descendants(teamId: string): Promise<string[]>;
-  /** Return all user ids that are members of `teamId` or any descendant. */
+  /** Return all user ids that are members of `teamId`. */
   expandUsers(teamId: string): Promise<string[]>;
   /** Return all user ids that hold a role of `roleName` in `organizationId`. */
   expandRoleUsers(roleName: string, organizationId?: string): Promise<string[]>;
   /** Return the manager id for a user (best-effort; null when none). */
+  managerOf(userId: string, organizationId?: string): Promise<string | null>;
+}
+
+/**
+ * Hierarchical department graph (`sys_department` org skeleton).
+ *
+ * Walks `parent_department_id` to expand a department into the union of
+ * its members and all descendant members. Drives:
+ *   - `recipient_type='department'` sharing rules
+ *   - `dept:` approver prefix in the approval engine
+ *   - report rollups, manager chains, and similar org-aware logic
+ */
+export interface IDepartmentGraphService {
+  /** Return all descendant department ids (BFS, includes the seed). */
+  descendants(departmentId: string): Promise<string[]>;
+  /** Return all user ids in `departmentId` or any descendant department. */
+  expandUsers(departmentId: string): Promise<string[]>;
+  /** Return the department head (manager_user_id) — best-effort, null when none. */
+  headOf(departmentId: string): Promise<string | null>;
+  /** Return the manager id for a user — proxy to {@link ITeamGraphService.managerOf}. */
   managerOf(userId: string, organizationId?: string): Promise<string | null>;
 }

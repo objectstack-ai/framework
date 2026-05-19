@@ -12,7 +12,16 @@ function makeFakeEngine() {
   function matches(row: FakeRow, filter: any): boolean {
     if (!filter || typeof filter !== 'object') return true;
     for (const [k, v] of Object.entries(filter)) {
-      if (row[k] !== v) return false;
+      const rv = row[k];
+      if (v != null && typeof v === 'object' && '$in' in (v as any)) {
+        if (!(v as any).$in.includes(rv)) return false;
+        continue;
+      }
+      if (v != null && typeof v === 'object' && '$ne' in (v as any)) {
+        if (rv === (v as any).$ne) return false;
+        continue;
+      }
+      if (rv !== v) return false;
     }
     return true;
   }
@@ -272,5 +281,57 @@ describe('ApprovalService', () => {
     await svc.approve(req.id, { actorId: 'u9' }, CTX);
     const actions = await svc.listActions(req.id, CTX);
     expect(actions.map(a => a.action)).toEqual(['submit', 'approve']);
+  });
+
+  // ── Graph expansion (M10.17.1) ───────────────────────────────────
+
+  it('approver type=team expands flat sys_team_member', async () => {
+    engine._tables.sys_team = [{ id: 'sales', name: 'sales', organization_id: 't1' }];
+    engine._tables.sys_team_member = [
+      { id: 'tm1', team_id: 'sales', user_id: 'alice' },
+      { id: 'tm2', team_id: 'sales', user_id: 'bob' },
+    ];
+    await svc.defineProcess({
+      name: 'team_proc', label: 'TeamProc', object: 'opportunity',
+      definition: {
+        name: 'team_proc', label: 'TeamProc', object: 'opportunity', active: true,
+        steps: [{ name: 's1', label: 'S1', approvers: [{ type: 'team', value: 'sales' }] }],
+      },
+    }, CTX);
+    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
+    expect(req.pending_approvers?.sort()).toEqual(['alice', 'bob']);
+  });
+
+  it('approver type=department walks parent_department_id (BFS)', async () => {
+    engine._tables.sys_department = [
+      { id: 'emea',        name: 'EMEA',        parent_department_id: null,    organization_id: 't1', active: true },
+      { id: 'emea_sales',  name: 'EMEA Sales',  parent_department_id: 'emea',  organization_id: 't1', active: true },
+      { id: 'emea_sales_uk', name: 'EMEA Sales UK', parent_department_id: 'emea_sales', organization_id: 't1', active: true },
+    ];
+    engine._tables.sys_department_member = [
+      { id: 'dm1', department_id: 'emea',           user_id: 'eva' },
+      { id: 'dm2', department_id: 'emea_sales_uk',  user_id: 'alice' },
+    ];
+    await svc.defineProcess({
+      name: 'dept_proc', label: 'DeptProc', object: 'opportunity',
+      definition: {
+        name: 'dept_proc', label: 'DeptProc', object: 'opportunity', active: true,
+        steps: [{ name: 's1', label: 'S1', approvers: [{ type: 'department', value: 'emea' }] }],
+      },
+    }, CTX);
+    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
+    expect(req.pending_approvers?.sort()).toEqual(['alice', 'eva']);
+  });
+
+  it('approver type=department with no rows falls back to prefixed literal', async () => {
+    await svc.defineProcess({
+      name: 'dept_proc2', label: 'DeptProc', object: 'opportunity',
+      definition: {
+        name: 'dept_proc2', label: 'DeptProc', object: 'opportunity', active: true,
+        steps: [{ name: 's1', label: 'S1', approvers: [{ type: 'department', value: 'unknown' }] }],
+      },
+    }, CTX);
+    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
+    expect(req.pending_approvers).toEqual(['department:unknown']);
   });
 });

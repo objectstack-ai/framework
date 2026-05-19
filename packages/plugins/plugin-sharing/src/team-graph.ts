@@ -5,14 +5,7 @@ import type { SharingEngine } from './sharing-service.js';
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
 
-/**
- * Cache key for a team-graph lookup. Per-tenant when an org is in scope
- * (rules are tenant-scoped) — but we don't cache long-term in v1 since
- * `sys_team_member` rows mutate freely; we just memoise within a single
- * evaluation pass.
- */
 type Cache = {
-  descendants?: Map<string, string[]>;
   expandUsers?: Map<string, string[]>;
   expandRole?: Map<string, string[]>;
   manager?: Map<string, string | null>;
@@ -28,11 +21,15 @@ export interface TeamGraphOptions {
 
 /**
  * Default {@link ITeamGraphService} implementation backed by
- * `sys_team` (with `parent_team_id` for hierarchy) and
- * `sys_team_member` plus `sys_member.role` for role expansion.
+ * `sys_team` + `sys_team_member` (better-auth's flat collaboration
+ * grouping) plus `sys_member.role` for tenant role expansion.
+ *
+ * **This service does NOT walk a hierarchy.** Teams here are flat —
+ * the enterprise org chart lives in `sys_department` and is served by
+ * {@link DepartmentGraphService}.
  *
  * All queries elevate to {@link SYSTEM_CTX} since the graph is platform
- * metadata — callers (sharing rule evaluator, approval engine) own their
+ * metadata; callers (sharing rule evaluator, approval engine) own their
  * own enforcement.
  */
 export class TeamGraphService implements ITeamGraphService {
@@ -44,43 +41,9 @@ export class TeamGraphService implements ITeamGraphService {
     this.engine = opts.engine;
     this.organizationId = opts.organizationId ?? null;
     this.cache = opts.cache ?? {};
-    this.cache.descendants ??= new Map();
     this.cache.expandUsers ??= new Map();
     this.cache.expandRole ??= new Map();
     this.cache.manager ??= new Map();
-  }
-
-  async descendants(teamId: string): Promise<string[]> {
-    if (!teamId) return [];
-    const cached = this.cache.descendants!.get(teamId);
-    if (cached) return cached;
-
-    const seen = new Set<string>([teamId]);
-    const queue: string[] = [teamId];
-    while (queue.length) {
-      const parent = queue.shift()!;
-      let children: any[] = [];
-      try {
-        children = await this.engine.find('sys_team', {
-          filter: this.orgScope({ parent_team_id: parent }),
-          fields: ['id'],
-          limit: 1000,
-          context: SYSTEM_CTX,
-        });
-      } catch {
-        children = [];
-      }
-      for (const c of children ?? []) {
-        const cid = String((c as any).id ?? '');
-        if (cid && !seen.has(cid)) {
-          seen.add(cid);
-          queue.push(cid);
-        }
-      }
-    }
-    const out = Array.from(seen);
-    this.cache.descendants!.set(teamId, out);
-    return out;
   }
 
   async expandUsers(teamId: string): Promise<string[]> {
@@ -88,12 +51,10 @@ export class TeamGraphService implements ITeamGraphService {
     const cached = this.cache.expandUsers!.get(teamId);
     if (cached) return cached;
 
-    const teams = await this.descendants(teamId);
-    if (teams.length === 0) return [];
     let rows: any[] = [];
     try {
       rows = await this.engine.find('sys_team_member', {
-        filter: { team_id: { $in: teams } },
+        filter: { team_id: teamId },
         fields: ['user_id'],
         limit: 10000,
         context: SYSTEM_CTX,
@@ -149,39 +110,49 @@ export class TeamGraphService implements ITeamGraphService {
     this.cache.manager!.set(userId, mgr);
     return mgr;
   }
+}
 
-  /**
-   * Expand an approver / recipient descriptor of the form
-   * `{type, value}` into a flat list of user IDs by walking the graph.
-   * Unknown types echo `${type}:${value}` so existing storage formats
-   * stay compatible.
-   */
-  async expandPrincipal(
-    input: { type: string; value: string; record?: any },
-  ): Promise<string[]> {
-    const t = input.type;
-    const v = String(input.value ?? '');
-    if (!v) return [];
-    if (t === 'user') return [v];
-    if (t === 'team') return this.expandUsers(v);
-    if (t === 'role') return this.expandRoleUsers(v);
-    if (t === 'field' && input.record) {
-      const fv = (input.record as any)[v];
-      return fv ? [String(fv)] : [];
-    }
-    if (t === 'manager' && input.record) {
-      const subject = (input.record as any)[v] ?? (input.record as any).owner_id;
-      if (!subject) return [];
-      const mgr = await this.managerOf(String(subject));
-      return mgr ? [mgr] : [];
-    }
-    // queue / unknown — fall back to raw prefix string so existing
-    // string-match approver flows keep working.
+/**
+ * Convenience helper used by the sharing-rule evaluator + approval
+ * engine: expand an approver / recipient descriptor of the form
+ * `{type, value}` into a flat list of user IDs by routing to the
+ * appropriate graph service.
+ *
+ * `team` → flat team members (this service).
+ * `department` → recursive department members (delegated; requires a
+ *   {@link IDepartmentGraphService} instance passed in `opts.dept`).
+ * `role` → tenant role members.
+ * `manager` → submitter's manager via `record[value] ?? record.owner_id`.
+ * `field` → literal user id stored in `record[value]`.
+ * `user` → literal value.
+ * Anything else echoes `type:value` for back-compat with legacy
+ * substring-match approver flows.
+ */
+export async function expandPrincipal(
+  input: { type: string; value: string; record?: any },
+  ctx: { team: TeamGraphService; dept?: { expandUsers(id: string): Promise<string[]> }; organizationId?: string | null },
+): Promise<string[]> {
+  const t = input.type;
+  const v = String(input.value ?? '');
+  if (!v) return [];
+  if (t === 'user') return [v];
+  if (t === 'team') return ctx.team.expandUsers(v);
+  if (t === 'department' || t === 'dept') {
+    if (ctx.dept) return ctx.dept.expandUsers(v);
     return [`${t}:${v}`];
   }
-
-  private orgScope(filter: Record<string, unknown>): Record<string, unknown> {
-    if (this.organizationId) return { ...filter, organization_id: this.organizationId };
-    return filter;
+  if (t === 'role') return ctx.team.expandRoleUsers(v, ctx.organizationId ?? undefined);
+  if (t === 'field' && input.record) {
+    const fv = (input.record as any)[v];
+    return fv ? [String(fv)] : [];
   }
+  if (t === 'manager' && input.record) {
+    const subject = (input.record as any)[v] ?? (input.record as any).owner_id;
+    if (!subject) return [];
+    const mgr = await ctx.team.managerOf(String(subject), ctx.organizationId ?? undefined);
+    return mgr ? [mgr] : [];
+  }
+  // queue / unknown — fall back to raw prefix string so existing
+  // string-match approver flows keep working.
+  return [`${t}:${v}`];
 }

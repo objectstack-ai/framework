@@ -97,17 +97,9 @@ function rowFromAction(row: any): ApprovalActionRow {
   };
 }
 
-/** Approver resolution — MVP: literal values for user/field, prefixed strings for role/manager/queue. */
-function resolveApprovers(step: any, record?: any): string[] {
-  const out: string[] = [];
-  for (const a of (step.approvers ?? [])) {
-    if (!a) continue;
-    if (a.type === 'user') out.push(String(a.value));
-    else if (a.type === 'field' && record) out.push(String((record as any)[a.value] ?? ''));
-    else out.push(`${a.type}:${a.value}`);
-  }
-  return out.filter(Boolean);
-}
+// Note: legacy synchronous `resolveApprovers` removed in M10.17.1 — replaced
+// by the async `expandApprovers` member which routes through the team/dept
+// graph tables (with prefixed-literal fallback for back-compat).
 
 export interface ApprovalServiceOptions {
   engine: ApprovalEngine;
@@ -147,11 +139,20 @@ export class ApprovalService implements IApprovalService {
   }
 
   /**
-   * Expand the approvers on a step into user IDs by walking the team
-   * graph for `team:` / `role:` / `manager:` approver types. Falls back
-   * to the synchronous {@link resolveApprovers} (literal/prefixed) when
-   * graph lookups produce nothing — so existing test fixtures and
-   * approver flows that rely on prefixed strings keep working.
+   * Expand the approvers on a step into user IDs by querying the graph
+   * tables for `team:` / `department:` / `role:` / `manager:` approver
+   * types. Falls back to a prefixed literal (`type:value`) when graph
+   * lookups produce nothing — so existing test fixtures and approver
+   * flows that rely on substring matching keep working.
+   *
+   * **Graph semantics (M10.17.1):**
+   *   - `team`       → flat members of `sys_team` (better-auth; no BFS)
+   *   - `department` → recursive BFS of `sys_department.parent_department_id`
+   *                    → members of every descendant via `sys_department_member`
+   *   - `role`       → users with `sys_member.role = value` in tenant
+   *   - `manager`    → `sys_user.manager_id` of `record[value] ?? record.owner_id`
+   *   - `field`      → literal user id stored in `record[value]`
+   *   - `user`       → literal value
    */
   private async expandApprovers(step: any, record?: any, organizationId?: string | null): Promise<string[]> {
     if (!step || !Array.isArray(step.approvers)) return [];
@@ -162,7 +163,10 @@ export class ApprovalService implements IApprovalService {
       if (a.type === 'field' && record) { out.push(String((record as any)[a.value] ?? '')); continue; }
       try {
         if (a.type === 'team') {
-          const users = await this.expandTeamUsers(String(a.value), organizationId);
+          const users = await this.expandTeamUsers(String(a.value));
+          if (users.length) { for (const u of users) out.push(u); continue; }
+        } else if (a.type === 'department' || a.type === 'dept') {
+          const users = await this.expandDepartmentUsers(String(a.value), organizationId);
           if (users.length) { for (const u of users) out.push(u); continue; }
         } else if (a.type === 'role') {
           const users = await this.expandRoleUsers(String(a.value), organizationId);
@@ -180,17 +184,47 @@ export class ApprovalService implements IApprovalService {
     return out.filter(Boolean);
   }
 
-  private async expandTeamUsers(teamId: string, organizationId?: string | null): Promise<string[]> {
+  /** Flat team — `sys_team` is better-auth's collaboration grouping (no hierarchy). */
+  private async expandTeamUsers(teamId: string): Promise<string[]> {
     if (!teamId) return [];
-    const seen = new Set<string>([teamId]);
-    const queue: string[] = [teamId];
+    let rows: any[] = [];
+    try {
+      rows = await this.engine.find('sys_team_member', {
+        filter: { team_id: teamId },
+        fields: ['user_id'],
+        limit: 10000,
+        context: SYSTEM_CTX,
+      } as any);
+    } catch { rows = []; }
+    return Array.from(new Set((rows ?? []).map((r: any) => String(r.user_id ?? '')).filter(Boolean)));
+  }
+
+  /** Recursive department — walks `sys_department.parent_department_id`. */
+  private async expandDepartmentUsers(departmentId: string, organizationId?: string | null): Promise<string[]> {
+    if (!departmentId) return [];
+    // Seed sanity check: skip if dept doesn't exist or is inactive within tenant.
+    try {
+      const seed = await this.engine.find('sys_department', {
+        filter: organizationId
+          ? { id: departmentId, organization_id: organizationId }
+          : { id: departmentId },
+        fields: ['id', 'active'],
+        limit: 1,
+        context: SYSTEM_CTX,
+      } as any);
+      const seedRow: any = Array.isArray(seed) ? seed[0] : null;
+      if (!seedRow || seedRow.active === false) return [];
+    } catch { return []; }
+
+    const seen = new Set<string>([departmentId]);
+    const queue: string[] = [departmentId];
     while (queue.length) {
       const parent = queue.shift()!;
       let kids: any[] = [];
       try {
-        const filter: any = { parent_team_id: parent };
+        const filter: any = { parent_department_id: parent, active: { $ne: false } };
         if (organizationId) filter.organization_id = organizationId;
-        kids = await this.engine.find('sys_team', { filter, fields: ['id'], limit: 1000, context: SYSTEM_CTX } as any);
+        kids = await this.engine.find('sys_department', { filter, fields: ['id'], limit: 1000, context: SYSTEM_CTX } as any);
       } catch { kids = []; }
       for (const k of kids ?? []) {
         const kid = String((k as any).id ?? '');
@@ -199,8 +233,8 @@ export class ApprovalService implements IApprovalService {
     }
     let rows: any[] = [];
     try {
-      rows = await this.engine.find('sys_team_member', {
-        filter: { team_id: { $in: Array.from(seen) } },
+      rows = await this.engine.find('sys_department_member', {
+        filter: { department_id: { $in: Array.from(seen) } },
         fields: ['user_id'],
         limit: 10000,
         context: SYSTEM_CTX,

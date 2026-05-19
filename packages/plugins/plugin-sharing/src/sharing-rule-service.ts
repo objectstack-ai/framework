@@ -12,6 +12,7 @@ import type {
 import type { SharingEngine } from './sharing-service.js';
 import type { SharingService } from './sharing-service.js';
 import { TeamGraphService } from './team-graph.js';
+import { DepartmentGraphService } from './department-graph.js';
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
 
@@ -250,13 +251,21 @@ export class SharingRuleService implements ISharingRuleService {
   }
 
   private async expandRecipient(rule: SharingRuleRow): Promise<string[]> {
-    const graph = new TeamGraphService({
+    const team = new TeamGraphService({
       engine: this.engine,
       organizationId: rule.organization_id ?? null,
     });
     if (rule.recipient_type === 'user') return [rule.recipient_id];
-    if (rule.recipient_type === 'team') return graph.expandUsers(rule.recipient_id);
-    if (rule.recipient_type === 'role') return graph.expandRoleUsers(rule.recipient_id, rule.organization_id ?? undefined);
+    if (rule.recipient_type === 'team') return team.expandUsers(rule.recipient_id);
+    if (rule.recipient_type === 'department') {
+      const dept = new DepartmentGraphService({
+        engine: this.engine,
+        organizationId: rule.organization_id ?? null,
+        teamGraph: team,
+      });
+      return dept.expandUsers(rule.recipient_id);
+    }
+    if (rule.recipient_type === 'role') return team.expandRoleUsers(rule.recipient_id, rule.organization_id ?? undefined);
     // queue — v1 stores literal; treat as no-op until queue impl lands.
     return [];
   }

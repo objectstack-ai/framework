@@ -3,7 +3,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SharingService } from './sharing-service.js';
 import { SharingRuleService } from './sharing-rule-service.js';
-import { TeamGraphService } from './team-graph.js';
+import { TeamGraphService, expandPrincipal } from './team-graph.js';
+import { DepartmentGraphService } from './department-graph.js';
 
 interface Row { [k: string]: any }
 
@@ -19,6 +20,10 @@ function makeEngine() {
       const rv = row[k];
       if (v != null && typeof v === 'object' && '$in' in (v as any)) {
         if (!(v as any).$in.includes(rv)) return false;
+        continue;
+      }
+      if (v != null && typeof v === 'object' && '$ne' in (v as any)) {
+        if (rv === (v as any).$ne) return false;
         continue;
       }
       if (v != null && typeof v === 'object' && '$gte' in (v as any)) {
@@ -52,23 +57,20 @@ function makeEngine() {
   };
 }
 
-describe('TeamGraphService', () => {
+describe('TeamGraphService (flat — better-auth sys_team)', () => {
   let engine: ReturnType<typeof makeEngine>;
   beforeEach(() => {
     engine = makeEngine();
-    // Hierarchy: root → eu → eu_sales; root → us
+    // FLAT teams — no parent_team_id; cross-org leak guard
     engine._tables.sys_team = [
-      { id: 'root', name: 'root', parent_team_id: null, organization_id: 'org1' },
-      { id: 'eu', name: 'eu', parent_team_id: 'root', organization_id: 'org1' },
-      { id: 'eu_sales', name: 'eu_sales', parent_team_id: 'eu', organization_id: 'org1' },
-      { id: 'us', name: 'us', parent_team_id: 'root', organization_id: 'org1' },
-      // foreign org sibling — must NOT leak
-      { id: 'foreign', name: 'foreign', parent_team_id: 'root', organization_id: 'org2' },
+      { id: 'eu_sales', name: 'eu_sales', organization_id: 'org1' },
+      { id: 'us_sales', name: 'us_sales', organization_id: 'org1' },
+      { id: 'foreign',  name: 'foreign',  organization_id: 'org2' },
     ];
     engine._tables.sys_team_member = [
       { id: 'tm1', team_id: 'eu_sales', user_id: 'alice' },
-      { id: 'tm2', team_id: 'eu', user_id: 'bob' },
-      { id: 'tm3', team_id: 'us', user_id: 'carol' },
+      { id: 'tm2', team_id: 'eu_sales', user_id: 'bob' },
+      { id: 'tm3', team_id: 'us_sales', user_id: 'carol' },
     ];
     engine._tables.sys_member = [
       { id: 'm1', organization_id: 'org1', user_id: 'alice', role: 'sales_manager' },
@@ -82,21 +84,10 @@ describe('TeamGraphService', () => {
     ];
   });
 
-  it('descendants walks the hierarchy', async () => {
+  it('expandUsers returns flat members (no hierarchy walk)', async () => {
     const g = new TeamGraphService({ engine: engine as any, organizationId: 'org1' });
-    const d = await g.descendants('root');
-    expect(d.sort()).toEqual(['eu', 'eu_sales', 'root', 'us']);
-  });
-
-  it('expandUsers returns members of all descendants', async () => {
-    const g = new TeamGraphService({ engine: engine as any, organizationId: 'org1' });
-    const users = await g.expandUsers('root');
-    expect(users.sort()).toEqual(['alice', 'bob', 'carol']);
-  });
-
-  it('expandUsers of leaf returns just leaf members', async () => {
-    const g = new TeamGraphService({ engine: engine as any, organizationId: 'org1' });
-    expect(await g.expandUsers('eu_sales')).toEqual(['alice']);
+    expect((await g.expandUsers('eu_sales')).sort()).toEqual(['alice', 'bob']);
+    expect(await g.expandUsers('us_sales')).toEqual(['carol']);
   });
 
   it('expandRoleUsers scopes by organization', async () => {
@@ -110,13 +101,73 @@ describe('TeamGraphService', () => {
     expect(await g.managerOf('carol')).toBeNull();
   });
 
-  it('expandPrincipal dispatches correctly', async () => {
-    const g = new TeamGraphService({ engine: engine as any, organizationId: 'org1' });
-    expect(await g.expandPrincipal({ type: 'user', value: 'x' })).toEqual(['x']);
-    expect((await g.expandPrincipal({ type: 'team', value: 'eu_sales' })).sort()).toEqual(['alice']);
-    expect((await g.expandPrincipal({ type: 'role', value: 'sales_manager' })).sort()).toEqual(['alice']);
-    expect(await g.expandPrincipal({ type: 'manager', value: 'owner_id', record: { owner_id: 'alice' } })).toEqual(['bob']);
-    expect(await g.expandPrincipal({ type: 'queue', value: 'q1' })).toEqual(['queue:q1']);
+  it('expandPrincipal helper dispatches correctly', async () => {
+    const t = new TeamGraphService({ engine: engine as any, organizationId: 'org1' });
+    expect(await expandPrincipal({ type: 'user', value: 'x' }, { team: t, organizationId: 'org1' })).toEqual(['x']);
+    expect((await expandPrincipal({ type: 'team', value: 'eu_sales' }, { team: t, organizationId: 'org1' })).sort()).toEqual(['alice', 'bob']);
+    expect((await expandPrincipal({ type: 'role', value: 'sales_manager' }, { team: t, organizationId: 'org1' })).sort()).toEqual(['alice']);
+    expect(await expandPrincipal({ type: 'manager', value: 'owner_id', record: { owner_id: 'alice' } }, { team: t, organizationId: 'org1' })).toEqual(['bob']);
+    expect(await expandPrincipal({ type: 'queue', value: 'q1' }, { team: t, organizationId: 'org1' })).toEqual(['queue:q1']);
+    // department without a dept graph instance falls back to literal
+    expect(await expandPrincipal({ type: 'department', value: 'emea' }, { team: t, organizationId: 'org1' })).toEqual(['department:emea']);
+  });
+});
+
+describe('DepartmentGraphService (recursive sys_department)', () => {
+  let engine: ReturnType<typeof makeEngine>;
+  beforeEach(() => {
+    engine = makeEngine();
+    // Hierarchy: emea → emea_sales → emea_sales_uk ; emea_marketing
+    engine._tables.sys_department = [
+      { id: 'emea',           name: 'EMEA',           parent_department_id: null,           organization_id: 'org1', active: true },
+      { id: 'emea_sales',     name: 'EMEA Sales',     parent_department_id: 'emea',         organization_id: 'org1', active: true },
+      { id: 'emea_sales_uk',  name: 'EMEA Sales UK',  parent_department_id: 'emea_sales',   organization_id: 'org1', active: true },
+      { id: 'emea_marketing', name: 'EMEA Marketing', parent_department_id: 'emea',         organization_id: 'org1', active: true },
+      // Inactive subtree — must not contribute
+      { id: 'emea_legacy',    name: 'EMEA Legacy',    parent_department_id: 'emea',         organization_id: 'org1', active: false },
+      // Foreign tenant — must not leak
+      { id: 'foreign',        name: 'Foreign',        parent_department_id: 'emea',         organization_id: 'org2', active: true },
+    ];
+    engine._tables.sys_department_member = [
+      { id: 'dm1', department_id: 'emea_sales_uk',  user_id: 'alice' },
+      { id: 'dm2', department_id: 'emea_sales',     user_id: 'bob' },
+      { id: 'dm3', department_id: 'emea_marketing', user_id: 'carol' },
+      { id: 'dm4', department_id: 'emea_legacy',    user_id: 'ghost' },
+    ];
+  });
+
+  it('descendants walks the active hierarchy', async () => {
+    const d = new DepartmentGraphService({ engine: engine as any, organizationId: 'org1' });
+    expect((await d.descendants('emea')).sort()).toEqual(['emea', 'emea_marketing', 'emea_sales', 'emea_sales_uk']);
+  });
+
+  it('expandUsers returns members of all descendant departments', async () => {
+    const d = new DepartmentGraphService({ engine: engine as any, organizationId: 'org1' });
+    expect((await d.expandUsers('emea')).sort()).toEqual(['alice', 'bob', 'carol']);
+  });
+
+  it('expandUsers of leaf returns just leaf members', async () => {
+    const d = new DepartmentGraphService({ engine: engine as any, organizationId: 'org1' });
+    expect(await d.expandUsers('emea_sales_uk')).toEqual(['alice']);
+  });
+
+  it('inactive subtree contributes no members', async () => {
+    const d = new DepartmentGraphService({ engine: engine as any, organizationId: 'org1' });
+    expect(await d.expandUsers('emea_legacy')).toEqual([]);
+  });
+
+  it('cross-tenant lookup is blocked by org scope', async () => {
+    const d = new DepartmentGraphService({ engine: engine as any, organizationId: 'org1' });
+    // 'foreign' is in org2 — descendants from emea should not include it
+    const desc = await d.descendants('emea');
+    expect(desc).not.toContain('foreign');
+  });
+
+  it('headOf returns manager_user_id (when set)', async () => {
+    engine._tables.sys_department[1].manager_user_id = 'alice';
+    const d = new DepartmentGraphService({ engine: engine as any, organizationId: 'org1' });
+    expect(await d.headOf('emea_sales')).toEqual('alice');
+    expect(await d.headOf('emea_marketing')).toBeNull();
   });
 });
 
@@ -135,11 +186,20 @@ describe('SharingRuleService', () => {
       { id: 'opp3', name: 'Small', amount: 5000, owner_id: 'someone' },
     ];
     engine._tables.sys_team = [
-      { id: 'sales', name: 'sales', parent_team_id: null, organization_id: 'org1' },
+      { id: 'sales', name: 'sales', organization_id: 'org1' },
     ];
     engine._tables.sys_team_member = [
       { id: 'tm1', team_id: 'sales', user_id: 'alice' },
       { id: 'tm2', team_id: 'sales', user_id: 'bob' },
+    ];
+    // Department hierarchy: emea_sales (Alice) → emea_sales_uk (Bob)
+    engine._tables.sys_department = [
+      { id: 'emea_sales',    name: 'EMEA Sales',    parent_department_id: null,         organization_id: 'org1', active: true },
+      { id: 'emea_sales_uk', name: 'EMEA Sales UK', parent_department_id: 'emea_sales', organization_id: 'org1', active: true },
+    ];
+    engine._tables.sys_department_member = [
+      { id: 'dm1', department_id: 'emea_sales',    user_id: 'alice' },
+      { id: 'dm2', department_id: 'emea_sales_uk', user_id: 'bob' },
     ];
     sharing = new SharingService({ engine: engine as any });
     rules = new SharingRuleService({ engine: engine as any, sharing });
@@ -270,5 +330,19 @@ describe('SharingRuleService', () => {
     expect(opps).toHaveLength(2);
     const active = await rules.listRules({ object: 'opportunity', activeOnly: true }, SYS);
     expect(active.map(r => r.name)).toEqual(['a']);
+  });
+
+  it('recipientType=department expands via the dept graph (BFS)', async () => {
+    const r = await rules.defineRule({
+      name: 'dept_rule', label: 'Dept Rule', object: 'opportunity',
+      criteria: { amount: { $gte: 100000 } },
+      recipientType: 'department', recipientId: 'emea_sales', accessLevel: 'read',
+    }, SYS);
+    const res = await rules.evaluateRule(r.id, SYS);
+    expect(res.matchedRecords).toBe(2);          // opp1, opp2
+    expect(res.expandedUsers).toBe(2);            // alice (emea_sales) + bob (emea_sales_uk descendant)
+    expect(res.grantsCreated).toBe(4);
+    expect(engine._tables.sys_record_share).toHaveLength(4);
+    expect(new Set(engine._tables.sys_record_share.map(s => s.recipient_id))).toEqual(new Set(['alice', 'bob']));
   });
 });

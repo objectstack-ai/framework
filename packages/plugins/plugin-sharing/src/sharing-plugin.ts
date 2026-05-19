@@ -3,6 +3,7 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { EngineMiddleware, OperationContext } from '@objectstack/objectql';
 import { SysRecordShare, SysSharingRule } from '@objectstack/platform-objects/security';
+import { SysDepartment, SysDepartmentMember } from '@objectstack/platform-objects/identity';
 import { SharingService, type SharingEngine } from './sharing-service.js';
 import { SharingRuleService } from './sharing-rule-service.js';
 import { bindRuleHooks, unbindAllRuleHooks } from './rule-hooks.js';
@@ -72,7 +73,7 @@ export class SharingServicePlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysRecordShare, SysSharingRule],
+      objects: [SysRecordShare, SysSharingRule, SysDepartment, SysDepartmentMember],
     });
     ctx.logger.info('SharingServicePlugin: schema registered');
   }

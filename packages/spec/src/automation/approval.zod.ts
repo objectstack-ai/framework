@@ -10,8 +10,10 @@ import { ExpressionInputSchema } from '../shared/expression.zod';
 import { lazySchema } from '../shared/lazy-schema';
 export const ApproverType = z.enum([
   'user',           // Specific user(s)
-  'role',           // Users with specific role
-  'manager',        // Submitter's manager
+  'role',           // Users with specific role (sys_member.role)
+  'team',           // Members of a flat collaboration team (sys_team)
+  'department',     // Members of a department + all descendant departments (sys_department)
+  'manager',        // Submitter's manager (sys_user.manager_id)
   'field',          // User ID defined in a record field
   'queue'           // Data ownership queue
 ]);

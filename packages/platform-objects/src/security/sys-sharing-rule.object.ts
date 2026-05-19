@@ -83,12 +83,12 @@ export const SysSharingRule = ObjectSchema.create({
     }),
 
     recipient_type: Field.select(
-      ['user', 'team', 'role', 'queue'],
+      ['user', 'team', 'department', 'role', 'queue'],
       {
         label: 'Recipient Type',
         required: true,
-        defaultValue: 'team',
-        description: 'Kind of principal that receives access — expanded to user grants at evaluation time',
+        defaultValue: 'department',
+        description: 'Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth).',
         group: 'Recipient',
       },
     ),
@@ -97,7 +97,7 @@ export const SysSharingRule = ObjectSchema.create({
       label: 'Recipient',
       required: true,
       maxLength: 200,
-      description: 'team id / role name / queue name / user id depending on recipient_type',
+      description: 'department id / team id / role name / queue name / user id depending on recipient_type',
       group: 'Recipient',
     }),
 
