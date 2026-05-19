@@ -48,21 +48,49 @@ export const SETUP_APP: App = {
       ],
     },
     {
-      id: 'group_administration',
+      id: 'group_people_org',
       type: 'group',
-      label: 'Administration',
+      label: 'People & Organization',
+      icon: 'users',
+      children: [
+        // HR-shaped grouping: who exists, where they sit in the org chart,
+        // and which tenants/teams they belong to. `sys_department` is the
+        // platform-owned org skeleton (M10.17.1); `sys_team` is better-auth's
+        // flat collaboration grouping.
+        { id: 'nav_users', type: 'object', label: 'Users', objectName: 'sys_user', icon: 'user' },
+        { id: 'nav_departments', type: 'object', label: 'Departments', objectName: 'sys_department', icon: 'building', requiresObject: 'sys_department' },
+        { id: 'nav_department_members', type: 'object', label: 'Department Members', objectName: 'sys_department_member', icon: 'user-cog', requiresObject: 'sys_department_member' },
+        { id: 'nav_teams', type: 'object', label: 'Teams', objectName: 'sys_team', icon: 'users-round' },
+        { id: 'nav_team_members', type: 'object', label: 'Team Members', objectName: 'sys_team_member', icon: 'users' },
+        { id: 'nav_organizations', type: 'object', label: 'Organizations', objectName: 'sys_organization', icon: 'building-2' },
+        { id: 'nav_members', type: 'object', label: 'Org Members', objectName: 'sys_member', icon: 'user-check' },
+        { id: 'nav_invitations', type: 'object', label: 'Invitations', objectName: 'sys_invitation', icon: 'mail' },
+      ],
+    },
+    {
+      id: 'group_access_control',
+      type: 'group',
+      label: 'Access Control',
       icon: 'shield',
       children: [
-        { id: 'nav_users', type: 'object', label: 'Users', objectName: 'sys_user', icon: 'users' },
-        { id: 'nav_organizations', type: 'object', label: 'Organizations', objectName: 'sys_organization', icon: 'building-2' },
-        { id: 'nav_teams', type: 'object', label: 'Teams', objectName: 'sys_team', icon: 'users-round' },
-        { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'sys_api_key', icon: 'key' },
         { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
         { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
         { id: 'nav_user_permission_sets', type: 'object', label: 'User Permission Sets', objectName: 'sys_user_permission_set', icon: 'user-check' },
         { id: 'nav_role_permission_sets', type: 'object', label: 'Role Permission Sets', objectName: 'sys_role_permission_set', icon: 'shield-plus' },
-        { id: 'nav_oauth_apps', type: 'object', label: 'OAuth Apps', objectName: 'sys_oauth_application', icon: 'app-window' },
-        { id: 'nav_jwks', type: 'object', label: 'Signing Keys', objectName: 'sys_jwks', icon: 'key-round' },
+        { id: 'nav_sharing_rules', type: 'object', label: 'Sharing Rules', objectName: 'sys_sharing_rule', icon: 'share-2', requiresObject: 'sys_sharing_rule' },
+        { id: 'nav_record_shares', type: 'object', label: 'Record Shares', objectName: 'sys_record_share', icon: 'link', requiresObject: 'sys_record_share' },
+        { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'sys_api_key', icon: 'key' },
+      ],
+    },
+    {
+      id: 'group_approvals',
+      type: 'group',
+      label: 'Approvals',
+      icon: 'check-circle',
+      children: [
+        { id: 'nav_approval_processes', type: 'object', label: 'Processes', objectName: 'sys_approval_process', icon: 'workflow', requiresObject: 'sys_approval_process' },
+        { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
+        { id: 'nav_approval_actions', type: 'object', label: 'Action History', objectName: 'sys_approval_action', icon: 'history', requiresObject: 'sys_approval_action' },
       ],
     },
     {
@@ -84,27 +112,41 @@ export const SETUP_APP: App = {
       ],
     },
     {
-      id: 'group_approvals',
+      id: 'group_diagnostics',
       type: 'group',
-      label: 'Approvals',
-      icon: 'check-circle',
+      label: 'Diagnostics',
+      icon: 'stethoscope',
       children: [
-        { id: 'nav_approval_processes', type: 'object', label: 'Processes', objectName: 'sys_approval_process', icon: 'workflow', requiresObject: 'sys_approval_process' },
-        { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
-        { id: 'nav_approval_actions', type: 'object', label: 'Action History', objectName: 'sys_approval_action', icon: 'history', requiresObject: 'sys_approval_action' },
-      ],
-    },
-    {
-      id: 'group_system',
-      type: 'group',
-      label: 'System',
-      icon: 'settings',
-      children: [
+        // Day-to-day observability surfaces.
         { id: 'nav_sessions', type: 'object', label: 'Sessions', objectName: 'sys_session', icon: 'monitor' },
         { id: 'nav_audit_logs', type: 'object', label: 'Audit Logs', objectName: 'sys_audit_log', icon: 'scroll-text' },
         { id: 'nav_activity', type: 'object', label: 'Activity', objectName: 'sys_activity', icon: 'activity' },
         { id: 'nav_notifications', type: 'object', label: 'Notifications', objectName: 'sys_notification', icon: 'bell', requiresObject: 'sys_notification' },
         { id: 'nav_comments', type: 'object', label: 'Comments', objectName: 'sys_comment', icon: 'message-square' },
+      ],
+    },
+    {
+      id: 'group_advanced',
+      type: 'group',
+      label: 'Advanced',
+      icon: 'wrench',
+      expanded: false,
+      children: [
+        // Better-auth internals — rarely useful for humans, but exposed
+        // so support engineers can inspect token state without dropping
+        // to SQL. The objectui sidebar collapses this group by default;
+        // edits should hit the read-only banner since these are all
+        // `managedBy: 'better-auth'`.
+        { id: 'nav_oauth_apps', type: 'object', label: 'OAuth Apps', objectName: 'sys_oauth_application', icon: 'app-window' },
+        { id: 'nav_oauth_access_tokens', type: 'object', label: 'OAuth Access Tokens', objectName: 'sys_oauth_access_token', icon: 'key-square' },
+        { id: 'nav_oauth_refresh_tokens', type: 'object', label: 'OAuth Refresh Tokens', objectName: 'sys_oauth_refresh_token', icon: 'refresh-cw' },
+        { id: 'nav_oauth_consents', type: 'object', label: 'OAuth Consents', objectName: 'sys_oauth_consent', icon: 'check-square' },
+        { id: 'nav_jwks', type: 'object', label: 'Signing Keys (JWKS)', objectName: 'sys_jwks', icon: 'key-round' },
+        { id: 'nav_verifications', type: 'object', label: 'Verifications', objectName: 'sys_verification', icon: 'mail-check' },
+        { id: 'nav_two_factor', type: 'object', label: 'Two-Factor', objectName: 'sys_two_factor', icon: 'smartphone' },
+        { id: 'nav_device_codes', type: 'object', label: 'Device Codes', objectName: 'sys_device_code', icon: 'qr-code' },
+        { id: 'nav_accounts', type: 'object', label: 'Linked Accounts', objectName: 'sys_account', icon: 'link-2' },
+        { id: 'nav_user_preferences', type: 'object', label: 'User Preferences', objectName: 'sys_user_preference', icon: 'sliders' },
       ],
     },
   ],

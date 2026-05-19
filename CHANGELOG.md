@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — M10.28 Setup app reorganization ⭐
+- **`packages/platform-objects/src/apps/setup.app.ts`** — sidebar restructured from 5 ad-hoc groups into 7 semantic groups that mirror how admins actually think about identity & access:
+  - **Overview** — unchanged (`system_overview` / `security_overview` dashboards).
+  - **People & Organization** *(new)* — Users · Departments · Department Members · Teams · Team Members · Organizations · Org Members · Invitations. Co-locates the M10.17.1 `sys_department` + `sys_department_member` with better-auth's flat `sys_team` and `sys_member`, so the org-chart workflow (add user → assign to department → optionally join a team) is one continuous click path.
+  - **Access Control** *(renamed from "Administration")* — Roles · Permission Sets · User Permission Sets · Role Permission Sets · Sharing Rules · Record Shares · API Keys. Brings M10.17 `sys_sharing_rule` + `sys_record_share` out of the "All Metadata" abyss.
+  - **Approvals** — unchanged (M11.C15 surface).
+  - **Platform** — control-plane metadata (`sys_app` / `sys_package` / `sys_package_installation` / `sys_metadata`), unchanged.
+  - **Diagnostics** *(renamed from "System")* — Sessions · Audit Logs · Activity · Notifications · Comments. Operational surfaces grouped together.
+  - **Advanced** *(new, collapsed by default via `expanded: false`)* — OAuth Apps · OAuth Access Tokens · OAuth Refresh Tokens · OAuth Consents · Signing Keys (JWKS) · Verifications · Two-Factor · Device Codes · Linked Accounts · User Preferences. Moves 10 better-auth internals out of the daily admin sightline; they're still one click away for support engineers but no longer noise.
+- **Rationale** — 17 of 20 identity tables are `managedBy: 'better-auth'`; the previous "Administration" dump mixed HR-shaped operations (Users / Teams) with debugging-grade internals (JWKS / OAuth tokens). Splitting along the platform-vs-managed boundary makes the most common workflows (hiring, role assignment, sharing-rule authoring) discoverable, and de-emphasizes tables that should rarely need human editing.
+
 ### Added — M10.17.1 dedicated org-skeleton (`sys_department`) ⭐
 - **Architectural split** — better-auth's `sys_team` is now used *only* for flat collaboration groupings (matching the upstream contract). The enterprise org chart moves to a dedicated **`sys_department`** + **`sys_department_member`** pair (`packages/platform-objects/src/identity/`). This removes the M10.17 overload where `sys_team.parent_team_id` was doing double duty and risks colliding with future better-auth schema changes.
 - **`sys_department`** — recursive (`parent_department_id` self-lookup), tenant-scoped (`organization_id`), with `kind` enum (`company | division | department | team | office | cost_center`), `manager_user_id` for department head, `active` flag, effective-dated (`effective_from` / `effective_to`), and `external_ref` for HRIS sync (Workday / SAP HR / 北森).
