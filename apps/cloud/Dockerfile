@@ -63,6 +63,7 @@ COPY examples ./examples
 COPY apps/cloud ./apps/cloud
 COPY apps/studio ./apps/studio
 COPY apps/account ./apps/account
+COPY apps/console ./apps/console
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --prefer-offline --prod=false
