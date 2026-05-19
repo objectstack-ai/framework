@@ -531,6 +531,113 @@ export class HonoServerPlugin implements Plugin {
             }
         });
 
+        // Effective permissions for the current user — single aggregation
+        // endpoint that resolves session → roles → permission sets → merged
+        // field/object permissions. Frontend Field-Level Security (FLS)
+        // consumes this to gate form fields / list columns without having
+        // to replicate the server's role+permission-set resolution and
+        // most-permissive merge logic.
+        //
+        // Response shape (designed to mirror @object-ui/permissions
+        // expectations — see `PermissionSet` in @objectstack/spec):
+        //   {
+        //     userId, tenantId, roles, permissionSets,
+        //     objects: Record<objectName, { allowCreate, allowRead, ... }>,
+        //     fields:  Record<"object.field", { readable, editable }>,
+        //   }
+        //
+        // Returns `{authenticated:false}` (200) when no session is
+        // present, so the frontend can distinguish anon from error.
+        rawApp.get(`${prefix}/auth/me/permissions`, async (c: any) => {
+            const execCtx = await resolveCtx(c);
+            if (!execCtx?.userId) {
+                return c.json({ authenticated: false });
+            }
+            try {
+                const metadata: any = ctx.getService('metadata');
+                const evaluator: any = ctx.getService('security.permissions');
+                const bootstrap: any[] = (() => {
+                    try { return ctx.getService<any[]>('security.bootstrapPermissionSets') ?? []; }
+                    catch { return []; }
+                })();
+                const fallbackName: string | null = (() => {
+                    try { return ctx.getService<string | null>('security.fallbackPermissionSet') ?? 'member_default'; }
+                    catch { return 'member_default'; }
+                })();
+                if (!evaluator || !metadata) {
+                    // Auth resolved but security plugin isn't wired — emit
+                    // an empty-but-authenticated body so the frontend can
+                    // fail-open with full access (matches server behaviour
+                    // when SecurityPlugin isn't registered).
+                    return c.json({
+                        authenticated: true,
+                        userId: execCtx.userId,
+                        tenantId: execCtx.tenantId ?? null,
+                        roles: execCtx.roles ?? [],
+                        permissionSets: execCtx.permissions ?? [],
+                        objects: {},
+                        fields: {},
+                    });
+                }
+                // Resolve the same way SecurityPlugin middleware does:
+                // role names + explicit permission-set names, with a
+                // fallback to `member_default` when authenticated users
+                // resolve to zero permission sets (matches the
+                // post-resolution fallback in security-plugin.ts).
+                const requested = [
+                    ...(execCtx.roles ?? []),
+                    ...(execCtx.permissions ?? []),
+                ];
+                let resolved: any[] = await evaluator
+                    .resolvePermissionSets(requested, metadata, bootstrap)
+                    .catch(() => []);
+                if (resolved.length === 0 && fallbackName) {
+                    resolved = await evaluator
+                        .resolvePermissionSets([fallbackName], metadata, bootstrap)
+                        .catch(() => []);
+                }
+                // Most-permissive merge of `objects` and `fields` across
+                // all resolved permission sets — same semantics as
+                // PermissionEvaluator.getFieldPermissions but for ALL
+                // objects in a single pass.
+                const objects: Record<string, any> = {};
+                const fields: Record<string, { readable: boolean; editable: boolean }> = {};
+                for (const ps of resolved) {
+                    if (ps?.objects) {
+                        for (const [obj, perm] of Object.entries(ps.objects)) {
+                            const acc = objects[obj] ?? {};
+                            for (const [k, v] of Object.entries(perm as any)) {
+                                if (v === true) acc[k] = true;
+                                else if (acc[k] === undefined) acc[k] = v;
+                            }
+                            objects[obj] = acc;
+                        }
+                    }
+                    if (ps?.fields) {
+                        for (const [key, perm] of Object.entries(ps.fields)) {
+                            const acc = fields[key] ?? { readable: false, editable: false };
+                            const p = perm as any;
+                            if (p.readable) acc.readable = true;
+                            if (p.editable) acc.editable = true;
+                            fields[key] = acc;
+                        }
+                    }
+                }
+                return c.json({
+                    authenticated: true,
+                    userId: execCtx.userId,
+                    tenantId: execCtx.tenantId ?? null,
+                    roles: execCtx.roles ?? [],
+                    permissionSets: resolved.map((p: any) => p?.name).filter(Boolean),
+                    objects,
+                    fields,
+                });
+            } catch (err: any) {
+                ctx.logger.warn('[hono] /auth/me/permissions failed', { err: err?.message });
+                return c.json({ authenticated: true, userId: execCtx.userId, objects: {}, fields: {} });
+            }
+        });
+
         ctx.logger.debug('Registered standard CRUD data endpoints', { prefix });
     }
 

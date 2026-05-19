@@ -114,6 +114,14 @@ export class SecurityPlugin implements Plugin {
     ctx.registerService('security.permissions', this.permissionEvaluator);
     ctx.registerService('security.rls', this.rlsCompiler);
     ctx.registerService('security.fieldMasker', this.fieldMasker);
+    // Bootstrap permission sets (admin_full_access, member_default,
+    // viewer_readonly by default) — exposed as a service so other
+    // plugins (e.g. plugin-hono-server's /me/permissions endpoint)
+    // can pass them as the fallback list to
+    // `PermissionEvaluator.resolvePermissionSets` without re-importing
+    // the platform-objects package directly.
+    ctx.registerService('security.bootstrapPermissionSets', this.bootstrapPermissionSets);
+    ctx.registerService('security.fallbackPermissionSet', this.fallbackPermissionSet);
 
     ctx.getService<{ register(m: any): void }>('manifest').register({
       ...securityPluginManifestHeader,
