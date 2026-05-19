@@ -9,11 +9,13 @@ describe('MongoDBDriver', () => {
   let driver: MongoDBDriver;
 
   beforeAll(async () => {
-    mongod = await MongoMemoryServer.create();
+    mongod = await MongoMemoryServer.create({
+      instance: { launchTimeout: 60_000 },
+    });
     const uri = mongod.getUri();
     driver = new MongoDBDriver({ url: uri, database: 'test_db' });
     await driver.connect();
-  }, 60_000);
+  }, 90_000);
 
   afterAll(async () => {
     if (driver) await driver.disconnect();
