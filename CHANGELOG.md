@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — M10.30c listViews coverage + dashboard cleanup 🎯
+Followup to M10.30b. Closes the remaining listViews gaps on Setup-visible objects and repairs the two Overview dashboards (whose widget filters were never correct).
+
+- **listViews extension** (6 schemas):
+  - `sys_api_key`: My Keys (filtered to `user_id={current_user_id}`) / Active (`revoked=false`) / Revoked / All
+  - `sys_record_share`: Granted to Me / Granted by Me / By Object (grouped) / Manual Grants / Rule Grants / All
+  - `sys_oauth_application`: Active (`disabled=false`) / Disabled / All
+  - `sys_two_factor`: My Enrollment / All
+  - `sys_account`: My Links / By Provider (grouped) / All
+  - `sys_user_preference`: My Preferences / By User (grouped, collapsed) / All
+- **Dashboard fixes** — `apps/dashboards/{system,security}_overview.dashboard.ts`:
+  - **Filter shape corrected** — every widget `filter` was using the list-view shape `{ field, operator, value }` which the analytics layer parses as three separate field equalities (e.g. literally `WHERE field='action' AND operator='equals' AND value='login'`), so every filtered metric silently returned 0. Migrated all widget filters to canonical MongoDB-style `FilterCondition` (e.g. `{ action: 'login' }`, `{ action: { $in: [...] } }`).
+  - **Misleading title removed** — "Failed Login Attempts" → "Login Events". The `sys_audit_log.action` enum doesn't distinguish failed vs successful logins (both are `'login'`); the previous title overstated what the widget showed.
+  - **Broken relative-date filter dropped** — `{ field: 'created_at', operator: 'gte', value: 'NOW() - INTERVAL 7 DAY' }` was a literal string the analytics layer never substituted. The dashboard's bottom date-range bar (`globalFilters`) is the supported way to scope; pie/bar widgets now rely on it.
+  - **Duplicate "Recent X Events" metric panels** (which previously rendered the same total count twice on each dashboard) replaced with real `type: 'table'` widgets that pull rows from `sys_audit_log` via `ObjectDataTable`.
+
 ### Added — M10.30b Setup app audit + listViews batch 🎯
 Followup to M10.30a. Walked every Setup menu in a real tenant; produced verdict matrix; shipped the safe fixes plus structural cleanup.
 

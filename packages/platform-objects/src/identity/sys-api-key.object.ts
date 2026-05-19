@@ -25,6 +25,50 @@ export const SysApiKey = ObjectSchema.create({
   titleFormat: '{name}',
   compactLayout: ['name', 'prefix', 'user_id', 'expires_at', 'revoked'],
 
+  listViews: {
+    mine: {
+      type: 'grid',
+      name: 'mine',
+      label: 'My Keys',
+      data: { provider: 'object', object: 'sys_api_key' },
+      columns: ['name', 'prefix', 'expires_at', 'last_used_at', 'revoked'],
+      filter: [
+        { field: 'user_id', operator: 'equals', value: '{current_user_id}' },
+      ],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    active: {
+      type: 'grid',
+      name: 'active',
+      label: 'Active',
+      data: { provider: 'object', object: 'sys_api_key' },
+      columns: ['name', 'prefix', 'user_id', 'expires_at', 'last_used_at'],
+      filter: [{ field: 'revoked', operator: 'equals', value: false }],
+      sort: [{ field: 'last_used_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    revoked: {
+      type: 'grid',
+      name: 'revoked',
+      label: 'Revoked',
+      data: { provider: 'object', object: 'sys_api_key' },
+      columns: ['name', 'prefix', 'user_id', 'expires_at', 'updated_at'],
+      filter: [{ field: 'revoked', operator: 'equals', value: true }],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    all_keys: {
+      type: 'grid',
+      name: 'all_keys',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_api_key' },
+      columns: ['name', 'prefix', 'user_id', 'expires_at', 'last_used_at', 'revoked'],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+  },
+
   fields: {
     // ── Identity ─────────────────────────────────────────────────
     name: Field.text({

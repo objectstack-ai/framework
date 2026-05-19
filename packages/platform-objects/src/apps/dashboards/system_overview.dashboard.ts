@@ -90,20 +90,21 @@ export const SystemOverviewDashboard = Dashboard.create({
         w: 3,
         h: 2,
       },
-      filter: {
-        field: 'status',
-        operator: 'equals',
-        value: 'installed',
-      },
+      filter: { status: 'installed' },
       aggregate: 'count',
       colorVariant: 'success',
       description: 'Active package installations across projects',
     },
 
-    // ── Audit Actions by Type (last 7 days) ─────────────────────────
+    // ── Audit Actions by Type ───────────────────────────────────────
+    // Note: relative date filters like `NOW() - INTERVAL 7 DAY` are not
+    // currently substituted by the analytics layer (see
+    // service-analytics/strategies/filter-normalizer.ts). The dashboard's
+    // `globalFilters` date-range bar at the bottom is the supported way
+    // to scope this widget.
     {
       id: 'widget_audit_actions',
-      title: 'Audit Actions (7d)',
+      title: 'Audit Actions',
       description: 'Distribution of audit events by action type',
       type: 'pie',
       object: 'sys_audit_log',
@@ -115,11 +116,6 @@ export const SystemOverviewDashboard = Dashboard.create({
       },
       categoryField: 'action',
       aggregate: 'count',
-      filter: {
-        field: 'created_at',
-        operator: 'gte',
-        value: 'NOW() - INTERVAL 7 DAY',
-      },
     },
 
     // ── Session Status Overview ─────────────────────────────────────
@@ -140,20 +136,27 @@ export const SystemOverviewDashboard = Dashboard.create({
     },
 
     // ── Recent Audit Log (Table) ────────────────────────────────────
+    // `type: 'table'` renders the underlying rows directly, so this
+    // panel actually shows the latest events instead of just repeating
+    // the total-count metric. `valueField`/`aggregate` are intentionally
+    // omitted — table widgets pull raw records.
     {
       id: 'widget_recent_events',
       title: 'Recent Audit Events',
       description: 'Latest platform events',
-      type: 'metric',
+      type: 'table',
       object: 'sys_audit_log',
       layout: {
         x: 0,
         y: 6,
         w: 12,
-        h: 3,
+        h: 4,
       },
-      aggregate: 'count',
-      colorVariant: 'default',
+      options: {
+        columns: ['created_at', 'user_id', 'action', 'object_name', 'record_id'],
+        sort: [{ field: 'created_at', order: 'desc' }],
+        pageSize: 20,
+      },
     },
   ],
   globalFilters: [

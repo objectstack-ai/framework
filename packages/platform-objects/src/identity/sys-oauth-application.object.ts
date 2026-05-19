@@ -29,6 +29,38 @@ export const SysOauthApplication = ObjectSchema.create({
   titleFormat: '{name}',
   compactLayout: ['name', 'client_id', 'type', 'disabled'],
 
+  listViews: {
+    active: {
+      type: 'grid',
+      name: 'active',
+      label: 'Active',
+      data: { provider: 'object', object: 'sys_oauth_application' },
+      columns: ['name', 'client_id', 'type', 'updated_at'],
+      filter: [{ field: 'disabled', operator: 'equals', value: false }],
+      sort: [{ field: 'name', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+    disabled_apps: {
+      type: 'grid',
+      name: 'disabled_apps',
+      label: 'Disabled',
+      data: { provider: 'object', object: 'sys_oauth_application' },
+      columns: ['name', 'client_id', 'type', 'updated_at'],
+      filter: [{ field: 'disabled', operator: 'equals', value: true }],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    all_apps: {
+      type: 'grid',
+      name: 'all_apps',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_oauth_application' },
+      columns: ['name', 'client_id', 'type', 'disabled', 'created_at'],
+      sort: [{ field: 'name', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+  },
+
   fields: {
     // ── Identity ─────────────────────────────────────────────────
     id: Field.text({

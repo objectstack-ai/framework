@@ -30,6 +30,38 @@ export const SysUserPreference = ObjectSchema.create({
   titleFormat: '{key}',
   compactLayout: ['user_id', 'key'],
 
+  listViews: {
+    mine: {
+      type: 'grid',
+      name: 'mine',
+      label: 'My Preferences',
+      data: { provider: 'object', object: 'sys_user_preference' },
+      columns: ['key', 'updated_at'],
+      filter: [{ field: 'user_id', operator: 'equals', value: '{current_user_id}' }],
+      sort: [{ field: 'key', order: 'asc' }],
+      pagination: { pageSize: 100 },
+    },
+    by_user: {
+      type: 'grid',
+      name: 'by_user',
+      label: 'By User',
+      data: { provider: 'object', object: 'sys_user_preference' },
+      columns: ['user_id', 'key', 'updated_at'],
+      sort: [{ field: 'user_id', order: 'asc' }, { field: 'key', order: 'asc' }],
+      grouping: { fields: [{ field: 'user_id', order: 'asc', collapsed: true }] },
+      pagination: { pageSize: 200 },
+    },
+    all_preferences: {
+      type: 'grid',
+      name: 'all_preferences',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_user_preference' },
+      columns: ['user_id', 'key', 'created_at', 'updated_at'],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 100 },
+    },
+  },
+
   fields: {
     id: Field.text({
       label: 'Preference ID',

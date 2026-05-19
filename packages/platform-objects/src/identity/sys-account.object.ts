@@ -20,6 +20,38 @@ export const SysAccount = ObjectSchema.create({
   description: 'OAuth and authentication provider accounts',
   titleFormat: '{provider_id} - {account_id}',
   compactLayout: ['provider_id', 'user_id', 'account_id'],
+
+  listViews: {
+    mine: {
+      type: 'grid',
+      name: 'mine',
+      label: 'My Links',
+      data: { provider: 'object', object: 'sys_account' },
+      columns: ['provider_id', 'account_id', 'created_at', 'updated_at'],
+      filter: [{ field: 'user_id', operator: 'equals', value: '{current_user_id}' }],
+      sort: [{ field: 'provider_id', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+    by_provider: {
+      type: 'grid',
+      name: 'by_provider',
+      label: 'By Provider',
+      data: { provider: 'object', object: 'sys_account' },
+      columns: ['provider_id', 'user_id', 'account_id', 'created_at'],
+      sort: [{ field: 'provider_id', order: 'asc' }, { field: 'created_at', order: 'desc' }],
+      grouping: { fields: [{ field: 'provider_id', order: 'asc', collapsed: false }] },
+      pagination: { pageSize: 100 },
+    },
+    all_links: {
+      type: 'grid',
+      name: 'all_links',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_account' },
+      columns: ['provider_id', 'user_id', 'account_id', 'created_at', 'updated_at'],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 100 },
+    },
+  },
   
   fields: {
     id: Field.text({

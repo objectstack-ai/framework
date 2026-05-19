@@ -20,6 +20,28 @@ export const SysTwoFactor = ObjectSchema.create({
   description: 'Two-factor authentication credentials',
   titleFormat: 'Two-factor for {user_id}',
   compactLayout: ['user_id', 'created_at'],
+
+  listViews: {
+    mine: {
+      type: 'grid',
+      name: 'mine',
+      label: 'My Enrollment',
+      data: { provider: 'object', object: 'sys_two_factor' },
+      columns: ['created_at', 'updated_at'],
+      filter: [{ field: 'user_id', operator: 'equals', value: '{current_user_id}' }],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    all_enrollments: {
+      type: 'grid',
+      name: 'all_enrollments',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_two_factor' },
+      columns: ['user_id', 'created_at', 'updated_at'],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+  },
   
   fields: {
     id: Field.text({

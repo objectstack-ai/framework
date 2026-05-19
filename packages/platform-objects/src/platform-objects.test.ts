@@ -105,7 +105,17 @@ describe('@objectstack/platform-objects', () => {
       expect(policyNames).toEqual([
         'owner_only_deletes',
         'owner_only_writes',
+        'sys_account_self',
+        'sys_api_key_self',
+        'sys_device_code_self',
+        'sys_oauth_access_token_self',
+        'sys_oauth_consent_self',
+        'sys_oauth_refresh_token_self',
         'sys_organization_self',
+        'sys_session_self',
+        'sys_team_member_self',
+        'sys_two_factor_self',
+        'sys_user_preference_self',
         'sys_user_self',
         'tenant_isolation',
       ]);
@@ -114,6 +124,12 @@ describe('@objectstack/platform-objects', () => {
       const orgSelf = (member.rowLevelSecurity ?? []).find((p) => p.name === 'sys_organization_self')!;
       expect(orgSelf.object).toBe('sys_organization');
       expect(orgSelf.using).toBe('id = current_user.organization_id');
+      // The user_id-keyed better-auth tables (sys_session etc.) get
+      // per-object carve-outs because the wildcard tenant_isolation
+      // policy would otherwise DENY them (they lack organization_id).
+      const sessionSelf = (member.rowLevelSecurity ?? []).find((p) => p.name === 'sys_session_self')!;
+      expect(sessionSelf.object).toBe('sys_session');
+      expect(sessionSelf.using).toBe('user_id = current_user.id');
     });
 
     it('viewer_readonly denies writes', () => {

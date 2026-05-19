@@ -21,10 +21,14 @@ export const SecurityOverviewDashboard = Dashboard.create({
   gap: 4,
 
   widgets: [
-    // ── Failed Login Attempts Widget ────────────────────────────────
+    // ── Login Events Widget ─────────────────────────────────────────
+    // The `sys_audit_log.action` enum doesn't distinguish failed vs
+    // successful logins (both fold into `action='login'`). Surfacing a
+    // total Login Events count is honest; a "Failed Logins" widget will
+    // need a richer enum or a separate detail field first.
     {
-      id: 'widget_failed_logins',
-      title: 'Failed Login Attempts',
+      id: 'widget_login_events',
+      title: 'Login Events',
       type: 'metric',
       object: 'sys_audit_log',
       layout: {
@@ -33,14 +37,10 @@ export const SecurityOverviewDashboard = Dashboard.create({
         w: 3,
         h: 2,
       },
-      filter: {
-        field: 'action',
-        operator: 'equals',
-        value: 'login',
-      },
+      filter: { action: 'login' },
       aggregate: 'count',
-      colorVariant: 'danger',
-      description: 'Failed authentication attempts (24h)',
+      colorVariant: 'blue',
+      description: 'Authentication events recorded by the audit log',
     },
 
     // ── Permission Changes Widget ───────────────────────────────────
@@ -55,11 +55,7 @@ export const SecurityOverviewDashboard = Dashboard.create({
         w: 3,
         h: 2,
       },
-      filter: {
-        field: 'action',
-        operator: 'equals',
-        value: 'permission_change',
-      },
+      filter: { action: 'permission_change' },
       aggregate: 'count',
       colorVariant: 'warning',
       description: 'Recent permission and role modifications',
@@ -77,11 +73,7 @@ export const SecurityOverviewDashboard = Dashboard.create({
         w: 3,
         h: 2,
       },
-      filter: {
-        field: 'action',
-        operator: 'equals',
-        value: 'config_change',
-      },
+      filter: { action: 'config_change' },
       aggregate: 'count',
       colorVariant: 'blue',
       description: 'System configuration modifications',
@@ -139,20 +131,27 @@ export const SecurityOverviewDashboard = Dashboard.create({
     },
 
     // ── Recent Security Events (Table) ──────────────────────────────
+    // Real table widget — pulls the latest permission/config rows.
     {
       id: 'widget_recent_security_events',
       title: 'Recent Security Events',
       description: 'Latest permission and config changes',
-      type: 'metric',
+      type: 'table',
       object: 'sys_audit_log',
       layout: {
         x: 0,
         y: 6,
         w: 12,
-        h: 3,
+        h: 4,
       },
-      aggregate: 'count',
-      colorVariant: 'default',
+      filter: {
+        action: { $in: ['login', 'logout', 'permission_change', 'config_change'] },
+      },
+      options: {
+        columns: ['created_at', 'user_id', 'action', 'object_name', 'record_id'],
+        sort: [{ field: 'created_at', order: 'desc' }],
+        pageSize: 20,
+      },
     },
   ],
   globalFilters: [
