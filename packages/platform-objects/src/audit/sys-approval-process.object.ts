@@ -30,6 +30,48 @@ export const SysApprovalProcess = ObjectSchema.create({
   titleFormat: '{label}',
   compactLayout: ['name', 'object_name', 'active', 'updated_at'],
 
+  listViews: {
+    active: {
+      type: 'grid',
+      name: 'active',
+      label: 'Active',
+      data: { provider: 'object', object: 'sys_approval_process' },
+      columns: ['label', 'object_name', 'active', 'updated_at'],
+      filter: [{ field: 'active', operator: 'equals', value: true }],
+      sort: [{ field: 'label', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+    inactive: {
+      type: 'grid',
+      name: 'inactive',
+      label: 'Inactive',
+      data: { provider: 'object', object: 'sys_approval_process' },
+      columns: ['label', 'object_name', 'active', 'updated_at'],
+      filter: [{ field: 'active', operator: 'equals', value: false }],
+      sort: [{ field: 'label', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+    by_object: {
+      type: 'grid',
+      name: 'by_object',
+      label: 'By Object',
+      data: { provider: 'object', object: 'sys_approval_process' },
+      columns: ['object_name', 'label', 'active', 'updated_at'],
+      sort: [{ field: 'object_name', order: 'asc' }, { field: 'label', order: 'asc' }],
+      grouping: { fields: [{ field: 'object_name', order: 'asc', collapsed: false }] },
+      pagination: { pageSize: 100 },
+    },
+    all_processes: {
+      type: 'grid',
+      name: 'all_processes',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_approval_process' },
+      columns: ['label', 'object_name', 'active', 'updated_at'],
+      sort: [{ field: 'label', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+  },
+
   fields: {
     id: Field.text({ label: 'Process ID', required: true, readonly: true, group: 'System' }),
 

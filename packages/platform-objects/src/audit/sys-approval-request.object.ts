@@ -33,6 +33,54 @@ export const SysApprovalRequest = ObjectSchema.create({
   titleFormat: '{process_name} · {record_id}',
   compactLayout: ['process_name', 'object_name', 'record_id', 'status', 'current_step', 'submitter_id', 'updated_at'],
 
+  // Curated built-in list views — render as segmented tabs in the console.
+  // Filters use {current_user_id} substitution wired by the console.
+  listViews: {
+    my_pending: {
+      type: 'grid',
+      name: 'my_pending',
+      label: 'My Pending',
+      data: { provider: 'object', object: 'sys_approval_request' },
+      columns: ['process_name', 'object_name', 'record_id', 'current_step', 'submitter_id', 'updated_at'],
+      filter: [
+        { field: 'status', operator: 'equals', value: 'pending' },
+        { field: 'pending_approvers', operator: 'contains', value: '{current_user_id}' },
+      ],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 25 },
+      emptyState: { title: 'No pending approvals', message: 'You\'re all caught up.' },
+    },
+    submitted_by_me: {
+      type: 'grid',
+      name: 'submitted_by_me',
+      label: 'I Submitted',
+      data: { provider: 'object', object: 'sys_approval_request' },
+      columns: ['process_name', 'object_name', 'record_id', 'status', 'current_step', 'updated_at'],
+      filter: [{ field: 'submitter_id', operator: 'equals', value: '{current_user_id}' }],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 25 },
+    },
+    completed: {
+      type: 'grid',
+      name: 'completed',
+      label: 'Completed',
+      data: { provider: 'object', object: 'sys_approval_request' },
+      columns: ['process_name', 'object_name', 'record_id', 'status', 'submitter_id', 'completed_at'],
+      filter: [{ field: 'status', operator: 'in', value: ['approved', 'rejected', 'recalled'] }],
+      sort: [{ field: 'completed_at', order: 'desc' }],
+      pagination: { pageSize: 25 },
+    },
+    all_requests: {
+      type: 'grid',
+      name: 'all_requests',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_approval_request' },
+      columns: ['process_name', 'object_name', 'record_id', 'status', 'current_step', 'submitter_id', 'updated_at'],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+  },
+
   fields: {
     id: Field.text({ label: 'Request ID', required: true, readonly: true, group: 'System' }),
 

@@ -25,6 +25,58 @@ export const SysAuditLog = ObjectSchema.create({
   titleFormat: '{action} · {object_name}',
   compactLayout: ['created_at', 'action', 'object_name', 'record_id', 'user_id'],
 
+  listViews: {
+    recent: {
+      type: 'grid',
+      name: 'recent',
+      label: 'Recent',
+      data: { provider: 'object', object: 'sys_audit_log' },
+      columns: ['created_at', 'action', 'object_name', 'record_id', 'user_id'],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+      emptyState: { title: 'No audit events', message: 'Activity will appear here as users interact with the platform.' },
+    },
+    writes_only: {
+      type: 'grid',
+      name: 'writes_only',
+      label: 'Writes',
+      data: { provider: 'object', object: 'sys_audit_log' },
+      columns: ['created_at', 'action', 'object_name', 'record_id', 'user_id'],
+      filter: [{ field: 'action', operator: 'in', value: ['create', 'update', 'delete', 'restore'] }],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    auth_events: {
+      type: 'grid',
+      name: 'auth_events',
+      label: 'Auth',
+      data: { provider: 'object', object: 'sys_audit_log' },
+      columns: ['created_at', 'action', 'user_id'],
+      filter: [{ field: 'action', operator: 'in', value: ['login', 'logout', 'permission_change'] }],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    config_changes: {
+      type: 'grid',
+      name: 'config_changes',
+      label: 'Config',
+      data: { provider: 'object', object: 'sys_audit_log' },
+      columns: ['created_at', 'action', 'object_name', 'user_id'],
+      filter: [{ field: 'action', operator: 'in', value: ['config_change', 'export', 'import'] }],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    all_events: {
+      type: 'grid',
+      name: 'all_events',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_audit_log' },
+      columns: ['created_at', 'action', 'object_name', 'record_id', 'user_id'],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 100 },
+    },
+  },
+
   fields: {
     // ── Event ────────────────────────────────────────────────────
     created_at: Field.datetime({

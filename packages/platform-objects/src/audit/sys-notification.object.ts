@@ -29,6 +29,42 @@ export const SysNotification = ObjectSchema.create({
   titleFormat: '{title}',
   compactLayout: ['title', 'type', 'is_read', 'created_at'],
 
+  listViews: {
+    unread: {
+      type: 'grid',
+      name: 'unread',
+      label: 'Unread',
+      data: { provider: 'object', object: 'sys_notification' },
+      columns: ['type', 'title', 'recipient_id', 'created_at'],
+      filter: [
+        { field: 'recipient_id', operator: 'equals', value: '{current_user_id}' },
+        { field: 'is_read', operator: 'equals', value: false },
+      ],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+      emptyState: { title: 'Inbox zero', message: 'No unread notifications.' },
+    },
+    mine: {
+      type: 'grid',
+      name: 'mine',
+      label: 'Mine',
+      data: { provider: 'object', object: 'sys_notification' },
+      columns: ['type', 'title', 'is_read', 'created_at'],
+      filter: [{ field: 'recipient_id', operator: 'equals', value: '{current_user_id}' }],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+    all_notifications: {
+      type: 'grid',
+      name: 'all_notifications',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_notification' },
+      columns: ['type', 'title', 'recipient_id', 'is_read', 'created_at'],
+      sort: [{ field: 'created_at', order: 'desc' }],
+      pagination: { pageSize: 100 },
+    },
+  },
+
   fields: {
     id: Field.text({
       label: 'Notification ID',

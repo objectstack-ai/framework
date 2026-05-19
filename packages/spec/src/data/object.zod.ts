@@ -5,6 +5,7 @@ import { FieldSchema } from './field.zod';
 import { ValidationRuleSchema } from './validation.zod';
 import { StateMachineSchema } from '../automation/state-machine.zod';
 import { ActionSchema } from '../ui/action.zod';
+import { ListViewSchema } from '../ui/view.zod';
 
 /**
  * API Operations Enum
@@ -500,6 +501,33 @@ const ObjectSchemaBase = z.object({
   }).optional().describe('Record name generation configuration (Salesforce pattern)'),
   titleFormat: TemplateExpressionInputSchema.optional().describe('Title template — supports {{record.field}} interpolation. Overrides displayNameField.'),
   compactLayout: z.array(z.string()).optional().describe('Primary fields for hover/cards/lookups'),
+
+  /**
+   * Built-in List Views
+   *
+   * Curated, platform-shipped list views (grid / kanban / calendar / …)
+   * keyed by view name. Rendered as segmented tabs in the console list page
+   * **before** any user-saved `sys_view` rows. Use this for system objects
+   * (audit, runtime, config) where the default "All records" grid lacks
+   * business context — e.g. an approval-request list should ship with
+   * "My pending", "I submitted", "Completed" tabs out of the box.
+   *
+   * Each value is a `ListViewSchema` (see `@objectstack/spec/ui`) so authors
+   * get the full tab/filter/sort/grouping vocabulary.
+   *
+   * @example
+   * ```ts
+   * listViews: {
+   *   my_pending: {
+   *     type: 'grid',
+   *     label: 'My Pending',
+   *     filter: [{ field: 'pending_approvers', operator: 'contains', value: '{current_user_id}' }],
+   *     sort: [{ field: 'updated_at', order: 'desc' }],
+   *   },
+   * }
+   * ```
+   */
+  listViews: z.record(z.string(), ListViewSchema).optional().describe('Built-in named list views (segmented tabs) shipped with the object schema'),
   
   /** 
    * Search Engine Config 
