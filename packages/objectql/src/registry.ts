@@ -165,11 +165,18 @@ export function applySystemFields(
   // 1. Hard opt-out at object level (e.g. seed/migration tables).
   if ((schema as any).systemFields === false) return schema;
 
-  // 2. Skip externally-managed tables. better-auth/system/platform tables
-  //    declare exactly what they need; injecting more would either collide
-  //    with the manager's expectations (better-auth migrations) or pollute
-  //    audit-grade ledgers.
-  if (schema.managedBy) return schema;
+  // 2. Skip only `better-auth` managed tables. Their column layout is
+  //    driven by better-auth's own migrations (sys_user, sys_session,
+  //    sys_organization, …) and injecting extra columns here would
+  //    collide with what better-auth expects. Other `managedBy` buckets
+  //    (`platform`, `config`, `system`, `append-only`) all need the
+  //    tenant + audit columns for multi-tenant isolation and time-travel
+  //    history — withholding them silently broke RLS reads on
+  //    sys_audit_log / sys_activity (the SecurityPlugin's
+  //    field-existence safety net dropped `organization_id =
+  //    current_user.organization_id` as "field missing", producing
+  //    RLS_DENY_FILTER → 0 rows for every non-admin caller).
+  if (schema.managedBy === 'better-auth') return schema;
 
   const sf =
     typeof (schema as any).systemFields === 'object' && (schema as any).systemFields !== null

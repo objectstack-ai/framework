@@ -106,6 +106,9 @@ export interface SeedPlatformSsoClientOptions {
     baseSecret: string;
     /** Optional logger for diagnostics. */
     logger?: { info?: (...a: any[]) => void; warn?: (...a: any[]) => void; error?: (...a: any[]) => void };
+    /** When true, rethrow insert/update errors instead of swallowing them.
+     * Backfill uses this to surface real failures via the admin endpoint. */
+    throwOnError?: boolean;
 }
 
 /**
@@ -116,7 +119,7 @@ export interface SeedPlatformSsoClientOptions {
  * existing row's JSON array.
  */
 export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions): Promise<void> {
-    const { ql, projectId, hostname, baseSecret, logger } = opts;
+    const { ql, projectId, hostname, baseSecret, logger, throwOnError } = opts;
     if (!baseSecret) {
         logger?.warn?.('[platform-sso] OS_AUTH_SECRET not set — skipping client seed', { projectId });
         return;
@@ -172,6 +175,7 @@ export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions):
                 projectId,
                 error: (err as Error)?.message,
             });
+            if (throwOnError) throw err;
         }
         return;
     }
@@ -228,11 +232,13 @@ export interface BackfillPlatformSsoClientsOptions {
 export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClientsOptions): Promise<{
     scanned: number;
     seeded: number;
+    alreadyExisted: number;
+    failures: Array<{ projectId: string; error: string }>;
 }> {
     const { ql, baseSecret, logger, limit = 1000 } = opts;
     if (!baseSecret) {
         logger?.warn?.('[platform-sso] backfill skipped — OS_AUTH_SECRET not set');
-        return { scanned: 0, seeded: 0 };
+        return { scanned: 0, seeded: 0, alreadyExisted: 0, failures: [] };
     }
     let projects: any[] = [];
     try {
@@ -245,9 +251,11 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
         logger?.warn?.('[platform-sso] backfill: sys_project read failed', {
             error: (err as Error)?.message,
         });
-        return { scanned: 0, seeded: 0 };
+        return { scanned: 0, seeded: 0, alreadyExisted: 0, failures: [{ projectId: '<scan>', error: (err as Error)?.message ?? String(err) }] };
     }
     let seeded = 0;
+    let alreadyExisted = 0;
+    const failures: Array<{ projectId: string; error: string }> = [];
     for (const p of projects) {
         if (!p?.id) continue;
         const before = await (async () => {
@@ -260,9 +268,28 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
                 return list[0] ?? null;
             } catch { return null; }
         })();
-        await seedPlatformSsoClient({ ql, projectId: p.id, hostname: p.hostname, baseSecret, logger });
-        if (!before) seeded++;
+        try {
+            await seedPlatformSsoClient({ ql, projectId: p.id, hostname: p.hostname, baseSecret, logger, throwOnError: true });
+            if (before) alreadyExisted++;
+            else {
+                // Verify the row is actually readable post-insert.
+                const after = await (async () => {
+                    try {
+                        const r = await ql.find('sys_oauth_application', {
+                            where: { client_id: derivePlatformSsoClientId(p.id) },
+                            limit: 1,
+                        }, { context: { isSystem: true } });
+                        const list = Array.isArray(r) ? r : Array.isArray((r as any)?.records) ? (r as any).records : [];
+                        return list[0] ?? null;
+                    } catch (err) { return { _readErr: (err as Error)?.message }; }
+                })();
+                if (after && !(after as any)._readErr) seeded++;
+                else failures.push({ projectId: p.id, error: `post-insert read returned ${after ? JSON.stringify(after) : 'null'}` });
+            }
+        } catch (err: any) {
+            failures.push({ projectId: p.id, error: err?.message ?? String(err) });
+        }
     }
-    logger?.info?.('[platform-sso] backfill complete', { scanned: projects.length, seeded });
-    return { scanned: projects.length, seeded };
+    logger?.info?.('[platform-sso] backfill complete', { scanned: projects.length, seeded, alreadyExisted, failures: failures.length });
+    return { scanned: projects.length, seeded, alreadyExisted, failures };
 }

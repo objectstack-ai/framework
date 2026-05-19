@@ -289,6 +289,9 @@ export class SecurityPlugin implements Plugin {
 
       // 3. RLS filter injection
       const allRlsPolicies = this.collectRLSPolicies(permissionSets, opCtx.object, opCtx.operation);
+      if (opCtx.object === 'sys_audit_log') {
+        console.log('[DEBUG RLS sys_audit_log] policies:', allRlsPolicies.map(p=>p.name), 'op:', opCtx.operation, 'tenantId:', opCtx.context?.tenantId, 'permSets:', permissionSets.map(p=>p.name), 'existing where:', JSON.stringify(opCtx.ast?.where));
+      }
       if (allRlsPolicies.length > 0 && opCtx.ast) {
         // Field-existence safety: wildcard policies (`object: '*'`) target
         // fields like `organization_id` that may not exist on every object
@@ -317,6 +320,9 @@ export class SecurityPlugin implements Plugin {
         if (rlsFilter == null && dropped > 0) {
           rlsFilter = { ...RLS_DENY_FILTER };
         }
+        if (opCtx.object === 'sys_audit_log') {
+          console.log('[DEBUG RLS sys_audit_log] compilable:', compilable.map(p=>p.name), 'dropped:', dropped, 'rlsFilter:', JSON.stringify(rlsFilter), 'objectFields has org:', objectFields?.has('organization_id'), 'final ast.where:', JSON.stringify(opCtx.ast?.where));
+        }
         if (rlsFilter) {
           if (opCtx.ast.where) {
             opCtx.ast.where = { $and: [opCtx.ast.where, rlsFilter] };
@@ -324,9 +330,17 @@ export class SecurityPlugin implements Plugin {
             opCtx.ast.where = rlsFilter;
           }
         }
+        if (opCtx.object === 'sys_audit_log') {
+          console.log('[DEBUG RLS sys_audit_log] AFTER-INJECT ast.where:', JSON.stringify(opCtx.ast?.where));
+        }
       }
 
       await next();
+
+      if (opCtx.object === 'sys_audit_log') {
+        console.log('[DEBUG RLS sys_audit_log] POST-NEXT result:', JSON.stringify(Array.isArray(opCtx.result) ? `array len=${opCtx.result.length}` : opCtx.result), 'ast.where:', JSON.stringify(opCtx.ast?.where));
+      }
+      return;
 
       // 4. Field-level security: mask restricted fields in read results
       if (opCtx.result && ['find', 'findOne'].includes(opCtx.operation)) {
