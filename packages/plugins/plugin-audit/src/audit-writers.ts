@@ -155,13 +155,12 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
    * audit failures.
    */
   const writeAudit = async (ctx: HookContext) => {
-    process.stderr.write(`[AuditWriter] hook event=${ctx.event} object=${ctx.object} hasApi=${!!(ctx as any).api} hasSudo=${!!(ctx as any).api?.sudo}\n`);
     if (SKIP_OBJECTS.has(ctx.object)) return;
     const action = actionFor(ctx.event);
     if (!action) return;
 
     const api: any = (ctx as any).api;
-    if (!api?.sudo) { process.stderr.write(`[AuditWriter] BAIL no api.sudo for ${ctx.object}\n`); return; }
+    if (!api?.sudo) return;
 
     const after: any = ctx.result;
     const before: any = (ctx as any).__previous ?? (ctx as any).previous ?? null;
@@ -175,7 +174,23 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
 
     const sess: any = (ctx as any).session ?? {};
     const userId: string | undefined = sess.userId;
-    const tenantId: string | undefined = sess.tenantId;
+    // Prefer the active session tenant, but fall back to the audited
+    // record's own `organization_id`. This matters in two cases:
+    //   1. Background jobs / unauthenticated sudo paths where the
+    //      session has no `tenantId` populated.
+    //   2. better-auth's `activeOrganizationId` cache miss on first
+    //      requests after sign-in, before the active-org has been set
+    //      on the session row.
+    // Without this fallback, audit rows are written with
+    // `organization_id=NULL` and the SecurityPlugin's RLS predicate
+    // (`organization_id = current_user.organization_id`) hides them
+    // forever — making the audit log UI appear permanently empty even
+    // though writes succeed.
+    const recordOrgId: string | undefined =
+      (typeof (ctx.result as any)?.organization_id === 'string' && (ctx.result as any).organization_id) ||
+      (typeof ((ctx as any).__previous as any)?.organization_id === 'string' && ((ctx as any).__previous as any).organization_id) ||
+      undefined;
+    const tenantId: string | undefined = sess.tenantId ?? recordOrgId;
 
     let oldValue: Record<string, any> | null = null;
     let newValue: Record<string, any> | null = null;
@@ -236,7 +251,6 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
     try {
       const sys = api.sudo();
       await sys.object('sys_audit_log').create(auditRow);
-      process.stderr.write(`[AuditWriter] WROTE audit_log object=${ctx.object} action=${action}\n`);
       await sys.object('sys_activity').create(activityRow);
       // M10.8: write per-user inbox notifications. Best-effort; never
       // throws into the user-facing CRUD path. Covers two common cases:
@@ -259,7 +273,6 @@ export function installAuditWriters(engine: any, packageId = 'com.objectstack.au
         tenantId: tenantId ?? null,
       });
     } catch (err) {
-      process.stderr.write(`[AuditWriter] WRITE FAILED: ${String((err as any)?.message ?? err)}\n`);
       // Log via engine logger if available, but never throw.
       try { (engine as any).logger?.warn?.('Audit write failed', { object: ctx.object, action, err: String((err as any)?.message ?? err) }); } catch {}
     }
