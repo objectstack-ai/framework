@@ -25,6 +25,43 @@ export const SysApiKey = ObjectSchema.create({
   titleFormat: '{name}',
   compactLayout: ['name', 'prefix', 'user_id', 'expires_at', 'revoked'],
 
+  // Custom actions — sys_api_key is managed-by 'better-auth' but the
+  // `revoked` boolean is a column we control via the data API. These row
+  // actions use the generic PATCH /api/v1/sys_api_key/{id} endpoint with
+  // `bodyExtra` to set the `revoked` flag explicitly.
+  actions: [
+    {
+      name: 'revoke_api_key',
+      label: 'Revoke API Key',
+      icon: 'shield-off',
+      variant: 'danger',
+      mode: 'custom',
+      locations: ['list_item'],
+      type: 'api',
+      method: 'PATCH',
+      target: '/api/v1/data/sys_api_key/{id}',
+      bodyExtra: { revoked: true },
+      confirmText: 'Revoke this API key? Any clients using it will immediately lose access.',
+      successMessage: 'API key revoked',
+      refreshAfter: true,
+    },
+    {
+      name: 'restore_api_key',
+      label: 'Restore API Key',
+      icon: 'shield-check',
+      variant: 'secondary',
+      mode: 'custom',
+      locations: ['list_item'],
+      type: 'api',
+      method: 'PATCH',
+      target: '/api/v1/data/sys_api_key/{id}',
+      bodyExtra: { revoked: false },
+      confirmText: 'Restore this revoked API key? Existing clients holding the key will regain access.',
+      successMessage: 'API key restored',
+      refreshAfter: true,
+    },
+  ],
+
   listViews: {
     mine: {
       type: 'grid',

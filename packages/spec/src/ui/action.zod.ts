@@ -219,6 +219,20 @@ export const ActionSchema = lazySchema(() => z.object({
     z.object({ wrap: z.string() }),
   ]).optional().describe('Body wrapping: flat (default) or { wrap: key } to nest user-collected params under a key.'),
   /**
+   * HTTP method to use when `type: 'api'`. Defaults to `POST`. Use `PATCH` to
+   * call data-API update endpoints (e.g. `/api/v1/sys_api_key/{id}` with
+   * `bodyExtra: { revoked: true }`).
+   */
+  method: z.enum(['POST', 'PATCH', 'PUT', 'DELETE']).optional().describe('HTTP method for type:"api" actions. Defaults to POST.'),
+  /**
+   * Static body fragment merged into the outgoing request body for `type:'api'`
+   * actions. Useful for constants the user shouldn't (or can't) edit, e.g.
+   * `bodyExtra: { resend: true }` on a resend-invitation action that reuses
+   * better-auth's `invite-member` endpoint. Applied after user-collected
+   * params and `recordIdParam` so constants always win.
+   */
+  bodyExtra: z.record(z.string(), z.unknown()).optional().describe('Constant body fields merged into the API request (applied last; overrides user params).'),
+  /**
    * Semantic mode hint — UI / runtime can use this to pick confirm copy,
    * default variants, success messaging. Pure metadata; no runtime branching.
    */

@@ -54,6 +54,22 @@ export const SysInvitation = ObjectSchema.create({
       successMessage: 'Invitation canceled',
       refreshAfter: true,
     },
+    {
+      name: 'resend_invitation',
+      label: 'Resend Invitation',
+      icon: 'send',
+      variant: 'secondary',
+      locations: ['list_item'],
+      type: 'api',
+      target: '/api/v1/auth/organization/invite-member',
+      bodyExtra: { resend: true },
+      successMessage: 'Invitation resent',
+      refreshAfter: true,
+      params: [
+        { field: 'email', required: true, defaultFromRow: true },
+        { field: 'role', required: true, defaultFromRow: true },
+      ],
+    },
   ],
 
   listViews: {
