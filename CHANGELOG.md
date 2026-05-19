@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — M10.33 dedup duplicate list-view tabs on Setup objects 🐛
+Several `sys_*` objects (`sys_user`, `sys_organization`, `sys_role`, `sys_session`, `sys_audit_log`) showed two near-identical list-view tabs — e.g. `Users` *and* `All Users` on `sys_user/view/users` vs `sys_user/view/all_users`. The schema-derived view had correct columns; the duplicate `Users` view referenced fields that don't exist on `sys_user` (phone/status/active) and rendered an empty grid.
+
+Root cause: `plugin-auth` was registering six legacy top-level `ListView` objects (`UsersView`, `OrganizationsView`, `RolesView`, `SessionsView`, `AuditLogsView`, `PackageInstallationsView`) via the manifest service. These predate the M10.30b–c work that moved list-view definitions onto each schema's `listViews` map. Both sets now flowed into `/api/v1/meta/view?objectName=X`, so the console merged them and surfaced both as tabs. One of the legacy views (`package_installations`) even targeted a `sys_package_installation` object that no longer exists.
+
+- Removed the `views: [UsersView, …]` block from `plugin-auth/src/auth-plugin.ts`.
+- Deleted `packages/platform-objects/src/apps/views/` (6 view files + their barrel).
+- Schema-embedded `listViews` is now the single source of truth for these objects:
+  - `sys_user.listViews`: `all_users` / `unverified` / `two_factor`
+  - `sys_organization.listViews`: `all_orgs`
+  - `sys_role.listViews`: `active` / `default_roles` / `custom` / `all_roles`
+  - `sys_session.listViews`: `mine` / `all_sessions`
+  - `sys_audit_log.listViews`: `recent` / `writes_only` / `auth_events` / `config_changes` / `all_events`
+- Verified end-to-end via browser at `/console/apps/setup/{sys_user,sys_organization,sys_role,sys_audit_log}` — each page now renders exactly the schema-defined tabs with correct columns.
+
 ### Fixed — M10.32 honest UX: suppress broken generic CRUD on `sys_approval_process` & `sys_sharing_rule` 🐛
 The Studio list pages for these two `managedBy: 'config'` objects exposed New/Import/Edit buttons, but the forms behind them rendered `definition_json` / `criteria_json` as raw textareas — admins were expected to hand-write multi-page Zod envelopes to author an approval process or sharing rule. Not usable for any real business user.
 
