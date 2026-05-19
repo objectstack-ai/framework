@@ -117,3 +117,102 @@ export interface ISharingService {
     context: SharingExecutionContext,
   ): Promise<RecordShare[]>;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// SharingRuleService — declarative criteria-based sharing
+// (Salesforce-style "any record matching X is shared with team Y").
+// ─────────────────────────────────────────────────────────────────────
+
+/** Kinds of principals a rule can target. */
+export type SharingRuleRecipientType = 'user' | 'team' | 'role' | 'queue';
+
+/**
+ * Stored shape of a sharing rule. Maps 1-to-1 to `sys_sharing_rule`
+ * with `criteria` lifted out of the JSON column.
+ */
+export interface SharingRuleRow {
+  id: string;
+  organization_id?: string | null;
+  name: string;
+  label: string;
+  description?: string | null;
+  object_name: string;
+  /**
+   * Engine-compatible FilterCondition. `undefined`/`null` matches every
+   * row of `object_name` (use with care — typically scoped via teams).
+   */
+  criteria?: unknown;
+  recipient_type: SharingRuleRecipientType;
+  recipient_id: string;
+  access_level: ShareAccessLevel;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Input to {@link ISharingRuleService.defineRule}. */
+export interface DefineSharingRuleInput {
+  name: string;
+  label: string;
+  description?: string;
+  object: string;
+  criteria?: unknown;
+  recipientType: SharingRuleRecipientType;
+  recipientId: string;
+  accessLevel?: ShareAccessLevel;
+  active?: boolean;
+}
+
+/** Result of a rule evaluation pass. */
+export interface SharingRuleEvaluationResult {
+  ruleId: string;
+  matchedRecords: number;
+  expandedUsers: number;
+  grantsCreated: number;
+  grantsUpdated: number;
+  grantsRevoked: number;
+}
+
+/**
+ * Declarative sharing rules. The evaluator materialises grants into
+ * `sys_record_share` with `source='rule'` and `source_id=rule.id` so
+ * stale grants from a rule update can be reconciled without touching
+ * manual or team-derived shares.
+ */
+export interface ISharingRuleService {
+  defineRule(input: DefineSharingRuleInput, context: SharingExecutionContext): Promise<SharingRuleRow>;
+  listRules(filter: { object?: string; activeOnly?: boolean }, context: SharingExecutionContext): Promise<SharingRuleRow[]>;
+  getRule(idOrName: string, context: SharingExecutionContext): Promise<SharingRuleRow | null>;
+  deleteRule(idOrName: string, context: SharingExecutionContext): Promise<void>;
+
+  /**
+   * Re-evaluate a rule across every record of its object_name and
+   * reconcile the resulting `sys_record_share` rows. Admin-initiated;
+   * use after rule edits or for backfill.
+   */
+  evaluateRule(idOrName: string, context: SharingExecutionContext): Promise<SharingRuleEvaluationResult>;
+
+  /**
+   * Incremental evaluation triggered by the lifecycle hook — re-checks
+   * every active rule for `object` against this single record and
+   * upserts/reconciles only that record's share rows.
+   */
+  evaluateAllForRecord(object: string, recordId: string, context: SharingExecutionContext): Promise<SharingRuleEvaluationResult[]>;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Team graph helpers (lives behind ISharingRuleService implementations
+// but is exported so the approval engine can expand `team:` / `role:`
+// approver references without depending on the plugin directly).
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ITeamGraphService {
+  /** Return all descendant team ids (BFS, includes the seed). */
+  descendants(teamId: string): Promise<string[]>;
+  /** Return all user ids that are members of `teamId` or any descendant. */
+  expandUsers(teamId: string): Promise<string[]>;
+  /** Return all user ids that hold a role of `roleName` in `organizationId`. */
+  expandRoleUsers(roleName: string, organizationId?: string): Promise<string[]>;
+  /** Return the manager id for a user (best-effort; null when none). */
+  managerOf(userId: string, organizationId?: string): Promise<string | null>;
+}

@@ -146,6 +146,91 @@ export class ApprovalService implements IApprovalService {
     (this as any).onRegistryChange = handler;
   }
 
+  /**
+   * Expand the approvers on a step into user IDs by walking the team
+   * graph for `team:` / `role:` / `manager:` approver types. Falls back
+   * to the synchronous {@link resolveApprovers} (literal/prefixed) when
+   * graph lookups produce nothing — so existing test fixtures and
+   * approver flows that rely on prefixed strings keep working.
+   */
+  private async expandApprovers(step: any, record?: any, organizationId?: string | null): Promise<string[]> {
+    if (!step || !Array.isArray(step.approvers)) return [];
+    const out: string[] = [];
+    for (const a of step.approvers) {
+      if (!a) continue;
+      if (a.type === 'user') { out.push(String(a.value)); continue; }
+      if (a.type === 'field' && record) { out.push(String((record as any)[a.value] ?? '')); continue; }
+      try {
+        if (a.type === 'team') {
+          const users = await this.expandTeamUsers(String(a.value), organizationId);
+          if (users.length) { for (const u of users) out.push(u); continue; }
+        } else if (a.type === 'role') {
+          const users = await this.expandRoleUsers(String(a.value), organizationId);
+          if (users.length) { for (const u of users) out.push(u); continue; }
+        } else if (a.type === 'manager' && record) {
+          const subject = (record as any)[a.value] ?? (record as any).owner_id;
+          if (subject) {
+            const mgr = await this.lookupManager(String(subject));
+            if (mgr) { out.push(mgr); continue; }
+          }
+        }
+      } catch { /* fall through */ }
+      out.push(`${a.type}:${a.value}`);
+    }
+    return out.filter(Boolean);
+  }
+
+  private async expandTeamUsers(teamId: string, organizationId?: string | null): Promise<string[]> {
+    if (!teamId) return [];
+    const seen = new Set<string>([teamId]);
+    const queue: string[] = [teamId];
+    while (queue.length) {
+      const parent = queue.shift()!;
+      let kids: any[] = [];
+      try {
+        const filter: any = { parent_team_id: parent };
+        if (organizationId) filter.organization_id = organizationId;
+        kids = await this.engine.find('sys_team', { filter, fields: ['id'], limit: 1000, context: SYSTEM_CTX } as any);
+      } catch { kids = []; }
+      for (const k of kids ?? []) {
+        const kid = String((k as any).id ?? '');
+        if (kid && !seen.has(kid)) { seen.add(kid); queue.push(kid); }
+      }
+    }
+    let rows: any[] = [];
+    try {
+      rows = await this.engine.find('sys_team_member', {
+        filter: { team_id: { $in: Array.from(seen) } },
+        fields: ['user_id'],
+        limit: 10000,
+        context: SYSTEM_CTX,
+      } as any);
+    } catch { rows = []; }
+    return Array.from(new Set((rows ?? []).map((r: any) => String(r.user_id ?? '')).filter(Boolean)));
+  }
+
+  private async expandRoleUsers(roleName: string, organizationId?: string | null): Promise<string[]> {
+    if (!roleName) return [];
+    const filter: any = { role: roleName };
+    if (organizationId) filter.organization_id = organizationId;
+    let rows: any[] = [];
+    try {
+      rows = await this.engine.find('sys_member', { filter, fields: ['user_id'], limit: 10000, context: SYSTEM_CTX } as any);
+    } catch { rows = []; }
+    return Array.from(new Set((rows ?? []).map((r: any) => String(r.user_id ?? '')).filter(Boolean)));
+  }
+
+  private async lookupManager(userId: string): Promise<string | null> {
+    try {
+      const rows = await this.engine.find('sys_user', {
+        filter: { id: userId }, fields: ['id', 'manager_id'], limit: 1, context: SYSTEM_CTX,
+      } as any);
+      const row: any = Array.isArray(rows) ? rows[0] : null;
+      return row?.manager_id ? String(row.manager_id) : null;
+    } catch { return null; }
+  }
+
+
   private async notifyRegistryChanged(): Promise<void> {
     const cb = this.onRegistryChange ?? ((this as any).onRegistryChange as (() => void | Promise<void>) | undefined);
     if (!cb) return;
@@ -308,11 +393,11 @@ export class ApprovalService implements IApprovalService {
       throw new Error('VALIDATION_FAILED: process definition has no steps');
     }
     const step0 = steps[0];
-    const approvers = resolveApprovers(step0, input.payload);
+    const ctxOrg = (context as any)?.organizationId ?? (context as any)?.tenantId ?? null;
+    const approvers = await this.expandApprovers(step0, input.payload, ctxOrg);
 
     const now = this.clock.now().toISOString();
     const id = uid('areq');
-    const ctxOrg = (context as any)?.organizationId ?? (context as any)?.tenantId ?? null;
     const row: any = {
       id,
       process_name: process.name,
@@ -445,7 +530,7 @@ export class ApprovalService implements IApprovalService {
 
     // Unanimous: only advance once every original approver has approved at this step_index.
     if (step.behavior === 'unanimous') {
-      const original = resolveApprovers(step, req.payload);
+      const original = await this.expandApprovers(step, req.payload, (req as any).organization_id ?? null);
       const acts = await this.engine.find('sys_approval_action', {
         where: { request_id: req.id, step_index: stepIndex, action: 'approve' },
         limit: 500, context: SYSTEM_CTX,
@@ -482,7 +567,7 @@ export class ApprovalService implements IApprovalService {
     }
 
     const nextStep = steps[stepIndex + 1];
-    const nextApprovers = resolveApprovers(nextStep, req.payload);
+    const nextApprovers = await this.expandApprovers(nextStep, req.payload, (req as any).organization_id ?? null);
     await this.engine.update('sys_approval_request', {
       id: req.id,
       current_step: nextStep.name,
@@ -526,7 +611,7 @@ export class ApprovalService implements IApprovalService {
 
     if (step?.rejectionBehavior === 'back_to_previous' && stepIndex > 0) {
       const prev = steps[stepIndex - 1];
-      const prevApprovers = resolveApprovers(prev, req.payload);
+      const prevApprovers = await this.expandApprovers(prev, req.payload, (req as any).organization_id ?? null);
       await this.engine.update('sys_approval_request', {
         id: req.id,
         current_step: prev.name,

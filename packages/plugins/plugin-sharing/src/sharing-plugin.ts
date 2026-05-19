@@ -2,8 +2,10 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { EngineMiddleware, OperationContext } from '@objectstack/objectql';
-import { SysRecordShare } from '@objectstack/platform-objects/security';
+import { SysRecordShare, SysSharingRule } from '@objectstack/platform-objects/security';
 import { SharingService, type SharingEngine } from './sharing-service.js';
+import { SharingRuleService } from './sharing-rule-service.js';
+import { bindRuleHooks, unbindAllRuleHooks } from './rule-hooks.js';
 
 export interface SharingPluginOptions {
   /** Extra object names that bypass sharing entirely. */
@@ -54,6 +56,7 @@ export class SharingServicePlugin implements Plugin {
 
   private readonly options: SharingPluginOptions;
   private service?: SharingService;
+  private ruleService?: SharingRuleService;
 
   constructor(options: SharingPluginOptions = {}) {
     this.options = options;
@@ -69,7 +72,7 @@ export class SharingServicePlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysRecordShare],
+      objects: [SysRecordShare, SysSharingRule],
     });
     ctx.logger.info('SharingServicePlugin: schema registered');
   }
@@ -101,6 +104,26 @@ export class SharingServicePlugin implements Plugin {
         ctx.logger.info('SharingServicePlugin: enforcement middleware installed');
       } else {
         ctx.logger.warn('SharingServicePlugin: engine has no registerMiddleware — enforcement not applied');
+      }
+
+      // Rule evaluator + hot-rebindable lifecycle hooks.
+      try {
+        this.ruleService = new SharingRuleService({
+          engine: engine as SharingEngine,
+          sharing: this.service,
+          logger: ctx.logger as any,
+        });
+        ctx.registerService('sharingRules', this.ruleService);
+
+        if (typeof engine.registerHook === 'function' && typeof engine.unregisterHooksByPackage === 'function') {
+          const rules = await this.ruleService.listRules({ activeOnly: true }, { isSystem: true } as any);
+          unbindAllRuleHooks(engine);
+          bindRuleHooks(engine, this.ruleService, rules, ctx.logger as any);
+        } else {
+          ctx.logger.warn('SharingServicePlugin: engine has no hook API — sharing rule auto-evaluation disabled');
+        }
+      } catch (err: any) {
+        ctx.logger.warn('SharingServicePlugin: sharing-rule subsystem not started', { error: err?.message });
       }
     });
   }

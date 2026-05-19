@@ -563,7 +563,7 @@ D9 / D10 / D11                   (resolved through M9 sub-tasks above)
 
 - [x] M10.15 — Workflow / approval engine — delivered as M11.C15 (`@objectstack/plugin-approvals` + `sys_approval_process` / `sys_approval_request` / `sys_approval_action`, tenant-scoped REST surface, autopilot lifecycle hooks).
 - [x] M10.16 — Saved reports + scheduled email — delivered as M11.C16 (`@objectstack/plugin-reports` + matrix `groupBy` with `dateGranularity`).
-- [ ] M10.17 — Record-level sharing rules (`sys_sharing_rule`) + team hierarchy (`sys_team`).
+- [x] M10.17 — Record-level sharing rules (`sys_sharing_rule`) + team hierarchy (`sys_team.parent_team_id`). Declarative criteria-based sharing materialised into `sys_record_share` with `source='rule'` and reconciled by `SharingRuleService`; team graph used by both rule evaluator and `ApprovalService.expandApprovers()` for `team:` / `role:` / `manager:` approver expansion. REST surface at `/api/v1/data/sharing/rules`; auto-loaded by the CLI capability resolver when `requires: ['…, 'sharing']`.
 - [ ] M10.18 — Tags (`sys_tag`).
 - [ ] M10.19 — Re-enable GraphQL (currently 501) and OpenAPI spec endpoint (currently 404).
 - [ ] M10.20 — Realtime channels (collaborative editing on the same opportunity).

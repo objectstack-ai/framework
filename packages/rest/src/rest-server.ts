@@ -401,6 +401,7 @@ export class RestServer {
     private sharingServiceProvider?: (projectId?: string) => Promise<any | undefined>;
     private reportsServiceProvider?: (projectId?: string) => Promise<any | undefined>;
     private approvalsServiceProvider?: (projectId?: string) => Promise<any | undefined>;
+    private sharingRulesServiceProvider?: (projectId?: string) => Promise<any | undefined>;
 
     constructor(
         server: IHttpServer,
@@ -415,6 +416,7 @@ export class RestServer {
         sharingServiceProvider?: (projectId?: string) => Promise<any | undefined>,
         reportsServiceProvider?: (projectId?: string) => Promise<any | undefined>,
         approvalsServiceProvider?: (projectId?: string) => Promise<any | undefined>,
+        sharingRulesServiceProvider?: (projectId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
@@ -428,6 +430,7 @@ export class RestServer {
         this.sharingServiceProvider = sharingServiceProvider;
         this.reportsServiceProvider = reportsServiceProvider;
         this.approvalsServiceProvider = approvalsServiceProvider;
+        this.sharingRulesServiceProvider = sharingRulesServiceProvider;
     }
 
     /**
@@ -937,6 +940,7 @@ export class RestServer {
             }
             this.registerEmailEndpoints(bp);
             this.registerSharingEndpoints(bp);
+            this.registerSharingRuleEndpoints(bp);
             this.registerReportsEndpoints(bp);
             this.registerApprovalsEndpoints(bp);
             // CRUD's generic `/:object` route is greedy, so it must be
@@ -2123,6 +2127,151 @@ export class RestServer {
                 }
             },
             metadata: { summary: 'Revoke a per-record share by id', tags: ['sharing'] },
+        });
+    }
+
+    /**
+     * Register sharing-rule endpoints (M10.17). Mirrors the existing
+     * sharing endpoints but operates on `sys_sharing_rule` rows.
+     *
+     *   GET    {basePath}/data/sharing/rules?object=&activeOnly=
+     *   POST   {basePath}/data/sharing/rules
+     *   GET    {basePath}/data/sharing/rules/:idOrName
+     *   DELETE {basePath}/data/sharing/rules/:idOrName
+     *   POST   {basePath}/data/sharing/rules/:idOrName/evaluate
+     *
+     * Returns 501 when no sharing-rule service is configured.
+     */
+    private registerSharingRuleEndpoints(basePath: string): void {
+        const { crud } = this.config;
+        const dataPath = `${basePath}${crud.dataPrefix}`;
+        const isScoped = basePath.includes('/projects/:projectId');
+
+        const resolveService = async (projectId?: string) => {
+            if (!this.sharingRulesServiceProvider) return undefined;
+            try { return await this.sharingRulesServiceProvider(projectId); }
+            catch { return undefined; }
+        };
+        const respond501 = (res: any) => res.status(501).json({
+            code: 'NOT_IMPLEMENTED',
+            message: 'Sharing-rule service is not configured on this deployment',
+        });
+        const handleError = (err: any, res: any, defaultCode: string) => {
+            const msg = String(err?.message ?? err ?? '');
+            if (msg.startsWith('VALIDATION_FAILED')) {
+                return res.status(400).json({ code: 'VALIDATION_FAILED', error: msg.replace(/^VALIDATION_FAILED:\s*/, '') });
+            }
+            if (msg.startsWith('RULE_NOT_FOUND')) {
+                return res.status(404).json({ code: 'RULE_NOT_FOUND', error: msg.replace(/^RULE_NOT_FOUND:?\s*/, '') });
+            }
+            logError(`[REST] sharing-rule ${defaultCode}:`, err);
+            return res.status(500).json({ code: defaultCode, error: msg.slice(0, 500) });
+        };
+
+        // LIST
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/sharing/rules`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const rows = await svc.listRules({
+                        object: req.query?.object,
+                        activeOnly: req.query?.activeOnly === 'true' || req.query?.activeOnly === true,
+                    }, context ?? {});
+                    res.json({ data: rows });
+                } catch (err: any) { handleError(err, res, 'RULE_LIST_FAILED'); }
+            },
+            metadata: { summary: 'List sharing rules', tags: ['sharing'] },
+        });
+
+        // CREATE / UPSERT
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/sharing/rules`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const body = req.body ?? {};
+                    const input = {
+                        name: body.name,
+                        label: body.label,
+                        description: body.description,
+                        object: body.object ?? body.object_name,
+                        criteria: body.criteria,
+                        recipientType: body.recipientType ?? body.recipient_type,
+                        recipientId: body.recipientId ?? body.recipient_id,
+                        accessLevel: body.accessLevel ?? body.access_level,
+                        active: body.active,
+                    };
+                    const row = await svc.defineRule(input, context ?? {});
+                    res.status(201).json(row);
+                } catch (err: any) { handleError(err, res, 'RULE_DEFINE_FAILED'); }
+            },
+            metadata: { summary: 'Create or upsert a sharing rule', tags: ['sharing'] },
+        });
+
+        // GET
+        this.routeManager.register({
+            method: 'GET',
+            path: `${dataPath}/sharing/rules/:idOrName`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const row = await svc.getRule(req.params.idOrName, context ?? {});
+                    if (!row) return res.status(404).json({ code: 'RULE_NOT_FOUND' });
+                    res.json(row);
+                } catch (err: any) { handleError(err, res, 'RULE_GET_FAILED'); }
+            },
+            metadata: { summary: 'Get a sharing rule by id or name', tags: ['sharing'] },
+        });
+
+        // DELETE
+        this.routeManager.register({
+            method: 'DELETE',
+            path: `${dataPath}/sharing/rules/:idOrName`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    await svc.deleteRule(req.params.idOrName, context ?? {});
+                    res.status(204).end();
+                } catch (err: any) { handleError(err, res, 'RULE_DELETE_FAILED'); }
+            },
+            metadata: { summary: 'Delete a sharing rule and its materialised grants', tags: ['sharing'] },
+        });
+
+        // EVALUATE
+        this.routeManager.register({
+            method: 'POST',
+            path: `${dataPath}/sharing/rules/:idOrName/evaluate`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const context = await this.resolveExecCtx(projectId, req);
+                    if (this.enforceAuth(req, res, context)) return;
+                    const svc = await resolveService(projectId);
+                    if (!svc) return respond501(res);
+                    const result = await svc.evaluateRule(req.params.idOrName, context ?? {});
+                    res.json(result);
+                } catch (err: any) { handleError(err, res, 'RULE_EVALUATE_FAILED'); }
+            },
+            metadata: { summary: 'Re-evaluate a sharing rule and reconcile grants', tags: ['sharing'] },
         });
     }
 
