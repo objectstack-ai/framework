@@ -236,6 +236,30 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             });
         }
 
+        // Pre-seed the project owner. The cloud control-plane stashed the
+        // creator's identity into `sys_project.metadata.ownerSeed` at
+        // project-create time; replay it here so the owner exists as a
+        // real `sys_user` BEFORE their first SSO callback arrives. This
+        // is what gives them the auto-created personal org + owner role
+        // (via SecurityPlugin's insert middleware mounted above) without
+        // them having to manually self-promote. Idempotent — safe across
+        // cold-boots.
+        try {
+            const projMeta: any = typeof (project as any)?.metadata === 'string'
+                ? JSON.parse((project as any).metadata)
+                : ((project as any)?.metadata ?? {});
+            const ownerSeed = projMeta?.ownerSeed;
+            if (ownerSeed?.userId && ownerSeed?.email) {
+                const { seedProjectOwner } = await import('./project-owner-seed.js');
+                await seedProjectOwner(kernel, ownerSeed, this.logger);
+            }
+        } catch (err: any) {
+            this.logger.warn?.('[ArtifactKernelFactory] owner seed skipped', {
+                projectId,
+                error: err?.message,
+            });
+        }
+
         const projectName = project.hostname ?? projectId;
         const bundle = artifact.metadata as any;
         const sys = bundle?.manifest ?? bundle;

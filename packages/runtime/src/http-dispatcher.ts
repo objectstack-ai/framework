@@ -1864,6 +1864,35 @@ export class HttpDispatcher {
                 // failed / retry state machine end-to-end without a real driver.
                 const simulateFailure = Boolean((baseMetadata as any).__simulateFailure);
                 const simulateDelayMs = Number((baseMetadata as any).__simulateDelayMs ?? 1500);
+
+                // Capture project-owner identity so the per-project kernel can
+                // pre-seed a `sys_user` row for this person on first boot.
+                // Without this, the owner lands on their own project as a
+                // brand-new SSO JIT user (no admin role, no membership) and
+                // has to manually promote themselves. We stash the cloud
+                // identity here — the project DB does not exist yet — and let
+                // ArtifactKernelFactory replay the seed once the project's
+                // sys_user table is provisioned. Best-effort: failure to
+                // resolve the session must not abort project creation.
+                try {
+                    const authService: any = await this.getService(CoreServiceName.enum.auth);
+                    const sessionData = await authService?.api?.getSession?.({
+                        headers: _context?.request?.headers,
+                    });
+                    const u = sessionData?.user;
+                    if (u?.id && u?.email) {
+                        (baseMetadata as any).ownerSeed = {
+                            userId: String(u.id),
+                            email: String(u.email),
+                            name: u.name ? String(u.name) : null,
+                            image: u.image ? String(u.image) : null,
+                        };
+                    }
+                } catch {
+                    // Session unavailable (e.g. service-to-service call) —
+                    // skip owner seed; later access flows still work via the
+                    // platform-SSO JIT path.
+                }
                 await ql.insert(ENV, {
                     id: projectId,
                     organization_id: req.organization_id,
