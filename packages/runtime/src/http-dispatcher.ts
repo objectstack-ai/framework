@@ -695,8 +695,39 @@ export class HttpDispatcher {
      * path: sub-path after /auth/
      */
     async handleAuth(path: string, method: string, body: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        // 0. Custom non-better-auth endpoints. Per-project AuthPlugins run
+        // with registerRoutes:false (the project kernel has no HTTP server
+        // of its own — the host dispatcher routes inbound requests in), so
+        // the `/config` and `/bootstrap-status` routes that AuthPlugin
+        // normally wires onto the raw Hono app are unreachable. Mirror them
+        // here so the per-project Account SPA can render the "Continue with
+        // ObjectStack" SSO button and detect first-run setup.
+        const normalizedShort = path.replace(/^\/+/, '');
+        const authService: any = await this.getService(CoreServiceName.enum.auth);
+        if (authService && method.toUpperCase() === 'GET') {
+            if (normalizedShort === 'config' && typeof authService.getPublicConfig === 'function') {
+                try {
+                    const config = authService.getPublicConfig();
+                    return { handled: true, response: { status: 200, body: { success: true, data: config } } };
+                } catch (e: any) {
+                    return { handled: true, response: { status: 500, body: { success: false, error: { code: 'auth_config_error', message: String(e?.message ?? e) } } } };
+                }
+            }
+            if (normalizedShort === 'bootstrap-status') {
+                try {
+                    const dataEngine = typeof authService.getDataEngine === 'function' ? authService.getDataEngine() : null;
+                    if (!dataEngine || typeof dataEngine.count !== 'function') {
+                        return { handled: true, response: { status: 200, body: { hasOwner: true } } };
+                    }
+                    const count = await dataEngine.count('sys_user', {});
+                    return { handled: true, response: { status: 200, body: { hasOwner: (count ?? 0) > 0 } } };
+                } catch {
+                    return { handled: true, response: { status: 200, body: { hasOwner: true } } };
+                }
+            }
+        }
+
         // 1. Try generic Auth Service
-        const authService = await this.getService(CoreServiceName.enum.auth);
         if (authService && typeof authService.handler === 'function') {
             const response = await authService.handler(context.request, context.response);
             return { handled: true, result: response };
