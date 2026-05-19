@@ -136,6 +136,30 @@ export class AuthManager {
       },
       account: {
         ...AUTH_ACCOUNT_CONFIG,
+        // Allow OIDC/OAuth callbacks to implicitly link the incoming
+        // identity to a pre-existing local user when the emails match.
+        //
+        // ObjectStack's platform SSO ("objectstack-cloud" provider) is the
+        // canonical case: cloud is the IdP for every project, so a user
+        // arriving via SSO is — by construction — the same person who was
+        // auto-seeded as the project owner when the project was created.
+        // Without trusting the provider, better-auth's safety check rejects
+        // the link with `error=account_not_linked` because the seeded user
+        // row has `emailVerified=false` (no actual verification ever runs
+        // in the IdP-mediated flow). See packages/plugins/plugin-auth/
+        // node_modules/better-auth/dist/oauth2/link-account.mjs:22.
+        //
+        // Custom-deployment consumers can extend the trusted set via
+        // `config.account.accountLinking.trustedProviders`; we always
+        // include `objectstack-cloud` because it is the platform IdP.
+        accountLinking: {
+          enabled: true,
+          ...((this.config as any)?.account?.accountLinking ?? {}),
+          trustedProviders: Array.from(new Set([
+            'objectstack-cloud',
+            ...((this.config as any)?.account?.accountLinking?.trustedProviders ?? []),
+          ])),
+        },
       },
       verification: {
         ...AUTH_VERIFICATION_CONFIG,
