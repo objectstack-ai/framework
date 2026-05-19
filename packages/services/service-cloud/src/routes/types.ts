@@ -22,6 +22,14 @@ export interface RouteDeps {
     storageAdapterName: string;
     requiredKey: string | undefined;
     controlDriverPromise: Promise<{ driver: IDataDriver; driverName: string; databaseUrl: string }>;
+    /**
+     * Resolve the caller's user id from the request headers using better-auth's
+     * `getSession`. When the auth service is unavailable this resolves to
+     * `undefined`. Optional so unit tests / legacy callers can omit it.
+     */
+    getCallerUserId?: (req: any) => Promise<string | undefined>;
+    /** Resolve the caller's active organization id via better-auth. */
+    getCallerActiveOrgId?: (req: any) => Promise<string | undefined>;
 }
 
 export type AuthResult = { ok: true } | { ok: false; status: number; body: any };

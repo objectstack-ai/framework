@@ -115,7 +115,13 @@ export class PermissionEvaluator {
   async resolvePermissionSets(
     identifiers: string[],
     metadataService: any,
-    bootstrapPermissionSets: PermissionSet[] = []
+    bootstrapPermissionSets: PermissionSet[] = [],
+    /**
+     * Optional async loader for permission set names that aren't found in
+     * metadata or bootstrap. Lets callers query user-defined permission
+     * sets persisted in `sys_permission_set`. Failures are swallowed.
+     */
+    dbLoader?: (unresolved: string[]) => Promise<PermissionSet[]>
   ): Promise<PermissionSet[]> {
     if (identifiers.length === 0) return [];
 
@@ -151,6 +157,28 @@ export class PermissionEvaluator {
       if (wanted.has(ps.name) && !seen.has(ps.name)) {
         seen.add(ps.name);
         result.push(ps);
+      }
+    }
+
+    // Last-resort: query user-defined permission sets from the database.
+    // Without this, custom permission sets (created via the admin UI as
+    // `sys_permission_set` rows) would be silently ignored both for CRUD
+    // enforcement and for field-level masking.
+    if (dbLoader) {
+      const unresolved = identifiers.filter((n) => !seen.has(n));
+      if (unresolved.length > 0) {
+        try {
+          const dbRows = await dbLoader(unresolved);
+          for (const ps of dbRows ?? []) {
+            if (ps?.name && !seen.has(ps.name)) {
+              seen.add(ps.name);
+              result.push(ps);
+            }
+          }
+        } catch {
+          // Swallow — the request shouldn't fail just because the DB
+          // lookup is unavailable.
+        }
       }
     }
 

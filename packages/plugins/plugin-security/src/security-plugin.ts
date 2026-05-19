@@ -157,6 +157,36 @@ export class SecurityPlugin implements Plugin {
       return;
     }
 
+    // Construct a dbLoader once that lets resolvePermissionSets
+    // surface user-defined permission sets from `sys_permission_set`
+    // (created via the admin UI) in addition to plugin-registered
+    // ones. Uses `isSystem` to bypass tenant RLS.
+    const dbLoader = ql
+      ? async (names: string[]) => {
+          let rows: any;
+          try {
+            rows = await ql.find(
+              'sys_permission_set',
+              { where: { name: { $in: names } }, limit: names.length },
+              { context: { isSystem: true } },
+            );
+          } catch {
+            rows = [];
+          }
+          const list = Array.isArray(rows) ? rows : rows?.records ?? [];
+          return list.map((r: any) => ({
+            name: r.name,
+            label: r.label,
+            objects: typeof r.object_permissions === 'string'
+              ? JSON.parse(r.object_permissions || '{}')
+              : r.object_permissions ?? {},
+            fields: typeof r.field_permissions === 'string'
+              ? JSON.parse(r.field_permissions || '{}')
+              : r.field_permissions ?? {},
+          }));
+        }
+      : undefined;
+
     // Register security middleware
     ql.registerMiddleware(async (opCtx: any, next: () => Promise<void>) => {
       // System operations bypass security
@@ -198,6 +228,7 @@ export class SecurityPlugin implements Plugin {
           requested,
           metadata,
           this.bootstrapPermissionSets,
+          dbLoader,
         );
         // **Post-resolution fallback** — closes the fail-open hole that
         // appears when a user's `roles` array is populated (e.g. a
@@ -219,6 +250,7 @@ export class SecurityPlugin implements Plugin {
             [this.fallbackPermissionSet],
             metadata,
             this.bootstrapPermissionSets,
+            dbLoader,
           );
           permissionSets = fallback;
         }

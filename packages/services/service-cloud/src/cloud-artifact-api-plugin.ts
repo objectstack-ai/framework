@@ -26,6 +26,7 @@ import { resolveStorage } from './routes/storage.js';
 import { registerCloudRoutes } from './routes/cloud.js';
 import { registerPublicRoutes } from './routes/public.js';
 import { registerBranchRoutes } from './routes/branches.js';
+import { registerProjectLifecycleRoutes } from './routes/project-lifecycle.js';
 import type { RouteDeps } from './routes/types.js';
 
 type AnyContext = any;
@@ -63,6 +64,34 @@ export function createCloudArtifactApiPlugin(options: CloudArtifactApiPluginOpti
 
             const { storage, adapterName: storageAdapterName } = resolveStorage(ctx, options, artifactRoot);
 
+            // Best-effort better-auth session resolver. Cached on first use.
+            let cachedAuthSvc: any | null | undefined;
+            const headersFromReq = (req: any): any => {
+                const raw = req?.headers;
+                if (!raw) return new Headers();
+                if (typeof raw.get === 'function') return raw;
+                const h = new Headers();
+                for (const [k, v] of Object.entries(raw as Record<string, any>)) {
+                    if (v == null) continue;
+                    h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
+                }
+                return h;
+            };
+            const getSessionData = async (req: any): Promise<any> => {
+                if (cachedAuthSvc === undefined) {
+                    try { cachedAuthSvc = ctx.getService?.('auth') ?? null; }
+                    catch { cachedAuthSvc = null; }
+                }
+                if (!cachedAuthSvc) return null;
+                try {
+                    const apiObj = cachedAuthSvc.auth?.api ?? cachedAuthSvc.api;
+                    if (!apiObj?.getSession) return null;
+                    return await apiObj.getSession.call(apiObj, { headers: headersFromReq(req) });
+                } catch { return null; }
+            };
+            const getCallerUserId = async (req: any) => (await getSessionData(req))?.user?.id;
+            const getCallerActiveOrgId = async (req: any) => (await getSessionData(req))?.session?.activeOrganizationId;
+
             const deps: RouteDeps = {
                 prefix,
                 artifactRoot,
@@ -71,11 +100,14 @@ export function createCloudArtifactApiPlugin(options: CloudArtifactApiPluginOpti
                 storageAdapterName,
                 requiredKey,
                 controlDriverPromise: options.controlDriverPromise,
+                getCallerUserId,
+                getCallerActiveOrgId,
             };
 
             registerCloudRoutes(server, deps);
             registerPublicRoutes(server, deps);
             registerBranchRoutes(server, deps);
+            registerProjectLifecycleRoutes(server, deps);
         },
         stop: async (_ctx: AnyContext) => {},
     };

@@ -72,6 +72,14 @@ export const CLOUD_CONTROL_APP: App = {
         { id: 'nav_projects', type: 'object', label: 'Projects', objectName: 'sys_project', icon: 'layers' },
         { id: 'nav_project_branches', type: 'object', label: 'Branches', objectName: 'sys_project_branch', icon: 'git-branch' },
         { id: 'nav_project_members', type: 'object', label: 'Project Members', objectName: 'sys_project_member', icon: 'user-cog' },
+      ],
+    },
+    {
+      id: 'group_operations',
+      type: 'group',
+      label: 'Operations',
+      icon: 'wrench',
+      children: [
         { id: 'nav_project_revisions', type: 'object', label: 'Revisions', objectName: 'sys_project_revision', icon: 'history' },
         { id: 'nav_project_credentials', type: 'object', label: 'Credentials', objectName: 'sys_project_credential', icon: 'key-square' },
       ],

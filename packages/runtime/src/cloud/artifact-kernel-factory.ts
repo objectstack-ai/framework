@@ -261,14 +261,27 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             const ownerSeed = projMeta?.ownerSeed;
             const orgSeed = projMeta?.orgSeed;
 
+            // Diagnostic: surface metadata visibility at cold-boot so we
+            // can confirm runtime is wired up correctly without needing a
+            // shell into the project DB. Drops out as soon as we're past
+            // the bring-up phase.
+            console.warn('[ArtifactKernelFactory] seed replay check', {
+                projectId,
+                hasOwnerSeed: !!ownerSeed?.userId,
+                hasOrgSeed: !!orgSeed?.id,
+                metaType: typeof (project as any)?.metadata,
+            });
+
             if (orgSeed?.id && orgSeed?.name) {
                 const { seedProjectOrganization } = await import('./project-org-seed.js');
-                await seedProjectOrganization(kernel, orgSeed, this.logger);
+                const result = await seedProjectOrganization(kernel, orgSeed, this.logger);
+                console.warn('[ArtifactKernelFactory] orgSeed →', result);
             }
 
             if (ownerSeed?.userId && ownerSeed?.email) {
                 const { seedProjectOwner } = await import('./project-owner-seed.js');
-                await seedProjectOwner(kernel, ownerSeed, this.logger);
+                const ownerResult = await seedProjectOwner(kernel, ownerSeed, this.logger);
+                console.warn('[ArtifactKernelFactory] ownerSeed →', ownerResult);
 
                 // Bind owner → cloud org with role=owner so the
                 // auto-personal-workspace middleware skips. If no org
@@ -276,11 +289,12 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 // legacy personal-org auto-create behaviour.
                 if (orgSeed?.id) {
                     const { seedProjectMember } = await import('./project-org-seed.js');
-                    await seedProjectMember(
+                    const memberResult = await seedProjectMember(
                         kernel,
                         { userId: ownerSeed.userId, organizationId: orgSeed.id, role: 'owner' },
                         this.logger,
                     );
+                    console.warn('[ArtifactKernelFactory] memberSeed →', memberResult);
                 }
             }
         } catch (err: any) {
@@ -288,6 +302,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 projectId,
                 error: err?.message,
             });
+            console.warn('[ArtifactKernelFactory] seed THREW', err?.message);
         }
 
         const projectName = project.hostname ?? projectId;

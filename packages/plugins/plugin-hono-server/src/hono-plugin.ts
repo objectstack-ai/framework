@@ -564,6 +564,37 @@ export class HonoServerPlugin implements Plugin {
                     try { return ctx.getService<string | null>('security.fallbackPermissionSet') ?? 'member_default'; }
                     catch { return 'member_default'; }
                 })();
+                // DB loader: surfaces user-defined permission sets
+                // (created via the admin UI as `sys_permission_set`
+                // rows) that aren't in metadata or bootstrap.
+                const ql: any = (() => {
+                    try { return ctx.getService('objectql'); } catch { return null; }
+                })();
+                const dbLoader = ql
+                    ? async (names: string[]) => {
+                        let rows: any;
+                        try {
+                            rows = await ql.find(
+                                'sys_permission_set',
+                                { where: { name: { $in: names } }, limit: names.length },
+                                { context: { isSystem: true } },
+                            );
+                        } catch {
+                            rows = [];
+                        }
+                        const list = Array.isArray(rows) ? rows : rows?.records ?? [];
+                        return list.map((r: any) => ({
+                            name: r.name,
+                            label: r.label,
+                            objects: typeof r.object_permissions === 'string'
+                                ? JSON.parse(r.object_permissions || '{}')
+                                : r.object_permissions ?? {},
+                            fields: typeof r.field_permissions === 'string'
+                                ? JSON.parse(r.field_permissions || '{}')
+                                : r.field_permissions ?? {},
+                        }));
+                    }
+                    : undefined;
                 if (!evaluator || !metadata) {
                     // Auth resolved but security plugin isn't wired — emit
                     // an empty-but-authenticated body so the frontend can
@@ -589,11 +620,11 @@ export class HonoServerPlugin implements Plugin {
                     ...(execCtx.permissions ?? []),
                 ];
                 let resolved: any[] = await evaluator
-                    .resolvePermissionSets(requested, metadata, bootstrap)
+                    .resolvePermissionSets(requested, metadata, bootstrap, dbLoader)
                     .catch(() => []);
                 if (resolved.length === 0 && fallbackName) {
                     resolved = await evaluator
-                        .resolvePermissionSets([fallbackName], metadata, bootstrap)
+                        .resolvePermissionSets([fallbackName], metadata, bootstrap, dbLoader)
                         .catch(() => []);
                 }
                 // Most-permissive merge of `objects` and `fields` across
