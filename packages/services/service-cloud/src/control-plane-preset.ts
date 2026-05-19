@@ -269,25 +269,36 @@ export function createControlPlanePlugins(cfg: ControlPlanePresetConfig): any[] 
       name: 'com.objectstack.platform-sso-backfill',
       version: '1.0.0',
       async start(ctx: any) {
-        try {
-          const baseSecret = (process.env.OS_AUTH_SECRET ?? process.env.AUTH_SECRET ?? cfg.authSecret ?? '').trim();
-          if (!baseSecret) {
-            ctx.logger?.warn?.('[platform-sso-backfill] OS_AUTH_SECRET missing — skipping');
-            return;
+        // Backfill iterates all sys_project rows (up to 1000) doing 2-3
+        // DB calls each. On Neon-over-Workers that easily exceeds the
+        // 30s plugin-start timeout and rolls back the whole boot, taking
+        // the cloud container down with it. The backfill is non-critical
+        // (project-create hook seeds the happy path inline); run it in
+        // the background so a slow scan never blocks startup.
+        const runBackfill = async () => {
+          try {
+            const baseSecret = (process.env.OS_AUTH_SECRET ?? process.env.AUTH_SECRET ?? cfg.authSecret ?? '').trim();
+            if (!baseSecret) {
+              ctx.logger?.warn?.('[platform-sso-backfill] OS_AUTH_SECRET missing — skipping');
+              return;
+            }
+            const ql = ctx.getService?.('objectql');
+            if (!ql) {
+              ctx.logger?.warn?.('[platform-sso-backfill] objectql service not available — skipping');
+              return;
+            }
+            const { backfillPlatformSsoClients } = await import('@objectstack/runtime');
+            const result = await backfillPlatformSsoClients({ ql, baseSecret, logger: ctx.logger });
+            ctx.logger?.info?.('[platform-sso-backfill] done', result);
+          } catch (err) {
+            ctx.logger?.warn?.('[platform-sso-backfill] failed (non-fatal)', {
+              error: (err as Error)?.message,
+            });
           }
-          const ql = ctx.getService?.('objectql');
-          if (!ql) {
-            ctx.logger?.warn?.('[platform-sso-backfill] objectql service not available — skipping');
-            return;
-          }
-          const { backfillPlatformSsoClients } = await import('@objectstack/runtime');
-          const result = await backfillPlatformSsoClients({ ql, baseSecret, logger: ctx.logger });
-          ctx.logger?.info?.('[platform-sso-backfill] done', result);
-        } catch (err) {
-          ctx.logger?.warn?.('[platform-sso-backfill] failed (non-fatal)', {
-            error: (err as Error)?.message,
-          });
-        }
+        };
+        // Fire-and-forget. Attach a noop catch so an unhandled rejection
+        // never tips the process over.
+        void runBackfill().catch(() => {});
       },
     })),
   ];
