@@ -1,62 +1,121 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
+import { SysJobQueue } from '@objectstack/platform-objects/audit';
 import { MemoryQueueAdapter } from './memory-queue-adapter.js';
 import type { MemoryQueueAdapterOptions } from './memory-queue-adapter.js';
+import { DbQueueAdapter } from './db-queue-adapter.js';
+import type { DbQueueAdapterOptions } from './db-queue-adapter.js';
 
 /**
  * Configuration options for the QueueServicePlugin.
  */
 export interface QueueServicePluginOptions {
-  /** Queue adapter type (default: 'memory') */
-  adapter?: 'memory' | 'bullmq';
+  /**
+   * Queue adapter type.
+   *  - 'auto' (default): use DbQueueAdapter when objectql engine available, else MemoryQueueAdapter
+   *  - 'db': require objectql; persists messages, retries, and DLQ to sys_job_queue
+   *  - 'memory': in-process MemoryQueueAdapter (non-durable, dev/test)
+   *  - 'bullmq': reserved for M10.43 (throws today)
+   */
+  adapter?: 'auto' | 'db' | 'memory' | 'bullmq';
   /** Options for the memory queue adapter */
   memory?: MemoryQueueAdapterOptions;
-  /** Redis connection URL (used when adapter is 'bullmq') */
+  /** Options for the DB adapter (polling, batch, lease, idempotency window…) */
+  db?: DbQueueAdapterOptions;
+  /** Redis connection URL (reserved for bullmq) */
   redisUrl?: string;
 }
 
 /**
  * QueueServicePlugin — Production IQueueService implementation.
  *
- * Registers a queue service with the kernel during the init phase.
- * Supports in-memory and BullMQ adapters.
- *
- * @example
- * ```ts
- * import { ObjectKernel } from '@objectstack/core';
- * import { QueueServicePlugin } from '@objectstack/service-queue';
- *
- * const kernel = new ObjectKernel();
- * kernel.use(new QueueServicePlugin({ adapter: 'memory' }));
- * await kernel.bootstrap();
- *
- * const queue = kernel.getService('queue');
- * await queue.publish('orders', { orderId: 123 });
- * ```
+ * Default: registers MemoryQueueAdapter synchronously so producers can
+ * publish during plugin init; upgrades to DbQueueAdapter on `kernel:ready`
+ * when an ObjectQL engine is available. Subscribers registered against
+ * the (now-replaced) memory queue must re-subscribe after upgrade — for
+ * that reason most plugins register subscribers inside their own
+ * `kernel:ready` hook, which fires after this one.
  */
 export class QueueServicePlugin implements Plugin {
   name = 'com.objectstack.service.queue';
-  version = '1.0.0';
+  version = '1.1.0';
   type = 'standard';
 
   private readonly options: QueueServicePluginOptions;
+  private dbAdapter?: DbQueueAdapter;
 
   constructor(options: QueueServicePluginOptions = {}) {
-    this.options = { adapter: 'memory', ...options };
+    this.options = { adapter: 'auto', ...options };
   }
 
   async init(ctx: PluginContext): Promise<void> {
-    const adapter = this.options.adapter;
-    if (adapter === 'bullmq') {
+    // Register sys_job_queue (also serves as DLQ view) so Studio can list/replay.
+    try {
+      ctx.getService<{ register(m: any): void }>('manifest').register({
+        id: 'com.objectstack.service.queue',
+        name: 'Queue Service',
+        version: '1.1.0',
+        type: 'plugin',
+        scope: 'system',
+        defaultDatasource: 'cloud',
+        namespace: 'sys',
+        objects: [SysJobQueue],
+      });
+    } catch (err) {
+      ctx.logger.warn('QueueServicePlugin: manifest service unavailable; sys_job_queue not registered', err as any);
+    }
+
+    const choice = this.options.adapter ?? 'auto';
+
+    if (choice === 'bullmq') {
       throw new Error(
-        'BullMQ queue adapter is not yet implemented. ' +
-        'Use adapter: "memory" or provide a custom IQueueService via ctx.registerService("queue", impl).'
+        'BullMQ queue adapter is not yet implemented (M10.43). ' +
+        'Use adapter: "auto", "db", or "memory", or provide a custom IQueueService.',
       );
     }
 
-    const queue = new MemoryQueueAdapter(this.options.memory);
-    ctx.registerService('queue', queue);
-    ctx.logger.info('QueueServicePlugin: registered memory queue adapter');
+    if (choice === 'memory') {
+      const q = new MemoryQueueAdapter(this.options.memory);
+      ctx.registerService('queue', q);
+      ctx.logger.info('QueueServicePlugin: registered MemoryQueueAdapter');
+      return;
+    }
+
+    // auto / db — register memory placeholder, upgrade on kernel:ready
+    ctx.registerService('queue', new MemoryQueueAdapter(this.options.memory));
+
+    ctx.hook('kernel:ready', async () => {
+      let engine: any = null;
+      try { engine = ctx.getService<any>('objectql'); }
+      catch { try { engine = ctx.getService<any>('data'); } catch { /* ignore */ } }
+
+      if (!engine) {
+        if (choice === 'db') {
+          ctx.logger.warn('QueueServicePlugin: db adapter requested but no ObjectQL engine — staying on MemoryQueueAdapter');
+        } else {
+          ctx.logger.info('QueueServicePlugin: no ObjectQL engine — staying on MemoryQueueAdapter');
+        }
+        return;
+      }
+
+      this.dbAdapter = new DbQueueAdapter({
+        engine,
+        logger: ctx.logger,
+        options: this.options.db,
+      });
+
+      try {
+        (ctx as any).replaceService?.('queue', this.dbAdapter);
+        this.dbAdapter.start();
+        ctx.logger.info('QueueServicePlugin: upgraded to DbQueueAdapter (sys_job_queue persistence)');
+      } catch (err) {
+        ctx.logger.warn('QueueServicePlugin: replaceService failed; staying on MemoryQueueAdapter', err as any);
+      }
+    });
+  }
+
+  async destroy(): Promise<void> {
+    await this.dbAdapter?.stop();
   }
 }

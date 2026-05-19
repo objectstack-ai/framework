@@ -1,0 +1,214 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import { DbQueueAdapter } from './db-queue-adapter';
+
+/**
+ * In-memory engine that mimics objectql's `where:`-based find and
+ * `(table, {id, ...patch})` update signature.
+ */
+function makeFakeEngine() {
+  const tables = new Map<string, any[]>();
+  function row(table: string, id: string) {
+    const t = tables.get(table) ?? [];
+    return t.find((r) => r.id === id);
+  }
+  function matches(row: any, where: Record<string, any>): boolean {
+    for (const [k, v] of Object.entries(where)) {
+      if (row[k] !== v) return false;
+    }
+    return true;
+  }
+  return {
+    tables,
+    async find(table: string, opts: any = {}) {
+      const t = tables.get(table) ?? [];
+      let out = opts.where ? t.filter((r) => matches(r, opts.where)) : [...t];
+      if (opts.orderBy) {
+        for (const order of [...opts.orderBy].reverse()) {
+          out.sort((a, b) => {
+            const av = a[order.field], bv = b[order.field];
+            if (av === bv) return 0;
+            const cmp = av > bv ? 1 : -1;
+            return order.direction === 'desc' ? -cmp : cmp;
+          });
+        }
+      }
+      if (opts.offset) out = out.slice(opts.offset);
+      if (opts.limit) out = out.slice(0, opts.limit);
+      return out;
+    },
+    async insert(table: string, data: any) {
+      const t = tables.get(table) ?? [];
+      t.push({ ...data });
+      tables.set(table, t);
+      return { id: data.id };
+    },
+    async update(table: string, patch: any) {
+      const r = row(table, patch.id);
+      if (!r) throw new Error(`row ${patch.id} not found in ${table}`);
+      Object.assign(r, patch);
+      return r;
+    },
+    async delete(table: string, opts: any) {
+      const t = tables.get(table) ?? [];
+      tables.set(table, t.filter((r) => r.id !== opts.id));
+      return { id: opts.id };
+    },
+  };
+}
+
+describe('DbQueueAdapter', () => {
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let adapter: DbQueueAdapter;
+
+  beforeEach(() => {
+    engine = makeFakeEngine();
+    adapter = new DbQueueAdapter({
+      engine,
+      options: { pollIntervalMs: 60_000, autoStart: false, defaultMaxAttempts: 3 },
+    });
+  });
+
+  it('publishes message persisted with status=pending', async () => {
+    const id = await adapter.publish('email.retry', { to: 'a@b.c' });
+    const rows = engine.tables.get('sys_job_queue') ?? [];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(id);
+    expect(rows[0].status).toBe('pending');
+    expect(rows[0].queue).toBe('email.retry');
+    expect(JSON.parse(rows[0].payload_json)).toEqual({ to: 'a@b.c' });
+  });
+
+  it('dedups by idempotencyKey within window', async () => {
+    const a = await adapter.publish('q', { x: 1 }, { idempotencyKey: 'k1' });
+    const b = await adapter.publish('q', { x: 2 }, { idempotencyKey: 'k1' });
+    expect(b).toBe(a);
+    const rows = engine.tables.get('sys_job_queue') ?? [];
+    expect(rows).toHaveLength(1);
+    expect(JSON.parse(rows[0].payload_json)).toEqual({ x: 1 });
+  });
+
+  it('processes pending messages via subscribed handler', async () => {
+    const received: any[] = [];
+    await adapter.subscribe('jobs', async (msg) => { received.push(msg.data); });
+    await adapter.publish('jobs', { hello: 'world' });
+
+    const n = await adapter.pollOnce();
+    expect(n).toBe(1);
+    expect(received).toEqual([{ hello: 'world' }]);
+    const row = (engine.tables.get('sys_job_queue') ?? [])[0];
+    expect(row.status).toBe('completed');
+    expect(row.attempts).toBe(1);
+  });
+
+  it('retries with backoff on handler failure', async () => {
+    let calls = 0;
+    await adapter.subscribe('flaky', async () => {
+      calls++;
+      if (calls < 2) throw new Error('first attempt fails');
+    });
+    await adapter.publish('flaky', {}, { maxAttempts: 3, backoff: { type: 'fixed', delayMs: 1 } });
+
+    await adapter.pollOnce();
+    const row1 = (engine.tables.get('sys_job_queue') ?? [])[0];
+    expect(row1.status).toBe('pending');
+    expect(row1.attempts).toBe(1);
+    expect(row1.last_error).toContain('first attempt fails');
+
+    // Wait past backoff
+    await new Promise((r) => setTimeout(r, 10));
+    await adapter.pollOnce();
+    const row2 = (engine.tables.get('sys_job_queue') ?? [])[0];
+    expect(row2.status).toBe('completed');
+    expect(row2.attempts).toBe(2);
+    expect(calls).toBe(2);
+  });
+
+  it('moves to dlq after maxAttempts exhausted', async () => {
+    await adapter.subscribe('always-fail', async () => { throw new Error('boom'); });
+    await adapter.publish('always-fail', {}, {
+      maxAttempts: 2,
+      backoff: { type: 'fixed', delayMs: 1 },
+    });
+
+    await adapter.pollOnce();
+    expect((engine.tables.get('sys_job_queue') ?? [])[0].status).toBe('pending');
+
+    await new Promise((r) => setTimeout(r, 5));
+    await adapter.pollOnce();
+    const final = (engine.tables.get('sys_job_queue') ?? [])[0];
+    expect(final.status).toBe('dlq');
+    expect(final.attempts).toBe(2);
+    expect(final.last_error).toContain('boom');
+  });
+
+  it('respects scheduled_for delay', async () => {
+    await adapter.subscribe('later', async () => {});
+    await adapter.publish('later', {}, { delay: 10_000 });
+
+    const n = await adapter.pollOnce();
+    expect(n).toBe(0);
+    expect((engine.tables.get('sys_job_queue') ?? [])[0].status).toBe('pending');
+  });
+
+  it('listFailed returns only dlq rows', async () => {
+    await adapter.subscribe('dlq-q', async () => { throw new Error('x'); });
+    await adapter.publish('dlq-q', { a: 1 }, { maxAttempts: 1 });
+    await adapter.pollOnce();
+
+    const failed = await adapter.listFailed('dlq-q');
+    expect(failed).toHaveLength(1);
+    expect(failed[0].status).toBe('dlq');
+    expect(failed[0].data).toEqual({ a: 1 });
+    expect(failed[0].lastError).toContain('x');
+  });
+
+  it('replay resets dlq message back to pending and re-processes', async () => {
+    let attempts = 0;
+    await adapter.subscribe('replay-q', async () => {
+      attempts++;
+      if (attempts < 3) throw new Error('still failing');
+    });
+    await adapter.publish('replay-q', { v: 1 }, { maxAttempts: 1 });
+    await adapter.pollOnce();
+    const id = (engine.tables.get('sys_job_queue') ?? [])[0].id;
+    expect((engine.tables.get('sys_job_queue') ?? [])[0].status).toBe('dlq');
+
+    await adapter.replay(id);
+    expect((engine.tables.get('sys_job_queue') ?? [])[0].status).toBe('pending');
+    expect((engine.tables.get('sys_job_queue') ?? [])[0].attempts).toBe(0);
+
+    await adapter.pollOnce(); // attempts++ → still failing, back to dlq (maxAttempts=1)
+    await adapter.replay(id);
+    await adapter.pollOnce(); // success on third call
+    expect((engine.tables.get('sys_job_queue') ?? [])[0].status).toBe('completed');
+    expect(attempts).toBe(3);
+  });
+
+  it('purgeFailed deletes dlq row', async () => {
+    await adapter.subscribe('purge-q', async () => { throw new Error(); });
+    await adapter.publish('purge-q', {}, { maxAttempts: 1 });
+    await adapter.pollOnce();
+    const id = (engine.tables.get('sys_job_queue') ?? [])[0].id;
+
+    await adapter.purgeFailed(id);
+    expect(engine.tables.get('sys_job_queue')).toEqual([]);
+  });
+
+  it('replay rejects non-dlq messages', async () => {
+    await adapter.publish('q', {});
+    const id = (engine.tables.get('sys_job_queue') ?? [])[0].id;
+    await expect(adapter.replay(id)).rejects.toThrow(/INVALID_STATE/);
+  });
+
+  it('getQueueSize counts pending only', async () => {
+    await adapter.subscribe('mix', async () => {});
+    await adapter.publish('mix', { x: 1 });
+    await adapter.publish('mix', { x: 2 });
+    await adapter.publish('mix', { x: 3 });
+    expect(await adapter.getQueueSize('mix')).toBe(3);
+    await adapter.pollOnce();
+    expect(await adapter.getQueueSize('mix')).toBe(0);
+  });
+});

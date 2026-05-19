@@ -14,6 +14,18 @@
  */
 
 /**
+ * Backoff policy for failed message retries.
+ */
+export interface QueueBackoffPolicy {
+    /** Backoff strategy */
+    type: 'fixed' | 'exponential';
+    /** Base delay in milliseconds */
+    delayMs: number;
+    /** Maximum delay cap in milliseconds (exponential only) */
+    maxDelayMs?: number;
+}
+
+/**
  * Options for publishing a message to a queue
  */
 export interface QueuePublishOptions {
@@ -21,8 +33,44 @@ export interface QueuePublishOptions {
     delay?: number;
     /** Message priority (lower = higher priority) */
     priority?: number;
-    /** Number of retry attempts on failure */
+    /** Number of retry attempts on failure (legacy — prefer maxAttempts) */
     retries?: number;
+    /** Maximum total delivery attempts before DLQ (default: 3) */
+    maxAttempts?: number;
+    /** Backoff policy between retries */
+    backoff?: QueueBackoffPolicy;
+    /**
+     * Idempotency key — if a non-completed message with the same
+     * (queue, idempotencyKey) exists within the dedup window, the publish
+     * is suppressed and the existing message id is returned.
+     */
+    idempotencyKey?: string;
+    /** ISO 8601 datetime — schedule message for future delivery */
+    scheduledFor?: string;
+    /** Arbitrary metadata (org_id, tenant_id, source record) for observability */
+    metadata?: Record<string, unknown>;
+}
+
+/**
+ * A persisted queue message including lifecycle bookkeeping.
+ * Returned from `listFailed` and admin endpoints.
+ */
+export interface QueueMessageRecord<T = unknown> {
+    id: string;
+    queue: string;
+    data: T;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'dlq';
+    attempts: number;
+    maxAttempts: number;
+    scheduledFor?: string;
+    lockedBy?: string;
+    lockedUntil?: string;
+    lastError?: string;
+    idempotencyKey?: string;
+    metadata?: Record<string, unknown>;
+    createdAt: string;
+    updatedAt?: string;
+    completedAt?: string;
 }
 
 /**
@@ -79,4 +127,26 @@ export interface IQueueService {
      * @param queue - Queue name
      */
     purge?(queue: string): Promise<void>;
+
+    /**
+     * List messages currently in the dead-letter state.
+     * @param queue - Optional queue filter; omit for cross-queue listing
+     * @param options - Pagination / limit
+     */
+    listFailed?(
+        queue?: string,
+        options?: { limit?: number; offset?: number },
+    ): Promise<QueueMessageRecord[]>;
+
+    /**
+     * Move a DLQ message back to pending so a worker re-processes it.
+     * Resets `attempts` and clears `lastError`. Throws if the message
+     * does not exist or is not in 'dlq' status.
+     */
+    replay?(messageId: string): Promise<void>;
+
+    /**
+     * Permanently remove a message in the 'dlq' or 'failed' state.
+     */
+    purgeFailed?(messageId: string): Promise<void>;
 }

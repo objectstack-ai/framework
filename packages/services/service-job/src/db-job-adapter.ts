@@ -1,0 +1,299 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+import type {
+  IJobService,
+  JobSchedule,
+  JobHandler,
+  JobExecution,
+} from '@objectstack/spec/contracts';
+import { IntervalJobAdapter } from './interval-job-adapter.js';
+
+const JOB_TABLE = 'sys_job';
+const RUN_TABLE = 'sys_job_run';
+const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as const;
+
+export interface JobEngineLike {
+  find(object: string, options?: any): Promise<any[]>;
+  insert(object: string, data: any, options?: any): Promise<any>;
+  update(object: string, idOrData: any, dataOrOptions?: any, options?: any): Promise<any>;
+  delete?(object: string, options?: any): Promise<any>;
+}
+
+export interface JobLoggerLike {
+  info(msg: string, meta?: unknown): void;
+  warn(msg: string, meta?: unknown): void;
+  error?(msg: string, meta?: unknown): void;
+}
+
+export interface DbJobAdapterOptions {
+  /** Maximum executions kept in memory per job (default 100) */
+  maxExecutions?: number;
+  /** Soft cap on sys_job_run rows recorded per job (defaults to none — handled by retention jobs) */
+  recordRuns?: boolean;
+}
+
+function uid(prefix: string): string {
+  const g: any = globalThis as any;
+  if (g.crypto?.randomUUID) return `${prefix}_${g.crypto.randomUUID()}`;
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * DbJobAdapter — IJobService that persists job registry and execution
+ * history to ObjectQL while delegating timer mechanics to
+ * `IntervalJobAdapter`. Cron is delegated to `CronJobAdapter` callers
+ * supplied via {@link withCron}.
+ *
+ * Persisted side effects:
+ *   - `schedule(name, …)` upserts a `sys_job` row (active=true)
+ *   - `cancel(name)` marks the row inactive
+ *   - every execution writes a `sys_job_run` row
+ *   - every execution updates `sys_job.last_run_at / last_status / run_count / failure_count`
+ *
+ * The persistence is best-effort: a DB failure is logged but does not
+ * break job execution. This keeps a healthy job system resilient to
+ * transient storage hiccups.
+ */
+export class DbJobAdapter implements IJobService {
+  private readonly inner: IntervalJobAdapter;
+  private readonly cron?: IJobService;
+  private readonly engine: JobEngineLike;
+  private readonly logger?: JobLoggerLike;
+  private readonly recordRuns: boolean;
+
+  constructor(args: {
+    engine: JobEngineLike;
+    logger?: JobLoggerLike;
+    options?: DbJobAdapterOptions;
+    cron?: IJobService;
+  }) {
+    this.engine = args.engine;
+    this.logger = args.logger;
+    this.recordRuns = args.options?.recordRuns ?? true;
+    this.inner = new IntervalJobAdapter({ maxExecutions: args.options?.maxExecutions });
+    this.cron = args.cron;
+  }
+
+  // ── IJobService ──────────────────────────────────────────────────
+
+  async schedule(name: string, schedule: JobSchedule, handler: JobHandler): Promise<void> {
+    const wrapped = this.wrap(name, handler, 'schedule');
+
+    if (schedule.type === 'cron') {
+      if (this.cron) await this.cron.schedule(name, schedule, wrapped);
+      else this.logger?.warn?.(
+        `DbJobAdapter: cron schedule registered for "${name}" without CronJobAdapter — job will only run via manual trigger`,
+      );
+      // Still record in inner so trigger() works
+      await this.inner.schedule(name, schedule, wrapped);
+    } else {
+      await this.inner.schedule(name, schedule, wrapped);
+    }
+
+    await this.upsertJobRow(name, schedule, true);
+  }
+
+  async cancel(name: string): Promise<void> {
+    await this.inner.cancel(name);
+    if (this.cron && typeof this.cron.cancel === 'function') {
+      try { await this.cron.cancel(name); } catch { /* ignore */ }
+    }
+    await this.setActive(name, false);
+  }
+
+  async trigger(name: string, data?: unknown): Promise<void> {
+    await this.inner.trigger(name, data);
+  }
+
+  async getExecutions(name: string, limit?: number): Promise<JobExecution[]> {
+    return this.inner.getExecutions(name, limit);
+  }
+
+  async listJobs(): Promise<string[]> {
+    return this.inner.listJobs();
+  }
+
+  async replay(name: string, data?: unknown): Promise<void> {
+    // Same execution path as trigger but tag the run as 'replay'.
+    const handlers = (this.inner as any).jobs?.get?.(name);
+    if (!handlers) throw new Error(`Job "${name}" not found`);
+    // Reuse trigger; the wrap function uses a closure flag — simpler:
+    // expose by calling inner.trigger with a marker via data is intrusive,
+    // so we record a synthetic run row before/after to ensure 'replay' tag.
+    const runId = await this.startRun(name, 'replay');
+    try {
+      await this.inner.trigger(name, data);
+      // The wrap already recorded a run; mark our synthetic run as success.
+      await this.finishRun(runId, 'success');
+    } catch (err) {
+      await this.finishRun(runId, 'failed', err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }
+
+  async listExecutionsByStatus(
+    status: JobExecution['status'],
+    limit?: number,
+  ): Promise<JobExecution[]> {
+    const rows = await this.engine.find(RUN_TABLE, {
+      where: { status },
+      limit: limit ?? 50,
+      orderBy: [{ field: 'started_at', direction: 'desc' }],
+      context: SYSTEM_CTX,
+    });
+    return (rows ?? []).map((r: any) => ({
+      jobId: String(r.job_name),
+      status: r.status,
+      startedAt: r.started_at,
+      completedAt: r.completed_at ?? undefined,
+      durationMs: r.duration_ms ?? undefined,
+      error: r.error ?? undefined,
+    }));
+  }
+
+  async destroy(): Promise<void> {
+    await this.inner.destroy();
+  }
+
+  // ── Internals ────────────────────────────────────────────────────
+
+  private wrap(name: string, handler: JobHandler, defaultTrigger: 'schedule' | 'manual' | 'replay'): JobHandler {
+    return async (ctx) => {
+      const runId = this.recordRuns ? await this.startRun(name, defaultTrigger) : undefined;
+      const startMs = Date.now();
+      try {
+        await handler(ctx);
+        if (runId) await this.finishRun(runId, 'success', undefined, Date.now() - startMs);
+        await this.bumpJob(name, 'success');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (runId) await this.finishRun(runId, 'failed', msg, Date.now() - startMs);
+        await this.bumpJob(name, 'failed', msg);
+        throw err;
+      }
+    };
+  }
+
+  private async startRun(jobName: string, trigger: 'schedule' | 'manual' | 'replay'): Promise<string | undefined> {
+    const id = uid('run');
+    const now = new Date().toISOString();
+    try {
+      await this.engine.insert(RUN_TABLE, {
+        id,
+        job_name: jobName,
+        status: 'running',
+        started_at: now,
+        trigger,
+        attempt: 1,
+        created_at: now,
+      }, { context: SYSTEM_CTX });
+      return id;
+    } catch (err) {
+      this.logger?.warn?.('DbJobAdapter: failed to insert sys_job_run', err as any);
+      return undefined;
+    }
+  }
+
+  private async finishRun(
+    id: string | undefined,
+    status: JobExecution['status'],
+    error?: string,
+    durationMs?: number,
+  ): Promise<void> {
+    if (!id) return;
+    const now = new Date().toISOString();
+    try {
+      await this.engine.update(RUN_TABLE, {
+        id,
+        status,
+        completed_at: now,
+        duration_ms: durationMs,
+        error: error ?? null,
+      }, { context: SYSTEM_CTX });
+    } catch (err) {
+      this.logger?.warn?.('DbJobAdapter: failed to update sys_job_run', err as any);
+    }
+  }
+
+  private async upsertJobRow(name: string, schedule: JobSchedule, active: boolean): Promise<void> {
+    const now = new Date().toISOString();
+    const expression =
+      schedule.expression ?? (schedule.intervalMs != null ? String(schedule.intervalMs) : schedule.at);
+    try {
+      const existing = await this.engine.find(JOB_TABLE, {
+        where: { name },
+        limit: 1,
+        context: SYSTEM_CTX,
+      });
+      const row = existing?.[0];
+      if (row) {
+        await this.engine.update(JOB_TABLE, {
+          id: row.id,
+          schedule_type: schedule.type,
+          schedule_expression: expression ?? null,
+          timezone: schedule.timezone ?? null,
+          active,
+          updated_at: now,
+        }, { context: SYSTEM_CTX });
+      } else {
+        await this.engine.insert(JOB_TABLE, {
+          id: uid('job'),
+          name,
+          schedule_type: schedule.type,
+          schedule_expression: expression ?? null,
+          timezone: schedule.timezone ?? null,
+          active,
+          run_count: 0,
+          failure_count: 0,
+          created_at: now,
+          updated_at: now,
+        }, { context: SYSTEM_CTX });
+      }
+    } catch (err) {
+      this.logger?.warn?.('DbJobAdapter: failed to upsert sys_job', err as any);
+    }
+  }
+
+  private async setActive(name: string, active: boolean): Promise<void> {
+    try {
+      const existing = await this.engine.find(JOB_TABLE, {
+        where: { name },
+        limit: 1,
+        context: SYSTEM_CTX,
+      });
+      const row = existing?.[0];
+      if (!row) return;
+      await this.engine.update(JOB_TABLE, {
+        id: row.id,
+        active,
+        updated_at: new Date().toISOString(),
+      }, { context: SYSTEM_CTX });
+    } catch (err) {
+      this.logger?.warn?.('DbJobAdapter: setActive failed', err as any);
+    }
+  }
+
+  private async bumpJob(name: string, last_status: 'success' | 'failed', last_error?: string): Promise<void> {
+    try {
+      const existing = await this.engine.find(JOB_TABLE, {
+        where: { name },
+        limit: 1,
+        context: SYSTEM_CTX,
+      });
+      const row = existing?.[0];
+      if (!row) return;
+      const now = new Date().toISOString();
+      await this.engine.update(JOB_TABLE, {
+        id: row.id,
+        last_run_at: now,
+        last_status,
+        last_error: last_status === 'failed' ? (last_error ?? null) : null,
+        run_count: (row.run_count ?? 0) + 1,
+        failure_count: (row.failure_count ?? 0) + (last_status === 'failed' ? 1 : 0),
+        updated_at: now,
+      }, { context: SYSTEM_CTX });
+    } catch (err) {
+      this.logger?.warn?.('DbJobAdapter: bumpJob failed', err as any);
+    }
+  }
+}

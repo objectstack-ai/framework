@@ -6,3 +6,5 @@ export { IntervalJobAdapter } from './interval-job-adapter.js';
 export type { IntervalJobAdapterOptions } from './interval-job-adapter.js';
 export { CronJobAdapter } from './cron-job-adapter.js';
 export type { CronJobAdapterOptions } from './cron-job-adapter.js';
+export { DbJobAdapter } from './db-job-adapter.js';
+export type { DbJobAdapterOptions, JobEngineLike, JobLoggerLike } from './db-job-adapter.js';

@@ -87,4 +87,19 @@ export interface IJobService {
      * @returns Array of job names
      */
     listJobs?(): Promise<string[]>;
+
+    /**
+     * Replay the most recent execution of a job — useful from admin UI.
+     * Equivalent to `trigger(name)` but records that this run is a replay
+     * in the execution audit trail.
+     */
+    replay?(name: string, data?: unknown): Promise<void>;
+
+    /**
+     * List executions filtered by status across all jobs (admin/observability).
+     */
+    listExecutionsByStatus?(
+        status: JobExecution['status'],
+        limit?: number,
+    ): Promise<JobExecution[]>;
 }

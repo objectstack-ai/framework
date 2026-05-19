@@ -175,6 +175,16 @@ export class AuthManager {
         // include `objectstack-cloud` because it is the platform IdP.
         accountLinking: {
           enabled: true,
+          // better-auth's account-linking gate has TWO independent clauses
+          // (see link-account.mjs:22). Trusting the provider only satisfies
+          // the first clause; the second — `requireLocalEmailVerified &&
+          // !dbUser.user.emailVerified` — still blocks linking when the
+          // pre-existing local user row has `emailVerified=false` (the
+          // default for owner-seeded rows). Disabling the local-email gate
+          // is safe here because the OAuth side is what we actually trust:
+          // the incoming identity was verified by the IdP. Consumers who
+          // need the stricter behavior can override via config.
+          requireLocalEmailVerified: false,
           ...((this.config as any)?.account?.accountLinking ?? {}),
           trustedProviders: Array.from(new Set([
             'objectstack-cloud',
