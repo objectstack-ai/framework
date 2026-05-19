@@ -411,6 +411,7 @@ export const ListViewSchema = lazySchema(() => z.object({
   resizable: z.boolean().optional().describe('Enable column resizing'),
   striped: z.boolean().optional().describe('Striped row styling'),
   bordered: z.boolean().optional().describe('Show borders'),
+  compactToolbar: z.boolean().optional().describe('Collapse Group/Color/Density/Hide-fields into a single View settings popover'),
 
   /** Selection */
   selection: SelectionConfigSchema.optional().describe('Row selection configuration'),

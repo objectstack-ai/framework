@@ -13197,6 +13197,7 @@
             "order": "desc"
           }
         ],
+        "compactToolbar": true,
         "selection": {
           "type": "multiple"
         },

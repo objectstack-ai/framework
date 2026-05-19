@@ -32,6 +32,7 @@ export const AccountViews = defineView({
     selection: { type: 'multiple' },
     pagination: { pageSize: 50, pageSizeOptions: [25, 50, 100] },
     exportOptions: ['csv', 'xlsx'],
+    compactToolbar: true,
     bulkActionDefs: [
       {
         name: 'update_tier',
