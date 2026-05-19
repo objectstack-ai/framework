@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — M10.32 honest UX: suppress broken generic CRUD on `sys_approval_process` & `sys_sharing_rule` 🐛
+The Studio list pages for these two `managedBy: 'config'` objects exposed New/Import/Edit buttons, but the forms behind them rendered `definition_json` / `criteria_json` as raw textareas — admins were expected to hand-write multi-page Zod envelopes to author an approval process or sharing rule. Not usable for any real business user.
+
+- Added `userActions: { create: false, edit: false, delete: false, import: false }` override on both schemas. The console (which already gates on `resolveCrudAffordances()` per M10.30b) now hides the affordances.
+- Updated the schema `description` on both to direct authors to the real long-term path: `defineApprovalProcess({...})` / `defineSharingRule({...})` in code, seeded via the service endpoints (`POST /api/v1/approvals/processes`, `POST /api/v1/sharing/rules`).
+- A visual designer for both objects is on the roadmap; the list views still surface segmented tabs (Active / Inactive / By Object / All) so admins can audit existing definitions, and per-row Active toggles will be added as inline actions in a follow-up.
+- Verified in browser: list pages now render the "Admin config" banner with filter/group/sort toolbar only — no New/Import buttons. Identical pattern to the existing `system` / `append-only` buckets.
+
 ### Fixed — M10.30e ObjectQL: `applySystemFields` now applies to managed tables 🐛
 `packages/objectql/src/registry.ts`: `applySystemFields` was early-returning for **every** table with `managedBy` set (admin/append-only/platform/config/system). That meant `sys_audit_log`, `sys_activity`, `sys_approval_action`, `sys_email`, `sys_presence`, etc. never received the implicit `organization_id` column in their in-memory schema, even though the physical DB columns existed. Downstream, SecurityPlugin's field-existence safety net (security-plugin.ts:303-319) dropped the wildcard `tenant_isolation` policy as "field missing on object" → `RLS_DENY_FILTER` → 0 rows for any non-admin member, regardless of writer fixes.
 
