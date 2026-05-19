@@ -939,13 +939,15 @@ export class RestServer {
                 this.registerSearchEndpoints(bp);
             }
             this.registerEmailEndpoints(bp);
+            // Capability routes (sharing rules, reports, approvals) live at
+            // the top of the API surface (`/api/v1/{capability}/...`) rather
+            // than under `/data/`, so they don't collide with the greedy
+            // CRUD `/:object` matcher and don't pretend to be records on a
+            // single object.
             this.registerSharingEndpoints(bp);
             this.registerSharingRuleEndpoints(bp);
             this.registerReportsEndpoints(bp);
             this.registerApprovalsEndpoints(bp);
-            // CRUD's generic `/:object` route is greedy, so it must be
-            // registered AFTER any sub-namespace routes like /approvals/*,
-            // /reports/*, /sharing/* — otherwise `:object` swallows them.
             if (this.config.api.enableCrud) {
                 this.registerCrudEndpoints(bp);
             }
@@ -2134,17 +2136,21 @@ export class RestServer {
      * Register sharing-rule endpoints (M10.17). Mirrors the existing
      * sharing endpoints but operates on `sys_sharing_rule` rows.
      *
-     *   GET    {basePath}/data/sharing/rules?object=&activeOnly=
-     *   POST   {basePath}/data/sharing/rules
-     *   GET    {basePath}/data/sharing/rules/:idOrName
-     *   DELETE {basePath}/data/sharing/rules/:idOrName
-     *   POST   {basePath}/data/sharing/rules/:idOrName/evaluate
+     *   GET    {basePath}/sharing/rules?object=&activeOnly=
+     *   POST   {basePath}/sharing/rules
+     *   GET    {basePath}/sharing/rules/:idOrName
+     *   DELETE {basePath}/sharing/rules/:idOrName
+     *   POST   {basePath}/sharing/rules/:idOrName/evaluate
      *
      * Returns 501 when no sharing-rule service is configured.
      */
     private registerSharingRuleEndpoints(basePath: string): void {
-        const { crud } = this.config;
-        const dataPath = `${basePath}${crud.dataPrefix}`;
+        // Sharing-rule routes live at the top of the API surface (e.g.
+        // `/api/v1/sharing/rules`) — they administer rules across the whole
+        // tenant rather than acting on a single CRUD object, so anchoring
+        // them on `basePath` keeps them out of the `/data/:object` namespace
+        // where greedy CRUD matchers would otherwise swallow them.
+        const dataPath = basePath;
         const isScoped = basePath.includes('/projects/:projectId');
 
         const resolveService = async (projectId?: string) => {
@@ -2280,24 +2286,28 @@ export class RestServer {
      *
      * Surfaces `IReportService` over HTTP so the UI can build,
      * run, and schedule reports without dropping to ObjectQL. Routes
-     * are mounted under the data prefix so every route honours the
-     * same auth/tenant resolution as data CRUD:
+     * live at the top of the API surface (alongside `/approvals` and
+     * `/sharing`) — reports are a tenant-wide capability, not a record
+     * on a specific CRUD object:
      *
-     *   GET    {basePath}/data/reports?object=&ownerId=
-     *   POST   {basePath}/data/reports
-     *   GET    {basePath}/data/reports/:id
-     *   DELETE {basePath}/data/reports/:id
-     *   POST   {basePath}/data/reports/:id/run
-     *   POST   {basePath}/data/reports/:id/schedule
-     *   GET    {basePath}/data/reports/:id/schedules
-     *   DELETE {basePath}/data/reports/schedules/:scheduleId
+     *   GET    {basePath}/reports?object=&ownerId=
+     *   POST   {basePath}/reports
+     *   GET    {basePath}/reports/:id
+     *   DELETE {basePath}/reports/:id
+     *   POST   {basePath}/reports/:id/run
+     *   POST   {basePath}/reports/:id/schedule
+     *   GET    {basePath}/reports/:id/schedules
+     *   DELETE {basePath}/reports/schedules/:scheduleId
      *
      * All routes return 501 when `reportsServiceProvider` is unset so
      * a deployment without `@objectstack/plugin-reports` fails cleanly.
      */
     private registerReportsEndpoints(basePath: string): void {
-        const { crud } = this.config;
-        const dataPath = `${basePath}${crud.dataPrefix}`;
+        // Reports live at the top of the API surface (e.g. `/api/v1/reports`)
+        // rather than under `/data/`, because a report is a first-class
+        // capability whose definition is tenant-wide (not a record on a
+        // particular object).
+        const dataPath = basePath;
         const isScoped = basePath.includes('/projects/:projectId');
 
         const resolveService = async (projectId?: string) => {
@@ -2529,7 +2539,7 @@ export class RestServer {
     /**
      * Register approval engine endpoints.
      *
-     * Routes (all under {dataPath}/approvals):
+     * Routes (all under {basePath}/approvals):
      *   GET    /processes                       — list approval processes
      *   POST   /processes                       — upsert (defineProcess)
      *   GET    /processes/:id                   — get by id or name
@@ -2546,8 +2556,12 @@ export class RestServer {
      * without `@objectstack/plugin-approvals` fail cleanly.
      */
     private registerApprovalsEndpoints(basePath: string): void {
-        const { crud } = this.config;
-        const dataPath = `${basePath}${crud.dataPrefix}`;
+        // Approval routes live at the top of the API surface (e.g.
+        // `/api/v1/approvals/processes`, `/api/v1/approvals/requests/:id/approve`).
+        // Approvals are a cross-cutting capability — a request is not a
+        // record on a single CRUD object, so anchoring it on `basePath`
+        // (instead of `${basePath}/data`) keeps the URL semantics honest.
+        const dataPath = basePath;
         const isScoped = basePath.includes('/projects/:projectId');
 
         const resolveService = async (projectId?: string) => {

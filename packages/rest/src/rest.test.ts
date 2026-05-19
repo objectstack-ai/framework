@@ -840,20 +840,20 @@ describe('RestServer', () => {
   });
 
   // -----------------------------------------------------------------------
-  // /data/reports — IReportService bridge (M11.C16)
+  // /api/v1/reports — IReportService bridge (M11.C16; promoted to top-level)
   // -----------------------------------------------------------------------
   describe('reports endpoints', () => {
     function getReportRoutes(rest: any) {
       const routes = rest.getRoutes();
       return {
-        list:        routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/data/reports'),
-        save:        routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/reports'),
-        get:         routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/data/reports/:id'),
-        del:         routes.find((r: any) => r.method === 'DELETE' && r.path === '/api/v1/data/reports/:id'),
-        run:         routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/reports/:id/run'),
-        schedule:    routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/data/reports/:id/schedule'),
-        schedules:   routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/data/reports/:id/schedules'),
-        unschedule:  routes.find((r: any) => r.method === 'DELETE' && r.path === '/api/v1/data/reports/schedules/:scheduleId'),
+        list:        routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/reports'),
+        save:        routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/reports'),
+        get:         routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/reports/:id'),
+        del:         routes.find((r: any) => r.method === 'DELETE' && r.path === '/api/v1/reports/:id'),
+        run:         routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/reports/:id/run'),
+        schedule:    routes.find((r: any) => r.method === 'POST' && r.path === '/api/v1/reports/:id/schedule'),
+        schedules:   routes.find((r: any) => r.method === 'GET' && r.path === '/api/v1/reports/:id/schedules'),
+        unschedule:  routes.find((r: any) => r.method === 'DELETE' && r.path === '/api/v1/reports/schedules/:scheduleId'),
       };
     }
 

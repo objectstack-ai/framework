@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — REST capability routes promoted to top-level ⭐ BREAKING
+- **`packages/rest/src/rest-server.ts`** — `approvals/*`, `sharing/rules/*`, and `reports/*` REST endpoints moved from `/api/v1/data/{capability}/...` → `/api/v1/{capability}/...`. These are tenant-wide capabilities (not records on a CRUD object), so nesting them under `/data/` (which is reserved for ObjectQL CRUD on `:object/:id`) was misleading and produced a confusing surface where `/data/approvals` looked like a `sys_approvals` object table. Scoped variants under `/api/v1/projects/:projectId/{capability}/...` are auto-registered the same way.
+- **Per-record `/:object/:id/shares`** stays under `/data/` because it *is* scoped to a CRUD record. Only the tenant-wide rule/process/report admin surface moved.
+- **Affected paths** (old → new):
+  - `POST /api/v1/data/approvals/processes` → `POST /api/v1/approvals/processes` (+ 10 other approval routes)
+  - `GET /api/v1/data/sharing/rules` → `GET /api/v1/sharing/rules` (+ 4 other rule routes)
+  - `POST /api/v1/data/reports` → `POST /api/v1/reports` (+ 7 other report routes)
+- **Consumer updates** — `@object-ui/console` `approvalsApi.ts` rebased on `/api/v1` (not `/api/v1/data`); `@object-ui/app-shell` `AppHeader.tsx` pending-approvals badge fetch URL updated.
+- **Migration** — find/replace `/api/v1/data/approvals` → `/api/v1/approvals`, `/api/v1/data/sharing/rules` → `/api/v1/sharing/rules`, `/api/v1/data/reports` → `/api/v1/reports` in any external clients. Old paths return 404 (no compat shim — `/data/:object` would otherwise treat e.g. `approvals` as a sys-approvals record id).
+
 ### Changed — M10.28 Setup app reorganization ⭐
 - **`packages/platform-objects/src/apps/setup.app.ts`** — sidebar restructured from 5 ad-hoc groups into 7 semantic groups that mirror how admins actually think about identity & access:
   - **Overview** — unchanged (`system_overview` / `security_overview` dashboards).

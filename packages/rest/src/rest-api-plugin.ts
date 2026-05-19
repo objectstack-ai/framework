@@ -123,21 +123,21 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 } catch { return undefined; }
             };
 
-            // Reports service resolver — used by /data/reports/* routes.
+            // Reports service resolver — used by /reports/* routes.
             const reportsServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('reports');
                 } catch { return undefined; }
             };
 
-            // Approvals service resolver — used by /data/approvals/* routes.
+            // Approvals service resolver — used by /approvals/* routes.
             const approvalsServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('approvals');
                 } catch { return undefined; }
             };
 
-            // Sharing-rule service resolver — used by /data/sharing/rules/* routes.
+            // Sharing-rule service resolver — used by /sharing/rules/* routes.
             const sharingRulesServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('sharingRules');

@@ -15,7 +15,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * Evaluation triggers:
  *   - `afterInsert` / `afterUpdate` on the target object (per-record,
  *     incremental — the hot path).
- *   - REST `POST /data/sharing/rules/:id/evaluate` (admin-initiated
+ *   - REST `POST /sharing/rules/:id/evaluate` (admin-initiated
  *     bulk reconcile — used after rule edits).
  *
  * Criteria are stored as JSON (a normal `FilterCondition`) so the
