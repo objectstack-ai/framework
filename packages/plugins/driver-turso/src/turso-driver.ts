@@ -169,51 +169,51 @@ export class TursoDriver extends SqlDriver {
 
   public override get supports() {
     return {
-    // Basic CRUD Operations
-    create: true,
-    read: true,
-    update: true,
-    delete: true,
+      // Basic CRUD Operations
+      create: true,
+      read: true,
+      update: true,
+      delete: true,
 
-    // Bulk Operations
-    bulkCreate: true,
-    bulkUpdate: true,
-    bulkDelete: true,
+      // Bulk Operations
+      bulkCreate: true,
+      bulkUpdate: true,
+      bulkDelete: true,
 
-    // Transaction & Connection Management
-    transactions: true,
-    savepoints: true,
+      // Transaction & Connection Management
+      transactions: true,
+      savepoints: true,
 
-    // Query Operations
-    queryFilters: true,
-    queryAggregations: true,
-    querySorting: true,
-    queryPagination: true,
-    queryWindowFunctions: true,
-    querySubqueries: true,
-    queryCTE: true,
-    joins: true,
-    queryDateGranularity: this.dateGranularityCapabilities,
+      // Query Operations
+      queryFilters: true,
+      queryAggregations: true,
+      queryDateGranularity: this.dateGranularityCapabilities,
+      querySorting: true,
+      queryPagination: true,
+      queryWindowFunctions: true,
+      querySubqueries: true,
+      queryCTE: true,
+      joins: true,
 
-    // Advanced Features — Turso/libSQL native capabilities
-    fullTextSearch: true,  // FTS5
-    jsonQuery: true,       // JSON1 extension
-    geospatialQuery: false,
-    streaming: false,
-    jsonFields: true,
-    arrayFields: true,
-    vectorSearch: false,
+      // Advanced Features — Turso/libSQL native capabilities
+      fullTextSearch: true,  // FTS5
+      jsonQuery: true,       // JSON1 extension
+      geospatialQuery: false,
+      streaming: false,
+      jsonFields: true,
+      arrayFields: true,
+      vectorSearch: false,
 
-    // Schema Management
-    schemaSync: true,
-    batchSchemaSync: true,
-    migrations: false,
-    indexes: true,
+      // Schema Management
+      schemaSync: true,
+      batchSchemaSync: true,
+      migrations: false,
+      indexes: true,
 
-    // Performance & Optimization
-    connectionPooling: false, // Turso uses concurrency limits, not connection pools
-    preparedStatements: true,
-    queryCache: false,
+      // Performance & Optimization
+      connectionPooling: false, // Turso uses concurrency limits, not connection pools
+      preparedStatements: true,
+      queryCache: false,
     };
   }
 

@@ -16,8 +16,8 @@ Represents "Order By".
 ## TypeScript Usage
 
 ```typescript
-import { AggregationFunction, AggregationNode, FieldNode, FullTextSearch, JoinNode, JoinStrategy, JoinType, Query, SortNode, WindowFunction, WindowFunctionNode, WindowSpec } from '@objectstack/spec/data';
-import type { AggregationFunction, AggregationNode, FieldNode, FullTextSearch, JoinNode, JoinStrategy, JoinType, Query, SortNode, WindowFunction, WindowFunctionNode, WindowSpec } from '@objectstack/spec/data';
+import { AggregationFunction, AggregationNode, DateGranularity, FieldNode, FullTextSearch, GroupByNode, JoinNode, JoinStrategy, JoinType, Query, SortNode, WindowFunction, WindowFunctionNode, WindowSpec } from '@objectstack/spec/data';
+import type { AggregationFunction, AggregationNode, DateGranularity, FieldNode, FullTextSearch, GroupByNode, JoinNode, JoinStrategy, JoinType, Query, SortNode, WindowFunction, WindowFunctionNode, WindowSpec } from '@objectstack/spec/data';
 
 // Validate data
 const result = AggregationFunction.parse(data);
@@ -52,6 +52,19 @@ const result = AggregationFunction.parse(data);
 | **alias** | `string` | ✅ | Result column alias |
 | **distinct** | `boolean` | optional | Apply DISTINCT before aggregation |
 | **filter** | `[__schema0](./__schema0)` | optional | Filter/Condition to apply to the aggregation (FILTER WHERE clause) |
+
+
+---
+
+## DateGranularity
+
+### Allowed Values
+
+* `day`
+* `week`
+* `month`
+* `quarter`
+* `year`
 
 
 ---
@@ -97,6 +110,33 @@ Type: `string`
 | **minScore** | `number` | optional | Minimum relevance score threshold |
 | **language** | `string` | optional | Language for text analysis (e.g., "en", "zh", "es") |
 | **highlight** | `boolean` | ✅ | Enable search result highlighting |
+
+
+---
+
+## GroupByNode
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **field** | `string` | ✅ | Field to group by |
+| **dateGranularity** | `Enum<'day' \| 'week' \| 'month' \| 'quarter' \| 'year'>` | optional | Bucket date values into uniform periods (day/week/month/quarter/year) |
+| **alias** | `string` | optional | Alias for the projected group value |
+
+---
 
 
 ---
@@ -158,7 +198,7 @@ Type: `string`
 | **cursor** | `Record<string, any>` | optional | Cursor for keyset pagination |
 | **joins** | `Object[]` | optional | Explicit Table Joins |
 | **aggregations** | `Object[]` | optional | Aggregation functions |
-| **groupBy** | `string[]` | optional | GROUP BY fields |
+| **groupBy** | `string \| Object[]` | optional | GROUP BY targets (strings or ``{field, dateGranularity?}`` objects for date bucketing) |
 | **having** | `[__schema1](./__schema1)` | optional | HAVING clause for aggregation filtering |
 | **windowFunctions** | `Object[]` | optional | Window functions with OVER clause |
 | **distinct** | `boolean` | optional | SELECT DISTINCT flag |

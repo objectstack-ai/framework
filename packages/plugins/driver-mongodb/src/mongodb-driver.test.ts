@@ -13,11 +13,11 @@ describe('MongoDBDriver', () => {
     const uri = mongod.getUri();
     driver = new MongoDBDriver({ url: uri, database: 'test_db' });
     await driver.connect();
-  });
+  }, 60_000);
 
   afterAll(async () => {
-    await driver.disconnect();
-    await mongod.stop();
+    if (driver) await driver.disconnect();
+    if (mongod) await mongod.stop();
   });
 
   beforeEach(async () => {
