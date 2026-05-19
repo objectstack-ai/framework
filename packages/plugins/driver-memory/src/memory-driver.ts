@@ -874,11 +874,17 @@ export class InMemoryDriver implements IDataDriver {
     const { groupBy, aggregations } = query;
     const groups: Map<string, any[]> = new Map();
 
+    const normalizeGroupBy = (node: any): { field: string; alias: string } => {
+      if (typeof node === 'string') return { field: node, alias: node };
+      return { field: node.field, alias: node.alias ?? node.field };
+    };
+
     // 1. Group records
     if (groupBy && groupBy.length > 0) {
         for (const record of records) {
             // Create a composite key from group values
-            const keyParts = groupBy.map(field => {
+            const keyParts = groupBy.map(node => {
+                const { field } = normalizeGroupBy(node);
                 const val = getValueByPath(record, field);
                 return val === undefined || val === null ? 'null' : String(val);
             });
@@ -903,8 +909,9 @@ export class InMemoryDriver implements IDataDriver {
         if (groupBy && groupBy.length > 0) {
              if (groupRecords.length > 0) {
                 const firstRecord = groupRecords[0];
-                for (const field of groupBy) {
-                     this.setValueByPath(row, field, getValueByPath(firstRecord, field));
+                for (const node of groupBy) {
+                     const { field, alias } = normalizeGroupBy(node);
+                     this.setValueByPath(row, alias, getValueByPath(firstRecord, field));
                 }
              }
         }

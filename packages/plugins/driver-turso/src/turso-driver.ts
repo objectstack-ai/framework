@@ -167,52 +167,55 @@ export class TursoDriver extends SqlDriver {
   public override readonly name: string = 'com.objectstack.driver.turso';
   public override readonly version: string = '1.0.0';
 
-  public override readonly supports = {
-    // Basic CRUD Operations
-    create: true,
-    read: true,
-    update: true,
-    delete: true,
+  public override get supports() {
+    return {
+      // Basic CRUD Operations
+      create: true,
+      read: true,
+      update: true,
+      delete: true,
 
-    // Bulk Operations
-    bulkCreate: true,
-    bulkUpdate: true,
-    bulkDelete: true,
+      // Bulk Operations
+      bulkCreate: true,
+      bulkUpdate: true,
+      bulkDelete: true,
 
-    // Transaction & Connection Management
-    transactions: true,
-    savepoints: true,
+      // Transaction & Connection Management
+      transactions: true,
+      savepoints: true,
 
-    // Query Operations
-    queryFilters: true,
-    queryAggregations: true,
-    querySorting: true,
-    queryPagination: true,
-    queryWindowFunctions: true,
-    querySubqueries: true,
-    queryCTE: true,
-    joins: true,
+      // Query Operations
+      queryFilters: true,
+      queryAggregations: true,
+      queryDateGranularity: this.dateGranularityCapabilities,
+      querySorting: true,
+      queryPagination: true,
+      queryWindowFunctions: true,
+      querySubqueries: true,
+      queryCTE: true,
+      joins: true,
 
-    // Advanced Features — Turso/libSQL native capabilities
-    fullTextSearch: true,  // FTS5
-    jsonQuery: true,       // JSON1 extension
-    geospatialQuery: false,
-    streaming: false,
-    jsonFields: true,
-    arrayFields: true,
-    vectorSearch: false,
+      // Advanced Features — Turso/libSQL native capabilities
+      fullTextSearch: true,  // FTS5
+      jsonQuery: true,       // JSON1 extension
+      geospatialQuery: false,
+      streaming: false,
+      jsonFields: true,
+      arrayFields: true,
+      vectorSearch: false,
 
-    // Schema Management
-    schemaSync: true,
-    batchSchemaSync: true,
-    migrations: false,
-    indexes: true,
+      // Schema Management
+      schemaSync: true,
+      batchSchemaSync: true,
+      migrations: false,
+      indexes: true,
 
-    // Performance & Optimization
-    connectionPooling: false, // Turso uses concurrency limits, not connection pools
-    preparedStatements: true,
-    queryCache: false,
-  };
+      // Performance & Optimization
+      connectionPooling: false, // Turso uses concurrency limits, not connection pools
+      preparedStatements: true,
+      queryCache: false,
+    };
+  }
 
   private tursoConfig: TursoDriverConfig;
   private libsqlClient: Client | null = null;
