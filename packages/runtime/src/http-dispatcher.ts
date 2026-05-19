@@ -1873,25 +1873,66 @@ export class HttpDispatcher {
                 // identity here — the project DB does not exist yet — and let
                 // ArtifactKernelFactory replay the seed once the project's
                 // sys_user table is provisioned. Best-effort: failure to
-                // resolve the session must not abort project creation.
+                // resolve the user must not abort project creation.
+                //
+                // We prefer `req.created_by` (already resolved upstream from
+                // `__session__` or sent explicitly by the cloud frontend) and
+                // look the user row up directly via objectql. The previous
+                // approach — calling `authService.api.getSession({headers})`
+                // a SECOND time — was unreliable because the cloud's project-
+                // create route is often invoked via an internal RPC where the
+                // original browser cookies do not propagate.
                 try {
-                    const authService: any = await this.getService(CoreServiceName.enum.auth);
-                    const sessionData = await authService?.api?.getSession?.({
-                        headers: _context?.request?.headers,
-                    });
-                    const u = sessionData?.user;
-                    if (u?.id && u?.email) {
+                    let ownerUserId: string | undefined = req.created_by && req.created_by !== 'system'
+                        ? String(req.created_by)
+                        : undefined;
+                    let ownerEmail: string | undefined;
+                    let ownerName: string | undefined;
+                    let ownerImage: string | undefined;
+
+                    if (ownerUserId) {
+                        const userRow = await ql.find('sys_user', { where: { id: ownerUserId } } as any);
+                        const userRows = Array.isArray(userRow) ? userRow : (userRow?.value ?? []);
+                        const u = Array.isArray(userRows) && userRows.length > 0 ? userRows[0] : null;
+                        if (u?.email) {
+                            ownerEmail = String(u.email);
+                            ownerName = u.name ? String(u.name) : undefined;
+                            ownerImage = u.image ? String(u.image) : undefined;
+                        }
+                    }
+
+                    // Fall back to the session probe if `created_by` was not
+                    // set (e.g. CLI scripts) — preserves the prior behaviour
+                    // when cookies are available.
+                    if (!ownerEmail) {
+                        try {
+                            const authService: any = await this.getService(CoreServiceName.enum.auth);
+                            const sessionData = await authService?.api?.getSession?.({
+                                headers: _context?.request?.headers,
+                            });
+                            const u = sessionData?.user;
+                            if (u?.id && u?.email) {
+                                ownerUserId = String(u.id);
+                                ownerEmail = String(u.email);
+                                ownerName = u.name ? String(u.name) : undefined;
+                                ownerImage = u.image ? String(u.image) : undefined;
+                            }
+                        } catch {
+                            // session lookup is best-effort
+                        }
+                    }
+
+                    if (ownerUserId && ownerEmail) {
                         (baseMetadata as any).ownerSeed = {
-                            userId: String(u.id),
-                            email: String(u.email),
-                            name: u.name ? String(u.name) : null,
-                            image: u.image ? String(u.image) : null,
+                            userId: ownerUserId,
+                            email: ownerEmail,
+                            name: ownerName ?? null,
+                            image: ownerImage ?? null,
                         };
                     }
                 } catch {
-                    // Session unavailable (e.g. service-to-service call) —
-                    // skip owner seed; later access flows still work via the
-                    // platform-SSO JIT path.
+                    // owner lookup failed entirely — skip seed; later access
+                    // flows still work via the platform-SSO JIT path.
                 }
 
                 // Also capture the OWNING cloud org so the per-project
