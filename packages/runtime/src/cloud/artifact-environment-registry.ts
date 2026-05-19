@@ -171,6 +171,7 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
             hostname: host,
             database_url: runtime.databaseUrl,
             database_driver: runtime.databaseDriver,
+            metadata: runtime.metadata,
         };
 
         return {

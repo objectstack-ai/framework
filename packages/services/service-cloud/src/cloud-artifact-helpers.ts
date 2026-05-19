@@ -267,5 +267,16 @@ export function buildRuntimeBlock(project: SysProjectRow, cred: SysCredentialRow
         ?? cred?.secret_ciphertext
         ?? project.database_auth_token;
     if (token) out.databaseAuthToken = token;
+    // Forward project metadata (ownerSeed, orgSeed, …) so the per-project
+    // runtime can replay cold-boot seeds. Metadata is stored either as a
+    // JSON string or already-parsed object depending on the driver.
+    const rawMeta: any = (project as any).metadata;
+    if (rawMeta != null) {
+        try {
+            out.metadata = typeof rawMeta === 'string' ? JSON.parse(rawMeta) : rawMeta;
+        } catch {
+            // Malformed metadata — skip rather than poisoning the runtime block.
+        }
+    }
     return out;
 }

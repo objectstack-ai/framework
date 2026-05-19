@@ -241,6 +241,7 @@ describe('createCloudArtifactApiPlugin', () => {
             databaseDriver: 'sqlite',
             databaseUrl: 'file:./a.db',
             databaseAuthToken: 'tk_123',
+            metadata: { artifact_path: 'artifact.json' },
         });
     });
 

@@ -39,6 +39,13 @@ export interface ProjectRuntimeConfig {
     databaseUrl: string;
     /** Optional auth token (e.g. for libSQL/Turso). */
     databaseAuthToken?: string;
+    /**
+     * Project-level metadata captured by the control plane at create time
+     * (e.g. `ownerSeed`, `orgSeed`). Forwarded to the runtime so cold-boot
+     * seed replay can mirror the cloud org + owner into the project DB
+     * before the user's first SSO callback arrives.
+     */
+    metadata?: Record<string, unknown>;
 }
 
 /**
