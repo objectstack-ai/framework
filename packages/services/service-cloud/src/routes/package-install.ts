@@ -110,7 +110,8 @@ export async function installPackageIntoEnvironment(args: {
     if (!packageId) return { status: 400, body: fail('package id is required') };
     if (!environmentId) return { status: 400, body: fail('environment_id is required') };
 
-    const driver = await controlDriverPromise;
+    const driverEnvelope = await controlDriverPromise;
+    const driver = driverEnvelope?.driver;
     if (!driver) return { status: 503, body: fail('Control-plane driver is unavailable') };
 
     const pkg: any = await (driver as any).findOne?.('sys_package', { where: { id: packageId } });

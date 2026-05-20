@@ -520,10 +520,25 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: Packag
         // app-shell sends `{ recordId, params }`. Rewrite to the shape the
         // existing transition handlers expect (req.params.id + req.body
         // carrying the params).
+        // app-shell's list_item dispatcher attaches the clicked row as
+        // `params._rowRecord` but does NOT forward its id as the top-level
+        // `recordId`. Fall back to that row context so list_item invocations
+        // work without each action having to set `recordIdParam` manually.
         const body = (req.body ?? {}) as AnyRow;
-        const recordId = String(body.recordId ?? body.record_id ?? '').trim();
+        const params = (body.params && typeof body.params === 'object') ? (body.params as AnyRow) : {};
+        const rowRecord = (params._rowRecord && typeof params._rowRecord === 'object') ? (params._rowRecord as AnyRow) : null;
+        const recordId = String(
+            body.recordId
+            ?? body.record_id
+            ?? params.recordId
+            ?? params.record_id
+            ?? rowRecord?.id
+            ?? ''
+        ).trim();
         if (!recordId) return res.status(400).json(fail('recordId is required', 400));
-        const params = (body.params && typeof body.params === 'object') ? body.params : {};
+        // Strip the internal row-context marker before forwarding so dispatch
+        // handlers see a clean payload.
+        if ('_rowRecord' in params) delete (params as Record<string, unknown>)._rowRecord;
 
         // Mutate req in place (handlers read req.params.id / req.body.*).
         req.params = { ...(req.params ?? {}), id: recordId };
