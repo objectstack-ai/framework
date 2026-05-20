@@ -25,6 +25,7 @@ import {
     ProjectProvisioningService,
     createDefaultProjectAdapters,
 } from '@objectstack/service-tenant';
+import { installPackageIntoEnvironment, type PackageInstallDeps } from './package-install.js';
 
 type AnyRow = Record<string, any>;
 
