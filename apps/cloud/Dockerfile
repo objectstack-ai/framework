@@ -112,8 +112,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=4000 \
-    HOST=0.0.0.0 \
-    OS_DISABLE_CONSOLE=1
+    HOST=0.0.0.0
+# NOTE: Console IS mounted on the cloud control plane — it provides the
+# Org/Project management UI and claims the root `/` redirect.
+# Studio is disabled (no per-project tenant kernels live in this process)
+# via OS_DISABLE_STUDIO=1 set at the Cloudflare Worker / runtime layer.
 
 COPY --from=pruner /deploy /app
 COPY --from=builder /repo/apps/cloud/dist /app/dist
