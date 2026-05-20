@@ -17,6 +17,7 @@ import {
   builtinSettingsManifests,
   mailTestActionHandler,
 } from './manifests/index.js';
+import { settingsBuiltinTranslations } from './translations/index.js';
 
 /** Configuration options for the SettingsServicePlugin. */
 export interface SettingsServicePluginOptions {
@@ -102,6 +103,35 @@ export class SettingsServicePlugin implements Plugin {
     if (!this.service) return;
 
     ctx.hook('kernel:ready', async () => {
+      // Contribute built-in settings translations into the i18n service.
+      // Done in `kernel:ready` (not `init`) because the i18n service plugin
+      // is typically registered AFTER capability-loaded service plugins.
+      try {
+        const i18n = ctx.getService<{
+          loadTranslations: (locale: string, data: Record<string, unknown>) => void;
+        }>('i18n');
+        let loaded = 0;
+        for (const [locale, data] of Object.entries(settingsBuiltinTranslations)) {
+          if (data && typeof data === 'object') {
+            try {
+              i18n.loadTranslations(locale, data as Record<string, unknown>);
+              loaded++;
+            } catch (err: any) {
+              ctx.logger?.warn?.(
+                `SettingsServicePlugin: failed to load translations for '${locale}': ${err?.message ?? err}`,
+              );
+            }
+          }
+        }
+        if (loaded > 0) {
+          ctx.logger?.info?.(
+            `SettingsServicePlugin: contributed built-in translations (${loaded} locale${loaded > 1 ? 's' : ''})`,
+          );
+        }
+      } catch {
+        // i18n service not registered — manifest literals remain authoritative.
+      }
+
       // Late-bind the data engine.
       let engine: IDataEngine | null = null;
       try {
