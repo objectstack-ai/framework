@@ -183,7 +183,15 @@ export function applySystemFields(
       ? ((schema as any).systemFields as { tenant?: boolean; audit?: boolean })
       : undefined;
 
-  const wantTenant = opts.multiTenant && sf?.tenant !== false;
+  // Honor explicit opt-out via either `systemFields.tenant === false`
+  // OR `tenancy.enabled === false`. The latter is the schema-level
+  // declaration that the table is a shared/global catalog (e.g.
+  // sys_package — the Marketplace registry). Without this, the
+  // registry would still inject `organization_id`, and the
+  // SecurityPlugin's RLS layer would filter every cross-org read down
+  // to 0 rows even though the schema explicitly disabled multi-tenancy.
+  const tenancyDisabled = (schema as any).tenancy?.enabled === false;
+  const wantTenant = opts.multiTenant && sf?.tenant !== false && !tenancyDisabled;
   const wantAudit = sf?.audit !== false;
 
   const additions: Record<string, any> = {};
