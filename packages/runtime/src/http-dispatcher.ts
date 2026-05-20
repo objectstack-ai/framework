@@ -699,6 +699,47 @@ export class HttpDispatcher {
         const authService = await this.getService(CoreServiceName.enum.auth);
         if (authService && typeof authService.handler === 'function') {
             const response = await authService.handler(context.request, context.response);
+            // Plan-A diag: capture the most recent oauth2/callback round-trip
+            // so we can inspect status + Set-Cookie + Location without needing
+            // a real cloud session in curl. Remove once SSO is green.
+            try {
+                if (path.includes('oauth2/callback')) {
+                    const headers: Record<string, string> = {};
+                    const setCookies: string[] = [];
+                    try {
+                        if (response && typeof (response as any).headers?.forEach === 'function') {
+                            (response as any).headers.forEach((v: string, k: string) => {
+                                if (k.toLowerCase() === 'set-cookie') setCookies.push(v);
+                                else headers[k] = v;
+                            });
+                        } else if (response && (response as any).headers) {
+                            const h = (response as any).headers;
+                            for (const k of Object.keys(h)) {
+                                if (k.toLowerCase() === 'set-cookie') {
+                                    const v = h[k];
+                                    if (Array.isArray(v)) setCookies.push(...v);
+                                    else setCookies.push(String(v));
+                                } else {
+                                    headers[k] = String(h[k]);
+                                }
+                            }
+                        }
+                    } catch {}
+                    (this.kernel as any).__lastAuthCallbackDiag = {
+                        at: new Date().toISOString(),
+                        path,
+                        method,
+                        requestUrl: (context.request as any)?.url ?? null,
+                        responseStatus: (response as any)?.status ?? null,
+                        responseHeaders: headers,
+                        setCookieCount: setCookies.length,
+                        setCookieRedacted: setCookies.map(c =>
+                            c.split(';').map((p, i) => i === 0 ? p.split('=')[0] + '=<redacted>' : p.trim()).join('; ')
+                        ),
+                        location: headers['location'] || headers['Location'] || null,
+                    };
+                }
+            } catch {}
             return { handled: true, result: response };
         }
 
@@ -3732,6 +3773,18 @@ export class HttpDispatcher {
             return {
                 handled: true,
                 response: this.success({ seed: diag }),
+            };
+        }
+
+        // Plan-A diagnostic: surface the most recent oauth2/callback round-trip
+        // (status, headers, redacted Set-Cookie, Location) so we can debug
+        // why a callback redirects without establishing a session.
+        // TODO(plan-a): remove once SSO is green.
+        if (cleanPath === '/_diag/auth-callback' && method === 'GET') {
+            const diag = (this.kernel as any)?.__lastAuthCallbackDiag ?? null;
+            return {
+                handled: true,
+                response: this.success({ authCallback: diag }),
             };
         }
 

@@ -243,6 +243,16 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            // ── Plan-A diagnostic: last oauth2/callback round-trip ──────
+            server.get(`${prefix}/_diag/auth-callback`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.dispatch('GET', '/_diag/auth-callback', undefined, {}, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             // ── Auth ────────────────────────────────────────────────────
             // NOTE: /auth/* wildcard is mounted by AuthProxyPlugin (cloud)
             // or AuthPlugin (single-tenant) directly on the raw Hono app —

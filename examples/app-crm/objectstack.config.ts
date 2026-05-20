@@ -14,6 +14,7 @@ import * as ragPipelines from './src/rag';
 import * as profiles from './src/profiles';
 import * as apps from './src/apps';
 import * as views from './src/views';
+import * as pages from './src/pages';
 import * as approvals from './src/approvals';
 import * as translations from './src/translations';
 import { CrmSeedData } from './src/data';
@@ -60,6 +61,7 @@ export default defineStack({
   permissions: Object.values(profiles),
   apps: Object.values(apps),
   views: Object.values(views),
+  pages: Object.values(pages),
   approvals: Object.values(approvals),
   analyticsCubes: Object.values(cubes),
 

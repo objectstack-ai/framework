@@ -16848,6 +16848,1140 @@
       }
     }
   ],
+  "pages": [
+    {
+      "name": "app_launcher_page",
+      "label": "App Launcher",
+      "description": "Central hub for accessing all applications",
+      "type": "app",
+      "template": "centered",
+      "regions": [
+        {
+          "name": "header",
+          "width": "full",
+          "components": [
+            {
+              "type": "global:search",
+              "id": "app_search",
+              "label": "Search Apps",
+              "properties": {}
+            }
+          ]
+        },
+        {
+          "name": "main",
+          "width": "large",
+          "components": [
+            {
+              "type": "page:header",
+              "id": "launcher_header",
+              "label": "App Launcher Header",
+              "properties": {
+                "title": "App Launcher",
+                "subtitle": "Select an app to get started",
+                "icon": "th",
+                "breadcrumb": false
+              }
+            },
+            {
+              "type": "app:launcher",
+              "id": "app_grid",
+              "label": "Application Grid",
+              "properties": {}
+            }
+          ]
+        }
+      ],
+      "isDefault": false,
+      "assignedProfiles": [
+        "sales_user",
+        "sales_manager",
+        "service_user",
+        "system_administrator"
+      ],
+      "aria": {
+        "ariaLabel": "App Launcher Page",
+        "ariaDescribedBy": "Central application launcher for accessing all apps"
+      }
+    },
+    {
+      "name": "close_case",
+      "label": "Close Case",
+      "description": "Modal stub for the case close action.",
+      "type": "blank",
+      "blankLayout": {
+        "columns": 12,
+        "rowHeight": 40,
+        "gap": 8,
+        "items": []
+      },
+      "template": "default",
+      "regions": [
+        {
+          "name": "main",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "close_case_placeholder",
+              "label": "Close Case",
+              "properties": {
+                "title": "Close Case",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": false
+    },
+    {
+      "name": "create_campaign",
+      "label": "Create Campaign",
+      "description": "Modal stub for the lead-to-campaign action.",
+      "type": "blank",
+      "blankLayout": {
+        "columns": 12,
+        "rowHeight": 40,
+        "gap": 8,
+        "items": []
+      },
+      "template": "default",
+      "regions": [
+        {
+          "name": "main",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "create_campaign_placeholder",
+              "label": "Create Campaign",
+              "properties": {
+                "title": "Create Campaign",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": false
+    },
+    {
+      "name": "escalate_case",
+      "label": "Escalate Case",
+      "description": "Modal stub for the case escalation action.",
+      "type": "blank",
+      "blankLayout": {
+        "columns": 12,
+        "rowHeight": 40,
+        "gap": 8,
+        "items": []
+      },
+      "template": "default",
+      "regions": [
+        {
+          "name": "main",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "escalate_case_placeholder",
+              "label": "Escalate Case",
+              "properties": {
+                "title": "Escalate Case",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": false
+    },
+    {
+      "name": "lead_detail_page",
+      "label": "Lead Detail",
+      "description": "Comprehensive lead detail page with highlights, details, and related information",
+      "type": "record",
+      "variables": [
+        {
+          "name": "showHistory",
+          "type": "boolean",
+          "defaultValue": false
+        },
+        {
+          "name": "activeTab",
+          "type": "string",
+          "defaultValue": "details"
+        }
+      ],
+      "object": "lead",
+      "template": "header-sidebar-main",
+      "regions": [
+        {
+          "name": "header",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:header",
+              "id": "lead_header",
+              "label": "Lead Information",
+              "properties": {
+                "title": "{first_name} {last_name}",
+                "subtitle": "{company}",
+                "icon": "user-plus",
+                "breadcrumb": true,
+                "actions": [
+                  "edit",
+                  "delete",
+                  "convert_lead",
+                  "share"
+                ]
+              }
+            },
+            {
+              "type": "record:path",
+              "id": "lead_path",
+              "label": "Lead Status Path",
+              "properties": {
+                "statusField": "status",
+                "stages": [
+                  {
+                    "value": "new",
+                    "label": "New"
+                  },
+                  {
+                    "value": "contacted",
+                    "label": "Contacted"
+                  },
+                  {
+                    "value": "qualified",
+                    "label": "Qualified"
+                  },
+                  {
+                    "value": "unqualified",
+                    "label": "Unqualified"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "sidebar",
+          "width": "medium",
+          "components": [
+            {
+              "type": "record:highlights",
+              "id": "lead_highlights",
+              "label": "Key Information",
+              "properties": {
+                "fields": [
+                  "status",
+                  "rating",
+                  "lead_source",
+                  "owner",
+                  "email",
+                  "phone"
+                ],
+                "layout": "vertical"
+              }
+            },
+            {
+              "type": "page:card",
+              "id": "quick_actions_card",
+              "label": "Quick Actions",
+              "properties": {
+                "title": "Quick Actions",
+                "bordered": true,
+                "actions": [
+                  "send_email",
+                  "log_call",
+                  "create_task",
+                  "schedule_meeting"
+                ]
+              }
+            },
+            {
+              "type": "ai:chat_window",
+              "id": "ai_assistant",
+              "label": "AI Assistant",
+              "properties": {
+                "mode": "sidebar",
+                "agentId": "sales_assistant",
+                "context": {
+                  "recordType": "lead",
+                  "recordId": "{record.id}"
+                }
+              },
+              "visibility": {
+                "dialect": "cel",
+                "source": "record.status == \"qualified\" || record.status == \"contacted\""
+              }
+            }
+          ]
+        },
+        {
+          "name": "main",
+          "width": "large",
+          "components": [
+            {
+              "type": "page:tabs",
+              "id": "main_tabs",
+              "label": "Lead Information Tabs",
+              "properties": {
+                "type": "line",
+                "position": "top",
+                "items": [
+                  {
+                    "label": "Details",
+                    "icon": "info-circle",
+                    "children": [
+                      {
+                        "type": "record:details",
+                        "id": "lead_details",
+                        "label": "Lead Details",
+                        "properties": {
+                          "columns": "2",
+                          "layout": "auto"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "label": "Related",
+                    "icon": "link",
+                    "children": [
+                      {
+                        "type": "page:accordion",
+                        "id": "related_accordion",
+                        "label": "Related Records",
+                        "properties": {
+                          "allowMultiple": true,
+                          "items": [
+                            {
+                              "label": "Tasks",
+                              "icon": "list-checks",
+                              "collapsed": false,
+                              "children": [
+                                {
+                                  "type": "record:related_list",
+                                  "id": "related_tasks",
+                                  "label": "Tasks",
+                                  "properties": {
+                                    "objectName": "task",
+                                    "relationshipField": "lead_id",
+                                    "columns": [
+                                      "subject",
+                                      "status",
+                                      "priority",
+                                      "due_date",
+                                      "assigned_to"
+                                    ],
+                                    "sort": [
+                                      {
+                                        "field": "due_date",
+                                        "order": "asc"
+                                      }
+                                    ],
+                                    "limit": 10,
+                                    "title": "Open Tasks",
+                                    "filter": [
+                                      [
+                                        "status",
+                                        "!=",
+                                        "completed"
+                                      ]
+                                    ],
+                                    "showViewAll": true,
+                                    "actions": [
+                                      "new_task",
+                                      "edit",
+                                      "complete"
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "label": "Events",
+                              "icon": "calendar",
+                              "collapsed": true,
+                              "children": [
+                                {
+                                  "type": "record:related_list",
+                                  "id": "related_events",
+                                  "label": "Events",
+                                  "properties": {
+                                    "objectName": "event",
+                                    "relationshipField": "lead_id",
+                                    "columns": [
+                                      "subject",
+                                      "start_date",
+                                      "end_date",
+                                      "location"
+                                    ],
+                                    "sort": [
+                                      {
+                                        "field": "start_date",
+                                        "order": "desc"
+                                      }
+                                    ],
+                                    "limit": 5,
+                                    "showViewAll": true,
+                                    "actions": [
+                                      "new_event"
+                                    ]
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "label": "Notes & Attachments",
+                              "icon": "paperclip",
+                              "collapsed": true,
+                              "children": [
+                                {
+                                  "type": "record:related_list",
+                                  "id": "related_files",
+                                  "label": "Files",
+                                  "properties": {
+                                    "objectName": "file",
+                                    "relationshipField": "parent_id",
+                                    "columns": [
+                                      "title",
+                                      "file_type",
+                                      "size",
+                                      "created_by",
+                                      "created_date"
+                                    ],
+                                    "sort": [
+                                      {
+                                        "field": "created_date",
+                                        "order": "desc"
+                                      }
+                                    ],
+                                    "limit": 5,
+                                    "showViewAll": true
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "label": "Activity",
+                    "icon": "clock",
+                    "children": [
+                      {
+                        "type": "record:activity",
+                        "id": "lead_activity",
+                        "label": "Activity Timeline",
+                        "properties": {
+                          "types": [
+                            "task",
+                            "event",
+                            "email",
+                            "call",
+                            "note"
+                          ],
+                          "limit": 20,
+                          "showCompleted": false
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "label": "History",
+                    "icon": "history",
+                    "children": [
+                      {
+                        "type": "record:related_list",
+                        "id": "field_history",
+                        "label": "Field History",
+                        "properties": {
+                          "objectName": "field_history",
+                          "relationshipField": "record_id",
+                          "columns": [
+                            "field",
+                            "old_value",
+                            "new_value",
+                            "changed_by",
+                            "changed_date"
+                          ],
+                          "sort": [
+                            {
+                              "field": "changed_date",
+                              "order": "desc"
+                            }
+                          ],
+                          "limit": 25,
+                          "showViewAll": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": true,
+      "assignedProfiles": [
+        "sales_user",
+        "sales_manager",
+        "system_administrator"
+      ],
+      "aria": {
+        "ariaLabel": "Lead Detail Page",
+        "ariaDescribedBy": "Detailed view of lead information with related records and activity"
+      }
+    },
+    {
+      "name": "log_call",
+      "label": "Log a Call",
+      "description": "Modal stub for the global \"log a call\" action.",
+      "type": "blank",
+      "blankLayout": {
+        "columns": 12,
+        "rowHeight": 40,
+        "gap": 8,
+        "items": []
+      },
+      "template": "default",
+      "regions": [
+        {
+          "name": "main",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "log_call_placeholder",
+              "label": "Log a Call",
+              "properties": {
+                "title": "Log a Call",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": false
+    },
+    {
+      "name": "mass_update_stage",
+      "label": "Mass Update Stage",
+      "description": "Modal stub for the opportunity mass-update-stage action.",
+      "type": "blank",
+      "blankLayout": {
+        "columns": 12,
+        "rowHeight": 40,
+        "gap": 8,
+        "items": []
+      },
+      "template": "default",
+      "regions": [
+        {
+          "name": "main",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "mass_update_stage_placeholder",
+              "label": "Mass Update Stage",
+              "properties": {
+                "title": "Mass Update Stage",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": false
+    },
+    {
+      "name": "opportunity_detail_page",
+      "label": "Opportunity Detail",
+      "description": "Comprehensive opportunity detail page with path, highlights, details, and related lists",
+      "type": "record",
+      "variables": [
+        {
+          "name": "activeTab",
+          "type": "string",
+          "defaultValue": "details"
+        }
+      ],
+      "object": "opportunity",
+      "template": "header-sidebar-main",
+      "regions": [
+        {
+          "name": "header",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:header",
+              "id": "opp_header",
+              "label": "Opportunity Information",
+              "properties": {
+                "title": "{name}",
+                "subtitle": "{account}",
+                "icon": "briefcase",
+                "breadcrumb": true,
+                "actions": [
+                  "edit",
+                  "delete",
+                  "clone",
+                  "share"
+                ]
+              }
+            },
+            {
+              "type": "record:path",
+              "id": "opp_stage_path",
+              "label": "Opportunity Stage Path",
+              "properties": {
+                "statusField": "stage",
+                "stages": [
+                  {
+                    "value": "prospecting",
+                    "label": "Prospecting"
+                  },
+                  {
+                    "value": "qualification",
+                    "label": "Qualification"
+                  },
+                  {
+                    "value": "proposal",
+                    "label": "Proposal"
+                  },
+                  {
+                    "value": "negotiation",
+                    "label": "Negotiation"
+                  },
+                  {
+                    "value": "closed_won",
+                    "label": "Closed Won"
+                  },
+                  {
+                    "value": "closed_lost",
+                    "label": "Closed Lost"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "main",
+          "width": "large",
+          "components": [
+            {
+              "type": "page:tabs",
+              "id": "opp_main_tabs",
+              "properties": {
+                "type": "line",
+                "position": "top",
+                "items": [
+                  {
+                    "key": "details",
+                    "label": "Details",
+                    "components": [
+                      {
+                        "type": "record:details",
+                        "id": "opp_details",
+                        "label": "Opportunity Details",
+                        "properties": {
+                          "sections": [
+                            {
+                              "label": "Opportunity Information",
+                              "columns": 2,
+                              "fields": [
+                                {
+                                  "field": "name",
+                                  "required": true,
+                                  "colSpan": 2
+                                },
+                                {
+                                  "field": "account",
+                                  "required": true
+                                },
+                                {
+                                  "field": "owner"
+                                },
+                                {
+                                  "field": "stage",
+                                  "required": true
+                                },
+                                {
+                                  "field": "probability"
+                                },
+                                {
+                                  "field": "amount"
+                                },
+                                {
+                                  "field": "close_date",
+                                  "required": true
+                                }
+                              ]
+                            },
+                            {
+                              "label": "Description",
+                              "columns": 1,
+                              "collapsible": true,
+                              "fields": [
+                                {
+                                  "field": "description",
+                                  "colSpan": 1
+                                },
+                                {
+                                  "field": "next_step",
+                                  "colSpan": 1
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "key": "related",
+                    "label": "Related",
+                    "components": [
+                      {
+                        "type": "page:accordion",
+                        "id": "opp_related_accordion",
+                        "properties": {
+                          "items": [
+                            {
+                              "key": "quotes",
+                              "label": "Quotes",
+                              "components": [
+                                {
+                                  "type": "record:related_list",
+                                  "id": "opp_quotes",
+                                  "properties": {
+                                    "objectName": "opportunity_quote",
+                                    "relationshipField": "opportunity_id",
+                                    "columns": [
+                                      "quote_number",
+                                      "status",
+                                      "total_amount",
+                                      "expires_at"
+                                    ],
+                                    "limit": 10
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "key": "contacts",
+                              "label": "Contacts",
+                              "components": [
+                                {
+                                  "type": "record:related_list",
+                                  "id": "opp_contacts",
+                                  "properties": {
+                                    "objectName": "opportunity_contact",
+                                    "relationshipField": "opportunity_id",
+                                    "columns": [
+                                      "name",
+                                      "role",
+                                      "email",
+                                      "phone"
+                                    ],
+                                    "limit": 10
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "key": "tasks",
+                              "label": "Open Tasks",
+                              "components": [
+                                {
+                                  "type": "record:related_list",
+                                  "id": "opp_tasks",
+                                  "properties": {
+                                    "objectName": "opportunity_task",
+                                    "relationshipField": "opportunity_id",
+                                    "columns": [
+                                      "subject",
+                                      "status",
+                                      "due_date",
+                                      "assignee"
+                                    ],
+                                    "filter": [
+                                      {
+                                        "field": "status",
+                                        "op": "neq",
+                                        "value": "completed"
+                                      }
+                                    ],
+                                    "limit": 10
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "key": "activity",
+                    "label": "Activity",
+                    "components": [
+                      {
+                        "type": "record:activity",
+                        "id": "opp_activity",
+                        "properties": {
+                          "filters": [
+                            "all",
+                            "tasks",
+                            "meetings",
+                            "calls",
+                            "emails"
+                          ],
+                          "limit": 25
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "sidebar",
+          "width": "medium",
+          "components": [
+            {
+              "type": "record:highlights",
+              "id": "opp_highlights",
+              "label": "Key Information",
+              "properties": {
+                "fields": [
+                  "amount",
+                  "close_date",
+                  "probability",
+                  "expected_revenue",
+                  "owner",
+                  "account"
+                ],
+                "layout": "vertical"
+              }
+            },
+            {
+              "type": "page:card",
+              "id": "opp_quick_actions",
+              "label": "Quick Actions",
+              "properties": {
+                "title": "Quick Actions",
+                "bordered": true,
+                "actions": [
+                  "log_call",
+                  "create_task",
+                  "schedule_meeting",
+                  "send_email"
+                ]
+              }
+            },
+            {
+              "type": "ai:chat_window",
+              "id": "opp_ai_assistant",
+              "label": "AI Assistant",
+              "properties": {
+                "mode": "sidebar",
+                "agentId": "sales_assistant",
+                "context": {
+                  "recordType": "opportunity",
+                  "recordId": "{record.id}"
+                }
+              },
+              "visibility": {
+                "dialect": "cel",
+                "source": "record.stage == \"negotiation\" || record.stage == \"proposal\""
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": true,
+      "assignedProfiles": [
+        "sales_user",
+        "sales_manager",
+        "system_administrator"
+      ],
+      "aria": {
+        "ariaLabel": "Opportunity Detail Page",
+        "ariaDescribedBy": "Detailed view of opportunity information with related records and activity"
+      }
+    },
+    {
+      "name": "sales_home_page",
+      "label": "Sales Home",
+      "description": "Sales team home page with key metrics and quick actions",
+      "type": "home",
+      "variables": [
+        {
+          "name": "selectedPeriod",
+          "type": "string",
+          "defaultValue": "this_month"
+        }
+      ],
+      "template": "three-column",
+      "regions": [
+        {
+          "name": "header",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:header",
+              "id": "home_header",
+              "label": "Sales Home Header",
+              "properties": {
+                "title": "Sales Dashboard",
+                "subtitle": "Welcome back, {current_user.first_name}",
+                "icon": "home",
+                "breadcrumb": false
+              }
+            }
+          ]
+        },
+        {
+          "name": "left_sidebar",
+          "width": "small",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "quick_create",
+              "label": "Quick Create",
+              "properties": {
+                "title": "Quick Create",
+                "bordered": true,
+                "body": [
+                  {
+                    "type": "nav:menu",
+                    "id": "create_menu",
+                    "properties": {}
+                  }
+                ]
+              }
+            },
+            {
+              "type": "page:card",
+              "id": "my_recent_items",
+              "label": "Recent Items",
+              "properties": {
+                "title": "Recent Items",
+                "bordered": true
+              }
+            }
+          ]
+        },
+        {
+          "name": "main",
+          "width": "large",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "key_metrics",
+              "label": "Key Metrics",
+              "properties": {
+                "title": "Key Performance Indicators",
+                "bordered": false,
+                "body": [
+                  {
+                    "type": "record:highlights",
+                    "id": "kpi_highlights",
+                    "properties": {
+                      "fields": [
+                        "total_revenue",
+                        "deals_won",
+                        "pipeline_value",
+                        "conversion_rate"
+                      ],
+                      "layout": "horizontal"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "type": "page:tabs",
+              "id": "home_tabs",
+              "label": "Home Tabs",
+              "properties": {
+                "type": "card",
+                "position": "top",
+                "items": [
+                  {
+                    "label": "My Leads",
+                    "icon": "user-plus",
+                    "children": [
+                      {
+                        "type": "page:section",
+                        "properties": {}
+                      }
+                    ]
+                  },
+                  {
+                    "label": "My Opportunities",
+                    "icon": "dollar-sign",
+                    "children": [
+                      {
+                        "type": "page:section",
+                        "properties": {}
+                      }
+                    ]
+                  },
+                  {
+                    "label": "My Tasks",
+                    "icon": "list-checks",
+                    "children": [
+                      {
+                        "type": "page:section",
+                        "properties": {}
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "right_sidebar",
+          "width": "medium",
+          "components": [
+            {
+              "type": "ai:chat_window",
+              "id": "sales_assistant",
+              "label": "Sales Assistant",
+              "properties": {
+                "mode": "sidebar",
+                "agentId": "sales_assistant",
+                "context": {
+                  "page": "home",
+                  "user": "{current_user.id}"
+                }
+              }
+            },
+            {
+              "type": "page:card",
+              "id": "upcoming_events",
+              "label": "Calendar",
+              "properties": {
+                "title": "Today's Schedule",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": true,
+      "assignedProfiles": [
+        "sales_user",
+        "sales_manager"
+      ],
+      "aria": {
+        "ariaLabel": "Sales Home Page",
+        "ariaDescribedBy": "Sales team home page with metrics, leads, and quick actions"
+      }
+    },
+    {
+      "name": "send_email",
+      "label": "Send Email",
+      "description": "Modal stub for the contact send-email action.",
+      "type": "blank",
+      "blankLayout": {
+        "columns": 12,
+        "rowHeight": 40,
+        "gap": 8,
+        "items": []
+      },
+      "template": "default",
+      "regions": [
+        {
+          "name": "main",
+          "width": "full",
+          "components": [
+            {
+              "type": "page:card",
+              "id": "send_email_placeholder",
+              "label": "Send Email",
+              "properties": {
+                "title": "Send Email",
+                "bordered": true
+              }
+            }
+          ]
+        }
+      ],
+      "isDefault": false
+    },
+    {
+      "name": "utility_bar_page",
+      "label": "Utility Bar",
+      "description": "Quick access utility bar with floating tools",
+      "type": "utility",
+      "template": "utility-bar",
+      "regions": [
+        {
+          "name": "utilities",
+          "width": "full",
+          "components": [
+            {
+              "type": "global:notifications",
+              "id": "notifications_panel",
+              "label": "Notifications",
+              "properties": {}
+            },
+            {
+              "type": "ai:chat_window",
+              "id": "quick_chat",
+              "label": "Quick Chat",
+              "properties": {
+                "mode": "float",
+                "agentId": "general_assistant"
+              }
+            },
+            {
+              "type": "page:card",
+              "id": "quick_notes",
+              "label": "Quick Notes",
+              "properties": {
+                "title": "Quick Notes",
+                "bordered": true
+              }
+            },
+            {
+              "type": "global:search",
+              "id": "quick_search",
+              "label": "Quick Search",
+              "properties": {}
+            }
+          ]
+        }
+      ],
+      "isDefault": false,
+      "assignedProfiles": [
+        "sales_user",
+        "sales_manager",
+        "service_user",
+        "system_administrator"
+      ],
+      "aria": {
+        "ariaLabel": "Utility Bar",
+        "ariaDescribedBy": "Quick access utility bar with floating tools and notifications"
+      }
+    }
+  ],
   "dashboards": [
     {
       "name": "crm_overview_dashboard",
