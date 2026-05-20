@@ -3,6 +3,22 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
+ * Resolve the root domain that subdomains are appended to when users
+ * leave the hostname blank or change it via the `change_hostname`
+ * action. Mirrors the precedence used in
+ * `ProjectProvisioningService.provisionProject` and
+ * `service-cloud/routes/project-lifecycle.ts::resolveNewHostname`.
+ */
+function getRootDomainForUiHints(): string {
+  return (
+    process.env.OS_ROOT_DOMAIN ||
+    process.env.ROOT_DOMAIN ||
+    (process.env.NODE_ENV === 'production' ? 'objectstack.app' : 'localhost')
+  );
+}
+const ROOT_DOMAIN_HINT = getRootDomainForUiHints();
+
+/**
  * sys_project — Control Plane Project Registry
  *
  * One row per project. An organization owns N projects
@@ -253,7 +269,7 @@ export const SysProject = ObjectSchema.create({
           required: true,
           placeholder: 'my-project',
           helpText:
-            'Just the subdomain — the root domain (e.g. .objectstack.app) is appended automatically. Allowed: lowercase letters, digits, hyphens.',
+            `Just the subdomain — the root domain (.${ROOT_DOMAIN_HINT}) is appended automatically. Allowed: lowercase letters, digits, hyphens.`,
         },
       ],
     },

@@ -61,7 +61,9 @@ function resolveNewHostname(body: AnyRow): { ok: true; hostname: string } | { ok
     if (!input) return { ok: false, error: 'subdomain or hostname is required', status: 400 };
 
     const rootDomain =
-        (process.env.OS_ROOT_DOMAIN || process.env.ROOT_DOMAIN || 'objectstack.app')
+        (process.env.OS_ROOT_DOMAIN ||
+            process.env.ROOT_DOMAIN ||
+            (process.env.NODE_ENV === 'production' ? 'objectstack.app' : 'localhost'))
             .toLowerCase()
             .replace(/^\.+|\.+$/g, '');
 

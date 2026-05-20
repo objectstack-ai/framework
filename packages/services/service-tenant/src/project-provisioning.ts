@@ -362,13 +362,22 @@ export class ProjectProvisioningService {
     // `http-dispatcher` POST /environment behaviour so existing tenant
     // resolution code keeps working. The user only needs to type a
     // display name; the hostname is computed deterministically from the
-    // org slug + project id. Suffix is configurable via OS_ROOT_DOMAIN
-    // (falls back to `objectstack.app`).
+    // org slug + project id. Suffix is configurable via OS_ROOT_DOMAIN.
+    //
+    // Default selection:
+    //   - OS_ROOT_DOMAIN set       → use as-is (operator override)
+    //   - ROOT_DOMAIN set          → use as-is (legacy alias)
+    //   - NODE_ENV === 'production'→ `objectstack.app`
+    //   - otherwise (dev/test)     → `localhost` so generated hostnames
+    //     auto-resolve in the browser via the standard *.localhost rule
+    //     and don't require /etc/hosts edits.
     let resolvedHostname = parsed.hostname?.trim();
     if (!resolvedHostname) {
       const shortId = projectId.replace(/-/g, '').slice(0, 8);
       const rootDomain =
-        process.env.OS_ROOT_DOMAIN || process.env.ROOT_DOMAIN || 'objectstack.app';
+        process.env.OS_ROOT_DOMAIN ||
+        process.env.ROOT_DOMAIN ||
+        (process.env.NODE_ENV === 'production' ? 'objectstack.app' : 'localhost');
       let orgSlug: string | undefined;
       if (this.config.controlPlaneDriver) {
         try {
