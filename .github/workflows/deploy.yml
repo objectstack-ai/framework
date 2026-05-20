@@ -1,0 +1,271 @@
+name: Deploy to Cloudflare Containers
+
+# ─────────────────────────────────────────────────────────────────────────
+# Build + push Docker images for cloud (cloud.objectos.app) and/or
+# objectos (single-project runtime per env), then `wrangler deploy` the
+# matching Worker so the new image is pinned.
+#
+# Triggers:
+#   1. Manual:  Actions → "Deploy to Cloudflare Containers" → Run
+#               (choose `target` = cloud | objectos | both, and optionally
+#               the commit SHA to deploy; defaults to the workflow ref).
+#   2. Tag:     push a tag matching `deploy-cloud-*`, `deploy-objectos-*`,
+#               or `deploy-all-*`. The tag suffix is informational; the
+#               image tag = the resolved commit SHA (short, 8 chars) so a
+#               redeploy of the same SHA is idempotent.
+#
+# Image naming:
+#   registry.cloudflare.com/<ACCOUNT_ID>/objectstack-cloud:<sha8>
+#   registry.cloudflare.com/<ACCOUNT_ID>/objectos:<sha8>
+#
+# The corresponding `apps/<target>/wrangler.toml` is rewritten in-place to
+# pin `image = "<registry>:<sha8>"` and committed back to `main` so the
+# repo always tracks what is actually deployed.
+#
+# Required secrets (Repository → Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   — token with Containers:Edit + Workers:Edit perms
+#   CLOUDFLARE_ACCOUNT_ID  — 2846eb40a60f4738e292b90dcd8cce10
+# ─────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which app(s) to deploy'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - cloud
+          - objectos
+          - both
+      ref:
+        description: 'Commit SHA or branch to deploy (default: workflow ref)'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'deploy-cloud-*'
+      - 'deploy-objectos-*'
+      - 'deploy-all-*'
+
+concurrency:
+  # Serialize deploys per-target so two pushes don't race on `wrangler deploy`.
+  group: deploy-${{ github.event.inputs.target || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Resolve which targets to build based on the trigger ──
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_cloud: ${{ steps.plan.outputs.deploy_cloud }}
+      deploy_objectos: ${{ steps.plan.outputs.deploy_objectos }}
+      sha: ${{ steps.plan.outputs.sha }}
+      sha8: ${{ steps.plan.outputs.sha8 }}
+    steps:
+      - name: Checkout (resolve ref)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+          fetch-depth: 1
+
+      - id: plan
+        name: Plan targets + resolve SHA
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          SHA8="$(git rev-parse --short=8 HEAD)"
+          echo "sha=$SHA"   >> "$GITHUB_OUTPUT"
+          echo "sha8=$SHA8" >> "$GITHUB_OUTPUT"
+
+          DEPLOY_CLOUD=false
+          DEPLOY_OBJECTOS=false
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              T="${{ github.event.inputs.target }}"
+              [[ "$T" == "cloud"    || "$T" == "both" ]] && DEPLOY_CLOUD=true
+              [[ "$T" == "objectos" || "$T" == "both" ]] && DEPLOY_OBJECTOS=true
+              ;;
+            push)
+              REF="${{ github.ref_name }}"
+              [[ "$REF" == deploy-cloud-*    || "$REF" == deploy-all-* ]] && DEPLOY_CLOUD=true
+              [[ "$REF" == deploy-objectos-* || "$REF" == deploy-all-* ]] && DEPLOY_OBJECTOS=true
+              ;;
+          esac
+
+          echo "deploy_cloud=$DEPLOY_CLOUD"       >> "$GITHUB_OUTPUT"
+          echo "deploy_objectos=$DEPLOY_OBJECTOS" >> "$GITHUB_OUTPUT"
+          echo "─────────────────────────────────"
+          echo "Trigger:    ${{ github.event_name }}"
+          echo "SHA:        $SHA"
+          echo "Image tag:  $SHA8"
+          echo "Cloud:      $DEPLOY_CLOUD"
+          echo "ObjectOS:   $DEPLOY_OBJECTOS"
+
+  # ── Build + push cloud image; pin tag in wrangler.toml; wrangler deploy ──
+  cloud:
+    needs: plan
+    if: needs.plan.outputs.deploy_cloud == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to commit the wrangler.toml tag bump back to main
+    env:
+      ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IMAGE_NAME: objectstack-cloud
+      SHA8:       ${{ needs.plan.outputs.sha8 }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          # Need full history so we can push back the tag-bump commit.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Cloudflare container registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cloudflare.com
+          username: ${{ env.ACCOUNT_ID }}
+          password: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Build + push cloud image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/cloud/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: registry.cloudflare.com/${{ env.ACCOUNT_ID }}/${{ env.IMAGE_NAME }}:${{ env.SHA8 }}
+          # GitHub Actions cache — drops cloud rebuild from ~20m to ~3-6m
+          # after the first run.
+          cache-from: type=gha,scope=cloud
+          cache-to:   type=gha,scope=cloud,mode=max
+
+      - name: Pin image tag in wrangler.toml
+        run: |
+          set -euo pipefail
+          NEW="registry.cloudflare.com/${ACCOUNT_ID}/${IMAGE_NAME}:${SHA8}"
+          sed -i -E "s#^image = .*${IMAGE_NAME}:.*#image = \"${NEW}\"#" apps/cloud/wrangler.toml
+          echo "Pinned to: $NEW"
+          grep '^image' apps/cloud/wrangler.toml
+
+      - name: Wrangler deploy (cloud)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.ACCOUNT_ID }}
+          workingDirectory: apps/cloud
+          command: deploy --config wrangler.toml
+
+      - name: Commit pinned tag back to main
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          if git diff --quiet apps/cloud/wrangler.toml; then
+            echo "No tag change to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B deploy/cloud-${SHA8}
+          git add apps/cloud/wrangler.toml
+          git commit -m "chore(deploy): pin cloud image tag to ${SHA8}
+
+          Auto-bumped by .github/workflows/deploy.yml after successful Cloudflare
+          Containers deploy of registry.cloudflare.com/${ACCOUNT_ID}/${IMAGE_NAME}:${SHA8}.
+
+          Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          # Fast-forward push to main if possible; otherwise leave the branch
+          # for a human to PR. We never force-push main.
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            git push origin HEAD:main
+          else
+            git push origin HEAD
+            echo "::warning::Could not fast-forward main; pushed branch deploy/cloud-${SHA8} instead. Open a PR."
+          fi
+
+  # ── Build + push objectos image; pin tag; wrangler deploy ──
+  objectos:
+    needs: plan
+    if: needs.plan.outputs.deploy_objectos == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      IMAGE_NAME: objectos
+      SHA8:       ${{ needs.plan.outputs.sha8 }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Cloudflare container registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cloudflare.com
+          username: ${{ env.ACCOUNT_ID }}
+          password: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Build + push objectos image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/objectos/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: registry.cloudflare.com/${{ env.ACCOUNT_ID }}/${{ env.IMAGE_NAME }}:${{ env.SHA8 }}
+          cache-from: type=gha,scope=objectos
+          cache-to:   type=gha,scope=objectos,mode=max
+
+      - name: Pin image tag in wrangler.toml
+        run: |
+          set -euo pipefail
+          NEW="registry.cloudflare.com/${ACCOUNT_ID}/${IMAGE_NAME}:${SHA8}"
+          sed -i -E "s#^image = .*${IMAGE_NAME}:.*#image = \"${NEW}\"#" apps/objectos/wrangler.toml
+          echo "Pinned to: $NEW"
+          grep '^image' apps/objectos/wrangler.toml
+
+      - name: Wrangler deploy (objectos)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken:  ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.ACCOUNT_ID }}
+          workingDirectory: apps/objectos
+          command: deploy --config wrangler.toml
+
+      - name: Commit pinned tag back to main
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          if git diff --quiet apps/objectos/wrangler.toml; then
+            echo "No tag change to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B deploy/objectos-${SHA8}
+          git add apps/objectos/wrangler.toml
+          git commit -m "chore(deploy): pin objectos image tag to ${SHA8}
+
+          Auto-bumped by .github/workflows/deploy.yml after successful Cloudflare
+          Containers deploy of registry.cloudflare.com/${ACCOUNT_ID}/${IMAGE_NAME}:${SHA8}.
+
+          Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            git push origin HEAD:main
+          else
+            git push origin HEAD
+            echo "::warning::Could not fast-forward main; pushed branch deploy/objectos-${SHA8} instead. Open a PR."
+          fi
