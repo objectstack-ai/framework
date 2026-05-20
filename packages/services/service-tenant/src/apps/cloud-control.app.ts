@@ -41,9 +41,14 @@ export const CLOUD_CONTROL_APP: App = {
   // project control plane; org/user/role/audit/oauth/session management
   // lives in the Setup App and is intentionally NOT duplicated here.
   //
-  // Internal operator surfaces (Revisions, Credentials, Package Versions,
-  // Registered Apps) remain accessible via direct URL but are hidden from
-  // the navigation to keep the App focused on real user tasks.
+  // Internal operator surfaces (Branches, Revisions, Credentials, Package
+  // Versions, Registered Apps) remain accessible via direct URL but are
+  // hidden from the navigation to keep the App focused on real user tasks.
+  //
+  // Branches are a Builder-persona concept (per ADR-0006). For the default
+  // Consumer flow — create an Environment, install from Marketplace — branches
+  // add navigation noise. They re-surface only when a Project authoring
+  // workspace is introduced (deferred until Builder need shows up).
   navigation: [
     {
       id: 'group_environments',
@@ -52,7 +57,6 @@ export const CLOUD_CONTROL_APP: App = {
       icon: 'globe',
       children: [
         { id: 'nav_environments', type: 'object', label: 'Environments', objectName: 'sys_project', icon: 'globe' },
-        { id: 'nav_env_branches', type: 'object', label: 'Branches', objectName: 'sys_project_branch', icon: 'git-branch' },
         { id: 'nav_env_members', type: 'object', label: 'Members', objectName: 'sys_project_member', icon: 'user-cog' },
       ],
     },
