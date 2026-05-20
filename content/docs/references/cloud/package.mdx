@@ -32,8 +32,8 @@ See `docs/adr/0003-package-as-first-class-citizen.md` for the full rationale.
 ## TypeScript Usage
 
 ```typescript
-import { CreatePackageRequest, Package, PackageCategory, PackageVisibility, UpdatePackageRequest } from '@objectstack/spec/cloud';
-import type { CreatePackageRequest, Package, PackageCategory, PackageVisibility, UpdatePackageRequest } from '@objectstack/spec/cloud';
+import { CreatePackageRequest, Package, PackageCategory, PackagePublisher, PackageVisibility, UpdatePackageRequest } from '@objectstack/spec/cloud';
+import type { CreatePackageRequest, Package, PackageCategory, PackagePublisher, PackageVisibility, UpdatePackageRequest } from '@objectstack/spec/cloud';
 
 // Validate data
 const result = CreatePackageRequest.parse(data);
@@ -59,6 +59,8 @@ Register a new package in the Control Plane
 | **iconUrl** | `string` | optional |  |
 | **homepageUrl** | `string` | optional |  |
 | **license** | `string` | optional |  |
+| **publisher** | `Enum<'objectstack' \| 'partner' \| 'community' \| 'private'>` | optional | Package publisher provenance tier |
+| **isStarter** | `boolean` | optional |  |
 | **createdBy** | `string` | ✅ | User ID creating the package |
 
 
@@ -82,12 +84,28 @@ Register a new package in the Control Plane
 | **iconUrl** | `string` | optional | Package icon URL |
 | **homepageUrl** | `string` | optional | Package homepage URL |
 | **license** | `string` | optional | SPDX license identifier (e.g. MIT, Apache-2.0) |
+| **publisher** | `Enum<'objectstack' \| 'partner' \| 'community' \| 'private'>` | ✅ | Package publisher provenance tier |
+| **isStarter** | `boolean` | ✅ | If true, surfaces in the Create Project blueprint picker as a starter template |
 | **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
 | **updatedAt** | `string` | ✅ | Last update timestamp (ISO-8601) |
 | **createdBy** | `string` | ✅ | User ID that created the package |
 
 
 ---
+
+
+---
+
+## PackagePublisher
+
+Package publisher provenance tier
+
+### Allowed Values
+
+* `objectstack`
+* `partner`
+* `community`
+* `private`
 
 
 ---
@@ -122,6 +140,8 @@ Update mutable package metadata
 | **iconUrl** | `string` | optional |  |
 | **homepageUrl** | `string` | optional |  |
 | **license** | `string` | optional |  |
+| **publisher** | `Enum<'objectstack' \| 'partner' \| 'community' \| 'private'>` | optional | Package publisher provenance tier |
+| **isStarter** | `boolean` | optional |  |
 
 
 ---

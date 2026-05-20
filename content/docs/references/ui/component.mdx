@@ -14,8 +14,8 @@ Empty Properties Schema
 ## TypeScript Usage
 
 ```typescript
-import { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
-import type { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
+import { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
+import type { AIChatWindowProps, ElementButtonProps, ElementFilterProps, ElementImageProps, ElementNumberProps, ElementRecordPickerProps, ElementTextProps, PageAccordionProps, PageCardProps, PageHeaderProps, PageTabsProps, RecordActivityProps, RecordChatterProps, RecordDetailsProps, RecordHighlightsField, RecordHighlightsProps, RecordPathProps, RecordRelatedListProps } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AIChatWindowProps.parse(data);
@@ -247,13 +247,43 @@ const result = AIChatWindowProps.parse(data);
 
 ---
 
+## RecordHighlightsField
+
+Highlight field: bare name, or `{name,label?,icon?,type?}`
+
+### Union Options
+
+This schema accepts one of the following structures:
+
+#### Option 1
+
+Type: `string`
+
+---
+
+#### Option 2
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Field name on the record |
+| **label** | `string` | optional | Display label (overrides schema label) |
+| **icon** | `string` | optional | Icon name (lucide icon key) |
+| **type** | `string` | optional | Override cell renderer type (rare) |
+
+---
+
+
+---
+
 ## RecordHighlightsProps
 
 ### Properties
 
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| **fields** | `string[]` | ✅ | Key fields to highlight (1-7 fields max, typically displayed as prominent cards) |
+| **fields** | `string \| Object[]` | ✅ | Key fields to highlight (1-7 fields max, typically displayed as prominent cards). Each item may be a bare field name or `{name, label?, icon?, type?}` for inline overrides. |
 | **layout** | `Enum<'horizontal' \| 'vertical'>` | ✅ | Layout orientation for highlight fields |
 | **aria** | `Object` | optional | ARIA accessibility attributes |
 

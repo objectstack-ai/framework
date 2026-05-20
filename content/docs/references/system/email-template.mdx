@@ -1,0 +1,95 @@
+---
+title: Email Template
+description: Email Template protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Email Template Metadata Protocol
+
+Declarative template definition consumed by `IEmailService.sendTemplate()`
+
+to render outbound mail. Persisted as rows of `sys_email_template` so
+
+administrators can author/edit/translate templates in Studio without
+
+shipping code, and tenants can override the built-in defaults
+
+(`allowOrgOverride: true` in the metadata registry).
+
+Aligned with Salesforce `EmailTemplate` and ServiceNow
+
+`sysevent_email_action` conventions: a single named template is
+
+resolved by `(name, locale)`; subject/body strings carry simple
+
+`\{\{path.to.value\}\}` placeholders rendered against a per-send
+
+`data` payload.
+
+<Callout type="info">
+**Source:** `packages/spec/src/system/email-template.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { EmailTemplateDefinition, EmailTemplateDefinitionCategory, EmailTemplateDefinitionVariable } from '@objectstack/spec/system';
+import type { EmailTemplateDefinition, EmailTemplateDefinitionCategory, EmailTemplateDefinitionVariable } from '@objectstack/spec/system';
+
+// Validate data
+const result = EmailTemplateDefinition.parse(data);
+```
+
+---
+
+## EmailTemplateDefinition
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Template identifier (dotted snake_case) |
+| **label** | `string` | ✅ | Display label |
+| **category** | `Enum<'auth' \| 'notification' \| 'workflow' \| 'marketing' \| 'custom'>` | ✅ |  |
+| **locale** | `string` | ✅ | BCP-47 locale (e.g. en-US, zh-CN) |
+| **subject** | `string` | ✅ | Subject template |
+| **bodyHtml** | `string` | ✅ | HTML body template |
+| **bodyText** | `string` | optional | Plain-text body template (auto-derived from HTML when omitted) |
+| **variables** | `Object[]` | ✅ |  |
+| **fromOverride** | `Object` | optional |  |
+| **replyTo** | `string` | optional |  |
+| **active** | `boolean` | ✅ |  |
+| **isSystem** | `boolean` | ✅ |  |
+| **description** | `string` | optional |  |
+
+
+---
+
+## EmailTemplateDefinitionCategory
+
+### Allowed Values
+
+* `auth`
+* `notification`
+* `workflow`
+* `marketing`
+* `custom`
+
+
+---
+
+## EmailTemplateDefinitionVariable
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | ✅ | Variable name as referenced in placeholders (snake_case or dotted path) |
+| **type** | `Enum<'string' \| 'number' \| 'boolean' \| 'date' \| 'url' \| 'user' \| 'record'>` | ✅ |  |
+| **required** | `boolean` | ✅ |  |
+| **description** | `string` | optional | Author hint shown in Studio |
+
+
+---
+

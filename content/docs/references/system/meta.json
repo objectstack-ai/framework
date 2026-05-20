@@ -11,6 +11,8 @@
     "core-services",
     "deploy-bundle",
     "disaster-recovery",
+    "email-config",
+    "email-template",
     "encryption",
     "http-server",
     "incident-response",

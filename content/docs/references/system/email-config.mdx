@@ -1,0 +1,80 @@
+---
+title: Email Config
+description: Email Config protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+Email Service Configuration Protocol
+
+Operator-facing configuration that selects the outbound email
+
+transport for the EmailServicePlugin. Provider is a `provider` tag
+
++ provider-specific settings; concrete `IEmailTransport`
+
+implementations live in `@objectstack/plugin-email/transports/*`.
+
+Resolution order in `serve.ts`:
+
+1. `config.email.*` from objectstack.config.ts
+
+2. `OS_EMAIL_*` environment variables (override per setting)
+
+3. Default → provider='log' (LogTransport, no real send)
+
+<Callout type="info">
+**Source:** `packages/spec/src/system/email-config.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { EmailAddressConfig, EmailProvider, EmailServiceConfig } from '@objectstack/spec/system';
+import type { EmailAddressConfig, EmailProvider, EmailServiceConfig } from '@objectstack/spec/system';
+
+// Validate data
+const result = EmailAddressConfig.parse(data);
+```
+
+---
+
+## EmailAddressConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **name** | `string` | optional | Display name (e.g. "Acme CRM") |
+| **address** | `string` | ✅ | RFC-5322 address |
+
+
+---
+
+## EmailProvider
+
+### Allowed Values
+
+* `log`
+* `resend`
+* `postmark`
+
+
+---
+
+## EmailServiceConfig
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **provider** | `Enum<'log' \| 'resend' \| 'postmark'>` | ✅ |  |
+| **apiKey** | `string` | optional | Provider API key (or OS_EMAIL_API_KEY env) |
+| **defaultFrom** | `Object` | optional |  |
+| **retries** | `integer` | optional | Retry attempts on transport throw |
+| **persist** | `boolean` | optional | Persist to sys_email (default true) |
+| **options** | `Record<string, any>` | optional |  |
+
+
+---
+

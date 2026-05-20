@@ -30,6 +30,11 @@ export const SysPackage = ObjectSchema.create({
   description: 'Control-plane registry of installable packages / solutions (sys_package).',
   titleFormat: '{display_name}',
   compactLayout: ['display_name', 'manifest_id', 'visibility', 'created_at'],
+  // sys_package is a global catalog (Marketplace). Visibility/access is
+  // governed by the `visibility` column + `owner_org_id` (when set), NOT
+  // by implicit organization_id row-scoping. Disable tenant injection so
+  // platform-seeded starter rows (owner_org_id NULL) are visible to all.
+  tenancy: { enabled: false, strategy: 'shared' },
 
   fields: {
     id: Field.text({
