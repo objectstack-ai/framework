@@ -16,6 +16,8 @@
  *   GET  /cloud/projects/:id/revisions
  *   POST /cloud/projects/:id/revisions/:commit/activate
  *   POST /cloud/projects/:id/revisions/prune
+ *   POST /cloud/packages                      — register/upsert a package (ADR-0006 v4 Phase B)
+ *   POST /cloud/packages/:id/versions         — publish a new package version (ADR-0006 v4 Phase B)
  *   GET  /pub/v1/projects/:id/manifest.json
  *   GET  /pub/v1/projects/:id/artifact[?commit=&redirect=]
  *   GET  /pub/v1/projects/:id/revisions
@@ -28,6 +30,7 @@ import { registerPublicRoutes } from './routes/public.js';
 import { registerBranchRoutes } from './routes/branches.js';
 import { registerProjectLifecycleRoutes } from './routes/project-lifecycle.js';
 import { registerPackageInstallRoutes } from './routes/package-install.js';
+import { registerPackagePublishRoutes } from './routes/package-publish.js';
 import type { ProjectTemplate } from './multi-project-plugin.js';
 import type { RouteDeps } from './routes/types.js';
 
@@ -118,6 +121,7 @@ export function createCloudArtifactApiPlugin(options: CloudArtifactApiPluginOpti
             registerBranchRoutes(server, deps);
             registerProjectLifecycleRoutes(server, { ...deps, templates: options.templates });
             registerPackageInstallRoutes(server, { ...deps, templates: options.templates });
+            registerPackagePublishRoutes(server, { ...deps, templates: options.templates });
         },
         stop: async (_ctx: AnyContext) => {},
     };

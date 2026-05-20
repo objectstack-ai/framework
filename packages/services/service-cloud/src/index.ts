@@ -3,6 +3,13 @@
 // ── Main entry point ──────────────────────────────────────────────────────────
 export { createCloudStack } from './cloud-stack.js';
 export type { CloudStackConfig } from './cloud-stack.js';
+export {
+  mountDefaultProjectPlugins,
+} from './default-project-plugins.js';
+export type {
+  MountDefaultProjectPluginsOptions,
+  DefaultProjectCap,
+} from './default-project-plugins.js';
 
 // ── Data-directory resolution ─────────────────────────────────────────────────
 export { resolveDefaultDataDir, isServerlessReadOnlyFs } from './data-dir.js';

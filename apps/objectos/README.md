@@ -422,3 +422,54 @@ Required runtime env vars (set as Cloudflare secrets, not in `wrangler.toml`):
 | `OS_DATABASE_AUTH_TOKEN` | Turso auth token. |
 | `AUTH_SECRET` | Cookie/session signing secret. |
 | `OS_CLOUD_URL` *(optional)* | Point at an `apps/cloud` deployment for multi-project mode. Omit for single-project local mode. |
+
+## Default per-project plugin slate
+
+ObjectOS keeps the **host kernel intentionally bare** (stateless
+routing shell). All tenant-data plugins live on **per-project kernels**,
+mounted on first-hit and cached by `ArtifactKernelFactory` /
+`DefaultProjectKernelFactory`.
+
+Every per-project kernel automatically gets the following default
+plugins (in this order) via `mountDefaultProjectPlugins()`:
+
+1. `QueueServicePlugin` (in-memory)
+2. `JobServicePlugin`
+3. `CacheServicePlugin` (in-memory)
+4. `SettingsServicePlugin` — `sys_setting` / `sys_secret` /
+   `sys_setting_audit` rows live in the **project's own driver**, so
+   tenants are fully isolated
+5. `EmailServicePlugin` — each tenant configures its own provider /
+   api_key via Settings; api_key is stored encrypted in `sys_secret`
+6. `StorageServicePlugin` — see below
+
+### Storage adapter selection
+
+- `OS_STORAGE_ADAPTER=s3` + `OS_S3_*` env → shared S3 bucket with
+  `pathStylePrefix: projects/<projectId>` so tenant prefixes never
+  collide
+- otherwise → local driver under
+  `<dataRoot>/projects/<projectId>/uploads/`; a single boot warning
+  fires in non-dev mode
+
+### Ops overrides
+
+The factory accepts `basePluginsExtra({ projectId, kernel })` which can
+return `{ caps?: {…: false}, extraPlugins?: [...] }` to:
+
+- inject a **shared Redis-backed queue** so retries survive kernel
+  eviction (set `caps.queue=false` and push your custom plugin in
+  `extraPlugins`)
+- skip storage when the host worker mounts a shared S3 instance
+  out-of-band
+- mount tenant-specific audit/automation/analytics plugins
+
+### Caveats
+
+- **In-memory queue eviction** — when a per-project kernel is LRU-
+  evicted, queued retries are dropped. Use the `basePluginsExtra`
+  hook above to inject a Redis-backed queue for SLA-bound workloads.
+- **InMemoryCryptoProvider is per-process** — the default AES key is
+  regenerated on every restart, so encrypted `sys_secret` rows cannot
+  be decrypted after a redeploy. Ship `KmsCryptoProvider` (AWS KMS
+  envelope) before enabling encrypted settings on hosted objectos.

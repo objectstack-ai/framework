@@ -8,6 +8,7 @@ import type { ProjectKernelFactory } from './kernel-manager.js';
 import type { EnvironmentDriverRegistry, SecretEncryptor } from './environment-registry.js';
 import { NoopSecretEncryptor } from './environment-registry.js';
 import { resolveDefaultDataDir } from './data-dir.js';
+import { mountDefaultProjectPlugins } from './default-project-plugins.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -79,6 +80,24 @@ export interface DefaultProjectKernelFactoryConfig {
   logger?: { info?: (...a: any[]) => void; warn?: (...a: any[]) => void; error?: (...a: any[]) => void };
   kernelConfig?: ConstructorParameters<typeof ObjectKernel>[0];
   localProject?: LocalProjectConfig;
+  /**
+   * Ops escape hatch — replace or augment the default per-project
+   * plugin slate (queue, job, cache, settings, email, storage) without
+   * forking the factory. Common cases:
+   *   - inject a shared Redis-backed `QueueServicePlugin` so retries
+   *     survive kernel eviction
+   *   - skip storage when the host worker mounts a shared S3 instance
+   *     out-of-band (return `{ caps: { storage: false } }`)
+   *   - pass `extraPlugins` to mount per-tenant plugins (audit,
+   *     analytics, automation) that aren't part of the default slate
+   */
+  basePluginsExtra?: (ctx: {
+    projectId: string;
+    kernel: ObjectKernel;
+  }) => Promise<{
+    caps?: Partial<Record<'queue' | 'job' | 'cache' | 'settings' | 'email' | 'storage', boolean>>;
+    extraPlugins?: Plugin[];
+  } | undefined> | { caps?: any; extraPlugins?: Plugin[] } | undefined;
 }
 
 export class DefaultProjectKernelFactory implements ProjectKernelFactory {
@@ -90,6 +109,7 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
   private readonly logger: NonNullable<DefaultProjectKernelFactoryConfig['logger']>;
   private readonly kernelConfig?: DefaultProjectKernelFactoryConfig['kernelConfig'];
   private readonly localProject?: LocalProjectConfig;
+  private readonly basePluginsExtra?: DefaultProjectKernelFactoryConfig['basePluginsExtra'];
 
   constructor(config: DefaultProjectKernelFactoryConfig) {
     this.controlPlaneDriver = config.controlPlaneDriver;
@@ -100,6 +120,7 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
     this.logger = config.logger ?? console;
     this.kernelConfig = config.kernelConfig;
     this.localProject = config.localProject;
+    this.basePluginsExtra = config.basePluginsExtra;
   }
 
   async create(projectId: string): Promise<ObjectKernel> {
@@ -191,6 +212,21 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
     await kernel.use(new DriverPlugin(proxyDriver, { registerAsDefault: false, datasourceName: 'cloud' } as any));
 
     for (const p of basePlugins) await kernel.use(p);
+    // Mount default per-project plugin slate (queue, job, cache, settings,
+    // email, storage). Mirrors `ALWAYS_CAPS` in
+    // `packages/cli/src/commands/serve.ts` for hosted tenants. Ops can
+    // override via `basePluginsExtra`.
+    const extra1 = this.basePluginsExtra
+      ? await Promise.resolve(this.basePluginsExtra({ projectId, kernel }))
+      : undefined;
+    await mountDefaultProjectPlugins(kernel, {
+      projectId,
+      logger: this.logger,
+      ...(extra1?.caps ? { caps: extra1.caps } : {}),
+    });
+    if (extra1?.extraPlugins) {
+      for (const ep of extra1.extraPlugins) await kernel.use(ep);
+    }
     const projectName = (project as any).name ?? (project as any).hostname;
     await this.maybeRegisterI18n(kernel, bundles, projectId);
     for (const b of bundles) {
@@ -278,6 +314,18 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
     const kernel = new ObjectKernel(this.kernelConfig);
     await kernel.use(new DriverPlugin(driver));
     for (const p of basePlugins) await kernel.use(p);
+    // Mount default per-project plugin slate (same as cloud path).
+    const extra2 = this.basePluginsExtra
+      ? await Promise.resolve(this.basePluginsExtra({ projectId, kernel }))
+      : undefined;
+    await mountDefaultProjectPlugins(kernel, {
+      projectId,
+      logger: this.logger,
+      ...(extra2?.caps ? { caps: extra2.caps } : {}),
+    });
+    if (extra2?.extraPlugins) {
+      for (const ep of extra2.extraPlugins) await kernel.use(ep);
+    }
 
     const projectName = syntheticProject.hostname ?? projectId;
     await this.maybeRegisterI18n(kernel, bundles, projectId);

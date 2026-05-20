@@ -41,3 +41,16 @@ provide a real KMS adapter via plugin options.
 
 Every write emits a `sys_audit_log` row (when the audit service is
 present). Encrypted values are masked with `'<encrypted>'` + checksum.
+
+## Always-on default
+
+`SettingsServicePlugin` is part of the **default capability slate** —
+it is auto-mounted by `objectstack serve` (any preset except
+`--preset minimal`) and by `mountDefaultProjectPlugins()` on every
+per-project kernel on hosted objectos. Apps no longer need to declare
+`requires: ['settings']`. Apps with zero registered manifests pay
+no runtime cost (the registry is empty, no routes fire).
+
+The Settings hub in `apps/console` therefore appears in every app, and
+the **Mail Settings** card is the first manifest registered (by
+`EmailServicePlugin`, also always-on).

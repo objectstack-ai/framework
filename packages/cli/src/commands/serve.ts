@@ -87,6 +87,22 @@ export default class Serve extends Command {
   };
 
   /**
+   * Capabilities auto-added to every app's `requires` for every preset
+   * EXCEPT `minimal`. These form the foundation that every server-side
+   * runtime expects to exist (background work, settings persistence,
+   * transactional mail, file uploads). Apps may still list these in
+   * `requires:` explicitly — duplicates are de-duped.
+   *
+   * Opt out: `objectstack serve --preset minimal`.
+   *
+   * Mirrored on hosted objectos per-project kernels by
+   * `mountDefaultProjectPlugins()` in `@objectstack/service-cloud`.
+   */
+  static readonly ALWAYS_ON_CAPABILITIES: readonly string[] = Object.freeze([
+    'queue', 'job', 'cache', 'settings', 'email', 'storage',
+  ]);
+
+  /**
    * Auto-registered plugin tiers. Plugins explicitly listed in
    * `config.plugins` are always loaded — tiers only gate the optional
    * auto-registration blocks below (AIService, I18n, Studio UI, etc.).
@@ -306,7 +322,7 @@ export default class Serve extends Command {
       // storage). Opt out with `objectstack serve --preset minimal`.
       // Keeping `auth → email` above as a defensive rule for users who
       // explicitly opt into `minimal` but still enable auth.
-      const ALWAYS_CAPS = ['queue', 'job', 'cache', 'settings', 'email', 'storage'];
+      const ALWAYS_CAPS = Serve.ALWAYS_ON_CAPABILITIES;
       if (presetName !== 'minimal') {
         for (const cap of ALWAYS_CAPS) {
           if (!requires.includes(cap)) requires.push(cap);
@@ -1076,6 +1092,26 @@ export default class Serve extends Command {
                 `  ⚠ Capability "email": provider='${provider}' but no apiKey found (set OS_EMAIL_API_KEY or config.email.apiKey). Falling back to LogTransport.`,
               ));
               arg.provider = 'log';
+            }
+          } else if (cap === 'storage') {
+            // Storage is now in the default capability slate. If the host
+            // hasn't configured a backend explicitly we fall back to the
+            // local-disk driver under `.objectstack/data/uploads/` so
+            // avatars / attachments / report files work out of the box.
+            // In production mode we emit a single loud warning so the
+            // operator knows to point storage at S3 / GCS / Azure before
+            // shipping (data on a single pod is volatile / non-replicated).
+            const cfgStorage = (config as any).storage;
+            if (cfgStorage && (cfgStorage.driver || cfgStorage.adapter)) {
+              arg = cfgStorage;
+            } else {
+              const root = process.env.OS_STORAGE_ROOT || '.objectstack/data/uploads';
+              arg = { driver: 'local', root };
+              if (!isDev) {
+                console.warn(chalk.yellow(
+                  `  ⚠ StorageServicePlugin using local driver (${root}) — switch to S3/GCS/Azure for production (set config.storage or OS_STORAGE_*).`,
+                ));
+              }
             }
           }
           await kernel.use(arg !== undefined ? new Ctor(arg) : new Ctor());

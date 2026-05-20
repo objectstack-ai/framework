@@ -254,6 +254,31 @@ os projects bind <id> --artifact dist/objectstack.json  # 8. Bind to a Cloud Pro
 └── package.json                # oclif config under "oclif" key
 ```
 
+
+## Default capability slate (always-on)
+
+`objectstack serve` (and `os dev`) auto-mount a baseline slate of
+service plugins for every preset **except** `--preset minimal`:
+
+| Capability  | Plugin                       | Why default                                                  |
+|-------------|------------------------------|--------------------------------------------------------------|
+| `queue`     | `QueueServicePlugin`         | Background retries (mail, audit batching) need a queue.      |
+| `job`       | `JobServicePlugin`           | Scheduled jobs (cleanup, reports, cron).                     |
+| `cache`     | `CacheServicePlugin`         | In-memory adapter; performance baseline.                     |
+| `settings`  | `SettingsServicePlugin`      | Mail/branding/feature-flag UI + persistence.                 |
+| `email`     | `EmailServicePlugin`         | Auth callbacks (verify, reset, magic-link) hard-depend.      |
+| `storage`   | `StorageServicePlugin`       | Avatars, attachments, exports. Local fallback in dev.        |
+
+Apps no longer need to list these in `requires: [...]`.
+
+**Opt-out:** run `objectstack serve --preset minimal` to skip the slate
+and only load core + your explicit `requires`.
+
+**Storage warning:** when no `storage:` block is configured the plugin
+falls back to the local driver under `.objectstack/data/uploads/`. In
+non-dev mode a single `console.warn` fires at boot — switch to S3/GCS/
+Azure for production by setting `config.storage` or `OS_STORAGE_*` env.
+
 ## License
 
 Apache-2.0

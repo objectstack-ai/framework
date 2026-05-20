@@ -48,7 +48,12 @@ export default defineStack({
   // `ui`   serves the Studio shell and CRM apps under /_studio/.
   // Both are required for a clickable login flow when running `objectstack start`
   // off the compiled artifact.
-  requires: ['ai', 'automation', 'analytics', 'auth', 'ui', 'storage', 'approvals', 'sharing', 'settings'],
+  // Note: the foundational slate (queue, job, cache, settings, email,
+  // storage) is auto-injected by the CLI for every non-`minimal`
+  // preset — see `ALWAYS_CAPS` in packages/cli/src/commands/serve.ts.
+  // Listed below only the *opt-in* capabilities this stack actually
+  // wants on top of that slate.
+  requires: ['ai', 'automation', 'analytics', 'auth', 'ui', 'approvals', 'sharing'],
 
   objects: Object.values(objects),
   actions: Object.values(actions),

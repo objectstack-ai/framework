@@ -33,6 +33,7 @@ import { DriverPlugin, AppPlugin } from '@objectstack/runtime';
 import type { ProjectKernelFactory } from './kernel-manager.js';
 import type { EnvironmentDriverRegistry } from './environment-registry.js';
 import type { ArtifactApiClient } from './artifact-api-client.js';
+import { mountDefaultProjectPlugins } from './default-project-plugins.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
@@ -182,6 +183,16 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 error: err?.message,
             });
         }
+
+        // Mount the default per-project plugin slate (queue, job, cache,
+        // settings, email, storage). Mirrors `ALWAYS_CAPS` in
+        // `packages/cli/src/commands/serve.ts` so hosted tenants get the
+        // same foundational services a single-tenant `objectstack dev`
+        // stack gets.
+        await mountDefaultProjectPlugins(kernel, {
+            projectId,
+            logger: this.logger,
+        });
 
         const projectName = project.hostname ?? projectId;
         const bundle = artifact.metadata as any;
