@@ -128,6 +128,16 @@ export class SqlDriver implements IDataDriver {
   protected jsonFields: Record<string, string[]> = {};
   protected booleanFields: Record<string, string[]> = {};
   protected tablesWithTimestamps: Set<string> = new Set();
+  /**
+   * Autonumber field configs per table, captured during initObjects.
+   * Each entry is rendered on insert as `prefix + padded(n)` where `n` is
+   * MAX(existing matching value) + 1 (parsed from the field column itself).
+   * Format placeholder `{0000}` controls zero-padding width.
+   */
+  protected autoNumberFields: Record<
+    string,
+    Array<{ name: string; format: string; prefix: string; padWidth: number }>
+  > = {};
 
   /** Whether the underlying database is a SQLite variant (sqlite3 or better-sqlite3). */
   protected get isSqlite(): boolean {
@@ -346,11 +356,56 @@ export class SqlDriver implements IDataDriver {
       toInsert.id = nanoid(DEFAULT_ID_LENGTH);
     }
 
+    await this.fillAutoNumberFields(object, toInsert, options);
+
     const builder = this.getBuilder(object, options);
     const formatted = this.formatInput(object, toInsert);
 
     const result = await builder.insert(formatted).returning('*');
     return this.formatOutput(object, result[0]);
+  }
+
+  /**
+   * For each `auto_number` field on the object that the caller did not
+   * provide a value for, compute the next value by scanning existing rows
+   * with the same prefix and incrementing the highest numeric suffix.
+   *
+   * Note: this is intentionally a per-call MAX-and-increment rather than a
+   * persistent sequence row. The SELECT/INSERT pair is not atomic across
+   * concurrent writers, so under heavy concurrent create load two requests
+   * can race to the same number. Adequate for app demo seeds; production
+   * deployments should layer a dedicated sequence table or a DB sequence.
+   */
+  protected async fillAutoNumberFields(
+    object: string,
+    row: Record<string, any>,
+    options?: DriverOptions,
+  ): Promise<void> {
+    const tableName = StorageNameMapping.resolveTableName({ name: object } as any);
+    const cfgs = this.autoNumberFields[tableName] || this.autoNumberFields[object];
+    if (!cfgs || cfgs.length === 0) return;
+    for (const cfg of cfgs) {
+      if (row[cfg.name] !== undefined && row[cfg.name] !== null && row[cfg.name] !== '') continue;
+      const builder = this.getBuilder(object, options);
+      // LIKE 'CTR-%' (escape underscores/percents — autonumber prefixes
+      // are typically uppercase letters + a separator, so this is safe in
+      // practice; keep it conservative).
+      const escapedPrefix = cfg.prefix.replace(/([\\%_])/g, '\\$1');
+      const rows = await builder
+        .select(cfg.name)
+        .where(cfg.name, 'like', `${escapedPrefix}%`)
+        .whereNotNull(cfg.name);
+      let maxN = 0;
+      for (const r of rows as any[]) {
+        const v: string = (r as any)[cfg.name];
+        if (typeof v !== 'string') continue;
+        const tail = v.slice(cfg.prefix.length);
+        const n = parseInt(tail.replace(/[^0-9]/g, ''), 10);
+        if (Number.isFinite(n) && n > maxN) maxN = n;
+      }
+      const next = maxN + 1;
+      row[cfg.name] = `${cfg.prefix}${String(next).padStart(cfg.padWidth, '0')}`;
+    }
   }
 
   async update(object: string, id: string | number, data: Record<string, any>, options?: DriverOptions): Promise<any> {
@@ -381,6 +436,8 @@ export class SqlDriver implements IDataDriver {
     } else if (toUpsert.id === undefined) {
       toUpsert.id = nanoid(DEFAULT_ID_LENGTH);
     }
+
+    await this.fillAutoNumberFields(object, toUpsert, options);
 
     const formatted = this.formatInput(object, toUpsert);
     const mergeKeys = conflictKeys && conflictKeys.length > 0 ? conflictKeys : ['id'];
@@ -703,6 +760,7 @@ export class SqlDriver implements IDataDriver {
 
       const jsonCols: string[] = [];
       const booleanCols: string[] = [];
+      const autoNumberCols: Array<{ name: string; format: string; prefix: string; padWidth: number }> = [];
       if (obj.fields) {
         for (const [name, field] of Object.entries<any>(obj.fields)) {
           const type = field.type || 'string';
@@ -712,10 +770,20 @@ export class SqlDriver implements IDataDriver {
           if (type === 'boolean') {
             booleanCols.push(name);
           }
+          if (type === 'auto_number' || type === 'autonumber') {
+            const fmt = typeof field.format === 'string' && field.format
+              ? field.format
+              : '{0000}';
+            const m = fmt.match(/\{(0+)\}/);
+            const padWidth = m ? m[1].length : 4;
+            const prefix = m ? fmt.slice(0, m.index ?? 0) : fmt;
+            autoNumberCols.push({ name, format: fmt, prefix, padWidth });
+          }
         }
       }
       this.jsonFields[tableName] = jsonCols;
       this.booleanFields[tableName] = booleanCols;
+      this.autoNumberFields[tableName] = autoNumberCols;
 
       let exists = await this.knex.schema.hasTable(tableName);
 
@@ -1106,6 +1174,7 @@ export class SqlDriver implements IDataDriver {
         col = table.float(name);
         break;
       case 'auto_number':
+      case 'autonumber':
         col = table.string(name);
         break;
       case 'formula':

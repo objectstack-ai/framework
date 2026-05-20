@@ -332,6 +332,31 @@ export class CloudContainer extends Container<Env> {
 export default {
     async fetch(request: Request, env: Env): Promise<Response> {
         const container = getContainer(env.CLOUD, 'singleton');
+        // Admin: restart container on demand (used by deploy script to
+        // force a fresh image roll-over without waiting for sleepAfter
+        // eviction). Requires a shared secret to avoid public abuse.
+        const url = new URL(request.url);
+        if (url.pathname === '/_admin/restart-container') {
+            const provided = request.headers.get('x-admin-secret') ?? '';
+            const expected = env.OS_CLOUD_API_KEY ?? '';
+            if (!expected || provided !== expected) {
+                return new Response('forbidden', { status: 403 });
+            }
+            try {
+                // destroy() = SIGKILL the container; next request cold-starts
+                // with whatever image tag is currently bound in wrangler.toml.
+                await container.destroy();
+                return new Response(JSON.stringify({ ok: true, action: 'destroyed' }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                });
+            } catch (err) {
+                return new Response(
+                    JSON.stringify({ ok: false, error: String((err as Error)?.message ?? err) }),
+                    { status: 500, headers: { 'content-type': 'application/json' } },
+                );
+            }
+        }
         return container.fetch(request);
     },
 };
