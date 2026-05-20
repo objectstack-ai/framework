@@ -24,5 +24,10 @@ export { default as ProjectsCreateCommand } from './commands/projects/create.js'
 export { default as ProjectsSwitchCommand } from './commands/projects/switch.js';
 export { default as ProjectsBindCommand } from './commands/projects/bind.js';
 
+// ─── Cloud topic subcommands ────────────────────────────────────────
+export { default as CloudLoginCommand } from './commands/cloud/login.js';
+export { default as CloudLogoutCommand } from './commands/cloud/logout.js';
+export { default as CloudWhoamiCommand } from './commands/cloud/whoami.js';
+
 // ─── Package topic subcommands ──────────────────────────────────────
 export { default as PackagePublishCommand } from './commands/package/publish.js';

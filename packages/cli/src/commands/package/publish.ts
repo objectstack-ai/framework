@@ -22,6 +22,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve as resolvePath, basename } from 'node:path';
 import { Args, Command, Flags } from '@oclif/core';
 import { printHeader, printKV, printSuccess, printError, printStep } from '../../utils/format.js';
+import { DEFAULT_CLOUD_URL, tryReadCloudConfig } from '../../utils/cloud-config.js';
 
 const MANIFEST_ID_RE = /^[a-z0-9][a-z0-9._-]{0,254}$/i;
 
@@ -89,9 +90,9 @@ export default class PackagePublish extends Command {
   static override flags = {
     server: Flags.string({
       char: 's',
-      description: 'ObjectStack Cloud control-plane URL',
+      description: 'ObjectStack Cloud control-plane URL (override for self-hosted registries)',
       env: 'OS_CLOUD_URL',
-      default: 'http://localhost:4000',
+      default: DEFAULT_CLOUD_URL,
     }),
     token: Flags.string({
       char: 't',
@@ -192,8 +193,35 @@ export default class PackagePublish extends Command {
       const displayName = (flags['display-name'] ?? deriveDisplayName(artifact, manifestId)).trim();
       const version = deriveVersion(artifact, flags.version);
 
-      const token = flags.token ?? process.env.OS_TOKEN ?? undefined;
-      const baseUrl = flags.server.replace(/\/+$/, '');
+      // Resolve auth + server URL. Credential precedence:
+      //   1. explicit --token flag  (or $OS_TOKEN env)
+      //   2. ~/.objectstack/cloud.json (written by `os cloud login`)
+      //   3. fail with a clear "run `os cloud login`" message
+      //
+      // Server URL precedence:
+      //   1. explicit --server flag (or $OS_CLOUD_URL env)
+      //   2. cloud.json's recorded url
+      //   3. https://cloud.objectos.app (DEFAULT_CLOUD_URL)
+      //
+      // Note: we deliberately do NOT fall back to ~/.objectstack/credentials.json
+      // (the *runtime* identity, written by `os login`). Publishing a package
+      // and managing a local ObjectOS instance are two distinct identities —
+      // see `os cloud login` for the cloud identity.
+      let token = flags.token ?? process.env.OS_TOKEN ?? undefined;
+      let baseUrl = flags.server.replace(/\/+$/, '');
+      const serverFlagWasDefault = !process.env.OS_CLOUD_URL && baseUrl === DEFAULT_CLOUD_URL;
+      if (!token || serverFlagWasDefault) {
+        const stored = await tryReadCloudConfig();
+        if (!token && stored?.token) token = stored.token;
+        if (serverFlagWasDefault && stored?.url) baseUrl = stored.url.replace(/\/+$/, '');
+      }
+      if (!token) {
+        printError(
+          'Not logged in to ObjectStack Cloud. Run `os cloud login` first, or pass --token / set $OS_TOKEN.',
+        );
+        this.exit(1);
+        return;
+      }
 
       // ---- Step 1: ensure sys_package row ---------------------------------
       printStep(`Registering package '${manifestId}'...`);

@@ -147,9 +147,13 @@ describe('Remote API Commands (oclif)', () => {
   });
 
   describe('Command Conventions', () => {
-    it('all remote commands should support --url flag with OS_CLOUD_URL env var', () => {
+    it('runtime data/meta commands should support --url with OS_CLOUD_URL env var', () => {
+      // Note: `os login` was moved off this convention by ADR-0006 v4 — it
+      // is now a *runtime* identity command (defaults to localhost:3000,
+      // env OS_RUNTIME_URL). Cloud identity commands live under
+      // `os cloud login` and use ~/.objectstack/cloud.json directly.
       const commands = [
-        AuthLogin, AuthWhoami,
+        AuthWhoami,
         DataQuery, DataGet, DataCreate, DataUpdate, DataDelete,
         MetaList, MetaGet, MetaRegister, MetaDelete
       ];
@@ -158,6 +162,11 @@ describe('Remote API Commands (oclif)', () => {
         expect(cmd.flags).toHaveProperty('url');
         expect(cmd.flags.url).toHaveProperty('env', 'OS_CLOUD_URL');
       });
+    });
+
+    it('os login should use OS_RUNTIME_URL env var (runtime identity, not cloud)', () => {
+      expect(AuthLogin.flags).toHaveProperty('url');
+      expect(AuthLogin.flags.url).toHaveProperty('env', 'OS_RUNTIME_URL');
     });
 
     it('authenticated commands should support --token flag with OS_TOKEN env var', () => {

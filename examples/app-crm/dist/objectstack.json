@@ -25940,9 +25940,7 @@
     "analytics",
     "auth",
     "ui",
-    "storage",
     "approvals",
-    "sharing",
-    "settings"
+    "sharing"
   ]
 }

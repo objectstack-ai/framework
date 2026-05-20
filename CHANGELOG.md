@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Cloud identity split: `os cloud login` separates from `os login`
+
+Introduced a second credential store at `~/.objectstack/cloud.json` to model
+the two distinct identities a developer holds on their machine:
+
+1. **Runtime identity** — your account on the ObjectOS instance you build
+   and operate (your CRM / Todo / SaaS). Stored in
+   `~/.objectstack/credentials.json` via the existing `os login`. Default
+   server stays at `http://localhost:3000` (env `OS_RUNTIME_URL`).
+
+2. **Cloud identity** — your developer account on the hosted ObjectStack
+   Cloud package registry at `https://cloud.objectos.app`. Stored in
+   `~/.objectstack/cloud.json` via the new `os cloud login` command.
+
+This eliminates the prior ambiguity where one token+url slot tried to
+serve both "manage my local data" and "publish my package to the
+registry" workflows.
+
+**New commands**
+
+- `os cloud login` — RFC 8628 device-flow (or `--email/--password`)
+  against `https://cloud.objectos.app` (override via `--url` /
+  `OS_CLOUD_URL` for self-hosted registries).
+- `os cloud logout` — best-effort session revocation + clears
+  `cloud.json`.
+- `os cloud whoami` — verifies the cached token against
+  `/api/v1/auth/get-session` and prints the active cloud identity.
+- `os package publish` (ADR-0006 v4 Phase B) — uploads
+  `dist/objectstack.json` as a `sys_package` + `sys_package_version`
+  pair into the caller's organization on the cloud control plane.
+  Reads credentials **only** from `~/.objectstack/cloud.json` (never
+  falls back to the runtime `credentials.json`, preventing accidental
+  "publish with my app-user token" mistakes). Default server is
+  `https://cloud.objectos.app`.
+
+**Updated commands**
+
+- `os login` env var renamed from `OS_CLOUD_URL` to `OS_RUNTIME_URL` to
+  make the runtime-vs-cloud distinction explicit at the shell level.
+
+**New utilities**
+
+- `packages/cli/src/utils/cloud-config.ts` — read/write/delete helpers
+  for `~/.objectstack/cloud.json` plus `DEFAULT_CLOUD_URL` constant.
+- `packages/cli/src/utils/auth-flows.ts` — shared `loginWithBrowser` /
+  `loginWithPassword` flows so runtime and cloud login paths can stay
+  in sync without duplicating the RFC 8628 polling loop.
+
 ### Changed — ADR-0006 v4: drop dev-workspace Project, unify deploy on Package
 
 Removed the dev-workspace `sys_project` / `sys_project_branch` /

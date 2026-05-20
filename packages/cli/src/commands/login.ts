@@ -86,9 +86,9 @@ export default class AuthLogin extends Command {
   static override flags = {
     url: Flags.string({
       char: 'u',
-      description: 'Server URL',
+      description: 'ObjectStack runtime server URL (your local ObjectOS or self-hosted control plane). For the hosted package registry, use `os cloud login` instead.',
       default: 'http://localhost:3000',
-      env: 'OS_CLOUD_URL',
+      env: 'OS_RUNTIME_URL',
     }),
     email: Flags.string({
       char: 'e',
