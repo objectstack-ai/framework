@@ -46,6 +46,95 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     // saveMetaItem — dual-write (registry + database)
     // ═══════════════════════════════════════════════════════════════
 
+    // ═══════════════════════════════════════════════════════════════
+    // ADR-0005 (revised 2026-05): per-organization overlay isolation
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('per-organization overlay isolation', () => {
+        it('saveMetaItem persists organization_id when provided', async () => {
+            mockEngine.findOne.mockResolvedValue(null);
+            await protocol.saveMetaItem({
+                type: 'app',
+                name: 'test_app',
+                item: sampleApp,
+                organizationId: 'org_alpha',
+            });
+            expect(mockEngine.findOne).toHaveBeenCalledWith('sys_metadata', {
+                where: { type: 'app', name: 'test_app', organization_id: 'org_alpha', state: 'active' },
+            });
+            expect(mockEngine.insert).toHaveBeenCalledWith('sys_metadata', expect.objectContaining({
+                organization_id: 'org_alpha',
+                scope: 'platform',
+            }));
+        });
+
+        it('getMetaItem returns org-specific overlay when both org and env-wide rows exist', async () => {
+            // findOverlay calls: first attempts org=org_alpha (returns row),
+            // env-wide fallback should be skipped.
+            mockEngine.findOne.mockImplementation((_table: string, opts: any) => {
+                if (opts?.where?.organization_id === 'org_alpha') {
+                    return Promise.resolve({
+                        type: 'app', name: 'test_app', state: 'active',
+                        metadata: JSON.stringify({ ...sampleApp, label: 'Org Alpha' }),
+                    });
+                }
+                if (opts?.where?.organization_id === null) {
+                    return Promise.resolve({
+                        type: 'app', name: 'test_app', state: 'active',
+                        metadata: JSON.stringify({ ...sampleApp, label: 'Env Default' }),
+                    });
+                }
+                return Promise.resolve(null);
+            });
+
+            const result = await protocol.getMetaItem({
+                type: 'app', name: 'test_app', organizationId: 'org_alpha',
+            });
+            expect((result.item as any).label).toBe('Org Alpha');
+        });
+
+        it('getMetaItem falls through to env-wide overlay when no org-specific row exists', async () => {
+            mockEngine.findOne.mockImplementation((_table: string, opts: any) => {
+                if (opts?.where?.organization_id === null) {
+                    return Promise.resolve({
+                        type: 'app', name: 'test_app', state: 'active',
+                        metadata: JSON.stringify({ ...sampleApp, label: 'Env Default' }),
+                    });
+                }
+                return Promise.resolve(null);
+            });
+            const result = await protocol.getMetaItem({
+                type: 'app', name: 'test_app', organizationId: 'org_alpha',
+            });
+            expect((result.item as any).label).toBe('Env Default');
+        });
+
+        it('getMetaItems unions env-wide and org-specific rows (org wins on collision)', async () => {
+            mockEngine.find.mockImplementation((_table: string, opts: any) => {
+                if (opts?.where?.organization_id === 'org_alpha') {
+                    return Promise.resolve([
+                        { type: 'app', name: 'shared', state: 'active', metadata: JSON.stringify({ name: 'shared', label: 'Org Alpha' }) },
+                        { type: 'app', name: 'alpha_only', state: 'active', metadata: JSON.stringify({ name: 'alpha_only', label: 'Alpha Only' }) },
+                    ]);
+                }
+                if (opts?.where?.organization_id === null) {
+                    return Promise.resolve([
+                        { type: 'app', name: 'shared', state: 'active', metadata: JSON.stringify({ name: 'shared', label: 'Env Default' }) },
+                        { type: 'app', name: 'env_only', state: 'active', metadata: JSON.stringify({ name: 'env_only', label: 'Env Only' }) },
+                    ]);
+                }
+                return Promise.resolve([]);
+            });
+            const result = await protocol.getMetaItems({
+                type: 'app', organizationId: 'org_alpha',
+            });
+            const names = (result.items as any[]).map((i) => i.name).sort();
+            expect(names).toEqual(['alpha_only', 'env_only', 'shared']);
+            const shared = (result.items as any[]).find((i) => i.name === 'shared');
+            expect(shared.label).toBe('Org Alpha');
+        });
+    });
+
     describe('saveMetaItem', () => {
         it('should throw when item data is missing', async () => {
             await expect(
@@ -82,7 +171,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             await protocol.saveMetaItem({ type: 'app', name: 'test_app', item: sampleApp });
 
             expect(mockEngine.findOne).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', name: 'test_app', project_id: null }
+                where: { type: 'app', name: 'test_app', organization_id: null, state: 'active' }
             });
             expect(mockEngine.insert).toHaveBeenCalledWith('sys_metadata', expect.objectContaining({
                 name: 'test_app',
@@ -113,8 +202,8 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             const result = await protocol.saveMetaItem({ type: 'app', name: 'test_app', item: sampleApp });
 
             expect(result.success).toBe(true);
-            // control-plane (no projectId) returns the legacy message
-            expect(result.message).toBe('Saved to database and registry');
+            // env-wide (no organizationId) overlay save
+            expect(result.message).toMatch(/Saved customization overlay/);
         });
 
         it('should fail-fast with 500 when DB findOne is unavailable (ADR-0005)', async () => {
@@ -324,7 +413,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
             expect(result.item).toEqual(sampleApp);
             expect(mockEngine.findOne).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', name: 'test_app', state: 'active', project_id: null }
+                where: { type: 'app', name: 'test_app', state: 'active', organization_id: null }
             });
         });
 
@@ -425,7 +514,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             // DB *is* queried (always-merge semantics) so seeded metadata
             // surfaces even when the registry already has unrelated items.
             expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', state: 'active', project_id: null }
+                where: { type: 'app', state: 'active', organization_id: null }
             });
         });
 
@@ -444,7 +533,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect(result.items).toHaveLength(1);
             expect(result.items[0]).toEqual(sampleApp);
             expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
-                where: { type: 'app', state: 'active', project_id: null }
+                where: { type: 'app', state: 'active', organization_id: null }
             });
         });
 
@@ -561,7 +650,7 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             await protocol.loadMetaFromDb();
 
             expect(mockEngine.find).toHaveBeenCalledWith('sys_metadata', {
-                where: { state: 'active', project_id: null }
+                where: { state: 'active', organization_id: null }
             });
         });
 

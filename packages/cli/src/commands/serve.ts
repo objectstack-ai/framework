@@ -301,6 +301,17 @@ export default class Serve extends Command {
       if (requires.includes('auth') && !requires.includes('email')) {
         requires.push('email');
       }
+      // Default capability slate — every preset except `minimal` gets the
+      // foundational services (queue + job + cache + settings + email +
+      // storage). Opt out with `objectstack serve --preset minimal`.
+      // Keeping `auth → email` above as a defensive rule for users who
+      // explicitly opt into `minimal` but still enable auth.
+      const ALWAYS_CAPS = ['queue', 'job', 'cache', 'settings', 'email', 'storage'];
+      if (presetName !== 'minimal') {
+        for (const cap of ALWAYS_CAPS) {
+          if (!requires.includes(cap)) requires.push(cap);
+        }
+      }
       // The email + approvals + reports services schedule background work
       // (durable retries, SLA escalation, scheduled digests). Auto-pull
       // 'job' and 'queue' so plugins can opt into durable scheduling.

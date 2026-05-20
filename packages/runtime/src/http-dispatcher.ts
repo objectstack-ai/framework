@@ -837,7 +837,8 @@ export class HttpDispatcher {
 
                 if (protocol && typeof protocol.saveMetaItem === 'function') {
                     try {
-                        const result = await protocol.saveMetaItem({ type, name, item: body });
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const result = await protocol.saveMetaItem({ type, name, item: body, organizationId });
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {
                         return { handled: true, response: this.error(e.message, 400) };
@@ -875,7 +876,8 @@ export class HttpDispatcher {
 
                     if (scoped && typeof protocol.getMetaItem === 'function') {
                         try {
-                            const data = await protocol.getMetaItem({ type: 'object', name });
+                            const organizationId = await this.resolveActiveOrganizationId(_context);
+                            const data = await protocol.getMetaItem({ type: 'object', name, organizationId });
                             // Protocol returns `{ type, name, item }` — only
                             // treat the lookup as a hit when item is present.
                             if (data && (data.item ?? data)) {
@@ -895,7 +897,8 @@ export class HttpDispatcher {
                     // yet hydrated). Skip when we already tried above.
                     if (!scoped && protocol && typeof protocol.getMetaItem === 'function') {
                         try {
-                            const data = await protocol.getMetaItem({ type: 'object', name });
+                            const organizationId = await this.resolveActiveOrganizationId(_context);
+                            const data = await protocol.getMetaItem({ type: 'object', name, organizationId });
                             if (data && (data.item ?? data)) {
                                 return { handled: true, response: this.success(data) };
                             }
@@ -911,7 +914,8 @@ export class HttpDispatcher {
                 const protocol = await this.resolveService('protocol');
                 if (protocol && typeof protocol.getMetaItem === 'function') {
                      try {
-                        const data = await protocol.getMetaItem({ type: singularType, name, packageId });
+                        const organizationId = await this.resolveActiveOrganizationId(_context);
+                        const data = await protocol.getMetaItem({ type: singularType, name, packageId, organizationId });
                         return { handled: true, response: this.success(data) };
                      } catch (e: any) {
                         // Protocol might throw if not found or not supported
@@ -944,7 +948,8 @@ export class HttpDispatcher {
             const protocol = await this.resolveService('protocol');
             if (protocol && typeof protocol.getMetaItems === 'function') {
                 try {
-                    const data = await protocol.getMetaItems({ type: typeOrName, packageId });
+                    const organizationId = await this.resolveActiveOrganizationId(_context);
+                    const data = await protocol.getMetaItems({ type: typeOrName, packageId, organizationId });
                     // Return any valid response from protocol (including empty items arrays)
                     if (data && (data.items !== undefined || Array.isArray(data))) {
                         return { handled: true, response: this.success(data) };
@@ -1404,6 +1409,32 @@ export class HttpDispatcher {
      * Resolve the calling user id from the request session, if any.
      * Returns `undefined` for anonymous calls or when auth is not wired up.
      */
+    private async resolveActiveOrganizationId(context: HttpProtocolContext): Promise<string | undefined> {
+        try {
+            const authService: any = await this.resolveService(CoreServiceName.enum.auth);
+            const rawHeaders = context.request?.headers;
+            let headers: any = rawHeaders;
+            if (rawHeaders && typeof rawHeaders === 'object' && typeof (rawHeaders as any).get !== 'function') {
+                try {
+                    const h = new Headers();
+                    for (const [k, v] of Object.entries(rawHeaders as Record<string, any>)) {
+                        if (v == null) continue;
+                        h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
+                    }
+                    headers = h;
+                } catch {
+                    headers = rawHeaders;
+                }
+            }
+            const apiObj = authService?.auth?.api ?? authService?.api;
+            const sessionData = await apiObj?.getSession?.call(apiObj, { headers });
+            const oid = sessionData?.session?.activeOrganizationId;
+            return typeof oid === 'string' && oid.length > 0 ? oid : undefined;
+        } catch {
+            return undefined;
+        }
+    }
+
     private async resolveCallerUserId(context: HttpProtocolContext): Promise<string | undefined> {
         try {
             const authService: any = await this.resolveService(CoreServiceName.enum.auth);

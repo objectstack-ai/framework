@@ -135,11 +135,16 @@ export const SysMetadataObject = ObjectSchema.create({
       description: 'Organization for multi-tenant isolation.',
     }),
 
-    /** Project ID — null = platform-global, set = project-scoped */
+    /**
+     * @deprecated ADR-0005 (revised 2026-05): per-env DBs replace per-project
+     * isolation. `project_id` is no longer written by saveMetaItem and not
+     * consulted by overlay reads. Kept for legacy rows; new writes leave it
+     * NULL. Will be dropped in a future schema migration.
+     */
     project_id: Field.lookup('sys_project', {
-      label: 'Project',
+      label: 'Project (deprecated)',
       required: false,
-      description: 'Foreign key to sys_project (UUID). Null = platform-global.',
+      description: 'DEPRECATED. Use organization_id for tenant isolation.',
     }),
 
     /** Version number for optimistic concurrency */
@@ -194,17 +199,20 @@ export const SysMetadataObject = ObjectSchema.create({
   },
 
   indexes: [
-    // ADR-0005: overlay uniqueness is scoped by (type, name, organization_id, project_id, scope)
-    // restricted to active rows so resets / archived versions don't collide.
+    // ADR-0005 (revised 2026-05): overlay uniqueness is scoped by
+    // (type, name, organization_id), restricted to active rows so resets
+    // / archived versions don't collide. project_id is deprecated and
+    // not part of the discriminator. The runtime layer (protocol.ts
+    // ensureOverlayIndex) issues a DROP-then-CREATE migration to
+    // replace any pre-existing legacy composite index in-place.
     {
       name: 'idx_sys_metadata_overlay_active',
-      fields: ['type', 'name', 'organization_id', 'project_id', 'scope'],
+      fields: ['type', 'name', 'organization_id'],
       unique: true,
       partial: "state = 'active'",
     },
     { name: 'idx_sys_metadata_org_type', fields: ['organization_id', 'type'] },
     { fields: ['type', 'scope'] },
-    { fields: ['project_id'] },
     { fields: ['package_version_id'] },
     { fields: ['state'] },
     { fields: ['namespace'] },

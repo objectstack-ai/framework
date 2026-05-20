@@ -159,13 +159,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     throw new Error('driver has neither raw nor execute');
                 }
             };
+            // ADR-0005 (revised 2026-05): per-env DBs replace the old
+            // "per-project" isolation, so `project_id` is no longer a
+            // discriminator. Overlay uniqueness is `(type, name,
+            // organization_id)` filtered to active rows. Drop the legacy
+            // composite index first so the new partial UNIQUE can claim
+            // the same name — DROP INDEX IF EXISTS is idempotent.
+            try { await exec("DROP INDEX IF EXISTS idx_sys_metadata_overlay_active"); } catch { /* best-effort */ }
             const partialSql =
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_sys_metadata_overlay_active " +
-                "ON sys_metadata (type, name, organization_id, project_id, scope) " +
+                "ON sys_metadata (type, name, organization_id) " +
                 "WHERE state = 'active'";
             const fallbackSql =
                 "CREATE INDEX IF NOT EXISTS idx_sys_metadata_overlay_active " +
-                "ON sys_metadata (type, name, organization_id, project_id, scope)";
+                "ON sys_metadata (type, name, organization_id)";
             try {
                 await exec(partialSql);
             } catch (err: any) {
@@ -331,7 +338,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         return { types: allTypes };
     }
 
-    async getMetaItems(request: { type: string; packageId?: string }) {
+    async getMetaItems(request: { type: string; packageId?: string; organizationId?: string }) {
         const { packageId } = request;
         let items: unknown[] = [];
 
@@ -364,32 +371,41 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         // Always consult the DB so metadata persisted by the seeder /
         // bulkRegister shows up even when the registry already has unrelated
-        // entries (the previous fallback-only logic meant project metadata
+        // entries (the previous fallback-only logic meant per-env metadata
         // was never surfaced whenever system-bridged items populated the
         // registry). Deduplicate against whatever the registry returned.
         //
-        // ADR-0005 Phase 4: project kernels also consult sys_metadata so that
-        // customer-saved view/dashboard overlays show up in list endpoints
-        // alongside the artifact-loaded items.
+        // ADR-0005 (revised 2026-05): isolation is now per-organization, since
+        // each env has its own physical DB. We surface both org-scoped overlays
+        // (when an active org is provided) and env-wide (organization_id IS NULL)
+        // overlays; org-scoped rows win on name collision.
         try {
-            const whereClause: Record<string, unknown> = {
-                type: request.type,
-                state: 'active',
-                // Always filter by project_id: project kernels use their projectId,
-                // control-plane kernels use NULL (global scope only).
-                project_id: this.projectId ?? null,
-            };
-            if (packageId) whereClause._packageId = packageId;
-            let records = await this.engine.find('sys_metadata', { where: whereClause });
-            if ((!records || records.length === 0)) {
-                // Try alternate type name in DB using explicit mapping
-                const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
-                if (alt) {
-                    const altWhere: Record<string, unknown> = { type: alt, state: 'active', project_id: this.projectId ?? null };
-                    if (packageId) altWhere._packageId = packageId;
-                    records = await this.engine.find('sys_metadata', { where: altWhere });
+            const orgId = (request as any).organizationId as string | undefined;
+            const queryByOrg = async (oid: string | null): Promise<any[]> => {
+                const whereClause: Record<string, unknown> = {
+                    type: request.type,
+                    state: 'active',
+                    organization_id: oid,
+                };
+                if (packageId) whereClause._packageId = packageId;
+                let rs = await this.engine.find('sys_metadata', { where: whereClause });
+                if ((!rs || rs.length === 0)) {
+                    const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                    if (alt) {
+                        const altWhere: Record<string, unknown> = { type: alt, state: 'active', organization_id: oid };
+                        if (packageId) altWhere._packageId = packageId;
+                        rs = await this.engine.find('sys_metadata', { where: altWhere });
+                    }
                 }
-            }
+                return rs ?? [];
+            };
+            const envWideRecords = await queryByOrg(null);
+            const orgRecords = orgId ? await queryByOrg(orgId) : [];
+            // org-specific rows override env-wide rows on name collision
+            const mergedMap = new Map<string, any>();
+            for (const r of envWideRecords) mergedMap.set(r.name, r);
+            for (const r of orgRecords) mergedMap.set(r.name, r);
+            const records = Array.from(mergedMap.values());
             if (records && records.length > 0) {
                 const byName = new Map<string, any>();
                 for (const existing of items) {
@@ -468,42 +484,42 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
-    async getMetaItem(request: { type: string, name: string, packageId?: string }) {
+    async getMetaItem(request: { type: string, name: string, packageId?: string, organizationId?: string }) {
         let item: unknown;
+        const orgId = request.organizationId;
 
         // 1. Customization overlay lookup (sys_metadata).
-        //    Per ADR-0005, overlay rows are the customer-managed delta and win
-        //    over the artifact-loaded registry. Both project-kernel and
-        //    control-plane modes participate (control-plane scope = NULL).
+        //    Per ADR-0005 (revised), org-scoped row wins; env-wide
+        //    (organization_id IS NULL) row is the fallback before falling
+        //    through to the in-memory registry / MetadataService.
         try {
-            const scopedWhere: Record<string, unknown> = {
-                type: request.type,
-                name: request.name,
-                state: 'active',
-                project_id: this.projectId ?? null,
-            };
-            const record = await this.engine.findOne('sys_metadata', { where: scopedWhere });
-            if (record) {
-                item = typeof record.metadata === 'string'
-                    ? JSON.parse(record.metadata)
-                    : record.metadata;
-            } else {
-                // Try alternate type name using explicit singular/plural mapping
+            const findOverlay = async (oid: string | null): Promise<any | undefined> => {
+                const where: Record<string, unknown> = {
+                    type: request.type,
+                    name: request.name,
+                    state: 'active',
+                    organization_id: oid,
+                };
+                const rec = await this.engine.findOne('sys_metadata', { where });
+                if (rec) return rec;
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                 if (alt) {
                     const altWhere: Record<string, unknown> = {
                         type: alt,
                         name: request.name,
                         state: 'active',
-                        project_id: this.projectId ?? null,
+                        organization_id: oid,
                     };
-                    const altRecord = await this.engine.findOne('sys_metadata', { where: altWhere });
-                    if (altRecord) {
-                        item = typeof altRecord.metadata === 'string'
-                            ? JSON.parse(altRecord.metadata)
-                            : altRecord.metadata;
-                    }
+                    return await this.engine.findOne('sys_metadata', { where: altWhere });
                 }
+                return undefined;
+            };
+            const record = (orgId ? await findOverlay(orgId) : undefined)
+                ?? await findOverlay(null);
+            if (record) {
+                item = typeof record.metadata === 'string'
+                    ? JSON.parse(record.metadata)
+                    : record.metadata;
             }
         } catch {
             // DB not available — fall through to registry / MetadataService
@@ -1630,7 +1646,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             || ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES.has(type);
     }
 
-    async saveMetaItem(request: { type: string, name: string, item?: any }) {
+    async saveMetaItem(request: { type: string, name: string, item?: any, organizationId?: string }) {
         if (!request.item) {
             throw new Error('Item data is required');
         }
@@ -1706,16 +1722,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
 
         // 2. Persist to sys_metadata as a customization overlay row.
-        //    Both project-kernel (project_id = this.projectId) and
-        //    control-plane (project_id = NULL) modes participate. Per ADR-0005
-        //    we store the entire item document — no field-level patch.
+        //    ADR-0005 (revised 2026-05): isolation key is `organization_id`
+        //    (each env = its own DB, so project_id is redundant). Org-scoped
+        //    rows belong to the active organization in the request; env-wide
+        //    overlays are written with organization_id = NULL.
         await this.ensureOverlayIndex();
         try {
             const now = new Date().toISOString();
+            const orgId = request.organizationId ?? null;
             const scopedWhere: Record<string, unknown> = {
                 type: request.type,
                 name: request.name,
-                project_id: this.projectId ?? null,
+                organization_id: orgId,
+                state: 'active',
             };
             const existing = await this.engine.findOne('sys_metadata', {
                 where: scopedWhere,
@@ -1740,29 +1759,25 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     id,
                     name: request.name,
                     type: request.type,
-                    // `scope` is informational; `project_id` is the authoritative
-                    // isolation key (see sys-metadata schema unique index).
-                    // We always write 'platform' here — per-project overlays
-                    // are distinguished by `project_id`, not by a separate
-                    // scope value (the enum is ['system','platform','user']).
+                    // `scope` enum is ['system','platform','user']; per-org
+                    // overlays use 'platform' as the informational tag. The
+                    // authoritative isolation key is `organization_id`.
                     scope: 'platform',
                     metadata: JSON.stringify(request.item),
                     state: 'active',
                     version: 1,
                     created_at: now,
                     updated_at: now,
+                    organization_id: orgId,
                 };
-                if (this.projectId !== undefined) {
-                    row.project_id = this.projectId;
-                }
                 await this.engine.insert('sys_metadata', row);
             }
 
             return {
                 success: true,
-                message: this.projectId !== undefined
-                    ? `Saved customization overlay to sys_metadata (project scope) — type=${request.type}, name=${request.name}`
-                    : 'Saved to database and registry',
+                message: orgId
+                    ? `Saved customization overlay (org=${orgId}) — type=${request.type}, name=${request.name}`
+                    : `Saved customization overlay (env-wide) — type=${request.type}, name=${request.name}`,
             };
         } catch (dbError: any) {
             // DB write failed — surface as an error rather than silently
@@ -1786,7 +1801,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * "Reset to factory default" semantic from ADR-0005. Whitelist is shared
      * with {@link saveMetaItem}.
      */
-    async deleteMetaItem(request: { type: string; name: string }): Promise<{
+    async deleteMetaItem(request: { type: string; name: string; organizationId?: string }): Promise<{
         success: boolean;
         message?: string;
         reset?: boolean;
@@ -1805,7 +1820,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         const scopedWhere: Record<string, unknown> = {
             type: request.type,
             name: request.name,
-            project_id: this.projectId ?? null,
+            organization_id: request.organizationId ?? null,
         };
 
         try {
@@ -1868,14 +1883,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         let loaded = 0;
         let errors = 0;
         try {
-            // Always scope by project_id: project kernels hydrate only their own
-            // rows; control-plane kernels (no projectId) hydrate only
-            // rows with project_id = NULL (global scope). Without this filter the
-            // control-plane registry would absorb every project's objects and
-            // expose them at the control-plane metadata endpoints.
+            // ADR-0005 (revised 2026-05): hydrate only env-wide rows
+            // (organization_id IS NULL). Per-org overlays are loaded on
+            // demand by getMetaItem to avoid cross-org leakage into the
+            // process-wide SchemaRegistry.
             const where: Record<string, unknown> = {
                 state: 'active',
-                project_id: this.projectId ?? null,
+                organization_id: null,
             };
             const records = await this.engine.find('sys_metadata', { where });
             for (const record of records) {
