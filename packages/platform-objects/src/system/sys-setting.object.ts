@@ -149,6 +149,19 @@ export const SysSetting = ObjectSchema.create({
       description: 'When true, the value is stored encrypted-at-rest in value_enc; value column is null.',
     }),
 
+    locked: Field.boolean({
+      label: 'Locked',
+      defaultValue: false,
+      description:
+        'When true, lower-scope rows cannot override this value; writes against lower scopes return 409. ' +
+        'Used by platform administrators to pin a global value for all tenants (Phase 2 cascade).',
+    }),
+
+    locked_reason: Field.text({
+      label: 'Lock Reason',
+      description: 'Human-readable explanation surfaced in the UI tooltip when locked=true.',
+    }),
+
     value_enc: Field.text({
       label: 'Encrypted Value',
       readonly: true,

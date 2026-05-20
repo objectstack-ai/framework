@@ -10,3 +10,5 @@
  */
 
 export { SysSetting } from './sys-setting.object.js';
+export { SysSecret } from './sys-secret.object.js';
+export { SysSettingAudit } from './sys-setting-audit.object.js';

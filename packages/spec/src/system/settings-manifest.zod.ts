@@ -193,6 +193,25 @@ export const SpecifierSchema = lazySchema(() => z.object({
   /** Scope of this value. Defaults to manifest-level scope. */
   scope: SpecifierScopeSchema.optional().describe('Override manifest scope for this key'),
 
+  /**
+   * Optional whitelist of scopes that may carry a row for this
+   * specifier. When omitted, all scopes from `scope` downward through
+   * the cascade are eligible. Tighten this to e.g. `['global']` for
+   * platform-only knobs (mail provider, allowed login methods) so the
+   * UI hides tenant/user override affordances. (Phase 2)
+   */
+  availableScopes: z
+    .array(SpecifierScopeSchema)
+    .optional()
+    .describe('Scopes allowed to override this specifier'),
+
+  /**
+   * When true, a value at an upper scope (e.g. global) may be locked
+   * to prevent lower scopes from shadowing it. Default `true` for
+   * `global`/`tenant`-scoped specifiers, `false` for `user`. (Phase 2)
+   */
+  lockable: z.boolean().optional().describe('Allow upper-scope locking of this specifier'),
+
   /** Permission name required to read this specifier (defaults to manifest read). */
   readPermission: z.string().optional().describe('Permission required to read this specifier'),
 
@@ -450,6 +469,32 @@ export const ResolvedSettingValueSchema = lazySchema(() => z.object({
 
   /** Optional human-readable reason when locked (shown in tooltip). */
   lockedReason: z.string().optional().describe('Reason for the lock (UI tooltip)'),
+
+  /**
+   * Full cascade trace from highest precedence (env) downward, listing
+   * every layer that contributed (or could have contributed) a value.
+   * Used by the UI to render "Inherited from Global" / "Overrides
+   * tenant default" badges and let admins inspect *why* a value is
+   * effective. Omitted by the lightweight resolver path; populated by
+   * the inspection path used by the settings UI.
+   *
+   * The first entry where `value` is non-null is also the effective
+   * `source` above. `locked: true` on an upper entry means writes to
+   * lower entries are rejected (Phase 2 lock semantics).
+   */
+  cascadeChain: z
+    .array(
+      z.object({
+        scope: z.enum(['env', 'global', 'tenant', 'user', 'default']),
+        value: z.unknown(),
+        locked: z.boolean().optional(),
+        lockedReason: z.string().optional(),
+        /** True when this layer is the one that supplied the effective value. */
+        effective: z.boolean().optional(),
+      }),
+    )
+    .optional()
+    .describe('Full cascade trace (env → global → tenant → user → default)'),
 }));
 export type ResolvedSettingValue<T = unknown> = Omit<z.infer<typeof ResolvedSettingValueSchema>, 'value'> & { value: T };
 

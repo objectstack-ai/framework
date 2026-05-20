@@ -291,3 +291,68 @@ describe('SettingsService — Phase 1 change events + client', () => {
     await expect(svc.set('mail', 'from_email', 'ok@x.y')).resolves.toBeDefined();
   });
 });
+
+describe('SettingsService — Phase 2 cascade chain + lock', () => {
+  it('exposes the full cascade chain on ResolvedSettingValue', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest({
+      namespace: 'prefs',
+      version: 1,
+      label: 'Prefs',
+      scope: 'user',
+      specifiers: [{ type: 'text', key: 'nick', label: 'Nick', required: false, default: 'anon' }],
+    } as any);
+
+    // Default only.
+    let r = await svc.get<string>('prefs', 'nick', { userId: 'u1' });
+    expect(r.value).toBe('anon');
+    expect(r.source).toBe('default');
+    expect(r.cascadeChain?.map((e) => e.scope)).toEqual(['default']);
+    expect(r.cascadeChain?.find((e) => e.effective)?.scope).toBe('default');
+
+    // Add user row → chain has user then default; user wins.
+    await svc.set('prefs', 'nick', 'alice', { userId: 'u1' });
+    r = await svc.get<string>('prefs', 'nick', { userId: 'u1' });
+    expect(r.source).toBe('user');
+    expect(r.cascadeChain?.map((e) => e.scope)).toEqual(['user', 'default']);
+    expect(r.cascadeChain?.find((e) => e.effective)?.scope).toBe('user');
+  });
+
+  it('locked upper-scope row blocks lower-scope writes', async () => {
+    const svc = new SettingsService({ env: {} });
+    svc.registerManifest({
+      namespace: 'feat',
+      version: 1,
+      label: 'Features',
+      scope: 'tenant',
+      specifiers: [{ type: 'toggle', key: 'beta', label: 'Beta', required: false, default: false }],
+    } as any);
+
+    // Write the global lock directly via the memory store (simulating
+    // a platform admin write that the regular API would route to scope='global').
+    await (svc as any).upsertRow({
+      namespace: 'feat',
+      key: 'beta',
+      scope: 'global',
+      user_id: null,
+      value: true,
+      value_enc: null,
+      encrypted: false,
+      locked: true,
+      locked_reason: 'Platform policy: beta features disabled in production.',
+    });
+
+    // get() reports the lock and the effective value.
+    const r = await svc.get<boolean>('feat', 'beta');
+    expect(r.value).toBe(true);
+    expect(r.source).toBe('global');
+    expect(r.locked).toBe(true);
+    expect(r.lockedReason).toMatch(/Platform policy/);
+    expect(r.cascadeChain?.[0]).toMatchObject({ scope: 'global', locked: true });
+
+    // Tenant-scope set must be rejected with SETTINGS_LOCKED.
+    await expect(svc.set('feat', 'beta', false)).rejects.toMatchObject({
+      code: 'SETTINGS_LOCKED',
+    });
+  });
+});

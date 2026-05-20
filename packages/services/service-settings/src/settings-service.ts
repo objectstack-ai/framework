@@ -92,6 +92,20 @@ export class SettingsService {
     if (audit) this.audit = audit;
   }
 
+  /**
+   * Cascade priority ranks for lock comparisons (lower = higher
+   * precedence). env<global<tenant<user<default. A locked row at a
+   * lower rank blocks writes at all higher ranks.
+   */
+  private scopeRank(scope: SpecifierScope | 'env' | 'default'): number {
+    switch (scope) {
+      case 'global':  return 1;
+      case 'tenant':  return 2;
+      case 'user':    return 3;
+      default:        return 99;
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Change events (Phase 1)
   // ---------------------------------------------------------------------
@@ -195,11 +209,15 @@ export class SettingsService {
     const envRaw = this.env[envName];
     if (typeof envRaw === 'string') {
       const def = reg.defaults.get(key);
+      const value = coerceEnvValue(envRaw, def);
       return {
-        value: coerceEnvValue(envRaw, def) as T,
+        value: value as T,
         source: 'env',
         locked: true,
         lockedReason: `Set via env: ${envName}`,
+        cascadeChain: [
+          { scope: 'env', value, locked: true, lockedReason: `Set via env: ${envName}`, effective: true },
+        ],
       };
     }
 
@@ -208,33 +226,62 @@ export class SettingsService {
     // we load everything for the namespace and pick the right row below.
     const rows = await this.loadRows(namespace, scope === 'user' ? ctx.userId ?? null : null);
 
-    // 2. cascade walk — env (handled above) > global > tenant > user
+    // 2. cascade walk — env (handled above) > global > tenant > user > default
     //
-    // We always check higher scopes first so a platform-level value can
-    // shadow a tenant-level row that was carried over from an older
-    // version of a manifest. The Phase 2 work will surface the full
-    // cascade chain on `ResolvedSettingValue.cascadeChain`.
+    // Build the full chain in declared order so the UI can render
+    // "Inherited from Global / Locked by Global / Overrides tenant"
+    // badges. The first non-null entry wins as `source`.
+    const chain: NonNullable<ResolvedSettingValue['cascadeChain']> = [];
+
     const globalRow = rows.find((r) => r.key === key && r.scope === 'global');
     if (globalRow) {
-      return {
-        value: (await this.materialiseRow(globalRow)) as T,
-        source: 'global',
-        locked: false,
-      };
-    }
-    const row = rows.find((r) => r.key === key && r.scope === scope);
-    if (row) {
-      const value = await this.materialiseRow(row);
-      return {
-        value: value as T,
-        source: scope,
-        locked: false,
-      };
+      const value = await this.materialiseRow(globalRow);
+      chain.push({
+        scope: 'global',
+        value,
+        locked: !!globalRow.locked,
+        lockedReason: globalRow.locked_reason ?? undefined,
+      });
     }
 
-    // 3. default
+    if (scope === 'tenant' || scope === 'user') {
+      const tenantRow = rows.find((r) => r.key === key && r.scope === 'tenant');
+      if (tenantRow) {
+        chain.push({
+          scope: 'tenant',
+          value: await this.materialiseRow(tenantRow),
+          locked: !!tenantRow.locked,
+          lockedReason: tenantRow.locked_reason ?? undefined,
+        });
+      }
+    }
+
+    if (scope === 'user') {
+      const userRow = rows.find((r) => r.key === key && r.scope === 'user');
+      if (userRow) {
+        chain.push({
+          scope: 'user',
+          value: await this.materialiseRow(userRow),
+        });
+      }
+    }
+
     const def = reg.defaults.get(key);
-    return { value: (def ?? null) as T, source: 'default', locked: false };
+    chain.push({ scope: 'default', value: def ?? null });
+
+    // Effective row: highest priority entry. Lock anywhere up the chain
+    // locks the effective value (lower scopes can't shadow it).
+    const lockedEntry = chain.find((e) => e.locked === true);
+    const effective = chain.find((e) => e.value !== null && e.value !== undefined) ?? chain[chain.length - 1];
+    effective.effective = true;
+
+    return {
+      value: effective.value as T,
+      source: effective.scope as ResolvedSettingValue['source'],
+      locked: !!lockedEntry,
+      lockedReason: lockedEntry?.lockedReason,
+      cascadeChain: chain,
+    };
   }
 
   /** Resolve every value in a namespace + return the manifest. */
@@ -349,6 +396,22 @@ export class SettingsService {
       if (!reg.scopes.has(key)) throw new UnknownKeyError(namespace, key);
       const envRaw = this.env[envKeyOf(namespace, key)];
       if (typeof envRaw === 'string') throw new SettingsLockedError(namespace, key);
+
+      // Phase 2 lock: a row at an upper scope marked locked=true
+      // refuses writes at this (lower) scope. Writing AT the same
+      // scope as the lock is still permitted (i.e. a platform admin
+      // can edit a globally-locked value; a tenant admin cannot).
+      const scope = reg.scopes.get(key)!;
+      const rows = await this.loadRows(namespace, scope === 'user' ? ctx.userId ?? null : null);
+      const upper = rows.find(
+        (r) =>
+          r.key === key &&
+          r.locked === true &&
+          this.scopeRank(r.scope) < this.scopeRank(scope),
+      );
+      if (upper) {
+        throw new SettingsLockedError(namespace, key, `locked-by-${upper.scope}`);
+      }
     }
 
     for (const [key, rawValue] of Object.entries(patch)) {
@@ -474,6 +537,8 @@ export class SettingsService {
         value: r.value ?? null,
         value_enc: r.value_enc ?? null,
         encrypted: Boolean(r.encrypted),
+        locked: Boolean(r.locked),
+        locked_reason: r.locked_reason ?? null,
         updated_at: r.updated_at,
         updated_by: r.updated_by ?? null,
       }));

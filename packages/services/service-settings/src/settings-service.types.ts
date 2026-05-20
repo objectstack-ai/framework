@@ -47,6 +47,15 @@ export interface SettingsRow {
   value: unknown | null;
   value_enc: string | null;
   encrypted: boolean;
+  /**
+   * When true, lower-scope rows for the same (namespace, key) are
+   * read-only — the resolver still returns this row's value and the
+   * mutation API throws `SettingsLockedError`. Only meaningful on
+   * upper-scope rows (`global`, `tenant`). (Phase 2)
+   */
+  locked?: boolean;
+  /** Human-readable reason the lock was applied (UI tooltip). */
+  locked_reason?: string | null;
   updated_at?: string;
   updated_by?: string | null;
 }
