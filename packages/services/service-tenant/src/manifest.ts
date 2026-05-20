@@ -21,6 +21,7 @@ import {
   SysBillingPeriod,
   SysQuotaUsage,
 } from './objects/index.js';
+import { SysPresence } from '@objectstack/platform-objects';
 import { CLOUD_CONTROL_APP } from './apps/index.js';
 
 export const TENANT_SERVICE_ID = 'com.objectstack.service-tenant';
@@ -39,6 +40,11 @@ export const tenantObjects = [
   SysApp,
   SysBillingPeriod,
   SysQuotaUsage,
+  // Real-time presence — registered here so Console's presence poll
+  // (`/api/v1/data/sys_presence?...`) returns 200 with an empty list
+  // instead of 404-spamming on every page load. service-realtime owns
+  // the write path; we just need the read endpoint to exist.
+  SysPresence,
 ];
 
 /** Control-plane Apps surfaced in the App switcher when service-tenant is loaded. */
