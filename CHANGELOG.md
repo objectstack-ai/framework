@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — ADR-0006 v4: drop dev-workspace Project, unify deploy on Package
+
+Removed the dev-workspace `sys_project` / `sys_project_branch` /
+`sys_project_revision` concept introduced in v3. After scoping Phase 5 we
+confirmed every Project responsibility is already covered by
+`sys_package` + `sys_package_version` + `sys_package_installation`
+(ADR-0003), so maintaining a parallel tree would create two competing
+version-management spines.
+
+CLI `objectstack publish` will be rewired to create a `sys_package_version`
+and upsert a `sys_package_installation` row (Phase B of v4). The local dev
+workspace is now just "local files + git" — no server-side row.
+
+**Spec / schema side**
+- Deleted `packages/spec/src/cloud/project.zod.ts` and dropped its export
+  from `packages/spec/src/cloud/index.ts`. `ProjectSchema`,
+  `ProjectBranchSchema`, `ProjectRevisionSchema` and their helpers are no
+  longer exported.
+- Trimmed the corresponding `describe` blocks from
+  `packages/spec/src/cloud/environment.test.ts`.
+- `packages/spec/src/cloud/environment.zod.ts` docstring updated to point
+  at ADR-0006 v4 and stop referencing the deleted `project.zod.ts`.
+- `packages/services/service-tenant/src/objects/sys-environment-revision.object.ts`
+  marked `@deprecated transitional`; the file remains so the existing CLI
+  publish HTTP path keeps compiling, and the index re-exports it with a
+  comment explaining it will be removed in Phase D.
+- `packages/services/service-tenant/src/objects/sys-project-revision.object.ts`
+  and `sys-project-branch.object.ts` (dormant Phase 5 placeholders) were
+  previously deleted in the same cleanup pass.
+
+**Docs**
+- Added `docs/adr/0006-project-environment-split.v4.md` describing the
+  unified Package model and the four-phase rollout (A protocol cleanup
+  now → B CLI rewire → C command split → D table removal).
+- Marked v3 (`docs/adr/0006-project-environment-split.md`) as
+  *Superseded by v4*.
+
 ### Added — M10.34 first-class custom action: "Invite User" on `sys_user` ✨
 
 `sys_user` is `managedBy: 'better-auth'`, so generic CRUD is correctly suppressed (no New/Edit/Delete) — but Setup admins still need a way to add a user. Instead of routing them to a soon-to-be-deprecated organization-members page, we declare a proper schema action that opens a real inline modal and POSTs to the better-auth invite endpoint.

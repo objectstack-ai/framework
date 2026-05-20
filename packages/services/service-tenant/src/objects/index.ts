@@ -7,11 +7,12 @@
 export * from './sys-environment.object.js';
 export * from './sys-environment-member.object.js';
 export * from './sys-environment-credential.object.js';
+// ADR-0006 v4: dev-workspace `sys_project*` concept dropped. User code
+// is now modelled as an implicit `sys_package` per org, and version
+// management goes through sys_package_version + sys_package_installation
+// (same path Marketplace uses). The transitional sys_environment_revision
+// schema below will be removed once the CLI publish path is rewired.
 export * from './sys-environment-revision.object.js';
-// Note: dev-workspace `sys_project` / `sys_project_branch` schemas are NOT
-// registered here. The future Phase 5 dev-workspace concept will introduce
-// them under a separate package; this directory only ships runtime
-// Environment metadata.
 export * from './sys-app.object.js';
 export * from './sys-package.object.js';
 export * from './sys-package-version.object.js';

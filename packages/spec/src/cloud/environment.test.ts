@@ -11,14 +11,6 @@ import {
   ProvisionEnvironmentRequestSchema,
   ProvisionOrganizationRequestSchema,
 } from './environment.zod';
-import {
-  ProjectSchema,
-  ProjectStatusSchema,
-  ProjectBranchSchema,
-  ProjectBranchKindSchema,
-  ProjectRevisionSchema,
-} from './project.zod';
-
 describe('EnvironmentStatusSchema', () => {
   it('accepts lifecycle statuses including migrating', () => {
     for (const s of [
@@ -178,95 +170,5 @@ describe('ProvisionOrganizationRequestSchema', () => {
       createdBy: 'user_1',
     });
     expect(parsed.defaultEnvironmentDisplayName).toBe('Production');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Dev-workspace Project / Branch / Revision (Phase 5 protocol)
-// ---------------------------------------------------------------------------
-
-describe('ProjectSchema (dev-workspace)', () => {
-  const base = {
-    id: '550e8400-e29b-41d4-a716-446655440000',
-    organizationId: 'org_1',
-    displayName: 'CRM source repo',
-    createdBy: 'user_1',
-    createdAt: '2026-04-19T00:00:00.000Z',
-    updatedAt: '2026-04-19T00:00:00.000Z',
-  };
-
-  it('parses a valid project', () => {
-    const parsed = ProjectSchema.parse(base);
-    expect(parsed.status).toBe('active');
-  });
-
-  it('accepts dev-workspace lifecycle statuses', () => {
-    for (const s of ['active', 'archived', 'failed']) {
-      expect(() => ProjectStatusSchema.parse(s)).not.toThrow();
-    }
-  });
-
-  it('rejects runtime-container statuses (those moved to EnvironmentStatusSchema)', () => {
-    for (const s of ['provisioning', 'suspended', 'migrating']) {
-      expect(() => ProjectStatusSchema.parse(s)).toThrow();
-    }
-  });
-});
-
-describe('ProjectBranchSchema', () => {
-  const base = {
-    id: '550e8400-e29b-41d4-a716-446655440000',
-    projectId: '550e8400-e29b-41d4-a716-446655440001',
-    name: 'main',
-    displayName: 'Main',
-    createdAt: '2026-04-19T00:00:00.000Z',
-    updatedAt: '2026-04-19T00:00:00.000Z',
-  };
-
-  it('parses a valid branch with defaults', () => {
-    const parsed = ProjectBranchSchema.parse(base);
-    expect(parsed.kind).toBe('preview');
-    expect(parsed.isDefault).toBe(false);
-    expect(parsed.status).toBe('active');
-  });
-
-  it('accepts the canonical branch kinds', () => {
-    for (const k of ['production', 'staging', 'preview', 'sandbox']) {
-      expect(() => ProjectBranchKindSchema.parse(k)).not.toThrow();
-    }
-  });
-
-  it('rejects an empty branch name', () => {
-    expect(() => ProjectBranchSchema.parse({ ...base, name: '' })).toThrow();
-  });
-});
-
-describe('ProjectRevisionSchema', () => {
-  const base = {
-    id: '550e8400-e29b-41d4-a716-446655440000',
-    projectId: '550e8400-e29b-41d4-a716-446655440001',
-    commitId: 'a1b2c3d4e5f6',
-    storageKey: 'artifacts/550e8400-e29b-41d4-a716-446655440001/a1b2c3d4e5f6.json',
-    createdAt: '2026-04-19T00:00:00.000Z',
-    updatedAt: '2026-04-19T00:00:00.000Z',
-  };
-
-  it('parses a valid revision with defaults', () => {
-    const parsed = ProjectRevisionSchema.parse(base);
-    expect(parsed.isCurrent).toBe(false);
-    expect(parsed.branch).toBe('main');
-    expect(parsed.isBranchHead).toBe(false);
-  });
-
-  it('rejects a non-hex full checksum', () => {
-    expect(() =>
-      ProjectRevisionSchema.parse({ ...base, checksum: 'not-a-checksum' }),
-    ).toThrow();
-  });
-
-  it('rejects an empty commitId', () => {
-    expect(() =>
-      ProjectRevisionSchema.parse({ ...base, commitId: '' }),
-    ).toThrow();
   });
 });

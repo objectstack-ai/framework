@@ -3,28 +3,22 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_environment_revision — Per-Environment Artifact Revision History
+ * sys_environment_revision — **TRANSITIONAL** Per-Environment Deploy Log
  *
- * One row per `objectstack publish` (a.k.a. CLI deploy). Each row records a
+ * @deprecated Transitional. ADR-0006 v4 dropped the standalone "deploy
+ * revision" concept: a CLI `publish` should produce a `sys_package_version`
+ * row (immutable artifact snapshot) and a `sys_package_installation` upsert
+ * (env × package × version pointer). The same three-table model already
+ * powers Marketplace installs — there is no reason to maintain a parallel
+ * revision table for "user code".
+ *
+ * This row remains so the existing `objectstack publish` HTTP path keeps
+ * working until the CLI rewrite lands. New callers MUST NOT bind to this
+ * shape. See ADR-0006 v4 → "Phase B: Unify deploy on sys_package_version".
+ *
+ * Current behaviour: one row per `objectstack publish`. Each row records a
  * content-addressable pointer to the compiled artifact stored in
- * IStorageService (S3, R2, local fs, …) plus enough provenance to support
- * rollback, audit, and "preview at commit" UX in Studio.
- *
- * Per ADR-0006 v3, the runtime container is `sys_environment`, so the
- * deployment history lives next to it as `sys_environment_revision`. The
- * dormant `sys_project_revision` schema from the rename was a placeholder
- * for the future dev-workspace Project (Phase 5) and is **not** the
- * deployment table — that one is this row.
- *
- * Lifecycle:
- *   - `is_current = true` for at most one row per environment. Activating a
- *     historical revision flips the flag (atomic UPDATE in the cloud-
- *     artifact plugin's POST /activate handler).
- *   - Rows are immutable apart from `is_current`, `is_branch_head`,
- *     `branch` (during rename), and `note`.
- *   - `storage_key` is content-addressable
- *     (`artifacts/orgs/<org_id>/projects/<env_id>/<commit_id>.json` by
- *     default), so re-publishing identical content is a no-op upload.
+ * IStorageService (S3, R2, local fs, …).
  *
  * Lives in the control plane only.
  *

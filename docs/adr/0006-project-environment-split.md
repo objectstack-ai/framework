@@ -1,9 +1,10 @@
 # ADR-0006: Environment & Project as Independent Siblings — v3
 
-**Status**: Accepted (v3 — supersedes v2)
+**Status**: Superseded by v4 (`0006-project-environment-split.v4.md`) — 2026-05-20
 **Date**: 2026-05-20 (v3)
 **Deciders**: ObjectStack Protocol Architects
 **Supersedes**: v1 (strict tree), v2 (siblings + sys_deployment join)
+**Superseded by**: v4 — drops the dev-workspace Project concept entirely; user code unifies on `sys_package` / `sys_package_version` / `sys_package_installation`.
 **Builds on**: ADR-0002 (Environment-Per-Database Isolation), ADR-0003 (Package as First-Class Citizen)
 **Consumers**: `@objectstack/service-tenant`, `@objectstack/service-cloud`, `@objectstack/spec/cloud`, `apps/cloud`, the Console `cloud_control` app
 
