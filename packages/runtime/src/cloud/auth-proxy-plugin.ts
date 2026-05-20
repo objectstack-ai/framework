@@ -157,8 +157,6 @@ export class AuthProxyPlugin implements Plugin {
 
                     // Forward the original Web Request directly — better-auth
                     // accepts a standard `Request` and returns a `Response`.
-                    const isCallback = subPath.startsWith('oauth2/callback');
-                    const startAt = Date.now();
                     const resp = await fn(c.req.raw);
 
                     // ── Cookie-leak cleanup ─────────────────────────────────
@@ -193,45 +191,6 @@ export class AuthProxyPlugin implements Plugin {
                         } catch { /* best-effort cleanup */ }
                     }
 
-                    // Plan-A diag: capture last oauth2/callback for debug.
-                    // TODO(plan-a): remove once SSO is green.
-                    if (isCallback) {
-                        try {
-                            const respHeaders: Record<string, string> = {};
-                            const setCookies: string[] = [];
-                            try {
-                                const getSetCookie = (resp as any).headers?.getSetCookie?.bind((resp as any).headers);
-                                const arr = typeof getSetCookie === 'function' ? getSetCookie() : null;
-                                if (arr && Array.isArray(arr)) setCookies.push(...arr);
-                            } catch {}
-                            (resp as any).headers?.forEach?.((v: string, k: string) => {
-                                if (k.toLowerCase() === 'set-cookie' && setCookies.length === 0) setCookies.push(v);
-                                else if (k.toLowerCase() !== 'set-cookie') respHeaders[k] = v;
-                            });
-                            (projectKernel as any).__lastAuthCallbackDiag = {
-                                at: new Date().toISOString(),
-                                durationMs: Date.now() - startAt,
-                                projectId,
-                                requestPath: subPath,
-                                requestMethod: c.req.method,
-                                requestUrl: c.req.url,
-                                responseStatus: (resp as any).status,
-                                responseHeaders: respHeaders,
-                                location: respHeaders['location'] || respHeaders['Location'] || null,
-                                setCookieCount: setCookies.length,
-                                setCookieRedacted: setCookies.map(ck =>
-                                    ck.split(';').map((p, i) => i === 0 ? (p.split('=')[0] + '=<redacted>') : p.trim()).join('; ')
-                                ),
-                            };
-                        } catch (diagErr: any) {
-                            (projectKernel as any).__lastAuthCallbackDiag = {
-                                at: new Date().toISOString(),
-                                projectId,
-                                requestPath: subPath,
-                                diagError: diagErr?.message ?? String(diagErr),
-                            };
-                        }
-                    }
                     return resp;
                 } catch (err: any) {
                     (ctx.logger?.error as any)?.('[AuthProxyPlugin] auth dispatch failed', {

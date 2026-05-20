@@ -74,18 +74,6 @@ function deriveProjectAuthSecret(baseSecret: string, projectId: string): string 
     return createHmac('sha256', baseSecret).update(`project:${projectId}`).digest('hex');
 }
 
-/**
- * Per-project diagnostic record from the most recent kernel cold-boot.
- * Captures seed-replay outcomes (ownerSeed / orgSeed / member) so they
- * can be inspected via an HTTP endpoint when the container's stdout
- * is not reachable (Cloudflare Containers do not surface stdout to
- * `wrangler tail`).
- */
-const __lastSeedDiagByProject = new Map<string, any>();
-export function getLastSeedDiag(projectId: string): any {
-    return __lastSeedDiagByProject.get(projectId) ?? null;
-}
-
 export class ArtifactKernelFactory implements ProjectKernelFactory {
     private readonly client: ArtifactApiClient;
     private readonly envRegistry: EnvironmentDriverRegistry;
@@ -365,83 +353,50 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             const ownerSeed = projMeta?.ownerSeed;
             const orgSeed = projMeta?.orgSeed;
 
-            console.warn('[ArtifactKernelFactory] seed replay check', {
-                projectId,
-                hasOwnerSeed: !!ownerSeed?.userId,
-                hasOrgSeed: !!orgSeed?.id,
-                metaType: typeof (project as any)?.metadata,
-            });
-
-            const diag: Record<string, any> = {
-                hasOwnerSeed: !!ownerSeed?.userId,
-                hasOrgSeed: !!orgSeed?.id,
-                metaType: typeof (project as any)?.metadata,
-                results: {} as Record<string, any>,
-                errors: {} as Record<string, any>,
-                warns: [] as any[],
-            };
-
-            // Capture seed-helper warn() calls so non-throwing failure
-            // paths (`return 'error'`) still surface their root cause.
-            const capturingLogger = {
-                info: (...args: any[]) => this.logger.info?.(args[0], args[1]),
-                warn: (msg: string, ctx?: any) => {
-                    diag.warns.push({ msg, ctx });
-                    this.logger.warn?.(msg, ctx);
-                },
-            };
-
             if (orgSeed?.id && orgSeed?.name) {
                 try {
                     const { seedProjectOrganization } = await import('./project-org-seed.js');
-                    const result = await seedProjectOrganization(kernel, orgSeed, capturingLogger);
-                    console.warn('[ArtifactKernelFactory] orgSeed →', result);
-                    diag.results.org = result;
+                    await seedProjectOrganization(kernel, orgSeed, this.logger);
                 } catch (e: any) {
-                    diag.results.org = 'threw';
-                    diag.errors.org = { message: e?.message, stack: e?.stack?.split('\n').slice(0, 5) };
+                    this.logger.warn?.('[ArtifactKernelFactory] orgSeed threw', {
+                        projectId,
+                        error: e?.message,
+                    });
                 }
             }
 
             if (ownerSeed?.userId && ownerSeed?.email) {
                 try {
                     const { seedProjectOwner } = await import('./project-owner-seed.js');
-                    const ownerResult = await seedProjectOwner(kernel, ownerSeed, capturingLogger);
-                    console.warn('[ArtifactKernelFactory] ownerSeed →', ownerResult);
-                    diag.results.owner = ownerResult;
+                    await seedProjectOwner(kernel, ownerSeed, this.logger);
                 } catch (e: any) {
-                    diag.results.owner = 'threw';
-                    diag.errors.owner = { message: e?.message, stack: e?.stack?.split('\n').slice(0, 5) };
+                    this.logger.warn?.('[ArtifactKernelFactory] ownerSeed threw', {
+                        projectId,
+                        error: e?.message,
+                    });
                 }
 
                 if (orgSeed?.id) {
                     try {
                         const { seedProjectMember } = await import('./project-org-seed.js');
-                        const memberResult = await seedProjectMember(
+                        await seedProjectMember(
                             kernel,
                             { userId: ownerSeed.userId, organizationId: orgSeed.id, role: 'owner' },
-                            capturingLogger,
+                            this.logger,
                         );
-                        console.warn('[ArtifactKernelFactory] memberSeed →', memberResult);
-                        diag.results.member = memberResult;
                     } catch (e: any) {
-                        diag.results.member = 'threw';
-                        diag.errors.member = { message: e?.message, stack: e?.stack?.split('\n').slice(0, 5) };
+                        this.logger.warn?.('[ArtifactKernelFactory] memberSeed threw', {
+                            projectId,
+                            error: e?.message,
+                        });
                     }
                 }
             }
-
-            (kernel as any).__seedDiag = diag;
-            __lastSeedDiagByProject.set(projectId, diag);
         } catch (err: any) {
             this.logger.warn?.('[ArtifactKernelFactory] owner/org seed skipped', {
                 projectId,
                 error: err?.message,
             });
-            console.warn('[ArtifactKernelFactory] seed THREW', err?.message);
-            const diag = { error: err?.message ?? String(err), stack: err?.stack };
-            (kernel as any).__seedDiag = diag;
-            __lastSeedDiagByProject.set(projectId, diag);
         }
 
         // Belt-and-braces: load translation bundles directly into the i18n
