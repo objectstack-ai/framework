@@ -334,7 +334,28 @@ export class AuthPlugin implements Plugin {
             ctx.logger.error('[AuthPlugin] better-auth returned server error', new Error(`HTTP ${response.status}: (unable to read body)`));
           }
         }
-        
+
+        // Public-cache JWKS: it's static JSON that only changes when the
+        // signing key rotates (default ~30 days). better-auth doesn't set
+        // any Cache-Control header, so every relying party currently
+        // re-fetches it on every JWT verification (≈700 ms warm against a
+        // Container DO + Neon). Add a conservative public cache so CF's
+        // edge can short-circuit repeated fetches. The 5-min freshness +
+        // 24 h SWR window is well inside better-auth's default rotation
+        // and matches what most IdPs publish (Auth0, Cognito, Google).
+        try {
+          const url = c.req.url as string;
+          if (response.ok && /\/jwks(\?|$)/.test(url)) {
+            const existing = response.headers.get('cache-control');
+            if (!existing) {
+              response.headers.set(
+                'cache-control',
+                'public, max-age=300, stale-while-revalidate=86400',
+              );
+            }
+          }
+        } catch { /* best-effort header annotation */ }
+
         return response;
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
@@ -385,8 +406,23 @@ export class AuthPlugin implements Plugin {
     const authServerHandler = oauthProviderAuthServerMetadata(auth as any);
     const openidConfigHandler = oauthProviderOpenIdConfigMetadata(auth as any);
 
-    rawApp.get('/.well-known/oauth-authorization-server', (c: any) => authServerHandler(c.req.raw));
-    rawApp.get('/.well-known/openid-configuration', (c: any) => openidConfigHandler(c.req.raw));
+    // Cache-Control for OIDC discovery docs. These describe stable issuer
+    // configuration (endpoints, supported scopes, signing algs); they
+    // change only on app redeploy. CF edge can short-circuit repeated
+    // fetches and dramatically cut SSO first-call latency.
+    const DISCOVERY_CACHE = 'public, max-age=300, stale-while-revalidate=86400';
+    const withDiscoveryCache = async (handler: (req: Request) => Promise<Response> | Response, req: Request): Promise<Response> => {
+      const resp = await handler(req);
+      try {
+        if (resp.ok && !resp.headers.get('cache-control')) {
+          resp.headers.set('cache-control', DISCOVERY_CACHE);
+        }
+      } catch { /* best-effort */ }
+      return resp;
+    };
+
+    rawApp.get('/.well-known/oauth-authorization-server', (c: any) => withDiscoveryCache(authServerHandler, c.req.raw));
+    rawApp.get('/.well-known/openid-configuration', (c: any) => withDiscoveryCache(openidConfigHandler, c.req.raw));
 
     ctx.logger.info(
       'OIDC discovery endpoints mounted at /.well-known/{oauth-authorization-server,openid-configuration}',
