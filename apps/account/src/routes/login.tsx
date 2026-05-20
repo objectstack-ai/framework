@@ -270,89 +270,141 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-svh w-full flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
-      {ssoAutoRedirecting || sessionLoading || !!user ? (
-        <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-          <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-          <span>
-            {user
-              ? t('auth.login.signingIn', { defaultValue: 'Signing you in…' })
-              : t('auth.login.redirecting', { defaultValue: 'Redirecting to ObjectStack…' })}
-          </span>
+    <div className="relative grid min-h-svh w-full lg:grid-cols-2">
+      {/* Left: form column */}
+      <div className="flex flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
+        {ssoAutoRedirecting || sessionLoading || !!user ? (
+          <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+            <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+            <span>
+              {user
+                ? t('auth.login.signingIn', { defaultValue: 'Signing you in…' })
+                : t('auth.login.redirecting', { defaultValue: 'Redirecting to ObjectStack…' })}
+            </span>
+          </div>
+        ) : (
+        <div className="flex w-full max-w-sm flex-col gap-6">
+          <a href="#" className="flex items-center gap-2 self-center font-semibold tracking-tight">
+            <div className="flex size-7 items-center justify-center rounded-md bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/30">
+              <GalleryVerticalEnd className="size-4" />
+            </div>
+            <span>ObjectStack</span>
+          </a>
+          <div className="flex flex-col gap-6">
+            <Card className="border-border/60 shadow-sm shadow-primary/5 backdrop-blur supports-[backdrop-filter]:bg-card/95">
+              <CardHeader className="text-center">
+                <CardTitle className="text-xl tracking-tight">{t('auth.login.title')}</CardTitle>
+                <CardDescription>{t('auth.login.description')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit}>
+                  <div className="flex flex-col gap-4">
+                    <SocialSignInButtons mode="sign-in" redirect={redirect} />
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="email">{t('auth.emailLabel')}</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder={t('auth.emailPlaceholder')}
+                        autoComplete="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center">
+                        <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
+                        <Link
+                          to="/forgot-password"
+                          className="ml-auto text-sm underline-offset-4 hover:underline"
+                        >
+                          {t('auth.login.forgotPassword')}
+                        </Link>
+                      </div>
+                      <Input
+                        id="password"
+                        type="password"
+                        autoComplete="current-password"
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:opacity-95 hover:shadow-md hover:shadow-primary/30"
+                      disabled={submitting}
+                    >
+                      {submitting ? t('auth.login.submitting') : t('auth.login.submit')}
+                    </Button>
+                    <p className="text-center text-sm text-muted-foreground">
+                      {t('auth.login.noAccount')}{' '}
+                      <Link
+                        to="/register"
+                        search={redirect ? { redirect } : undefined}
+                        className="font-medium text-primary underline-offset-4 hover:underline"
+                      >
+                        {t('auth.login.signUp')}
+                      </Link>
+                    </p>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+            <p className="px-6 text-center text-xs text-muted-foreground [&_a]:underline [&_a]:underline-offset-4 [&_a]:hover:text-primary">
+              {t('legal.agreementPrefix')}{' '}
+              <a href="#">{t('legal.termsOfService')}</a> {t('legal.and')} <a href="#">{t('legal.privacyPolicy')}</a>.
+            </p>
+          </div>
         </div>
-      ) : (
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <a href="#" className="flex items-center gap-2 self-center font-medium">
-          <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        )}
+      </div>
+
+      {/* Right: brand panel (≥ lg) */}
+      <aside
+        aria-hidden
+        className="relative hidden overflow-hidden bg-brand-mesh text-white lg:flex lg:flex-col lg:justify-between lg:p-12"
+      >
+        {/* Subtle grid overlay */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+            maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 75%)',
+          }}
+        />
+        {/* Soft glow */}
+        <div className="pointer-events-none absolute -left-24 top-1/3 size-[28rem] rounded-full bg-white/15 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 -bottom-20 size-[24rem] rounded-full bg-white/10 blur-3xl" />
+
+        <div className="relative flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <div className="flex size-7 items-center justify-center rounded-md bg-white/15 ring-1 ring-white/30 backdrop-blur">
             <GalleryVerticalEnd className="size-4" />
           </div>
           ObjectStack
-        </a>
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-xl">{t('auth.login.title')}</CardTitle>
-              <CardDescription>{t('auth.login.description')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit}>
-                <div className="flex flex-col gap-4">
-                  <SocialSignInButtons mode="sign-in" redirect={redirect} />
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="email">{t('auth.emailLabel')}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder={t('auth.emailPlaceholder')}
-                      autoComplete="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center">
-                      <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
-                      <Link
-                        to="/forgot-password"
-                        className="ml-auto text-sm underline-offset-4 hover:underline"
-                      >
-                        {t('auth.login.forgotPassword')}
-                      </Link>
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={submitting}>
-                    {submitting ? t('auth.login.submitting') : t('auth.login.submit')}
-                  </Button>
-                  <p className="text-center text-sm text-muted-foreground">
-                    {t('auth.login.noAccount')}{' '}
-                    <Link
-                      to="/register"
-                      search={redirect ? { redirect } : undefined}
-                      className="underline underline-offset-4 hover:text-primary"
-                    >
-                      {t('auth.login.signUp')}
-                    </Link>
-                  </p>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-          <p className="px-6 text-center text-xs text-muted-foreground [&_a]:underline [&_a]:underline-offset-4 [&_a]:hover:text-primary">
-            {t('legal.agreementPrefix')}{' '}
-            <a href="#">{t('legal.termsOfService')}</a> {t('legal.and')} <a href="#">{t('legal.privacyPolicy')}</a>.
+        </div>
+
+        <div className="relative max-w-md space-y-5">
+          <h2 className="text-balance text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+            {t('auth.login.brandHeadline', {
+              defaultValue: 'The post-SaaS operating system for your team.',
+            })}
+          </h2>
+          <p className="text-balance text-base/relaxed text-white/80">
+            {t('auth.login.brandSubline', {
+              defaultValue:
+                'One identity, every workspace. Sign in to manage your account, organizations and connected apps.',
+            })}
           </p>
         </div>
-      </div>
-      )}
+
+        <div className="relative text-xs text-white/60">
+          © {new Date().getFullYear()} ObjectStack
+        </div>
+      </aside>
     </div>
   );
 }

@@ -11,6 +11,8 @@
 
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { useObjectTranslation } from '@object-ui/i18n';
+import { User } from 'lucide-react';
+import { PageHeader } from '@/components/page-header';
 import { useSession } from '@/hooks/useSession';
 
 export const Route = createFileRoute('/account')({
@@ -23,13 +25,13 @@ function AccountLayout() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto px-6 py-8">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold">{t('topBar.breadcrumb.account')}</h1>
-            <p className="text-sm text-muted-foreground">{user?.email}</p>
-          </div>
-
+      <div className="flex-1 overflow-auto px-4 py-6 sm:px-6 sm:py-8">
+        <div className="page-enter mx-auto flex max-w-4xl flex-col gap-6">
+          <PageHeader
+            icon={User}
+            title={t('topBar.breadcrumb.account')}
+            description={user?.email ?? undefined}
+          />
           <Outlet />
         </div>
       </div>
