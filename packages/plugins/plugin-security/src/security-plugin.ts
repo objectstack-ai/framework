@@ -96,6 +96,17 @@ export class SecurityPlugin implements Plugin {
    * invalidation — a kernel restart drops the cache.
    */
   private readonly fieldNamesCache = new Map<string, Set<string> | null>();
+  /**
+   * Per-object cache of tenancy opt-out. `true` means the schema
+   * explicitly disabled multi-tenancy (`tenancy.enabled === false` or
+   * `systemFields.tenant === false`). Wildcard policies that target
+   * the conventional tenant column (`organization_id`) are treated as
+   * *not applicable* on these tables instead of triggering the
+   * field-missing deny sentinel — without this, every read of a
+   * cross-org catalog (e.g. `sys_package`, the Marketplace) returns
+   * zero rows.
+   */
+  private readonly tenancyDisabledCache = new Map<string, boolean>();
 
   constructor(options: SecurityPluginOptions = {}) {
     this.bootstrapPermissionSets =
@@ -389,13 +400,25 @@ export class SecurityPlugin implements Plugin {
         // When the schema lookup itself fails we keep all policies (drivers
         // will surface column errors clearly during compilation).
         const objectFields = await this.getObjectFieldNames(metadata, opCtx.object, ql);
+        const tenancyDisabled = this.tenancyDisabledCache.get(opCtx.object) === true;
         let dropped = 0;
         const compilable = objectFields
           ? allRlsPolicies.filter((p) => {
               const targetField = this.extractTargetField(p.using);
-              const ok = targetField ? objectFields.has(targetField) : true;
-              if (!ok) dropped++;
-              return ok;
+              if (!targetField) return true;
+              if (objectFields.has(targetField)) return true;
+              // Schema-level opt-out: when the object explicitly
+              // disabled tenancy (`tenancy.enabled === false`), the
+              // wildcard `tenant_isolation` policy targeting
+              // `organization_id` was never meant to apply. Treat as
+              // "not applicable" — skip silently without contributing
+              // to the deny sentinel, mirroring how the registry skips
+              // injecting the column itself for these tables.
+              if (tenancyDisabled && targetField === 'organization_id') {
+                return false;
+              }
+              dropped++;
+              return false;
             })
           : allRlsPolicies;
         let rlsFilter = this.rlsCompiler.compileFilter(compilable, opCtx.context);
@@ -710,6 +733,15 @@ export class SecurityPlugin implements Plugin {
         obj = await metadata?.get?.('object', objectName);
       }
       if (!obj || !obj.fields) return null;
+      // Populate the tenancy opt-out cache alongside the field set so
+      // the RLS filter pass can decide whether a wildcard
+      // `organization_id` policy is genuinely "applicable but
+      // uncompilable" (deny) versus "not applicable on this object"
+      // (skip without contributing to the deny sentinel).
+      const tenancyDisabled =
+        (obj as any)?.tenancy?.enabled === false ||
+        (obj as any)?.systemFields?.tenant === false;
+      this.tenancyDisabledCache.set(objectName, !!tenancyDisabled);
       const set = new Set<string>(['id']);
       if (Array.isArray(obj.fields)) {
         for (const f of obj.fields) {

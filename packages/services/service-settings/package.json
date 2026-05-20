@@ -1,0 +1,40 @@
+{
+  "name": "@objectstack/service-settings",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Settings service for ObjectStack — manifest registry + K/V resolver (Env > Tenant > User > Default) + REST routes. See ADR-0007.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/platform-objects": "workspace:*",
+    "@objectstack/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "keywords": ["objectstack", "service", "settings", "config"],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/services/service-settings"
+  },
+  "publishConfig": { "access": "public" },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=18.0.0" }
+}

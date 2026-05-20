@@ -95,11 +95,12 @@ describe('SecurityPlugin', () => {
   // multiTenant switch — single-tenant mode strips tenant policies and skips
   // organization_id auto-injection.
   // -------------------------------------------------------------------------
-  const makeMiddlewareCtx = (overrides: { permissionSets: PermissionSet[]; objectFields?: string[] }) => {
+  const makeMiddlewareCtx = (overrides: { permissionSets: PermissionSet[]; objectFields?: string[]; schemaExtra?: Record<string, any> }) => {
     const fields: Record<string, any> = {};
     for (const f of overrides.objectFields ?? ['id', 'organization_id', 'owner_id', 'name']) {
       fields[f] = { name: f };
     }
+    const baseSchema: any = { name: 'task', fields, ...(overrides.schemaExtra ?? {}) };
     let middleware: any;
     const ql = {
       registerMiddleware: (mw: any) => {
@@ -108,10 +109,10 @@ describe('SecurityPlugin', () => {
         // later in `start()`.
         if (!middleware) middleware = mw;
       },
-      getSchema: () => ({ name: 'task', fields }),
+      getSchema: () => baseSchema,
     };
     const metadata = {
-      get: async () => ({ name: 'task', fields }),
+      get: async () => baseSchema,
       list: async () => overrides.permissionSets,
     };
     const services: Record<string, any> = {
@@ -195,6 +196,70 @@ describe('SecurityPlugin', () => {
     };
     await harness.run(opCtx);
     expect(opCtx.ast.where).toEqual({ organization_id: 'org-1' });
+  });
+
+  // Regression: when a schema explicitly opts out of tenancy
+  // (`tenancy.enabled === false` — e.g. `sys_package` Marketplace catalog),
+  // the wildcard `tenant_isolation` policy targeting `organization_id`
+  // must be treated as "not applicable" and SKIPPED, NOT fail-closed
+  // with RLS_DENY_FILTER. Otherwise the registry skips injecting the
+  // tenant column (correct) but the security plugin still produces zero
+  // rows on every read (wrong) — which silently broke the cloud
+  // Marketplace UI.
+  it('tenancy.enabled=false — wildcard organization_id RLS is skipped, not denied', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: true, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [tenantPolicySet],
+      // Catalog table without organization_id; opts out of tenancy.
+      objectFields: ['id', 'manifest_id', 'visibility', 'owner_org_id'],
+      schemaExtra: { tenancy: { enabled: false, strategy: 'shared' } },
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'find', ast: { where: undefined },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    // No deny sentinel, no organization_id where clause: the read
+    // passes through and the catalog row is visible to every tenant.
+    expect(opCtx.ast.where).toBeUndefined();
+  });
+
+  it('tenancy.enabled=false via systemFields.tenant=false — also skipped', async () => {
+    const plugin = new SecurityPlugin({ multiTenant: true, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [tenantPolicySet],
+      objectFields: ['id', 'name'],
+      schemaExtra: { systemFields: { tenant: false } },
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'find', ast: { where: undefined },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.ast.where).toBeUndefined();
+  });
+
+  it('tenancy enabled (default) — wildcard organization_id RLS still denies when field is missing', async () => {
+    // Sanity check: dropping the deny sentinel must remain in effect
+    // for objects that did NOT opt out — otherwise a wildcard policy
+    // applied to a half-migrated table would silently expose every row.
+    const plugin = new SecurityPlugin({ multiTenant: true, fallbackPermissionSet: 'member_default' });
+    const harness = makeMiddlewareCtx({
+      permissionSets: [tenantPolicySet],
+      objectFields: ['id', 'name'], // no organization_id, no opt-out
+    });
+    await plugin.init(harness.ctx);
+    await plugin.start(harness.ctx);
+    const opCtx: any = {
+      object: 'task', operation: 'find', ast: { where: undefined },
+      context: { userId: 'u1', tenantId: 'org-1', roles: [], permissions: [] },
+    };
+    await harness.run(opCtx);
+    expect(opCtx.ast.where).toEqual(RLS_DENY_FILTER);
   });
 
   // Post-resolution fallback: roles is non-empty (e.g. better-auth
