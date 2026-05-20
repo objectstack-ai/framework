@@ -45,7 +45,7 @@ compatibility_flags = ["nodejs_compat"]
 # rebuild + re-push to ship a new version, then run `wrangler deploy`.
 [[containers]]
 class_name = "CloudContainer"
-image = "registry.cloudflare.com/2846eb40a60f4738e292b90dcd8cce10/objectstack-cloud:42c6a11d"
+image = "registry.cloudflare.com/2846eb40a60f4738e292b90dcd8cce10/objectstack-cloud:8e4d3ec6"
 max_instances = 3
 instance_type = "standard-1"
 
