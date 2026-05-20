@@ -49,7 +49,7 @@ export function registerPublicRoutes(server: IHttpServer, deps: RouteDeps): void
         const driver = await getDriver();
         if (!driver) return controlPlaneUnavailable(res);
 
-        const project = (await (driver.findOne as any)('sys_project', { where: { id: projectId } })) as SysProjectRow | null;
+        const project = (await (driver.findOne as any)('sys_environment', { where: { id: projectId } })) as SysProjectRow | null;
         if (!project) return res.status(404).json(fail('not found', 404));
 
         // For manifest we only expose `public` (no enumeration of `private`).
@@ -57,8 +57,8 @@ export function registerPublicRoutes(server: IHttpServer, deps: RouteDeps): void
             return res.status(404).json(fail('not found', 404));
         }
 
-        const current = await (driver.findOne as any)('sys_project_revision', {
-            where: { project_id: projectId, is_current: true },
+        const current = await (driver.findOne as any)('sys_project_revision_DEPRECATED', {
+            where: { environment_id: projectId, is_current: true },
         });
 
         if (typeof res.set === 'function') {
@@ -83,7 +83,7 @@ export function registerPublicRoutes(server: IHttpServer, deps: RouteDeps): void
         const driver = await getDriver();
         if (!driver) return controlPlaneUnavailable(res);
 
-        const project = (await (driver.findOne as any)('sys_project', { where: { id: projectId } })) as SysProjectRow | null;
+        const project = (await (driver.findOne as any)('sys_environment', { where: { id: projectId } })) as SysProjectRow | null;
         if (!project) return res.status(404).json(fail('not found', 404));
 
         const requestedCommit = String(req.query?.commit ?? '').trim();
@@ -93,12 +93,12 @@ export function registerPublicRoutes(server: IHttpServer, deps: RouteDeps): void
         let rev: any = null;
         try {
             if (requestedCommit) {
-                rev = await (driver.findOne as any)('sys_project_revision', {
-                    where: { project_id: projectId, commit_id: requestedCommit },
+                rev = await (driver.findOne as any)('sys_project_revision_DEPRECATED', {
+                    where: { environment_id: projectId, commit_id: requestedCommit },
                 });
             } else {
-                rev = await (driver.findOne as any)('sys_project_revision', {
-                    where: { project_id: projectId, is_current: true },
+                rev = await (driver.findOne as any)('sys_project_revision_DEPRECATED', {
+                    where: { environment_id: projectId, is_current: true },
                 });
             }
         } catch { /* no revision table yet */ }
@@ -162,7 +162,7 @@ export function registerPublicRoutes(server: IHttpServer, deps: RouteDeps): void
         const driver = await getDriver();
         if (!driver) return controlPlaneUnavailable(res);
 
-        const project = (await (driver.findOne as any)('sys_project', { where: { id: projectId } })) as SysProjectRow | null;
+        const project = (await (driver.findOne as any)('sys_environment', { where: { id: projectId } })) as SysProjectRow | null;
         if (!project) return res.status(404).json(fail('not found', 404));
 
         // Listing reveals history → only allow on `public`.
@@ -173,8 +173,8 @@ export function registerPublicRoutes(server: IHttpServer, deps: RouteDeps): void
         const limit = Math.min(Math.max(Number(req.query?.limit ?? 20), 1), 100);
         let rows: any[] = [];
         try {
-            rows = (await (driver.find as any)('sys_project_revision', {
-                where: { project_id: projectId },
+            rows = (await (driver.find as any)('sys_project_revision_DEPRECATED', {
+                where: { environment_id: projectId },
                 orderBy: [{ field: 'published_at', direction: 'desc' }],
                 limit,
             })) ?? [];

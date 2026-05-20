@@ -112,7 +112,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         const driver = await getDriver();
         if (!driver) return null;
         try {
-            return (await (driver.findOne as any)('sys_project', { where: { id } })) as AnyRow | null;
+            return (await (driver.findOne as any)('sys_environment', { where: { id } })) as AnyRow | null;
         } catch {
             return null;
         }
@@ -122,7 +122,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         const driver = await getDriver();
         if (!driver) return false;
         try {
-            await (driver.update as any)('sys_project', id, { ...patch, updated_at: nowIso() });
+            await (driver.update as any)('sys_environment', id, { ...patch, updated_at: nowIso() });
             return true;
         } catch (err: any) {
             console.error('[ProjectLifecycle] update failed:', err?.message ?? err);
@@ -131,7 +131,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
     };
 
     // ── POST /cloud/projects ─────────────────────────────────────────
-    server.post(`${prefix}/cloud/projects`, async (req: any, res: any) => {
+    server.post(`${prefix}/cloud/environments`, async (req: any, res: any) => {
         const auth = await checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
         const svc = await getProvisioningService();
         if (!svc) return controlPlaneUnavailable(res);
@@ -201,7 +201,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         fromStatuses: string[] | null,
         patch: (req: any, project: AnyRow) => AnyRow | Promise<AnyRow>,
     ) => {
-        server.post(`${prefix}/cloud/projects/:id/${urlSuffix}`, async (req: any, res: any) => {
+        server.post(`${prefix}/cloud/environments/:id/${urlSuffix}`, async (req: any, res: any) => {
             const auth = await checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
             const projectId = String(req.params?.id ?? '').trim();
             if (!projectId) return res.status(400).json(fail('project id required'));
@@ -243,7 +243,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
     });
 
     // ── set-default: clears other defaults in same org ──
-    server.post(`${prefix}/cloud/projects/:id/set-default`, async (req: any, res: any) => {
+    server.post(`${prefix}/cloud/environments/:id/set-default`, async (req: any, res: any) => {
         const auth = await checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
         const projectId = String(req.params?.id ?? '').trim();
         if (!projectId) return res.status(400).json(fail('project id required'));
@@ -255,12 +255,12 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         if (!driver) return controlPlaneUnavailable(res);
 
         try {
-            const peers = await (driver.find as any)('sys_project', {
+            const peers = await (driver.find as any)('sys_environment', {
                 where: { organization_id: project.organization_id, is_default: true },
             });
             for (const peer of (peers ?? [])) {
                 if (peer.id !== projectId) {
-                    await (driver.update as any)('sys_project', peer.id, { is_default: false, updated_at: nowIso() });
+                    await (driver.update as any)('sys_environment', peer.id, { is_default: false, updated_at: nowIso() });
                 }
             }
             const success = await patchProject(projectId, { is_default: true });
@@ -272,7 +272,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
     });
 
     // ── change-plan ──
-    server.post(`${prefix}/cloud/projects/:id/change-plan`, async (req: any, res: any) => {
+    server.post(`${prefix}/cloud/environments/:id/change-plan`, async (req: any, res: any) => {
         const auth = await checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
         const projectId = String(req.params?.id ?? '').trim();
         if (!projectId) return res.status(400).json(fail('project id required'));
@@ -291,7 +291,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
     });
 
     // ── change-hostname ──
-    server.post(`${prefix}/cloud/projects/:id/change-hostname`, async (req: any, res: any) => {
+    server.post(`${prefix}/cloud/environments/:id/change-hostname`, async (req: any, res: any) => {
         const auth = await checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
         const projectId = String(req.params?.id ?? '').trim();
         if (!projectId) return res.status(400).json(fail('project id required'));
@@ -305,7 +305,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         const driver = await getDriver();
         if (driver) {
             try {
-                const conflict = await (driver.findOne as any)('sys_project', { where: { hostname } });
+                const conflict = await (driver.findOne as any)('sys_environment', { where: { hostname } });
                 if (conflict && conflict.id !== projectId) {
                     return res.status(409).json(fail(`Hostname '${hostname}' is already in use`, 409));
                 }
@@ -360,11 +360,11 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         }
     };
 
-    actionDispatch.suspend_project = (req, res) =>
+    actionDispatch.suspend_environment = (req, res) =>
         dispatchTransition(req, res, 'suspend', ['active', 'provisioning'], () => ({ status: 'suspended' }));
-    actionDispatch.resume_project = (req, res) =>
+    actionDispatch.resume_environment = (req, res) =>
         dispatchTransition(req, res, 'resume', ['suspended'], () => ({ status: 'active' }));
-    actionDispatch.archive_project = (req, res) =>
+    actionDispatch.archive_environment = (req, res) =>
         dispatchTransition(req, res, 'archive', null, (r) => {
             const reason = String(r.body?.reason ?? '').trim();
             const existing: any = {};
@@ -373,7 +373,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
             return { status: 'archived', metadata: JSON.stringify(existing) };
         });
 
-    actionDispatch.set_default_project = async (req, res) => {
+    actionDispatch.set_default_environment = async (req, res) => {
         const projectId = String(req.params?.id ?? '').trim();
         if (!projectId) return res.status(400).json(fail('project id required'));
         const project = await loadProject(projectId);
@@ -381,12 +381,12 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         const driver = await getDriver();
         if (!driver) return controlPlaneUnavailable(res);
         try {
-            const peers = await (driver.find as any)('sys_project', {
+            const peers = await (driver.find as any)('sys_environment', {
                 where: { organization_id: project.organization_id, is_default: true },
             });
             for (const peer of (peers ?? [])) {
                 if (peer.id !== projectId) {
-                    await (driver.update as any)('sys_project', peer.id, { is_default: false, updated_at: nowIso() });
+                    await (driver.update as any)('sys_environment', peer.id, { is_default: false, updated_at: nowIso() });
                 }
             }
             const success = await patchProject(projectId, { is_default: true });
@@ -423,7 +423,7 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         const driver = await getDriver();
         if (driver) {
             try {
-                const conflict = await (driver.findOne as any)('sys_project', { where: { hostname } });
+                const conflict = await (driver.findOne as any)('sys_environment', { where: { hostname } });
                 if (conflict && conflict.id !== projectId) {
                     return res.status(409).json(fail(`Hostname '${hostname}' is already in use`, 409));
                 }
@@ -434,11 +434,14 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         return res.json(ok({ projectId, hostname }));
     };
 
-    server.post(`${prefix}/actions/sys_project/:actionName`, async (req: any, res: any) => {
+    // Both new and legacy action paths are accepted so the Console renderer
+    // (which still computes the URL from objectName=sys_environment) routes
+    // here regardless of which path the action descriptor advertised.
+    const actionHandler = async (req: any, res: any) => {
         const auth = await checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
         const actionName = String(req.params?.actionName ?? '').trim();
         const impl = actionDispatch[actionName];
-        if (!impl) return res.status(404).json(fail(`Unknown sys_project action '${actionName}'`, 404));
+        if (!impl) return res.status(404).json(fail(`Unknown sys_environment action '${actionName}'`, 404));
 
         // app-shell sends `{ recordId, params }`. Rewrite to the shape the
         // existing transition handlers expect (req.params.id + req.body
@@ -453,7 +456,9 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         req.body = { ...params };
 
         return impl(req, res);
-    });
+    };
+    server.post(`${prefix}/actions/sys_environment/:actionName`, actionHandler);
+    server.post(`${prefix}/actions/sys_project/:actionName`, actionHandler); // legacy alias
 
     // Reference the randomUUID import (silences unused warnings) — used by
     // adapter fallbacks elsewhere in the file in the future.

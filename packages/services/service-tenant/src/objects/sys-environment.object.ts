@@ -6,7 +6,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * Resolve the root domain that subdomains are appended to when users
  * leave the hostname blank or change it via the `change_hostname`
  * action. Mirrors the precedence used in
- * `ProjectProvisioningService.provisionProject` and
+ * `EnvironmentProvisioningService.provisionEnvironment` and
  * `service-cloud/routes/project-lifecycle.ts::resolveNewHostname`.
  */
 function getRootDomainForUiHints(): string {
@@ -19,50 +19,50 @@ function getRootDomainForUiHints(): string {
 const ROOT_DOMAIN_HINT = getRootDomainForUiHints();
 
 /**
- * sys_project — Control Plane Project Registry
+ * sys_environment — Control Plane Environment Registry
  *
  * One row per project. An organization owns N projects
  * (dev/test/prod/sandbox/preview/…). Physical database connection info
  * is stored directly on this row (database_url, database_driver, etc.)
  * so a single JOIN-free lookup gives both logical and physical addressing.
  *
- * **This table lives in the Control Plane only.** Project DBs contain
+ * **This table lives in the Control Plane only.** Environment DBs contain
  * only business data rows — zero system tables.
  *
  * **UX**: the default CRUD `create` form is disabled; users go through
- * the `create_project` toolbar wizard which wraps
- * {@link ProjectProvisioningService.provisionProject} so a real database
+ * the `create_environment` toolbar wizard which wraps
+ * {@link EnvironmentProvisioningService.provisionEnvironment} so a real database
  * is allocated atomically. Status transitions go through dedicated
  * actions (suspend/resume/archive/set_default/change_plan/change_hostname/
- * clone_project) — `status` is `readonly` and must not be edited inline.
+ * clone_environment) — `status` is `readonly` and must not be edited inline.
  *
  * @namespace sys
  */
-export const SysProject = ObjectSchema.create({
-  name: 'sys_project',
-  label: 'Project',
-  pluralLabel: 'Projects',
-  icon: 'briefcase',
+export const SysEnvironment = ObjectSchema.create({
+  name: 'sys_environment',
+  label: 'Environment',
+  pluralLabel: 'Environments',
+  icon: 'globe',
   isSystem: true,
   managedBy: 'config',
-  description: 'Control-plane registry of cloud projects. Each project owns a hostname, ' +
+  description: 'Control-plane registry of cloud environments. Each environment owns a hostname, ' +
     'a dedicated database, and a plan/quota envelope. ' +
     'Note: a true Project/Environment split (separate sys_environment table for runtime ' +
     'instances bound to a project branch) is planned — see ADR-0006 Phase 1.',
   titleFormat: '{display_name}',
   compactLayout: ['display_name', 'plan', 'status', 'hostname', 'is_default'],
 
-  // Users must use the Create Project wizard (which actually provisions a
+  // Users must use the Create Environment wizard (which actually provisions a
   // database). Direct row insert would leave the project with no
   // database_url and break the runtime.
   userActions: { create: false, edit: true, delete: true, import: false },
 
   listViews: {
-    my_projects: {
+    my_environments: {
       type: 'grid',
-      name: 'my_projects',
-      label: 'My Projects',
-      data: { provider: 'object', object: 'sys_project' },
+      name: 'my_environments',
+      label: 'My Environments',
+      data: { provider: 'object', object: 'sys_environment' },
       columns: ['display_name', 'plan', 'status', 'hostname', 'is_default', 'updated_at'],
       filter: [{ field: 'created_by', operator: 'equals', value: '{current_user_id}' }],
       sort: [{ field: 'updated_at', order: 'desc' }],
@@ -73,7 +73,7 @@ export const SysProject = ObjectSchema.create({
       type: 'grid',
       name: 'active',
       label: 'Active',
-      data: { provider: 'object', object: 'sys_project' },
+      data: { provider: 'object', object: 'sys_environment' },
       columns: ['display_name', 'organization_id', 'plan', 'hostname', 'storage_limit_mb', 'updated_at'],
       filter: [{ field: 'status', operator: 'equals', value: 'active' }],
       sort: [{ field: 'updated_at', order: 'desc' }],
@@ -84,7 +84,7 @@ export const SysProject = ObjectSchema.create({
       type: 'grid',
       name: 'provisioning',
       label: 'Provisioning',
-      data: { provider: 'object', object: 'sys_project' },
+      data: { provider: 'object', object: 'sys_environment' },
       columns: ['display_name', 'plan', 'database_driver', 'created_by', 'created_at'],
       filter: [{ field: 'status', operator: 'equals', value: 'provisioning' }],
       sort: [{ field: 'created_at', order: 'desc' }],
@@ -94,7 +94,7 @@ export const SysProject = ObjectSchema.create({
       type: 'kanban',
       name: 'by_plan',
       label: 'By Plan',
-      data: { provider: 'object', object: 'sys_project' },
+      data: { provider: 'object', object: 'sys_environment' },
       columns: ['display_name', 'status', 'hostname'],
       kanban: {
         groupByField: 'plan',
@@ -105,8 +105,8 @@ export const SysProject = ObjectSchema.create({
     archive: {
       type: 'grid',
       name: 'archive',
-      label: 'Archived & Failed',
-      data: { provider: 'object', object: 'sys_project' },
+      label: 'd & Failed',
+      data: { provider: 'object', object: 'sys_environment' },
       columns: ['display_name', 'organization_id', 'status', 'plan', 'updated_at'],
       filter: [
         { field: 'status', operator: 'in', value: ['archived', 'failed'] },
@@ -119,7 +119,7 @@ export const SysProject = ObjectSchema.create({
   actions: [
     // ────────────────────────────────────────────────────────────────────
     // Environment provisioning wizard — replaces the disabled default
-    // CRUD `create` form. Wraps ProjectProvisioningService.provisionProject
+    // CRUD `create` form. Wraps EnvironmentProvisioningService.provisionEnvironment
     // so a real database is allocated atomically.
     //
     // Conceptually this creates an Environment (see ADR-0006). The backend
@@ -127,19 +127,19 @@ export const SysProject = ObjectSchema.create({
     // existing SDK clients; the conceptual rename is UI-visible only.
     // ────────────────────────────────────────────────────────────────────
     {
-      name: 'create_project',
-      label: 'Create Project',
+      name: 'create_environment',
+      label: 'Create Environment',
       icon: 'plus',
       variant: 'primary',
       type: 'api',
       locations: ['list_toolbar'],
-      target: '/api/v1/cloud/projects',
+      target: '/api/v1/cloud/environments',
       method: 'POST',
       mode: 'create',
       refreshAfter: true,
-      successMessage: 'Project provisioned.',
+      successMessage: 'Environment provisioned.',
       params: [
-        { name: 'displayName', label: 'Display Name', type: 'text', required: true, placeholder: 'My new project' },
+        { name: 'displayName', label: 'Display Name', type: 'text', required: true, placeholder: 'My new environment' },
         {
           name: 'driver',
           label: 'Database Driver',
@@ -199,53 +199,53 @@ export const SysProject = ObjectSchema.create({
     // Status-machine row actions (replace direct status field edits).
     // ────────────────────────────────────────────────────────────────────
     {
-      name: 'suspend_project',
-      label: 'Suspend',
+      name: 'suspend_environment',
+      label: '',
       icon: 'pause-circle',
       variant: 'secondary',
       type: 'script',
       locations: ['list_item', 'record_header'],
-      confirmText: 'Suspend this project? All runtime traffic to it will be blocked until you resume.',
-      successMessage: 'Project suspended.',
+      confirmText: ' this environment? All runtime traffic to it will be blocked until you resume.',
+      successMessage: 'Environment suspended.',
       refreshAfter: true,
     },
     {
-      name: 'resume_project',
-      label: 'Resume',
+      name: 'resume_environment',
+      label: '',
       icon: 'play-circle',
       variant: 'secondary',
       type: 'script',
       locations: ['list_item', 'record_header'],
-      successMessage: 'Project resumed.',
+      successMessage: 'Environment resumed.',
       refreshAfter: true,
     },
     {
-      name: 'archive_project',
-      label: 'Archive',
+      name: 'archive_environment',
+      label: '',
       icon: 'archive',
       variant: 'danger',
       type: 'script',
       locations: ['list_item', 'record_header'],
-      confirmText: 'Archive this project? It will be removed from active views. Data is retained for 30 days before deletion.',
-      successMessage: 'Project archived.',
+      confirmText: ' this environment? It will be removed from active views. Data is retained for 30 days before deletion.',
+      successMessage: 'Environment archived.',
       refreshAfter: true,
       params: [
         { name: 'reason', label: 'Reason (optional)', type: 'text', required: false },
       ],
     },
     {
-      name: 'set_default_project',
-      label: 'Set as Default',
+      name: 'set_default_environment',
+      label: '',
       icon: 'star',
       variant: 'secondary',
       type: 'script',
       locations: ['list_item', 'record_header'],
-      successMessage: 'Default project updated.',
+      successMessage: 'Default environment updated.',
       refreshAfter: true,
     },
     {
       name: 'change_plan',
-      label: 'Change Plan',
+      label: '',
       icon: 'sliders',
       variant: 'secondary',
       type: 'script',
@@ -270,7 +270,7 @@ export const SysProject = ObjectSchema.create({
     },
     {
       name: 'change_hostname',
-      label: 'Change Hostname',
+      label: '',
       icon: 'globe',
       variant: 'secondary',
       type: 'script',
@@ -283,7 +283,7 @@ export const SysProject = ObjectSchema.create({
           label: 'New Subdomain',
           type: 'text',
           required: true,
-          placeholder: 'my-project',
+          placeholder: 'my-environment',
           helpText:
             `Just the subdomain — the root domain (.${ROOT_DOMAIN_HINT}) is appended automatically. Allowed: lowercase letters, digits, hyphens.`,
         },
@@ -312,7 +312,7 @@ export const SysProject = ObjectSchema.create({
       label: 'Plan',
       required: true,
       defaultValue: 'free',
-      description: 'Plan tier applied to this project for quota and billing. Change via Change Plan action.',
+      description: 'Plan tier applied to this environment for quota and billing. Change via  action.',
       readonly: true,
       group: 'Basics',
       options: [
@@ -328,14 +328,14 @@ export const SysProject = ObjectSchema.create({
       label: 'Status',
       required: true,
       defaultValue: 'provisioning',
-      description: 'Project lifecycle status. Driven by status-machine actions; not directly editable.',
+      description: 'Environment lifecycle status. Driven by status-machine actions; not directly editable.',
       readonly: true,
       group: 'Basics',
       options: [
         { value: 'provisioning', label: 'Provisioning' },
         { value: 'active', label: 'Active' },
-        { value: 'suspended', label: 'Suspended' },
-        { value: 'archived', label: 'Archived' },
+        { value: 'suspended', label: 'ed' },
+        { value: 'archived', label: 'd' },
         { value: 'failed', label: 'Failed' },
         { value: 'migrating', label: 'Migrating' },
       ],
@@ -355,7 +355,7 @@ export const SysProject = ObjectSchema.create({
       unique: true,
       readonly: true,
       description:
-        'The canonical hostname where this project is served. Use the Change Hostname action to update.',
+        'The canonical hostname where this project is served. Use the  action to update.',
       group: 'Access',
     }),
 
@@ -394,11 +394,11 @@ export const SysProject = ObjectSchema.create({
     }),
 
     is_default: Field.boolean({
-      label: 'Default Project',
+      label: 'Default Environment',
       required: true,
       defaultValue: false,
       readonly: true,
-      description: 'Exactly one default project per organization. Set via Set as Default action.',
+      description: 'Exactly one default environment per organization. Set via  action.',
       group: 'Access',
     }),
 
@@ -426,7 +426,7 @@ export const SysProject = ObjectSchema.create({
       required: false,
       readonly: true,
       hidden: true,
-      description: 'Connection URL for the project database. Sensitive — admin only.',
+      description: 'Connection URL for the environment database. Sensitive — admin only.',
       group: 'Connection',
     }),
 
@@ -440,11 +440,11 @@ export const SysProject = ObjectSchema.create({
 
     // ── Internal (system-managed; hidden from forms) ──────────────────
     id: Field.text({
-      label: 'Project ID',
+      label: 'Environment ID',
       required: true,
       readonly: true,
       hidden: true,
-      description: 'UUID of the project (stable, never reused).',
+      description: 'UUID of the environment (stable, never reused).',
       group: 'Internal',
     }),
 
@@ -454,7 +454,7 @@ export const SysProject = ObjectSchema.create({
       defaultValue: false,
       readonly: true,
       hidden: true,
-      description: 'Platform infrastructure project (not user data).',
+      description: 'Platform infrastructure environment (not user data).',
       group: 'Internal',
     }),
 
@@ -462,7 +462,7 @@ export const SysProject = ObjectSchema.create({
       label: 'Created By',
       required: true,
       readonly: true,
-      description: 'User that created the project.',
+      description: 'User that created the environment.',
       group: 'Internal',
     }),
 

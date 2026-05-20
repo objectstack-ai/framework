@@ -29,13 +29,18 @@ export interface SysProjectRow {
 /**
  * Row shape fetched from `sys_project_credential` (`status = 'active'`).
  */
-export interface SysProjectCredentialRow {
+export interface SysEnvironmentCredentialRow {
   id: string;
-  project_id: string;
+  environment_id: string;
   secret_ciphertext: string;
   encryption_key_id?: string;
+  database_driver?: string;
+  database_url?: string;
+  database_auth_token?: string;
   [k: string]: any;
 }
+/** @deprecated Use `SysEnvironmentCredentialRow`. Kept for backward compat. */
+export type SysProjectCredentialRow = SysEnvironmentCredentialRow;
 
 /**
  * Resolves the list of App bundles a project is subscribed to.
@@ -222,7 +227,7 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
           .filter((n: any): n is string => typeof n === 'string' && n.length > 0),
       );
       const existing = await proxyDriver.find('sys_app', {
-        where: { project_id: projectId },
+        where: { environment_id: projectId },
         limit: 10_000,
       } as any);
       const rows: Array<{ name?: string }> = Array.isArray(existing)
@@ -233,7 +238,7 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
       if (stale.length && typeof deleteMany === 'function') {
         for (const row of stale) {
           await deleteMany.call(proxyDriver, 'sys_app', {
-            where: { project_id: projectId, name: row.name },
+            where: { environment_id: projectId, name: row.name },
           });
         }
         this.logger.info?.('[ProjectKernelFactory] sys_app catalog reconciled', {
@@ -312,8 +317,8 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
     if (!this.controlPlaneDriver) {
       throw new Error(`[ProjectKernelFactory] controlPlaneDriver is required in cloud mode`);
     }
-    const result = await this.controlPlaneDriver.find('sys_project', {
-      object: 'sys_project',
+    const result = await this.controlPlaneDriver.find('sys_environment', {
+      object: 'sys_environment',
       where: { id: projectId },
       limit: 1,
     } as any);
@@ -325,9 +330,9 @@ export class DefaultProjectKernelFactory implements ProjectKernelFactory {
     if (!this.controlPlaneDriver) {
       throw new Error(`[ProjectKernelFactory] controlPlaneDriver is required in cloud mode`);
     }
-    const result = await this.controlPlaneDriver.find('sys_project_credential', {
-      object: 'sys_project_credential',
-      where: { project_id: projectId, status: 'active' },
+    const result = await this.controlPlaneDriver.find('sys_environment_credential', {
+      object: 'sys_environment_credential',
+      where: { environment_id: projectId, status: 'active' },
       limit: 1,
     } as any);
     const rows = Array.isArray(result) ? result : (result as any)?.value ?? [];

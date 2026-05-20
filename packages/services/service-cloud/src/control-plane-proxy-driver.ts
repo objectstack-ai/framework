@@ -219,9 +219,9 @@ const ORG_SCOPED_OBJECTS = new Set<string>([
     'sys_audit_log',
     'sys_metadata',
     'sys_metadata_history',
-    'sys_project',
-    'sys_project_credential',
-    'sys_project_member',
+    'sys_environment',
+    'sys_environment_credential',
+    'sys_environment_member',
     'sys_project_package',
     'sys_app',
 ]);

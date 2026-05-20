@@ -301,7 +301,7 @@ function createTemplateSeeder(
             } else {
                 publishStatus.stage = 'findProject';
                 const projectRow = await (publishCtx.controlDriver as any).findOne(
-                    'sys_project',
+                    'sys_environment',
                     { where: { id: projectId } },
                 );
                 if (projectRow) {
@@ -334,12 +334,12 @@ function createTemplateSeeder(
         // Persist publish diagnostic into sys_project.metadata.publishStatus so
         // operators can see why publish skipped without container logs.
         try {
-            const cur = await (publishCtx.controlDriver as any).findOne('sys_project', { where: { id: projectId } });
+            const cur = await (publishCtx.controlDriver as any).findOne('sys_environment', { where: { id: projectId } });
             const meta = cur && typeof cur.metadata === 'string'
                 ? JSON.parse(cur.metadata)
                 : (cur?.metadata ?? {});
             await (publishCtx.controlDriver as any).update(
-                'sys_project',
+                'sys_environment',
                 projectId,
                 { metadata: JSON.stringify({ ...meta, publishStatus, publishStatusAt: new Date().toISOString() }) },
             );
@@ -361,10 +361,10 @@ function createTemplateSeeder(
         async seed({ projectId, templateId }) {
             const writeDiag = async (stage: string, extra: any = {}) => {
                 try {
-                    const cur = await (publishCtx.controlDriver as any).findOne('sys_project', { where: { id: projectId } });
+                    const cur = await (publishCtx.controlDriver as any).findOne('sys_environment', { where: { id: projectId } });
                     const meta = cur && typeof cur.metadata === 'string' ? JSON.parse(cur.metadata) : (cur?.metadata ?? {});
                     const seedDiag = { ...(meta.seedDiag ?? {}), [stage]: { at: new Date().toISOString(), ...extra } };
-                    await (publishCtx.controlDriver as any).update('sys_project', projectId, {
+                    await (publishCtx.controlDriver as any).update('sys_environment', projectId, {
                         metadata: JSON.stringify({ ...meta, seedDiag }),
                     });
                 } catch (e: any) { console.error('[MultiProjectPlugin] writeDiag failed', stage, e?.message); }
@@ -452,7 +452,7 @@ export class MultiProjectPlugin implements Plugin {
                     return [];
                 };
                 const installs = await findRows('sys_package_installation', {
-                    project_id: projectId,
+                    environment_id: projectId,
                 });
                 if (installs.length === 0) return [];
 

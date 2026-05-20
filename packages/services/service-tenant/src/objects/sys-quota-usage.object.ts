@@ -24,7 +24,7 @@ export const SysQuotaUsage = ObjectSchema.create({
   description: 'Metered counter per metric per window — drives billing + quota enforcement.',
   displayNameField: 'metric',
   titleFormat: '{metric} — {window_start}',
-  compactLayout: ['organization_id', 'project_id', 'metric', 'value', 'limit_value', 'window_start'],
+  compactLayout: ['organization_id', 'environment_id', 'metric', 'value', 'limit_value', 'window_start'],
   userActions: { create: false, edit: false, delete: false, import: false },
 
   listViews: {
@@ -33,19 +33,19 @@ export const SysQuotaUsage = ObjectSchema.create({
       name: 'over_limit',
       label: 'Over Limit',
       data: { provider: 'object', object: 'sys_quota_usage' },
-      columns: ['organization_id', 'project_id', 'metric', 'value', 'limit_value', 'window_start'],
+      columns: ['organization_id', 'environment_id', 'metric', 'value', 'limit_value', 'window_start'],
       filter: [{ field: 'is_over_limit', operator: 'equals', value: true }],
       sort: [{ field: 'window_start', order: 'desc' }],
       pagination: { pageSize: 100 },
     },
-    by_project: {
+    by_environment: {
       type: 'grid',
-      name: 'by_project',
-      label: 'By Project',
+      name: 'by_environment',
+      label: 'By Environment',
       data: { provider: 'object', object: 'sys_quota_usage' },
-      columns: ['project_id', 'metric', 'value', 'limit_value', 'window_start'],
-      sort: [{ field: 'project_id', order: 'asc' }, { field: 'window_start', order: 'desc' }],
-      grouping: { fields: [{ field: 'project_id', order: 'asc', collapsed: false }] },
+      columns: ['environment_id', 'metric', 'value', 'limit_value', 'window_start'],
+      sort: [{ field: 'environment_id', order: 'asc' }, { field: 'window_start', order: 'desc' }],
+      grouping: { fields: [{ field: 'environment_id', order: 'asc', collapsed: false }] },
       pagination: { pageSize: 100 },
     },
     current_window: {
@@ -53,7 +53,7 @@ export const SysQuotaUsage = ObjectSchema.create({
       name: 'current_window',
       label: 'Current Window',
       data: { provider: 'object', object: 'sys_quota_usage' },
-      columns: ['organization_id', 'project_id', 'metric', 'value', 'limit_value'],
+      columns: ['organization_id', 'environment_id', 'metric', 'value', 'limit_value'],
       sort: [{ field: 'value', order: 'desc' }],
       pagination: { pageSize: 100 },
     },
@@ -68,8 +68,8 @@ export const SysQuotaUsage = ObjectSchema.create({
       group: 'Scope',
     }),
 
-    project_id: Field.lookup('sys_project', {
-      label: 'Project',
+    environment_id: Field.lookup('sys_environment', {
+      label: 'Environment',
       required: false,
       group: 'Scope',
     }),
@@ -141,7 +141,7 @@ export const SysQuotaUsage = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['organization_id', 'project_id', 'metric', 'window_start'], unique: true },
+    { fields: ['organization_id', 'environment_id', 'metric', 'window_start'], unique: true },
     { fields: ['period_id'] },
     { fields: ['is_over_limit'] },
   ],

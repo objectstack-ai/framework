@@ -82,16 +82,16 @@ export async function setBranchHead(
     revisionId: string,
 ): Promise<void> {
     try {
-        const heads = (await driver.find('sys_project_revision', {
-            where: { project_id: projectId, branch, is_branch_head: true },
+        const heads = (await driver.find('sys_project_revision_DEPRECATED', {
+            where: { environment_id: projectId, branch, is_branch_head: true },
             limit: 100,
         })) as BranchHeadRow[];
         for (const h of heads) {
             if (h.id !== revisionId) {
-                await driver.update('sys_project_revision', h.id, { is_branch_head: false });
+                await driver.update('sys_project_revision_DEPRECATED', h.id, { is_branch_head: false });
             }
         }
-        await driver.update('sys_project_revision', revisionId, {
+        await driver.update('sys_project_revision_DEPRECATED', revisionId, {
             branch,
             is_branch_head: true,
         });
@@ -175,8 +175,8 @@ export function registerBranchRoutes(server: IHttpServer, deps: RouteDeps): void
         if (!driver) return controlPlaneUnavailable(res);
 
         try {
-            const rows = (await (driver.find as any)('sys_project_revision', {
-                where: { project_id: projectId },
+            const rows = (await (driver.find as any)('sys_project_revision_DEPRECATED', {
+                where: { environment_id: projectId },
                 orderBy: [{ field: 'published_at', direction: 'desc' }],
                 limit: 5000,
             })) as BranchHeadRow[];
@@ -215,20 +215,20 @@ export function registerBranchRoutes(server: IHttpServer, deps: RouteDeps): void
         if (!driver) return controlPlaneUnavailable(res);
 
         try {
-            const collisions = (await (driver.find as any)('sys_project_revision', {
-                where: { project_id: projectId, branch: normalizedNew },
+            const collisions = (await (driver.find as any)('sys_project_revision_DEPRECATED', {
+                where: { environment_id: projectId, branch: normalizedNew },
                 limit: 1,
             })) as any[];
             if (Array.isArray(collisions) && collisions.length > 0) {
                 return res.status(409).json(fail(`Branch '${normalizedNew}' already exists`, 409));
             }
 
-            const rows = (await (driver.find as any)('sys_project_revision', {
-                where: { project_id: projectId, branch: oldName },
+            const rows = (await (driver.find as any)('sys_project_revision_DEPRECATED', {
+                where: { environment_id: projectId, branch: oldName },
                 limit: 5000,
             })) as BranchHeadRow[];
             for (const r of rows) {
-                await (driver.update as any)('sys_project_revision', r.id, { branch: normalizedNew });
+                await (driver.update as any)('sys_project_revision_DEPRECATED', r.id, { branch: normalizedNew });
             }
             return res.json(ok({ projectId, from: oldName, to: normalizedNew, renamed: rows.length }));
         } catch (err: any) {
@@ -259,8 +259,8 @@ export function registerBranchRoutes(server: IHttpServer, deps: RouteDeps): void
         if (!driver) return controlPlaneUnavailable(res);
 
         try {
-            const rows = (await (driver.find as any)('sys_project_revision', {
-                where: { project_id: projectId, branch: name },
+            const rows = (await (driver.find as any)('sys_project_revision_DEPRECATED', {
+                where: { environment_id: projectId, branch: name },
                 limit: 5000,
             })) as BranchHeadRow[];
             if (rows.length === 0) {
@@ -275,7 +275,7 @@ export function registerBranchRoutes(server: IHttpServer, deps: RouteDeps): void
             }
             for (const r of rows) {
                 if (r.is_branch_head) {
-                    await (driver.update as any)('sys_project_revision', r.id, { is_branch_head: false });
+                    await (driver.update as any)('sys_project_revision_DEPRECATED', r.id, { is_branch_head: false });
                 }
             }
             return res.json(ok({ projectId, branch: name, demoted: rows.filter((r) => r.is_branch_head).length, totalRevisions: rows.length }));

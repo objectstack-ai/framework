@@ -3,22 +3,22 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_app — Org-scoped catalog of apps across all projects in an organization.
+ * sys_app — Org-scoped catalog of apps across all environments in an organization.
  *
- * Mirrors per-project app metadata into the control-plane DB so the Studio
+ * Mirrors per-environment app metadata into the control-plane DB so the Studio
  * frontend can render a workspace-style "all apps in this org" view with a
- * single org-filtered query, without fanning out to every project DB.
+ * single org-filtered query, without fanning out to every environment DB.
  *
  * Kept thin on purpose: only the card-level fields (name, label, icon,
- * project_name, …) needed to render the catalog. The full app definition
- * remains authoritative in the project DB and is fetched on demand when the
+ * environment_name, …) needed to render the catalog. The full app definition
+ * remains authoritative in the environment DB and is fetched on demand when the
  * user enters an app.
  *
  * Sync source: `AppCatalogService` listens for `app:registered` /
  * `app:unregistered` kernel hooks fired from project kernels (both
  * package-installed and user-created apps).
  *
- * **Stored in the Control Plane DB (not in project DBs).**
+ * **Stored in the Control Plane DB (not in environment DBs).**
  *
  * @namespace sys
  */
@@ -29,9 +29,9 @@ export const SysApp = ObjectSchema.create({
   icon: 'layout-grid',
   isSystem: true,
   managedBy: 'config',
-  description: 'Org-scoped catalog of apps across all projects (sys_app).',
+  description: 'Org-scoped catalog of apps across all environments (sys_app).',
   titleFormat: '{label}',
-  compactLayout: ['label', 'project_name', 'source', 'active'],
+  compactLayout: ['label', 'environment_name', 'source', 'active'],
 
   fields: {
     id: Field.text({
@@ -63,18 +63,18 @@ export const SysApp = ObjectSchema.create({
         'ControlPlaneProxyDriver auto-injects this filter on all reads.',
     }),
 
-    project_id: Field.lookup('sys_project', {
-      label: 'Project',
+    environment_id: Field.lookup('sys_environment', {
+      label: 'Environment',
       required: true,
-      description: 'Foreign key to sys_project. The project this app lives in.',
+      description: 'Foreign key to sys_environment. The environment this app lives in.',
     }),
 
-    project_name: Field.text({
-      label: 'Project Name',
+    environment_name: Field.text({
+      label: 'Environment Name',
       required: false,
       description:
-        'Denormalized project display name. Cached here so the catalog list ' +
-        'avoids a JOIN against sys_project for card rendering.',
+        'Denormalized environment display name. Cached here so the catalog list ' +
+        'avoids a JOIN against sys_environment for card rendering.',
     }),
 
     name: Field.text({
@@ -136,9 +136,9 @@ export const SysApp = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['project_id', 'name'], unique: true },
+    { fields: ['environment_id', 'name'], unique: true },
     { fields: ['organization_id'] },
-    { fields: ['project_id'] },
+    { fields: ['environment_id'] },
   ],
 
   enable: {

@@ -239,8 +239,8 @@ export class MockProjectDatabaseAdapter implements ProjectDatabaseAdapter {
  */
 export interface ProjectProvisioningConfig {
   /**
-   * Control-plane data driver used to persist `sys_project` and
-   * `sys_project_credential` rows.
+   * Control-plane data driver used to persist `sys_environment` and
+   * `sys_environment_credential` rows.
    *
    * Optional: when omitted, the service runs in **detached** mode —
    * useful for tests that only exercise the orchestration logic.
@@ -478,7 +478,7 @@ export class ProjectProvisioningService {
     // Persist to the control plane.
     if (this.config.controlPlaneDriver) {
       try {
-        await this.config.controlPlaneDriver.create('sys_project', {
+        await this.config.controlPlaneDriver.create('sys_environment', {
           id: project.id,
           organization_id: project.organizationId,
           display_name: project.displayName,
@@ -500,9 +500,9 @@ export class ProjectProvisioningService {
           visibility: project.visibility ?? 'private',
         });
 
-        await this.config.controlPlaneDriver.create('sys_project_credential', {
+        await this.config.controlPlaneDriver.create('sys_environment_credential', {
           id: credential.id,
-          project_id: credential.projectId,
+          environment_id: credential.projectId,
           secret_ciphertext: credential.secretCiphertext,
           encryption_key_id: credential.encryptionKeyId,
           authorization: credential.authorization,
@@ -512,13 +512,13 @@ export class ProjectProvisioningService {
         });
 
         // Auto-add the project creator as the initial owner so they show up
-        // in `sys_project_member` and the dispatcher's per-user membership
+        // in `sys_environment_member` and the dispatcher's per-user membership
         // lookup returns a role on the very first detail load.
         if (project.createdBy) {
           try {
-            await this.config.controlPlaneDriver.create('sys_project_member', {
+            await this.config.controlPlaneDriver.create('sys_environment_member', {
               id: randomUUID(),
-              project_id: project.id,
+              environment_id: project.id,
               user_id: project.createdBy,
               role: 'owner',
               invited_by: project.createdBy,
@@ -580,21 +580,21 @@ export class ProjectProvisioningService {
     };
 
     // Revoke existing active credentials.
-    const existing = (await this.config.controlPlaneDriver.find('sys_project_credential', {
-      where: { project_id: projectId, status: 'active' },
+    const existing = (await this.config.controlPlaneDriver.find('sys_environment_credential', {
+      where: { environment_id: projectId, status: 'active' },
     } as any)) as Array<{ id: string }>;
 
     for (const row of existing ?? []) {
-      await this.config.controlPlaneDriver.update('sys_project_credential', row.id, {
+      await this.config.controlPlaneDriver.update('sys_environment_credential', row.id, {
         status: 'revoked',
         revoked_at: nowIso,
         updated_at: nowIso,
       });
     }
 
-    await this.config.controlPlaneDriver.create('sys_project_credential', {
+    await this.config.controlPlaneDriver.create('sys_environment_credential', {
       id: credential.id,
-      project_id: credential.projectId,
+      environment_id: credential.projectId,
       secret_ciphertext: credential.secretCiphertext,
       encryption_key_id: credential.encryptionKeyId,
       authorization: credential.authorization,
@@ -621,7 +621,7 @@ export class ProjectProvisioningService {
     // Check if system project already exists (idempotent operation)
     if (this.config.controlPlaneDriver) {
       try {
-        const existing = await this.config.controlPlaneDriver.findOne('sys_project', {
+        const existing = await this.config.controlPlaneDriver.findOne('sys_environment', {
           where: { id: SYSTEM_PROJECT_ID },
         } as any);
 
@@ -706,7 +706,7 @@ export class ProjectProvisioningService {
     // Persist to control plane
     if (this.config.controlPlaneDriver) {
       try {
-        await this.config.controlPlaneDriver.create('sys_project', {
+        await this.config.controlPlaneDriver.create('sys_environment', {
           id: project.id,
           organization_id: project.organizationId,
           display_name: project.displayName,
@@ -750,7 +750,7 @@ export class ProjectProvisioningService {
   private async findDefaultProject(organizationId: string): Promise<{ id: string } | null> {
     if (!this.config.controlPlaneDriver) return null;
     try {
-      const rows = (await this.config.controlPlaneDriver.find('sys_project', {
+      const rows = (await this.config.controlPlaneDriver.find('sys_environment', {
         where: { organization_id: organizationId, is_default: true },
       } as any)) as Array<{ id: string }>;
       return rows && rows.length > 0 ? rows[0] : null;
@@ -763,7 +763,7 @@ export class ProjectProvisioningService {
    * Permanently delete a project: cascade-removes credential, member, and
    * package-installation rows from the control plane, then destroys the
    * physical database via the registered adapter, then removes the
-   * `sys_project` row itself.
+   * `sys_environment` row itself.
    *
    * Guards:
    * - System projects (isSystem=true) cannot be deleted.
@@ -784,7 +784,7 @@ export class ProjectProvisioningService {
     }
     const cp = this.config.controlPlaneDriver;
 
-    const row = (await cp.findOne('sys_project', { where: { id: projectId } } as any)) as
+    const row = (await cp.findOne('sys_environment', { where: { id: projectId } } as any)) as
       | Record<string, unknown>
       | null;
     if (!row) {
@@ -808,9 +808,9 @@ export class ProjectProvisioningService {
     // Cascade-delete dependent rows. Use deleteMany if available; otherwise
     // fall back to find + per-row delete.
     const cascadeObjects: Array<{ object: string; field: string }> = [
-      { object: 'sys_project_credential', field: 'project_id' },
-      { object: 'sys_project_member', field: 'project_id' },
-      { object: 'sys_package_installation', field: 'project_id' },
+      { object: 'sys_environment_credential', field: 'environment_id' },
+      { object: 'sys_environment_member', field: 'environment_id' },
+      { object: 'sys_package_installation', field: 'environment_id' },
     ];
 
     for (const { object, field } of cascadeObjects) {
@@ -854,12 +854,12 @@ export class ProjectProvisioningService {
       );
     }
 
-    // Finally remove the sys_project row itself.
+    // Finally remove the sys_environment row itself.
     try {
-      await cp.delete('sys_project', projectId);
+      await cp.delete('sys_environment', projectId);
     } catch (error) {
       throw new Error(
-        `Failed to delete sys_project row for ${projectId}: ${
+        `Failed to delete sys_environment row for ${projectId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );

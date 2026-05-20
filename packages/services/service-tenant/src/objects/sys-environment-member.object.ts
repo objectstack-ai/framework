@@ -3,27 +3,27 @@
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 /**
- * sys_project_member — Per-Project RBAC
+ * sys_environment_member — Per-Environment RBAC
  *
- * Grants a user access to a specific project with a specific role.
- * Scoped narrowly to project boundaries so that `prod` can have a
+ * Grants a user access to a specific environment with a specific role.
+ * Scoped narrowly to environment boundaries so that `prod` can have a
  * different cast of admins than `dev`.
  *
- * A user may be a member of multiple projects within the same
- * organization with different roles. Uniqueness is `(project_id, user_id)`.
+ * A user may be a member of multiple environments within the same
+ * organization with different roles. Uniqueness is `(environment_id, user_id)`.
  *
  * @namespace sys
  */
-export const SysProjectMember = ObjectSchema.create({
-  name: 'sys_project_member',
-  label: 'Project Member',
-  pluralLabel: 'Project Members',
+export const SysEnvironmentMember = ObjectSchema.create({
+  name: 'sys_environment_member',
+  label: 'Environment Member',
+  pluralLabel: 'Environment Members',
   icon: 'users',
   isSystem: true,
   managedBy: 'config',
-  description: 'Per-project user/role assignments.',
-  titleFormat: '{user_id} @ {project_id}',
-  compactLayout: ['user_id', 'project_id', 'role'],
+  description: 'Per-environment user/role assignments.',
+  titleFormat: '{user_id} @ {environment_id}',
+  compactLayout: ['user_id', 'environment_id', 'role'],
 
   fields: {
     id: Field.text({
@@ -47,10 +47,10 @@ export const SysProjectMember = ObjectSchema.create({
       description: 'Last update timestamp.',
     }),
 
-    project_id: Field.lookup('sys_project', {
-      label: 'Project',
+    environment_id: Field.lookup('sys_environment', {
+      label: 'Environment',
       required: true,
-      description: 'Foreign key to sys_project.',
+      description: 'Foreign key to sys_environment.',
     }),
 
     user_id: Field.lookup('sys_user', {
@@ -80,8 +80,8 @@ export const SysProjectMember = ObjectSchema.create({
   },
 
   indexes: [
-    { fields: ['project_id', 'user_id'], unique: true },
-    { fields: ['project_id'] },
+    { fields: ['environment_id', 'user_id'], unique: true },
+    { fields: ['environment_id'] },
     { fields: ['user_id'] },
     { fields: ['role'] },
   ],

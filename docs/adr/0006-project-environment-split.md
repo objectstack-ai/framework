@@ -1,134 +1,150 @@
-# ADR-0006: Three-Layer Tenancy — Organization, Project, Environment
+# ADR-0006: Environment & Project as Independent Siblings — v3
 
-**Status**: Accepted (v2)
-**Date**: 2026-05-20 (v1) / 2026-05-20 (v2 — same day revision)
+**Status**: Accepted (v3 — supersedes v2)
+**Date**: 2026-05-20 (v3)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: ADR-0002 (Environment-Per-Database Isolation), ADR-0003 (Package as First-Class Citizen), ADR-0005 (Metadata Customization Overlay)
-**Consumers**: `@objectstack/service-tenant`, `@objectstack/service-cloud`, `@objectstack/spec/cloud`, `apps/cloud`, `apps/objectos`, the Console `cloud_control` app, the Marketplace publisher CLI
+**Supersedes**: v1 (strict tree), v2 (siblings + sys_deployment join)
+**Builds on**: ADR-0002 (Environment-Per-Database Isolation), ADR-0003 (Package as First-Class Citizen)
+**Consumers**: `@objectstack/service-tenant`, `@objectstack/service-cloud`, `@objectstack/spec/cloud`, `apps/cloud`, the Console `cloud_control` app
 
-> **v2 revision note** — v1 modelled the layers as a strict tree
-> (`Org → Project → Environment`), which forced every consumer to
-> create a Project even when they only wanted to install a Marketplace
-> package. v2 promotes Project and Environment to **siblings under
-> Organization** with an optional `sys_deployment` join, matching the
-> Salesforce / ServiceNow / Shopify model where the runtime container
-> is the unit users pay for and Project is reserved for developers
-> who customize.
+> **v3 revision note** — v2 introduced Project and Environment as siblings
+> joined by a `sys_deployment` M:N table. That join was modelled on Vercel's
+> git-driven deployment graph, which ObjectStack does not need: every
+> Project-to-Environment promotion goes through a published `sys_package_version`,
+> which already carries the snapshot. v3 deletes `sys_deployment` and connects
+> Project ↔ Environment only via the package version (publish → install). This
+> matches Power Platform (Solution → Environment) and Salesforce (Unlocked
+> Package → Org) exactly, with one fewer table.
+>
+> v3 also adopts the **drop-schema-clean** path: the system is pre-launch,
+> the user accepted a one-shot wipe of `sys_project*` / `sys_package*` rows.
+> No grandfathering code is shipped.
 
 ---
 
 ## Context
 
-After ADR-0002 introduced per-environment databases and ADR-0003 made
-`sys_package` a first-class artifact, the runtime ended up with a
-**single conflated layer** (`sys_project`) that tries to serve two
-distinct concerns:
+After v2 we hit two practical problems:
 
-1. **Authoring** — the human-owned workspace where metadata,
-   customizations, branches, reviews, and releases live. Owned by
-   developers / power users. There is **0 or 1** of these per logical
-   product.
-2. **Runtime** — the host that actually serves a hostname. There are
-   **1..N** of these per product (`dev`, `staging`, `prod`), each with
-   its own DNS hostname, database URL, quota envelope, and rollout
-   state.
+1. **Phase 0 was a misleading UI relabel.** `sys_project.label` was changed to
+   "Environment", but the schema still conflated authoring and runtime concerns.
+   Reviewers correctly observed "this is just a rename — you didn't actually
+   split anything." Reverted in commit `0f412a0f`.
+2. **`sys_deployment` solves a problem we don't have.** v2 envisioned a M:N
+   between Project Revisions and Environments to support per-env version pinning.
+   But ADR-0003 already says published package versions ARE the pinnable unit.
+   A Project publishes a `sys_package_version`; an Environment installs it via
+   `sys_package_installation`. There is no third table needed.
 
-The current schema collapses both into `sys_project`. Concrete pain:
-
-- A consumer who installs ACME CRM from the Marketplace is forced to
-  pick a "Project" name they will never use again.
-- `sys_package_installation.project_id` cannot express "pin
-  `crm@1.4.2` to prod and `crm@1.5.0-beta` to staging".
-- The Create Project form forces driver / storage decisions before
-  the user has even committed to using the platform (the `min=max=0`
-  storage limit field in the migrated Console is a direct symptom).
-
-Benchmarking again, with v2's eyes — note who has a Project at all:
-
-| Platform | Runtime container (sibling of Org) | Authoring workspace |
-|----|----|----|
-| Salesforce | **Org** (Sandbox / Production / Scratch) | DX Project (devs only) |
-| ServiceNow | **Instance** | Application (devs only) |
-| Shopify | **Store** | n/a (no first-party authoring) |
-| Notion | **Workspace** | n/a |
-| Vercel | Deployment (under Project) | **Project** (mandatory — assumes git repo) |
-| **ObjectStack today** | sys_project | sys_project ← *same row* |
-
-Four of five benchmarks make the runtime container the primary
-creatable unit. Vercel is the outlier because it presumes every user
-has a git repository. ObjectStack does not — we have first-party
-starter packages, no-code consumers, and a Marketplace.
+Meanwhile, the platform is pre-launch and all production data can be wiped.
+This is a one-time window: structural splits done now cost ~3-5 days; done
+post-launch they cost weeks plus a dual-write migration window plus a token-
+invalidation event for SSO clients.
 
 ---
 
 ## Decision
 
-Adopt a **three-layer model with Project and Environment as siblings**
-under Organization, joined by an optional `sys_deployment` row:
+Adopt the **independent-siblings** model with no join table. Project and
+Environment are both first-class children of Organization, and they communicate
+only through published Package Versions (Marketplace contract).
 
 ```
-Organization (cloud tenant — billing, members, SSO)
-  ├── Project (0..N — optional authoring scope)
-  │     └── Revision  ← Branch ← Member
-  ├── Environment (1..N — runtime container, primary user-facing unit)
-  │     └── Installation (M:N → PackageVersion)
-  └── Deployment (M:N join: Project Revision × Environment, only when a
-                  Project is deployed; absent for pure-consumer envs)
+Organization (account root — billing, members, SSO realm)
+  ├── Environment (1..N — runtime container)
+  │     ├── hostname, database_url, plan, quota, status
+  │     └── installed_packages (M:N → sys_package_version)
+  │
+  └── Project (0..N — optional dev workspace)
+        ├── Branch (main / staging / feature/*)
+        │     └── Revision (immutable snapshot per publish)
+        │           ↓ publish
+        │       sys_package_version  ──→  install into any Environment
+        │
+        └── Member (developer RBAC, separate from env operator RBAC)
 ```
 
-Two user personas, two paths:
+**No FK between Project and Environment.** The published Package Version is
+the only artifact that crosses the boundary.
 
-| Persona | What they create first | Sees in nav |
+### Two personas, two paths
+
+| Persona | First action | Default Console nav |
 |----|----|----|
-| **Consumer** (no-code) | Environment + Installations from Marketplace | `Environments`, `Marketplace` |
-| **Builder** (developer) | Project (with branches/revisions) → Deploys to Environment(s) | `Environments`, `Projects` (under "Developer" sub-menu), `Marketplace` |
+| **Consumer** | Register → Create Environment → Install from Marketplace | `Environments`, `Marketplace`, `Members`, `Billing` |
+| **Builder** | Either path A or B below | + `Developer` group (Projects, Branches, Revisions, Published Packages) |
+|  | A: registers, creates Environment, then clicks **"Customize this Environment"** → auto-creates a Project initialized from the env's current metadata | |
+|  | B: registers, creates Project directly, builds metadata, publishes Package Version, installs into one or many Environments | |
 
-The Console hides the Project surface until the user explicitly opts
-into authoring (clicks "Customize this environment" or "New Project").
+Projects are zero-or-many under an Org. Consumer accounts may have **zero**
+Projects forever — that is the supported case, not a degenerate edge.
 
-### Field migration
+### Schema
 
-Today, all runtime concerns sit on `sys_project`. We **keep the
-physical table name `sys_project`** (cheap backwards-compat) but
-relabel it conceptually as Environment in the UI. v2 of this ADR
-defers the structural split to Phase 1 — and reframes it as:
+**Renamed / repurposed**
+- `sys_project` becomes pure **Dev Workspace**: `id`, `organization_id`,
+  `slug`, `display_name`, `description`, `repo_url?`, `default_branch_id?`,
+  `visibility`, `archived_at?`, `created_at`, `updated_at`, `created_by`.
+  **No** hostname / database / quota / plan / kernel state.
 
-- **Phase 1 schema** introduces a separate authoring table
-  `sys_project_metadata` (or rename `sys_project` → `sys_environment`
-  via view alias) and a sibling `sys_project_metadata` for the
-  authoring concept. Installation FK migrates to
-  `environment_id` (was `project_id`, same column physically).
-- **Backwards compatibility**: `sys_project` continues to exist as the
-  underlying table and is the source of truth for runtime data; the
-  ORM exposes both `sys_project` (legacy) and `sys_environment` (new
-  preferred name) — see ADR-0005 overlay precedent.
+**New**
+- `sys_environment`: `id`, `organization_id`, `slug`, `display_name`,
+  `hostname` (unique global), `database_url` / `database_driver` /
+  `database_owner` (per ADR-0002), `plan`, `storage_limit_bytes`,
+  `status`, `is_default`, `last_published_at`, `archived_at?`,
+  `created_at`, `updated_at`, `created_by`.
 
-### Backward compatibility
+**Re-pointed FKs**
+- `sys_project_branch.project_id` → `sys_project` (already the case
+  conceptually; now actually correct semantically — was misleadingly
+  pointing at the runtime row before v3).
+- `sys_project_member.project_id` → `sys_project` (dev RBAC).
+- `sys_environment_member` is a **new** table (env operator RBAC), peer
+  of `sys_project_member`.
+- `sys_package_installation.environment_id` → `sys_environment` (was
+  `project_id` → `sys_project`).
+- `sys_oauth_application.environment_id` → `sys_environment` (SSO per env,
+  not per project).
+- `sys_quota_usage.environment_id`, `sys_billing_period.environment_id`
+  (usage accrues at env; billing rolls up by org).
+- `sys_package_version.published_from_project_id` — **optional** lookup
+  (soft attribution; not a hard FK enforced at install time).
 
-The conceptual rename is UI-only in Phase 0. All API URLs
-(`/api/v1/cloud/projects`), all SDK methods (`provisionProject`), and
-all DB column names stay. We only change:
+**No deployment / promotion join table.** "Promote staging → prod" is:
+```sql
+INSERT INTO sys_package_installation (environment_id, package_version_id)
+SELECT 'prod-env', package_version_id
+FROM sys_package_installation
+WHERE environment_id = 'staging-env';
+```
 
-- Display labels (`label: 'Environment'`, `pluralLabel: 'Environments'`)
-- Toast messages (`'Environment provisioned.'`)
-- Console nav (`Environments`, not `Projects`)
+### Hostname routing
 
-When Phase 1 introduces a true authoring `sys_project_metadata` table,
-the existing `sys_project` rows continue to function as Environments
-with no migration required. Existing SDK callers continue to compile.
+The Cloudflare Worker resolves `<slug>.objectos.app` → `sys_environment.id`
+(was `sys_project.id`). The cache key in `multi-project-plugin.ts` becomes
+`hostname → environmentId`. The DO singleton hydrates per Environment.
 
-### Console UX impact
+### Console UX
 
-The migrated `cloud_control` app changes in three ways:
+**Default (Consumer) nav:**
+```
+Environments
+Marketplace
+Members
+Billing
+```
 
-1. The **Projects** nav group is renamed to **Environments**.
-2. The **Create Project** primary button becomes **Create Environment**
-   with a cleaner form: starter package picker → display name →
-   plan + driver + storage. The new form is the only blueprint-aware
-   surface; there is no separate "template" concept (ADR-0003).
-3. **Project metadata authoring surface** (revisions, branches,
-   customization overlays) is deferred to Phase 1 and lives under
-   a separate **Developer** nav group, hidden by default.
+**Developer mode (toggled by clicking "Customize this Environment" or
+"Create Project") adds:**
+```
+Developer
+├── Projects
+├── Branches
+├── Revisions
+└── Published Packages
+```
+
+The toggle is sticky per user; once on, it stays on across sessions.
 
 ---
 
@@ -136,88 +152,73 @@ The migrated `cloud_control` app changes in three ways:
 
 ### Positive
 
-1. **Consumer-friendly first run.** A user installing ACME CRM never
-   has to define a "Project". They click `+ New Environment`,
-   pick the starter package, and get a hostname.
-2. **Marketplace promotion story.** "Promote `staging` to `prod`" is
-   `INSERT INTO sys_package_installation (env_id, package_version_id)
-   SELECT 'prod-env', package_version_id FROM sys_package_installation
-   WHERE env_id = 'staging-env'`.
-3. **Per-env version pinning** unblocks the Marketplace install model
-   ("templates as packages"). Phase 1 introduces
-   `sys_deployment` for the M:N project↔env join used by Builder
-   persona.
-4. **Clean form UX.** Create Environment no longer forces driver /
-   storage decisions before the user understands the platform — they
-   are env-level concerns made when creating the env, but with sane
-   defaults (free / memory / 1 GB).
-5. **RBAC layering.** Project-level "viewer / editor / admin" maps to
-   metadata authoring; environment-level "deploy / suspend /
-   read-logs" maps to runtime ops. Phase 1 splits the role enums.
+1. **Consumer first-run is unambiguous.** No hidden Project rows, no auto-
+   created "default project" with a fake slug. Account → Env → Install.
+2. **Schema is small and obvious.** 1 new table (`sys_environment`) +
+   field rename on installations. No join table.
+3. **Per-env version pinning is trivial.** `sys_package_installation` already
+   carries `package_version_id`; different envs can pin different versions
+   the same package without any new mechanism.
+4. **SSO isolation is automatic.** Each Environment is its own IdP realm
+   with its own OAuth client; prod tokens cannot be replayed against staging.
+5. **Billing rollup is straightforward.** Usage rows carry `environment_id`;
+   `SUM(usage) GROUP BY organization_id` produces the invoice.
+6. **Promotion = SQL.** No special "deployment" verb in the API — it's
+   `POST /cloud/environments/:prod/installations` with the same
+   `package_version_id` the staging env uses.
 
 ### Negative / Costs
 
-1. **Documentation churn.** Every page that said "project" has to
-   audit whether it means "runtime environment" or "authoring
-   project". One-time tax.
-2. **Phase 1 schema work** introduces a `sys_project_metadata` (or
-   equivalent) table and a `sys_deployment` join table. Done online
-   behind a feature flag.
-3. **SDK rename window.** New `provisionEnvironment` /
-   `listEnvironments` methods sit alongside `provisionProject` /
-   `listProjects` for one major version, then the latter deprecate.
+1. **One-shot data wipe.** Pre-launch is the only time this is free. After
+   launch, the same split costs ~3 weeks (dual-write, backfill, token rotation).
+2. **`@objectstack/cloud` API surface change.** `POST /cloud/projects` is
+   replaced by `POST /cloud/environments`; `POST /cloud/projects` re-emerges
+   later (different semantics) when Builder UX ships. SDK consumers
+   (none in production yet) must rename calls.
+3. **`apps/cloud/server/index.ts` and `worker.ts` change** their hostname
+   resolution from `sys_project` to `sys_environment`.
 
 ### Neutral
 
-1. Existing `sys_project` rows continue to work — they are
-   Environments. No data migration needed in Phase 0.
-2. `apps/cloud` worker routing (`*.{ROOT_DOMAIN}` → DO) stays
-   `hostname → sys_project`. Same mechanism, more accurate UI naming.
+1. `sys_project_branch` keeps its name and semantics — was always a dev
+   concept, just had a confused FK target before v3.
+2. `sys_package_version.published_from_project_id` is optional, so
+   platform-seeded starter packages (no Project owner) work the same way.
 
 ---
 
-## Phasing
+## Phasing (post v3 acceptance)
 
-| Phase | Scope | Status |
+| Phase | Scope | Notes |
 |----|----|----|
-| **0 — UI relabel + foundation** | This ADR (v2); `is_starter` + `publisher` on `sys_package`; session auth on `/api/v1/cloud/*`; Console rename `Projects → Environments`; storage spinbutton bug; approvals badge stub | **Done** (this PR) |
-| **1 — Schema sibling split** | `sys_project_metadata` (or rename to `sys_environment` via alias) + `sys_deployment` table; per-env install FK; Developer nav group | Next |
-| **2 — Builder wizard** | "Customize this Environment" flow (creates project + initial revision); branch UI; revision history; per-env install picker | Following |
-| **3 — Promotion + Quota rollup** | Cross-env package promotion; quota composition (org = Σ env); usage charts | Later |
+| **1 — Drop & redefine schema** | Wipe prod `sys_project*`, `sys_package*`, `sys_quota_usage`, `sys_billing_period`; rebuild `sys_project` as Dev Workspace; ship new `sys_environment` + member table | One commit; one prod DB wipe |
+| **2 — Cloud routes refactor** | `POST /cloud/environments` (provisioning); `POST /cloud/environments/:id/installations`; hostname→env in worker; remove old `/cloud/projects` runtime routes | Same PR as Phase 1 |
+| **3 — Console nav refactor** | Default nav = Environments + Marketplace; Developer toggle for Projects; install action targets envs | Same PR or follow-up |
+| **4 — Deploy + smoke** | Build → deploy → wipe Neon → register fresh account → create env → install starter | One go-live moment |
+| **5 (later) — Builder UX** | Project create, branch list, revision publisher, "Customize this Environment" flow, Publish to Marketplace | Separate epic |
 
-Each phase is independently shippable behind a feature flag
-(`cloud.threeLayer=true` resolved per-org).
+Phases 1-4 are the 3-5 day budget.
 
 ---
 
-## Open questions (deferred to Phase 1)
+## Open questions
 
-- **Authoring table name**: `sys_project_metadata`, `sys_solution`,
-  or rename `sys_project` → `sys_environment` and re-use `sys_project`
-  for authoring? Recommend the rename + reuse because it surfaces
-  the conceptual cleanup to operators (one breaking
-  schema-introspection change) instead of accumulating "history-suffixed"
-  table names.
-- **Per-env vs per-project quotas**: should the bill aggregate at
-  project level (with sub-allocations to envs) or at env level
-  (with optional project caps)? Recommend env-level primary with
-  optional project-level cap, mirroring how AWS sub-accounts work.
-- **Default environment policy on first signup**: auto-create one
-  `prod` env, or wait for the user to click? Recommend auto-create —
-  the empty Console is unwelcoming.
+1. **Multiple Environments per account in free tier?** Recommend: 1 free env
+   per Org; paid plans get N. Enforced at provision time.
+2. **Default Project on Customize flow?** When a Consumer clicks "Customize
+   this Environment", do we create a Project named after the env (`acme-crm`)
+   or prompt for a name? Recommend: auto-name from env slug, allow rename.
+3. **What about packages installed into an Environment that originate from
+   a Project that gets archived?** Installations are immutable references
+   to `sys_package_version`; archiving the Project does not break running
+   Environments. Republishing requires un-archiving.
 
 ---
 
 ## References
 
 - ADR-0002 — Environment-Per-Database Isolation
-- ADR-0003 — Package as First-Class Citizen (starter packages
-  eliminate the legacy "template" concept)
-- ADR-0005 — Metadata Customization Overlay (overlays apply at the
-  project layer when Phase 1 lands)
-- `/Users/zhuangjianguo/.copilot/session-state/8445ca18-486f-41e8-aa08-f6869d28aecb/plan.md`
-  §12.3 — original three-layer-model recommendation
-- `packages/services/service-tenant/src/objects/sys-project.object.ts`
-  — current single-table model; relabelled in Phase 0
-
-
+- ADR-0003 — Package as First-Class Citizen
+- v2 (archived): `0006-project-environment-split.v2.md`
+- Power Platform: Solution → Environment model
+- Salesforce: Unlocked Package → Org model

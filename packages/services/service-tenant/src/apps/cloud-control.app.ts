@@ -25,7 +25,7 @@ import type { App } from '@objectstack/spec/ui';
 export const CLOUD_CONTROL_APP: App = {
   name: 'cloud_control',
   label: 'Cloud Control',
-  description: 'Multi-tenant control plane: organizations, projects, packages, billing.',
+  description: 'Multi-tenant control plane: organizations, environments, packages, billing.',
   icon: 'cloud',
   active: true,
   isDefault: true,
@@ -51,13 +51,13 @@ export const CLOUD_CONTROL_APP: App = {
   // split lands (sys_environment table) — see ADR-0006 Phase 1.
   navigation: [
     {
-      id: 'group_projects',
+      id: 'group_environments',
       type: 'group',
-      label: 'Projects',
-      icon: 'briefcase',
+      label: 'Environments',
+      icon: 'globe',
       children: [
-        { id: 'nav_projects', type: 'object', label: 'Projects', objectName: 'sys_project', icon: 'briefcase' },
-        { id: 'nav_project_members', type: 'object', label: 'Members', objectName: 'sys_project_member', icon: 'user-cog' },
+        { id: 'nav_environments', type: 'object', label: 'Environments', objectName: 'sys_environment', icon: 'globe' },
+        { id: 'nav_environment_members', type: 'object', label: 'Members', objectName: 'sys_environment_member', icon: 'user-cog' },
       ],
     },
     {

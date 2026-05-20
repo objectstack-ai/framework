@@ -25,7 +25,7 @@ export interface SysProjectRow {
 
 export interface SysCredentialRow {
     id: string;
-    project_id: string;
+    environment_id: string;
     database_driver?: string;
     database_url?: string;
     database_auth_token?: string;
@@ -33,9 +33,9 @@ export interface SysCredentialRow {
     secret_ciphertext?: string;
 }
 
-export interface SysProjectRevisionRow {
+export interface SysEnvironmentRevisionRow {
     id: string;
-    project_id: string;
+    environment_id: string;
     commit_id: string;
     checksum?: string;
     storage_key: string;
@@ -125,17 +125,17 @@ export function mergeArtifactMetadata(bundles: any[]): Record<string, any[]> {
 
 export async function resolveProjectByHost(driver: IDataDriver, host: string): Promise<SysProjectRow | null> {
     if (!host) return null;
-    const direct = await (driver.findOne as any)('sys_project', { where: { hostname: host } });
+    const direct = await (driver.findOne as any)('sys_environment', { where: { hostname: host } });
     if (direct) return direct as SysProjectRow;
-    const wildcard = await (driver.findOne as any)('sys_project', { where: { hostname: '*' } });
+    const wildcard = await (driver.findOne as any)('sys_environment', { where: { hostname: '*' } });
     if (wildcard) return wildcard as SysProjectRow;
     return null;
 }
 
 export async function readProjectCredentials(driver: IDataDriver, projectId: string): Promise<SysCredentialRow | null> {
     try {
-        const row = await (driver.findOne as any)('sys_project_credential', {
-            where: { project_id: projectId },
+        const row = await (driver.findOne as any)('sys_environment_credential', {
+            where: { environment_id: projectId },
         });
         return (row ?? null) as SysCredentialRow | null;
     } catch {
@@ -204,34 +204,34 @@ export async function publishProjectRevision(
 
     let created = false;
     let revisionId: string;
-    const existing = await (driver.findOne as any)('sys_project_revision', {
-        where: { project_id: project.id, commit_id: commitId },
+    const existing = await (driver.findOne as any)('sys_project_revision_DEPRECATED', {
+        where: { environment_id: project.id, commit_id: commitId },
     });
     if (existing) {
         revisionId = existing.id;
         if (!existing.is_current) {
             try {
-                const oldCurrent = await (driver.findOne as any)('sys_project_revision', {
-                    where: { project_id: project.id, is_current: true },
+                const oldCurrent = await (driver.findOne as any)('sys_project_revision_DEPRECATED', {
+                    where: { environment_id: project.id, is_current: true },
                 });
                 if (oldCurrent && oldCurrent.id !== existing.id) {
-                    await (driver.update as any)('sys_project_revision', oldCurrent.id, { is_current: false });
+                    await (driver.update as any)('sys_project_revision_DEPRECATED', oldCurrent.id, { is_current: false });
                 }
             } catch { /* table may not exist yet */ }
-            await (driver.update as any)('sys_project_revision', existing.id, { is_current: true });
+            await (driver.update as any)('sys_project_revision_DEPRECATED', existing.id, { is_current: true });
         }
     } else {
         try {
-            const oldCurrent = await (driver.findOne as any)('sys_project_revision', {
-                where: { project_id: project.id, is_current: true },
+            const oldCurrent = await (driver.findOne as any)('sys_project_revision_DEPRECATED', {
+                where: { environment_id: project.id, is_current: true },
             });
             if (oldCurrent) {
-                await (driver.update as any)('sys_project_revision', oldCurrent.id, { is_current: false });
+                await (driver.update as any)('sys_project_revision_DEPRECATED', oldCurrent.id, { is_current: false });
             }
         } catch { /* ok */ }
         const { randomUUID } = await import('node:crypto');
         revisionId = randomUUID();
-        await (driver.create as any)('sys_project_revision', {
+        await (driver.create as any)('sys_project_revision_DEPRECATED', {
             id: revisionId,
             project_id: project.id,
             commit_id: commitId,

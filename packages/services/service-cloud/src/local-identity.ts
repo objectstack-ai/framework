@@ -66,9 +66,9 @@ export async function ensureLocalIdentity(opts: LocalIdentityOptions): Promise<v
     }
 
     // ── Project ──────────────────────────────────────────────────────────
-    const existingProject = await safeFind(objectql, 'sys_project', projectId);
+    const existingProject = await safeFind(objectql, 'sys_environment', projectId);
     if (!existingProject?.length) {
-        await safeInsert(objectql, 'sys_project', {
+        await safeInsert(objectql, 'sys_environment', {
             id: projectId,
             organization_id: orgId,
             display_name: orgName,

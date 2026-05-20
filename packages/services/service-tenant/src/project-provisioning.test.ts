@@ -70,12 +70,12 @@ describe('ProjectProvisioningService.provisionProject', () => {
 
     const objects = created.map((c) => c.object);
     expect(objects).toEqual([
-      'sys_project',
-      'sys_project_credential',
-      'sys_project_member',
+      'sys_environment',
+      'sys_environment_credential',
+      'sys_environment_member',
     ]);
 
-    const projectRow = created.find((c) => c.object === 'sys_project')!.data;
+    const projectRow = created.find((c) => c.object === 'sys_environment')!.data;
     expect(projectRow.organization_id).toBe('org-42');
     expect(projectRow.is_default).toBe(true);
     expect(projectRow.is_system).toBe(false);
@@ -89,8 +89,8 @@ describe('ProjectProvisioningService.provisionProject', () => {
 
     // Creator should be seeded as the initial owner so /projects/:id/members
     // returns at least one row immediately after provisioning.
-    const memberRow = created.find((c) => c.object === 'sys_project_member')!.data;
-    expect(memberRow.project_id).toBe(projectRow.id);
+    const memberRow = created.find((c) => c.object === 'sys_environment_member')!.data;
+    expect(memberRow.environment_id).toBe(projectRow.id);
     expect(memberRow.user_id).toBe('user-1');
     expect(memberRow.role).toBe('owner');
     expect(memberRow.invited_by).toBe('user-1');
@@ -172,7 +172,7 @@ describe('ProjectProvisioningService.provisionSystemProject', () => {
     expect(created).toHaveLength(1);
     const projectRow = created[0].data;
 
-    expect(created[0].object).toBe('sys_project');
+    expect(created[0].object).toBe('sys_environment');
     expect(projectRow.id).toBe(SYSTEM_PROJECT_ID);
     expect(projectRow.organization_id).toBe(PLATFORM_ORG_ID);
     expect(projectRow.display_name).toBe('System');
@@ -191,7 +191,7 @@ describe('ProjectProvisioningService.provisionSystemProject', () => {
       find: vi.fn(async () => []),
       findOne: vi.fn(async (object: string, query: any) => {
         findOneCalled.push(object);
-        if (object === 'sys_project' && query.where?.id === SYSTEM_PROJECT_ID) {
+        if (object === 'sys_environment' && query.where?.id === SYSTEM_PROJECT_ID) {
           return {
             id: SYSTEM_PROJECT_ID,
             organization_id: PLATFORM_ORG_ID,
@@ -219,7 +219,7 @@ describe('ProjectProvisioningService.provisionSystemProject', () => {
     const result = await svc.provisionSystemProject();
 
     // Should have queried for existing system project
-    expect(findOneCalled).toContain('sys_project');
+    expect(findOneCalled).toContain('sys_environment');
 
     // Should NOT have called create since project exists
     expect(driver.create).not.toHaveBeenCalled();

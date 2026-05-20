@@ -288,7 +288,7 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
     }
     let projects: any[] = [];
     try {
-        const rows = await ql.find('sys_project', {
+        const rows = await ql.find('sys_environment', {
             limit,
             fields: ['id', 'hostname', 'status'],
         }, { context: { isSystem: true } });

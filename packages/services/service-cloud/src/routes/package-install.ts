@@ -94,7 +94,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
         if (!pkg) return res.status(404).json(fail(`Package ${packageId} not found`));
 
         // 2. Load the env (sys_project) row + verify org membership.
-        const env: any = await (driver as any).findOne?.('sys_project', { where: { id: environmentId } });
+        const env: any = await (driver as any).findOne?.('sys_environment', { where: { id: environmentId } });
         if (!env) return res.status(404).json(fail(`Environment ${environmentId} not found`));
 
         if (auth.mode === 'user' && getCallerActiveOrgId) {
@@ -148,7 +148,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
 
         // 4. UPSERT sys_package_installation (project_id + package_id unique).
         const existing: any = await (driver as any).findOne?.('sys_package_installation', {
-            where: { project_id: environmentId, package_id: packageId },
+            where: { environment_id: environmentId, package_id: packageId },
         });
         let installationId: string;
         if (existing && existing.id) {
@@ -165,7 +165,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
                 id: installationId,
                 created_at: nowIso(),
                 updated_at: nowIso(),
-                project_id: environmentId,
+                environment_id: environmentId,
                 package_id: packageId,
                 package_version_id: version.id,
                 status: 'installed',
@@ -178,7 +178,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
         // 5. Bump env's last_published_at so the next request triggers a
         //    kernel recycle and the multi-project-plugin re-reads installs.
         try {
-            await (driver as any).update?.('sys_project', environmentId, {
+            await (driver as any).update?.('sys_environment', environmentId, {
                 last_published_at: nowIso(),
                 updated_at: nowIso(),
             });
@@ -210,7 +210,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
         if (!install) return res.status(404).json(fail(`Installation ${installationId} not found`));
 
         if (auth.mode === 'user' && getCallerActiveOrgId) {
-            const env: any = await (driver as any).findOne?.('sys_project', { where: { id: install.project_id } });
+            const env: any = await (driver as any).findOne?.('sys_environment', { where: { id: install.environment_id } });
             const activeOrg = await getCallerActiveOrgId(req);
             if (env?.organization_id && activeOrg && env.organization_id !== activeOrg) {
                 return res.status(403).json(fail('Installation belongs to another organization'));
@@ -224,7 +224,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
         });
 
         try {
-            await (driver as any).update?.('sys_project', install.project_id, {
+            await (driver as any).update?.('sys_environment', install.environment_id, {
                 last_published_at: nowIso(),
                 updated_at: nowIso(),
             });

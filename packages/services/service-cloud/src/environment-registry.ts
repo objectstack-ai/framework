@@ -107,8 +107,8 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
     // driver for the tenant plugin's `sys.*` namespace. The short name is
     // `sys_project`; drivers store the physical table under that name.
     // Callers can override for test drivers that use different naming.
-    this.projectObjectName = config.projectObjectName ?? 'sys_project';
-    this.credentialObjectName = config.credentialObjectName ?? 'sys_project_credential';
+    this.projectObjectName = config.projectObjectName ?? 'sys_environment';
+    this.credentialObjectName = config.credentialObjectName ?? 'sys_environment_credential';
   }
 
   async resolveByHostname(host: string): Promise<{ projectId: string; driver: IDataDriver } | null> {
@@ -252,7 +252,7 @@ export class DefaultEnvironmentDriverRegistry implements EnvironmentDriverRegist
 
     const credResult = await this.controlPlaneDriver.find(this.credentialObjectName, {
       object: this.credentialObjectName,
-      where: { project_id: projectId, status: 'active' },
+      where: { environment_id: projectId, status: 'active' },
       limit: 1,
     } as any);
 

@@ -9,11 +9,9 @@
  */
 
 import {
-  SysProject,
-  SysProjectCredential,
-  SysProjectMember,
-  SysProjectRevision,
-  SysProjectBranch,
+  SysEnvironment,
+  SysEnvironmentCredential,
+  SysEnvironmentMember,
   SysPackage,
   SysPackageVersion,
   SysPackageInstallation,
@@ -29,11 +27,9 @@ export const TENANT_SERVICE_VERSION = '0.2.0';
 
 /** Tenant/control-plane objects owned by service-tenant. */
 export const tenantObjects = [
-  SysProject,
-  SysProjectCredential,
-  SysProjectMember,
-  SysProjectRevision,
-  SysProjectBranch,
+  SysEnvironment,
+  SysEnvironmentCredential,
+  SysEnvironmentMember,
   SysPackage,
   SysPackageVersion,
   SysPackageInstallation,

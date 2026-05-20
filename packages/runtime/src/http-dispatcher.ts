@@ -400,7 +400,7 @@ export class HttpDispatcher {
                     const qlService = await this.getObjectQLService();
                     const ql = qlService ?? await this.resolveService('objectql');
                     if (ql) {
-                        let rows = await ql.find('sys_project', {
+                        let rows = await ql.find('sys_environment', {
                             where: {
                                 organization_id: activeOrganizationId,
                                 is_default: true
@@ -514,8 +514,8 @@ export class HttpDispatcher {
             const ql = qlService ?? await this.resolveService('objectql');
             if (!ql) return null; // No QL — cannot enforce; fail open.
 
-            let rows = await ql.find('sys_project_member', {
-                where: { project_id: projectId, user_id: userId },
+            let rows = await ql.find('sys_environment_member', {
+                where: { environment_id: projectId, user_id: userId },
                 limit: 1,
             } as any);
             if (rows && (rows as any).value) rows = (rows as any).value;
@@ -1445,9 +1445,9 @@ export class HttpDispatcher {
             return { handled: true, response: this.error('Project service not available (ObjectQL missing)', 503) };
         }
 
-        const ENV = 'sys_project';
-        const CRED = 'sys_project_credential';
-        const MEM = 'sys_project_member';
+        const ENV = 'sys_environment';
+        const CRED = 'sys_environment_credential';
+        const MEM = 'sys_environment_member';
         const PKG_INSTALL = 'sys_package_installation';
         const PKG = 'sys_package';
         const PKG_VERSION = 'sys_package_version';
@@ -1526,7 +1526,7 @@ export class HttpDispatcher {
             const pkgRow = await ql.findOne(PKG, { where: { manifest_id: manifestId } } as any) as any;
             if (!pkgRow?.id) return null;
             return await ql.findOne(PKG_INSTALL, {
-                where: { project_id: envId, package_id: pkgRow.id },
+                where: { environment_id: envId, package_id: pkgRow.id },
             } as any);
         };
 
@@ -1851,7 +1851,7 @@ export class HttpDispatcher {
                 // insert — by which point the caller has already moved
                 // on from the HTTP response.
                 try {
-                    const existing = await findOne('sys_project', {
+                    const existing = await findOne('sys_environment', {
                         hostname: computedHostname,
                     });
                     if (existing && existing.id !== projectId) {
@@ -2045,7 +2045,7 @@ export class HttpDispatcher {
                         );
                         await ql.insert(CRED, {
                             id: credentialId,
-                            project_id: projectId,
+                            environment_id: projectId,
                             secret_ciphertext: plaintextSecret,
                             encryption_key_id: 'noop',
                             authorization: 'full_access',
@@ -2212,14 +2212,14 @@ export class HttpDispatcher {
                 if (m === 'GET') {
                     const envRow = await findOne(ENV, { id });
                     if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
-                    const credRow = await findOne(CRED, { project_id: id, status: 'active' });
+                    const credRow = await findOne(CRED, { environment_id: id, status: 'active' });
                     // Scope membership lookup to the calling user when possible so the
                     // returned `membership.role` reflects the caller, not some other
                     // arbitrary member of the project.
                     const callerUserId = await this.resolveCallerUserId(_context);
                     const membership = callerUserId
-                        ? await findOne(MEM, { project_id: id, user_id: callerUserId })
-                        : await findOne(MEM, { project_id: id });
+                        ? await findOne(MEM, { environment_id: id, user_id: callerUserId })
+                        : await findOne(MEM, { environment_id: id });
                     // Omit the ciphertext from responses — metadata only.
                     const credMeta = credRow
                         ? {
@@ -2491,11 +2491,11 @@ export class HttpDispatcher {
                             },
                             { where: { id } } as any,
                         );
-                        const existingCred = await findOne(CRED, { project_id: id, status: 'active' });
+                        const existingCred = await findOne(CRED, { environment_id: id, status: 'active' });
                         if (!existingCred) {
                             await ql.insert(CRED, {
                                 id: randomUUID(),
-                                project_id: id,
+                                environment_id: id,
                                 secret_ciphertext: retrySecret,
                                 encryption_key_id: 'noop',
                                 authorization: 'full_access',
@@ -2550,7 +2550,7 @@ export class HttpDispatcher {
 
                 const nowIso = new Date().toISOString();
                 // Revoke existing active credentials
-                let existing = await ql.find(CRED, { where: { project_id: id, status: 'active' } } as any);
+                let existing = await ql.find(CRED, { where: { environment_id: id, status: 'active' } } as any);
                 if (existing && (existing as any).value) existing = (existing as any).value;
                 for (const row of (Array.isArray(existing) ? existing : [])) {
                     await ql.update(CRED, {
@@ -2563,7 +2563,7 @@ export class HttpDispatcher {
                 const credentialId = randomUUID();
                 await ql.insert(CRED, {
                     id: credentialId,
-                    project_id: id,
+                    environment_id: id,
                     secret_ciphertext: plaintext,
                     encryption_key_id: 'noop',
                     authorization: 'full_access',
@@ -2587,7 +2587,7 @@ export class HttpDispatcher {
             // ----- /cloud/projects/:id/members -----
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'members' && m === 'GET') {
                 const id = decodeURIComponent(parts[1]);
-                let rows = await ql.find(MEM, { where: { project_id: id } } as any);
+                let rows = await ql.find(MEM, { where: { environment_id: id } } as any);
                 if (rows && (rows as any).value) rows = (rows as any).value;
                 const members = Array.isArray(rows) ? rows : [];
                 // Enrich with user display info (best-effort).
@@ -2628,7 +2628,7 @@ export class HttpDispatcher {
 
                 const callerId = await this.resolveCallerUserId(_context);
                 if (!callerId) return { handled: true, response: this.error('Authentication required', 401) };
-                const callerMem = await findOne(MEM, { project_id: id, user_id: callerId });
+                const callerMem = await findOne(MEM, { environment_id: id, user_id: callerId });
                 if (!callerMem || !['owner', 'admin'].includes(String(callerMem.role))) {
                     return { handled: true, response: this.error('Forbidden — owner or admin required', 403) };
                 }
@@ -2658,7 +2658,7 @@ export class HttpDispatcher {
                     inviteUserId = String(row.id);
                 }
 
-                const existing = await findOne(MEM, { project_id: id, user_id: inviteUserId });
+                const existing = await findOne(MEM, { environment_id: id, user_id: inviteUserId });
                 if (existing) {
                     return { handled: true, response: this.success({ member: existing, alreadyMember: true }) };
                 }
@@ -2667,7 +2667,7 @@ export class HttpDispatcher {
                     const memberId = randomUUID();
                     await ql.insert(MEM, {
                         id: memberId,
-                        project_id: id,
+                        environment_id: id,
                         user_id: inviteUserId,
                         role,
                         invited_by: callerId,
@@ -2690,12 +2690,12 @@ export class HttpDispatcher {
 
                 const callerId = await this.resolveCallerUserId(_context);
                 if (!callerId) return { handled: true, response: this.error('Authentication required', 401) };
-                const callerMem = await findOne(MEM, { project_id: id, user_id: callerId });
+                const callerMem = await findOne(MEM, { environment_id: id, user_id: callerId });
                 if (!callerMem || !['owner', 'admin'].includes(String(callerMem.role))) {
                     return { handled: true, response: this.error('Forbidden — owner or admin required', 403) };
                 }
 
-                const target = await findOne(MEM, { id: memberId, project_id: id });
+                const target = await findOne(MEM, { id: memberId, environment_id: id });
                 if (!target) return { handled: true, response: this.error(`Member '${memberId}' not found`, 404) };
 
                 const newRole = String(body?.role ?? '').trim().toLowerCase();
@@ -2705,7 +2705,7 @@ export class HttpDispatcher {
 
                 // Demoting the last owner is forbidden.
                 if (target.role === 'owner' && newRole !== 'owner') {
-                    let owners = await ql.find(MEM, { where: { project_id: id, role: 'owner' } } as any);
+                    let owners = await ql.find(MEM, { where: { environment_id: id, role: 'owner' } } as any);
                     if (owners && (owners as any).value) owners = (owners as any).value;
                     const ownerCount = Array.isArray(owners) ? owners.length : 0;
                     if (ownerCount <= 1) {
@@ -2734,10 +2734,10 @@ export class HttpDispatcher {
                 const callerId = await this.resolveCallerUserId(_context);
                 if (!callerId) return { handled: true, response: this.error('Authentication required', 401) };
 
-                const target = await findOne(MEM, { id: memberId, project_id: id });
+                const target = await findOne(MEM, { id: memberId, environment_id: id });
                 if (!target) return { handled: true, response: this.error(`Member '${memberId}' not found`, 404) };
 
-                const callerMem = await findOne(MEM, { project_id: id, user_id: callerId });
+                const callerMem = await findOne(MEM, { environment_id: id, user_id: callerId });
                 const isSelf = String(target.user_id) === String(callerId);
                 const isPrivileged = callerMem && ['owner', 'admin'].includes(String(callerMem.role));
                 if (!isSelf && !isPrivileged) {
@@ -2745,7 +2745,7 @@ export class HttpDispatcher {
                 }
 
                 if (target.role === 'owner') {
-                    let owners = await ql.find(MEM, { where: { project_id: id, role: 'owner' } } as any);
+                    let owners = await ql.find(MEM, { where: { environment_id: id, role: 'owner' } } as any);
                     if (owners && (owners as any).value) owners = (owners as any).value;
                     const ownerCount = Array.isArray(owners) ? owners.length : 0;
                     if (ownerCount <= 1) {
@@ -2765,7 +2765,7 @@ export class HttpDispatcher {
             // GET  /cloud/projects/:envId/packages
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'GET') {
                 const envId = decodeURIComponent(parts[1]);
-                let rows = await ql.find(PKG_INSTALL, { where: { project_id: envId } } as any);
+                let rows = await ql.find(PKG_INSTALL, { where: { environment_id: envId } } as any);
                 if (rows && (rows as any).value) rows = (rows as any).value;
                 const installs = Array.isArray(rows) ? rows : [];
 
@@ -2844,7 +2844,7 @@ export class HttpDispatcher {
 
                 // Reject duplicate installs for the same package in the same project
                 const dup = await ql.findOne(PKG_INSTALL, {
-                    where: { project_id: envId, package_id: packageId },
+                    where: { environment_id: envId, package_id: packageId },
                 } as any) as any;
                 if (dup?.id) {
                     return { handled: true, response: this.error(`Package '${packageId}' is already installed in this project`, 409) };
@@ -2858,7 +2858,7 @@ export class HttpDispatcher {
                 const recordId = randomUUID();
                 await ql.insert(PKG_INSTALL, {
                     id: recordId,
-                    project_id: envId,
+                    environment_id: envId,
                     package_id: sysPackageId,
                     package_version_id: sysPackageVersionId,
                     status: 'installed',
@@ -2880,7 +2880,7 @@ export class HttpDispatcher {
             if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'GET') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
-                const record = await ql.findOne(PKG_INSTALL, { where: { project_id: envId, package_id: pkgId } } as any);
+                const record = await ql.findOne(PKG_INSTALL, { where: { environment_id: envId, package_id: pkgId } } as any);
                 if (!record) return { handled: true, response: this.error(`Package '${pkgId}' is not installed in this project`, 404) };
                 return { handled: true, response: this.success({ package: record }) };
             }
@@ -2998,7 +2998,7 @@ export class HttpDispatcher {
         },
     ): Promise<{ ok: boolean; status?: number; error?: string; warnings: string[] }> {
         const { ql, findOne, getRealAdapter, force } = deps;
-        const ENV = 'sys_project';
+        const ENV = 'sys_environment';
         const warnings: string[] = [];
 
         const row = await findOne(ENV, { id: projectId });
@@ -3019,9 +3019,9 @@ export class HttpDispatcher {
 
         // Cascade-delete dependent rows.
         const cascade: Array<{ object: string; field: string }> = [
-            { object: 'sys_project_credential', field: 'project_id' },
-            { object: 'sys_project_member', field: 'project_id' },
-            { object: 'sys_package_installation', field: 'project_id' },
+            { object: 'sys_environment_credential', field: 'environment_id' },
+            { object: 'sys_environment_member', field: 'environment_id' },
+            { object: 'sys_package_installation', field: 'environment_id' },
         ];
         for (const { object, field } of cascade) {
             try {
