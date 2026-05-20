@@ -410,6 +410,81 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             });
         }
 
+        // Post-bootstrap seed replay. The SecurityPlugin's `sys_organization`
+        // insert middleware only fires when a brand-new org row is inserted,
+        // so packages installed AFTER the env's primary org already exists
+        // would never get their `data` arrays applied. Run the seed-replayer
+        // once per kernel cold-start so newly-installed marketplace packages
+        // (e.g. CRM with "Include sample data" ticked) hydrate the primary
+        // org on the next request after install.
+        //
+        // SeedLoader uses upsert semantics, so re-running across cold-starts
+        // is idempotent — at worst we pay one batch upsert per kernel boot.
+        try {
+            const datasetsNow: any[] | undefined = (() => {
+                try { return (kernel as any).getService?.('seed-datasets'); } catch { return undefined; }
+            })();
+            const replayer: any = (() => {
+                try { return (kernel as any).getService?.('seed-replayer'); } catch { return undefined; }
+            })();
+
+            if (Array.isArray(datasetsNow) && datasetsNow.length > 0 && typeof replayer === 'function') {
+                // Resolve the env's primary organization. Prefer the explicit
+                // orgSeed metadata (set when env is created via the data API);
+                // fall back to scanning sys_organization for the first row
+                // (env created via the lifecycle endpoint that doesn't stash
+                // orgSeed, or any env that has been used at least once).
+                const projMetaRaw: any = (project as any)?.metadata;
+                const projMeta: any = typeof projMetaRaw === 'string' ? (() => {
+                    try { return JSON.parse(projMetaRaw); } catch { return {}; }
+                })() : (projMetaRaw ?? {});
+                let primaryOrgId: string | undefined = projMeta?.orgSeed?.id;
+
+                if (!primaryOrgId) {
+                    try {
+                        const ql: any = (kernel as any).getService?.('objectql');
+                        if (ql?.find) {
+                            const rows = await ql.find('sys_organization', { limit: 5, orderBy: [{ field: 'created_at', direction: 'asc' }] } as any);
+                            const list = Array.isArray(rows) ? rows : (rows?.value ?? rows?.records ?? []);
+                            if (Array.isArray(list) && list.length > 0 && list[0]?.id) {
+                                primaryOrgId = String(list[0].id);
+                            }
+                        }
+                    } catch { /* org table may not exist yet on a brand-new env */ }
+                }
+
+                if (primaryOrgId) {
+                    try {
+                        const summary = await replayer(primaryOrgId);
+                        const inserted = summary?.inserted ?? 0;
+                        const updated = summary?.updated ?? 0;
+                        const errs = summary?.errors?.length ?? 0;
+                        if (inserted > 0 || updated > 0 || errs > 0) {
+                            this.logger.info?.('[ArtifactKernelFactory] post-bootstrap seed replay', {
+                                projectId,
+                                organizationId: primaryOrgId,
+                                datasets: datasetsNow.length,
+                                inserted,
+                                updated,
+                                errors: errs,
+                            });
+                        }
+                    } catch (e: any) {
+                        this.logger.warn?.('[ArtifactKernelFactory] post-bootstrap seed replay failed', {
+                            projectId,
+                            organizationId: primaryOrgId,
+                            error: e?.message,
+                        });
+                    }
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn?.('[ArtifactKernelFactory] post-bootstrap seed step threw', {
+                projectId,
+                error: err?.message,
+            });
+        }
+
         // Belt-and-braces: load translation bundles directly into the i18n
         // service after bootstrap. AppPlugin.loadTranslations should do this
         // during its `start` phase, but several conditions (missing objectql

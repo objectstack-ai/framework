@@ -127,6 +127,17 @@ export const SysPackageInstallation = ObjectSchema.create({
       required: false,
       description: 'Error details when status is error. Cleared on next successful install/upgrade.',
     }),
+
+    with_sample_data: Field.boolean({
+      label: 'Include Sample Data',
+      required: false,
+      defaultValue: false,
+      description:
+        'When true, the environment runtime will replay the package\'s seed datasets ' +
+        '(demo Accounts / Contacts / etc.) into the primary organization the next time the ' +
+        'environment kernel boots. Set at install time and never auto-cleared so the ' +
+        'env can re-seed on cold-start until the user explicitly disables it.',
+    }),
   },
 
   indexes: [

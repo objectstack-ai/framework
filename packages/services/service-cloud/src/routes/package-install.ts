@@ -22,7 +22,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { IHttpServer } from '@objectstack/spec/contracts';
-import { fail, ok } from '../cloud-artifact-helpers.js';
+import { fail, ok, KNOWN_METADATA_CATEGORIES } from '../cloud-artifact-helpers.js';
 import type { RouteDeps } from './types.js';
 import { makeCheckAuth, makeGetDriver, controlPlaneUnavailable } from './types.js';
 import type { ProjectTemplate } from '../multi-project-plugin.js';
@@ -45,21 +45,27 @@ function deriveTemplateIdFromManifest(manifestId: string): string | null {
  * multi-project-plugin can materialize it directly without normalization.
  */
 function snapshotManifest(template: ProjectTemplate, bundle: any): string {
-    const safe = {
+    const safe: Record<string, any> = {
         id: starterManifestId(template.id),
         name: template.label,
         description: template.description,
         category: template.category ?? 'starter',
         version: '1.0.0',
-        objects: bundle?.objects ?? [],
-        views: bundle?.views ?? [],
-        apps: bundle?.apps ?? [],
-        dashboards: bundle?.dashboards ?? [],
-        flows: bundle?.flows ?? [],
-        agents: bundle?.agents ?? [],
-        tools: bundle?.tools ?? [],
-        translations: bundle?.translations ?? bundle?.i18n ?? undefined,
     };
+    // Copy every known metadata category from the template bundle so the
+    // snapshot is a complete portable manifest (objects, views, apps,
+    // dashboards, flows, agents, tools, data, reports, hooks, actions,
+    // permissions, roles, sharingRules, i18n, etc.).
+    for (const key of KNOWN_METADATA_CATEGORIES) {
+        const val = (bundle as any)?.[key];
+        if (Array.isArray(val) && val.length > 0) {
+            safe[key] = val;
+        }
+    }
+    // Translations may live under either `translations` or `i18n`.
+    if (!safe.translations && (bundle as any)?.i18n) {
+        safe.translations = (bundle as any).i18n;
+    }
     return JSON.stringify(safe);
 }
 
@@ -85,6 +91,13 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
         const body = (req.body ?? {}) as Record<string, any>;
         const environmentId = String(body.environment_id ?? body.environmentId ?? body.project_id ?? body.projectId ?? '').trim();
         if (!environmentId) return res.status(400).json(fail('environment_id is required'));
+
+        // Optional opt-in: pre-populate the environment with sample data
+        // from the package (e.g. demo Accounts/Contacts for the CRM starter).
+        const seedSampleData = body.seed_sample_data === true
+            || body.seed_sample_data === 'true'
+            || body.seedSampleData === true
+            || body.seedSampleData === 'true';
 
         const driver = await getDriver();
         if (!driver) return controlPlaneUnavailable(res);
@@ -158,6 +171,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
                 package_version_id: version.id,
                 status: 'installed',
                 enabled: true,
+                with_sample_data: seedSampleData,
             });
         } else {
             installationId = `pkgi_${randomUUID()}`;
@@ -170,6 +184,7 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
                 package_version_id: version.id,
                 status: 'installed',
                 enabled: true,
+                with_sample_data: seedSampleData,
                 installed_at: nowIso(),
                 installed_by: auth.mode === 'user' ? auth.userId : undefined,
             });

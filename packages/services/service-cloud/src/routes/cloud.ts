@@ -201,6 +201,15 @@ export function registerCloudRoutes(server: IHttpServer, deps: RouteDeps): void 
                     continue;
                 }
                 if (!manifest || typeof manifest !== 'object') continue;
+                // Honor the per-install "Include sample data" opt-in. When
+                // false (default) we strip the `data` (and legacy `datasets`)
+                // arrays from this install's bundle so the env runtime
+                // doesn't replay demo records into the user's primary org.
+                const withSamples = inst.with_sample_data === true || inst.with_sample_data === 1;
+                if (!withSamples) {
+                    if (Array.isArray((manifest as any).data)) delete (manifest as any).data;
+                    if (Array.isArray((manifest as any).datasets)) delete (manifest as any).datasets;
+                }
                 // Wrap as a bundle-shaped object so mergeArtifactMetadata
                 // ingests its arrays (`objects`, `apps`, `views`, etc.).
                 bundles.push({ metadata: manifest, manifest });

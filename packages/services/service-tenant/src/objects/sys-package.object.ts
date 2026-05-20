@@ -203,6 +203,16 @@ export const SysPackage = ObjectSchema.create({
           helpText: 'ID of the environment to install this package into. ' +
             'Open Environments → click your environment → copy the Environment ID.',
         },
+        {
+          name: 'seed_sample_data',
+          label: 'Include sample data',
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
+          helpText: 'Pre-populate the environment with the package\'s demo records ' +
+            '(e.g. example Accounts, Contacts, Leads) so you can explore the app immediately. ' +
+            'Recommended for first-time users; leave unchecked for a clean production environment.',
+        },
       ],
     },
   ],
