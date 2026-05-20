@@ -62,7 +62,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@tanstack/react-router": "^1.170.4",
+    "@tanstack/react-router": "^1.170.5",
     "ai": "^6.0.185",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
