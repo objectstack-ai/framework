@@ -73,26 +73,155 @@ export interface PackageInstallDeps extends RouteDeps {
     templates?: Record<string, ProjectTemplate>;
 }
 
+/**
+ * Result envelope from {@link installPackageIntoEnvironment}. Mirrors the
+ * shape we'd return over HTTP so callers (route handlers, server-action
+ * dispatchers) can forward verbatim.
+ */
+export interface InstallPackageResult {
+    status: number;
+    body: { success: boolean; data?: any; error?: string };
+}
+
+/**
+ * Transport-agnostic install helper — used by both:
+ *   • POST /cloud/packages/:id/install        (marketplace flow)
+ *   • POST /cloud/environments/:id/install-package (env-detail flow)
+ *   • POST /api/v1/actions/sys_environment/install_application
+ *           (app-shell RecordDetailView script dispatcher — needed because
+ *            its built-in apiHandler ignores action.target and falls back
+ *            to dataSource.update, see RecordDetailView.js apiHandler).
+ *
+ * Behavior is identical to the original inline route: verify caller can
+ * install the package into the target env, lazy-snapshot starter manifests
+ * into sys_package_version, UPSERT sys_package_installation, bump
+ * last_published_at so the env kernel recycles on next request.
+ */
+export async function installPackageIntoEnvironment(args: {
+    deps: PackageInstallDeps;
+    packageId: string;
+    environmentId: string;
+    seedSampleData: boolean;
+    callerUserId?: string | null;
+    callerActiveOrgId?: string | null;
+}): Promise<InstallPackageResult> {
+    const { deps, packageId, environmentId, seedSampleData, callerUserId, callerActiveOrgId } = args;
+    const { controlDriverPromise, templates = {} } = deps;
+    if (!packageId) return { status: 400, body: fail('package id is required') };
+    if (!environmentId) return { status: 400, body: fail('environment_id is required') };
+
+    const driver = await controlDriverPromise;
+    if (!driver) return { status: 503, body: fail('Control-plane driver is unavailable') };
+
+    const pkg: any = await (driver as any).findOne?.('sys_package', { where: { id: packageId } });
+    if (!pkg) return { status: 404, body: fail(`Package ${packageId} not found`) };
+
+    const env: any = await (driver as any).findOne?.('sys_environment', { where: { id: environmentId } });
+    if (!env) return { status: 404, body: fail(`Environment ${environmentId} not found`) };
+
+    if (callerActiveOrgId) {
+        if (env.organization_id && env.organization_id !== callerActiveOrgId) {
+            return { status: 403, body: fail('Environment is not in your active organization') };
+        }
+        if (pkg.visibility !== 'marketplace' && pkg.owner_org_id && pkg.owner_org_id !== callerActiveOrgId) {
+            return { status: 403, body: fail('You do not have access to this package') };
+        }
+    }
+
+    let version: any = await (driver as any).findOne?.('sys_package_version', {
+        where: { package_id: packageId, status: 'published' },
+        orderBy: [{ field: 'published_at', direction: 'desc' }],
+    });
+    if (!version) {
+        const tplId = deriveTemplateIdFromManifest(pkg.manifest_id);
+        const template = tplId ? templates[tplId] : undefined;
+        if (!template) {
+            return { status: 409, body: fail(
+                `No published version exists for package ${pkg.display_name ?? packageId} and no template snapshot is available`,
+            ) };
+        }
+        try {
+            const bundle = await template.load();
+            const manifestJson = snapshotManifest(template, bundle);
+            const versionId = `pkgv_${randomUUID()}`;
+            await (driver as any).create?.('sys_package_version', {
+                id: versionId,
+                created_at: nowIso(),
+                updated_at: nowIso(),
+                package_id: packageId,
+                version: '1.0.0',
+                status: 'published',
+                manifest_json: manifestJson,
+                is_pre_release: false,
+                published_at: nowIso(),
+                created_by: callerUserId ?? undefined,
+            });
+            version = await (driver as any).findOne?.('sys_package_version', { where: { id: versionId } });
+        } catch (err: any) {
+            console.error('[package-install] Snapshot failed:', err);
+            return { status: 500, body: fail(`Failed to snapshot template: ${err?.message ?? err}`) };
+        }
+    }
+
+    const existing: any = await (driver as any).findOne?.('sys_package_installation', {
+        where: { environment_id: environmentId, package_id: packageId },
+    });
+    let installationId: string;
+    if (existing && existing.id) {
+        installationId = existing.id;
+        await (driver as any).update?.('sys_package_installation', existing.id, {
+            updated_at: nowIso(),
+            package_version_id: version.id,
+            status: 'installed',
+            enabled: true,
+            with_sample_data: seedSampleData,
+        });
+    } else {
+        installationId = `pkgi_${randomUUID()}`;
+        await (driver as any).create?.('sys_package_installation', {
+            id: installationId,
+            created_at: nowIso(),
+            updated_at: nowIso(),
+            environment_id: environmentId,
+            package_id: packageId,
+            package_version_id: version.id,
+            status: 'installed',
+            enabled: true,
+            with_sample_data: seedSampleData,
+            installed_at: nowIso(),
+            installed_by: callerUserId ?? undefined,
+        });
+    }
+
+    try {
+        await (driver as any).update?.('sys_environment', environmentId, {
+            last_published_at: nowIso(),
+            updated_at: nowIso(),
+        });
+    } catch { /* non-fatal */ }
+
+    return { status: 200, body: ok({
+        installation_id: installationId,
+        package_id: packageId,
+        package_version_id: version.id,
+        environment_id: environmentId,
+        message: `Installed ${pkg.display_name ?? packageId} into environment ${env.name ?? environmentId}`,
+    }) };
+}
+
 export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageInstallDeps): void {
-    const { prefix, requiredKey, controlDriverPromise, getCallerUserId, getCallerActiveOrgId, templates = {} } = deps;
+    const { prefix, requiredKey, controlDriverPromise, getCallerUserId, getCallerActiveOrgId } = deps;
     const checkAuth = makeCheckAuth(requiredKey, getCallerUserId);
     const getDriver = makeGetDriver(controlDriverPromise);
 
     // Shared install handler — invoked by both:
     //   POST /cloud/packages/:id/install        (package-keyed, body.environment_id)
     //   POST /cloud/environments/:id/install-package (env-keyed, body.package_id)
-    // The two flavors exist because the marketplace browses packages while
-    // the env detail page wants an "Install Application" CTA scoped to the
-    // current environment.
     async function runInstall(req: any, res: any, packageId: string, environmentId: string) {
         const auth = await checkAuth(req);
         if (!auth.ok) return res.status(auth.status).json(auth.body);
-        if (!packageId) return res.status(400).json(fail('package id is required'));
-        if (!environmentId) return res.status(400).json(fail('environment_id is required'));
 
         const body = (req.body ?? {}) as Record<string, any>;
-        // Optional opt-in: pre-populate the environment with sample data
-        // from the package (e.g. demo Accounts/Contacts for the CRM starter).
         const seedSampleData = body.seed_sample_data === true
             || body.seed_sample_data === 'true'
             || body.seedSampleData === true
@@ -101,110 +230,19 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
         const driver = await getDriver();
         if (!driver) return controlPlaneUnavailable(res);
 
-        // 1. Load the sys_package row.
-        const pkg: any = await (driver as any).findOne?.('sys_package', { where: { id: packageId } });
-        if (!pkg) return res.status(404).json(fail(`Package ${packageId} not found`));
+        const callerActiveOrg = (auth.mode === 'user' && getCallerActiveOrgId)
+            ? await getCallerActiveOrgId(req)
+            : null;
 
-        // 2. Load the env (sys_project) row + verify org membership.
-        const env: any = await (driver as any).findOne?.('sys_environment', { where: { id: environmentId } });
-        if (!env) return res.status(404).json(fail(`Environment ${environmentId} not found`));
-
-        if (auth.mode === 'user' && getCallerActiveOrgId) {
-            const activeOrg = await getCallerActiveOrgId(req);
-            if (activeOrg && env.organization_id && env.organization_id !== activeOrg) {
-                return res.status(403).json(fail('Environment is not in your active organization'));
-            }
-            // Marketplace packages installable by any org; private packages only by the owning org.
-            if (pkg.visibility !== 'marketplace' && pkg.owner_org_id && pkg.owner_org_id !== activeOrg) {
-                return res.status(403).json(fail('You do not have access to this package'));
-            }
-        }
-
-        // 3. Resolve (or lazy-snapshot) the latest sys_package_version.
-        let version: any = await (driver as any).findOne?.('sys_package_version', {
-            where: { package_id: packageId, status: 'published' },
-            orderBy: [{ field: 'published_at', direction: 'desc' }],
+        const result = await installPackageIntoEnvironment({
+            deps,
+            packageId,
+            environmentId,
+            seedSampleData,
+            callerUserId: auth.mode === 'user' ? auth.userId : null,
+            callerActiveOrgId: callerActiveOrg ?? null,
         });
-        if (!version) {
-            // Lazy snapshot path — only works for starter templates whose
-            // manifest_id maps back to the in-process template registry.
-            const tplId = deriveTemplateIdFromManifest(pkg.manifest_id);
-            const template = tplId ? templates[tplId] : undefined;
-            if (!template) {
-                return res.status(409).json(fail(
-                    `No published version exists for package ${pkg.display_name ?? packageId} and no template snapshot is available`,
-                ));
-            }
-            try {
-                const bundle = await template.load();
-                const manifestJson = snapshotManifest(template, bundle);
-                const versionId = `pkgv_${randomUUID()}`;
-                await (driver as any).create?.('sys_package_version', {
-                    id: versionId,
-                    created_at: nowIso(),
-                    updated_at: nowIso(),
-                    package_id: packageId,
-                    version: '1.0.0',
-                    status: 'published',
-                    manifest_json: manifestJson,
-                    is_pre_release: false,
-                    published_at: nowIso(),
-                    created_by: auth.mode === 'user' ? auth.userId : undefined,
-                });
-                version = await (driver as any).findOne?.('sys_package_version', { where: { id: versionId } });
-            } catch (err: any) {
-                console.error('[package-install] Snapshot failed:', err);
-                return res.status(500).json(fail(`Failed to snapshot template: ${err?.message ?? err}`));
-            }
-        }
-
-        // 4. UPSERT sys_package_installation (project_id + package_id unique).
-        const existing: any = await (driver as any).findOne?.('sys_package_installation', {
-            where: { environment_id: environmentId, package_id: packageId },
-        });
-        let installationId: string;
-        if (existing && existing.id) {
-            installationId = existing.id;
-            await (driver as any).update?.('sys_package_installation', existing.id, {
-                updated_at: nowIso(),
-                package_version_id: version.id,
-                status: 'installed',
-                enabled: true,
-                with_sample_data: seedSampleData,
-            });
-        } else {
-            installationId = `pkgi_${randomUUID()}`;
-            await (driver as any).create?.('sys_package_installation', {
-                id: installationId,
-                created_at: nowIso(),
-                updated_at: nowIso(),
-                environment_id: environmentId,
-                package_id: packageId,
-                package_version_id: version.id,
-                status: 'installed',
-                enabled: true,
-                with_sample_data: seedSampleData,
-                installed_at: nowIso(),
-                installed_by: auth.mode === 'user' ? auth.userId : undefined,
-            });
-        }
-
-        // 5. Bump env's last_published_at so the next request triggers a
-        //    kernel recycle and the multi-project-plugin re-reads installs.
-        try {
-            await (driver as any).update?.('sys_environment', environmentId, {
-                last_published_at: nowIso(),
-                updated_at: nowIso(),
-            });
-        } catch { /* non-fatal */ }
-
-        return res.json(ok({
-            installation_id: installationId,
-            package_id: packageId,
-            package_version_id: version.id,
-            environment_id: environmentId,
-            message: `Installed ${pkg.display_name ?? packageId} into environment ${env.name ?? environmentId}`,
-        }));
+        return res.status(result.status).json(result.body);
     }
 
     // ================================================================
