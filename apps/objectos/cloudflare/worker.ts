@@ -4,7 +4,7 @@
 // when shipping a hotfix that lives inside the Container image. The
 // DO only reloads when worker code changes, so a no-op edit here
 // guarantees the container restarts with the freshly-pushed image.
-// build: 2026-05-20T16:00Z org-scoped-overlay-refactor
+// build: 2026-05-20T16:30Z unknown-hostname-404
 
 /**
  * Cloudflare Containers entrypoint for ObjectOS.

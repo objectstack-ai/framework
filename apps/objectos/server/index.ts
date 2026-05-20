@@ -55,6 +55,77 @@ async function bootKernel(): Promise<BootResult> {
     kernel.registerService('http.server', httpServer);
     kernel.registerService('http-server', httpServer); // alias for backward compatibility
 
+    // Unknown-environment hostname guard.
+    //
+    // In multi-tenant cloud deployments (objectos.app), every public
+    // hostname is expected to map to a `sys_environment` row whose
+    // hostname column matches the request `Host`. Without this guard,
+    // an unknown subdomain like `demo-xxx.objectos.app` happily renders
+    // the control-plane console (because the console SPA is served
+    // statically and ignores the host), making the deployment look like
+    // it has data when it doesn't. We respond with a clear 404 instead.
+    //
+    // Activation: only when OS_ROOT_DOMAIN is set (e.g. "objectos.app").
+    // Reserved subdomains (cloud/www/api/docs/admin) bypass the check so
+    // the platform's own surfaces and infra endpoints keep working.
+    // Custom domains that aren't subdomains of the root are passed
+    // through unchanged — a tenant's bring-your-own-domain still needs
+    // to be looked up via envRegistry, but a miss there falls back to
+    // the legacy behaviour to avoid blocking unknown-yet-valid hosts.
+    const rootDomain = (process.env.OS_ROOT_DOMAIN || '').trim().toLowerCase();
+    if (rootDomain) {
+        const RESERVED = new Set(['', 'cloud', 'www', 'api', 'docs', 'admin', 'app']);
+        const rawApp = httpServer.getRawApp();
+        let envRegistryRef: any;
+        const getEnvRegistry = async () => {
+            if (envRegistryRef !== undefined) return envRegistryRef;
+            try {
+                envRegistryRef = await (kernel as any).getServiceAsync?.('env-registry') ?? null;
+            } catch {
+                envRegistryRef = null;
+            }
+            return envRegistryRef;
+        };
+        rawApp.use('*', async (c: any, next: any) => {
+            const rawHost = c.req.header('host') || '';
+            const host = rawHost.split(':')[0].toLowerCase();
+            if (!host) return next();
+            const isPlatformHost = host === rootDomain || host.endsWith('.' + rootDomain);
+            if (!isPlatformHost) return next();
+            const sub = host === rootDomain ? '' : host.slice(0, -(rootDomain.length + 1));
+            // Treat any reserved subdomain (and apex) as platform infra,
+            // not a tenant env. Also allow nested platform prefixes like
+            // `api.cloud.objectos.app`.
+            const head = sub.split('.').pop() || '';
+            if (RESERVED.has(sub) || RESERVED.has(head)) return next();
+            // Always allow platform-level infra endpoints regardless of host.
+            const p = c.req.path;
+            if (p.startsWith('/_admin/') || p === '/_admin' || p.startsWith('/.well-known/')) {
+                return next();
+            }
+            const registry = await getEnvRegistry();
+            if (!registry || typeof registry.resolveByHostname !== 'function') {
+                // Registry unavailable — don't synthesize a 404 (could be
+                // a boot-time race or a non-cloud deployment).
+                return next();
+            }
+            try {
+                const hit = await registry.resolveByHostname(host);
+                if (hit) return next();
+            } catch {
+                return next();
+            }
+            return c.json(
+                {
+                    error: 'environment_not_found',
+                    message: `No environment is bound to hostname '${host}'.`,
+                    hostname: host,
+                },
+                404,
+            );
+        });
+    }
+
     // 1. Config plugins (control-plane preset + MultiProjectPlugin + Auth/Security/Audit).
     //    AuthPlugin registers the platform Setup App via its manifest
     //    (definition lives in @objectstack/platform-objects/apps).
