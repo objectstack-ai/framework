@@ -249,3 +249,175 @@ export function translateMetadataDocument(
   if (type === 'action') return translateAction(doc, bundle, opts);
   return doc;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Settings (SettingsManifest) resolvers
+// ────────────────────────────────────────────────────────────────────────────
+
+function pickSettingsEntry(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  locale: string,
+) {
+  return pickData(bundle, locale)?.settings?.[namespace];
+}
+
+function resolveOptionalString(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  pick: (entry: NonNullable<ReturnType<typeof pickSettingsEntry>>) => string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  if (!bundle) return undefined;
+  for (const code of localeChain(opts)) {
+    const entry = pickSettingsEntry(bundle, namespace, code);
+    if (!entry) continue;
+    const value = pick(entry);
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return undefined;
+}
+
+/** Resolve manifest title; falls back to literal. */
+export function resolveSettingsTitle(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  fallback: string,
+  opts?: ResolveOptions,
+): string {
+  return resolveOptionalString(bundle, namespace, (e) => e.title, opts) ?? fallback;
+}
+
+/** Resolve manifest description. Returns literal (possibly undefined) when no translation found. */
+export function resolveSettingsDescription(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  fallback: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  return resolveOptionalString(bundle, namespace, (e) => e.description, opts) ?? fallback;
+}
+
+/** Resolve a group title under `settings.<namespace>.groups.<group>.title`. */
+export function resolveSettingsGroupTitle(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  groupKey: string,
+  fallback: string,
+  opts?: ResolveOptions,
+): string {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.groups?.[groupKey]?.title, opts)
+    ?? fallback
+  );
+}
+
+export function resolveSettingsGroupDescription(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  groupKey: string,
+  fallback: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.groups?.[groupKey]?.description, opts)
+    ?? fallback
+  );
+}
+
+/** Resolve a setting field label under `settings.<namespace>.keys.<key>.label`. */
+export function resolveSettingsFieldLabel(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  key: string,
+  fallback: string,
+  opts?: ResolveOptions,
+): string {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.keys?.[key]?.label, opts) ?? fallback
+  );
+}
+
+export function resolveSettingsFieldHelp(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  key: string,
+  fallback: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.keys?.[key]?.help, opts) ?? fallback
+  );
+}
+
+export function resolveSettingsFieldPlaceholder(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  key: string,
+  fallback: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.keys?.[key]?.placeholder, opts)
+    ?? fallback
+  );
+}
+
+/** Resolve an enum option label under `settings.<namespace>.keys.<key>.options.<value>`. */
+export function resolveSettingsOptionLabel(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  key: string,
+  optionValue: string,
+  fallback: string,
+  opts?: ResolveOptions,
+): string {
+  return (
+    resolveOptionalString(
+      bundle,
+      namespace,
+      (e) => e.keys?.[key]?.options?.[optionValue],
+      opts,
+    ) ?? fallback
+  );
+}
+
+/** Resolve an action button label under `settings.<namespace>.actions.<actionId>.label`. */
+export function resolveSettingsActionLabel(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  actionId: string,
+  fallback: string,
+  opts?: ResolveOptions,
+): string {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.actions?.[actionId]?.label, opts)
+    ?? fallback
+  );
+}
+
+export function resolveSettingsActionConfirm(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  actionId: string,
+  fallback: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.actions?.[actionId]?.confirmText, opts)
+    ?? fallback
+  );
+}
+
+export function resolveSettingsActionSuccess(
+  bundle: TranslationBundle | undefined,
+  namespace: string,
+  actionId: string,
+  fallback: string | undefined,
+  opts?: ResolveOptions,
+): string | undefined {
+  return (
+    resolveOptionalString(bundle, namespace, (e) => e.actions?.[actionId]?.successMessage, opts)
+    ?? fallback
+  );
+}

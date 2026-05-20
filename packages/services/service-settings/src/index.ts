@@ -57,3 +57,13 @@ export type {
   SettingsActionResult,
   SpecifierScope,
 } from '@objectstack/spec/system';
+
+// Built-in translations (en / zh-CN / ja-JP) for the reference manifests.
+// Hosts merge `settingsBuiltinTranslations` into their i18next resource tree
+// so SettingsView resolves labels via `<ns>.settings.<namespace>.…`.
+export {
+  settingsBuiltinTranslations,
+  en as settingsTranslationsEn,
+  zhCN as settingsTranslationsZhCN,
+  jaJP as settingsTranslationsJaJP,
+} from './translations/index.js';

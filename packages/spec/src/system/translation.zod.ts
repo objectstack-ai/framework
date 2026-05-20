@@ -154,6 +154,44 @@ export const TranslationDataSchema = lazySchema(() => z.object({
       description: z.string().optional().describe('Translated widget description'),
     })).optional().describe('Widget translations keyed by widget id'),
   })).optional().describe('Dashboard translations keyed by dashboard name'),
+
+  /**
+   * Settings manifest translations keyed by settings namespace
+   * (matches `SettingsManifest.namespace`, e.g. "mail", "branding").
+   *
+   * Convention (auto-resolved by `resolveSettings*` helpers):
+   *   settings.<namespace>.title
+   *   settings.<namespace>.description
+   *   settings.<namespace>.groups.<group_key>.title
+   *   settings.<namespace>.groups.<group_key>.description
+   *   settings.<namespace>.keys.<setting_key>.label
+   *   settings.<namespace>.keys.<setting_key>.help
+   *   settings.<namespace>.keys.<setting_key>.placeholder
+   *   settings.<namespace>.keys.<setting_key>.options.<option_value>
+   *   settings.<namespace>.actions.<action_id>.label
+   *   settings.<namespace>.actions.<action_id>.confirmText
+   *   settings.<namespace>.actions.<action_id>.successMessage
+   */
+  settings: z.record(z.string(), z.object({
+    title: z.string().optional().describe('Translated settings manifest title'),
+    description: z.string().optional().describe('Translated settings manifest description'),
+    groups: z.record(z.string(), z.object({
+      title: z.string().optional().describe('Translated group title'),
+      description: z.string().optional().describe('Translated group description'),
+    })).optional().describe('Group translations keyed by group key'),
+    keys: z.record(z.string(), z.object({
+      label: z.string().optional().describe('Translated setting label'),
+      help: z.string().optional().describe('Translated setting help text'),
+      placeholder: z.string().optional().describe('Translated input placeholder'),
+      options: z.record(z.string(), z.string()).optional()
+        .describe('Enum option value → translated label'),
+    })).optional().describe('Per-setting field translations keyed by setting key'),
+    actions: z.record(z.string(), z.object({
+      label: z.string().optional().describe('Translated action label'),
+      confirmText: z.string().optional().describe('Translated confirmation prompt'),
+      successMessage: z.string().optional().describe('Translated success toast/message'),
+    })).optional().describe('Action button translations keyed by action id'),
+  })).optional().describe('Settings manifest translations keyed by namespace'),
 }).describe('Translation data for objects, apps, and UI messages'));
 
 export type TranslationData = z.infer<typeof TranslationDataSchema>;
