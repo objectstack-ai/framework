@@ -38,7 +38,7 @@
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   },
   "keywords": [
     "objectstack",

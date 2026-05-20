@@ -75,7 +75,7 @@
     "chalk": "^5.6.2",
     "dotenv-flow": "^4.1.0",
     "esbuild": "^0.28.0",
-    "tsx": "^4.22.2",
+    "tsx": "^4.22.3",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
@@ -85,10 +85,10 @@
   "devDependencies": {
     "@oclif/plugin-help": "^6.2.49",
     "@oclif/plugin-plugins": "^5.4.68",
-    "@types/node": "^25.9.0",
+    "@types/node": "^25.9.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   },
   "repository": {
     "type": "git",

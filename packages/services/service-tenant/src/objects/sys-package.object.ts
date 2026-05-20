@@ -195,13 +195,21 @@ export const SysPackage = ObjectSchema.create({
       refreshAfter: true,
       params: [
         {
+          // Borrow the typed lookup config from sys_package_installation
+          // so renderers that support it can show a record picker
+          // instead of asking the user to paste a UUID. We keep the
+          // explicit `name` and `placeholder` so renderers that don't
+          // support field-borrow still get a usable text input.
           name: 'environment_id',
+          field: 'environment_id',
+          objectOverride: 'sys_package_installation',
           label: 'Target Environment',
-          type: 'text',
+          type: 'lookup',
           required: true,
-          placeholder: 'Paste the Environment ID from the Environments list',
-          helpText: 'ID of the environment to install this package into. ' +
-            'Open Environments → click your environment → copy the Environment ID.',
+          placeholder: 'Pick an environment (or paste its ID)',
+          helpText: 'Environment to install this package into. ' +
+            'Renderers that support record pickers will show your environments; ' +
+            'otherwise paste the Environment ID from the Environments list.',
         },
         {
           name: 'seed_sample_data',

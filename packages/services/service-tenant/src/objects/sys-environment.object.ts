@@ -197,18 +197,18 @@ export const SysEnvironment = ObjectSchema.create({
     // ────────────────────────────────────────────────────────────────────
     {
       name: 'suspend_environment',
-      label: '',
+      label: 'Suspend',
       icon: 'pause-circle',
       variant: 'secondary',
       type: 'script',
       locations: ['list_item', 'record_header'],
-      confirmText: ' this environment? All runtime traffic to it will be blocked until you resume.',
+      confirmText: 'Suspend this environment? All runtime traffic to it will be blocked until you resume.',
       successMessage: 'Environment suspended.',
       refreshAfter: true,
     },
     {
       name: 'resume_environment',
-      label: '',
+      label: 'Resume',
       icon: 'play-circle',
       variant: 'secondary',
       type: 'script',
@@ -218,12 +218,12 @@ export const SysEnvironment = ObjectSchema.create({
     },
     {
       name: 'archive_environment',
-      label: '',
+      label: 'Archive',
       icon: 'archive',
       variant: 'danger',
       type: 'script',
       locations: ['list_item', 'record_header'],
-      confirmText: ' this environment? It will be removed from active views. Data is retained for 30 days before deletion.',
+      confirmText: 'Archive this environment? It will be removed from active views. Data is retained for 30 days before deletion.',
       successMessage: 'Environment archived.',
       refreshAfter: true,
       params: [
@@ -232,7 +232,7 @@ export const SysEnvironment = ObjectSchema.create({
     },
     {
       name: 'set_default_environment',
-      label: '',
+      label: 'Set as Default',
       icon: 'star',
       variant: 'secondary',
       type: 'script',
@@ -242,7 +242,7 @@ export const SysEnvironment = ObjectSchema.create({
     },
     {
       name: 'change_plan',
-      label: '',
+      label: 'Change Plan',
       icon: 'sliders',
       variant: 'secondary',
       type: 'script',
@@ -267,7 +267,7 @@ export const SysEnvironment = ObjectSchema.create({
     },
     {
       name: 'change_hostname',
-      label: '',
+      label: 'Change Hostname',
       icon: 'globe',
       variant: 'secondary',
       type: 'script',
@@ -283,6 +283,54 @@ export const SysEnvironment = ObjectSchema.create({
           placeholder: 'my-environment',
           helpText:
             `Just the subdomain — the root domain (.${ROOT_DOMAIN_HINT}) is appended automatically. Allowed: lowercase letters, digits, hyphens.`,
+        },
+      ],
+    },
+    // ────────────────────────────────────────────────────────────────────
+    // Install Application — primary CTA on an environment detail page.
+    // Solves "I just created an env, now what?": user picks a package
+    // (with a record-picker if the renderer supports it; otherwise paste
+    // its ID) and the package is installed into the current env.
+    //
+    // The endpoint is env-keyed (recordIdParam: 'id' → /:id/install-package)
+    // so a record-header click already knows the target env and only needs
+    // to collect the package_id + optional seed flag.
+    // ────────────────────────────────────────────────────────────────────
+    {
+      name: 'install_application',
+      label: 'Install Application',
+      icon: 'download-cloud',
+      variant: 'primary',
+      type: 'api',
+      locations: ['list_item', 'record_header'],
+      target: '/api/v1/cloud/environments/{id}/install-package',
+      method: 'POST',
+      recordIdParam: 'id',
+      successMessage: 'Application installed. Open your environment to see it.',
+      refreshAfter: true,
+      params: [
+        {
+          // Borrow the typed lookup config from sys_package_installation
+          // so renderers that support it can show a record picker;
+          // otherwise users can paste the Package ID from the Marketplace.
+          name: 'package_id',
+          field: 'package_id',
+          objectOverride: 'sys_package_installation',
+          label: 'Application',
+          type: 'lookup',
+          required: true,
+          placeholder: 'Pick an application from the Marketplace',
+          helpText: 'Application package to install. Browse the Marketplace tab to see what is available.',
+        },
+        {
+          name: 'seed_sample_data',
+          label: 'Include sample data',
+          type: 'boolean',
+          required: false,
+          defaultValue: false,
+          helpText: 'Pre-populate the environment with the package\'s demo records ' +
+            '(e.g. example Accounts, Contacts, Leads) so you can explore the app immediately. ' +
+            'Recommended for first-time users; leave unchecked for a clean production environment.',
         },
       ],
     },

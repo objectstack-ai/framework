@@ -78,20 +78,19 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
     const checkAuth = makeCheckAuth(requiredKey, getCallerUserId);
     const getDriver = makeGetDriver(controlDriverPromise);
 
-    // ================================================================
-    // POST /cloud/packages/:id/install
-    // ================================================================
-    server.post(`${prefix}/cloud/packages/:id/install`, async (req: any, res: any) => {
+    // Shared install handler — invoked by both:
+    //   POST /cloud/packages/:id/install        (package-keyed, body.environment_id)
+    //   POST /cloud/environments/:id/install-package (env-keyed, body.package_id)
+    // The two flavors exist because the marketplace browses packages while
+    // the env detail page wants an "Install Application" CTA scoped to the
+    // current environment.
+    async function runInstall(req: any, res: any, packageId: string, environmentId: string) {
         const auth = await checkAuth(req);
         if (!auth.ok) return res.status(auth.status).json(auth.body);
-
-        const packageId = String(req.params?.id ?? '').trim();
         if (!packageId) return res.status(400).json(fail('package id is required'));
-
-        const body = (req.body ?? {}) as Record<string, any>;
-        const environmentId = String(body.environment_id ?? body.environmentId ?? body.project_id ?? body.projectId ?? '').trim();
         if (!environmentId) return res.status(400).json(fail('environment_id is required'));
 
+        const body = (req.body ?? {}) as Record<string, any>;
         // Optional opt-in: pre-populate the environment with sample data
         // from the package (e.g. demo Accounts/Contacts for the CRM starter).
         const seedSampleData = body.seed_sample_data === true
@@ -206,6 +205,30 @@ export function registerPackageInstallRoutes(server: IHttpServer, deps: PackageI
             environment_id: environmentId,
             message: `Installed ${pkg.display_name ?? packageId} into environment ${env.name ?? environmentId}`,
         }));
+    }
+
+    // ================================================================
+    // POST /cloud/packages/:id/install
+    //   (marketplace-keyed install — Install dialog on sys_package row)
+    // ================================================================
+    server.post(`${prefix}/cloud/packages/:id/install`, async (req: any, res: any) => {
+        const packageId = String(req.params?.id ?? '').trim();
+        const body = (req.body ?? {}) as Record<string, any>;
+        const environmentId = String(
+            body.environment_id ?? body.environmentId ?? body.project_id ?? body.projectId ?? '',
+        ).trim();
+        return runInstall(req, res, packageId, environmentId);
+    });
+
+    // ================================================================
+    // POST /cloud/environments/:id/install-package
+    //   (env-keyed install — Install Application CTA on sys_environment row)
+    // ================================================================
+    server.post(`${prefix}/cloud/environments/:id/install-package`, async (req: any, res: any) => {
+        const environmentId = String(req.params?.id ?? '').trim();
+        const body = (req.body ?? {}) as Record<string, any>;
+        const packageId = String(body.package_id ?? body.packageId ?? '').trim();
+        return runInstall(req, res, packageId, environmentId);
     });
 
     // ================================================================
