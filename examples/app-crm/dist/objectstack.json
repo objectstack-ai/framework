@@ -17029,13 +17029,36 @@
                 "title": "{first_name} {last_name}",
                 "subtitle": "{company}",
                 "icon": "user-plus",
-                "breadcrumb": true,
+                "breadcrumb": true
+              }
+            },
+            {
+              "type": "record:quick_actions",
+              "id": "lead_header_actions",
+              "properties": {
                 "actions": [
-                  "edit",
-                  "delete",
-                  "convert_lead",
-                  "share"
-                ]
+                  {
+                    "name": "convert_lead",
+                    "label": "Convert Lead",
+                    "objectName": "lead",
+                    "icon": "arrow-right-circle",
+                    "type": "flow",
+                    "target": "lead_conversion",
+                    "locations": [
+                      "record_header",
+                      "list_item"
+                    ],
+                    "visible": {
+                      "dialect": "cel",
+                      "source": "record.status == \"qualified\" && record.is_converted == false"
+                    },
+                    "confirmText": "Are you sure you want to convert this lead?",
+                    "successMessage": "Lead converted successfully!",
+                    "refreshAfter": true
+                  }
+                ],
+                "location": "record_header",
+                "align": "end"
               }
             },
             {
@@ -17084,38 +17107,6 @@
                   "phone"
                 ],
                 "layout": "vertical"
-              }
-            },
-            {
-              "type": "page:card",
-              "id": "quick_actions_card",
-              "label": "Quick Actions",
-              "properties": {
-                "title": "Quick Actions",
-                "bordered": true,
-                "actions": [
-                  "send_email",
-                  "log_call",
-                  "create_task",
-                  "schedule_meeting"
-                ]
-              }
-            },
-            {
-              "type": "ai:chat_window",
-              "id": "ai_assistant",
-              "label": "AI Assistant",
-              "properties": {
-                "mode": "sidebar",
-                "agentId": "sales_assistant",
-                "context": {
-                  "recordType": "lead",
-                  "recordId": "{record.id}"
-                }
-              },
-              "visibility": {
-                "dialect": "cel",
-                "source": "record.status == \"qualified\" || record.status == \"contacted\""
               }
             }
           ]
@@ -19923,7 +19914,7 @@
           "filter": {
             "is_active": true,
             "last_activity_date": {
-              "$lt": "2026-05-05"
+              "$lt": "2026-05-06"
             }
           }
         },
@@ -19949,7 +19940,7 @@
           "filter": {
             "is_active": true,
             "last_activity_date": {
-              "$lt": "2026-04-19"
+              "$lt": "2026-04-20"
             }
           }
         },
@@ -19980,7 +19971,7 @@
           "filter": {
             "stage": "closed_lost",
             "close_date": {
-              "$gte": "2026-04-19"
+              "$gte": "2026-04-20"
             }
           }
         }

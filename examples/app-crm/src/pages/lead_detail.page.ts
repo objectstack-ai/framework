@@ -1,13 +1,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Page } from '@objectstack/spec/ui';
-import { P } from '@objectstack/spec';
+import { ConvertLeadAction } from '../actions/lead.actions';
 
 /**
  * Lead Detail Record Page
- * 
+ *
  * Demonstrates a comprehensive record page layout similar to Salesforce Lightning Record Page.
- * 
+ *
  * Features:
  * - Template-based layout with named regions
  * - Rich component composition (details, highlights, related lists)
@@ -18,13 +18,13 @@ export const LeadDetailPage: Page = {
   name: 'lead_detail_page',
   label: 'Lead Detail',
   description: 'Comprehensive lead detail page with highlights, details, and related information',
-  
+
   type: 'record',
   object: 'lead',
-  
+
   // Template defines the overall layout structure
   template: 'header-sidebar-main',
-  
+
   // Page-level state variables
   variables: [
     {
@@ -38,7 +38,7 @@ export const LeadDetailPage: Page = {
       defaultValue: 'details',
     },
   ],
-  
+
   // Regions correspond to slots in the template
   regions: [
     {
@@ -54,7 +54,21 @@ export const LeadDetailPage: Page = {
             subtitle: '{company}',
             icon: 'user-plus',
             breadcrumb: true,
-            actions: ['edit', 'delete', 'convert_lead', 'share'],
+          },
+        },
+        // Sibling quick-actions strip in the header region. The previous
+        // `page:header.actions: string[]` form was inert — PageHeaderRenderer
+        // only paints a `<div data-page-actions-slot />` and does not
+        // resolve action names. `record:quick_actions` consumes real
+        // `ActionDef`s and goes through `useActionEngine` for execution,
+        // permissions, location filtering, and condition evaluation.
+        {
+          type: 'record:quick_actions',
+          id: 'lead_header_actions',
+          properties: {
+            actions: [ConvertLeadAction],
+            location: 'record_header',
+            align: 'end',
           },
         },
         {
@@ -73,7 +87,7 @@ export const LeadDetailPage: Page = {
         },
       ],
     },
-    
+
     {
       name: 'sidebar',
       width: 'medium',
@@ -87,34 +101,18 @@ export const LeadDetailPage: Page = {
             layout: 'vertical',
           },
         },
-        {
-          type: 'page:card',
-          id: 'quick_actions_card',
-          label: 'Quick Actions',
-          properties: {
-            title: 'Quick Actions',
-            bordered: true,
-            actions: ['send_email', 'log_call', 'create_task', 'schedule_meeting'],
-          },
-        },
-        {
-          type: 'ai:chat_window',
-          id: 'ai_assistant',
-          label: 'AI Assistant',
-          properties: {
-            mode: 'sidebar',
-            agentId: 'sales_assistant',
-            context: {
-              recordType: 'lead',
-              recordId: '{record.id}',
-            },
-          },
-          // Only show AI assistant for qualified leads
-          visibility: P`record.status == "qualified" || record.status == "contacted"`,
-        },
+        // NOTE: the previous sidebar contents have been removed:
+        //   1. `page:card "Quick Actions"` — its `actions: string[]` payload
+        //      was never rendered (page:card has no action runtime); the
+        //      header-level `record:quick_actions` above is the canonical
+        //      surface for per-record actions.
+        //   2. `ai:chat_window` — the AI assistant is exposed as a global
+        //      floating widget (see plugin-chatbot); an inline sidebar
+        //      window duplicated entry points and produced an unknown-
+        //      component error since `ai:chat_window` has no renderer.
       ],
     },
-    
+
     {
       name: 'main',
       width: 'large',
@@ -271,13 +269,13 @@ export const LeadDetailPage: Page = {
       ],
     },
   ],
-  
+
   // Make this the default page for leads
   isDefault: true,
-  
+
   // Assign to specific profiles
   assignedProfiles: ['sales_user', 'sales_manager', 'system_administrator'],
-  
+
   // ARIA accessibility
   aria: {
     ariaLabel: 'Lead Detail Page',
