@@ -23,3 +23,6 @@ export { default as ProjectsShowCommand } from './commands/projects/show.js';
 export { default as ProjectsCreateCommand } from './commands/projects/create.js';
 export { default as ProjectsSwitchCommand } from './commands/projects/switch.js';
 export { default as ProjectsBindCommand } from './commands/projects/bind.js';
+
+// ─── Package topic subcommands ──────────────────────────────────────
+export { default as PackagePublishCommand } from './commands/package/publish.js';
