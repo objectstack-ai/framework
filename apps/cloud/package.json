@@ -46,7 +46,7 @@
     "@objectstack/service-package": "workspace:*",
     "@objectstack/service-tenant": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "hono": "^4.12.19",
+    "hono": "^4.12.21",
     "pg": "^8.21.0"
   },
   "devDependencies": {
@@ -56,7 +56,7 @@
     "esbuild": "^0.28.0",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
-    "tsx": "^4.22.2",
+    "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "wrangler": "^4.92.0"
   }
