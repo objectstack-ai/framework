@@ -38,6 +38,44 @@ function readActorIdFromHeaders(req: any): string | undefined {
 
 function nowIso() { return new Date().toISOString(); }
 
+/**
+ * Resolve the new hostname for a change-hostname call.
+ *
+ * Users (and the Cloud Control UI) typically pass just a subdomain label
+ * — e.g. `acme-prod`. The root domain (`objectstack.app` by default,
+ * configurable via `OS_ROOT_DOMAIN` / `ROOT_DOMAIN`) is appended
+ * automatically so users never have to type `.objectstack.app` themselves.
+ *
+ * Backward compat: a fully-qualified hostname containing one or more
+ * dots is accepted as-is (so direct REST callers can still POST
+ * `{"hostname": "api.acme.com"}`). Reads `subdomain` first, then falls
+ * back to `hostname`.
+ *
+ * Returns either `{ ok: true, hostname }` or `{ ok: false, error, status }`
+ * suitable for direct response.
+ */
+function resolveNewHostname(body: AnyRow): { ok: true; hostname: string } | { ok: false; error: string; status: number } {
+    const rawSub = String(body?.subdomain ?? '').trim();
+    const rawHost = String(body?.hostname ?? '').trim();
+    const input = rawSub || rawHost;
+    if (!input) return { ok: false, error: 'subdomain or hostname is required', status: 400 };
+
+    const rootDomain =
+        (process.env.OS_ROOT_DOMAIN || process.env.ROOT_DOMAIN || 'objectstack.app')
+            .toLowerCase()
+            .replace(/^\.+|\.+$/g, '');
+
+    // If caller passed a fully-qualified hostname (has at least one dot),
+    // treat it as the canonical value. Otherwise append the root domain.
+    const hasDot = input.includes('.');
+    const hostname = (hasDot ? input : `${input}.${rootDomain}`).toLowerCase();
+
+    if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/.test(hostname)) {
+        return { ok: false, error: `Hostname '${hostname}' contains invalid characters`, status: 400 };
+    }
+    return { ok: true, hostname };
+}
+
 export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteDeps): void {
     const { prefix, requiredKey, controlDriverPromise, getCallerUserId, getCallerActiveOrgId } = deps;
     const checkAuth = makeCheckAuth(requiredKey);
@@ -253,11 +291,9 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
         const auth = checkAuth(req); if (!auth.ok) return res.status(auth.status).json(auth.body);
         const projectId = String(req.params?.id ?? '').trim();
         if (!projectId) return res.status(400).json(fail('project id required'));
-        const hostname = String(req.body?.hostname ?? '').trim();
-        if (!hostname) return res.status(400).json(fail('hostname is required', 400));
-        if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/i.test(hostname)) {
-            return res.status(400).json(fail('hostname contains invalid characters', 400));
-        }
+        const resolved = resolveNewHostname(req.body ?? {});
+        if (!resolved.ok) return res.status(resolved.status).json(fail(resolved.error, resolved.status));
+        const hostname = resolved.hostname;
 
         const project = await loadProject(projectId);
         if (!project) return res.status(404).json(fail(`Project '${projectId}' not found`, 404));
@@ -375,11 +411,9 @@ export function registerProjectLifecycleRoutes(server: IHttpServer, deps: RouteD
     actionDispatch.change_hostname = async (req, res) => {
         const projectId = String(req.params?.id ?? '').trim();
         if (!projectId) return res.status(400).json(fail('project id required'));
-        const hostname = String(req.body?.hostname ?? '').trim();
-        if (!hostname) return res.status(400).json(fail('hostname is required', 400));
-        if (!/^[a-z0-9][a-z0-9.-]*[a-z0-9]$/i.test(hostname)) {
-            return res.status(400).json(fail('hostname contains invalid characters', 400));
-        }
+        const resolved = resolveNewHostname(req.body ?? {});
+        if (!resolved.ok) return res.status(resolved.status).json(fail(resolved.error, resolved.status));
+        const hostname = resolved.hostname;
         const project = await loadProject(projectId);
         if (!project) return res.status(404).json(fail(`Project '${projectId}' not found`, 404));
         const driver = await getDriver();
