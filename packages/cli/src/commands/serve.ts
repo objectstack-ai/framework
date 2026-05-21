@@ -284,7 +284,20 @@ export default class Serve extends Command {
           const bootResult = await createStandaloneStack(config.standalone);
           config = { ...originalConfig, ...bootResult } as any;
         } else {
-          const { createBootStack } = await import('@objectstack/service-cloud');
+          // Cloud / multi-project boot modes require @objectstack/service-cloud.
+          // When the package is unavailable (e.g. someone vendored only the
+          // public framework), fail with a clear, actionable error instead of
+          // an opaque module-not-found stack trace.
+          let createBootStack: any;
+          try {
+            ({ createBootStack } = await import('@objectstack/service-cloud'));
+          } catch (err) {
+            throw new Error(
+              `Boot mode '${resolvedMode}' requires @objectstack/service-cloud, which is not installed.\n`
+              + `Either install it (\`pnpm add @objectstack/service-cloud\`) or switch to bootMode='standalone'.\n`
+              + `Underlying error: ${(err as Error)?.message ?? String(err)}`,
+            );
+          }
           const bootResult = await createBootStack({
             mode: config.bootMode,
             runtime: config.runtime ?? config.project,
