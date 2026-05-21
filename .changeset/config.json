@@ -45,7 +45,6 @@
       "@objectstack/service-realtime",
       "@objectstack/service-ai",
       "@objectstack/service-storage",
-      "@objectstack/service-cloud",
       "@objectstack/service-package",
       "@objectstack/service-tenant",
       "@objectstack/docs",
