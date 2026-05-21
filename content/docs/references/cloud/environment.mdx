@@ -1,0 +1,270 @@
+---
+title: Environment
+description: Environment protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+# Environment Protocol (runtime container)
+
+An **Environment** is the runtime container of an organization's data.
+
+It owns a physically isolated database, a canonical hostname, a plan/quota
+
+tier, and per-environment RBAC. An organization may own many environments
+
+(dev/test/prod/sandbox/preview/…) — exactly one is marked `is_default`.
+
+This file defines the Control-Plane schemas for the `sys_environment`,
+
+`sys_environment_credential` and `sys_environment_member` tables. Business
+
+data lives in each environment's own database — those data-plane DBs hold
+
+no system tables.
+
+See ADR-0006 v4: `sys_project` was renamed to `sys_environment`; the
+
+separate dev-workspace `Project` concept introduced in v3 has been
+
+dropped — user code is now modelled as an implicit `sys_package` with
+
+a per-org `manifest_id` (see ADR-0003), so a single package + version
+
++ installation model serves both Marketplace apps and user projects.
+
+Split of concerns:
+
+- **Control Plane**: `sys_environment` (includes physical DB addressing),
+
+`sys_package_installation` (with `environment_id`), `sys_environment_credential`,
+
+`sys_environment_member`, `sys_metadata` (with `environment_id`).
+
+- **Data Plane**: each environment DB contains only business objects
+
+(account, task, …). No system tables, no `environment_id` columns.
+
+<Callout type="info">
+**Source:** `packages/spec/src/cloud/environment.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { Environment, EnvironmentCredential, EnvironmentCredentialStatus, EnvironmentDriver, EnvironmentMember, EnvironmentRole, EnvironmentStatus, EnvironmentType, EnvironmentVisibility, ProvisionEnvironmentRequest, ProvisionEnvironmentResponse, ProvisionOrganizationRequest, ProvisionOrganizationResponse } from '@objectstack/spec/cloud';
+import type { Environment, EnvironmentCredential, EnvironmentCredentialStatus, EnvironmentDriver, EnvironmentMember, EnvironmentRole, EnvironmentStatus, EnvironmentType, EnvironmentVisibility, ProvisionEnvironmentRequest, ProvisionEnvironmentResponse, ProvisionOrganizationRequest, ProvisionOrganizationResponse } from '@objectstack/spec/cloud';
+
+// Validate data
+const result = Environment.parse(data);
+```
+
+---
+
+## Environment
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the environment (stable, never reused) |
+| **organizationId** | `string` | ✅ | Organization that owns this environment |
+| **displayName** | `string` | ✅ | Display name shown in Studio and APIs |
+| **isDefault** | `boolean` | ✅ | Whether this is the default environment for the organization |
+| **isSystem** | `boolean` | ✅ | Whether this is a system environment (platform infrastructure, not user data) |
+| **plan** | `Enum<'free' \| 'starter' \| 'pro' \| 'enterprise' \| 'custom'>` | ✅ | Plan tier for this environment |
+| **status** | `Enum<'provisioning' \| 'active' \| 'suspended' \| 'archived' \| 'failed' \| 'migrating'>` | ✅ | Environment lifecycle status |
+| **createdBy** | `string` | ✅ | User ID that created the environment |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **updatedAt** | `string` | ✅ | Last update timestamp (ISO-8601) |
+| **databaseUrl** | `string` | optional | Full connection URL for the environment database |
+| **databaseDriver** | `string` | optional | Data-plane driver key (turso, libsql, sqlite, memory, postgres) |
+| **storageLimitMb** | `integer` | optional | Storage quota in megabytes |
+| **provisionedAt** | `string` | optional | Provisioning timestamp (ISO-8601) |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+| **hostname** | `string` | optional | Canonical hostname for this environment. UNIQUE. Auto-set on creation; can be overridden for custom domains. |
+| **consoleUrl** | `string` | optional | Pre-computed admin Console URL for this environment |
+| **apiBaseUrl** | `string` | optional | Pre-computed REST API base URL for this environment |
+| **visibility** | `Enum<'private' \| 'unlisted' \| 'public'>` | ✅ | Public exposure of this environment artifacts (private | unlisted | public). |
+
+
+---
+
+## EnvironmentCredential
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the credential |
+| **environmentId** | `string` | ✅ | Environment this credential authorizes |
+| **secretCiphertext** | `string` | ✅ | Encrypted auth token or secret (ciphertext) |
+| **encryptionKeyId** | `string` | ✅ | Encryption key ID used to encrypt the secret |
+| **authorization** | `Enum<'full_access' \| 'read_only'>` | ✅ | Authorization scope for this credential |
+| **status** | `Enum<'active' \| 'rotating' \| 'revoked'>` | ✅ | Credential lifecycle status |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **expiresAt** | `string` | optional | Optional expiry timestamp |
+| **revokedAt** | `string` | optional | Revocation timestamp (if revoked) |
+
+
+---
+
+## EnvironmentCredentialStatus
+
+Credential lifecycle status
+
+### Allowed Values
+
+* `active`
+* `rotating`
+* `revoked`
+
+
+---
+
+
+---
+
+## EnvironmentMember
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | UUID of the membership |
+| **environmentId** | `string` | ✅ | Environment this membership grants access to |
+| **userId** | `string` | ✅ | User ID |
+| **role** | `Enum<'owner' \| 'admin' \| 'maker' \| 'reader' \| 'guest'>` | ✅ | Per-environment role |
+| **invitedBy** | `string` | ✅ | User ID that granted this membership |
+| **createdAt** | `string` | ✅ | Creation timestamp (ISO-8601) |
+| **updatedAt** | `string` | ✅ | Last update timestamp (ISO-8601) |
+
+
+---
+
+## EnvironmentRole
+
+Per-environment role
+
+### Allowed Values
+
+* `owner`
+* `admin`
+* `maker`
+* `reader`
+* `guest`
+
+
+---
+
+## EnvironmentStatus
+
+Environment lifecycle status
+
+### Allowed Values
+
+* `provisioning`
+* `active`
+* `suspended`
+* `archived`
+* `failed`
+* `migrating`
+
+
+---
+
+## EnvironmentType
+
+Environment categorical tag (prod/sandbox/dev/test/…)
+
+### Allowed Values
+
+* `production`
+* `sandbox`
+* `development`
+* `test`
+* `staging`
+* `preview`
+* `trial`
+
+
+---
+
+## EnvironmentVisibility
+
+Public exposure of this environment artifacts (private | unlisted | public).
+
+### Allowed Values
+
+* `private`
+* `unlisted`
+* `public`
+
+
+---
+
+## ProvisionEnvironmentRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **organizationId** | `string` | ✅ | Organization that will own the new environment |
+| **displayName** | `string` | ✅ | Display name shown in Studio and APIs |
+| **driver** | `string` | optional | Driver key (defaults to provisioning service config) |
+| **plan** | `Enum<'free' \| 'starter' \| 'pro' \| 'enterprise' \| 'custom'>` | optional | Plan tier |
+| **storageLimitMb** | `integer` | optional | Storage quota in megabytes |
+| **isDefault** | `boolean` | optional | Mark as the organization default environment |
+| **createdBy** | `string` | ✅ | User ID that initiated the provisioning |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+| **hostname** | `string` | optional | Canonical hostname (auto-generated if omitted) |
+| **templateId** | `string` | optional | Starter package to seed into the new environment on first provisioning (e.g. "crm", "todo"). Defaults to "blank". |
+| **visibility** | `Enum<'private' \| 'unlisted' \| 'public'>` | ✅ | Public exposure of this environment artifacts. private = auth required for every read (default); unlisted = downloadable when commit id is known; public = listed and freely downloadable via /pub/v1/environments/:id/*. |
+
+
+---
+
+## ProvisionEnvironmentResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **environment** | `Object` | ✅ | Provisioned environment (includes database addressing) |
+| **credential** | `Object` | ✅ | Freshly-minted credential for the environment DB |
+| **durationMs** | `number` | ✅ | Total provisioning duration in milliseconds |
+| **warnings** | `string[]` | optional | Non-fatal warnings emitted during provisioning |
+
+
+---
+
+## ProvisionOrganizationRequest
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **organizationId** | `string` | ✅ | Organization being bootstrapped |
+| **defaultEnvironmentDisplayName** | `string` | ✅ | Display name for the default environment |
+| **driver** | `string` | optional | Driver key |
+| **plan** | `Enum<'free' \| 'starter' \| 'pro' \| 'enterprise' \| 'custom'>` | optional | Plan tier |
+| **storageLimitMb** | `integer` | optional | Storage quota in megabytes |
+| **createdBy** | `string` | ✅ | User ID that initiated provisioning |
+| **metadata** | `Record<string, any>` | optional | Free-form metadata |
+
+
+---
+
+## ProvisionOrganizationResponse
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **defaultEnvironment** | `Object` | ✅ | Default environment that was created |
+| **durationMs** | `number` | ✅ | Total bootstrap duration in milliseconds |
+| **warnings** | `string[]` | optional | Non-fatal warnings |
+
+
+---
+
