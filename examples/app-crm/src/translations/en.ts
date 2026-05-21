@@ -39,6 +39,7 @@ export const en: TranslationData = {
         is_active: { label: 'Active' },
         last_activity_date: { label: 'Last Activity Date' },
         brand_color: { label: 'Brand Color' },
+        logo: { label: 'Company Logo' },
         tier: {
           label: 'Customer Tier',
           options: { strategic: 'Strategic', enterprise: 'Enterprise', mid_market: 'Mid-Market', smb: 'SMB' },
@@ -380,6 +381,8 @@ export const en: TranslationData = {
         product_manager: { label: 'Product Manager' },
         image_url: { label: 'Product Image' },
         datasheet_url: { label: 'Datasheet URL' },
+        image: { label: 'Product Image' },
+        datasheet: { label: 'Datasheet' },
       },
       _views: {
         all_products: { label: 'All Products' },

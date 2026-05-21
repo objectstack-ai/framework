@@ -80,6 +80,9 @@
               "brand_color": {
                 "label": "Brand Color"
               },
+              "logo": {
+                "label": "Company Logo"
+              },
               "tier": {
                 "label": "Customer Tier",
                 "options": {
@@ -789,6 +792,12 @@
               },
               "datasheet_url": {
                 "label": "Datasheet URL"
+              },
+              "image": {
+                "label": "Product Image"
+              },
+              "datasheet": {
+                "label": "Datasheet"
               }
             },
             "_views": {
@@ -1430,6 +1439,9 @@
               },
               "brand_color": {
                 "label": "品牌色"
+              },
+              "logo": {
+                "label": "公司标识"
               },
               "tier": {
                 "label": "客户分层",
@@ -2354,6 +2366,12 @@
               },
               "datasheet_url": {
                 "label": "规格书链接"
+              },
+              "image": {
+                "label": "产品图片"
+              },
+              "datasheet": {
+                "label": "规格书"
               }
             },
             "_views": {
@@ -2883,6 +2901,9 @@
               },
               "brand_color": {
                 "label": "ブランドカラー"
+              },
+              "logo": {
+                "label": "会社ロゴ"
               }
             },
             "_views": {
@@ -3521,6 +3542,12 @@
               },
               "datasheet_url": {
                 "label": "データシートURL"
+              },
+              "image": {
+                "label": "製品画像"
+              },
+              "datasheet": {
+                "label": "データシート"
               }
             },
             "_views": {
@@ -4161,6 +4188,9 @@
               },
               "brand_color": {
                 "label": "Color de Marca"
+              },
+              "logo": {
+                "label": "Logo de la Empresa"
               }
             },
             "_views": {
@@ -4799,6 +4829,12 @@
               },
               "datasheet_url": {
                 "label": "URL de Ficha Técnica"
+              },
+              "image": {
+                "label": "Imagen de Producto"
+              },
+              "datasheet": {
+                "label": "Ficha Técnica"
               }
             },
             "_views": {
@@ -5702,6 +5738,22 @@
             "#FF00FF",
             "#00FFFF"
           ],
+          "auditTrail": false,
+          "group": "branding",
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "logo": {
+          "label": "Company Logo",
+          "type": "image",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
           "auditTrail": false,
           "group": "branding",
           "hidden": false,
@@ -11206,9 +11258,9 @@
           "index": false,
           "externalId": false
         },
-        "image_url": {
+        "image": {
           "label": "Product Image",
-          "type": "url",
+          "type": "image",
           "required": false,
           "searchable": false,
           "multiple": false,
@@ -11221,9 +11273,9 @@
           "index": false,
           "externalId": false
         },
-        "datasheet_url": {
-          "label": "Datasheet URL",
-          "type": "url",
+        "datasheet": {
+          "label": "Datasheet",
+          "type": "file",
           "required": false,
           "searchable": false,
           "multiple": false,
@@ -14206,6 +14258,48 @@
             }
           ]
         }
+      },
+      "formViews": {
+        "web_to_case": {
+          "type": "simple",
+          "data": {
+            "provider": "object",
+            "object": "case"
+          },
+          "sections": [
+            {
+              "label": "How can we help?",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 1,
+              "fields": [
+                {
+                  "field": "subject",
+                  "placeholder": "Short summary of the issue",
+                  "required": true
+                },
+                {
+                  "field": "description",
+                  "placeholder": "Steps to reproduce, error messages, screenshots...",
+                  "required": true
+                },
+                {
+                  "field": "type",
+                  "helpText": "Pick the option that best matches your issue."
+                },
+                {
+                  "field": "priority",
+                  "helpText": "Critical issues should also be reported via phone."
+                }
+              ]
+            }
+          ],
+          "sharing": {
+            "enabled": true,
+            "publicLink": "/forms/support",
+            "allowAnonymous": true
+          }
+        }
       }
     },
     {
@@ -15428,6 +15522,74 @@
             }
           ]
         },
+        "web_to_lead": {
+          "type": "simple",
+          "data": {
+            "provider": "object",
+            "object": "lead"
+          },
+          "sections": [
+            {
+              "label": "Tell us about yourself",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "first_name",
+                  "required": true
+                },
+                {
+                  "field": "last_name",
+                  "required": true
+                },
+                {
+                  "field": "email",
+                  "required": true,
+                  "colSpan": 2
+                },
+                "phone",
+                "title"
+              ]
+            },
+            {
+              "label": "About your company",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "company",
+                  "required": true,
+                  "colSpan": 2
+                },
+                "website",
+                "industry",
+                "number_of_employees",
+                "annual_revenue"
+              ]
+            },
+            {
+              "label": "How can we help?",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 1,
+              "fields": [
+                {
+                  "field": "description",
+                  "placeholder": "Briefly describe what you are looking for...",
+                  "helpText": "A sales representative will get back to you within one business day.",
+                  "required": true
+                }
+              ]
+            }
+          ],
+          "sharing": {
+            "enabled": true,
+            "publicLink": "/forms/contact-us",
+            "allowAnonymous": true
+          }
+        },
         "advanced_conditional": {
           "type": "simple",
           "data": {
@@ -16145,8 +16307,8 @@
             "collapsed": false,
             "columns": 1,
             "fields": [
-              "image_url",
-              "datasheet_url",
+              "image",
+              "datasheet",
               "description"
             ]
           }
@@ -16167,7 +16329,7 @@
             "list_price"
           ],
           "gallery": {
-            "coverField": "image_url",
+            "coverField": "image",
             "coverFit": "cover",
             "cardSize": "medium",
             "titleField": "name",
@@ -21722,6 +21884,35 @@
   ],
   "permissions": [
     {
+      "name": "guest_portal",
+      "label": "Guest (Public Forms)",
+      "isProfile": true,
+      "objects": {
+        "lead": {
+          "allowCreate": true,
+          "allowRead": false,
+          "allowEdit": false,
+          "allowDelete": false,
+          "allowTransfer": false,
+          "allowRestore": false,
+          "allowPurge": false,
+          "viewAllRecords": false,
+          "modifyAllRecords": false
+        },
+        "case": {
+          "allowCreate": true,
+          "allowRead": false,
+          "allowEdit": false,
+          "allowDelete": false,
+          "allowTransfer": false,
+          "allowRestore": false,
+          "allowPurge": false,
+          "viewAllRecords": false,
+          "modifyAllRecords": false
+        }
+      }
+    },
+    {
       "name": "marketing_user",
       "label": "Marketing User",
       "isProfile": true,
@@ -22822,7 +23013,7 @@
       "handler": "case_sla_defaults",
       "body": {
         "language": "js",
-        "source": "\n    const { input } = ctx;\n    const priority = typeof input.priority === \"string\" && input.priority || typeof ctx.previous?.priority === \"string\" && ctx.previous.priority || void 0;\n    if (priority === \"critical\" && !input.sla_due_date && !ctx.previous?.sla_due_date) {\n      const due = /* @__PURE__ */ new Date();\n      due.setHours(due.getHours() + 4);\n      input.sla_due_date = due.toISOString();\n    }\n  ",
+        "source": "\n    const { input } = ctx;\n    const isGuestSubmission = !ctx.previous && !ctx.user?.id;\n    if (isGuestSubmission) {\n      if (!input.origin) input.origin = \"web\";\n      if (!input.status) input.status = \"new\";\n      if (!input.priority) input.priority = \"medium\";\n      delete input.owner;\n      delete input.is_escalated;\n      delete input.is_closed;\n      delete input.internal_notes;\n      delete input.resolution;\n    }\n    const priority = typeof input.priority === \"string\" && input.priority || typeof ctx.previous?.priority === \"string\" && ctx.previous.priority || void 0;\n    if (priority === \"critical\" && !input.sla_due_date && !ctx.previous?.sla_due_date) {\n      const due = /* @__PURE__ */ new Date();\n      due.setHours(due.getHours() + 4);\n      input.sla_due_date = due.toISOString();\n    }\n  ",
         "capabilities": []
       },
       "priority": 200,
@@ -22921,7 +23112,7 @@
       "handler": "lead_automation",
       "body": {
         "language": "js",
-        "source": "\n    const { event, input } = ctx;\n    const HIGH_VALUE_INDUSTRIES = /* @__PURE__ */ new Set([\"technology\", \"finance\", \"healthcare\"]);\n    const SENIOR_TITLE_PATTERN = /\\b(ceo|cto|cfo|cio|coo|founder|vp|vice president|director|head of)\\b/i;\n    function computeRating(input2) {\n      let score = 0;\n      const email = typeof input2.email === \"string\" ? input2.email : \"\";\n      const phone = typeof input2.phone === \"string\" ? input2.phone : \"\";\n      const title = typeof input2.title === \"string\" ? input2.title : \"\";\n      const industry = typeof input2.industry === \"string\" ? input2.industry : \"\";\n      const employees = typeof input2.number_of_employees === \"number\" ? input2.number_of_employees : 0;\n      const revenue = typeof input2.annual_revenue === \"number\" ? input2.annual_revenue : 0;\n      if (email && !/(gmail|yahoo|hotmail|outlook|qq|163)\\.com$/i.test(email)) score += 1;\n      if (phone.length > 0) score += 0.5;\n      if (SENIOR_TITLE_PATTERN.test(title)) score += 1.5;\n      if (HIGH_VALUE_INDUSTRIES.has(industry)) score += 1;\n      if (employees >= 200) score += 0.5;\n      if (revenue >= 1e7) score += 0.5;\n      const clamped = Math.max(1, Math.min(5, score));\n      return Math.round(clamped * 2) / 2;\n    }\n    if (event === \"beforeInsert\") {\n      if (typeof input.rating !== \"number\") {\n        input.rating = computeRating(input);\n      }\n    }\n    if (event === \"beforeUpdate\") {\n      const previous = ctx.previous;\n      if (previous?.is_converted === true || previous?.status === \"converted\") {\n        throw new Error(\"Cannot edit a converted lead. Make changes on the converted records instead.\");\n      }\n    }\n    if (event === \"afterUpdate\") {\n      const previous = ctx.previous;\n      const becameQualified = input.status === \"qualified\" && previous?.status !== \"qualified\";\n      if (!becameQualified) return;\n      const api = ctx.api;\n      if (!api) return;\n      const leadId = typeof input.id === \"string\" && input.id || typeof previous?.id === \"string\" && previous.id || void 0;\n      const ownerId = typeof input.owner === \"string\" && input.owner || typeof previous?.owner === \"string\" && previous.owner || ctx.user?.id;\n      const dueDate = /* @__PURE__ */ new Date();\n      dueDate.setDate(dueDate.getDate() + 2);\n      try {\n        await api.object(\"task\").insert({\n          subject: `Follow up with qualified lead${leadId ? ` (${leadId})` : \"\"}`,\n          status: \"not_started\",\n          priority: \"high\",\n          type: \"follow_up\",\n          due_date: dueDate.toISOString().slice(0, 10),\n          owner: ownerId,\n          related_to_type: \"lead\",\n          related_to_lead: leadId\n        });\n      } catch (err) {\n        console.warn(\"[lead_automation] failed to create follow-up task:\", err);\n      }\n    }\n  ",
+        "source": "\n    const { event, input } = ctx;\n    const HIGH_VALUE_INDUSTRIES = /* @__PURE__ */ new Set([\"technology\", \"finance\", \"healthcare\"]);\n    const SENIOR_TITLE_PATTERN = /\\b(ceo|cto|cfo|cio|coo|founder|vp|vice president|director|head of)\\b/i;\n    function computeRating(input2) {\n      let score = 0;\n      const email = typeof input2.email === \"string\" ? input2.email : \"\";\n      const phone = typeof input2.phone === \"string\" ? input2.phone : \"\";\n      const title = typeof input2.title === \"string\" ? input2.title : \"\";\n      const industry = typeof input2.industry === \"string\" ? input2.industry : \"\";\n      const employees = typeof input2.number_of_employees === \"number\" ? input2.number_of_employees : 0;\n      const revenue = typeof input2.annual_revenue === \"number\" ? input2.annual_revenue : 0;\n      if (email && !/(gmail|yahoo|hotmail|outlook|qq|163)\\.com$/i.test(email)) score += 1;\n      if (phone.length > 0) score += 0.5;\n      if (SENIOR_TITLE_PATTERN.test(title)) score += 1.5;\n      if (HIGH_VALUE_INDUSTRIES.has(industry)) score += 1;\n      if (employees >= 200) score += 0.5;\n      if (revenue >= 1e7) score += 0.5;\n      const clamped = Math.max(1, Math.min(5, score));\n      return Math.round(clamped * 2) / 2;\n    }\n    if (event === \"beforeInsert\") {\n      const isGuestSubmission = !ctx.user?.id;\n      if (isGuestSubmission) {\n        if (!input.lead_source) input.lead_source = \"web\";\n        if (!input.status) input.status = \"new\";\n        delete input.is_converted;\n        delete input.converted_account;\n        delete input.converted_contact;\n        delete input.converted_opportunity;\n        delete input.converted_date;\n        delete input.owner;\n      }\n      if (typeof input.rating !== \"number\") {\n        input.rating = computeRating(input);\n      }\n    }\n    if (event === \"beforeUpdate\") {\n      const previous = ctx.previous;\n      if (previous?.is_converted === true || previous?.status === \"converted\") {\n        throw new Error(\"Cannot edit a converted lead. Make changes on the converted records instead.\");\n      }\n    }\n    if (event === \"afterUpdate\") {\n      const previous = ctx.previous;\n      const becameQualified = input.status === \"qualified\" && previous?.status !== \"qualified\";\n      if (!becameQualified) return;\n      const api = ctx.api;\n      if (!api) return;\n      const leadId = typeof input.id === \"string\" && input.id || typeof previous?.id === \"string\" && previous.id || void 0;\n      const ownerId = typeof input.owner === \"string\" && input.owner || typeof previous?.owner === \"string\" && previous.owner || ctx.user?.id;\n      const dueDate = /* @__PURE__ */ new Date();\n      dueDate.setDate(dueDate.getDate() + 2);\n      try {\n        await api.object(\"task\").insert({\n          subject: `Follow up with qualified lead${leadId ? ` (${leadId})` : \"\"}`,\n          status: \"not_started\",\n          priority: \"high\",\n          type: \"follow_up\",\n          due_date: dueDate.toISOString().slice(0, 10),\n          owner: ownerId,\n          related_to_type: \"lead\",\n          related_to_lead: leadId\n        });\n      } catch (err) {\n        console.warn(\"[lead_automation] failed to create follow-up task:\", err);\n      }\n    }\n  ",
         "capabilities": [
           "api.write"
         ]

@@ -38,6 +38,7 @@ export const esES: TranslationData = {
         is_active: { label: 'Activo' },
         last_activity_date: { label: 'Fecha de Última Actividad' },
         brand_color: { label: 'Color de Marca' },
+        logo: { label: 'Logo de la Empresa' },
       },
       _views: {
         all_accounts: { label: 'Todas las Cuentas', description: 'Lista maestra de cuentas con ingresos e industria' },
@@ -344,6 +345,8 @@ export const esES: TranslationData = {
         product_manager: { label: 'Gerente de Producto' },
         image_url: { label: 'Imagen de Producto' },
         datasheet_url: { label: 'URL de Ficha Técnica' },
+        image: { label: 'Imagen de Producto' },
+        datasheet: { label: 'Ficha Técnica' },
       },
       _views: {
         all_products: { label: 'Todos los Productos' },

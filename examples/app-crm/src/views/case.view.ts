@@ -165,4 +165,52 @@ export const CaseViews = defineView({
       },
     ],
   },
+
+  /**
+   * Additional named form views.
+   *
+   * `web_to_case` is a PUBLIC / ANONYMOUS support form (Salesforce
+   * Web-to-Case equivalent). Hosted at `/forms/support` and embeddable in
+   * a help center. Guests can ONLY submit — the `guest_portal` profile
+   * denies read/edit/delete on `case`. Internal fields (status, origin,
+   * priority defaults, owner, SLA) are stamped by `case.hook.ts` after a
+   * guest submission.
+   */
+  formViews: {
+    web_to_case: {
+      type: 'simple',
+      data: { provider: 'object', object: 'case' },
+      sections: [
+        {
+          label: 'How can we help?',
+          columns: 1,
+          fields: [
+            {
+              field: 'subject',
+              required: true,
+              placeholder: 'Short summary of the issue',
+            },
+            {
+              field: 'description',
+              required: true,
+              placeholder: 'Steps to reproduce, error messages, screenshots...',
+            },
+            {
+              field: 'type',
+              helpText: 'Pick the option that best matches your issue.',
+            },
+            {
+              field: 'priority',
+              helpText: 'Critical issues should also be reported via phone.',
+            },
+          ],
+        },
+      ],
+      sharing: {
+        enabled: true,
+        allowAnonymous: true,
+        publicLink: '/forms/support',
+      },
+    },
+  },
 });

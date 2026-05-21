@@ -3,6 +3,7 @@
 /**
  * Profile Definitions Barrel
  */
+export { GuestPortalProfile } from './guest-portal.profile';
 export { MarketingUserProfile } from './marketing-user.profile';
 export { SalesManagerProfile } from './sales-manager.profile';
 export { SalesRepProfile } from './sales-rep.profile';

@@ -38,6 +38,7 @@ export const jaJP: TranslationData = {
         is_active: { label: '有効' },
         last_activity_date: { label: '最終活動日' },
         brand_color: { label: 'ブランドカラー' },
+        logo: { label: '会社ロゴ' },
       },
       _views: {
         all_accounts: { label: '全取引先', description: '売上と業種を含む取引先の一覧' },
@@ -344,6 +345,8 @@ export const jaJP: TranslationData = {
         product_manager: { label: 'プロダクトマネージャー' },
         image_url: { label: '製品画像' },
         datasheet_url: { label: 'データシートURL' },
+        image: { label: '製品画像' },
+        datasheet: { label: 'データシート' },
       },
       _views: {
         all_products: { label: '全製品' },

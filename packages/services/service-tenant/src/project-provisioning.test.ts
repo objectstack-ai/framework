@@ -122,6 +122,88 @@ describe('ProjectProvisioningService.provisionProject', () => {
 
     expect(driver.create).not.toHaveBeenCalled();
   });
+
+  it('auto-generates a readable hostname: {orgSlug}-{envSlug}.localhost', async () => {
+    const driver = {
+      create: vi.fn(async () => ({})),
+      find: vi.fn(async () => []),
+      findOne: vi.fn(async (object: string, query: any) => {
+        if (object === 'sys_organization' && query?.where?.id === 'org-42') {
+          return { id: 'org-42', slug: 'acme-corp' };
+        }
+        return null;
+      }),
+      update: vi.fn(async () => ({})),
+    };
+
+    const svc = new ProjectProvisioningService({
+      controlPlaneDriver: driver as any,
+      adapters: [new MockProjectDatabaseAdapter('turso')],
+    });
+
+    const result = await svc.provisionProject({
+      organizationId: 'org-42',
+      displayName: 'Production',
+      createdBy: 'user-1',
+    });
+
+    expect(result.environment.hostname).toBe('acme-corp-production.localhost');
+  });
+
+  it('appends a 4-hex suffix when hostname already exists in the org', async () => {
+    const driver = {
+      create: vi.fn(async () => ({})),
+      find: vi.fn(async () => []),
+      findOne: vi.fn(async (object: string, query: any) => {
+        if (object === 'sys_organization') return { id: 'org-42', slug: 'acme' };
+        // First env named "staging" already exists — force a collision.
+        if (object === 'sys_environment' && query?.where?.hostname === 'acme-staging.localhost') {
+          return { id: 'existing', hostname: 'acme-staging.localhost' };
+        }
+        return null;
+      }),
+      update: vi.fn(async () => ({})),
+    };
+
+    const svc = new ProjectProvisioningService({
+      controlPlaneDriver: driver as any,
+      adapters: [new MockProjectDatabaseAdapter('turso')],
+    });
+
+    const result = await svc.provisionProject({
+      organizationId: 'org-42',
+      displayName: 'Staging',
+      createdBy: 'user-1',
+    });
+
+    expect(result.environment.hostname).toMatch(/^acme-staging-[0-9a-f]{4}\.localhost$/);
+  });
+
+  it('falls back to a hex env-slug when displayName contains no ASCII chars', async () => {
+    const driver = {
+      create: vi.fn(async () => ({})),
+      find: vi.fn(async () => []),
+      findOne: vi.fn(async (object: string) => {
+        if (object === 'sys_organization') return { id: 'org-42', slug: 'acme' };
+        return null;
+      }),
+      update: vi.fn(async () => ({})),
+    };
+
+    const svc = new ProjectProvisioningService({
+      controlPlaneDriver: driver as any,
+      adapters: [new MockProjectDatabaseAdapter('turso')],
+    });
+
+    const result = await svc.provisionProject({
+      organizationId: 'org-42',
+      displayName: '生产环境',
+      createdBy: 'user-1',
+    });
+
+    // displayName produces no usable ASCII → falls back to 8-hex project id slice.
+    expect(result.environment.hostname).toMatch(/^acme-[0-9a-f]{8}\.localhost$/);
+  });
 });
 
 describe('ProjectProvisioningService.provisionSystemProject', () => {

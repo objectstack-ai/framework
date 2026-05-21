@@ -2,3 +2,4 @@
 
 export { SETUP_APP } from './setup.app.js';
 export * from './dashboards/index.js';
+export * from './translations/index.js';

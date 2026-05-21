@@ -76,6 +76,25 @@ const leadHook: Hook = {
     }
 
     if (event === 'beforeInsert') {
+      // Web-to-Lead: anonymous submissions from the public form get
+      // sensible defaults stamped server-side so they cannot be spoofed
+      // by the client. Guests are unauthenticated, so we identify them
+      // by the absence of `ctx.user?.id`. (The `guest_portal` profile
+      // already restricts them to INSERT-only on `lead`.)
+      const isGuestSubmission = !ctx.user?.id;
+      if (isGuestSubmission) {
+        if (!input.lead_source) input.lead_source = 'web';
+        if (!input.status)      input.status      = 'new';
+        // Never trust client-supplied conversion / ownership fields on
+        // a public form — strip them defensively.
+        delete (input as Record<string, unknown>).is_converted;
+        delete (input as Record<string, unknown>).converted_account;
+        delete (input as Record<string, unknown>).converted_contact;
+        delete (input as Record<string, unknown>).converted_opportunity;
+        delete (input as Record<string, unknown>).converted_date;
+        delete (input as Record<string, unknown>).owner;
+      }
+
       if (typeof input.rating !== 'number') {
         input.rating = computeRating(input);
       }

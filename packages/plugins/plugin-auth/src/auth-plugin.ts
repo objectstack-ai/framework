@@ -6,6 +6,7 @@ import {
   SETUP_APP,
   SystemOverviewDashboard,
   SecurityOverviewDashboard,
+  SetupAppTranslations,
 } from '@objectstack/platform-objects/apps';
 import { AuthManager } from './auth-manager.js';
 import {
@@ -150,6 +151,41 @@ export class AuthPlugin implements Plugin {
     if (!this.authManager) {
       throw new Error('Auth manager not initialized');
     }
+
+    // Contribute the static Setup App translation bundle into the kernel's
+    // i18n service. Done in `kernel:ready` (not `init`) because the i18n
+    // service plugin is typically registered AFTER capability-loaded service
+    // plugins. Mirrors the pattern used by SettingsServicePlugin for its
+    // built-in settings translations. Gracefully skips when no i18n service
+    // is registered (e.g. lean test/MSW kernels) — Setup App labels then
+    // fall back to the inline literals on the App / Dashboard metadata.
+    ctx.hook('kernel:ready', async () => {
+      try {
+        const i18n = ctx.getService<{
+          loadTranslations: (locale: string, data: Record<string, unknown>) => void;
+        }>('i18n');
+        let loaded = 0;
+        for (const [locale, data] of Object.entries(SetupAppTranslations)) {
+          if (data && typeof data === 'object') {
+            try {
+              i18n.loadTranslations(locale, data as Record<string, unknown>);
+              loaded++;
+            } catch (err: any) {
+              ctx.logger.warn(
+                `Auth: failed to load Setup App translations for '${locale}': ${err?.message ?? err}`,
+              );
+            }
+          }
+        }
+        if (loaded > 0) {
+          ctx.logger.info(
+            `Auth: contributed Setup App translations (${loaded} locale${loaded > 1 ? 's' : ''})`,
+          );
+        }
+      } catch {
+        // i18n service not registered — Setup App falls back to inline labels.
+      }
+    });
 
     // Defer HTTP route registration to kernel:ready hook.
     // This ensures all plugins (including HonoServerPlugin) have completed

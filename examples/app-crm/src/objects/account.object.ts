@@ -138,6 +138,13 @@ export const Account = ObjectSchema.create({
       group: 'branding',
     }),
 
+    // Company logo (uploaded image)
+    logo: Field.image({
+      label: 'Company Logo',
+      group: 'branding',
+      crop: true,
+    }),
+
     // Date field
     last_activity_date: Field.date({
       label: 'Last Activity Date',

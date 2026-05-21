@@ -436,6 +436,61 @@ export class AuthManager {
         // who wire a real mailer can re-enable downstream.
         requireEmailVerificationOnInvitation: false,
         ...(customOrgRoles ? { roles: customOrgRoles } : {}),
+        // ── Slug-change guard ─────────────────────────────────────
+        // An org's slug is baked into every env hostname at creation
+        // time (see service-tenant `project-provisioning.ts`). Renaming
+        // it while live envs exist would silently desync the URL from
+        // the org identity. Block the change here; the cloud Console
+        // surfaces this as an actionable error and points users to
+        // `change_hostname` or archiving the env. Org `name` (display
+        // label) is unaffected — only `slug` is guarded.
+        //
+        // We resolve the data engine lazily so non-cloud apps (which
+        // never seed `sys_environment`) keep working: any lookup error
+        // is treated as "no envs to protect".
+        organizationHooks: {
+          beforeUpdateOrganization: async ({ organization, member }: any) => {
+            const newSlug = organization?.slug;
+            const orgId = member?.organizationId;
+            if (!newSlug || !orgId) return;
+
+            const dataEngine = this.config.dataEngine as any;
+            if (!dataEngine) return;
+
+            let currentSlug: string | undefined;
+            try {
+              const current = await dataEngine.findOne('sys_organization', {
+                where: { id: orgId },
+              });
+              currentSlug = current?.slug;
+            } catch {
+              return;
+            }
+            if (!currentSlug || currentSlug === newSlug) return;
+
+            let activeEnvs = 0;
+            try {
+              const envs = await dataEngine.find('sys_environment', {
+                where: { organization_id: orgId },
+              });
+              activeEnvs = (envs ?? []).filter(
+                (e: any) => e?.status !== 'archived' && e?.status !== 'failed',
+              ).length;
+            } catch {
+              return;
+            }
+
+            if (activeEnvs > 0) {
+              const { APIError } = await import('better-auth/api');
+              throw new APIError('FORBIDDEN', {
+                message:
+                  `Cannot change organization slug while ${activeEnvs} active ` +
+                  `environment(s) still reference it. Archive those environments ` +
+                  `or rename their hostnames first.`,
+              });
+            }
+          },
+        },
         // No mailer is wired in framework yet — log the accept URL so
         // operators / UI can fall back to copy-paste flows. Replace this
         // with a real mail integration when available.

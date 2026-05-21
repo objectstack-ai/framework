@@ -27,6 +27,23 @@ const caseValidation: Hook = {
   description: 'Apply SLA defaults for critical cases.',
   handler: async (ctx: HookContext) => {
     const { input } = ctx;
+
+    // Web-to-Case: stamp safe defaults for anonymous submissions and strip
+    // any client-supplied fields that should be controlled server-side.
+    // Guests are unauthenticated, identified by the absence of ctx.user.id.
+    // Only applies on INSERT (no `ctx.previous`).
+    const isGuestSubmission = !ctx.previous && !ctx.user?.id;
+    if (isGuestSubmission) {
+      if (!input.origin)   input.origin   = 'web';
+      if (!input.status)   input.status   = 'new';
+      if (!input.priority) input.priority = 'medium';
+      delete (input as Record<string, unknown>).owner;
+      delete (input as Record<string, unknown>).is_escalated;
+      delete (input as Record<string, unknown>).is_closed;
+      delete (input as Record<string, unknown>).internal_notes;
+      delete (input as Record<string, unknown>).resolution;
+    }
+
     const priority =
       (typeof input.priority === 'string' && input.priority) ||
       (typeof ctx.previous?.priority === 'string' && (ctx.previous.priority as string)) ||

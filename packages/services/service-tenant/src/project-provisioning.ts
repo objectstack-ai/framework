@@ -19,6 +19,25 @@ import {
 import { TursoPlatformClient } from './turso-platform-client.js';
 
 /**
+ * Sanitise a string into a valid hostname segment: lowercase ASCII
+ * letters / digits / single dashes, no leading or trailing dash, trimmed
+ * to `maxLength`. Returns `''` when nothing usable remains (e.g. the input
+ * was empty or contained only non-ASCII characters such as Chinese names);
+ * callers should fall back to a deterministic short id in that case.
+ */
+function sanitiseHostnameSegment(input: string | undefined, maxLength: number): string {
+  if (!input) return '';
+  return input
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, maxLength)
+    .replace(/-+$/g, '');
+}
+
+/**
  * Backend-agnostic physical DB provisioning adapter.
  *
  * Implementations wrap provider APIs (Turso Platform, Neon, Supabase,
@@ -361,13 +380,19 @@ export class ProjectProvisioningService {
     const databaseName = `p-${projectId.replace(/-/g, '').slice(0, 24)}`;
 
     // ── Hostname auto-generation ────────────────────────────────────────
-    // Format: `{orgSlug}-{shortId}.{rootDomain}` — matches the legacy
-    // `http-dispatcher` POST /environment behaviour so existing tenant
-    // resolution code keeps working. The user only needs to type a
-    // display name; the hostname is computed deterministically from the
-    // org slug + project id. Suffix is configurable via OS_ROOT_DOMAIN.
+    // Format: `{orgSlug}-{envSlug}.{rootDomain}` where `envSlug` is derived
+    // from the user-supplied `displayName` (e.g. "Production" →
+    // `acme-corp-production.localhost`). This produces short, readable
+    // URLs that surface the env's purpose rather than an opaque hex
+    // suffix. On collision within the same org (e.g. user creates two
+    // envs both named "Staging"), we append a 4-hex suffix derived from
+    // the project id, which is stable per env and very unlikely to clash.
     //
-    // Default selection:
+    // Fall-back to the legacy 8-hex shortId when no usable slug can be
+    // produced (e.g. displayName is all non-ASCII) so we never end up
+    // with a degenerate hostname like `acme-corp-.localhost`.
+    //
+    // Root domain selection:
     //   - OS_ROOT_DOMAIN set       → use as-is (operator override)
     //   - ROOT_DOMAIN set          → use as-is (legacy alias)
     //   - NODE_ENV === 'production'→ `objectstack.app`
@@ -376,11 +401,13 @@ export class ProjectProvisioningService {
     //     and don't require /etc/hosts edits.
     let resolvedHostname = parsed.hostname?.trim();
     if (!resolvedHostname) {
-      const shortId = projectId.replace(/-/g, '').slice(0, 8);
+      const compactProjectHex = projectId.replace(/-/g, '');
       const rootDomain =
         process.env.OS_ROOT_DOMAIN ||
         process.env.ROOT_DOMAIN ||
         (process.env.NODE_ENV === 'production' ? 'objectstack.app' : 'localhost');
+
+      // Resolve org slug (fallback to org id when slug not yet stored).
       let orgSlug: string | undefined;
       if (this.config.controlPlaneDriver) {
         try {
@@ -393,13 +420,36 @@ export class ProjectProvisioningService {
           /* sys_organization may not exist yet — fall through */
         }
       }
-      // Sanitise slug: lowercase alnum + dashes only, fall back to "org".
-      const sanitised = (orgSlug ?? parsed.organizationId)
-        .toLowerCase()
-        .replace(/[^a-z0-9-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 40) || 'org';
-      resolvedHostname = `${sanitised}-${shortId}.${rootDomain}`;
+      const orgPart =
+        sanitiseHostnameSegment(orgSlug ?? parsed.organizationId, 30) || 'org';
+
+      // Derive env-slug from the user's display name; fall back to a
+      // deterministic short id when displayName produces no usable chars.
+      const envPart =
+        sanitiseHostnameSegment(parsed.displayName, 30) || compactProjectHex.slice(0, 8);
+
+      const baseCandidate = `${orgPart}-${envPart}`;
+      let hostname = `${baseCandidate}.${rootDomain}`;
+
+      // Collision check: if another env already owns this hostname,
+      // append a stable 4-hex suffix derived from the project id. We
+      // only check when we have a control-plane driver — otherwise the
+      // host-side UNIQUE index will surface any conflict.
+      if (this.config.controlPlaneDriver) {
+        try {
+          const collision = await (this.config.controlPlaneDriver.findOne as any)(
+            'sys_environment',
+            { where: { hostname } },
+          );
+          if (collision) {
+            const suffix = compactProjectHex.slice(0, 4);
+            hostname = `${baseCandidate}-${suffix}.${rootDomain}`;
+          }
+        } catch {
+          /* lookup failed — let the unique index decide */
+        }
+      }
+      resolvedHostname = hostname;
     }
 
     // Enforce "exactly one default project per org" invariant.

@@ -344,6 +344,121 @@ describe('AuthManager', () => {
       expect(orgPlugin._opts.schema.session.fields.activeOrganizationId).toBe('active_organization_id');
     });
 
+    it('blocks slug change when the org has active environments', async () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const dataEngine = {
+        findOne: vi.fn(async (object: string) => {
+          if (object === 'sys_organization') return { id: 'org-42', slug: 'acme-old' };
+          return null;
+        }),
+        find: vi.fn(async (object: string) => {
+          if (object === 'sys_environment') {
+            return [
+              { id: 'e1', status: 'active' },
+              { id: 'e2', status: 'archived' },
+            ];
+          }
+          return [];
+        }),
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        plugins: { organization: true },
+        dataEngine: dataEngine as any,
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      const beforeUpdate = orgPlugin._opts.organizationHooks?.beforeUpdateOrganization;
+      expect(typeof beforeUpdate).toBe('function');
+
+      // Slug change to "acme-new" while 1 active env exists must throw.
+      await expect(
+        beforeUpdate({
+          organization: { slug: 'acme-new' },
+          member: { organizationId: 'org-42' },
+        }),
+      ).rejects.toThrowError(/active.*environment/i);
+    });
+
+    it('allows slug change when no active environments reference the org', async () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const dataEngine = {
+        findOne: vi.fn(async () => ({ id: 'org-42', slug: 'acme-old' })),
+        find: vi.fn(async () => [{ id: 'e1', status: 'archived' }]),
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        plugins: { organization: true },
+        dataEngine: dataEngine as any,
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      const beforeUpdate = orgPlugin._opts.organizationHooks.beforeUpdateOrganization;
+
+      await expect(
+        beforeUpdate({
+          organization: { slug: 'acme-new' },
+          member: { organizationId: 'org-42' },
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('allows non-slug updates (e.g. name only) without env checks', async () => {
+      let capturedConfig: any;
+      (betterAuth as any).mockImplementation((config: any) => {
+        capturedConfig = config;
+        return { handler: vi.fn(), api: {} };
+      });
+
+      const dataEngine = {
+        findOne: vi.fn(),
+        find: vi.fn(),
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const manager = new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        plugins: { organization: true },
+        dataEngine: dataEngine as any,
+      });
+      await manager.getAuthInstance();
+      warnSpy.mockRestore();
+
+      const orgPlugin = capturedConfig.plugins.find((p: any) => p.id === 'organization');
+      const beforeUpdate = orgPlugin._opts.organizationHooks.beforeUpdateOrganization;
+
+      // Updating only `name` — no slug — must short-circuit before any DB read.
+      await expect(
+        beforeUpdate({
+          organization: { name: 'New Name' },
+          member: { organizationId: 'org-42' },
+        }),
+      ).resolves.toBeUndefined();
+      expect(dataEngine.findOne).not.toHaveBeenCalled();
+      expect(dataEngine.find).not.toHaveBeenCalled();
+    });
+
     it('should register twoFactor plugin with schema mapping when enabled', async () => {
       let capturedConfig: any;
       (betterAuth as any).mockImplementation((config: any) => {

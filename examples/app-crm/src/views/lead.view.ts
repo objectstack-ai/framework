@@ -611,6 +611,65 @@ export const LeadViews = defineView({
     },
     
     /**
+     * 7. PUBLIC / ANONYMOUS — "Web-to-Lead"
+     *
+     * Airtable-style public form hosted at `/forms/contact-us`. Embeddable
+     * via iframe on a marketing site. Guests can ONLY submit (insert) — the
+     * `guest_portal` profile denies read/edit/delete on `lead`.
+     *
+     * Fields not on the form (status, lead_source, owner, rating) are stamped
+     * by the `lead_automation` hook in `lead.hook.ts` after a guest submission.
+     */
+    web_to_lead: {
+      type: 'simple',
+      data: {
+        provider: 'object',
+        object: 'lead',
+      },
+      sections: [
+        {
+          label: 'Tell us about yourself',
+          columns: 2,
+          fields: [
+            { field: 'first_name', required: true },
+            { field: 'last_name',  required: true },
+            { field: 'email',      required: true, colSpan: 2 },
+            'phone',
+            'title',
+          ],
+        },
+        {
+          label: 'About your company',
+          columns: 2,
+          fields: [
+            { field: 'company', required: true, colSpan: 2 },
+            'website',
+            'industry',
+            'number_of_employees',
+            'annual_revenue',
+          ],
+        },
+        {
+          label: 'How can we help?',
+          columns: 1,
+          fields: [
+            {
+              field: 'description',
+              required: true,
+              placeholder: 'Briefly describe what you are looking for...',
+              helpText: 'A sales representative will get back to you within one business day.',
+            },
+          ],
+        },
+      ],
+      sharing: {
+        enabled: true,
+        allowAnonymous: true,
+        publicLink: '/forms/contact-us',
+      },
+    },
+
+    /**
      * Advanced Example: Conditional Field Visibility & Dependencies
      */
     advanced_conditional: {

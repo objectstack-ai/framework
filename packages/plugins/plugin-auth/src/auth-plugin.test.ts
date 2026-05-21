@@ -240,8 +240,18 @@ describe('AuthPlugin', () => {
       await authPlugin.init(mockContext);
       await authPlugin.start(mockContext);
 
-      // Should not register kernel:ready hook for routes
-      expect(mockContext.hook).not.toHaveBeenCalledWith('kernel:ready', expect.any(Function));
+      // Should not register HTTP routes — http-server should never be looked
+      // up. The plugin still registers a kernel:ready hook unconditionally
+      // for contributing Setup App i18n translations into the i18n service,
+      // so we assert by side-effect (http-server lookup) rather than by
+      // checking whether ctx.hook was called.
+      const httpServerLookups = (mockContext.getService as ReturnType<typeof vi.fn>).mock.calls
+        .filter((args: unknown[]) => args[0] === 'http-server');
+      // Trigger any registered hooks; route registration should still skip.
+      await hookCapture.trigger('kernel:ready');
+      const httpServerLookupsAfter = (mockContext.getService as ReturnType<typeof vi.fn>).mock.calls
+        .filter((args: unknown[]) => args[0] === 'http-server');
+      expect(httpServerLookups.length).toBe(httpServerLookupsAfter.length);
     });
 
     it('should gracefully skip routes when http-server is not available', async () => {

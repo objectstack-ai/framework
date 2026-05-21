@@ -39,6 +39,7 @@ export const zhCN: TranslationData = {
         is_active: { label: '是否活跃' },
         last_activity_date: { label: '最近活动日期' },
         brand_color: { label: '品牌色' },
+        logo: { label: '公司标识' },
         tier: {
           label: '客户分层',
           options: { strategic: '战略客户', enterprise: '企业客户', mid_market: '中型客户', smb: '中小客户' },
@@ -473,6 +474,8 @@ export const zhCN: TranslationData = {
         product_manager: { label: '产品经理' },
         image_url: { label: '产品图片' },
         datasheet_url: { label: '规格书链接' },
+        image: { label: '产品图片' },
+        datasheet: { label: '规格书' },
       },
       _views: {
         all_products: { label: '全部产品' },

@@ -49,7 +49,7 @@ export const ProductViews = defineView({
       data: { provider: 'object', object: 'product' },
       columns: ['name', 'category', 'list_price'],
       gallery: {
-        coverField: 'image_url',
+        coverField: 'image',
         coverFit: 'cover',
         cardSize: 'medium',
         titleField: 'name',
@@ -96,7 +96,7 @@ export const ProductViews = defineView({
       {
         label: 'Media',
         columns: 1,
-        fields: ['image_url', 'datasheet_url', 'description'],
+        fields: ['image', 'datasheet', 'description'],
       },
     ],
   },
