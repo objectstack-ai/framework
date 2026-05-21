@@ -654,6 +654,84 @@ export default class Serve extends Command {
                 } catch {
                   return next();
                 }
+                // Content negotiation: browsers (Accept: text/html) get
+                // a clean 404 page; API clients (curl/fetch with JSON
+                // accept) get a structured error body.
+                const accept = (c.req.header('accept') || '').toLowerCase();
+                const wantsHtml = accept.includes('text/html');
+                if (wantsHtml) {
+                  const safeHost = host.replace(/[<>&"']/g, (ch: string) => ((({
+                    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;',
+                  } as Record<string, string>)[ch]) ?? ch));
+                  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>404 — Environment not found</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #fafafa;
+    color: #111;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #0b0b0c; color: #e8e8e8; }
+    .card { background: #141417; border-color: #26262b; }
+    .host { background: #1c1c20; border-color: #2d2d33; color: #d0d0d0; }
+    .muted { color: #8b8b94; }
+    a { color: #6ea8fe; }
+  }
+  .card {
+    max-width: 520px;
+    width: 100%;
+    background: #fff;
+    border: 1px solid #e6e6e6;
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    text-align: center;
+  }
+  .code { font: 600 64px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 0; letter-spacing: -2px; }
+  h1 { font-size: 20px; margin: 16px 0 8px; font-weight: 600; }
+  p { margin: 8px 0; }
+  .muted { color: #666; font-size: 14px; }
+  .host {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 6px 12px;
+    background: #f4f4f5;
+    border: 1px solid #e4e4e7;
+    border-radius: 6px;
+    font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #444;
+    word-break: break-all;
+  }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <p class="code">404</p>
+    <h1>Environment not found</h1>
+    <p class="muted">No ObjectStack environment is bound to this hostname.</p>
+    <div class="host">${safeHost}</div>
+    <p class="muted" style="margin-top:24px">
+      If you own this domain, bind it to an environment in the
+      <a href="https://cloud.objectos.app/">ObjectStack Cloud console</a>.
+    </p>
+  </main>
+</body>
+</html>`;
+                  return c.html(html, 404);
+                }
                 return c.json(
                   {
                     error: 'environment_not_found',
