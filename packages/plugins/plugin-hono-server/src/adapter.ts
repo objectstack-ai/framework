@@ -111,7 +111,14 @@ export class HonoHttpServer implements IHttpServer {
 
             const res = {
                 json: (data: any) => { capturedResponse = c.json(data); },
-                send: (data: string) => { capturedResponse = c.html(data); },
+                send: (data: string | Uint8Array | ArrayBuffer | Buffer) => {
+                    if (data instanceof Uint8Array || data instanceof ArrayBuffer || (typeof Buffer !== 'undefined' && Buffer.isBuffer?.(data))) {
+                        const body = data instanceof ArrayBuffer ? data : (data as Uint8Array).buffer.slice((data as Uint8Array).byteOffset, (data as Uint8Array).byteOffset + (data as Uint8Array).byteLength);
+                        capturedResponse = c.body(body as ArrayBuffer);
+                    } else {
+                        capturedResponse = c.html(data as string);
+                    }
+                },
                 status: (code: number) => { c.status(code); return res; },
                 header: (name: string, value: string) => {
                     c.header(name, value);

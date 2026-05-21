@@ -479,9 +479,7 @@ export function registerStorageRoutes(
 
       res.header('content-type', payload.ct ?? 'application/octet-stream');
       res.header('content-length', String(data.byteLength));
-      // IHttpResponse only has json/send — use send with binary encoding
-      // This works for Hono adapter since send passes through
-      (res as any).send(data);
+      res.send(data);
     } catch (err: any) {
       const statusCode = err.message?.includes('expired') || err.message?.includes('signature') ? 403 : 500;
       res.status(statusCode).json({ error: err.message ?? 'Download failed' });

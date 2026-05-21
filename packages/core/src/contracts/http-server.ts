@@ -47,7 +47,7 @@ export interface IHttpResponse {
      * Send a text/html response
      * @param data - Data to send
      */
-    send(data: string): void | Promise<void>;
+    send(data: string | Uint8Array | ArrayBuffer): void | Promise<void>;
     
     /**
      * Set HTTP status code
