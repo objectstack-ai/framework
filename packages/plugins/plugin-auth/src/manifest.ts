@@ -27,6 +27,7 @@ import {
   SysUser,
   SysUserPreference,
   SysVerification,
+  UserAppState,
 } from '@objectstack/platform-objects/identity';
 
 export const AUTH_PLUGIN_ID = 'com.objectstack.plugin-auth';
@@ -46,6 +47,7 @@ export const authIdentityObjects: any[] = [
   SysApiKey,
   SysTwoFactor,
   SysUserPreference,
+  UserAppState,
   SysOauthApplication,
   SysOauthAccessToken,
   SysOauthRefreshToken,

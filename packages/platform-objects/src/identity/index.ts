@@ -28,6 +28,7 @@ export { SysApiKey } from './sys-api-key.object.js';
 export { SysTwoFactor } from './sys-two-factor.object.js';
 export { SysDeviceCode } from './sys-device-code.object.js';
 export { SysUserPreference } from './sys-user-preference.object.js';
+export { UserAppState } from './user-app-state.object.js';
 
 // ── OIDC Provider Objects ──────────────────────────────────────────────────
 export { SysOauthApplication } from './sys-oauth-application.object.js';

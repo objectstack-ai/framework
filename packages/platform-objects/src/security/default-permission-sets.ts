@@ -182,6 +182,12 @@ export const defaultPermissionSets: PermissionSet[] = [
         using: 'user_id = current_user.id',
       },
       {
+        name: 'user_app_state_self',
+        object: 'user_app_state',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      {
         name: 'sys_api_key_self',
         object: 'sys_api_key',
         operation: 'all',
@@ -277,6 +283,12 @@ export const defaultPermissionSets: PermissionSet[] = [
       {
         name: 'sys_user_preference_self',
         object: 'sys_user_preference',
+        operation: 'select',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'user_app_state_self',
+        object: 'user_app_state',
         operation: 'select',
         using: 'user_id = current_user.id',
       },
