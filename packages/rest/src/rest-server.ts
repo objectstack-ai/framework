@@ -81,6 +81,24 @@ function mapDataError(error: any, object?: string): { status: number; body: Reco
         };
     }
 
+    // Record-level not-found from ObjectQL (`getData` / `updateData` /
+    // `deleteData`). These are normal client mistakes (stale UI link,
+    // hand-typed id, deleted record) and should be a quiet 404 — not
+    // a "[REST] Unhandled error" log entry that scares operators.
+    if (
+        error?.code === 'RECORD_NOT_FOUND' ||
+        /^Record\s+\S+\s+not found in\s+\S+/i.test(raw)
+    ) {
+        return {
+            status: 404,
+            body: {
+                error: raw,
+                code: 'RECORD_NOT_FOUND',
+                ...(object ? { object } : {}),
+            },
+        };
+    }
+
     const looksLikeUnknownObject =
         lower.includes('no such table') ||
         lower.includes('relation') && lower.includes('does not exist') ||

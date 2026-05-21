@@ -858,7 +858,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 record: result
             };
         }
-        throw new Error(`Record ${request.id} not found in ${request.object}`);
+        const err = new Error(`Record ${request.id} not found in ${request.object}`) as Error & {
+            code?: string;
+            status?: number;
+            object?: string;
+        };
+        err.code = 'RECORD_NOT_FOUND';
+        err.status = 404;
+        err.object = request.object;
+        throw err;
     }
 
     async createData(request: { object: string, data: any, context?: any }) {
