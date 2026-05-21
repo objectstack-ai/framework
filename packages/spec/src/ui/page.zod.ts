@@ -302,6 +302,44 @@ export const PageSchema = lazySchema(() => z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes'),
+
+  /**
+   * Override semantics for record pages.
+   *
+   * - `"full"` (default): the schema fully describes the page.
+   * - `"slotted"`: the schema only provides overrides for one or more
+   *   named slots (see `slots`). The default-page synthesizer fills
+   *   in every slot the author did NOT override. Useful when you want
+   *   to customize just the header / actions / one tab without
+   *   re-authoring the rest of the page.
+   *
+   * Only meaningful when `type === 'record'`. Ignored otherwise.
+   */
+  kind: z.enum(['full', 'slotted']).default('full')
+    .describe('Page override mode: full (default) or slotted (partial overrides)'),
+
+  /**
+   * Slot override map for slotted record pages.
+   *
+   * Each slot accepts a single PageComponent or an array. Slots not
+   * provided fall through to the synthesized default.
+   *
+   * Slot menu (v1): header | actions | highlights | details | tabs |
+   * discussion. Each slot is a full replacement at the slot boundary —
+   * no deep merge, no patch operations. To compose default + custom,
+   * call the corresponding `buildDefault*` sub-builder from the
+   * renderer runtime (e.g. @object-ui/plugin-detail).
+   *
+   * Only honored when `kind === 'slotted'`.
+   */
+  slots: z.object({
+    header: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+    actions: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+    highlights: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+    details: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+    tabs: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+    discussion: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+  }).optional().describe('Slot override map for slotted pages'),
 }).superRefine((data, ctx) => {
   if (data.type === 'record_review' && !data.recordReview) {
     ctx.addIssue({
@@ -315,6 +353,13 @@ export const PageSchema = lazySchema(() => z.object({
       code: z.ZodIssueCode.custom,
       path: ['blankLayout'],
       message: 'blankLayout is required when type is "blank"',
+    });
+  }
+  if (data.kind === 'slotted' && !data.slots) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['slots'],
+      message: 'slots is required when kind is "slotted"',
     });
   }
 }));

@@ -2,6 +2,7 @@
 
 export { LeadDetailPage } from './lead_detail.page';
 export { OpportunityDetailPage } from './opportunity_detail.page';
+export { AccountDetailPage } from './account_detail.page';
 export { SalesHomePage } from './home.page';
 export { AppLauncherPage } from './app_launcher.page';
 export { UtilityBarPage } from './utility_bar.page';

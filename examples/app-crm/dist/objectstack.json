@@ -16850,6 +16850,31 @@
   ],
   "pages": [
     {
+      "name": "account_detail_page",
+      "label": "Account Detail",
+      "description": "Slotted detail page for Account — overrides only the header; all other regions (highlights, tabs, history) ride synthesized defaults.",
+      "type": "record",
+      "object": "account",
+      "template": "default",
+      "regions": [],
+      "isDefault": false,
+      "kind": "slotted",
+      "slots": {
+        "header": {
+          "type": "page:header",
+          "id": "account_header_slotted",
+          "label": "Account Header (slotted)",
+          "properties": {
+            "title": "{name}",
+            "subtitle": "{industry} · {type}",
+            "eyebrow": "ACCOUNT",
+            "icon": "building-2",
+            "breadcrumb": true
+          }
+        }
+      }
+    },
+    {
       "name": "app_launcher_page",
       "label": "App Launcher",
       "description": "Central hub for accessing all applications",
@@ -16902,7 +16927,8 @@
       "aria": {
         "ariaLabel": "App Launcher Page",
         "ariaDescribedBy": "Central application launcher for accessing all apps"
-      }
+      },
+      "kind": "full"
     },
     {
       "name": "close_case",
@@ -16933,7 +16959,8 @@
           ]
         }
       ],
-      "isDefault": false
+      "isDefault": false,
+      "kind": "full"
     },
     {
       "name": "create_campaign",
@@ -16964,7 +16991,8 @@
           ]
         }
       ],
-      "isDefault": false
+      "isDefault": false,
+      "kind": "full"
     },
     {
       "name": "escalate_case",
@@ -16995,7 +17023,8 @@
           ]
         }
       ],
-      "isDefault": false
+      "isDefault": false,
+      "kind": "full"
     },
     {
       "name": "lead_detail_page",
@@ -17360,7 +17389,8 @@
       "aria": {
         "ariaLabel": "Lead Detail Page",
         "ariaDescribedBy": "Detailed view of lead information with related records and activity"
-      }
+      },
+      "kind": "full"
     },
     {
       "name": "log_call",
@@ -17391,7 +17421,8 @@
           ]
         }
       ],
-      "isDefault": false
+      "isDefault": false,
+      "kind": "full"
     },
     {
       "name": "mass_update_stage",
@@ -17422,7 +17453,8 @@
           ]
         }
       ],
-      "isDefault": false
+      "isDefault": false,
+      "kind": "full"
     },
     {
       "name": "opportunity_detail_page",
@@ -17707,7 +17739,8 @@
       "aria": {
         "ariaLabel": "Opportunity Detail Page",
         "ariaDescribedBy": "Detailed view of opportunity information with related records and activity"
-      }
+      },
+      "kind": "full"
     },
     {
       "name": "sales_home_page",
@@ -17879,7 +17912,8 @@
       "aria": {
         "ariaLabel": "Sales Home Page",
         "ariaDescribedBy": "Sales team home page with metrics, leads, and quick actions"
-      }
+      },
+      "kind": "full"
     },
     {
       "name": "send_email",
@@ -17910,7 +17944,8 @@
           ]
         }
       ],
-      "isDefault": false
+      "isDefault": false,
+      "kind": "full"
     },
     {
       "name": "utility_bar_page",
@@ -17966,7 +18001,8 @@
       "aria": {
         "ariaLabel": "Utility Bar",
         "ariaDescribedBy": "Quick access utility bar with floating tools and notifications"
-      }
+      },
+      "kind": "full"
     }
   ],
   "dashboards": [
@@ -19910,7 +19946,7 @@
           "filter": {
             "is_active": true,
             "last_activity_date": {
-              "$lt": "2026-05-06"
+              "$lt": "2026-05-07"
             }
           }
         },
@@ -19936,7 +19972,7 @@
           "filter": {
             "is_active": true,
             "last_activity_date": {
-              "$lt": "2026-04-20"
+              "$lt": "2026-04-21"
             }
           }
         },
@@ -19967,7 +20003,7 @@
           "filter": {
             "stage": "closed_lost",
             "close_date": {
-              "$gte": "2026-04-20"
+              "$gte": "2026-04-21"
             }
           }
         }
