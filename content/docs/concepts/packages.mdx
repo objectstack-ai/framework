@@ -5,7 +5,7 @@ description: Complete reference of all ObjectStack packages in the monorepo
 
 # Package Reference
 
-ObjectStack is distributed as a monorepo containing **42 packages** organized into core runtime, client SDKs, framework adapters, drivers, plugins, and platform services.
+ObjectStack is distributed as a monorepo containing **51 publishable packages** organized into core runtime, client SDKs, framework adapters, drivers, plugins, and platform services. Counts are kept in sync with the `packages/` directory in the [framework repository](https://github.com/objectstack-ai/framework/tree/main/packages).
 
 > **Note for AI Agents**: Each package's `README.md` contains a specific architectural role and usage rules section.
 
@@ -13,14 +13,14 @@ ObjectStack is distributed as a monorepo containing **42 packages** organized in
 
 | Category | Count | Description |
 | :--- | :---: | :--- |
-| Core runtime | 7 | `spec`, `core`, `runtime`, `types`, `metadata`, `objectql`, `rest` |
+| Core runtime | 9 | `spec`, `core`, `runtime`, `types`, `metadata`, `objectql`, `rest`, `formula`, `platform-objects` |
 | Client / DX | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | Framework adapters | 7 | Express, Fastify, Hono, NestJS, Next.js, Nuxt, SvelteKit |
-| Drivers | 3 | `driver-memory`, `driver-sql`, `driver-turso` |
-| Plugins | 8 | Auth, Security, Audit, Hono-Server, MCP-Server, MSW, Dev, Setup |
-| Platform services | 12 | AI, Analytics, Automation, Cache, Feed, I18n, Job, Package, Queue, Realtime, Storage, Tenant |
+| Drivers | 4 | `driver-memory`, `driver-sql`, `driver-turso`, `driver-mongodb` |
+| Plugins | 12 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-mcp-server`, `plugin-msw`, `plugin-dev` |
+| Platform services | 14 | AI, Analytics, Automation, Cache, Cloud, Feed, I18n, Job, Package, Queue, Realtime, Settings, Storage, Tenant |
 
-**Total: 42 packages**
+**Total: 51 packages**
 
 ---
 
@@ -568,6 +568,126 @@ Framework adapters that bridge ObjectStack's unified `HttpDispatcher` to specifi
 - CI/CD pipeline testing
 
 **Implementation Status:** ✅ **FULLY IMPLEMENTED** - Development ready
+
+---
+
+### @objectstack/driver-mongodb
+
+**Description:** MongoDB driver for ObjectQL
+
+**Purpose:** Persist objects in MongoDB with native document semantics while still going through the ObjectQL protocol.
+
+**Use Cases:** Existing MongoDB infrastructure, document-shaped data, hybrid relational/document deployments.
+
+**Implementation Status:** ⚠️ **IN PROGRESS**
+
+---
+
+### @objectstack/plugin-approvals
+
+**Description:** Approval-process engine driven by `sys_approval_process` / `sys_approval_request` metadata.
+
+**Key Features:** Multi-step approval chains, recall, escalation, audit trail, per-step assignees and conditions.
+
+**Use Cases:** Expense, quote, contract, and any workflow requiring human sign-off.
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/plugin-sharing
+
+**Description:** Record-level sharing engine for collaborative access.
+
+**Key Features:** Manual shares, sharing rules, team-based access, `sys_record_share` table, integration with `plugin-security`.
+
+**Use Cases:** Granting per-record access beyond static RBAC, Salesforce-style sharing.
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/plugin-email
+
+**Description:** Outbound email channel for ObjectStack flows and notifications.
+
+**Key Features:** Provider adapters (SMTP, transactional), MJML templates, delivery tracking, retries.
+
+**Use Cases:** Transactional email, workflow notifications, approval requests.
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/plugin-webhooks
+
+**Description:** Outbound HTTP webhook delivery for ObjectStack events.
+
+**Key Features:** Subscriptions, signed payloads, exponential-backoff retries, delivery logs.
+
+**Use Cases:** Integrating ObjectStack with external systems (Zapier-style, ETL pipelines, customer integrations).
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/plugin-reports
+
+**Description:** Metadata-driven report rendering and scheduling.
+
+**Key Features:** Tabular and aggregate reports, scheduled delivery, multi-format export (CSV/XLSX/PDF).
+
+**Use Cases:** Operational reporting on top of business objects without writing custom queries.
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/service-cloud
+
+**Description:** Cloud control-plane bridge service.
+
+**Purpose:** Connects an ObjectOS runtime to the hosted (or self-hosted) ObjectStack control plane: artifact fetching, project version selection, telemetry hooks.
+
+**Use Cases:** Cloud deployments, multi-environment artifact promotion.
+
+**Implementation Status:** ⚠️ **EVOLVING**
+
+---
+
+### @objectstack/service-settings
+
+**Description:** Hierarchical, validated application settings.
+
+**Key Features:** Per-org / per-user settings, Zod-validated namespaces, default fallbacks, runtime override.
+
+**Use Cases:** Feature flags, tenant configuration, user preferences.
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/formula
+
+**Description:** Shared CEL formula compiler and runtime.
+
+**Purpose:** One expression language across validation hooks, predicates, formula fields, conditions, and dynamic seed values. See [Formula skill](/docs/guides/formula).
+
+**Use Cases:** Anywhere metadata references a CEL expression (`F\`\``, `P\`\``, `cel\`\``).
+
+**Implementation Status:** ✅ **IMPLEMENTED**
+
+---
+
+### @objectstack/platform-objects
+
+**Description:** Canonical `sys_*` platform objects bundled with every ObjectOS runtime.
+
+**Purpose:** Standard system tables — users, sessions, audit logs, approvals, sharing, settings — so applications never redefine identity, audit, or governance primitives.
+
+**Use Cases:** Always loaded by the runtime; apps reference these via lookups.
+
+**Implementation Status:** ✅ **IMPLEMENTED**
 
 ---
 

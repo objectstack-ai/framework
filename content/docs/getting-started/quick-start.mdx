@@ -27,24 +27,16 @@ cd my-app
 The scaffolded project includes a sample object. Open `src/objects/my_app.ts`:
 
 ```typescript
-import { Data } from '@objectstack/spec';
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 
-const myApp: Data.Object = {
+const myApp = ObjectSchema.create({
   name: 'my_app',
   label: 'My App',
   ownership: 'own',
   fields: {
-    name: {
-      type: 'text',
-      label: 'Name',
-      required: true,
-    },
-    description: {
-      type: 'textarea',
-      label: 'Description',
-    },
-    status: {
-      type: 'select',
+    name: Field.text({ label: 'Name', required: true }),
+    description: Field.textarea({ label: 'Description' }),
+    status: Field.select({
       label: 'Status',
       options: [
         { label: 'Draft', value: 'draft' },
@@ -52,12 +44,16 @@ const myApp: Data.Object = {
         { label: 'Archived', value: 'archived' },
       ],
       defaultValue: 'draft',
-    },
+    }),
   },
-};
+});
 
 export default myApp;
 ```
+
+<Callout type="info">
+This is the same metadata that powers the REST API, Studio editors, and the MCP tools exposed to AI agents — define it once, and ObjectStack derives the rest.
+</Callout>
 
 ### Launch the Studio
 

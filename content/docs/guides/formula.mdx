@@ -59,30 +59,25 @@ transforms it into the right envelope based on the field type. The compiled
 artifact always contains the full envelope (and, after M9.2, the AST).
 
 ```ts
-import { defineObject, F, P, cel, cron, tmpl } from '@objectstack/spec';
+import { F, P, cel, cron, tmpl } from '@objectstack/spec';
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 
-defineObject({
+export const Invoice = ObjectSchema.create({
   name: 'invoice',
   titleFormat: tmpl`Invoice {{record.invoice_no}} – {{record.customer.name}}`,
-  fields: [
-    {
-      name: 'total',
-      type: 'formula',
-      formula: F`record.subtotal + record.subtotal * record.tax_rate`,
+  fields: {
+    total: Field.formula({
       result_type: 'currency',
-    },
-    {
-      name: 'po_number',
-      type: 'text',
+      formula: F`record.subtotal + record.subtotal * record.tax_rate`,
+    }),
+    po_number: Field.text({
       conditionalRequired: P`record.amount > 10000`,
-    },
-    {
-      name: 'issued_date',
-      type: 'date',
-      // M9.9b — declarative default, evaluated at insert time
+    }),
+    // M9.9b — declarative default, evaluated at insert time
+    issued_date: Field.date({
       defaultValue: cel`today()`,
-    },
-  ],
+    }),
+  },
 });
 ```
 

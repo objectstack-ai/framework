@@ -258,18 +258,16 @@ await i18n.reload();
 Translate metadata labels automatically:
 
 ```typescript
-import { defineObject } from '@objectstack/spec';
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 
-const contact = defineObject({
+const contact = ObjectSchema.create({
   name: 'contact',
   label: 'i18n:objects.contact.label', // References translation key
-  fields: [
-    {
-      name: 'name',
+  fields: {
+    name: Field.text({
       label: 'i18n:fields.contact.name',
-      type: 'text',
-    },
-  ],
+    }),
+  },
 });
 
 // Translation file: locales/en-US/metadata.json

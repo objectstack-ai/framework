@@ -74,7 +74,7 @@ Serializers convert metadata objects to/from different file formats:
 
 - **JSONSerializer** — `.json` files with optional key sorting
 - **YAMLSerializer** — `.yaml`/`.yml` files (JSON_SCHEMA for security)
-- **TypeScriptSerializer** — `.ts`/`.js` module exports (for `defineObject()`, `defineView()`, etc.)
+- **TypeScriptSerializer** — `.ts`/`.js` module exports (for `ObjectSchema.create()`, `defineView()`, etc.)
 
 ### 4. Overlay / Customization System
 

@@ -5,18 +5,18 @@ description: Complete guide to all ObjectStack packages, services, drivers, plug
 
 # Package Overview
 
-ObjectStack is organized into **42 packages** across multiple categories. This guide provides a complete overview of each package, its purpose, and when to use it.
+ObjectStack is organized into **51 publishable packages** across multiple categories. This guide provides a complete overview of each package, its purpose, and when to use it. Counts are kept in sync with the `packages/` directory in the [framework repository](https://github.com/objectstack-ai/framework/tree/main/packages).
 
 ### Package categories at a glance
 
 | Category | Count | Packages |
 |:---|:---:|:---|
-| **Core runtime** | 7 | `spec`, `core`, `runtime`, `types`, `metadata`, `objectql`, `rest` |
+| **Core runtime** | 9 | `spec`, `core`, `runtime`, `types`, `metadata`, `objectql`, `rest`, `formula`, `platform-objects` |
 | **Client / DX** | 5 | `client`, `client-react`, `cli`, `create-objectstack`, `vscode-objectstack` |
 | **Framework adapters** | 7 | `express`, `fastify`, `hono`, `nestjs`, `nextjs`, `nuxt`, `sveltekit` |
-| **Drivers** | 3 | `driver-memory`, `driver-sql`, `driver-turso` |
-| **Plugins** | 8 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-hono-server`, `plugin-mcp-server`, `plugin-msw`, `plugin-dev`, `plugin-setup` |
-| **Platform services** | 12 | `service-ai`, `service-analytics`, `service-automation`, `service-cache`, `service-feed`, `service-i18n`, `service-job`, `service-package`, `service-queue`, `service-realtime`, `service-storage`, `service-tenant` |
+| **Drivers** | 4 | `driver-memory`, `driver-sql`, `driver-turso`, `driver-mongodb` |
+| **Plugins** | 12 | `plugin-auth`, `plugin-security`, `plugin-audit`, `plugin-approvals`, `plugin-sharing`, `plugin-email`, `plugin-webhooks`, `plugin-reports`, `plugin-hono-server`, `plugin-mcp-server`, `plugin-msw`, `plugin-dev` |
+| **Platform services** | 14 | `service-ai`, `service-analytics`, `service-automation`, `service-cache`, `service-cloud`, `service-feed`, `service-i18n`, `service-job`, `service-package`, `service-queue`, `service-realtime`, `service-settings`, `service-storage`, `service-tenant` |
 
 
 ## Core Packages
@@ -26,12 +26,13 @@ ObjectStack is organized into **42 packages** across multiple categories. This g
 **The Constitution** — Protocol schemas, types, and constants for the entire ObjectStack ecosystem.
 
 - **Purpose**: Zod-first schema definitions for all 15 protocol domains
-- **Exports**: Data, UI, System, Automation, AI, API, Identity, Security, Kernel, Cloud, QA, Contracts, Integration, Studio, Shared namespaces
-- **When to use**: Import types, schemas, and builder functions (`defineObject`, `defineView`, `defineFlow`, etc.)
+- **Exports**: Data, UI, System, Automation, AI, API, Identity, Security, Kernel, Cloud, QA, Contracts, Integration, Studio, Shared namespaces, plus builder functions (`defineStack`, `defineView`, `defineApp`, `defineFlow`, `defineAgent`, `defineTool`, `defineSkill`) and `ObjectSchema.create()` for objects.
+- **When to use**: Import types, schemas, and builder functions when authoring metadata.
 - **Documentation**: [Protocol Reference](/docs/references)
 
 ```typescript
-import { Data, UI, defineObject, defineView } from '@objectstack/spec';
+import { Data, UI, defineStack, defineView } from '@objectstack/spec';
+import { ObjectSchema, Field } from '@objectstack/spec/data';
 ```
 
 ### @objectstack/core
@@ -83,6 +84,22 @@ const kernel = new ObjectKernel();
 - **Exports**: REST server, route generators, middleware
 - **When to use**: Expose ObjectStack data via REST API
 - **README**: [View README](/packages/rest/README.md)
+
+### @objectstack/formula
+
+**Formula Engine** — CEL-based formula compiler/runtime shared by validation, predicates, conditions, and dynamic seed values.
+
+- **Purpose**: One expression language across hooks, predicates, formula fields, and seed templates
+- **When to use**: Anywhere you write a CEL expression in metadata
+- **Learn more**: [Formula skill](/docs/guides/formula)
+
+### @objectstack/platform-objects
+
+**Platform Objects Library** — The canonical set of `sys_*` objects shipped with every ObjectOS runtime (users, sessions, approvals, sharing, audit, …).
+
+- **Purpose**: Standard system tables and their metadata, so apps don't redefine identity, audit, or approvals
+- **When to use**: Always — bundled into the runtime
+- **README**: [View README](/packages/platform-objects/README.md)
 
 ---
 
@@ -164,6 +181,14 @@ const driver = new TursoDriver({
   authToken: process.env.TURSO_AUTH_TOKEN,
 });
 ```
+
+### @objectstack/driver-mongodb
+
+**MongoDB Driver** — Document-oriented storage backend.
+
+- **Purpose**: Native MongoDB driver for ObjectQL with document-flavored objects
+- **When to use**: Existing MongoDB infrastructure, document-shaped data
+- **README**: [View README](/packages/plugins/driver-mongodb/README.md)
 
 ---
 
@@ -269,6 +294,22 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **When to use**: Any multi-tenant SaaS on ObjectStack
 - **README**: [View README](/packages/services/service-tenant/README.md)
 
+### @objectstack/service-cloud
+
+**Cloud Control-Plane Service** — Bridge between ObjectOS runtimes and the hosted control plane (artifact API, project versions).
+
+- **Features**: Artifact fetch/cache, project version selection, telemetry hooks
+- **When to use**: When deploying through the ObjectStack hosted cloud or a self-hosted control plane
+- **README**: [View README](/packages/services/service-cloud/README.md)
+
+### @objectstack/service-settings
+
+**Settings Service** — Hierarchical, validated application settings backed by metadata.
+
+- **Features**: Per-org / per-user settings, Zod-validated namespaces, default fallbacks
+- **When to use**: Application/feature configuration that must be editable at runtime
+- **README**: [View README](/packages/services/service-settings/README.md)
+
 ---
 
 ## Official Plugins
@@ -329,13 +370,45 @@ All services implement contracts from `@objectstack/spec/contracts` and are kern
 - **When to use**: Development and debugging
 - **README**: [View README](/packages/plugins/plugin-dev/README.md)
 
-### @objectstack/plugin-setup
+### @objectstack/plugin-approvals
 
-**Setup Plugin** — First-run setup wizard.
+**Approvals Plugin** — Approval-process engine driven by `sys_approval_process` / `sys_approval_request` metadata.
 
-- **Features**: Initial configuration, sample data, guided setup
-- **When to use**: New project initialization
-- **README**: [View README](/packages/plugins/plugin-setup/README.md)
+- **Features**: Multi-step approval chains, recall, escalation, audit trail
+- **When to use**: Any workflow that needs human sign-off (expense, quote, contract, …)
+- **README**: [View README](/packages/plugins/plugin-approvals/README.md)
+
+### @objectstack/plugin-sharing
+
+**Sharing Plugin** — Record-level sharing engine for collaborative access.
+
+- **Features**: Manual shares, sharing rules, team-based access, `sys_record_share`
+- **When to use**: Teams that need to grant per-record access beyond RBAC
+- **README**: [View README](/packages/plugins/plugin-sharing/README.md)
+
+### @objectstack/plugin-email
+
+**Email Plugin** — Outbound email channel and templates.
+
+- **Features**: Provider adapters, MJML templates, delivery tracking
+- **When to use**: Transactional and workflow-driven email
+- **README**: [View README](/packages/plugins/plugin-email/README.md)
+
+### @objectstack/plugin-webhooks
+
+**Webhooks Plugin** — Outbound HTTP webhook delivery.
+
+- **Features**: Subscriptions, retries, signed payloads, delivery logs
+- **When to use**: Integrating ObjectStack events with external systems
+- **README**: [View README](/packages/plugins/plugin-webhooks/README.md)
+
+### @objectstack/plugin-reports
+
+**Reports Plugin** — Metadata-driven report rendering and scheduling.
+
+- **Features**: Tabular/aggregate reports, scheduled delivery, exports
+- **When to use**: Operational reporting on top of business objects
+- **README**: [View README](/packages/plugins/plugin-reports/README.md)
 
 ---
 
@@ -444,52 +517,52 @@ npx create-objectstack my-app
 
 ## Package Selection Guide
 
-### For New Projects
+ObjectStack composes packages at two layers:
+
+1. **Metadata** is declared inside `defineStack({...})` (objects, views, flows, agents, …) and lives in `objectstack.config.ts`.
+2. **Runtime** plugins/services/drivers are wired into the host kernel (e.g. `apps/objectos/src/server.ts` or any custom adapter) via `kernel.use(...)` and a host-side `HostConfig`.
+
+The snippets below illustrate which **runtime** packages you typically reach for in each scenario. See the [Quick Start](/docs/getting-started/quick-start) and [CLI guide](/docs/getting-started/cli) for the full bootstrap pattern.
+
+### For New Projects (edge / AI-native)
 
 ```typescript
-import { defineStack } from '@objectstack/spec';
-import { TursoDriver } from '@objectstack/driver-turso'; // Edge-first
-import { ServiceAI } from '@objectstack/service-ai'; // AI features
+// Host bootstrap (pseudocode — exact shape depends on adapter)
+import { ObjectKernel } from '@objectstack/core';
+import { createDriverPlugin } from '@objectstack/driver-turso';
+import { createServiceAiPlugin } from '@objectstack/service-ai';
 
-const stack = defineStack({
-  driver: new TursoDriver({ /* ... */ }),
-  services: [ServiceAI.configure({ /* ... */ })],
-});
+const kernel = new ObjectKernel();
+await kernel.use(createDriverPlugin({ /* libSQL config */ }));
+await kernel.use(createServiceAiPlugin({ /* model providers */ }));
+await kernel.bootstrap();
 ```
 
 ### For Traditional Web Apps
 
 ```typescript
-import { SqlDriver } from '@objectstack/driver-sql'; // PostgreSQL/MySQL/SQLite
-import { PluginAuth } from '@objectstack/plugin-auth'; // Authentication
-import { ServiceQueue } from '@objectstack/service-queue'; // Background jobs
+import { createDriverPlugin } from '@objectstack/driver-sql';
+import { createAuthPlugin } from '@objectstack/plugin-auth';
+import { createServiceQueuePlugin } from '@objectstack/service-queue';
 
-const stack = defineStack({
-  driver: new SqlDriver({ client: 'pg', /* ... */ }),
-  plugins: [PluginAuth.configure({ /* ... */ })],
-  services: [ServiceQueue.configure({ /* ... */ })],
-});
+await kernel.use(createDriverPlugin({ client: 'pg', /* … */ }));
+await kernel.use(createAuthPlugin({ /* … */ }));
+await kernel.use(createServiceQueuePlugin({ /* … */ }));
 ```
 
 ### For Enterprise Applications
 
 ```typescript
-import { PluginSecurity } from '@objectstack/plugin-security'; // RBAC
-import { PluginAudit } from '@objectstack/plugin-audit'; // Compliance
-import { ServiceAnalytics } from '@objectstack/service-analytics'; // BI
+import { createSecurityPlugin } from '@objectstack/plugin-security';
+import { createAuditPlugin } from '@objectstack/plugin-audit';
+import { createServiceAnalyticsPlugin } from '@objectstack/service-analytics';
 
-const stack = defineStack({
-  driver: new SqlDriver({ client: 'pg', /* PostgreSQL */ }),
-  plugins: [
-    PluginSecurity.configure({ /* ... */ }),
-    PluginAudit.configure({ /* ... */ }),
-  ],
-  services: [
-    ServiceAnalytics.configure({ /* ... */ }),
-    ServiceI18n.configure({ /* ... */ }),
-  ],
-});
+await kernel.use(createSecurityPlugin({ /* … */ }));
+await kernel.use(createAuditPlugin({ /* … */ }));
+await kernel.use(createServiceAnalyticsPlugin({ /* … */ }));
 ```
+
+> The exact factory names follow each package's `README.md` — they all return a plugin object compatible with `kernel.use()`.
 
 ---
 
