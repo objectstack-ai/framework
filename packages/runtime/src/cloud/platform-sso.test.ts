@@ -168,7 +168,7 @@ describe('seedPlatformSsoClient', () => {
 describe('backfillPlatformSsoClients', () => {
     it('seeds every project that lacks an oauth client', async () => {
         const ql = createMockQl({
-            sys_project: [
+            sys_environment: [
                 { id: 'p1', hostname: 'one.example.com', status: 'active' },
                 { id: 'p2', hostname: 'two.example.com', status: 'active' },
             ],
@@ -182,7 +182,7 @@ describe('backfillPlatformSsoClients', () => {
 
     it('skips projects that already have an oauth client', async () => {
         const ql = createMockQl({
-            sys_project: [{ id: 'p1', hostname: 'one.example.com', status: 'active' }],
+            sys_environment: [{ id: 'p1', hostname: 'one.example.com', status: 'active' }],
             sys_oauth_application: [{
                 id: 'oauthc_p1',
                 client_id: 'project_p1',
