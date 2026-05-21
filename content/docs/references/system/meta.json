@@ -32,6 +32,8 @@
     "registry-config",
     "search-engine",
     "security-context",
+    "settings-client",
+    "settings-manifest",
     "supplier-security",
     "tenant",
     "tracing",

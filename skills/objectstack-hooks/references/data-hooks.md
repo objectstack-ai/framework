@@ -1038,7 +1038,7 @@ const conditionalHook: Hook = {
 
 - [hook.zod.ts](./references/data/hook.zod.ts) — Hook schema definition, HookContext interface
 - [Examples: app-todo](../../examples/app-todo/src/objects/task.hook.ts) — Simple task hook
-- [Examples: app-crm](../../examples/app-crm/src/objects/) — Advanced CRM hooks
+- [Project hooks pattern](../../objectstack-hooks/SKILL.md#complete-hook-examples) — Advanced lifecycle hook examples
 
 ---
 

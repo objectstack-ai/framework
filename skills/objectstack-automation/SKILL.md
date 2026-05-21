@@ -217,31 +217,129 @@ Transitions can have conditions that must be met:
 
 ### Approval Processes
 
-Approvals are a specialised workflow pattern:
+An **ApprovalProcess** is the canonical multi-step review pattern for a
+business object. Build with the `ApprovalProcess.create({...})` factory from
+`@objectstack/spec/automation` and add to `defineStack({ approvals: [...] })`.
+
+```typescript
+import { ApprovalProcess } from '@objectstack/spec/automation';
+
+export const OpportunityDiscountApproval = ApprovalProcess.create({
+  name: 'opportunity_discount_approval',
+  label: 'Opportunity Discount Approval',
+  object: 'opportunity',
+  active: true,
+  description: 'High-value opportunities (> 100k) require manager + director sign-off.',
+
+  // Auto-submit + record locking — Phase B autopilot
+  entryCriteria: 'record.amount > 100000',     // CEL predicate
+  lockRecord: true,
+  approvalStatusField: 'approval_status',       // mirrors pending|approved|rejected|recalled
+
+  // Process-level hooks (run once per request)
+  onSubmit: [
+    { type: 'inbox_notify', name: 'notify_approvers',
+      config: { to: 'pending_approvers', title: 'Discount approval needed',
+        body: 'Opportunity {record_id} (> 100k) is awaiting review.', link: '/system/approvals' } },
+  ],
+  onFinalApprove: [
+    { type: 'field_update', name: 'mark_won',
+      config: { field: 'stage', value: 'closed_won' } },
+    { type: 'inbox_notify', name: 'notify_submitter_approved',
+      config: { to: 'submitter', title: 'Discount approved',
+        body: 'Your discount request on {record_id} was approved.', link: '/system/approvals' } },
+  ],
+  onFinalReject: [
+    { type: 'inbox_notify', name: 'notify_submitter_rejected',
+      config: { to: 'submitter', title: 'Discount rejected',
+        body: 'Rejected: {comment}', link: '/system/approvals' } },
+  ],
+  onRecall: [
+    { type: 'inbox_notify', name: 'notify_recall',
+      config: { to: 'pending_approvers', title: 'Discount request recalled',
+        body: 'Submitter recalled the request on {record_id}.' } },
+  ],
+
+  steps: [
+    {
+      name: 'manager_review',
+      label: 'Sales Manager Review',
+      approvers: [{ type: 'role', value: 'sales_manager' }],
+      behavior: 'first_response',           // or 'unanimous'
+      rejectionBehavior: 'back_to_previous', // or 'reject_process'
+    },
+    {
+      name: 'director_signoff',
+      label: 'Sales Director Sign-off',
+      approvers: [{ type: 'role', value: 'sales_director' }],
+      behavior: 'first_response',
+      rejectionBehavior: 'back_to_previous',
+    },
+  ],
+});
+```
+
+### Approver Types
+
+| `type` | Resolves to |
+|:-------|:------------|
+| `user`       | A specific user id (`value` = user id) |
+| `role`       | All users with the named role (`sys_member.role`) |
+| `team`       | Members of a flat `sys_team` |
+| `department` | A department + all descendant departments |
+| `manager`    | The submitter's manager (`sys_user.manager_id`) |
+| `field`      | User id read from a record field (`value` = field name) |
+| `queue`      | A data-ownership queue |
+
+### Step Behavior
+
+- `behavior: 'first_response'` — the first approver to respond decides the step.
+- `behavior: 'unanimous'` — every approver must approve.
+- `rejectionBehavior: 'reject_process'` — rejection terminates the whole process.
+- `rejectionBehavior: 'back_to_previous'` — rejection rolls back one step so
+  the submitter (or the previous approver) can revise.
+
+### Step & Process Actions
+
+Action types accepted in `onSubmit`, `onFinalApprove`, `onFinalReject`,
+`onRecall`, and per-step `onApprove`/`onReject`:
+
+| `type` | Purpose |
+|:-------|:--------|
+| `field_update`     | Write a field on the target record |
+| `inbox_notify`     | Insert a `sys_notification` row (in-app inbox) |
+| `email_alert`      | Send templated email to recipients |
+| `webhook`          | POST JSON payload to an external URL |
+| `script`           | Run an L2 hook body (sandboxed JS) |
+| `connector_action` | Invoke a Zapier-style connector action |
+
+### Per-Step Entry Criteria
+
+Use `entryCriteria` on a step to make it conditional (e.g. only require
+director sign-off for amounts > 500k):
 
 ```typescript
 {
-  name: 'expense_approval',
-  object: 'expense_report',
-  entryCondition: P`record.amount > 500`,
-  steps: [
-    {
-      name: 'manager_approval',
-      assignTo: { type: 'field', field: 'manager' },
-      action: 'approve_or_reject',
-      escalation: { timeout: '48h', action: 'auto_approve' },
-    },
-    {
-      name: 'finance_approval',
-      condition: P`record.amount > 5000`,
-      assignTo: { type: 'role', role: 'finance_manager' },
-      action: 'approve_or_reject',
-    },
-  ],
-  onApproved: { updateFields: { status: 'approved' } },
-  onRejected: { updateFields: { status: 'rejected' }, notifySubmitter: true },
+  name: 'director_signoff',
+  entryCriteria: 'record.amount > 500000',
+  approvers: [{ type: 'role', value: 'sales_director' }],
+  behavior: 'first_response',
+  rejectionBehavior: 'back_to_previous',
 }
 ```
+
+### Approval Best Practices
+
+1. **Always set `entryCriteria` at the process level** so the runtime can
+   auto-submit on insert/update. Hand-crafted submission flows are a smell.
+2. **Set `approvalStatusField`** to mirror status onto the row — views and
+   formulas can then filter on it without joining `sys_approval_request`.
+3. **Keep `lockRecord: true`** unless you have a strong reason to allow
+   edits while pending — otherwise approvers chase a moving target.
+4. **Prefer `back_to_previous`** for rejection unless the request is truly
+   terminal; it lets submitters iterate without re-opening the process.
+5. **Use `inbox_notify` over `email_alert`** for internal approval
+   notifications — it keeps the trail inside ObjectStack's audit log.
 
 ---
 
@@ -325,6 +423,22 @@ Triggers fire automatically when data events occur.
    the record operation — always provide a user-friendly error message.
 5. **Scheduled flows without idempotency.** If the flow runs twice
    accidentally, the result should be the same.
+
+---
+
+## CRM Automation Blueprint
+
+For enterprise automation design, align with this CRM-style structure:
+
+| Automation Type | Typical Location | Pattern |
+|:--|:--|:--|
+| Screen flow | `src/flows/*.flow.ts` | Use explicit `variables`, node graph (`nodes` + `edges`), and decision branches |
+| Approval process | `src/approvals/*.approval.ts` | Set `entryCriteria`, `lockRecord`, `approvalStatusField`, and stage-level approvers |
+| Flow registry | `src/flows/index.ts` | Export `allFlows: Flow[]` and register centrally in `defineStack({ flows })` |
+| Action-to-flow bridge | `src/actions/*.actions.ts` | Trigger screen flows via `Action.type = 'flow'` for user-driven automation entry |
+
+Default approach for metadata apps: model business lifecycle in Flow/Approval
+metadata first; reserve custom code for edge-case integrations.
 
 ---
 

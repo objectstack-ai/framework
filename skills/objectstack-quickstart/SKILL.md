@@ -118,6 +118,25 @@ my-app/
 
 ---
 
+## CRM Blueprint (Reference Implementation)
+
+When scaffolding a production-style metadata app, align with this
+CRM-style layout:
+
+| Blueprint Area | CRM Reference | What to Reuse |
+|:--|:--|:--|
+| Stack assembly | `objectstack.config.ts` | Single `defineStack()` root aggregating all metadata collections |
+| By-type directories | `src/{objects,views,pages,actions,flows,...}` | Domain-per-folder layout with barrel exports |
+| Typed aggregates | `src/*/index.ts` | Export `allFlows` / `allAgents` / `allSkills` typed arrays |
+| Runtime capabilities | `requires: ['ai','automation','analytics','auth','ui','approvals','sharing']` | Declare opt-in capabilities explicitly |
+| Security assembly | `src/profiles/*` + `src/sharing/*` | Compose `permissions`, `sharingRules`, and `roles` in stack root |
+| Localization assembly | `src/translations/*` + `i18n` | Keep per-locale files and central bundle registration |
+
+Use this as the default template for “metadata application” requests before
+simplifying to minimal-api.
+
+---
+
 ## `defineStack()` — The Core Configuration
 
 `objectstack.config.ts` is the single entry point for every project.

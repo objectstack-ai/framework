@@ -300,6 +300,24 @@ See [rules/hooks.md](./rules/hooks.md) for quick reference, or [objectstack-hook
 
 ---
 
+## CRM Schema Blueprint (Production Pattern)
+
+Mirror these CRM-style patterns when designing enterprise metadata objects:
+
+| Pattern | Typical Location | Implementation Cue |
+|:--|:--|:--|
+| Object layout via field groups | `src/objects/*.object.ts` | Use `fieldGroups[]` + per-field `group` for deterministic form structure |
+| Capability gating | `src/objects/*.object.ts` | Use `enable` flags (`trackHistory`, `apiMethods`, `files`, `feeds`, `activities`) per object |
+| Index + validation pairing | `src/objects/*.object.ts` | Keep `indexes[]` aligned to common filters and enforce invariants with `validations[]` |
+| Relationship constraints | `src/objects/*.object.ts` | Use `lookup` + `referenceFilters` for constrained child selection |
+| Lifecycle workflow | `src/objects/*.object.ts` | Use `workflows[]` for field updates triggered by record changes |
+| State transitions | `src/objects/*.state.ts` | Prefer explicit `stateMachines` for lifecycle-heavy objects |
+
+For metadata authoring, keep expressions in CEL (`P\`...\``, `F\`...\``,
+`cel\`...\``) and avoid legacy formula-string syntax.
+
+---
+
 ## Object Extension Model
 
 When extending an object you do not own:

@@ -540,6 +540,26 @@ Commit translation files to version control. ObjectStack automatically loads the
 
 ---
 
+## CRM I18n Blueprint
+
+Reference implementation shape:
+
+- Bundle entry: `src/translations/index.ts` (or `crm.translation.ts`)
+- Locale files: `src/translations/{en,zh-CN,ja-JP,es-ES}.ts`
+
+Use this structure for metadata apps:
+
+| Layer | CRM Pattern |
+|:--|:--|
+| Stack config | `i18n.fileOrganization = 'per_locale'` with explicit locale list |
+| Translation assembly | One `TranslationBundle` that imports per-locale files |
+| Locale content | Object-scoped translations (`objects.account.fields.*`, `_views`, `_actions`) + global app/nav/messages |
+| Naming integrity | Translation object/field keys exactly match metadata machine names |
+
+For new locales, copy one locale file as a baseline, then run coverage before release.
+
+---
+
 ## Advanced Patterns
 
 ### Namespace Isolation (Multi-Plugin)

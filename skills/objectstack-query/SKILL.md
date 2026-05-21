@@ -524,6 +524,23 @@ Window functions compute values across row sets without collapsing results:
 
 ---
 
+## CRM Analytics Query Blueprint
+
+Use dashboards/reports metadata as the practical query pattern source:
+
+| Query Need | CRM Reference | Pattern |
+|:--|:--|:--|
+| KPI widgets | `dashboards/sales.dashboard.ts` | Filtered aggregates (`sum`, `count`, `avg`) over `opportunity` |
+| Time-series chart | `dashboards/sales.dashboard.ts` | Date filters + month bucketing for trend analysis |
+| Matrix report | `reports/opportunity.report.ts` | `groupingsDown` + `groupingsAcross` + `dateGranularity: 'quarter'` |
+| Funnel summary | `reports/opportunity.report.ts` | Multi-level grouping (`owner -> stage`) + aggregated measures |
+| Operational filter | dashboard/report filters | Prefer declarative operators (`$ne`, `$nin`, `$gte`) over hardcoded SQL |
+
+For metadata app development, model analytics in report/dashboard metadata first;
+only fall back to custom query code when schema limits require it.
+
+---
+
 ## References
 
 - [rules/filters.md](./rules/filters.md) — Complete filter operator reference

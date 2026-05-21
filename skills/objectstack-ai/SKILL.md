@@ -341,6 +341,22 @@ structuredOutput: {
 
 ---
 
+## CRM AI Blueprint (Agent + Skill + RAG)
+
+Reference implementation shape: `src/{agents,skills,rag}/`
+
+| Layer | CRM File | Pattern |
+|:--|:--|:--|
+| Persona agent | `agents/sales-copilot.agent.ts` | Keep agent role-focused; compose capabilities via `skills[]` |
+| Reusable skill | `skills/lead-qualification.skill.ts` | Encode trigger phrases + trigger conditions + bounded toolset |
+| Knowledge pipeline | `rag/sales-knowledge.rag.ts` | Define embedding, vector store, chunking, retrieval, reranking as metadata |
+| Central registration | `agents/index.ts`, `skills/index.ts`, `rag/index.ts` | Export typed aggregates and register in `defineStack()` |
+
+Default for metadata apps: keep **few persona agents**, push business capability
+logic into **skills**, and wire domain knowledge through **RAG pipelines**.
+
+---
+
 ## References
 
 - [agent.zod.ts](./references/ai/agent.zod.ts) — AgentSchema, model config, guardrails

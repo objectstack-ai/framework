@@ -435,10 +435,23 @@ export const SeedData = [
 
 ---
 
+## CRM Seed Blueprint
+
+Reference shape: `src/data/index.ts`
+
+1. Use **one `defineDataset()` per object** (`account`, `contact`, `lead`, `opportunity`, ...), then export a single ordered array.
+2. Keep **dependency order explicit** (parent first, child later), e.g. account → contact → opportunity.
+3. Prefer **natural keys** for cross-record references (`account: 'Acme Corporation'`, `externalId: 'email'`).
+4. Use **CEL dynamic values** (`cel\`daysFromNow(45)\``, `cel\`daysAgo(3)\``) for deterministic time-based fixtures.
+5. For generated fixture loops, wrap date helpers (`celDaysAgo`, `celDaysFromNow`) to keep expressions valid inside `.map()`.
+
+This pattern is the baseline for realistic demo + test seed packs in metadata applications.
+
+---
+
 ## References
 
 - [references/dataset.zod.ts](./references/dataset.zod.ts) — `DatasetSchema`, `DatasetMode`, `defineDataset()` source
 - [packages/spec/src/data/dataset.zod.ts](../../packages/spec/src/data/dataset.zod.ts) — Canonical source
-- [examples/app-crm/src/data/index.ts](../../examples/app-crm/src/data/index.ts) — Real-world CRM seed example
 - [objectstack-schema](../objectstack-schema/SKILL.md) — Object & field schema design
 - [objectstack-query](../objectstack-query/SKILL.md) — Querying seeded data
