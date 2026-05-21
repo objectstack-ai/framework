@@ -28,10 +28,6 @@ const caseValidation: Hook = {
   handler: async (ctx: HookContext) => {
     const { input } = ctx;
 
-    // Web-to-Case: stamp safe defaults for anonymous submissions and strip
-    // any client-supplied fields that should be controlled server-side.
-    // Guests are unauthenticated, identified by the absence of ctx.user.id.
-    // Only applies on INSERT (no `ctx.previous`).
     const isGuestSubmission = !ctx.previous && !ctx.user?.id;
     if (isGuestSubmission) {
       if (!input.origin)   input.origin   = 'web';

@@ -6970,7 +6970,7 @@
         "contact": {
           "label": "Contact",
           "type": "lookup",
-          "required": true,
+          "required": false,
           "searchable": false,
           "multiple": false,
           "unique": false,

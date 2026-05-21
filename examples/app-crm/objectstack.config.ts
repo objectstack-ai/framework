@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { defineStack } from '@objectstack/spec';
-import * as cubes from './src/cubes';
+import * as cubes from './src/cubes/index.js';
 
 import * as objects from './src/objects';
 import * as actions from './src/actions';

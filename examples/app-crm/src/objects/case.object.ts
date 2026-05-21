@@ -45,7 +45,10 @@ export const Case = ObjectSchema.create({
     
     contact: Field.lookup('contact', {
       label: 'Contact',
-      required: true,
+      // Optional so Web-to-Case (anonymous) submissions can land without
+      // an existing CRM contact. Back-office staff or a triage flow links
+      // the case to a contact after the fact. This matches the Salesforce
+      // Web-to-Case convention.
       referenceFilters: ['account = {case.account}'],
     }),
     

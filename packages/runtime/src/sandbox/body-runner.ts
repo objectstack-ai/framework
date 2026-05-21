@@ -197,9 +197,12 @@ function buildSandboxApi(engineCtx: any, ql: any, errLabel: string) {
 
 function buildSandboxContext(engineCtx: any, ql: any): ScriptContext {
   const inputSnapshot = unwrapProxyToPlain(engineCtx?.input ?? engineCtx?.doc);
+  const previousRaw = engineCtx?.previous ?? engineCtx?.previousDoc;
   return {
-    input: inputSnapshot,
-    previous: unwrapProxyToPlain(engineCtx?.previous ?? engineCtx?.previousDoc),
+    input: inputSnapshot ?? {},
+    // Preserve `undefined` for `previous` on insert events so hooks can
+    // reliably distinguish create (`!ctx.previous`) from update/delete.
+    previous: unwrapProxyToPlain(previousRaw),
     user: engineCtx?.user ?? engineCtx?.session?.user,
     session: engineCtx?.session,
     event: typeof engineCtx?.event === 'string' ? engineCtx.event : undefined,
@@ -241,12 +244,13 @@ function buildActionSandboxContext(actionCtx: any, ql: any): ScriptContext {
  * JSON cleanly. `Object.fromEntries(Object.entries(p))` triggers the proxy's
  * ownKeys + get traps, materialising every visible field.
  */
-function unwrapProxyToPlain(v: unknown): Record<string, unknown> {
-  if (!v || typeof v !== 'object') return {};
-  if (Array.isArray(v)) return {};
+function unwrapProxyToPlain(v: unknown): Record<string, unknown> | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== 'object') return undefined;
+  if (Array.isArray(v)) return undefined;
   try {
     return Object.fromEntries(Object.entries(v as Record<string, unknown>));
   } catch {
-    return {};
+    return undefined;
   }
 }

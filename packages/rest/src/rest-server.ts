@@ -957,6 +957,11 @@ export class RestServer {
                 this.registerSearchEndpoints(bp);
             }
             this.registerEmailEndpoints(bp);
+            // Public (anonymous) form endpoints — opt-in via FormView.sharing.
+            // Registered BEFORE the greedy `/data/:object` matcher so the
+            // `/forms/:slug` and `/forms/:slug/submit` paths can't be
+            // shadowed by a literal object named "forms".
+            this.registerFormEndpoints(bp);
             // Capability routes (sharing rules, reports, approvals) live at
             // the top of the API surface (`/api/v1/{capability}/...`) rather
             // than under `/data/`, so they don't collide with the greedy
@@ -2028,6 +2033,211 @@ export class RestServer {
             metadata: {
                 summary: 'Send a transactional email via the configured EmailService',
                 tags: ['email'],
+            },
+        });
+    }
+
+    /**
+     * Register public (anonymous) form endpoints.
+     *
+     * Public forms are opt-in: a `FormView` becomes accessible to anonymous
+     * visitors only when `sharing.allowAnonymous === true` AND a
+     * `sharing.publicLink` slug is configured. Two routes are registered:
+     *
+     *   GET  {basePath}/forms/:slug          → resolved form spec
+     *   POST {basePath}/forms/:slug/submit   → INSERT record (no auth required)
+     *
+     * Both routes bypass `enforceAuth` even when `requireAuth=true` on the
+     * deployment (e.g. ObjectOS multi-tenant). Security is delegated to the
+     * `guest_portal` permission set carried on the execution context — the
+     * SecurityPlugin enforces INSERT-only access to the target object. If
+     * the deployment hasn't registered a `guest_portal` profile, the
+     * security middleware falls open with `permissions: []` (no userId),
+     * matching the existing anonymous-access semantics; deployers must
+     * keep `requireAuth=true` deployments paired with a `guest_portal`
+     * profile (the CRM example does this) to enforce the INSERT-only
+     * contract.
+     *
+     * The matched FormView's parent ViewSchema is found by scanning
+     * `protocol.getMetaItems({ type: 'view' })`. For each entry we inspect
+     * `form.sharing` and every entry in `formViews`; the first FormView
+     * whose `sharing.publicLink` matches `/forms/:slug` (or just `:slug`)
+     * wins. The response carries the matched form view under `form` and
+     * the inferred target object, matching what the frontend's
+     * `mapViewSpecToEmbeddableConfig` expects.
+     */
+    private registerFormEndpoints(basePath: string): void {
+        const isScoped = basePath.includes('/projects/:projectId');
+
+        const slugMatchesPublicLink = (publicLink: string | undefined, slug: string): boolean => {
+            if (!publicLink || typeof publicLink !== 'string') return false;
+            // Accept `/forms/:slug`, `forms/:slug`, or a bare slug.
+            const normalized = publicLink.replace(/^\/+/, '').replace(/^forms\//, '');
+            return normalized === slug;
+        };
+
+        const findPublicFormView = (views: any[], slug: string): { view: any; form: any; object: string } | null => {
+            for (const view of views ?? []) {
+                if (!view || typeof view !== 'object') continue;
+                const candidates: Array<{ form: any; key?: string }> = [];
+                if (view.form && view.form.sharing) candidates.push({ form: view.form });
+                const formViews = view.formViews;
+                if (formViews && typeof formViews === 'object') {
+                    for (const [key, fv] of Object.entries(formViews)) {
+                        if (fv && typeof fv === 'object' && (fv as any).sharing) {
+                            candidates.push({ form: fv as any, key });
+                        }
+                    }
+                }
+                for (const c of candidates) {
+                    const sharing = c.form?.sharing;
+                    if (!sharing || sharing.allowAnonymous !== true) continue;
+                    if (!slugMatchesPublicLink(sharing.publicLink, slug)) continue;
+                    const objectName =
+                        c.form?.data?.object ??
+                        view?.list?.data?.object ??
+                        view?.form?.data?.object ??
+                        view?.object;
+                    if (!objectName) continue;
+                    return { view, form: c.form, object: objectName };
+                }
+            }
+            return null;
+        };
+
+        const resolveFormBySlug = async (
+            projectId: string | undefined,
+            req: any,
+            slug: string,
+        ): Promise<{ view: any; form: any; object: string } | null> => {
+            const p = await this.resolveProtocol(projectId, req);
+            if (typeof (p as any).getMetaItems !== 'function') return null;
+            const result: any = await (p as any).getMetaItems({
+                type: 'view',
+                ...(projectId ? { projectId } : {}),
+            });
+            const items: any[] = Array.isArray(result?.items)
+                ? result.items
+                : Array.isArray(result)
+                    ? result
+                    : [];
+            return findPublicFormView(items, slug);
+        };
+
+        // GET /forms/:slug — resolve and return the public form spec
+        this.routeManager.register({
+            method: 'GET',
+            path: `${basePath}/forms/:slug`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const slug = String(req.params?.slug ?? '').trim();
+                    if (!slug) {
+                        res.status(400).json({ code: 'INVALID_REQUEST', error: 'slug is required' });
+                        return;
+                    }
+                    const match = await resolveFormBySlug(projectId, req, slug);
+                    if (!match) {
+                        res.status(404).json({
+                            code: 'FORM_NOT_FOUND',
+                            error: `No public form configured at /forms/${slug}`,
+                        });
+                        return;
+                    }
+                    res.json({
+                        slug,
+                        object: match.object,
+                        label: match.view?.label ?? match.form?.label,
+                        form: match.form,
+                    });
+                } catch (error: any) {
+                    logError('[REST] Public form resolve error:', error);
+                    res.status(500).json({
+                        code: 'FORM_RESOLVE_FAILED',
+                        error: String(error?.message ?? error ?? 'resolve failed').slice(0, 500),
+                    });
+                }
+            },
+            metadata: {
+                summary: 'Resolve a public form spec by slug (anonymous)',
+                tags: ['forms', 'public'],
+            },
+        });
+
+        // POST /forms/:slug/submit — INSERT a record on the target object
+        // with the `guest_portal` permission set attached.
+        this.routeManager.register({
+            method: 'POST',
+            path: `${basePath}/forms/:slug/submit`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const slug = String(req.params?.slug ?? '').trim();
+                    if (!slug) {
+                        res.status(400).json({ code: 'INVALID_REQUEST', error: 'slug is required' });
+                        return;
+                    }
+                    const match = await resolveFormBySlug(projectId, req, slug);
+                    if (!match) {
+                        res.status(404).json({
+                            code: 'FORM_NOT_FOUND',
+                            error: `No public form configured at /forms/${slug}`,
+                        });
+                        return;
+                    }
+
+                    // Only allow the fields declared on the matched FormView.
+                    // This prevents a public visitor from stuffing privileged
+                    // columns (owner_id, status, internal_notes, …) into the
+                    // row. Object hooks (`beforeInsert`) are still responsible
+                    // for stamping server-side defaults — see the CRM
+                    // `lead.hook.ts` / `case.hook.ts` for the canonical pattern.
+                    const allowedFields = new Set<string>();
+                    for (const section of match.form?.sections ?? []) {
+                        for (const f of section?.fields ?? []) {
+                            if (typeof f === 'string') allowedFields.add(f);
+                            else if (f?.field) allowedFields.add(f.field);
+                        }
+                    }
+                    const rawBody = (req.body && typeof req.body === 'object') ? req.body : {};
+                    const filteredData: Record<string, unknown> = {};
+                    if (allowedFields.size > 0) {
+                        for (const [k, v] of Object.entries(rawBody)) {
+                            if (allowedFields.has(k)) filteredData[k] = v;
+                        }
+                    } else {
+                        Object.assign(filteredData, rawBody);
+                    }
+
+                    // Anonymous execution context. Carries the `guest_portal`
+                    // permission set name so the SecurityPlugin resolves it
+                    // and enforces INSERT-only on the target object.
+                    // Leaving `userId` undefined keeps `ctx.user?.id` falsy
+                    // in object hooks (the canonical guest-detection check).
+                    const context: any = {
+                        permissions: ['guest_portal'],
+                        anonymous: true,
+                    };
+
+                    const p = await this.resolveProtocol(projectId, req);
+                    const result = await p.createData({
+                        object: match.object,
+                        data: filteredData,
+                        ...(projectId ? { projectId } : {}),
+                        context,
+                    } as any);
+                    res.status(201).json(result);
+                } catch (error: any) {
+                    const mapped = mapDataError(error);
+                    if (!isExpectedDataStatus(mapped.status) && mapped.body?.code !== 'VALIDATION_FAILED') {
+                        logError('[REST] Public form submit error:', error);
+                    }
+                    res.status(mapped.status).json(mapped.body);
+                }
+            },
+            metadata: {
+                summary: 'Submit an anonymous public form',
+                tags: ['forms', 'public'],
             },
         });
     }
