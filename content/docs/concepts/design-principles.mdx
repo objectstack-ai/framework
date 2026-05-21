@@ -81,6 +81,8 @@ We cleanly separate the **Definition** from the **Execution**.
 | **App (Policy)** | Defines the business logic. | `allowRead: "$user.role == 'admin'"` |
 | **Engine (Execution)** | Enforces the logic. | Compiles formula to SQL `WHERE` clause. |
 
+**Policies are metadata, not code.** Permission rules, validation predicates, sharing conditions, and flow guards are all expressed as analyzable CEL/Zod metadata — the same engine evaluates them for human users, REST callers, and AI agent tools, and every decision is traceable to a versioned artifact.
+
 ---
 
 ## Principle III: The Single Source of Truth

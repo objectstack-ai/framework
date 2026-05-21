@@ -36,7 +36,7 @@ Five non-negotiable tenets:
 - **Agent-Ready Business Metadata** - objects, fields, functions, views, flows, permissions, and tools are all explicit metadata artifacts
 - **Versioned Artifacts, Stateless Runtime** - every publish creates an immutable Project Version; ObjectOS runtimes pull the current Version artifact and serve it
 - **TS-Authored, JSON-Stored** - TypeScript is the authoring form (type safety, IDE intelligence, AI-assisted editing); JSON is the wire and storage form (Project Version artifact payload, Artifact API response body, local artifact cache). Zod schemas are the only bridge between the two.
-- **Local-First** - every project can run against local drivers; cloud is an enhancement, not a dependency
+- **Local-First (development)** - every project can run against local drivers (memory, SQLite, embedded Turso replica); cloud is an enhancement, not a dependency. This refers to the *developer/runtime* mode, not to data sovereignty on end-user devices.
 - **Open Core** - the runtime and protocols are Apache-2.0 licensed; hosted cloud features and official advanced Studio plugins may be proprietary
 
 ## 2. Product Shape

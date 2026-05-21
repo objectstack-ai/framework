@@ -17,6 +17,20 @@ A logical grouping of related schemas and types defined with Zod. ObjectStack ha
 
 ---
 
+## The Three Architectural Layers
+
+The 15 namespaces collapse into three top-level layers that match the public product vocabulary:
+
+| Layer | Also called | Namespaces it includes | Purpose |
+| :--- | :--- | :--- | :--- |
+| **ObjectQL** | Data Layer | Data | Objects, fields, queries, relations, validation, data access |
+| **ObjectOS** | Control Layer / System Layer | Kernel, System, Automation, AI, API, Identity, Security, Cloud, Integration, Studio, QA, Contracts, Shared | Runtime, permissions, automation, plugins, tenants, agent tools, artifact loading |
+| **ObjectUI** | View Layer | UI | Apps, views, dashboards, actions, presentation metadata |
+
+When external docs or talks refer to ObjectOS as the "Control Layer", they mean the same runtime described by the System/Kernel/AI/API protocol namespaces below.
+
+---
+
 ## The 15 Protocol Namespaces
 
 ### Data Protocol
@@ -71,8 +85,12 @@ Reusable error maps, suggestions, and metadata normalization utilities.
 ### Protocol-Driven
 A development paradigm where logic is defined in static, declarative data formats (JSON/YAML) with Zod schemas rather than imperative code. The goal is to separate the **Intent** (Business Logic) from the **Implementation** (Tech Stack).
 
-### Local-First
-An architectural pattern where the application reads and writes to a database embedded on the user's device (the Client) first. Network synchronization happens in the background. This ensures zero-latency interactions and offline availability.
+### Local-First (development)
+
+In ObjectStack, "local-first" refers to the **development and runtime mode**, not data sovereignty on end-user devices. Every project can boot against local drivers (in-memory, SQLite, Turso embedded replica) with zero cloud dependency, so authoring, testing, and demos work fully offline. Cloud is an enhancement, not a prerequisite.
+
+### Agent-Ready Boundaries
+The architectural commitment that AI agents act only through typed, permission-aware, auditable capabilities derived from the same metadata artifact that powers the application — never via raw SQL, scraped UI state, or hand-written glue tools. RBAC, RLS, and FLS apply to agent actions exactly as they apply to users.
 
 ### Database Compiler
 A system that takes a high-level query AST (Abstract Syntax Tree) and compiles it into an optimized database query string (e.g., SQL). This contrasts with an ORM, which typically acts as a runtime wrapper object.

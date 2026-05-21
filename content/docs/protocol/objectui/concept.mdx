@@ -177,7 +177,7 @@ OutlinedTextField(
 - **Zero drift:** All platforms render the same fields in the same order
 - **Platform-native UX:** iOS users get iOS keyboard, Android users get Material Design
 
-### 3. Empower Business Users with Low-Code Tools
+### 3. Same Metadata Powers Studio Editors and Agent Tools
 
 ```yaml
 # sales_dashboard.dashboard.yml
@@ -201,12 +201,14 @@ layout:
           field: amount
 ```
 
-**Who Can Edit This?**
-- ✅ Sales Manager (via Dashboard Builder UI)
-- ✅ Business Analyst (via YAML editor)
-- ❌ No developer required
+Because this dashboard is **declarative metadata**, the same definition can be:
 
-**Result:** IT backlog reduced by 60%. Executives build dashboards at 11 PM without filing tickets.
+- ✅ Edited by a developer in TypeScript with full type safety
+- ✅ Inspected and version-rolled-back in Studio
+- ✅ Exposed to an AI agent as a permission-bounded tool ("update the Revenue-by-Month chart filter")
+- ✅ Audited — every change is a versioned artifact, not a hand-edited JS string
+
+ObjectStack is **not** trying to be another drag-and-drop low-code dashboard product. Visual editing is a downstream consequence of having a clean, AI-readable metadata protocol — not the product itself.
 
 ### 4. Single Source of Truth for Validation
 
