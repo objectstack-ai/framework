@@ -32,6 +32,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer arch
 
 ## Key Features
 
+- **~100× less code to write and maintain** — Business objects, permissions, flows, APIs, and UI are declared as typed metadata, not hand-written. A typical enterprise module collapses from tens of thousands of lines of CRUD/glue code into hundreds of lines of declarative schema — small enough for an AI agent to load end-to-end and safely refactor.
 - **Agent-ready metadata** — Business objects, actions, and permissions are explicit enough for AI agents to inspect and use.
 - **Automatic tool surface** — Metadata can power REST APIs, client SDKs, UI views, and MCP tools without redefining each action by hand.
 - **Protocol-first schemas** — All schemas are defined with Zod; TypeScript types are derived via `z.infer<>`.
@@ -51,15 +52,19 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full microkernel and layer arch
 
 Most internal-tool and low-code platforms were designed for humans clicking screens. AI support is usually added later as a chat box that can call a few predefined queries.
 
-ObjectStack starts from a different assumption: AI agents need a structured, bounded, and auditable business backend before they can safely perform real work.
+ObjectStack starts from a different assumption: **AI agents need a structured, bounded, and auditable business backend before they can safely perform real work** — and the entire business system needs to be small enough to fit in an agent's context window.
+
+A typical enterprise application is tens of thousands of lines of CRUD, forms, queries, permissions, and API glue spread across dozens of files. ObjectStack collapses the same surface into a few hundred lines of typed metadata — roughly **two orders of magnitude less code for a developer (or an AI agent) to read, write, and maintain.** That's what turns AI from an autocomplete tool into a real co-maintainer of production business software.
 
 | Dimension | Retool / Appsmith-style tools | ObjectStack |
 | :--- | :--- | :--- |
 | Business model | Implicit in pages, queries, and scripts | Explicit Zod `ObjectSchema` metadata |
+| Code footprint | Thousands of lines of queries, JS, and UI state per app | **~100× less** — declarative metadata replaces CRUD, forms, validation, and API glue |
 | Business logic | JavaScript snippets and query glue | Flows, policies, conditions, and typed metadata |
 | External contract | App-specific UI state | Self-describing JSON Project Artifact |
 | Agent tools | Manually defined one by one | Generated from metadata and permissions |
-| Agent reasoning | Calls predefined queries | Reads schema, composes safe actions, respects boundaries |
+| Agent reasoning | Calls predefined queries | Reads the full schema, composes safe actions, respects boundaries |
+| AI maintainability | Agents must crawl sprawling app code | Whole app fits in an agent's context window |
 | Governance | App-level conventions | Auth, RBAC, RLS, FLS, audit, and versioned artifacts |
 
 This makes ObjectStack a backend substrate for AI-native business applications: CRM agents, support agents, operations agents, workflow agents, and internal tools that must act on real business data without bypassing permissions or audit trails.
