@@ -54,7 +54,7 @@ Reads walk top-to-bottom: the first non-null layer wins. Writes always route to 
 | **Cache** | `@objectstack/metadata` | In-memory snapshot of the registry, keyed by `MetaRef`. Invalidated by change-log events. |
 | **Registry** | `@objectstack/metadata` | Typed registry the Kernel and plugins query. Built from the cache. |
 
-`MetaRef = (type, name, org, project, branch)`. As of [ADR-0006 v4](/adr/0006-project-environment-split-v4), `project` is **dead in the runtime tuple** — only `(type, name, org, branch)` is meaningful. The Zod schema still exposes `project` for backward compatibility, defaulting to `"default"`.
+`MetaRef = (type, name, org)`. As of [ADR-0008 §0 amendment (2026-04-13)](/adr/0008-metadata-repository-and-change-log#0-2026-04-13-amendment--drop-project-and-branch-from-metaref), `project` and `branch` are removed from the runtime tuple. Project survives only as an artifact-packaging concept on the `objectstack.json` envelope; branching is left to Git.
 
 ---
 
