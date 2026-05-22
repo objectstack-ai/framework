@@ -1069,6 +1069,109 @@ describe('createRestApiPlugin', () => {
 });
 
 // ---------------------------------------------------------------------------
+// PUT /meta/:type/:name — If-Match → parentVersion / X-Actor → actor (PR-10d.4)
+// ---------------------------------------------------------------------------
+
+describe('PUT /meta/:type/:name handler — header → request plumbing (PR-10d.4)', () => {
+  function getPutRoute(rest: any, path: string) {
+    return rest.getRoutes().find((r: any) => r.method === 'PUT' && r.path === path);
+  }
+
+  it('forwards If-Match header as parentVersion to protocol.saveMetaItem', async () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    protocol.saveMetaItem = vi.fn().mockResolvedValue({ success: true });
+    const rest = new RestServer(server as any, protocol as any);
+    rest.registerRoutes();
+
+    const route = getPutRoute(rest, '/api/v1/meta/:type/:name');
+    expect(route).toBeDefined();
+
+    const req = {
+      params: { type: 'view', name: 'cases' },
+      headers: { 'if-match': 'sha256:abc', 'x-actor': 'user_42' },
+      body: { name: 'cases', type: 'grid', label: 'X', columns: ['id'] },
+    };
+    const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+
+    await route.handler(req, res);
+
+    expect(protocol.saveMetaItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'view',
+        name: 'cases',
+        parentVersion: 'sha256:abc',
+        actor: 'user_42',
+      }),
+    );
+  });
+
+  it('strips ETag-style quotes from If-Match before forwarding', async () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    protocol.saveMetaItem = vi.fn().mockResolvedValue({ success: true });
+    const rest = new RestServer(server as any, protocol as any);
+    rest.registerRoutes();
+    const route = getPutRoute(rest, '/api/v1/meta/:type/:name');
+
+    await route.handler(
+      {
+        params: { type: 'view', name: 'cases' },
+        headers: { 'If-Match': '"sha256:xyz"' },
+        body: {},
+      },
+      { json: vi.fn(), status: vi.fn().mockReturnThis() },
+    );
+
+    expect(protocol.saveMetaItem).toHaveBeenCalledWith(
+      expect.objectContaining({ parentVersion: 'sha256:xyz' }),
+    );
+  });
+
+  it('omits parentVersion when no If-Match header is present (legacy LWW behaviour preserved)', async () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    protocol.saveMetaItem = vi.fn().mockResolvedValue({ success: true });
+    const rest = new RestServer(server as any, protocol as any);
+    rest.registerRoutes();
+    const route = getPutRoute(rest, '/api/v1/meta/:type/:name');
+
+    await route.handler(
+      {
+        params: { type: 'view', name: 'cases' },
+        headers: {},
+        body: {},
+      },
+      { json: vi.fn(), status: vi.fn().mockReturnThis() },
+    );
+
+    const arg = (protocol.saveMetaItem as any).mock.calls[0][0];
+    expect(arg).not.toHaveProperty('parentVersion');
+    expect(arg).not.toHaveProperty('actor');
+  });
+
+  it('maps a thrown metadata_conflict (409) to a 409 response with the code', async () => {
+    const server = createMockServer();
+    const protocol = createMockProtocol();
+    const err: any = new Error('parentVersion mismatch');
+    err.code = 'metadata_conflict';
+    err.status = 409;
+    protocol.saveMetaItem = vi.fn().mockRejectedValue(err);
+    const rest = new RestServer(server as any, protocol as any);
+    rest.registerRoutes();
+    const route = getPutRoute(rest, '/api/v1/meta/:type/:name');
+
+    const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
+    await route.handler(
+      { params: { type: 'view', name: 'cases' }, headers: { 'if-match': 'sha256:stale' }, body: {} },
+      res,
+    );
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'metadata_conflict' }));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // RestServer — project-scoped routing (Phase 2)
 // ---------------------------------------------------------------------------
 

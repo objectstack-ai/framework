@@ -1288,11 +1288,26 @@ export class RestServer {
                             ? (body as any).item
                             : body;
 
+                    // Opt-in OCC under ADR-0008 PR-10d.3: callers (Studio,
+                    // CLI) may set `If-Match: <sha256:...>` to enforce that
+                    // the overlay row has not advanced since they last read
+                    // it. A `null`/empty body or no header preserves the
+                    // legacy last-write-wins behaviour.
+                    const ifMatchHeader = req.headers?.['if-match'] ?? req.headers?.['If-Match'];
+                    const parentVersion = typeof ifMatchHeader === 'string'
+                        ? ifMatchHeader.replace(/^"|"$/g, '') // strip ETag-style quotes
+                        : undefined;
+                    const actorHeader = req.headers?.['x-actor'] ?? req.headers?.['X-Actor']
+                        ?? req.user?.id ?? req.userId;
+                    const actor = typeof actorHeader === 'string' ? actorHeader : undefined;
+
                     const result = await p.saveMetaItem({
                         type: req.params.type,
                         name: req.params.name,
                         item,
                         ...(projectId ? { projectId } : {}),
+                        ...(parentVersion !== undefined ? { parentVersion } : {}),
+                        ...(actor ? { actor } : {}),
                     } as any);
                     res.json(result);
                 } catch (error: any) {
@@ -1386,11 +1401,21 @@ export class RestServer {
                     }
 
                     const compoundName = `${req.params.section}/${req.params.name}`;
+                    const ifMatchHeader = req.headers?.['if-match'] ?? req.headers?.['If-Match'];
+                    const parentVersion = typeof ifMatchHeader === 'string'
+                        ? ifMatchHeader.replace(/^"|"$/g, '')
+                        : undefined;
+                    const actorHeader = req.headers?.['x-actor'] ?? req.headers?.['X-Actor']
+                        ?? req.user?.id ?? req.userId;
+                    const actor = typeof actorHeader === 'string' ? actorHeader : undefined;
+
                     const result = await p.saveMetaItem({
                         type: req.params.type,
                         name: compoundName,
                         item: req.body,
                         ...(projectId ? { projectId } : {}),
+                        ...(parentVersion !== undefined ? { parentVersion } : {}),
+                        ...(actor ? { actor } : {}),
                     } as any);
                     res.json(result);
                 } catch (error: any) {
