@@ -129,10 +129,7 @@ describe('saveMetaItem — repository write path against real ObjectQL (PR-10d.4
         engine.registerDriver(driver, true);
         await engine.init();
         engine.registry.registerObject(sysMetadataObject as any);
-        protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        protocol = new ObjectStackProtocolImplementation(engine);
     });
 
     it('insert → update writes the second body and bumps version (id-based update on real engine)', async () => {

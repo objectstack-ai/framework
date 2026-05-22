@@ -157,21 +157,6 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     private projectId?: string;
 
     /**
-     * ADR-0008 PR-10d.3 feature flag. When `true`, `saveMetaItem` routes
-     * overlay writes through {@link SysMetadataRepository.put} so every
-     * mutation produces a change-log entry with a monotonic `seq` for
-     * HMR / replay. When `false`, uses the legacy inline insertOrUpdate
-     * path that bypasses the change log.
-     *
-     * Flipped to **default true** in PR-10d.5. Set
-     * `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH=0` (or pass
-     * `{ useRepositoryWritePath: false }` to the constructor) to opt back
-     * out of the repository path during the deprecation window. The legacy
-     * branch is scheduled for removal in PR-10d.6.
-     */
-    private useRepositoryWritePath: boolean;
-
-    /**
      * Lazily-instantiated SysMetadataRepository per organization. Keyed by
      * `${organizationId ?? '__env__'}`. Repositories are stateful — they
      * carry the per-org `seqCounter` and watch subscribers — so we cache
@@ -184,30 +169,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         getServicesRegistry?: () => Map<string, any>,
         getFeedService?: () => IFeedService | undefined,
         projectId?: string,
-        options?: { useRepositoryWritePath?: boolean },
     ) {
         this.engine = engine as ObjectQL;
         this.getServicesRegistry = getServicesRegistry;
         this.getFeedService = getFeedService;
         this.projectId = projectId;
-        // PR-10d.5: default is now ON. Resolution precedence:
-        //   1. Explicit constructor option (true/false).
-        //   2. `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH=0` env var → opt out.
-        //   3. `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH=1` env var → opt in
-        //      (redundant under the new default but kept for clarity in logs).
-        //   4. Default: true.
-        if (options?.useRepositoryWritePath !== undefined) {
-            this.useRepositoryWritePath = options.useRepositoryWritePath;
-        } else {
-            const envVal = typeof process !== 'undefined'
-                ? process.env?.OBJECTSTACK_USE_REPOSITORY_WRITE_PATH
-                : undefined;
-            if (envVal === '0' || envVal === 'false') {
-                this.useRepositoryWritePath = false;
-            } else {
-                this.useRepositoryWritePath = true;
-            }
-        }
     }
 
     /**
@@ -1905,18 +1871,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         //    overlays are written with organization_id = NULL.
         await this.ensureOverlayIndex();
 
-        // ADR-0008 PR-10d.3 — repository write path. When the flag is on
-        // AND the type is overlay-allowed (per the canonical registry), we
-        // route through SysMetadataRepository.put so every mutation appends
-        // to the change log and emits a watch event with a monotonic seq.
+        // ADR-0008 — overlay-allowed metadata types ALWAYS route through the
+        // repository write path: every mutation appends to the change log
+        // and emits a watch event with a monotonic `seq` (which Studio /
+        // browser clients consume for HMR). Non-overlay-allowed types
+        // (`object`, `flow`, `agent`, ...) take the legacy raw-engine path
+        // below — this preserves the control-plane bootstrap semantic where
+        // `saveMetaItem` is permitted by the outer protocol gate to write
+        // any metadata type when `projectId` is undefined (the repository's
+        // `assertAllowed()` would 403 those writes).
         //
-        // The overlay-allowed gate matters because control-plane bootstrap
-        // (no projectId) is permitted by the outer protocol gate to write
-        // ANY metadata type — including `object`/`flow`/etc. — and the
-        // repository's stricter assertAllowed() would 403 those. We only
-        // want the change-log / HMR machinery for the metadata types that
-        // are actually customer-overridable (view, dashboard, report,
-        // email_template); the rest stay on the legacy raw-engine path.
+        // PR-10d.6 (this PR) removed the `useRepositoryWritePath` flag.
+        // For overlay-allowed types the repo path is no longer opt-out-able.
         //
         // Callers that omit `parentVersion` get backward-compatible
         // "last-write-wins" semantics: we read the current row's checksum
@@ -1927,9 +1893,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // reading an item) get true optimistic-lock conflict detection
         // surfaced as a 409.
         const singularTypeForRepo = PLURAL_TO_SINGULAR[request.type] ?? request.type;
-        const repoEligible = this.useRepositoryWritePath
-            && ObjectStackProtocolImplementation.isOverlayAllowed(singularTypeForRepo);
-        if (repoEligible) {
+        if (ObjectStackProtocolImplementation.isOverlayAllowed(singularTypeForRepo)) {
             const orgId = request.organizationId ?? null;
             const repo = this.getOverlayRepo(orgId);
             const ref = {
@@ -1980,9 +1944,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         }
 
-        // Legacy path: keep the pre-persistence registry mutation for
-        // backward compatibility (it has always been this way), but the
-        // hazard is documented and PR-10d.4 retires this branch.
+        // Legacy raw-engine path — taken when the type is NOT overlay-allowed
+        // (control-plane bootstrap of `object`/`flow`/etc. when `projectId` is
+        // undefined). This branch is intentionally retained: the repository
+        // write path's `assertAllowed()` would 403 these types. There is no
+        // change-log / HMR machinery for non-overlay metadata because
+        // control-plane mutations are bootstrap-only and not subject to
+        // per-org overlay semantics.
+        //
+        // Note: the registry mutation for the legacy path happens BEFORE
+        // persistence (preserved historical behaviour). The overlay-allowed
+        // path moved it to AFTER persistence in PR-10d.3 (rubber-duck #3).
         this.applyObjectRegistryMutation(request);
 
         try {

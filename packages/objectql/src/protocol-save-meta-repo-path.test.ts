@@ -5,13 +5,13 @@ import { hashSpec } from '@objectstack/metadata-core';
 import { ObjectStackProtocolImplementation } from './protocol';
 
 /**
- * PR-10d.3 — repository write path behind a feature flag.
+ * Repository write-path coverage (post PR-10d.6).
  *
- * These tests verify the new branch in `saveMetaItem` that routes through
- * `SysMetadataRepository.put` when `useRepositoryWritePath` is on. We
- * stub the engine surface that both the protocol and the repository touch:
- * findOne / find / insert / update / delete on `sys_metadata`, plus a
- * minimal registry (only consulted for `type === 'object'`).
+ * `saveMetaItem` unconditionally routes overlay-allowed metadata types
+ * through `SysMetadataRepository.put`; the feature flag is gone. These
+ * tests stub the engine surface that both the protocol and the repository
+ * touch: findOne / find / insert / update / delete on `sys_metadata`,
+ * plus a minimal registry (only consulted for `type === 'object'`).
  */
 
 interface Row {
@@ -82,31 +82,10 @@ function makeStubEngine() {
     return { engine, rows };
 }
 
-describe('saveMetaItem — repository write path (PR-10d.3)', () => {
-    it('legacy path is used when explicitly opted out via { useRepositoryWritePath: false }', async () => {
-        // PR-10d.5 flipped the default to repository-path-on. The legacy
-        // raw-engine path is still available behind an explicit opt-out
-        // until PR-10d.6 deletes it. This test pins the legacy semantics
-        // so any regression in the opt-out branch is caught.
-        const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: false },
-        );
-        const result = await protocol.saveMetaItem({
-            type: 'view',
-            name: 'case_grid',
-            organizationId: 'org_alpha',
-            item: { name: 'case_grid', type: 'grid', label: 'Cases', columns: ['id', 'title'] },
-        });
-        expect(result.success).toBe(true);
-        // Legacy path does NOT set checksum / does NOT emit a seq.
-        expect((result as any).seq).toBeUndefined();
-        const row = Array.from(rows.values())[0];
-        expect(row.checksum).toBeUndefined();
-    });
-
-    it('PR-10d.5 — repository path is the default; checksum/seq are present without opt-in', async () => {
+describe('saveMetaItem — repository write path (post PR-10d.6)', () => {
+    it('overlay-allowed types take the repository path: checksum + seq are emitted', async () => {
+        // PR-10d.6 removed the `useRepositoryWritePath` flag — overlay-allowed
+        // types unconditionally route through SysMetadataRepository.put.
         const { engine, rows } = makeStubEngine();
         const protocol = new ObjectStackProtocolImplementation(engine);
         const result = await protocol.saveMetaItem({
@@ -124,10 +103,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('repository path writes the checksum and surfaces seq', async () => {
         const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
         const body = { name: 'case_grid', type: 'grid', label: 'Cases', columns: ['id', 'title'] };
         const result = await protocol.saveMetaItem({
             type: 'view',
@@ -143,10 +119,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('repository path increments seq across writes and updates the body', async () => {
         const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
         const r1 = await protocol.saveMetaItem({
             type: 'view', name: 'v', organizationId: 'org',
             item: { name: 'view_one', type: 'grid', label: 'A', columns: ['id'] },
@@ -163,10 +136,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('repository path returns 409 on parentVersion mismatch', async () => {
         const { engine } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
         // First write establishes a HEAD.
         await protocol.saveMetaItem({
             type: 'view', name: 'v', organizationId: 'org',
@@ -187,10 +157,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('repository path no-ops when body is identical (idempotent put)', async () => {
         const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
         const body = { name: 'view_one', type: 'grid', label: 'A', columns: ['id'] };
         const r1 = await protocol.saveMetaItem({
             type: 'view', name: 'v', organizationId: 'org', item: body,
@@ -207,10 +174,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('env-wide overlays (organizationId omitted) use a separate repo bucket', async () => {
         const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
         await protocol.saveMetaItem({
             type: 'view', name: 'v',
             item: { name: 'view_one', type: 'grid', label: 'env-wide', columns: ['id'] },
@@ -227,10 +191,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('plural type (e.g. "views") is normalized to singular before the repo gate (rubber-duck #5)', async () => {
         const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
         // 'views' must succeed — the repo only knows the singular form, so
         // without normalization this would throw 403 not_overridable.
         const result = await protocol.saveMetaItem({
@@ -247,10 +208,7 @@ describe('saveMetaItem — repository write path (PR-10d.3)', () => {
 
     it('on ConflictError the overlay row body is unchanged (rubber-duck #3 invariant)', async () => {
         const { engine, rows } = makeStubEngine();
-        const protocol = new ObjectStackProtocolImplementation(
-            engine, undefined, undefined, undefined,
-            { useRepositoryWritePath: true },
-        );
+        const protocol = new ObjectStackProtocolImplementation(engine);
 
         // Establish a HEAD overlay.
         await protocol.saveMetaItem({
