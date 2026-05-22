@@ -54,12 +54,34 @@ function genId(prefix: string): string {
   return `${prefix}_${ts}${rand}`;
 }
 
-function slugify(input: string): string {
-  return input
+function slugify(input: string, fallback = 'workspace'): string {
+  const cleaned = input
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'workspace';
+    .slice(0, 40);
+  return cleaned || fallback;
+}
+
+/**
+ * Derive an ASCII-safe slug seed for a user whose display name doesn't
+ * survive sanitisation (e.g. Chinese / Japanese / emoji-only names).
+ * Prefers the email local-part, then a short id suffix — never the bare
+ * literal "workspace" (which would produce ugly `workspace-workspace`
+ * org slugs and matching `workspace-workspace-<env>.localhost` hostnames).
+ */
+function deriveSlugFallback(user: { id: string; email?: string }): string {
+  if (user.email) {
+    const local = user.email.split('@')[0] ?? '';
+    const localSlug = local
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40);
+    if (localSlug) return localSlug;
+  }
+  const idTail = user.id.replace(/[^a-z0-9]/gi, '').slice(-8).toLowerCase();
+  return idTail ? `user-${idTail}` : 'user';
 }
 
 function deriveBaseName(user: { name?: string; email?: string; id: string }): string {
@@ -108,7 +130,8 @@ export async function ensureUserHasOrganization(
 
   const base = deriveBaseName(user);
   const orgName = `${base}'s Workspace`;
-  const baseSlug = slugify(base);
+  const slugFallback = deriveSlugFallback(user);
+  const baseSlug = slugify(base, slugFallback);
 
   // Find a free slug. better-auth allows duplicates technically, but
   // the dashboard renders the slug as a stable identifier so we keep
