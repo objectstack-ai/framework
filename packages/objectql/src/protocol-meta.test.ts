@@ -468,6 +468,56 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             expect(result.name).toBe('test_app');
         });
 
+        it('MetadataService is consulted BEFORE SchemaRegistry (HMR re-register wins over stale registry)', async () => {
+            // Regression test for the dev-mode HMR data-reload gap:
+            // CLI watcher recompiles → POSTs /api/v1/dev/metadata-events →
+            // MetadataPlugin re-registers via MetadataManager → only
+            // MetadataService sees the new value. SchemaRegistry was
+            // populated at boot via `loadMetadataFromService` and is NOT
+            // invalidated. If the protocol checks the registry first, reads
+            // return stale data. The fix: consult MetadataService first.
+            const stale = { name: 'case', label: 'Service Workflow' };
+            const fresh = { name: 'case', label: 'Service Workflow (HMR)' };
+
+            registry.registerItem('view', stale, 'name' as any);
+
+            const metadataService = {
+                get: vi.fn().mockResolvedValue(fresh),
+            };
+            const servicesRegistry = new Map<string, any>([['metadata', metadataService]]);
+            const protocolWithService = new ObjectStackProtocolImplementation(
+                mockEngine,
+                () => servicesRegistry,
+            );
+
+            mockEngine.findOne.mockResolvedValue(null); // no sys_metadata overlay
+
+            const result = await protocolWithService.getMetaItem({ type: 'view', name: 'case' });
+
+            expect(result.item).toEqual(fresh);
+            expect(metadataService.get).toHaveBeenCalledWith('view', 'case');
+        });
+
+        it('falls back to SchemaRegistry when MetadataService returns undefined', async () => {
+            const fromRegistry = { name: 'case', label: 'From Registry' };
+            registry.registerItem('view', fromRegistry, 'name' as any);
+
+            const metadataService = {
+                get: vi.fn().mockResolvedValue(undefined),
+            };
+            const servicesRegistry = new Map<string, any>([['metadata', metadataService]]);
+            const protocolWithService = new ObjectStackProtocolImplementation(
+                mockEngine,
+                () => servicesRegistry,
+            );
+
+            mockEngine.findOne.mockResolvedValue(null);
+
+            const result = await protocolWithService.getMetaItem({ type: 'view', name: 'case' });
+
+            expect(result.item).toEqual(fromRegistry);
+        });
+
         it('should parse metadata JSON string from DB record', async () => {
             const complexData = { name: 'complex', nested: { value: 42 } };
             mockEngine.findOne.mockResolvedValue({

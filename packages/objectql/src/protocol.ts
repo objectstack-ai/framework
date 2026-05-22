@@ -599,7 +599,41 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             // DB not available — fall through to registry / MetadataService
         }
 
-        // 2. In-memory SchemaRegistry (artifact-loaded out-of-box values).
+        // 2. MetadataService (runtime-registered items: HMR-updated view/page/
+        //    dashboard/agent/tool, plus FilesystemLoader-sourced items). This
+        //    is consulted BEFORE the in-memory SchemaRegistry because the
+        //    registry is a boot-time cache populated by `loadMetadataFromService`
+        //    and is NOT invalidated on `MetadataManager.register()` (which is
+        //    how the CLI dev watcher pushes recompiled metadata into the
+        //    running server). Without this ordering, edits to `*.view.ts`
+        //    source files appear to take effect (MetadataManager learns the
+        //    new value) but reads continue to return the stale registry copy.
+        if (item === undefined) {
+            try {
+                const services = this.getServicesRegistry?.();
+                const metadataService = services?.get('metadata');
+                if (metadataService && typeof metadataService.get === 'function') {
+                    const fromService = await metadataService.get(request.type, request.name);
+                    if (fromService !== undefined && fromService !== null) {
+                        item = fromService;
+                    } else {
+                        const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
+                        if (alt) {
+                            const altFromService = await metadataService.get(alt, request.name);
+                            if (altFromService !== undefined && altFromService !== null) {
+                                item = altFromService;
+                            }
+                        }
+                    }
+                }
+            } catch {
+                // MetadataService not available — fall through
+            }
+        }
+
+        // 3. In-memory SchemaRegistry (artifact-loaded out-of-box values, and
+        //    items that bypass MetadataService — e.g. some object-schema
+        //    extension chains registered by AppPlugin directly).
         //    Both control-plane (unscoped) and project kernels consult the
         //    registry. The previous guard that skipped the registry for
         //    project kernels was meant to prevent cross-project leakage at
@@ -614,19 +648,6 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             if (item === undefined) {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                 if (alt) item = this.engine.registry.getItem(alt, request.name);
-            }
-        }
-
-        // 3. Fallback to MetadataService for runtime-registered items (agents, tools, etc.)
-        if (item === undefined) {
-            try {
-                const services = this.getServicesRegistry?.();
-                const metadataService = services?.get('metadata');
-                if (metadataService && typeof metadataService.get === 'function') {
-                    item = await metadataService.get(request.type, request.name);
-                }
-            } catch {
-                // MetadataService not available
             }
         }
 

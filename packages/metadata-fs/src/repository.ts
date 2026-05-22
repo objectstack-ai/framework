@@ -405,6 +405,12 @@ export class FileSystemRepository implements MetadataRepository {
       ignoreInitial: true,
       depth: 2,
       awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 20 },
+      // Use polling to avoid `fs.watch` EMFILE on macOS / busy dev hosts.
+      // The depth-2 recursion would otherwise wire native watches across
+      // the entire customization tree.
+      usePolling: true,
+      interval: 1000,
+      binaryInterval: 2000,
     });
     w.on('add', (p) => void this.handleFsChange(p, 'add'));
     w.on('change', (p) => void this.handleFsChange(p, 'change'));

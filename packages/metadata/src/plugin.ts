@@ -314,6 +314,15 @@ export class MetadataPlugin implements Plugin {
                             ignoreInitial: true,
                             awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 20 },
                             persistent: true,
+                            // Use polling to avoid `fs.watch` exhausting the
+                            // process file-descriptor limit on macOS (chokidar
+                            // recursively wires watches on the parent
+                            // directory tree which can trip EMFILE on busy
+                            // dev hosts). 500ms polling is fast enough for
+                            // HMR (a recompile takes ~400ms anyway).
+                            usePolling: true,
+                            interval: 500,
+                            binaryInterval: 1000,
                         });
                         let pending = false;
                         const reload = async () => {
