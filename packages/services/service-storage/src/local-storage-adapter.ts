@@ -3,6 +3,11 @@
 import { promises as fs, createReadStream, createWriteStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHmac, randomUUID } from 'node:crypto';
+import {
+  NoopMetricsRegistry,
+  SEMCONV,
+  type MetricsRegistry,
+} from '@objectstack/observability';
 import type {
   IStorageService,
   StorageUploadOptions,
@@ -36,6 +41,8 @@ export interface LocalStorageAdapterOptions {
    * Auto-generated if omitted (suitable for single-process dev usage).
    */
   signingSecret?: string;
+  /** Optional MetricsRegistry for instrumentation. Defaults to NoopMetricsRegistry. */
+  metrics?: MetricsRegistry;
 }
 
 interface PresignTokenPayload {
@@ -62,6 +69,7 @@ export class LocalStorageAdapter implements IStorageService {
   private readonly baseUrl: string;
   private readonly basePath: string;
   private readonly signingSecret: string;
+  private readonly metrics: MetricsRegistry;
 
   constructor(options: LocalStorageAdapterOptions) {
     this.rootDir = options.rootDir;
@@ -69,6 +77,32 @@ export class LocalStorageAdapter implements IStorageService {
     this.baseUrl = options.baseUrl ?? '';
     this.basePath = options.basePath ?? '/api/v1/storage';
     this.signingSecret = options.signingSecret ?? randomUUID();
+    this.metrics = options.metrics ?? new NoopMetricsRegistry();
+  }
+
+  /**
+   * Wrap a storage operation with metrics instrumentation. Never swallows
+   * the underlying error; instrumentation failures are silently ignored.
+   */
+  private async track<T>(op: 'put' | 'get' | 'delete' | 'head' | 'list', fn: () => Promise<T>): Promise<T> {
+    const started = Date.now();
+    const baseLabels = { adapter: 'local', op } as const;
+    try {
+      const out = await fn();
+      try {
+        this.metrics.counter(SEMCONV.storageOperationsTotal, { ...baseLabels, result: 'ok' });
+        this.metrics.histogram(SEMCONV.storageOperationDurationMs, Date.now() - started, baseLabels);
+      } catch { /* never throw */ }
+      return out;
+    } catch (err: any) {
+      try {
+        this.metrics.counter(SEMCONV.storageOperationsTotal, { ...baseLabels, result: 'error' });
+        this.metrics.histogram(SEMCONV.storageOperationDurationMs, Date.now() - started, baseLabels);
+        const errorClass = err?.name || err?.constructor?.name || 'Error';
+        this.metrics.counter(SEMCONV.storageErrorsTotal, { ...baseLabels, errorClass });
+      } catch { /* never throw */ }
+      throw err;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -98,70 +132,82 @@ export class LocalStorageAdapter implements IStorageService {
     data: Buffer | ReadableStream,
     _options?: StorageUploadOptions,
   ): Promise<void> {
-    const filePath = this.resolvePath(key);
-    await fs.mkdir(dirname(filePath), { recursive: true });
+    return this.track('put', async () => {
+      const filePath = this.resolvePath(key);
+      await fs.mkdir(dirname(filePath), { recursive: true });
 
-    if (data instanceof Buffer) {
-      await fs.writeFile(filePath, data);
-      return;
-    }
+      if (data instanceof Buffer) {
+        await fs.writeFile(filePath, data);
+        return;
+      }
 
-    // Convert ReadableStream to Buffer
-    const chunks: Uint8Array[] = [];
-    const reader = (data as ReadableStream).getReader();
-    let done = false;
-    while (!done) {
-      const result = await reader.read();
-      done = result.done;
-      if (result.value) chunks.push(result.value);
-    }
-    await fs.writeFile(filePath, Buffer.concat(chunks));
+      // Convert ReadableStream to Buffer
+      const chunks: Uint8Array[] = [];
+      const reader = (data as ReadableStream).getReader();
+      let done = false;
+      while (!done) {
+        const result = await reader.read();
+        done = result.done;
+        if (result.value) chunks.push(result.value);
+      }
+      await fs.writeFile(filePath, Buffer.concat(chunks));
+    });
   }
 
   async download(key: string): Promise<Buffer> {
-    return fs.readFile(this.resolvePath(key));
+    return this.track('get', async () => fs.readFile(this.resolvePath(key)));
   }
 
   async delete(key: string): Promise<void> {
-    await fs.unlink(this.resolvePath(key)).catch((err) => {
-      if (err && err.code === 'ENOENT') return;
-      throw err;
+    return this.track('delete', async () => {
+      await fs.unlink(this.resolvePath(key)).catch((err) => {
+        if (err && err.code === 'ENOENT') return;
+        throw err;
+      });
     });
   }
 
   async exists(key: string): Promise<boolean> {
-    try {
-      await fs.access(this.resolvePath(key));
-      return true;
-    } catch {
-      return false;
-    }
+    return this.track('head', async () => {
+      try {
+        await fs.access(this.resolvePath(key));
+        return true;
+      } catch {
+        return false;
+      }
+    });
   }
 
   async getInfo(key: string): Promise<StorageFileInfo> {
-    const filePath = this.resolvePath(key);
-    const stat = await fs.stat(filePath);
-    return { key, size: stat.size, lastModified: stat.mtime };
+    return this.track('head', async () => {
+      const filePath = this.resolvePath(key);
+      const stat = await fs.stat(filePath);
+      return { key, size: stat.size, lastModified: stat.mtime };
+    });
   }
 
   async list(prefix: string): Promise<StorageFileInfo[]> {
-    const dirPath = this.resolvePath(prefix);
-    try {
-      const entries = await fs.readdir(dirPath);
-      const results: StorageFileInfo[] = [];
-      for (const entry of entries) {
-        if (entry.startsWith('.')) continue;
-        const fullKey = prefix ? `${prefix}/${entry}` : entry;
-        try {
-          results.push(await this.getInfo(fullKey));
-        } catch {
-          /* skip */
+    return this.track('list', async () => {
+      const dirPath = this.resolvePath(prefix);
+      try {
+        const entries = await fs.readdir(dirPath);
+        const results: StorageFileInfo[] = [];
+        for (const entry of entries) {
+          if (entry.startsWith('.')) continue;
+          const fullKey = prefix ? `${prefix}/${entry}` : entry;
+          try {
+            // Inline stat to avoid double-counting `head` operations.
+            const stat = await fs.stat(this.resolvePath(fullKey));
+            results.push({ key: fullKey, size: stat.size, lastModified: stat.mtime });
+          } catch {
+            /* skip */
+          }
         }
+        return results;
+      } catch {
+        return [];
       }
-      return results;
-    } catch {
-      return [];
-    }
+    });
   }
 
   // ---------------------------------------------------------------------------

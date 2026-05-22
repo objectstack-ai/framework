@@ -1,5 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import {
+  NoopMetricsRegistry,
+  SEMCONV,
+  type MetricsRegistry,
+} from '@objectstack/observability';
 import type {
   IStorageService,
   StorageUploadOptions,
@@ -24,6 +29,8 @@ export interface S3StorageAdapterOptions {
   secretAccessKey?: string;
   /** Force path-style URLs (needed for MinIO / self-hosted) */
   forcePathStyle?: boolean;
+  /** Optional MetricsRegistry for instrumentation. Defaults to NoopMetricsRegistry. */
+  metrics?: MetricsRegistry;
 }
 
 /**
@@ -47,6 +54,7 @@ export class S3StorageAdapter implements IStorageService {
   private readonly region: string;
   private readonly endpoint?: string;
   private readonly forcePathStyle: boolean;
+  private readonly metrics: MetricsRegistry;
   private clientPromise: Promise<any> | null = null;
 
   constructor(private readonly options: S3StorageAdapterOptions) {
@@ -54,6 +62,33 @@ export class S3StorageAdapter implements IStorageService {
     this.region = options.region;
     this.endpoint = options.endpoint;
     this.forcePathStyle = options.forcePathStyle ?? false;
+    this.metrics = options.metrics ?? new NoopMetricsRegistry();
+  }
+
+  /**
+   * Wrap a storage operation with metrics instrumentation.
+   * Records ok/error counters, a duration histogram, and an error counter
+   * keyed by error class on failure. Never swallows the underlying error.
+   */
+  private async track<T>(op: 'put' | 'get' | 'delete' | 'head' | 'list', fn: () => Promise<T>): Promise<T> {
+    const started = Date.now();
+    const baseLabels = { adapter: 's3', op } as const;
+    try {
+      const out = await fn();
+      try {
+        this.metrics.counter(SEMCONV.storageOperationsTotal, { ...baseLabels, result: 'ok' });
+        this.metrics.histogram(SEMCONV.storageOperationDurationMs, Date.now() - started, baseLabels);
+      } catch { /* never throw from instrumentation */ }
+      return out;
+    } catch (err: any) {
+      try {
+        this.metrics.counter(SEMCONV.storageOperationsTotal, { ...baseLabels, result: 'error' });
+        this.metrics.histogram(SEMCONV.storageOperationDurationMs, Date.now() - started, baseLabels);
+        const errorClass = err?.name || err?.constructor?.name || 'Error';
+        this.metrics.counter(SEMCONV.storageErrorsTotal, { ...baseLabels, errorClass });
+      } catch { /* never throw from instrumentation */ }
+      throw err;
+    }
   }
 
   /**
@@ -108,72 +143,84 @@ export class S3StorageAdapter implements IStorageService {
   // ---------------------------------------------------------------------------
 
   async upload(key: string, data: Buffer | ReadableStream, options?: StorageUploadOptions): Promise<void> {
-    const client = await this.getClient();
-    const s3 = await this.s3Mod();
-    const body = data instanceof Buffer ? data : await streamToBuffer(data);
-    const cmd = new s3.PutObjectCommand({
-      Bucket: this.bucket,
-      Key: key,
-      Body: body,
-      ContentType: options?.contentType,
-      Metadata: options?.metadata,
-      ACL: options?.acl === 'public-read' ? 'public-read' : undefined,
+    return this.track('put', async () => {
+      const client = await this.getClient();
+      const s3 = await this.s3Mod();
+      const body = data instanceof Buffer ? data : await streamToBuffer(data);
+      const cmd = new s3.PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: options?.contentType,
+        Metadata: options?.metadata,
+        ACL: options?.acl === 'public-read' ? 'public-read' : undefined,
+      });
+      await client.send(cmd);
     });
-    await client.send(cmd);
   }
 
   async download(key: string): Promise<Buffer> {
-    const client = await this.getClient();
-    const s3 = await this.s3Mod();
-    const cmd = new s3.GetObjectCommand({ Bucket: this.bucket, Key: key });
-    const res = await client.send(cmd);
-    return streamToBuffer(res.Body);
+    return this.track('get', async () => {
+      const client = await this.getClient();
+      const s3 = await this.s3Mod();
+      const cmd = new s3.GetObjectCommand({ Bucket: this.bucket, Key: key });
+      const res = await client.send(cmd);
+      return streamToBuffer(res.Body);
+    });
   }
 
   async delete(key: string): Promise<void> {
-    const client = await this.getClient();
-    const s3 = await this.s3Mod();
-    const cmd = new s3.DeleteObjectCommand({ Bucket: this.bucket, Key: key });
-    await client.send(cmd);
+    return this.track('delete', async () => {
+      const client = await this.getClient();
+      const s3 = await this.s3Mod();
+      const cmd = new s3.DeleteObjectCommand({ Bucket: this.bucket, Key: key });
+      await client.send(cmd);
+    });
   }
 
   async exists(key: string): Promise<boolean> {
-    const client = await this.getClient();
-    const s3 = await this.s3Mod();
-    try {
-      const cmd = new s3.HeadObjectCommand({ Bucket: this.bucket, Key: key });
-      await client.send(cmd);
-      return true;
-    } catch (err: any) {
-      if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) return false;
-      throw err;
-    }
+    return this.track('head', async () => {
+      const client = await this.getClient();
+      const s3 = await this.s3Mod();
+      try {
+        const cmd = new s3.HeadObjectCommand({ Bucket: this.bucket, Key: key });
+        await client.send(cmd);
+        return true;
+      } catch (err: any) {
+        if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) return false;
+        throw err;
+      }
+    });
   }
 
   async getInfo(key: string): Promise<StorageFileInfo> {
-    const client = await this.getClient();
-    const s3 = await this.s3Mod();
-    const cmd = new s3.HeadObjectCommand({ Bucket: this.bucket, Key: key });
-    const res = await client.send(cmd);
-    return {
-      key,
-      size: res.ContentLength ?? 0,
-      contentType: res.ContentType,
-      lastModified: res.LastModified ?? new Date(),
-      metadata: res.Metadata,
-    };
+    return this.track('head', async () => {
+      const client = await this.getClient();
+      const s3 = await this.s3Mod();
+      const cmd = new s3.HeadObjectCommand({ Bucket: this.bucket, Key: key });
+      const res = await client.send(cmd);
+      return {
+        key,
+        size: res.ContentLength ?? 0,
+        contentType: res.ContentType,
+        lastModified: res.LastModified ?? new Date(),
+        metadata: res.Metadata,
+      };
+    });
   }
 
   async list(prefix: string): Promise<StorageFileInfo[]> {
-    const client = await this.getClient();
-    const s3 = await this.s3Mod();
-    const cmd = new s3.ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix });
-    const res = await client.send(cmd);
-    return (res.Contents ?? []).map((item: any) => ({
-      key: item.Key,
-      size: item.Size ?? 0,
-      lastModified: item.LastModified ?? new Date(),
-    }));
+    return this.track('list', async () => {
+      const client = await this.getClient();
+      const s3 = await this.s3Mod();
+      const cmd = new s3.ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix });
+      const res = await client.send(cmd);
+      return (res.Contents ?? []).map((item: any) => ({
+        key: item.Key,
+        size: item.Size ?? 0,
+        lastModified: item.LastModified ?? new Date(),
+      }));
+    });
   }
 
   // ---------------------------------------------------------------------------

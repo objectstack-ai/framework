@@ -1,5 +1,10 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import {
+  NoopMetricsRegistry,
+  SEMCONV,
+  type MetricsRegistry,
+} from '@objectstack/observability';
 import type { ICacheService, CacheStats } from '@objectstack/spec/contracts';
 
 /**
@@ -18,6 +23,8 @@ export interface MemoryCacheAdapterOptions {
   maxSize?: number;
   /** Default TTL in seconds (0 = no expiry) */
   defaultTtl?: number;
+  /** Optional MetricsRegistry for instrumentation. Defaults to NoopMetricsRegistry. */
+  metrics?: MetricsRegistry;
 }
 
 /**
@@ -32,10 +39,25 @@ export class MemoryCacheAdapter implements ICacheService {
   private misses = 0;
   private readonly maxSize: number;
   private readonly defaultTtl: number;
+  private readonly metrics: MetricsRegistry;
+  private static readonly LABELS = { adapter: 'memory' } as const;
 
   constructor(options: MemoryCacheAdapterOptions = {}) {
     this.maxSize = options.maxSize ?? 0;
     this.defaultTtl = options.defaultTtl ?? 0;
+    this.metrics = options.metrics ?? new NoopMetricsRegistry();
+  }
+
+  private recordLookup(result: 'hit' | 'miss'): void {
+    try {
+      this.metrics.counter(SEMCONV.cacheLookupsTotal, { ...MemoryCacheAdapter.LABELS, result });
+    } catch { /* never throw from instrumentation */ }
+  }
+
+  private recordWrite(op: 'set' | 'delete' | 'clear'): void {
+    try {
+      this.metrics.counter(SEMCONV.cacheWritesTotal, { ...MemoryCacheAdapter.LABELS, op });
+    } catch { /* never throw from instrumentation */ }
   }
 
   async get<T = unknown>(key: string): Promise<T | undefined> {
@@ -43,9 +65,11 @@ export class MemoryCacheAdapter implements ICacheService {
     if (!entry || (entry.expires && Date.now() > entry.expires)) {
       if (entry) this.store.delete(key);
       this.misses++;
+      this.recordLookup('miss');
       return undefined;
     }
     this.hits++;
+    this.recordLookup('hit');
     return entry.value as T;
   }
 
@@ -60,24 +84,33 @@ export class MemoryCacheAdapter implements ICacheService {
       value,
       expires: effectiveTtl > 0 ? Date.now() + effectiveTtl * 1000 : undefined,
     });
+    this.recordWrite('set');
   }
 
   async delete(key: string): Promise<boolean> {
-    return this.store.delete(key);
+    const result = this.store.delete(key);
+    this.recordWrite('delete');
+    return result;
   }
 
   async has(key: string): Promise<boolean> {
     const entry = this.store.get(key);
-    if (!entry) return false;
-    if (entry.expires && Date.now() > entry.expires) {
-      this.store.delete(key);
+    if (!entry) {
+      this.recordLookup('miss');
       return false;
     }
+    if (entry.expires && Date.now() > entry.expires) {
+      this.store.delete(key);
+      this.recordLookup('miss');
+      return false;
+    }
+    this.recordLookup('hit');
     return true;
   }
 
   async clear(): Promise<void> {
     this.store.clear();
+    this.recordWrite('clear');
   }
 
   async stats(): Promise<CacheStats> {
