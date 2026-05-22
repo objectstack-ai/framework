@@ -113,14 +113,28 @@ export function CommandPalette({ selectedPackage }: PaletteProps) {
     navigate({ to: path });
   };
 
+  // Group by top-level nav category (Views & Apps, Automations, …) so the
+  // palette doesn't show one heading per raw metadata type. Items whose
+  // type isn't owned by any nav entry land in an "Other" bucket.
   const groupedItems = useMemo(() => {
-    const map = new Map<string, MetadataHit[]>();
+    const map = new Map<string, { label: string; hits: MetadataHit[] }>();
     for (const it of items) {
-      const bucket = map.get(it.type) ?? [];
-      bucket.push(it);
-      map.set(it.type, bucket);
+      const nav = navItemForType(it.type);
+      const key = nav?.key ?? 'other';
+      const label = nav?.label ?? 'Other';
+      const bucket = map.get(key) ?? { label, hits: [] };
+      bucket.hits.push(it);
+      map.set(key, bucket);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+    // Preserve STUDIO_NAV order; append "other" at the end.
+    const ordered: Array<[string, { label: string; hits: MetadataHit[] }]> = [];
+    for (const nav of STUDIO_NAV) {
+      const b = map.get(nav.key);
+      if (b) ordered.push([nav.key, b]);
+    }
+    const other = map.get('other');
+    if (other) ordered.push(['other', other]);
+    return ordered;
   }, [items]);
 
   return (
@@ -162,29 +176,31 @@ export function CommandPalette({ selectedPackage }: PaletteProps) {
               })}
             </Command.Group>
 
-            {/* Metadata items grouped by type */}
-            {groupedItems.map(([type, hits]) => {
-              const navItem = navItemForType(type);
-              const Icon = navItem?.icon;
+            {/* Metadata items grouped by top-level nav category */}
+            {groupedItems.map(([navKey, bucket]) => {
+              const Icon = STUDIO_NAV.find((n) => n.key === navKey)?.icon;
               return (
-                <Command.Group key={`type-${type}`} heading={navItem?.label ?? type}>
-                  {hits.slice(0, 50).map((hit) => (
+                <Command.Group key={`nav-group-${navKey}`} heading={bucket.label}>
+                  {bucket.hits.slice(0, 50).map((hit) => (
                     <Command.Item
-                      key={`${type}-${hit.name}`}
-                      value={`${type} ${hit.name} ${hit.label}`}
+                      key={`${hit.type}-${hit.name}`}
+                      value={`${hit.type} ${hit.name} ${hit.label}`}
                       onSelect={() => {
-                        if (type === 'object') {
+                        if (hit.type === 'object') {
                           goTo(`/${hit.packageId}/objects/${hit.name}`);
                         } else {
-                          goTo(`/${hit.packageId}/metadata/${type}/${hit.name}`);
+                          goTo(`/${hit.packageId}/metadata/${hit.type}/${hit.name}`);
                         }
                       }}
                       className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm aria-selected:bg-accent"
                     >
                       {Icon && <Icon className="h-4 w-4 text-muted-foreground" />}
                       <span className="truncate">{hit.label}</span>
-                      <span className="ml-auto truncate font-mono text-xs text-muted-foreground">
-                        {hit.name}
+                      <span className="ml-auto flex items-center gap-2 truncate font-mono text-xs text-muted-foreground">
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                          {hit.type}
+                        </span>
+                        <span>{hit.name}</span>
                       </span>
                     </Command.Item>
                   ))}

@@ -39,7 +39,6 @@ import {
   FormInput,
   Workflow,
   Shield,
-  Table2,
   ExternalLink,
   Code2,
 } from 'lucide-react';
@@ -61,7 +60,7 @@ function ObjectHubComponent() {
   const { package: packageId, name } = Route.useParams();
   const client = useClient();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<string>('schema');
+  const [tab, setTab] = useState<string>('designer');
 
   const [views, setViews] = useState<FilteredItem[]>([]);
   const [forms, setForms] = useState<FilteredItem[]>([]);
@@ -155,11 +154,8 @@ function ObjectHubComponent() {
         </div>
         <Tabs value={tab} onValueChange={setTab} className="mt-3">
           <TabsList>
-            <TabsTrigger value="schema" className="gap-1.5">
-              <Database className="h-3.5 w-3.5" /> Schema
-            </TabsTrigger>
-            <TabsTrigger value="data" className="gap-1.5">
-              <Table2 className="h-3.5 w-3.5" /> Data
+            <TabsTrigger value="designer" className="gap-1.5">
+              <Database className="h-3.5 w-3.5" /> Designer
             </TabsTrigger>
             <TabsTrigger value="views" className="gap-1.5">
               <Eye className="h-3.5 w-3.5" /> Views ({views.length})
@@ -179,12 +175,11 @@ function ObjectHubComponent() {
 
       <div className="flex-1 overflow-hidden">
         <Tabs value={tab} className="h-full">
-          <TabsContent value="schema" className="m-0 h-full overflow-hidden">
+          <TabsContent value="designer" className="m-0 h-full overflow-hidden">
+            {/* The embedded object-designer plugin owns Schema / Data / API
+                sub-tabs — we surface it as a single "Designer" canvas to
+                avoid duplicate tab rows. */}
             <PluginHost metadataType="object" metadataName={name} packageId={packageId} />
-          </TabsContent>
-          <TabsContent value="data" className="m-0 h-full overflow-auto">
-            <PluginHost metadataType="object" metadataName={name} packageId={packageId} />
-            {/* Note: PluginHost has a built-in "Data" mode that uses ObjectDataTable. */}
           </TabsContent>
           <TabsContent value="views" className="m-0 h-full overflow-auto p-6">
             <RelatedList
