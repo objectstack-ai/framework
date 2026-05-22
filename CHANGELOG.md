@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `defaultDetailForm` on ObjectSchema
+
+Objects can now declare which named FormView powers their record-detail
+screen via `defaultDetailForm: '<form_view_name>'`. This is the missing
+piece that lets the same FormView metadata drive Airtable-style internal
+edit panels in addition to public submissions — the runtime resolves
+the named view from `views.formViews`, falling back to the unnamed
+`view.form` and finally to an auto-generated layout.
+
 ### Added — `type: 'form'` action variant
 
 `ActionType` now includes `'form'` for actions that open a FormView.
