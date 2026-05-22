@@ -10,1852 +10,1852 @@ import type { TranslationData } from '@objectstack/spec/system';
 
 export const jaJPObjects: NonNullable<TranslationData['objects']> = {
   sys_user: {
-    label: "User",
-    pluralLabel: "Users",
-    description: "User accounts for authentication",
+    label: "ユーザー",
+    pluralLabel: "ユーザー",
+    description: "認証用ユーザーアカウント",
     fields: {
       name: {
-        label: "Name"
+        label: "名前"
       },
       email: {
-        label: "Email"
+        label: "メールアドレス"
       },
       email_verified: {
-        label: "Email Verified"
+        label: "メール確認済み"
       },
       two_factor_enabled: {
-        label: "Two-Factor Enabled",
-        help: "Whether two-factor authentication is enabled for this user. Maintained by the better-auth `twoFactor` plugin."
+        label: "二要素認証 有効",
+        help: "このユーザーの二要素認証が有効かどうか。better-auth の `twoFactor` プラグインが管理します。"
       },
       role: {
-        label: "Platform Role",
-        help: "Platform-level role (admin, user, …). Set via the Set Platform Role action."
+        label: "プラットフォームロール",
+        help: "プラットフォームレベルのロール（admin、user など）。「プラットフォームロールを設定」アクションから設定します。"
       },
       banned: {
-        label: "Banned",
-        help: "When true, the user cannot sign in. Toggle via Ban User / Unban User actions."
+        label: "利用停止",
+        help: "true の場合、ユーザーはサインインできません。「利用停止」/「利用停止を解除」アクションで切り替えます。"
       },
       ban_reason: {
-        label: "Ban Reason"
+        label: "利用停止理由"
       },
       ban_expires: {
-        label: "Ban Expires",
-        help: "When set, the ban auto-clears at this time."
+        label: "利用停止期限",
+        help: "設定されている場合、この日時に利用停止が自動解除されます。"
       },
       image: {
-        label: "Profile Image"
+        label: "プロフィール画像"
       },
       id: {
-        label: "User ID"
+        label: "ユーザー ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       all_users: {
-        label: "All Users"
+        label: "すべてのユーザー"
       },
       unverified: {
-        label: "Unverified"
+        label: "未確認"
       },
       two_factor: {
-        label: "2FA Enabled"
+        label: "2FA 有効"
       },
       banned: {
-        label: "Banned"
+        label: "利用停止"
       }
     },
     _actions: {
       invite_user: {
-        label: "Invite User",
-        successMessage: "Invitation sent"
+        label: "ユーザーを招待",
+        successMessage: "招待を送信しました"
       },
       ban_user: {
-        label: "Ban User",
-        confirmText: "Ban this user? They will be signed out and unable to sign in until unbanned.",
-        successMessage: "User banned"
+        label: "利用停止",
+        confirmText: "このユーザーを利用停止にしますか？利用停止になるとサインアウトされ、解除されるまでサインインできなくなります。",
+        successMessage: "ユーザーを利用停止にしました"
       },
       unban_user: {
-        label: "Unban User",
-        successMessage: "User unbanned"
+        label: "利用停止を解除",
+        successMessage: "ユーザーの利用停止を解除しました"
       },
       set_user_password: {
-        label: "Set Password",
-        successMessage: "Password updated"
+        label: "パスワードを設定",
+        successMessage: "パスワードを更新しました"
       },
       set_user_role: {
-        label: "Set Platform Role",
-        successMessage: "Role updated"
+        label: "プラットフォームロールを設定",
+        successMessage: "ロールを更新しました"
       },
       impersonate_user: {
-        label: "Impersonate User",
-        confirmText: "Start an impersonation session for this user? Use only for legitimate support cases — actions will be logged.",
-        successMessage: "Now impersonating user"
+        label: "代理ログイン",
+        confirmText: "このユーザーとして代理ログインを開始しますか？正当なサポート対応時のみ使用してください。操作は監査ログに記録されます。",
+        successMessage: "代理ログイン中"
       }
     }
   },
   sys_session: {
-    label: "Session",
-    pluralLabel: "Sessions",
-    description: "Active user sessions",
+    label: "セッション",
+    pluralLabel: "セッション",
+    description: "アクティブなユーザーセッション",
     fields: {
       user_id: {
-        label: "User"
+        label: "ユーザー"
       },
       expires_at: {
-        label: "Expires At"
+        label: "有効期限"
       },
       active_organization_id: {
-        label: "Active Organization"
+        label: "アクティブ組織"
       },
       active_team_id: {
-        label: "Active Team"
+        label: "アクティブチーム"
       },
       ip_address: {
-        label: "IP Address"
+        label: "IP アドレス"
       },
       user_agent: {
-        label: "User Agent"
+        label: "ユーザーエージェント"
       },
       impersonated_by: {
-        label: "Impersonated By",
-        help: "User id of the admin that started this impersonation session, if any."
+        label: "代理ログイン開始者",
+        help: "この代理ログインセッションを開始した管理者のユーザー ID（該当する場合）。"
       },
       token: {
-        label: "Session Token",
-        help: "Opaque session token — never exposed in UI"
+        label: "セッショントークン",
+        help: "不透明なセッショントークン — UI には表示されません"
       },
       id: {
-        label: "Session ID"
+        label: "セッション ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       mine: {
-        label: "My Sessions"
+        label: "自分のセッション"
       },
       all_sessions: {
-        label: "All"
+        label: "すべて"
       }
     },
     _actions: {
       revoke_my_other_sessions: {
-        label: "Sign out other devices",
-        confirmText: "Sign out of every other device where you're currently logged in? Your current session will remain active.",
-        successMessage: "All other sessions revoked"
+        label: "他のデバイスをサインアウト",
+        confirmText: "現在ログイン中の他のすべてのデバイスをサインアウトしますか？現在のセッションは維持されます。",
+        successMessage: "他のすべてのセッションを失効しました"
       },
       revoke_session: {
-        label: "Revoke Session",
-        confirmText: "Revoke this session? The user will be signed out from that device.",
-        successMessage: "Session revoked"
+        label: "セッションを失効",
+        confirmText: "このセッションを失効しますか？そのデバイスからサインアウトされます。",
+        successMessage: "セッションを失効しました"
       }
     }
   },
   sys_account: {
-    label: "Account",
-    pluralLabel: "Accounts",
-    description: "OAuth and authentication provider accounts",
+    label: "認証アカウント",
+    pluralLabel: "認証アカウント",
+    description: "OAuth および認証プロバイダーアカウント",
     fields: {
       id: {
-        label: "Account ID"
+        label: "アカウント ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       provider_id: {
-        label: "Provider ID",
-        help: "OAuth provider identifier (google, github, etc.)"
+        label: "プロバイダー ID",
+        help: "OAuth プロバイダー識別子（google、github など）"
       },
       account_id: {
-        label: "Provider Account ID",
-        help: "User's ID in the provider's system"
+        label: "プロバイダーアカウント ID",
+        help: "プロバイダーシステム内のユーザー ID"
       },
       user_id: {
-        label: "User",
-        help: "Link to user table"
+        label: "ユーザー",
+        help: "ユーザーテーブルへのリンク"
       },
       access_token: {
-        label: "Access Token"
+        label: "アクセストークン"
       },
       refresh_token: {
-        label: "Refresh Token"
+        label: "リフレッシュトークン"
       },
       id_token: {
-        label: "ID Token"
+        label: "ID トークン"
       },
       access_token_expires_at: {
-        label: "Access Token Expires At"
+        label: "アクセストークン有効期限"
       },
       refresh_token_expires_at: {
-        label: "Refresh Token Expires At"
+        label: "リフレッシュトークン有効期限"
       },
       scope: {
-        label: "OAuth Scope"
+        label: "OAuth スコープ"
       },
       password: {
-        label: "Password Hash",
-        help: "Hashed password for email/password provider"
+        label: "パスワードハッシュ",
+        help: "メール/パスワードプロバイダー用のハッシュ化パスワード"
       }
     },
     _views: {
       mine: {
-        label: "My Links"
+        label: "自分の連携"
       },
       by_provider: {
-        label: "By Provider"
+        label: "プロバイダー別"
       },
       all_links: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_verification: {
-    label: "Verification",
-    pluralLabel: "Verifications",
-    description: "Email and phone verification tokens",
+    label: "検証",
+    pluralLabel: "検証",
+    description: "メールおよび電話番号の確認トークン",
     fields: {
       id: {
-        label: "Verification ID"
+        label: "検証 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       value: {
-        label: "Verification Token",
-        help: "Token or code for verification"
+        label: "確認トークン",
+        help: "確認用のトークンまたはコード"
       },
       expires_at: {
-        label: "Expires At"
+        label: "有効期限"
       },
       identifier: {
-        label: "Identifier",
-        help: "Email address or phone number"
+        label: "識別子",
+        help: "メールアドレスまたは電話番号"
       }
     }
   },
   sys_organization: {
-    label: "Organization",
-    pluralLabel: "Organizations",
-    description: "Organizations for multi-tenant grouping",
+    label: "組織",
+    pluralLabel: "組織",
+    description: "マルチテナントグループ化のための組織",
     fields: {
       name: {
-        label: "Name"
+        label: "名前"
       },
       slug: {
-        label: "Slug",
-        help: "URL-friendly identifier"
+        label: "スラッグ",
+        help: "URL フレンドリーな識別子"
       },
       logo: {
-        label: "Logo"
+        label: "ロゴ"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized organization metadata"
+        label: "メタデータ",
+        help: "JSON シリアライズされた組織メタデータ"
       },
       id: {
-        label: "Organization ID"
+        label: "組織 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       all_orgs: {
-        label: "All"
+        label: "すべて"
       }
     },
     _actions: {
       create_organization: {
-        label: "Create Organization",
-        successMessage: "Organization created"
+        label: "組織を作成",
+        successMessage: "組織を作成しました"
       },
       update_organization: {
-        label: "Edit Organization",
-        successMessage: "Organization updated"
+        label: "組織を編集",
+        successMessage: "組織を更新しました"
       },
       delete_organization: {
-        label: "Delete Organization",
-        confirmText: "Delete this organization? All members will lose access immediately. This cannot be undone.",
-        successMessage: "Organization deleted"
+        label: "組織を削除",
+        confirmText: "この組織を削除しますか？すべてのメンバーはすぐにアクセスを失います。この操作は取り消せません。",
+        successMessage: "組織を削除しました"
       },
       set_active_organization: {
-        label: "Set Active",
-        successMessage: "Active organization switched"
+        label: "アクティブに設定",
+        successMessage: "アクティブ組織を切り替えました"
       },
       leave_organization: {
-        label: "Leave Organization",
-        confirmText: "Leave this organization? You will lose access to all of its resources.",
-        successMessage: "You have left the organization"
+        label: "組織から退出",
+        confirmText: "この組織から退出しますか？すべてのリソースへのアクセスを失います。",
+        successMessage: "組織から退出しました"
       }
     }
   },
   sys_member: {
-    label: "Member",
-    pluralLabel: "Members",
-    description: "Organization membership records",
+    label: "メンバー",
+    pluralLabel: "メンバー",
+    description: "組織メンバーシップレコード",
     fields: {
       id: {
-        label: "Member ID"
+        label: "メンバー ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       organization_id: {
-        label: "Organization"
+        label: "組織"
       },
       user_id: {
-        label: "User"
+        label: "ユーザー"
       },
       role: {
-        label: "Role",
-        help: "Member role within the organization",
+        label: "ロール",
+        help: "組織内のメンバーロール",
         options: {
-          owner: "Owner",
-          admin: "Admin",
-          member: "Member"
+          owner: "所有者",
+          admin: "管理者",
+          member: "メンバー"
         }
       }
     },
     _actions: {
       add_member: {
-        label: "Add Member",
-        successMessage: "Member added"
+        label: "メンバーを追加",
+        successMessage: "メンバーを追加しました"
       },
       update_member_role: {
-        label: "Change Role",
-        successMessage: "Member role updated"
+        label: "ロールを変更",
+        successMessage: "メンバーロールを更新しました"
       },
       remove_member: {
-        label: "Remove Member",
-        confirmText: "Remove this member from the organization? They will lose access to all org resources.",
-        successMessage: "Member removed"
+        label: "メンバーを削除",
+        confirmText: "このメンバーを組織から削除しますか？組織のすべてのリソースへのアクセスを失います。",
+        successMessage: "メンバーを削除しました"
       }
     }
   },
   sys_invitation: {
-    label: "Invitation",
-    pluralLabel: "Invitations",
-    description: "Organization invitations for user onboarding",
+    label: "招待",
+    pluralLabel: "招待",
+    description: "ユーザーオンボーディングのための組織招待",
     fields: {
       id: {
-        label: "Invitation ID"
+        label: "招待 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       organization_id: {
-        label: "Organization"
+        label: "組織"
       },
       email: {
-        label: "Email",
-        help: "Email address of the invited user"
+        label: "メールアドレス",
+        help: "招待ユーザーのメールアドレス"
       },
       role: {
-        label: "Role",
-        help: "Role to assign upon acceptance",
+        label: "ロール",
+        help: "承認時に割り当てるロール",
         options: {
-          owner: "Owner",
-          admin: "Admin",
-          member: "Member"
+          owner: "所有者",
+          admin: "管理者",
+          member: "メンバー"
         }
       },
       status: {
-        label: "Status",
+        label: "ステータス",
         options: {
-          pending: "pending",
-          accepted: "accepted",
-          rejected: "rejected",
-          expired: "expired",
-          canceled: "canceled"
+          pending: "保留中",
+          accepted: "承認済み",
+          rejected: "拒否済み",
+          expired: "期限切れ",
+          canceled: "キャンセル済み"
         }
       },
       inviter_id: {
-        label: "Inviter",
-        help: "User who sent the invitation"
+        label: "招待者",
+        help: "招待を送信したユーザー"
       },
       expires_at: {
-        label: "Expires At"
+        label: "有効期限"
       },
       team_id: {
-        label: "Team",
-        help: "Optional team to assign upon acceptance"
+        label: "チーム",
+        help: "承認時に割り当てるオプションのチーム"
       }
     },
     _views: {
       pending: {
-        label: "Pending"
+        label: "保留中"
       },
       accepted: {
-        label: "Accepted"
+        label: "承認済み"
       },
       expired: {
-        label: "Expired / Canceled"
+        label: "期限切れ / キャンセル済み"
       },
       all_invitations: {
-        label: "All"
+        label: "すべて"
       }
     },
     _actions: {
       invite_user: {
-        label: "Invite User",
-        successMessage: "Invitation sent"
+        label: "ユーザーを招待",
+        successMessage: "招待を送信しました"
       },
       cancel_invitation: {
-        label: "Cancel Invitation",
-        confirmText: "Cancel this invitation? The recipient will no longer be able to accept it.",
-        successMessage: "Invitation canceled"
+        label: "招待をキャンセル",
+        confirmText: "この招待をキャンセルしますか？受信者は承認できなくなります。",
+        successMessage: "招待をキャンセルしました"
       },
       resend_invitation: {
-        label: "Resend Invitation",
-        successMessage: "Invitation resent"
+        label: "招待を再送",
+        successMessage: "招待を再送しました"
       }
     }
   },
   sys_team: {
-    label: "Team",
-    pluralLabel: "Teams",
-    description: "Teams within organizations for fine-grained grouping",
+    label: "チーム",
+    pluralLabel: "チーム",
+    description: "細かいグループ化のための組織内チーム",
     fields: {
       name: {
-        label: "Name"
+        label: "名前"
       },
       organization_id: {
-        label: "Organization",
-        help: "Parent organization for this team"
+        label: "組織",
+        help: "このチームの親組織"
       },
       id: {
-        label: "Team ID"
+        label: "チーム ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       by_org: {
-        label: "By Organization"
+        label: "組織別"
       },
       all_teams: {
-        label: "All"
+        label: "すべて"
       }
     },
     _actions: {
       create_team: {
-        label: "Create Team",
-        successMessage: "Team created"
+        label: "チームを作成",
+        successMessage: "チームを作成しました"
       },
       update_team: {
-        label: "Edit Team",
-        successMessage: "Team updated"
+        label: "チームを編集",
+        successMessage: "チームを更新しました"
       },
       remove_team: {
-        label: "Delete Team",
-        confirmText: "Delete this team? Members will lose any team-scoped access. This cannot be undone.",
-        successMessage: "Team deleted"
+        label: "チームを削除",
+        confirmText: "このチームを削除しますか？メンバーはチームスコープのアクセスを失います。この操作は取り消せません。",
+        successMessage: "チームを削除しました"
       }
     }
   },
   sys_team_member: {
-    label: "Team Member",
-    pluralLabel: "Team Members",
-    description: "Team membership records linking users to teams",
+    label: "チームメンバー",
+    pluralLabel: "チームメンバー",
+    description: "ユーザーをチームに関連付けるチームメンバーシップレコード",
     fields: {
       id: {
-        label: "Team Member ID"
+        label: "チームメンバー ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       team_id: {
-        label: "Team"
+        label: "チーム"
       },
       user_id: {
-        label: "User"
+        label: "ユーザー"
       }
     },
     _actions: {
       add_team_member: {
-        label: "Add Member",
-        successMessage: "Team member added"
+        label: "メンバーを追加",
+        successMessage: "チームメンバーを追加しました"
       },
       remove_team_member: {
-        label: "Remove from Team",
-        confirmText: "Remove this user from the team? They will lose any team-scoped access.",
-        successMessage: "Team member removed"
+        label: "チームから削除",
+        confirmText: "このユーザーをチームから削除しますか？チームスコープのアクセスを失います。",
+        successMessage: "チームメンバーを削除しました"
       }
     }
   },
   sys_department: {
-    label: "Department",
-    pluralLabel: "Departments",
-    description: "Hierarchical org-skeleton node (department / division / business unit / office).",
+    label: "部門",
+    pluralLabel: "部門",
+    description: "階層的な組織ツリーノード（部門 / 事業部 / ビジネスユニット / オフィス）。",
     fields: {
       name: {
-        label: "Name"
+        label: "名前"
       },
       code: {
-        label: "Code",
-        help: "Short stable code (e.g. EMEA-SALES). Unique within tenant."
+        label: "コード",
+        help: "短い安定したコード（例: EMEA-SALES）。テナント内で一意。"
       },
       kind: {
-        label: "Kind",
-        help: "Categorisation hint — does not change graph semantics.",
+        label: "種別",
+        help: "分類ヒント — グラフのセマンティクスを変更しません。",
         options: {
-          company: "company",
-          division: "division",
-          department: "department",
-          team: "team",
-          office: "office",
-          cost_center: "cost_center"
+          company: "会社",
+          division: "事業部",
+          department: "部門",
+          team: "チーム",
+          office: "オフィス",
+          cost_center: "コストセンター"
         }
       },
       parent_department_id: {
-        label: "Parent Department",
-        help: "Self-reference for the org tree. Null = root of tenant."
+        label: "親部門",
+        help: "組織ツリーの自己参照。null = テナントのルート。"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant scope."
+        label: "組織",
+        help: "テナントスコープ。"
       },
       manager_user_id: {
-        label: "Department Head",
-        help: "User responsible for this org unit (department head / lead)."
+        label: "部門長",
+        help: "この組織単位の責任者（部門長 / リード）。"
       },
       active: {
-        label: "Active",
-        help: "When false, members are not expanded by graph queries."
+        label: "有効",
+        help: "false の場合、メンバーはグラフクエリで展開されません。"
       },
       effective_from: {
-        label: "Effective From",
-        help: "When this department came into existence (HRIS sync)."
+        label: "有効開始日",
+        help: "この部門が設立された日時（HRIS 同期）。"
       },
       effective_to: {
-        label: "Effective To",
-        help: "When this department was retired (HRIS sync)."
+        label: "有効終了日",
+        help: "この部門が廃止された日時（HRIS 同期）。"
       },
       external_ref: {
-        label: "External Reference",
-        help: "ID in upstream HRIS (Workday / SAP HR / 北森)."
+        label: "外部参照",
+        help: "上流 HRIS（Workday / SAP HR / 北森）の ID。"
       },
       id: {
-        label: "Department ID"
+        label: "部門 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       inactive: {
-        label: "Inactive"
+        label: "無効"
       },
       by_kind: {
-        label: "By Kind"
+        label: "種別別"
       },
       all_departments: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_department_member: {
-    label: "Department Member",
-    pluralLabel: "Department Members",
-    description: "User assignment to a department (matrix-org friendly, effective-dated).",
+    label: "部門メンバー",
+    pluralLabel: "部門メンバー",
+    description: "部門へのユーザー割り当て（マトリクス組織対応、有効期限付き）。",
     fields: {
       id: {
-        label: "Member ID"
+        label: "メンバー ID"
       },
       department_id: {
-        label: "Department"
+        label: "部門"
       },
       user_id: {
-        label: "User"
+        label: "ユーザー"
       },
       role_in_department: {
-        label: "Role in Department",
-        help: "`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.",
+        label: "部門内ロール",
+        help: "`lead` は日常の責任者、`deputy` は承認ルーティングでリードの代理を務める場合があります。",
         options: {
-          member: "member",
-          lead: "lead",
-          deputy: "deputy"
+          member: "メンバー",
+          lead: "リード",
+          deputy: "代理担当"
         }
       },
       is_primary: {
-        label: "Primary Assignment",
-        help: "When the user is in multiple departments, this marks the canonical one for reporting."
+        label: "主要割り当て",
+        help: "ユーザーが複数の部門に所属する場合、レポーティングの正規部門をマークします。"
       },
       effective_from: {
-        label: "Effective From"
+        label: "有効開始日"
       },
       effective_to: {
-        label: "Effective To"
+        label: "有効終了日"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_api_key: {
-    label: "API Key",
-    pluralLabel: "API Keys",
-    description: "API keys for programmatic access",
+    label: "API キー",
+    pluralLabel: "API キー",
+    description: "プログラムアクセス用の API キー",
     fields: {
       name: {
-        label: "Name",
-        help: "Human-readable label for the API key"
+        label: "名前",
+        help: "API キーの表示名"
       },
       prefix: {
-        label: "Prefix",
-        help: "Visible prefix for identifying the key (e.g., \"osk_\")"
+        label: "プレフィックス",
+        help: "キーを識別するための表示プレフィックス（例: \"osk_\"）"
       },
       user_id: {
-        label: "Owner",
-        help: "User who owns this API key"
+        label: "所有者",
+        help: "この API キーを所有するユーザー"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON array of permission scopes"
+        label: "スコープ",
+        help: "権限スコープの JSON 配列"
       },
       expires_at: {
-        label: "Expires At"
+        label: "有効期限"
       },
       last_used_at: {
-        label: "Last Used At",
-        help: "Automatically updated on each API call"
+        label: "最終使用日時",
+        help: "API 呼び出しのたびに自動更新されます"
       },
       revoked: {
-        label: "Revoked"
+        label: "失効済み"
       },
       key: {
-        label: "Hashed Key",
-        help: "Hashed API key value — never exposed to clients"
+        label: "ハッシュ済みキー",
+        help: "ハッシュ済み API キー値 — クライアントには公開されません"
       },
       id: {
-        label: "API Key ID"
+        label: "API キー ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       mine: {
-        label: "My Keys"
+        label: "自分のキー"
       },
       active: {
-        label: "Active"
+        label: "有効"
       },
       revoked: {
-        label: "Revoked"
+        label: "失効済み"
       },
       all_keys: {
-        label: "All"
+        label: "すべて"
       }
     },
     _actions: {
       revoke_api_key: {
-        label: "Revoke API Key",
-        confirmText: "Revoke this API key? Any clients using it will immediately lose access.",
-        successMessage: "API key revoked"
+        label: "API キーを失効",
+        confirmText: "この API キーを失効しますか？使用中のクライアントはすぐにアクセスを失います。",
+        successMessage: "API キーを失効しました"
       },
       restore_api_key: {
-        label: "Restore API Key",
-        confirmText: "Restore this revoked API key? Existing clients holding the key will regain access.",
-        successMessage: "API key restored"
+        label: "API キーを復元",
+        confirmText: "この失効済み API キーを復元しますか？キーを保持する既存のクライアントはアクセスを回復します。",
+        successMessage: "API キーを復元しました"
       }
     }
   },
   sys_two_factor: {
-    label: "Two Factor",
-    pluralLabel: "Two Factor Credentials",
-    description: "Two-factor authentication credentials",
+    label: "二要素認証",
+    pluralLabel: "二要素認証資格情報",
+    description: "二要素認証の資格情報",
     fields: {
       id: {
-        label: "Two Factor ID"
+        label: "二要素認証 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       user_id: {
-        label: "User"
+        label: "ユーザー"
       },
       secret: {
-        label: "Secret",
-        help: "TOTP secret key"
+        label: "シークレット",
+        help: "TOTP シークレットキー"
       },
       backup_codes: {
-        label: "Backup Codes",
-        help: "JSON-serialized backup recovery codes"
+        label: "バックアップコード",
+        help: "JSON シリアライズされたバックアップ回復コード"
       }
     },
     _views: {
       mine: {
-        label: "My Enrollment"
+        label: "自分の登録"
       },
       all_enrollments: {
-        label: "All"
+        label: "すべて"
       }
     },
     _actions: {
       enable_two_factor: {
-        label: "Enable 2FA",
-        successMessage: "2FA enrollment started — check response for TOTP URI and backup codes"
+        label: "2FA を有効化",
+        successMessage: "2FA 登録を開始しました — レスポンスで TOTP URI とバックアップコードを確認してください"
       },
       disable_two_factor: {
-        label: "Disable 2FA",
-        confirmText: "Disable two-factor authentication on your account?",
-        successMessage: "2FA disabled"
+        label: "2FA を無効化",
+        confirmText: "アカウントの二要素認証を無効化しますか？",
+        successMessage: "2FA を無効化しました"
       }
     }
   },
   sys_device_code: {
-    label: "Device Code",
-    pluralLabel: "Device Codes",
-    description: "OAuth 2.0 Device Authorization Grant (RFC 8628) pending requests",
+    label: "デバイスコード",
+    pluralLabel: "デバイスコード",
+    description: "OAuth 2.0 デバイス認証グラント（RFC 8628）の保留中リクエスト",
     fields: {
       id: {
-        label: "Device Code ID"
+        label: "デバイスコード ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       device_code: {
-        label: "Device Code",
-        help: "High-entropy token returned to the polling device"
+        label: "デバイスコード",
+        help: "ポーリングデバイスに返されるエントロピーの高いトークン"
       },
       user_code: {
-        label: "User Code",
-        help: "Short user-facing code (e.g. ABCD-EFGH)"
+        label: "ユーザーコード",
+        help: "短いユーザー向けコード（例: ABCD-EFGH）"
       },
       user_id: {
-        label: "User",
-        help: "User who approved the device authorization"
+        label: "ユーザー",
+        help: "デバイス認証を承認したユーザー"
       },
       expires_at: {
-        label: "Expires At",
-        help: "When the device & user codes are no longer valid"
+        label: "有効期限",
+        help: "デバイスコードとユーザーコードが無効になる日時"
       },
       status: {
-        label: "Status",
-        help: "Current status: 'pending' | 'approved' | 'denied'"
+        label: "ステータス",
+        help: "現在のステータス: 'pending' | 'approved' | 'denied'"
       },
       last_polled_at: {
-        label: "Last Polled At",
-        help: "Timestamp of the most recent /device/token poll"
+        label: "最終ポーリング日時",
+        help: "直近の /device/token ポーリングのタイムスタンプ"
       },
       polling_interval: {
-        label: "Polling Interval (ms)",
-        help: "Server-recommended minimum polling interval, in ms"
+        label: "ポーリング間隔（ミリ秒）",
+        help: "サーバー推奨の最小ポーリング間隔（ミリ秒）"
       },
       client_id: {
-        label: "Client ID",
-        help: "OAuth client identifier of the requesting device"
+        label: "クライアント ID",
+        help: "リクエストデバイスの OAuth クライアント識別子"
       },
       scope: {
-        label: "Scope",
-        help: "Space-separated OAuth scopes requested by the device"
+        label: "スコープ",
+        help: "デバイスがリクエストするスペース区切りの OAuth スコープ"
       }
     }
   },
   sys_user_preference: {
-    label: "User Preference",
-    pluralLabel: "User Preferences",
-    description: "Per-user key-value preferences (theme, locale, etc.)",
+    label: "ユーザー設定",
+    pluralLabel: "ユーザー設定",
+    description: "ユーザーごとのキー/バリュー設定（テーマ、ロケールなど）",
     fields: {
       id: {
-        label: "Preference ID"
+        label: "設定 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       user_id: {
-        label: "User",
-        help: "Owner user of this preference"
+        label: "ユーザー",
+        help: "この設定の所有者ユーザー"
       },
       key: {
-        label: "Key",
-        help: "Preference key (e.g., theme, locale, plugin.ai.auto_save)"
+        label: "キー",
+        help: "設定キー（例: theme、locale、plugin.ai.auto_save）"
       },
       value: {
-        label: "Value",
-        help: "Preference value (any JSON-serializable type)"
+        label: "値",
+        help: "設定値（JSON シリアライズ可能な任意の型）"
       }
     },
     _views: {
       mine: {
-        label: "My Preferences"
+        label: "自分の設定"
       },
       by_user: {
-        label: "By User"
+        label: "ユーザー別"
       },
       all_preferences: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_oauth_application: {
-    label: "OAuth Application",
-    pluralLabel: "OAuth Applications",
-    description: "Registered OAuth/OIDC client applications",
+    label: "OAuth アプリケーション",
+    pluralLabel: "OAuth アプリケーション",
+    description: "登録済み OAuth/OIDC クライアントアプリケーション",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name"
+        label: "名前"
       },
       icon: {
-        label: "Icon",
-        help: "Logo URL shown on the consent screen"
+        label: "アイコン",
+        help: "同意画面に表示されるロゴ URL"
       },
       uri: {
-        label: "Home URI",
-        help: "Public homepage of the registered client"
+        label: "ホーム URI",
+        help: "登録済みクライアントの公開ホームページ"
       },
       contacts: {
-        label: "Contacts",
-        help: "JSON-serialized list of contact email addresses"
+        label: "連絡先",
+        help: "連絡先メールアドレスの JSON シリアライズリスト"
       },
       tos: {
-        label: "Terms of Service"
+        label: "利用規約"
       },
       policy: {
-        label: "Privacy Policy"
+        label: "プライバシーポリシー"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized application metadata"
+        label: "メタデータ",
+        help: "JSON シリアライズされたアプリケーションメタデータ"
       },
       client_id: {
-        label: "Client ID",
-        help: "Public OAuth client identifier"
+        label: "クライアント ID",
+        help: "公開 OAuth クライアント識別子"
       },
       client_secret: {
-        label: "Client Secret",
-        help: "OAuth client secret (hashed/encrypted at rest)"
+        label: "クライアントシークレット",
+        help: "OAuth クライアントシークレット（保存時にハッシュ/暗号化済み）"
       },
       redirect_uris: {
-        label: "Redirect URIs",
-        help: "JSON-serialized list of allowed redirect URIs"
+        label: "リダイレクト URI",
+        help: "許可されたリダイレクト URI の JSON シリアライズリスト"
       },
       post_logout_redirect_uris: {
-        label: "Post-logout Redirect URIs",
-        help: "JSON-serialized list of allowed post-logout redirect URIs"
+        label: "ログアウト後リダイレクト URI",
+        help: "許可されたログアウト後リダイレクト URI の JSON シリアライズリスト"
       },
       type: {
-        label: "Client Type",
+        label: "クライアントタイプ",
         options: {
-          web: "web",
-          native: "native",
-          useragentbased: "user-agent-based",
-          public: "public"
+          web: "Web",
+          native: "ネイティブ",
+          useragentbased: "ユーザーエージェントベース",
+          public: "公開"
         }
       },
       public: {
-        label: "Public Client",
-        help: "Marks the client as a public (non-confidential) OAuth client"
+        label: "パブリッククライアント",
+        help: "クライアントをパブリック（非機密）OAuth クライアントとしてマークします"
       },
       require_pkce: {
-        label: "Require PKCE"
+        label: "PKCE 必須"
       },
       token_endpoint_auth_method: {
-        label: "Token Endpoint Auth Method",
-        help: "e.g. client_secret_basic, client_secret_post, none"
+        label: "トークンエンドポイント認証方式",
+        help: "例: client_secret_basic、client_secret_post、none"
       },
       grant_types: {
-        label: "Grant Types",
-        help: "JSON-serialized list of allowed grant types"
+        label: "グラントタイプ",
+        help: "許可されたグラントタイプの JSON シリアライズリスト"
       },
       response_types: {
-        label: "Response Types",
-        help: "JSON-serialized list of allowed response types"
+        label: "レスポンスタイプ",
+        help: "許可されたレスポンスタイプの JSON シリアライズリスト"
       },
       scopes: {
-        label: "Allowed Scopes",
-        help: "JSON-serialized list of scopes the client may request"
+        label: "許可スコープ",
+        help: "クライアントがリクエスト可能なスコープの JSON シリアライズリスト"
       },
       subject_type: {
-        label: "Subject Type",
-        help: "OIDC subject type (e.g. public, pairwise)"
+        label: "サブジェクトタイプ",
+        help: "OIDC サブジェクトタイプ（例: public、pairwise）"
       },
       disabled: {
-        label: "Disabled"
+        label: "無効"
       },
       skip_consent: {
-        label: "Skip Consent",
-        help: "Treat as a trusted client and bypass the consent screen"
+        label: "同意画面をスキップ",
+        help: "信頼済みクライアントとして扱い、同意画面をバイパスします"
       },
       enable_end_session: {
-        label: "Enable End Session",
-        help: "Allow the client to call the OIDC end-session endpoint"
+        label: "エンドセッションを有効化",
+        help: "クライアントが OIDC エンドセッションエンドポイントを呼び出せるようにします"
       },
       software_id: {
-        label: "Software ID"
+        label: "ソフトウェア ID"
       },
       software_version: {
-        label: "Software Version"
+        label: "ソフトウェアバージョン"
       },
       software_statement: {
-        label: "Software Statement",
-        help: "Signed JWT asserting the client metadata (RFC 7591 §2.3)"
+        label: "ソフトウェアステートメント",
+        help: "クライアントメタデータをアサートする署名済み JWT（RFC 7591 §2.3）"
       },
       user_id: {
-        label: "Owner User",
-        help: "User who registered this application"
+        label: "所有者ユーザー",
+        help: "このアプリケーションを登録したユーザー"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "参照 ID",
+        help: "呼び出し元が指定した相関識別子"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       disabled_apps: {
-        label: "Disabled"
+        label: "無効"
       },
       all_apps: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_oauth_access_token: {
-    label: "OAuth Access Token",
-    pluralLabel: "OAuth Access Tokens",
-    description: "Opaque OAuth access tokens issued to client applications",
+    label: "OAuth アクセストークン",
+    pluralLabel: "OAuth アクセストークン",
+    description: "クライアントアプリケーションに発行された不透明な OAuth アクセストークン",
     fields: {
       id: {
         label: "ID"
       },
       token: {
-        label: "Token",
-        help: "Opaque access token value"
+        label: "トークン",
+        help: "不透明なアクセストークン値"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "クライアント ID",
+        help: "sys_oauth_application.client_id への外部キー"
       },
       session_id: {
-        label: "Session",
-        help: "Foreign key to sys_session.id"
+        label: "セッション",
+        help: "sys_session.id への外部キー"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "ユーザー",
+        help: "sys_user.id への外部キー"
       },
       refresh_id: {
-        label: "Refresh Token",
-        help: "Foreign key to sys_oauth_refresh_token.id"
+        label: "リフレッシュトークン",
+        help: "sys_oauth_refresh_token.id への外部キー"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "参照 ID",
+        help: "呼び出し元が指定した相関識別子"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes granted to this token"
+        label: "スコープ",
+        help: "このトークンに付与されたスコープの JSON シリアライズリスト"
       },
       expires_at: {
-        label: "Expires At"
+        label: "有効期限"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       }
     }
   },
   sys_oauth_refresh_token: {
-    label: "OAuth Refresh Token",
-    pluralLabel: "OAuth Refresh Tokens",
-    description: "Opaque OAuth refresh tokens (linked to a session)",
+    label: "OAuth リフレッシュトークン",
+    pluralLabel: "OAuth リフレッシュトークン",
+    description: "不透明な OAuth リフレッシュトークン（セッションにリンク）",
     fields: {
       id: {
         label: "ID"
       },
       token: {
-        label: "Token",
-        help: "Opaque refresh token value"
+        label: "トークン",
+        help: "不透明なリフレッシュトークン値"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "クライアント ID",
+        help: "sys_oauth_application.client_id への外部キー"
       },
       session_id: {
-        label: "Session",
-        help: "Foreign key to sys_session.id"
+        label: "セッション",
+        help: "sys_session.id への外部キー"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "ユーザー",
+        help: "sys_user.id への外部キー"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "参照 ID",
+        help: "呼び出し元が指定した相関識別子"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes granted to this token"
+        label: "スコープ",
+        help: "このトークンに付与されたスコープの JSON シリアライズリスト"
       },
       expires_at: {
-        label: "Expires At"
+        label: "有効期限"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       revoked: {
-        label: "Revoked At",
-        help: "Timestamp at which this refresh token was revoked"
+        label: "失効日時",
+        help: "このリフレッシュトークンが失効したタイムスタンプ"
       },
       auth_time: {
-        label: "Auth Time",
-        help: "When the user originally authenticated for this token chain"
+        label: "認証日時",
+        help: "このトークンチェーンのためにユーザーが最初に認証した日時"
       }
     }
   },
   sys_oauth_consent: {
-    label: "OAuth Consent",
-    pluralLabel: "OAuth Consents",
-    description: "User consent records for OAuth client applications",
+    label: "OAuth 同意",
+    pluralLabel: "OAuth 同意",
+    description: "OAuth クライアントアプリケーションに対するユーザー同意レコード",
     fields: {
       id: {
         label: "ID"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "クライアント ID",
+        help: "sys_oauth_application.client_id への外部キー"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "ユーザー",
+        help: "sys_user.id への外部キー"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "参照 ID",
+        help: "呼び出し元が指定した相関識別子"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes the user consented to"
+        label: "スコープ",
+        help: "ユーザーが同意したスコープの JSON シリアライズリスト"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_jwks: {
-    label: "JWKS Key",
-    pluralLabel: "JWKS Keys",
-    description: "Asymmetric key pairs used to sign and verify issued JWTs",
+    label: "署名キー (JWKS)",
+    pluralLabel: "署名キー (JWKS)",
+    description: "発行済み JWT の署名および検証に使用する非対称鍵ペア",
     fields: {
       id: {
-        label: "Key ID",
-        help: "JWK `kid` value"
+        label: "キー ID",
+        help: "JWK `kid` 値"
       },
       public_key: {
-        label: "Public Key",
-        help: "JSON-serialized JWK public key"
+        label: "公開鍵",
+        help: "JSON シリアライズされた JWK 公開鍵"
       },
       private_key: {
-        label: "Private Key",
-        help: "JSON-serialized JWK private key (encrypted at rest)"
+        label: "秘密鍵",
+        help: "JSON シリアライズされた JWK 秘密鍵（保存時に暗号化済み）"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       expires_at: {
-        label: "Expires At",
-        help: "When the key may no longer be used to verify tokens"
+        label: "有効期限",
+        help: "このキーがトークン検証に使用できなくなる日時"
       }
     }
   },
   sys_role: {
-    label: "Role",
-    pluralLabel: "Roles",
-    description: "Role definitions for RBAC access control",
+    label: "ロール",
+    pluralLabel: "ロール",
+    description: "RBAC アクセス制御のためのロール定義",
     fields: {
       label: {
-        label: "Display Name"
+        label: "表示名"
       },
       name: {
-        label: "API Name",
-        help: "Unique machine name for the role (e.g. admin, editor, viewer)"
+        label: "API 名",
+        help: "ロールの一意の機械名（例: admin、editor、viewer）"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       permissions: {
-        label: "Permissions",
-        help: "JSON-serialized array of permission strings"
+        label: "権限",
+        help: "権限文字列の JSON シリアライズ配列"
       },
       active: {
-        label: "Active"
+        label: "有効"
       },
       is_default: {
-        label: "Default Role",
-        help: "Automatically assigned to new users"
+        label: "デフォルトロール",
+        help: "新規ユーザーに自動的に割り当てられます"
       },
       id: {
-        label: "Role ID"
+        label: "ロール ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       default_roles: {
-        label: "Default"
+        label: "デフォルト"
       },
       custom: {
-        label: "Custom"
+        label: "カスタム"
       },
       all_roles: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_permission_set: {
-    label: "Permission Set",
-    pluralLabel: "Permission Sets",
-    description: "Named permission groupings for fine-grained access control",
+    label: "権限セット",
+    pluralLabel: "権限セット",
+    description: "細かいアクセス制御のための権限グループ",
     fields: {
       label: {
-        label: "Display Name"
+        label: "表示名"
       },
       name: {
-        label: "API Name",
-        help: "Unique machine name for the permission set"
+        label: "API 名",
+        help: "権限セットの一意の機械名"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       object_permissions: {
-        label: "Object Permissions",
-        help: "JSON-serialized object-level CRUD permissions"
+        label: "オブジェクト権限",
+        help: "JSON シリアライズされたオブジェクトレベルの CRUD 権限"
       },
       field_permissions: {
-        label: "Field Permissions",
-        help: "JSON-serialized field-level read/write permissions"
+        label: "フィールド権限",
+        help: "JSON シリアライズされたフィールドレベルの読み取り/書き込み権限"
       },
       active: {
-        label: "Active"
+        label: "有効"
       },
       id: {
-        label: "Permission Set ID"
+        label: "権限セット ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       inactive: {
-        label: "Inactive"
+        label: "無効"
       },
       all_permsets: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_user_permission_set: {
-    label: "User Permission Set",
-    pluralLabel: "User Permission Sets",
-    description: "Direct assignment of a permission set to a user (optionally scoped to an organization).",
+    label: "ユーザー権限セット",
+    pluralLabel: "ユーザー権限セット",
+    description: "ユーザーへの権限セットの直接割り当て（組織スコープ可能）。",
     fields: {
       id: {
-        label: "Assignment ID",
-        help: "UUID of the assignment."
+        label: "割り当て ID",
+        help: "割り当ての UUID。"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user."
+        label: "ユーザー",
+        help: "sys_user への外部キー。"
       },
       permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
+        label: "権限セット",
+        help: "sys_permission_set への外部キー。"
       },
       organization_id: {
-        label: "Organization",
-        help: "Optional organization scope. NULL = applies in every org context."
+        label: "組織",
+        help: "オプションの組織スコープ。NULL = すべての組織コンテキストで適用。"
       },
       granted_by: {
-        label: "Granted By",
-        help: "User who granted this permission set."
+        label: "付与者",
+        help: "この権限セットを付与したユーザー。"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_role_permission_set: {
-    label: "Role Permission Set",
-    pluralLabel: "Role Permission Sets",
-    description: "Binds a permission set to a role.",
+    label: "ロール権限セット",
+    pluralLabel: "ロール権限セット",
+    description: "権限セットをロールにバインドします。",
     fields: {
       id: {
-        label: "Binding ID",
-        help: "UUID of the role-permission-set binding."
+        label: "バインド ID",
+        help: "ロール権限セットバインドの UUID。"
       },
       role_id: {
-        label: "Role",
-        help: "Foreign key to sys_role."
+        label: "ロール",
+        help: "sys_role への外部キー。"
       },
       permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
+        label: "権限セット",
+        help: "sys_permission_set への外部キー。"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_record_share: {
-    label: "Record Share",
-    pluralLabel: "Record Shares",
-    description: "Per-record sharing grant — extends OWD with explicit access",
+    label: "レコード共有",
+    pluralLabel: "レコード共有",
+    description: "レコードごとの共有付与 — OWD に明示的なアクセスを追加",
     fields: {
       id: {
-        label: "Share ID"
+        label: "共有 ID"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name of the shared record"
+        label: "オブジェクト",
+        help: "共有レコードの短いオブジェクト名"
       },
       record_id: {
-        label: "Record",
-        help: "Primary key of the shared record within object_name"
+        label: "レコード",
+        help: "object_name 内の共有レコードの主キー"
       },
       recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that holds the grant",
+        label: "受信者タイプ",
+        help: "付与を保持するプリンシパルの種別",
         options: {
-          user: "user",
-          group: "group",
-          role: "role",
-          role_and_subordinates: "role_and_subordinates",
-          guest: "guest"
+          user: "ユーザー",
+          group: "グループ",
+          role: "ロール",
+          role_and_subordinates: "ロールと下位階層",
+          guest: "ゲスト"
         }
       },
       recipient_id: {
-        label: "Recipient",
-        help: "ID of the user/group/role that receives access"
+        label: "受信者",
+        help: "アクセスを受け取るユーザー/グループ/ロールの ID"
       },
       access_level: {
-        label: "Access Level",
-        help: "What the recipient can do — read | edit | full (transfer/share/delete)",
+        label: "アクセスレベル",
+        help: "受信者に許可される操作 — read | edit | full（転送/共有/削除）",
         options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
+          read: "閲覧",
+          edit: "編集",
+          full: "フルアクセス"
         }
       },
       source: {
-        label: "Source",
-        help: "Why this grant exists — used by the rule evaluator to reconcile",
+        label: "ソース",
+        help: "この付与が存在する理由 — ルール評価者が調整に使用",
         options: {
-          manual: "manual",
-          rule: "rule",
-          team: "team",
-          inherited: "inherited"
+          manual: "手動",
+          rule: "ルール",
+          team: "チーム",
+          inherited: "継承"
         }
       },
       source_id: {
-        label: "Source ID",
-        help: "Rule name / team id when source != manual"
+        label: "ソース ID",
+        help: "source != manual の場合のルール名 / チーム ID"
       },
       granted_by: {
-        label: "Granted By",
-        help: "User that created the grant (manual only)"
+        label: "付与者",
+        help: "付与を作成したユーザー（手動のみ）"
       },
       reason: {
-        label: "Reason",
-        help: "Optional free-text explanation surfaced to the recipient"
+        label: "理由",
+        help: "受信者に表示されるオプションの自由記述説明"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       granted_to_me: {
-        label: "Granted to Me"
+        label: "自分への付与"
       },
       granted_by_me: {
-        label: "Granted by Me"
+        label: "自分による付与"
       },
       by_object: {
-        label: "By Object"
+        label: "オブジェクト別"
       },
       manual_grants: {
-        label: "Manual Grants"
+        label: "手動付与"
       },
       rule_grants: {
-        label: "Rule Grants"
+        label: "ルール付与"
       },
       all_shares: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_sharing_rule: {
-    label: "Sharing Rule",
-    pluralLabel: "Sharing Rules",
-    description: "Declarative sharing rule that auto-materialises sys_record_share grants. Authored via defineSharingRule() in code or the Studio criteria builder.",
+    label: "共有ルール",
+    pluralLabel: "共有ルール",
+    description: "sys_record_share 付与を自動マテリアライズする宣言的共有ルール。コードの defineSharingRule() または Studio の条件ビルダーで作成します。",
     fields: {
       id: {
-        label: "Rule ID"
+        label: "ルール ID"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this rule; null = global"
+        label: "組織",
+        help: "このルールを所有するテナント。null = グローバル"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case rule name"
+        label: "名前",
+        help: "一意の snake_case ルール名"
       },
       label: {
-        label: "Display Label"
+        label: "表示名"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name (e.g. opportunity, account)"
+        label: "オブジェクト",
+        help: "短いオブジェクト名（例: opportunity、account）"
       },
       criteria_json: {
-        label: "Criteria (FilterCondition JSON)",
-        help: "JSON FilterCondition matched against records of object_name. Empty = match all."
+        label: "条件（FilterCondition JSON）",
+        help: "object_name のレコードに対してマッチする JSON FilterCondition。空 = すべてにマッチ。"
       },
       recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth).",
+        label: "受信者タイプ",
+        help: "アクセスを受け取るプリンシパルの種別 — 評価時にユーザー付与に展開されます。`department` は parent_department_id ツリーをたどります。`team` はフラット（better-auth）。",
         options: {
-          user: "user",
-          team: "team",
-          department: "department",
-          role: "role",
-          queue: "queue"
+          user: "ユーザー",
+          team: "チーム",
+          department: "部門",
+          role: "ロール",
+          queue: "キュー"
         }
       },
       recipient_id: {
-        label: "Recipient",
-        help: "department id / team id / role name / queue name / user id depending on recipient_type"
+        label: "受信者",
+        help: "recipient_type に応じた部門 ID / チーム ID / ロール名 / キュー名 / ユーザー ID"
       },
       access_level: {
-        label: "Access Level",
+        label: "アクセスレベル",
         options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
+          read: "閲覧",
+          edit: "編集",
+          full: "フルアクセス"
         }
       },
       active: {
-        label: "Active",
-        help: "Only active rules participate in lifecycle evaluation"
+        label: "有効",
+        help: "有効なルールのみがライフサイクル評価に参加します"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       inactive: {
-        label: "Inactive"
+        label: "無効"
       },
       by_object: {
-        label: "By Object"
+        label: "オブジェクト別"
       },
       all_rules: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_audit_log: {
-    label: "Audit Log",
-    pluralLabel: "Audit Logs",
-    description: "Immutable audit trail for platform events",
+    label: "監査ログ",
+    pluralLabel: "監査ログ",
+    description: "プラットフォームイベントの不変の監査証跡",
     fields: {
       created_at: {
-        label: "Timestamp"
+        label: "タイムスタンプ"
       },
       action: {
-        label: "Action",
-        help: "Action type (snake_case)",
+        label: "アクション",
+        help: "アクションタイプ（snake_case）",
         options: {
-          create: "create",
-          update: "update",
-          delete: "delete",
-          restore: "restore",
-          login: "login",
-          logout: "logout",
-          permission_change: "permission_change",
-          config_change: "config_change",
-          export: "export",
-          import: "import"
+          create: "作成",
+          update: "更新",
+          delete: "削除",
+          restore: "復元",
+          login: "ログイン",
+          logout: "ログアウト",
+          permission_change: "権限変更",
+          config_change: "構成変更",
+          export: "エクスポート",
+          import: "インポート"
         }
       },
       user_id: {
-        label: "Actor",
-        help: "User who performed the action (null for system actions)"
+        label: "操作者",
+        help: "アクションを実行したユーザー（システム操作の場合は null）"
       },
       object_name: {
-        label: "Object",
-        help: "Target object (e.g. sys_user, project_task)"
+        label: "オブジェクト",
+        help: "対象オブジェクト（例: sys_user、project_task）"
       },
       record_id: {
-        label: "Record ID",
-        help: "ID of the affected record"
+        label: "レコード ID",
+        help: "影響を受けたレコードの ID"
       },
       old_value: {
-        label: "Old Value",
-        help: "JSON-serialized previous state"
+        label: "変更前の値",
+        help: "JSON シリアライズされた以前の状態"
       },
       new_value: {
-        label: "New Value",
-        help: "JSON-serialized new state"
+        label: "変更後の値",
+        help: "JSON シリアライズされた新しい状態"
       },
       ip_address: {
-        label: "IP Address"
+        label: "IP アドレス"
       },
       user_agent: {
-        label: "User Agent"
+        label: "ユーザーエージェント"
       },
       tenant_id: {
-        label: "Tenant",
-        help: "Tenant context for multi-tenant isolation"
+        label: "テナント",
+        help: "マルチテナント分離のためのテナントコンテキスト"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
+        label: "メタデータ",
+        help: "JSON シリアライズされた追加コンテキスト"
       },
       id: {
-        label: "Audit Log ID"
+        label: "監査ログ ID"
       }
     },
     _views: {
       recent: {
-        label: "Recent"
+        label: "最近"
       },
       writes_only: {
-        label: "Writes"
+        label: "書き込み"
       },
       auth_events: {
-        label: "Auth"
+        label: "認証"
       },
       config_changes: {
-        label: "Config"
+        label: "構成変更"
       },
       all_events: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_presence: {
-    label: "Presence",
-    pluralLabel: "Presences",
-    description: "Real-time user presence and activity tracking",
+    label: "在席状況",
+    pluralLabel: "在席状況",
+    description: "リアルタイムのユーザー在席状況とアクティビティ追跡",
     fields: {
       id: {
-        label: "Presence ID"
+        label: "在席 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       user_id: {
-        label: "User"
+        label: "ユーザー"
       },
       session_id: {
-        label: "Session"
+        label: "セッション"
       },
       status: {
-        label: "Status",
+        label: "ステータス",
         options: {
-          online: "Online",
-          away: "Away",
-          busy: "Busy",
-          offline: "Offline"
+          online: "オンライン",
+          away: "離席中",
+          busy: "取り込み中",
+          offline: "オフライン"
         }
       },
       last_seen: {
-        label: "Last Seen"
+        label: "最終確認日時"
       },
       current_location: {
-        label: "Current Location"
+        label: "現在地"
       },
       device: {
-        label: "Device",
+        label: "デバイス",
         options: {
-          desktop: "Desktop",
-          mobile: "Mobile",
-          tablet: "Tablet",
-          other: "Other"
+          desktop: "デスクトップ",
+          mobile: "モバイル",
+          tablet: "タブレット",
+          other: "その他"
         }
       },
       custom_status: {
-        label: "Custom Status"
+        label: "カスタムステータス"
       },
       metadata: {
-        label: "Metadata",
-        help: "Arbitrary JSON metadata associated with the presence state (matches PresenceStateSchema.metadata)."
+        label: "メタデータ",
+        help: "在席状態に関連付けられた任意の JSON メタデータ（PresenceStateSchema.metadata に対応）。"
       }
     }
   },
   sys_activity: {
-    label: "Activity",
-    pluralLabel: "Activities",
-    description: "Recent activity stream entries (lightweight, denormalized)",
+    label: "アクティビティ",
+    pluralLabel: "アクティビティ",
+    description: "最近のアクティビティストリームエントリ（軽量、非正規化）",
     fields: {
       id: {
-        label: "Activity ID"
+        label: "アクティビティ ID"
       },
       timestamp: {
-        label: "Timestamp"
+        label: "タイムスタンプ"
       },
       type: {
-        label: "Type",
+        label: "タイプ",
         options: {
-          created: "created",
-          updated: "updated",
-          deleted: "deleted",
-          commented: "commented",
-          mentioned: "mentioned",
-          shared: "shared",
-          assigned: "assigned",
-          completed: "completed",
-          login: "login",
-          logout: "logout",
-          system: "system"
+          created: "作成",
+          updated: "更新",
+          deleted: "削除",
+          commented: "コメント",
+          mentioned: "メンション",
+          shared: "共有",
+          assigned: "割り当て",
+          completed: "完了",
+          login: "ログイン",
+          logout: "ログアウト",
+          system: "システム"
         }
       },
       summary: {
-        label: "Summary",
-        help: "Human-readable one-line summary"
+        label: "サマリー",
+        help: "判別しやすい 1 行サマリー"
       },
       actor_id: {
-        label: "Actor"
+        label: "操作者"
       },
       actor_name: {
-        label: "Actor Name"
+        label: "操作者名"
       },
       actor_avatar_url: {
-        label: "Actor Avatar"
+        label: "操作者アバター"
       },
       object_name: {
-        label: "Object",
-        help: "Target object short name (e.g. account, sys_user)"
+        label: "オブジェクト",
+        help: "対象オブジェクトの短い名前（例: account、sys_user）"
       },
       record_id: {
-        label: "Record ID"
+        label: "レコード ID"
       },
       record_label: {
-        label: "Record Label",
-        help: "Display label of the target record at write time"
+        label: "レコード表示名",
+        help: "書き込み時点の対象レコードの表示名"
       },
       url: {
         label: "URL",
-        help: "Optional deep-link to the activity target"
+        help: "アクティビティターゲットへのオプションのディープリンク"
       },
       project_id: {
-        label: "Project",
-        help: "Project context (multi-project deployments)"
+        label: "プロジェクト",
+        help: "プロジェクトコンテキスト（マルチプロジェクトデプロイメント）"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
+        label: "メタデータ",
+        help: "JSON シリアライズされた追加コンテキスト"
       }
     }
   },
   sys_comment: {
-    label: "Comment",
-    pluralLabel: "Comments",
-    description: "Threaded comments attached to records via thread_id",
+    label: "コメント",
+    pluralLabel: "コメント",
+    description: "thread_id を介してレコードに添付されたスレッドコメント",
     fields: {
       id: {
-        label: "Comment ID"
+        label: "コメント ID"
       },
       thread_id: {
-        label: "Thread",
-        help: "Thread identifier — conventionally `{object}:{record_id}` (e.g. `sys_user:abc123`)"
+        label: "スレッド",
+        help: "スレッド識別子 — 通常は `{object}:{record_id}`（例: `sys_user:abc123`）"
       },
       parent_id: {
-        label: "Parent Comment",
-        help: "Optional parent comment for nested replies"
+        label: "親コメント",
+        help: "ネストした返信用のオプションの親コメント"
       },
       reply_count: {
-        label: "Reply Count"
+        label: "返信数"
       },
       author_id: {
-        label: "Author"
+        label: "投稿者"
       },
       author_name: {
-        label: "Author Name"
+        label: "投稿者名"
       },
       author_avatar_url: {
-        label: "Author Avatar"
+        label: "投稿者アバター"
       },
       body: {
-        label: "Body",
-        help: "Comment text (Markdown supported)"
+        label: "本文",
+        help: "コメントテキスト（Markdown 対応）"
       },
       mentions: {
-        label: "Mentions",
-        help: "JSON array of @mention objects"
+        label: "メンション",
+        help: "@メンションオブジェクトの JSON 配列"
       },
       reactions: {
-        label: "Reactions",
-        help: "JSON array of emoji reaction objects"
+        label: "リアクション",
+        help: "絵文字リアクションオブジェクトの JSON 配列"
       },
       is_edited: {
-        label: "Edited"
+        label: "編集済み"
       },
       edited_at: {
-        label: "Edited At"
+        label: "編集日時"
       },
       visibility: {
-        label: "Visibility",
+        label: "公開範囲",
         options: {
-          public: "public",
-          internal: "internal",
-          private: "private"
+          public: "公開",
+          internal: "内部",
+          private: "非公開"
         }
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_attachment: {
-    label: "Attachment",
-    pluralLabel: "Attachments",
-    description: "Polymorphic link between a sys_file and any other record",
+    label: "添付ファイル",
+    pluralLabel: "添付ファイル",
+    description: "sys_file と他のレコードを結ぶポリモーフィックリンク",
     fields: {
       id: {
-        label: "Attachment ID"
+        label: "添付ファイル ID"
       },
       parent_object: {
-        label: "Parent Object",
-        help: "Short object name of the attached-to record (e.g. account, lead)"
+        label: "親オブジェクト",
+        help: "添付先レコードの短いオブジェクト名（例: account、lead）"
       },
       parent_id: {
-        label: "Parent Record",
-        help: "Primary key of the attached-to record"
+        label: "親レコード",
+        help: "添付先レコードの主キー"
       },
       file_id: {
-        label: "File",
-        help: "The sys_file storage entry being attached"
+        label: "ファイル",
+        help: "添付する sys_file ストレージエントリ"
       },
       file_name: {
-        label: "File Name",
-        help: "Denormalised copy of sys_file.name for fast list rendering"
+        label: "ファイル名",
+        help: "リスト表示の高速化のための sys_file.name の非正規化コピー"
       },
       mime_type: {
-        label: "MIME Type"
+        label: "MIME タイプ"
       },
       size: {
-        label: "Size (bytes)"
+        label: "サイズ（バイト）"
       },
       share_type: {
-        label: "Share Type",
-        help: "viewer | collaborator | inferred (inherited from parent record)",
+        label: "共有タイプ",
+        help: "viewer | collaborator | inferred（親レコードから継承）",
         options: {
-          viewer: "viewer",
-          collaborator: "collaborator",
-          inferred: "inferred"
+          viewer: "閲覧者",
+          collaborator: "共同編集者",
+          inferred: "推定"
         }
       },
       visibility: {
-        label: "Visibility",
+        label: "公開範囲",
         options: {
-          internal: "internal",
-          all_users: "all_users",
-          shared_users: "shared_users"
+          internal: "内部",
+          all_users: "すべてのユーザー",
+          shared_users: "共有ユーザー"
         }
       },
       uploaded_by: {
-        label: "Uploaded By"
+        label: "アップロード者"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_notification: {
-    label: "Notification",
-    pluralLabel: "Notifications",
-    description: "Per-user notification inbox entries",
+    label: "通知",
+    pluralLabel: "通知",
+    description: "ユーザーごとの通知受信ボックスエントリ",
     fields: {
       id: {
-        label: "Notification ID"
+        label: "通知 ID"
       },
       recipient_id: {
-        label: "Recipient",
-        help: "User the notification is delivered to"
+        label: "受信者",
+        help: "通知が配信されるユーザー"
       },
       type: {
-        label: "Type",
-        help: "Notification category — drives icon + sort priority",
+        label: "タイプ",
+        help: "通知カテゴリー — アイコンと並び替え優先度を決定します",
         options: {
-          mention: "mention",
-          assignment: "assignment",
-          comment_reply: "comment_reply",
-          lead_converted: "lead_converted",
-          task_due: "task_due",
-          system: "system"
+          mention: "メンション",
+          assignment: "割り当て",
+          comment_reply: "コメント返信",
+          lead_converted: "リード変換",
+          task_due: "タスク期限",
+          system: "システム"
         }
       },
       title: {
-        label: "Title"
+        label: "タイトル"
       },
       body: {
-        label: "Body",
-        help: "Optional secondary text (one-line summary)"
+        label: "本文",
+        help: "オプションの補足テキスト（1行サマリー）"
       },
       source_object: {
-        label: "Source Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
+        label: "ソースオブジェクト",
+        help: "関連レコードのオブジェクト名（例: lead、opportunity）"
       },
       source_id: {
-        label: "Source Record",
-        help: "Record id within source_object"
+        label: "ソースレコード",
+        help: "source_object 内のレコード ID"
       },
       url: {
-        label: "Deep Link",
-        help: "Optional URL to navigate to when clicked"
+        label: "ディープリンク",
+        help: "クリック時に遷移するオプションの URL"
       },
       actor_id: {
-        label: "Actor",
-        help: "User who caused the notification (mentioner, assigner)"
+        label: "操作者",
+        help: "通知を引き起こしたユーザー（メンション者、担当者）"
       },
       actor_name: {
-        label: "Actor Name"
+        label: "操作者名"
       },
       is_read: {
-        label: "Read",
-        help: "True once recipient acknowledges"
+        label: "既読",
+        help: "受信者が確認すると true になります"
       },
       read_at: {
-        label: "Read At"
+        label: "既読日時"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       unread: {
-        label: "Unread"
+        label: "未読"
       },
       mine: {
-        label: "Mine"
+        label: "自分の通知"
       },
       all_notifications: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_email: {
-    label: "Email",
-    pluralLabel: "Emails",
-    description: "Outbound email delivery log",
+    label: "メール",
+    pluralLabel: "メール",
+    description: "送信メール配信ログ",
     fields: {
       id: {
-        label: "Email ID"
+        label: "メール ID"
       },
       message_id: {
         label: "Message-ID",
-        help: "RFC-5322 Message-ID assigned by the transport"
+        help: "トランスポートが割り当てる RFC-5322 Message-ID"
       },
       from_address: {
-        label: "From"
+        label: "送信元"
       },
       to_addresses: {
-        label: "To",
-        help: "Comma-separated recipient addresses"
+        label: "宛先",
+        help: "カンマ区切りの受信者アドレス"
       },
       cc_addresses: {
         label: "Cc"
@@ -1867,1051 +1867,1051 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "Reply-To"
       },
       subject: {
-        label: "Subject"
+        label: "件名"
       },
       body_text: {
-        label: "Body (text)"
+        label: "本文（テキスト）"
       },
       body_html: {
-        label: "Body (HTML)"
+        label: "本文（HTML）"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state — queued by IEmailService.send before transport call",
+        label: "ステータス",
+        help: "ライフサイクル状態 — トランスポート呼び出し前に IEmailService.send がキューに入れます",
         options: {
-          queued: "queued",
-          sent: "sent",
-          failed: "failed"
+          queued: "キュー済み",
+          sent: "送信済み",
+          failed: "失敗"
         }
       },
       error: {
-        label: "Error",
-        help: "Transport error message when status=failed"
+        label: "エラー",
+        help: "status=failed 時のトランスポートエラーメッセージ"
       },
       attempt_count: {
-        label: "Attempts",
-        help: "Number of delivery attempts performed by the service"
+        label: "試行回数",
+        help: "サービスが実行した配信試行回数"
       },
       sent_at: {
-        label: "Sent At",
-        help: "Set when status transitions to \"sent\""
+        label: "送信日時",
+        help: "ステータスが \"sent\" に遷移したときに設定されます"
       },
       related_object: {
-        label: "Related Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
+        label: "関連オブジェクト",
+        help: "関連レコードのオブジェクト名（例: lead、opportunity）"
       },
       related_id: {
-        label: "Related Record",
-        help: "Record id within related_object"
+        label: "関連レコード",
+        help: "related_object 内のレコード ID"
       },
       sent_by: {
-        label: "Sent By"
+        label: "送信者"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_email_template: {
-    label: "Email Template",
-    pluralLabel: "Email Templates",
-    description: "Outbound email template (subject + body + variables) resolved by name+locale",
+    label: "メールテンプレート",
+    pluralLabel: "メールテンプレート",
+    description: "送信メールテンプレート（件名 + 本文 + 変数）を名前+ロケールで解決",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name",
-        help: "Dotted snake_case identifier (e.g. auth.password_reset)"
+        label: "名前",
+        help: "ドット区切り snake_case 識別子（例: auth.password_reset）"
       },
       label: {
-        label: "Label",
-        help: "Human-readable name shown in Studio"
+        label: "表示名",
+        help: "Studio に表示される表示名"
       },
       category: {
-        label: "Category",
+        label: "カテゴリー",
         options: {
-          auth: "auth",
-          notification: "notification",
-          workflow: "workflow",
-          marketing: "marketing",
-          custom: "custom"
+          auth: "認証",
+          notification: "通知",
+          workflow: "ワークフロー",
+          marketing: "マーケティング",
+          custom: "カスタム"
         }
       },
       locale: {
-        label: "Locale",
-        help: "BCP-47 locale tag (en-US, zh-CN, …)"
+        label: "ロケール",
+        help: "BCP-47 ロケールタグ（en-US、zh-CN など）"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       subject: {
-        label: "Subject",
-        help: "Subject template; supports {{var.path}} placeholders"
+        label: "件名",
+        help: "件名テンプレート。{{var.path}} プレースホルダーに対応"
       },
       body_html: {
-        label: "HTML Body",
-        help: "HTML body template; supports {{var.path}} placeholders"
+        label: "HTML 本文",
+        help: "HTML 本文テンプレート。{{var.path}} プレースホルダーに対応"
       },
       body_text: {
-        label: "Plain Text Body",
-        help: "Optional plain-text alternative (auto-derived from HTML when blank)"
+        label: "プレーンテキスト本文",
+        help: "オプションのプレーンテキスト代替（空白の場合は HTML から自動生成）"
       },
       from_name: {
-        label: "From Name"
+        label: "送信者名"
       },
       from_address: {
-        label: "From Address"
+        label: "送信者アドレス"
       },
       reply_to: {
         label: "Reply-To"
       },
       active: {
-        label: "Active"
+        label: "有効"
       },
       is_system: {
-        label: "System Template",
-        help: "Provided by a plugin / platform; tenants may edit but should not delete"
+        label: "システムテンプレート",
+        help: "プラグイン/プラットフォームが提供。テナントは編集可能ですが削除は推奨しません"
       },
       variables_json: {
-        label: "Variables (JSON)",
-        help: "JSON array of {name,type,required,description}"
+        label: "変数（JSON）",
+        help: "{name,type,required,description} の JSON 配列"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_saved_report: {
-    label: "Saved Report",
-    pluralLabel: "Saved Reports",
-    description: "Persisted ObjectQL report definition — re-runnable and schedulable",
+    label: "保存済みレポート",
+    pluralLabel: "保存済みレポート",
+    description: "永続化された ObjectQL レポート定義 — 再実行およびスケジュール可能",
     fields: {
       id: {
-        label: "Report ID"
+        label: "レポート ID"
       },
       name: {
-        label: "Name"
+        label: "名前"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name the report queries"
+        label: "オブジェクト",
+        help: "レポートがクエリするオブジェクトの短い名前"
       },
       query_json: {
-        label: "Query",
-        help: "ObjectQL query envelope — { filter, fields, orderBy, limit, groupBy }"
+        label: "クエリ",
+        help: "ObjectQL クエリエンベロープ — { filter, fields, orderBy, limit, groupBy }"
       },
       format: {
-        label: "Format",
-        help: "Rendering used by IReportService.run() and email digests",
+        label: "フォーマット",
+        help: "IReportService.run() とメールダイジェストで使用するレンダリング",
         options: {
-          csv: "csv",
-          json: "json",
-          html_table: "html_table"
+          csv: "CSV",
+          json: "JSON",
+          html_table: "HTML テーブル"
         }
       },
       owner_id: {
-        label: "Owner",
-        help: "User that owns the report definition (drives sharing)"
+        label: "所有者",
+        help: "レポート定義を所有するユーザー（共有を促進）"
       },
       last_run_at: {
-        label: "Last Run",
-        help: "Stamped by IReportService.run() on successful execution"
+        label: "最終実行",
+        help: "正常実行時に IReportService.run() がスタンプします"
       },
       last_row_count: {
-        label: "Last Row Count"
+        label: "最終行数"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_report_schedule: {
-    label: "Report Schedule",
-    pluralLabel: "Report Schedules",
-    description: "Recurring delivery of a sys_saved_report via email",
+    label: "レポートスケジュール",
+    pluralLabel: "レポートスケジュール",
+    description: "sys_saved_report のメールによる定期配信",
     fields: {
       id: {
-        label: "Schedule ID"
+        label: "スケジュール ID"
       },
       report_id: {
-        label: "Report"
+        label: "レポート"
       },
       name: {
-        label: "Name",
-        help: "Optional label for the digest — used in the email subject"
+        label: "名前",
+        help: "ダイジェストの任意の表示名 — メール件名で使用"
       },
       interval_minutes: {
-        label: "Interval (minutes)",
-        help: "How often to send (1440 = daily, 10080 = weekly)"
+        label: "間隔（分）",
+        help: "送信頻度（1440 = 毎日、10080 = 毎週）"
       },
       cron_expression: {
-        label: "Cron Expression",
-        help: "Optional 5/6-field cron — overrides interval_minutes when present"
+        label: "Cron 式",
+        help: "オプションの 5/6 フィールド Cron — 存在する場合 interval_minutes を上書き"
       },
       timezone: {
-        label: "Timezone"
+        label: "タイムゾーン"
       },
       active: {
-        label: "Active"
+        label: "有効"
       },
       recipients: {
-        label: "Recipients",
-        help: "Comma-separated email addresses"
+        label: "受信者",
+        help: "カンマ区切りのメールアドレス"
       },
       format: {
-        label: "Format",
-        help: "Render format — csv is attached, html_table is inlined",
+        label: "フォーマット",
+        help: "レンダリング形式 — CSV は添付、HTML テーブルはインライン",
         options: {
-          csv: "csv",
-          html_table: "html_table"
+          csv: "CSV",
+          html_table: "HTML テーブル"
         }
       },
       subject_template: {
-        label: "Subject Template",
-        help: "Email subject; {{name}} / {{date}} / {{rows}} are substituted"
+        label: "件名テンプレート",
+        help: "メール件名。{{name}} / {{date}} / {{rows}} が置換されます"
       },
       owner_id: {
-        label: "Owner"
+        label: "所有者"
       },
       next_run_at: {
-        label: "Next Run",
-        help: "Dispatcher loads schedules where next_run_at <= now"
+        label: "次回実行",
+        help: "next_run_at <= 現在時刻のスケジュールをディスパッチャーが読み込みます"
       },
       last_sent_at: {
-        label: "Last Sent"
+        label: "最終送信日時"
       },
       last_status: {
-        label: "Last Status",
+        label: "最終ステータス",
         options: {
-          ok: "ok",
-          failed: "failed",
-          skipped: "skipped"
+          ok: "正常",
+          failed: "失敗",
+          skipped: "スキップ"
         }
       },
       last_error: {
-        label: "Last Error"
+        label: "最終エラー"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_approval_process: {
-    label: "Approval Process",
-    pluralLabel: "Approval Processes",
-    description: "Persisted approval process definition. Authored via defineApprovalProcess() in code; visual designer is on the roadmap.",
+    label: "承認プロセス",
+    pluralLabel: "承認プロセス",
+    description: "永続化された承認プロセス定義。コードの defineApprovalProcess() で作成。ビジュアルデザイナーはロードマップに予定。",
     fields: {
       id: {
-        label: "Process ID"
+        label: "プロセス ID"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced by submitters and audit rows"
+        label: "名前",
+        help: "一意の snake_case 名 — 送信者と監査行から参照"
       },
       label: {
-        label: "Display Label"
+        label: "表示名"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name this process governs"
+        label: "オブジェクト",
+        help: "このプロセスが管理する短いオブジェクト名"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       active: {
-        label: "Active",
-        help: "Only active processes are dispatched on submission"
+        label: "有効",
+        help: "有効なプロセスのみが送信時にディスパッチされます"
       },
       definition_json: {
-        label: "Definition",
-        help: "Serialised ApprovalProcess JSON (see @objectstack/spec/automation/approval)"
+        label: "定義",
+        help: "シリアライズされた ApprovalProcess JSON（@objectstack/spec/automation/approval 参照）"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       inactive: {
-        label: "Inactive"
+        label: "無効"
       },
       by_object: {
-        label: "By Object"
+        label: "オブジェクト別"
       },
       all_processes: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_approval_request: {
-    label: "Approval Request",
-    pluralLabel: "Approval Requests",
-    description: "Live approval instance tracked per submission",
+    label: "承認リクエスト",
+    pluralLabel: "承認リクエスト",
+    description: "送信ごとに追跡されるライブ承認インスタンス",
     fields: {
       id: {
-        label: "Request ID"
+        label: "リクエスト ID"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this approval request (propagated from submitter context)"
+        label: "組織",
+        help: "この承認リクエストを所有するテナント（送信者コンテキストから伝播）"
       },
       process_name: {
-        label: "Process",
-        help: "sys_approval_process.name this request was opened against"
+        label: "プロセス",
+        help: "このリクエストが開かれた sys_approval_process.name"
       },
       object_name: {
-        label: "Object"
+        label: "オブジェクト"
       },
       record_id: {
-        label: "Record ID"
+        label: "レコード ID"
       },
       submitter_id: {
-        label: "Submitter"
+        label: "送信者"
       },
       submitter_comment: {
-        label: "Submitter Comment"
+        label: "送信者コメント"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state of the request",
+        label: "ステータス",
+        help: "リクエストのライフサイクル状態",
         options: {
-          pending: "pending",
-          approved: "approved",
-          rejected: "rejected",
-          recalled: "recalled"
+          pending: "保留中",
+          approved: "承認済み",
+          rejected: "却下済み",
+          recalled: "取り消し済み"
         }
       },
       current_step: {
-        label: "Current Step",
-        help: "Machine name of the step awaiting approval"
+        label: "現在のステップ",
+        help: "承認待ちのステップの機械名"
       },
       current_step_index: {
-        label: "Current Step Index"
+        label: "現在のステップ番号"
       },
       pending_approvers: {
-        label: "Pending Approvers",
-        help: "Comma-separated user ids who can act on the current step"
+        label: "承認待ち承認者",
+        help: "現在のステップを処理できるユーザー ID のカンマ区切りリスト"
       },
       payload_json: {
-        label: "Snapshot",
-        help: "Record snapshot at submission time"
+        label: "スナップショット",
+        help: "送信時のレコードスナップショット"
       },
       completed_at: {
-        label: "Completed At"
+        label: "完了日時"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       my_pending: {
-        label: "My Pending"
+        label: "自分の保留中"
       },
       submitted_by_me: {
-        label: "I Submitted"
+        label: "自分が送信"
       },
       completed: {
-        label: "Completed"
+        label: "完了済み"
       },
       all_requests: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_approval_action: {
-    label: "Approval Action",
-    pluralLabel: "Approval Actions",
-    description: "Append-only audit trail for approval actions",
+    label: "承認アクション",
+    pluralLabel: "承認アクション",
+    description: "承認アクションの追記専用監査証跡",
     fields: {
       id: {
-        label: "Action ID"
+        label: "アクション ID"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this action (mirrors the parent request)"
+        label: "組織",
+        help: "このアクションを所有するテナント（親リクエストと同じ）"
       },
       request_id: {
-        label: "Request"
+        label: "リクエスト"
       },
       step_name: {
-        label: "Step",
-        help: "Machine name of the step at the time of the action"
+        label: "ステップ",
+        help: "アクション時点のステップの機械名"
       },
       step_index: {
-        label: "Step Index"
+        label: "ステップ番号"
       },
       action: {
-        label: "Action",
+        label: "アクション",
         options: {
-          submit: "submit",
-          approve: "approve",
-          reject: "reject",
-          recall: "recall",
-          escalate: "escalate"
+          submit: "申請",
+          approve: "承認",
+          reject: "却下",
+          recall: "取消",
+          escalate: "エスカレーション"
         }
       },
       actor_id: {
-        label: "Actor"
+        label: "操作者"
       },
       comment: {
-        label: "Comment"
+        label: "コメント"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       }
     },
     _views: {
       recent: {
-        label: "Recent"
+        label: "最近"
       },
       by_actor: {
-        label: "By Actor"
+        label: "操作者別"
       },
       all_actions: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_job: {
-    label: "Background Job",
-    pluralLabel: "Background Jobs",
-    description: "Catalogue of registered background jobs",
+    label: "ジョブ",
+    pluralLabel: "ジョブ",
+    description: "登録済みバックグラウンドジョブのカタログ",
     fields: {
       id: {
-        label: "Job ID"
+        label: "ジョブ ID"
       },
       name: {
-        label: "Job Name",
-        help: "Unique job identifier (snake_case)"
+        label: "ジョブ名",
+        help: "一意のジョブ識別子（snake_case）"
       },
       schedule_type: {
-        label: "Schedule Type",
+        label: "スケジュールタイプ",
         options: {
-          cron: "cron",
-          interval: "interval",
-          once: "once"
+          cron: "Cron",
+          interval: "間隔",
+          once: "1回"
         }
       },
       schedule_expression: {
-        label: "Expression",
-        help: "Cron expression / interval ms / ISO datetime"
+        label: "式",
+        help: "Cron 式 / 間隔ミリ秒 / ISO 日時"
       },
       timezone: {
-        label: "Timezone"
+        label: "タイムゾーン"
       },
       active: {
-        label: "Active",
-        help: "Whether the scheduler is currently running this job"
+        label: "有効",
+        help: "スケジューラが現在このジョブを実行中かどうか"
       },
       last_run_at: {
-        label: "Last Run At"
+        label: "最終実行日時"
       },
       last_status: {
-        label: "Last Status",
+        label: "最終ステータス",
         options: {
-          success: "success",
-          failed: "failed",
-          timeout: "timeout",
-          running: "running"
+          success: "成功",
+          failed: "失敗",
+          timeout: "タイムアウト",
+          running: "実行中"
         }
       },
       last_error: {
-        label: "Last Error"
+        label: "最終エラー"
       },
       run_count: {
-        label: "Run Count"
+        label: "実行回数"
       },
       failure_count: {
-        label: "Failure Count"
+        label: "失敗回数"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_job_run: {
-    label: "Job Run",
-    pluralLabel: "Job Runs",
-    description: "Background job execution audit trail",
+    label: "ジョブ実行",
+    pluralLabel: "ジョブ実行",
+    description: "バックグラウンドジョブ実行の監査証跡",
     fields: {
       id: {
-        label: "Run ID"
+        label: "実行 ID"
       },
       job_name: {
-        label: "Job"
+        label: "ジョブ"
       },
       status: {
-        label: "Status",
+        label: "ステータス",
         options: {
-          running: "running",
-          success: "success",
-          failed: "failed",
-          timeout: "timeout"
+          running: "実行中",
+          success: "成功",
+          failed: "失敗",
+          timeout: "タイムアウト"
         }
       },
       started_at: {
-        label: "Started At"
+        label: "開始日時"
       },
       completed_at: {
-        label: "Completed At"
+        label: "完了日時"
       },
       duration_ms: {
-        label: "Duration (ms)"
+        label: "所要時間（ミリ秒）"
       },
       attempt: {
-        label: "Attempt",
-        help: "1 for first run, >1 for retries/replays"
+        label: "試行回数",
+        help: "初回実行は 1、再試行/再実行は 1 超"
       },
       trigger: {
-        label: "Trigger",
+        label: "トリガー",
         options: {
-          schedule: "schedule",
-          manual: "manual",
-          replay: "replay"
+          schedule: "スケジュール",
+          manual: "手動",
+          replay: "再実行"
         }
       },
       error: {
-        label: "Error"
+        label: "エラー"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       }
     }
   },
   sys_job_queue: {
-    label: "Job Queue Message",
-    pluralLabel: "Job Queue Messages",
-    description: "Durable job/message queue including dead letters",
+    label: "ジョブキュー",
+    pluralLabel: "ジョブキュー",
+    description: "デッドレター含む耐久性のあるジョブ/メッセージキュー",
     fields: {
       id: {
-        label: "Message ID"
+        label: "メッセージ ID"
       },
       queue: {
-        label: "Queue",
-        help: "Logical queue name (snake_case)"
+        label: "キュー",
+        help: "論理キュー名（snake_case）"
       },
       idempotency_key: {
-        label: "Idempotency Key",
-        help: "Deduplication key within (queue, window)"
+        label: "冪等キー",
+        help: "（キュー、ウィンドウ）内の重複排除キー"
       },
       payload_json: {
-        label: "Payload (JSON)",
-        help: "Serialized message body"
+        label: "ペイロード（JSON）",
+        help: "シリアライズされたメッセージ本体"
       },
       metadata_json: {
-        label: "Metadata (JSON)",
-        help: "Serialized metadata bag (tenant_id, source_record, ...)"
+        label: "メタデータ（JSON）",
+        help: "シリアライズされたメタデータバッグ（tenant_id、source_record など）"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state",
+        label: "ステータス",
+        help: "ライフサイクル状態",
         options: {
-          pending: "pending",
-          running: "running",
-          completed: "completed",
-          failed: "failed",
-          dlq: "dlq"
+          pending: "保留中",
+          running: "実行中",
+          completed: "完了",
+          failed: "失敗",
+          dlq: "デッドレター"
         }
       },
       priority: {
-        label: "Priority",
-        help: "Lower = higher priority"
+        label: "優先度",
+        help: "値が小さいほど優先度が高い"
       },
       attempts: {
-        label: "Attempts"
+        label: "試行回数"
       },
       max_attempts: {
-        label: "Max Attempts"
+        label: "最大試行回数"
       },
       backoff_type: {
-        label: "Backoff",
+        label: "バックオフ",
         options: {
-          fixed: "fixed",
-          exponential: "exponential"
+          fixed: "固定",
+          exponential: "指数"
         }
       },
       backoff_delay_ms: {
-        label: "Backoff Base (ms)"
+        label: "バックオフ基本値（ミリ秒）"
       },
       backoff_max_delay_ms: {
-        label: "Backoff Cap (ms)"
+        label: "バックオフ上限（ミリ秒）"
       },
       scheduled_for: {
-        label: "Scheduled For",
-        help: "Earliest time a worker may lease this message"
+        label: "スケジュール日時",
+        help: "ワーカーがこのメッセージをリースできる最早時刻"
       },
       locked_by: {
-        label: "Locked By",
-        help: "Worker id holding the lease"
+        label: "ロック者",
+        help: "リースを保持しているワーカー ID"
       },
       locked_until: {
-        label: "Locked Until",
-        help: "Lease expiry; if past, another worker may claim"
+        label: "ロック期限",
+        help: "リース有効期限。過去の場合、別ワーカーがクレーム可能"
       },
       last_error: {
-        label: "Last Error"
+        label: "最終エラー"
       },
       completed_at: {
-        label: "Completed At"
+        label: "完了日時"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_webhook: {
     label: "Webhook",
-    pluralLabel: "Webhooks",
-    description: "Outbound HTTP webhook subscription. Authored via defineWebhook() in code or the Studio editor; executed by the HTTP connector plugin.",
+    pluralLabel: "Webhook",
+    description: "送信 HTTP Webhook サブスクリプション。defineWebhook() またはスタジオエディタで作成し、HTTP コネクタプラグインが実行します。",
     fields: {
       id: {
         label: "Webhook ID"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced in logs and audit"
+        label: "名前",
+        help: "一意の snake_case 名 — ログおよび監査で参照"
       },
       label: {
-        label: "Display Label"
+        label: "表示名"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name whose events fire this webhook (blank = manual / API-triggered)"
+        label: "オブジェクト",
+        help: "このウェブフックを発火するイベントのオブジェクト短縮名（空白 = 手動 / API トリガー）"
       },
       triggers: {
-        label: "Triggers",
-        help: "Comma-separated event list: create,update,delete,undelete,api"
+        label: "トリガー",
+        help: "カンマ区切りのイベントリスト: create,update,delete,undelete,api"
       },
       url: {
-        label: "Target URL",
-        help: "External endpoint that receives the POST"
+        label: "ターゲット URL",
+        help: "POST を受信する外部エンドポイント"
       },
       method: {
-        label: "HTTP Method",
+        label: "HTTP メソッド",
         help: "GET / POST / PUT / PATCH / DELETE"
       },
       description: {
-        label: "Description"
+        label: "説明"
       },
       active: {
-        label: "Active",
-        help: "Inactive webhooks are skipped by the dispatcher"
+        label: "有効",
+        help: "無効にするとディスパッチャにスキップされます"
       },
       definition_json: {
-        label: "Definition",
-        help: "Serialised Webhook JSON (see @objectstack/spec/automation/webhook) — full headers/auth/retry/payload config"
+        label: "定義",
+        help: "シリアライズされた Webhook JSON（@objectstack/spec/automation/webhook 参照）— ヘッダー/認証/リトライ/ペイロード設定を含む"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "有効"
       },
       inactive: {
-        label: "Inactive"
+        label: "無効"
       },
       by_object: {
-        label: "By Object"
+        label: "オブジェクト別"
       },
       all_webhooks: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_metadata: {
-    label: "System Metadata",
-    pluralLabel: "System Metadata",
-    description: "Stores platform and user-scope metadata records (objects, views, flows, etc.)",
+    label: "システムメタデータ",
+    pluralLabel: "システムメタデータ",
+    description: "オブジェクト・ビュー・フローなどのプラットフォームおよびユーザースコープのメタデータレコードを保存",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name"
+        label: "名前"
       },
       type: {
-        label: "Metadata Type"
+        label: "メタデータタイプ"
       },
       namespace: {
-        label: "Namespace"
+        label: "名前空間"
       },
       package_id: {
-        label: "Package ID",
-        help: "Legacy package manifest ID string. Use package_version_id for new records."
+        label: "パッケージ ID",
+        help: "レガシーパッケージマニフェスト ID 文字列。新規レコードには package_version_id を使用してください。"
       },
       package_version_id: {
-        label: "Package Version",
-        help: "Foreign key to sys_package_version (UUID). Null = platform-built-in or env-level override."
+        label: "パッケージバージョン",
+        help: "sys_package_version への外部キー（UUID）。null = プラットフォーム組み込みまたは環境レベルの上書き。"
       },
       managed_by: {
-        label: "Managed By",
+        label: "管理者",
         options: {
-          package: "package",
-          platform: "platform",
-          user: "user"
+          package: "パッケージ",
+          platform: "プラットフォーム",
+          user: "ユーザー"
         }
       },
       scope: {
-        label: "Scope",
+        label: "スコープ",
         options: {
-          system: "system",
-          platform: "platform",
-          user: "user"
+          system: "システム",
+          platform: "プラットフォーム",
+          user: "ユーザー"
         }
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized metadata payload"
+        label: "メタデータ",
+        help: "JSON シリアライズされたメタデータペイロード"
       },
       extends: {
-        label: "Extends"
+        label: "継承元"
       },
       strategy: {
-        label: "Strategy",
+        label: "マージ戦略",
         options: {
-          merge: "merge",
-          replace: "replace"
+          merge: "マージ",
+          replace: "置換"
         }
       },
       owner: {
-        label: "Owner"
+        label: "所有者"
       },
       state: {
-        label: "State",
+        label: "状態",
         options: {
-          draft: "draft",
-          active: "active",
-          archived: "archived",
-          deprecated: "deprecated"
+          draft: "下書き",
+          active: "有効",
+          archived: "アーカイブ済み",
+          deprecated: "非推奨"
         }
       },
       organization_id: {
-        label: "Organization",
-        help: "Organization for multi-tenant isolation."
+        label: "組織",
+        help: "マルチテナント分離のための組織。"
       },
       project_id: {
-        label: "Project (deprecated)",
-        help: "DEPRECATED. Use organization_id for tenant isolation."
+        label: "プロジェクト（非推奨）",
+        help: "非推奨。テナント分離には organization_id を使用してください。"
       },
       version: {
-        label: "Version"
+        label: "バージョン"
       },
       checksum: {
-        label: "Checksum"
+        label: "チェックサム"
       },
       source: {
-        label: "Source",
+        label: "ソース",
         options: {
-          filesystem: "filesystem",
-          database: "database",
-          api: "api",
-          migration: "migration"
+          filesystem: "ファイルシステム",
+          database: "データベース",
+          api: "API",
+          migration: "マイグレーション"
         }
       },
       tags: {
-        label: "Tags",
-        help: "JSON-serialized array of classification tags"
+        label: "タグ",
+        help: "分類タグの JSON シリアライズ配列"
       },
       created_by: {
-        label: "Created By"
+        label: "作成者"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_by: {
-        label: "Updated By"
+        label: "更新者"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       }
     }
   },
   sys_metadata_history: {
-    label: "Metadata History",
-    pluralLabel: "Metadata History",
-    description: "Version history and audit trail for metadata changes",
+    label: "メタデータ履歴",
+    pluralLabel: "メタデータ履歴",
+    description: "メタデータ変更のバージョン履歴および監査証跡",
     fields: {
       id: {
         label: "ID"
       },
       metadata_id: {
-        label: "Metadata"
+        label: "メタデータ"
       },
       name: {
-        label: "Name"
+        label: "名前"
       },
       type: {
-        label: "Metadata Type"
+        label: "メタデータタイプ"
       },
       version: {
-        label: "Version"
+        label: "バージョン"
       },
       operation_type: {
-        label: "Operation Type",
+        label: "操作タイプ",
         options: {
-          create: "create",
-          update: "update",
-          publish: "publish",
-          revert: "revert",
-          delete: "delete"
+          create: "作成",
+          update: "更新",
+          publish: "公開",
+          revert: "ロールバック",
+          delete: "削除"
         }
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized metadata snapshot at this version"
+        label: "メタデータ",
+        help: "このバージョン時点の JSON シリアライズされたメタデータスナップショット"
       },
       checksum: {
-        label: "Checksum"
+        label: "チェックサム"
       },
       previous_checksum: {
-        label: "Previous Checksum"
+        label: "直前のチェックサム"
       },
       change_note: {
-        label: "Change Note",
-        help: "Description of what changed in this version"
+        label: "変更メモ",
+        help: "このバージョンで変更された内容の説明"
       },
       organization_id: {
-        label: "Organization",
-        help: "Organization for multi-tenant isolation."
+        label: "組織",
+        help: "マルチテナント分離のための組織。"
       },
       project_id: {
-        label: "Environment ID",
-        help: "Scopes this history entry to a specific environment."
+        label: "環境 ID",
+        help: "この履歴エントリを特定の環境にスコープします。"
       },
       recorded_by: {
-        label: "Recorded By"
+        label: "記録者"
       },
       recorded_at: {
-        label: "Recorded At"
+        label: "記録日時"
       }
     }
   },
   sys_setting: {
-    label: "Setting",
-    pluralLabel: "Settings",
-    description: "Generic K/V store backing the SettingsManifest contract.",
+    label: "設定",
+    pluralLabel: "設定",
+    description: "SettingsManifest コントラクトを支える汎用 K/V ストア。",
     fields: {
       id: {
-        label: "Setting ID"
+        label: "設定 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "作成日時"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新日時"
       },
       namespace: {
-        label: "Namespace",
-        help: "Manifest namespace (e.g. mail, branding, feature_flags)."
+        label: "名前空間",
+        help: "マニフェスト名前空間（例: mail、branding、feature_flags）。"
       },
       key: {
-        label: "Key",
-        help: "Specifier key inside the namespace (snake_case)."
+        label: "キー",
+        help: "名前空間内の識別キー（snake_case）。"
       },
       scope: {
-        label: "Scope",
-        help: "Which layer of the config-resolution hierarchy this row belongs to.",
+        label: "スコープ",
+        help: "この行が属する設定解決階層のレイヤー。",
         options: {
-          global: "Global",
-          tenant: "Tenant",
-          user: "User",
-          runtime: "Runtime"
+          global: "グローバル",
+          tenant: "テナント",
+          user: "ユーザー",
+          runtime: "ランタイム"
         }
       },
       user_id: {
-        label: "User",
-        help: "Owning user when scope=user; null otherwise."
+        label: "ユーザー",
+        help: "scope=user の場合のオーナーユーザー。それ以外は null。"
       },
       value: {
-        label: "Value",
-        help: "JSON-encoded value. Null when encrypted=true (see value_enc)."
+        label: "値",
+        help: "JSON エンコードされた値。encrypted=true の場合は null（value_enc 参照）。"
       },
       encrypted: {
-        label: "Encrypted",
-        help: "When true, the value is stored encrypted-at-rest in value_enc; value column is null."
+        label: "暗号化",
+        help: "true の場合、値は value_enc に保存時暗号化されており、value カラムは null。"
       },
       locked: {
-        label: "Locked",
-        help: "When true, lower-scope rows cannot override this value; writes against lower scopes return 409. Used by platform administrators to pin a global value for all tenants (Phase 2 cascade)."
+        label: "ロック済み",
+        help: "true の場合、下位スコープの行はこの値を上書きできず、下位スコープへの書き込みは 409 を返します。プラットフォーム管理者がすべてのテナントにグローバル値を固定するために使用します（フェーズ 2 カスケード）。"
       },
       locked_reason: {
-        label: "Lock Reason",
-        help: "Human-readable explanation surfaced in the UI tooltip when locked=true."
+        label: "ロック理由",
+        help: "locked=true の場合に UI ツールチップに表示される人間向けの説明。"
       },
       value_enc: {
-        label: "Encrypted Value",
-        help: "Ciphertext payload (KMS-wrapped). Set only when encrypted=true."
+        label: "暗号化済み値",
+        help: "暗号文ペイロード（KMS ラップ済み）。encrypted=true の場合のみ設定。"
       },
       updated_by: {
-        label: "Updated By",
-        help: "Last actor who wrote this row via SettingsService.set()."
+        label: "更新者",
+        help: "SettingsService.set() 経由でこの行を最後に書き込んだ操作者。"
       }
     },
     _views: {
       by_namespace: {
-        label: "By Namespace"
+        label: "名前空間別"
       },
       tenant_only: {
-        label: "Tenant"
+        label: "テナント"
       },
       user_only: {
-        label: "User"
+        label: "ユーザー"
       },
       all_settings: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
   sys_secret: {
-    label: "Secret",
-    pluralLabel: "Secrets",
-    description: "Cipher store referenced by sys_setting handles. Never holds plaintext.",
+    label: "シークレット",
+    pluralLabel: "シークレット",
+    description: "sys_setting ハンドルが参照する暗号ストア。平文は保持しません。",
     fields: {
       id: {
         label: "ID",
-        help: "Opaque handle referenced by `sys_setting.value_enc`."
+        help: "`sys_setting.value_enc` が参照する不透明なハンドル。"
       },
       created_at: {
-        label: "Created At",
-        help: "When the cipher was first written."
+        label: "作成日時",
+        help: "暗号が最初に書き込まれた日時。"
       },
       rotated_at: {
-        label: "Rotated At",
-        help: "When the cipher was last re-wrapped under a new KMS key."
+        label: "ローテーション日時",
+        help: "暗号が新しい KMS キーで最後に再ラップされた日時。"
       },
       namespace: {
-        label: "Namespace",
-        help: "Settings namespace this secret belongs to."
+        label: "名前空間",
+        help: "このシークレットが属する設定名前空間。"
       },
       key: {
-        label: "Key",
-        help: "Specifier key within the namespace."
+        label: "キー",
+        help: "名前空間内の識別キー。"
       },
       kms_key_id: {
-        label: "KMS Key ID",
-        help: "External KMS handle (ARN, GCP resource id, or `local`)."
+        label: "KMS キー ID",
+        help: "外部 KMS ハンドル（ARN、GCP リソース ID、または `local`）。"
       },
       alg: {
-        label: "Algorithm",
-        help: "Cipher/AEAD algorithm tag."
+        label: "アルゴリズム",
+        help: "暗号 / AEAD アルゴリズムタグ。"
       },
       version: {
-        label: "Version",
-        help: "Bumps each time rotateKey() re-wraps this row."
+        label: "バージョン",
+        help: "rotateKey() でこの行が再ラップされるたびに増加。"
       },
       ciphertext: {
-        label: "Ciphertext",
-        help: "Provider-encoded ciphertext blob (base64 / JSON). Implementation-defined; only the matching ICryptoProvider can read it."
+        label: "暗号文",
+        help: "プロバイダーエンコードされた暗号文 blob（base64 / JSON）。実装定義のため、対応する ICryptoProvider のみが読み取り可能。"
       }
     }
   },
   sys_setting_audit: {
-    label: "Setting Audit Entry",
-    pluralLabel: "Setting Audit",
-    description: "Append-only audit trail for SettingsService mutations.",
+    label: "設定監査エントリ",
+    pluralLabel: "設定監査",
+    description: "SettingsService の変更に関する追記専用監査証跡。",
     fields: {
       id: {
         label: "ID"
       },
       created_at: {
-        label: "Created At",
-        help: "When the mutation was recorded."
+        label: "作成日時",
+        help: "変更が記録された日時。"
       },
       namespace: {
-        label: "Namespace"
+        label: "名前空間"
       },
       key: {
-        label: "Key"
+        label: "キー"
       },
       scope: {
-        label: "Scope",
-        help: "Cascade layer the row was written to.",
+        label: "スコープ",
+        help: "行が書き込まれたカスケードレイヤー。",
         options: {
-          global: "Global",
-          tenant: "Tenant",
-          user: "User"
+          global: "グローバル",
+          tenant: "テナント",
+          user: "ユーザー"
         }
       },
       action: {
-        label: "Action",
-        help: "Mutation kind.",
+        label: "アクション",
+        help: "変更の種別。",
         options: {
-          set: "Set",
-          reset: "Reset",
-          lock: "Lock",
-          unlock: "Unlock",
-          rotate: "Rotate"
+          set: "設定",
+          reset: "リセット",
+          lock: "ロック",
+          unlock: "ロック解除",
+          rotate: "ローテーション"
         }
       },
       actor_id: {
-        label: "Actor",
-        help: "User who performed the mutation; null for system jobs."
+        label: "操作者",
+        help: "変更を行ったユーザー。システムジョブの場合は null。"
       },
       source: {
-        label: "Source",
-        help: "Mutation entry-point.",
+        label: "ソース",
+        help: "変更のエントリポイント。",
         options: {
           ui: "UI",
           api: "API",
-          migration: "Migration",
-          import: "Import",
-          system: "System"
+          migration: "マイグレーション",
+          import: "インポート",
+          system: "システム"
         }
       },
       reason: {
-        label: "Reason",
-        help: "Free-text justification provided by the actor (optional)."
+        label: "理由",
+        help: "操作者が提供した自由記述の理由（任意）。"
       },
       old_hash: {
-        label: "Old Hash",
-        help: "SHA-256 of the previous value (canonicalised). Null when previously unset."
+        label: "変更前ハッシュ",
+        help: "変更前の値の SHA-256（正規化済み）。未設定の場合は null。"
       },
       new_hash: {
-        label: "New Hash",
-        help: "SHA-256 of the new value (canonicalised). Null on reset."
+        label: "変更後ハッシュ",
+        help: "新しい値の SHA-256（正規化済み）。リセット時は null。"
       },
       encrypted: {
-        label: "Encrypted",
-        help: "True when the field carries secret material (rotation is interesting)."
+        label: "暗号化",
+        help: "フィールドが機密情報を含む場合は true（ローテーションが重要）。"
       },
       request_id: {
-        label: "Request ID",
-        help: "Correlates with sys_audit_log / tracing."
+        label: "リクエスト ID",
+        help: "sys_audit_log / トレーシングとの相関用。"
       }
     }
   }

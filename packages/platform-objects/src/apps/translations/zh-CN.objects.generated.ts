@@ -10,2908 +10,2908 @@ import type { TranslationData } from '@objectstack/spec/system';
 
 export const zhCNObjects: NonNullable<TranslationData['objects']> = {
   sys_user: {
-    label: "User",
-    pluralLabel: "Users",
-    description: "User accounts for authentication",
+    label: "用户",
+    pluralLabel: "用户",
+    description: "用于身份认证的用户账号",
     fields: {
       name: {
-        label: "Name"
+        label: "名称"
       },
       email: {
-        label: "Email"
+        label: "邮箱"
       },
       email_verified: {
-        label: "Email Verified"
+        label: "邮箱已验证"
       },
       two_factor_enabled: {
-        label: "Two-Factor Enabled",
-        help: "Whether two-factor authentication is enabled for this user. Maintained by the better-auth `twoFactor` plugin."
+        label: "已启用双因素认证",
+        help: "该用户是否已启用双因素认证。由 better-auth 的 `twoFactor` 插件维护。"
       },
       role: {
-        label: "Platform Role",
-        help: "Platform-level role (admin, user, …). Set via the Set Platform Role action."
+        label: "平台角色",
+        help: "平台级角色（admin、user 等）。通过“设置平台角色”操作设置。"
       },
       banned: {
-        label: "Banned",
-        help: "When true, the user cannot sign in. Toggle via Ban User / Unban User actions."
+        label: "已封禁",
+        help: "为 true 时，用户无法登录。可通过“封禁用户 / 解除封禁”操作切换。"
       },
       ban_reason: {
-        label: "Ban Reason"
+        label: "封禁原因"
       },
       ban_expires: {
-        label: "Ban Expires",
-        help: "When set, the ban auto-clears at this time."
+        label: "封禁到期时间",
+        help: "设置后，到达该时间会自动解除封禁。"
       },
       image: {
-        label: "Profile Image"
+        label: "头像"
       },
       id: {
-        label: "User ID"
+        label: "用户 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       all_users: {
-        label: "All Users"
+        label: "全部用户"
       },
       unverified: {
-        label: "Unverified"
+        label: "未验证"
       },
       two_factor: {
-        label: "2FA Enabled"
+        label: "已启用 2FA"
       },
       banned: {
-        label: "Banned"
+        label: "已封禁"
       }
     },
     _actions: {
       invite_user: {
-        label: "Invite User",
-        successMessage: "Invitation sent"
+        label: "邀请用户",
+        successMessage: "邀请已发送"
       },
       ban_user: {
-        label: "Ban User",
-        confirmText: "Ban this user? They will be signed out and unable to sign in until unbanned.",
-        successMessage: "User banned"
+        label: "封禁用户",
+        confirmText: "要封禁该用户吗？封禁后会立即登出，且在解除封禁前无法再次登录。",
+        successMessage: "用户已封禁"
       },
       unban_user: {
-        label: "Unban User",
-        successMessage: "User unbanned"
+        label: "解除封禁",
+        successMessage: "用户已解除封禁"
       },
       set_user_password: {
-        label: "Set Password",
-        successMessage: "Password updated"
+        label: "设置密码",
+        successMessage: "密码已更新"
       },
       set_user_role: {
-        label: "Set Platform Role",
-        successMessage: "Role updated"
+        label: "设置平台角色",
+        successMessage: "角色已更新"
       },
       impersonate_user: {
-        label: "Impersonate User",
-        confirmText: "Start an impersonation session for this user? Use only for legitimate support cases — actions will be logged.",
-        successMessage: "Now impersonating user"
+        label: "模拟用户",
+        confirmText: "要为该用户启动模拟会话吗？仅限合法支持场景使用——所有操作都会被记录。",
+        successMessage: "已开始模拟该用户"
       }
     }
   },
   sys_session: {
-    label: "Session",
-    pluralLabel: "Sessions",
-    description: "Active user sessions",
+    label: "会话",
+    pluralLabel: "会话",
+    description: "活跃的用户会话",
     fields: {
       user_id: {
-        label: "User"
+        label: "用户"
       },
       expires_at: {
-        label: "Expires At"
+        label: "过期时间"
       },
       active_organization_id: {
-        label: "Active Organization"
+        label: "当前组织"
       },
       active_team_id: {
-        label: "Active Team"
+        label: "当前团队"
       },
       ip_address: {
-        label: "IP Address"
+        label: "IP 地址"
       },
       user_agent: {
-        label: "User Agent"
+        label: "用户代理"
       },
       impersonated_by: {
-        label: "Impersonated By",
-        help: "User id of the admin that started this impersonation session, if any."
+        label: "模拟发起人",
+        help: "如存在，该字段表示发起本次模拟会话的管理员用户 ID。"
       },
       token: {
-        label: "Session Token",
-        help: "Opaque session token — never exposed in UI"
+        label: "会话令牌",
+        help: "不透明会话令牌——绝不会在 UI 中暴露。"
       },
       id: {
-        label: "Session ID"
+        label: "会话 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       mine: {
-        label: "My Sessions"
+        label: "我的会话"
       },
       all_sessions: {
-        label: "All"
+        label: "全部"
       }
     },
     _actions: {
       revoke_my_other_sessions: {
-        label: "Sign out other devices",
-        confirmText: "Sign out of every other device where you're currently logged in? Your current session will remain active.",
-        successMessage: "All other sessions revoked"
+        label: "退出其他设备",
+        confirmText: "要退出你当前已登录的其他所有设备吗？当前会话将保持活跃。",
+        successMessage: "其他所有会话已撤销"
       },
       revoke_session: {
-        label: "Revoke Session",
-        confirmText: "Revoke this session? The user will be signed out from that device.",
-        successMessage: "Session revoked"
+        label: "撤销会话",
+        confirmText: "要撤销此会话吗？系统将使该设备上的用户退出登录。",
+        successMessage: "会话已撤销"
       }
     }
   },
   sys_account: {
-    label: "Account",
-    pluralLabel: "Accounts",
-    description: "OAuth and authentication provider accounts",
+    label: "身份链接",
+    pluralLabel: "身份链接",
+    description: "OAuth 与认证提供方账号",
     fields: {
       id: {
-        label: "Account ID"
+        label: "身份链接 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       provider_id: {
-        label: "Provider ID",
-        help: "OAuth provider identifier (google, github, etc.)"
+        label: "提供方 ID",
+        help: "OAuth 提供方标识（google、github 等）"
       },
       account_id: {
-        label: "Provider Account ID",
-        help: "User's ID in the provider's system"
+        label: "提供方账号 ID",
+        help: "用户在该提供方系统中的 ID"
       },
       user_id: {
-        label: "User",
-        help: "Link to user table"
+        label: "用户",
+        help: "关联到用户表"
       },
       access_token: {
-        label: "Access Token"
+        label: "访问令牌"
       },
       refresh_token: {
-        label: "Refresh Token"
+        label: "刷新令牌"
       },
       id_token: {
-        label: "ID Token"
+        label: "ID 令牌"
       },
       access_token_expires_at: {
-        label: "Access Token Expires At"
+        label: "Access Token 过期时间"
       },
       refresh_token_expires_at: {
-        label: "Refresh Token Expires At"
+        label: "Refresh Token 过期时间"
       },
       scope: {
-        label: "OAuth Scope"
+        label: "OAuth 范围"
       },
       password: {
-        label: "Password Hash",
-        help: "Hashed password for email/password provider"
+        label: "密码哈希",
+        help: "邮箱/密码提供方使用的密码哈希"
       }
     },
     _views: {
       mine: {
-        label: "My Links"
+        label: "我的链接"
       },
       by_provider: {
-        label: "By Provider"
+        label: "按提供方"
       },
       all_links: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_verification: {
-    label: "Verification",
-    pluralLabel: "Verifications",
-    description: "Email and phone verification tokens",
+    label: "验证记录",
+    pluralLabel: "验证记录",
+    description: "邮箱和手机号验证令牌",
     fields: {
       id: {
-        label: "Verification ID"
+        label: "验证记录 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       value: {
-        label: "Verification Token",
-        help: "Token or code for verification"
+        label: "验证令牌",
+        help: "用于验证的令牌或验证码"
       },
       expires_at: {
-        label: "Expires At"
+        label: "过期时间"
       },
       identifier: {
-        label: "Identifier",
-        help: "Email address or phone number"
+        label: "标识",
+        help: "邮箱地址或手机号码"
       }
     }
   },
   sys_organization: {
-    label: "Organization",
-    pluralLabel: "Organizations",
-    description: "Organizations for multi-tenant grouping",
+    label: "组织",
+    pluralLabel: "组织",
+    description: "用于多租户分组的组织",
     fields: {
       name: {
-        label: "Name"
+        label: "名称"
       },
       slug: {
-        label: "Slug",
-        help: "URL-friendly identifier"
+        label: "标识符",
+        help: "适合 URL 使用的标识符"
       },
       logo: {
-        label: "Logo"
+        label: "标识"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized organization metadata"
+        label: "元数据",
+        help: "JSON 序列化的组织元数据"
       },
       id: {
-        label: "Organization ID"
+        label: "组织 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       all_orgs: {
-        label: "All"
+        label: "全部"
       }
     },
     _actions: {
       create_organization: {
-        label: "Create Organization",
-        successMessage: "Organization created"
+        label: "创建组织",
+        successMessage: "组织已创建"
       },
       update_organization: {
-        label: "Edit Organization",
-        successMessage: "Organization updated"
+        label: "编辑组织",
+        successMessage: "组织已更新"
       },
       delete_organization: {
-        label: "Delete Organization",
-        confirmText: "Delete this organization? All members will lose access immediately. This cannot be undone.",
-        successMessage: "Organization deleted"
+        label: "删除组织",
+        confirmText: "要删除该组织吗？所有成员将立即失去访问权限。此操作无法撤销。",
+        successMessage: "组织已删除"
       },
       set_active_organization: {
-        label: "Set Active",
-        successMessage: "Active organization switched"
+        label: "设为当前",
+        successMessage: "当前组织已切换"
       },
       leave_organization: {
-        label: "Leave Organization",
-        confirmText: "Leave this organization? You will lose access to all of its resources.",
-        successMessage: "You have left the organization"
+        label: "退出组织",
+        confirmText: "要退出该组织吗？退出后你将失去对其所有资源的访问权限。",
+        successMessage: "你已退出该组织"
       }
     }
   },
   sys_member: {
-    label: "Member",
-    pluralLabel: "Members",
-    description: "Organization membership records",
+    label: "成员",
+    pluralLabel: "成员",
+    description: "组织成员关系记录",
     fields: {
       id: {
-        label: "Member ID"
+        label: "成员 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       organization_id: {
-        label: "Organization"
+        label: "组织"
       },
       user_id: {
-        label: "User"
+        label: "用户"
       },
       role: {
-        label: "Role",
-        help: "Member role within the organization",
+        label: "角色",
+        help: "成员在组织内的角色",
         options: {
-          owner: "Owner",
-          admin: "Admin",
-          member: "Member"
+          owner: "所有者",
+          admin: "管理员",
+          member: "成员"
         }
       }
     },
     _actions: {
       add_member: {
-        label: "Add Member",
-        successMessage: "Member added"
+        label: "添加成员",
+        successMessage: "成员已添加"
       },
       update_member_role: {
-        label: "Change Role",
-        successMessage: "Member role updated"
+        label: "更改角色",
+        successMessage: "成员角色已更新"
       },
       remove_member: {
-        label: "Remove Member",
-        confirmText: "Remove this member from the organization? They will lose access to all org resources.",
-        successMessage: "Member removed"
+        label: "移除成员",
+        confirmText: "要将该成员移出组织吗？移除后其将失去对该组织所有资源的访问权限。",
+        successMessage: "成员已移除"
       }
     }
   },
   sys_invitation: {
-    label: "Invitation",
-    pluralLabel: "Invitations",
-    description: "Organization invitations for user onboarding",
+    label: "邀请",
+    pluralLabel: "邀请",
+    description: "用于用户加入组织的邀请记录",
     fields: {
       id: {
-        label: "Invitation ID"
+        label: "邀请 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       organization_id: {
-        label: "Organization"
+        label: "组织"
       },
       email: {
-        label: "Email",
-        help: "Email address of the invited user"
+        label: "邮箱",
+        help: "被邀请用户的邮箱地址"
       },
       role: {
-        label: "Role",
-        help: "Role to assign upon acceptance",
+        label: "角色",
+        help: "接受邀请后分配的角色",
         options: {
-          owner: "Owner",
-          admin: "Admin",
-          member: "Member"
+          owner: "所有者",
+          admin: "管理员",
+          member: "成员"
         }
       },
       status: {
-        label: "Status",
+        label: "状态",
         options: {
-          pending: "pending",
-          accepted: "accepted",
-          rejected: "rejected",
-          expired: "expired",
-          canceled: "canceled"
+          pending: "待处理",
+          accepted: "已接受",
+          rejected: "已拒绝",
+          expired: "已过期",
+          canceled: "已取消"
         }
       },
       inviter_id: {
-        label: "Inviter",
-        help: "User who sent the invitation"
+        label: "邀请人",
+        help: "发送邀请的用户"
       },
       expires_at: {
-        label: "Expires At"
+        label: "过期时间"
       },
       team_id: {
-        label: "Team",
-        help: "Optional team to assign upon acceptance"
+        label: "团队",
+        help: "接受邀请后可选分配的团队"
       }
     },
     _views: {
       pending: {
-        label: "Pending"
+        label: "待处理"
       },
       accepted: {
-        label: "Accepted"
+        label: "已接受"
       },
       expired: {
-        label: "Expired / Canceled"
+        label: "已过期 / 已取消"
       },
       all_invitations: {
-        label: "All"
+        label: "全部"
       }
     },
     _actions: {
       invite_user: {
-        label: "Invite User",
-        successMessage: "Invitation sent"
+        label: "邀请用户",
+        successMessage: "邀请已发送"
       },
       cancel_invitation: {
-        label: "Cancel Invitation",
-        confirmText: "Cancel this invitation? The recipient will no longer be able to accept it.",
-        successMessage: "Invitation canceled"
+        label: "取消邀请",
+        confirmText: "要取消该邀请吗？接收人将无法再接受该邀请。",
+        successMessage: "邀请已取消"
       },
       resend_invitation: {
-        label: "Resend Invitation",
-        successMessage: "Invitation resent"
+        label: "重新发送邀请",
+        successMessage: "邀请已重新发送"
       }
     }
   },
   sys_team: {
-    label: "Team",
-    pluralLabel: "Teams",
-    description: "Teams within organizations for fine-grained grouping",
+    label: "团队",
+    pluralLabel: "团队",
+    description: "组织内用于精细化分组的团队",
     fields: {
       name: {
-        label: "Name"
+        label: "名称"
       },
       organization_id: {
-        label: "Organization",
-        help: "Parent organization for this team"
+        label: "组织",
+        help: "该团队所属的上级组织"
       },
       id: {
-        label: "Team ID"
+        label: "团队 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       by_org: {
-        label: "By Organization"
+        label: "按组织"
       },
       all_teams: {
-        label: "All"
+        label: "全部"
       }
     },
     _actions: {
       create_team: {
-        label: "Create Team",
-        successMessage: "Team created"
+        label: "创建团队",
+        successMessage: "团队已创建"
       },
       update_team: {
-        label: "Edit Team",
-        successMessage: "Team updated"
+        label: "编辑团队",
+        successMessage: "团队已更新"
       },
       remove_team: {
-        label: "Delete Team",
-        confirmText: "Delete this team? Members will lose any team-scoped access. This cannot be undone.",
-        successMessage: "Team deleted"
+        label: "删除团队",
+        confirmText: "要删除该团队吗？成员将失去所有团队范围内的访问权限。此操作无法撤销。",
+        successMessage: "团队已删除"
       }
     }
   },
   sys_team_member: {
-    label: "Team Member",
-    pluralLabel: "Team Members",
-    description: "Team membership records linking users to teams",
+    label: "团队成员",
+    pluralLabel: "团队成员",
+    description: "将用户关联到团队的团队成员记录",
     fields: {
       id: {
-        label: "Team Member ID"
+        label: "团队成员 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       team_id: {
-        label: "Team"
+        label: "团队"
       },
       user_id: {
-        label: "User"
+        label: "用户"
       }
     },
     _actions: {
       add_team_member: {
-        label: "Add Member",
-        successMessage: "Team member added"
+        label: "添加成员",
+        successMessage: "团队成员已添加"
       },
       remove_team_member: {
-        label: "Remove from Team",
-        confirmText: "Remove this user from the team? They will lose any team-scoped access.",
-        successMessage: "Team member removed"
+        label: "移出团队",
+        confirmText: "要将该用户移出团队吗？移除后其将失去所有团队范围内的访问权限。",
+        successMessage: "团队成员已移除"
       }
     }
   },
   sys_department: {
-    label: "Department",
-    pluralLabel: "Departments",
-    description: "Hierarchical org-skeleton node (department / division / business unit / office).",
+    label: "部门",
+    pluralLabel: "部门",
+    description: "层级化组织骨架节点（部门 / 事业部 / 业务单元 / 办公地点）。",
     fields: {
       name: {
-        label: "Name"
+        label: "名称"
       },
       code: {
-        label: "Code",
-        help: "Short stable code (e.g. EMEA-SALES). Unique within tenant."
+        label: "编码",
+        help: "简短且稳定的编码（例如 EMEA-SALES），在租户内唯一。"
       },
       kind: {
-        label: "Kind",
-        help: "Categorisation hint — does not change graph semantics.",
+        label: "类型",
+        help: "分类提示——不会改变图谱语义。",
         options: {
-          company: "company",
-          division: "division",
-          department: "department",
-          team: "team",
-          office: "office",
-          cost_center: "cost_center"
+          company: "公司",
+          division: "事业部",
+          department: "部门",
+          team: "团队",
+          office: "办公地点",
+          cost_center: "成本中心"
         }
       },
       parent_department_id: {
-        label: "Parent Department",
-        help: "Self-reference for the org tree. Null = root of tenant."
+        label: "上级部门",
+        help: "组织树的自关联字段。Null 表示租户根节点。"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant scope."
+        label: "组织",
+        help: "租户范围。"
       },
       manager_user_id: {
-        label: "Department Head",
-        help: "User responsible for this org unit (department head / lead)."
+        label: "部门负责人",
+        help: "负责该组织单元的用户（部门负责人 / lead）。"
       },
       active: {
-        label: "Active",
-        help: "When false, members are not expanded by graph queries."
+        label: "启用",
+        help: "为 false 时，图谱查询不会展开该部门成员。"
       },
       effective_from: {
-        label: "Effective From",
-        help: "When this department came into existence (HRIS sync)."
+        label: "生效时间",
+        help: "该部门生效的时间（HRIS 同步）。"
       },
       effective_to: {
-        label: "Effective To",
-        help: "When this department was retired (HRIS sync)."
+        label: "失效时间",
+        help: "该部门停用的时间（HRIS 同步）。"
       },
       external_ref: {
-        label: "External Reference",
-        help: "ID in upstream HRIS (Workday / SAP HR / 北森)."
+        label: "外部引用",
+        help: "上游 HRIS 中的 ID（Workday / SAP HR / 北森）。"
       },
       id: {
-        label: "Department ID"
+        label: "部门 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       inactive: {
-        label: "Inactive"
+        label: "停用"
       },
       by_kind: {
-        label: "By Kind"
+        label: "按类型"
       },
       all_departments: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_department_member: {
-    label: "Department Member",
-    pluralLabel: "Department Members",
-    description: "User assignment to a department (matrix-org friendly, effective-dated).",
+    label: "部门成员",
+    pluralLabel: "部门成员",
+    description: "用户到部门的任职关系（适配矩阵组织并支持生效时间）。",
     fields: {
       id: {
-        label: "Member ID"
+        label: "成员 ID"
       },
       department_id: {
-        label: "Department"
+        label: "部门"
       },
       user_id: {
-        label: "User"
+        label: "用户"
       },
       role_in_department: {
-        label: "Role in Department",
-        help: "`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.",
+        label: "部门内角色",
+        help: "`lead` 表示日常负责人；`deputy` 可在审批路由中代替负责人。",
         options: {
-          member: "member",
-          lead: "lead",
-          deputy: "deputy"
+          member: "成员",
+          lead: "负责人",
+          deputy: "副负责人"
         }
       },
       is_primary: {
-        label: "Primary Assignment",
-        help: "When the user is in multiple departments, this marks the canonical one for reporting."
+        label: "主任职",
+        help: "当用户属于多个部门时，用于标记报表上的主部门。"
       },
       effective_from: {
-        label: "Effective From"
+        label: "生效时间"
       },
       effective_to: {
-        label: "Effective To"
+        label: "失效时间"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_api_key: {
-    label: "API Key",
-    pluralLabel: "API Keys",
-    description: "API keys for programmatic access",
+    label: "API 密钥",
+    pluralLabel: "API 密钥",
+    description: "用于程序化访问的 API 密钥",
     fields: {
       name: {
-        label: "Name",
-        help: "Human-readable label for the API key"
+        label: "名称",
+        help: "API 密钥的人类可读标签"
       },
       prefix: {
-        label: "Prefix",
-        help: "Visible prefix for identifying the key (e.g., \"osk_\")"
+        label: "前缀",
+        help: "用于识别密钥的可见前缀（例如 `osk_`）"
       },
       user_id: {
-        label: "Owner",
-        help: "User who owns this API key"
+        label: "所有者",
+        help: "拥有该 API 密钥的用户"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON array of permission scopes"
+        label: "范围",
+        help: "权限范围的 JSON 数组"
       },
       expires_at: {
-        label: "Expires At"
+        label: "过期时间"
       },
       last_used_at: {
-        label: "Last Used At",
-        help: "Automatically updated on each API call"
+        label: "最近使用时间",
+        help: "每次 API 调用时自动更新"
       },
       revoked: {
-        label: "Revoked"
+        label: "已撤销"
       },
       key: {
-        label: "Hashed Key",
-        help: "Hashed API key value — never exposed to clients"
+        label: "哈希密钥",
+        help: "API 密钥值的哈希——绝不会向客户端暴露"
       },
       id: {
-        label: "API Key ID"
+        label: "API 密钥 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       mine: {
-        label: "My Keys"
+        label: "我的密钥"
       },
       active: {
-        label: "Active"
+        label: "启用"
       },
       revoked: {
-        label: "Revoked"
+        label: "已撤销"
       },
       all_keys: {
-        label: "All"
+        label: "全部"
       }
     },
     _actions: {
       revoke_api_key: {
-        label: "Revoke API Key",
-        confirmText: "Revoke this API key? Any clients using it will immediately lose access.",
-        successMessage: "API key revoked"
+        label: "撤销 API 密钥",
+        confirmText: "要撤销该 API 密钥吗？所有使用该密钥的客户端都将立即失去访问权限。",
+        successMessage: "API 密钥已撤销"
       },
       restore_api_key: {
-        label: "Restore API Key",
-        confirmText: "Restore this revoked API key? Existing clients holding the key will regain access.",
-        successMessage: "API key restored"
+        label: "恢复 API 密钥",
+        confirmText: "要恢复已撤销的 API 密钥吗？持有该密钥的现有客户端将重新获得访问权限。",
+        successMessage: "API 密钥已恢复"
       }
     }
   },
   sys_two_factor: {
-    label: "Two Factor",
-    pluralLabel: "Two Factor Credentials",
-    description: "Two-factor authentication credentials",
+    label: "双因素认证",
+    pluralLabel: "双因素认证凭据",
+    description: "双因素认证凭据",
     fields: {
       id: {
-        label: "Two Factor ID"
+        label: "双因素认证 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       user_id: {
-        label: "User"
+        label: "用户"
       },
       secret: {
-        label: "Secret",
-        help: "TOTP secret key"
+        label: "密钥",
+        help: "TOTP 密钥"
       },
       backup_codes: {
-        label: "Backup Codes",
-        help: "JSON-serialized backup recovery codes"
+        label: "备用恢复码",
+        help: "JSON 序列化的备用恢复码"
       }
     },
     _views: {
       mine: {
-        label: "My Enrollment"
+        label: "我的启用记录"
       },
       all_enrollments: {
-        label: "All"
+        label: "全部"
       }
     },
     _actions: {
       enable_two_factor: {
-        label: "Enable 2FA",
-        successMessage: "2FA enrollment started — check response for TOTP URI and backup codes"
+        label: "启用 2FA",
+        successMessage: "2FA 启用流程已开始——请查看响应中的 TOTP URI 和备用恢复码"
       },
       disable_two_factor: {
-        label: "Disable 2FA",
-        confirmText: "Disable two-factor authentication on your account?",
-        successMessage: "2FA disabled"
+        label: "停用 2FA",
+        confirmText: "要停用你账号上的双因素认证吗？",
+        successMessage: "2FA 已停用"
       }
     }
   },
   sys_device_code: {
-    label: "Device Code",
-    pluralLabel: "Device Codes",
-    description: "OAuth 2.0 Device Authorization Grant (RFC 8628) pending requests",
+    label: "设备代码",
+    pluralLabel: "设备代码",
+    description: "OAuth 2.0 设备授权流程（RFC 8628）的待处理请求",
     fields: {
       id: {
-        label: "Device Code ID"
+        label: "设备代码 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       device_code: {
-        label: "Device Code",
-        help: "High-entropy token returned to the polling device"
+        label: "设备代码",
+        help: "返回给轮询设备的高熵令牌"
       },
       user_code: {
-        label: "User Code",
-        help: "Short user-facing code (e.g. ABCD-EFGH)"
+        label: "用户代码",
+        help: "面向用户的短代码（例如 ABCD-EFGH）"
       },
       user_id: {
-        label: "User",
-        help: "User who approved the device authorization"
+        label: "用户",
+        help: "批准该设备授权的用户"
       },
       expires_at: {
-        label: "Expires At",
-        help: "When the device & user codes are no longer valid"
+        label: "过期时间",
+        help: "设备码与用户码失效的时间"
       },
       status: {
-        label: "Status",
-        help: "Current status: 'pending' | 'approved' | 'denied'"
+        label: "状态",
+        help: "当前状态：`pending` | `approved` | `denied`"
       },
       last_polled_at: {
-        label: "Last Polled At",
-        help: "Timestamp of the most recent /device/token poll"
+        label: "最近轮询时间",
+        help: "最近一次 `/device/token` 轮询的时间戳"
       },
       polling_interval: {
-        label: "Polling Interval (ms)",
-        help: "Server-recommended minimum polling interval, in ms"
+        label: "轮询间隔（毫秒）",
+        help: "服务器建议的最小轮询间隔（毫秒）"
       },
       client_id: {
-        label: "Client ID",
-        help: "OAuth client identifier of the requesting device"
+        label: "客户端 ID",
+        help: "发起请求的设备对应的 OAuth 客户端标识"
       },
       scope: {
-        label: "Scope",
-        help: "Space-separated OAuth scopes requested by the device"
+        label: "范围",
+        help: "设备请求的、以空格分隔的 OAuth scopes"
       }
     }
   },
   sys_user_preference: {
-    label: "User Preference",
-    pluralLabel: "User Preferences",
-    description: "Per-user key-value preferences (theme, locale, etc.)",
+    label: "用户偏好",
+    pluralLabel: "用户偏好",
+    description: "按用户存储的键值偏好设置（主题、语言等）",
     fields: {
       id: {
-        label: "Preference ID"
+        label: "偏好设置 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       user_id: {
-        label: "User",
-        help: "Owner user of this preference"
+        label: "用户",
+        help: "该偏好设置所属的用户"
       },
       key: {
-        label: "Key",
-        help: "Preference key (e.g., theme, locale, plugin.ai.auto_save)"
+        label: "键",
+        help: "偏好设置键（例如 theme、locale、plugin.ai.auto_save）"
       },
       value: {
-        label: "Value",
-        help: "Preference value (any JSON-serializable type)"
+        label: "值",
+        help: "偏好设置值（任意可 JSON 序列化类型）"
       }
     },
     _views: {
       mine: {
-        label: "My Preferences"
+        label: "我的偏好"
       },
       by_user: {
-        label: "By User"
+        label: "按用户"
       },
       all_preferences: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_oauth_application: {
-    label: "OAuth Application",
-    pluralLabel: "OAuth Applications",
-    description: "Registered OAuth/OIDC client applications",
+    label: "OAuth 应用",
+    pluralLabel: "OAuth 应用",
+    description: "已注册的 OAuth/OIDC 客户端应用",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name"
+        label: "名称"
       },
       icon: {
-        label: "Icon",
-        help: "Logo URL shown on the consent screen"
+        label: "图标",
+        help: "显示在同意授权页上的 Logo URL"
       },
       uri: {
-        label: "Home URI",
-        help: "Public homepage of the registered client"
+        label: "主页 URI",
+        help: "注册客户端的公开主页"
       },
       contacts: {
-        label: "Contacts",
-        help: "JSON-serialized list of contact email addresses"
+        label: "联系人",
+        help: "联系人邮箱地址的 JSON 序列化列表"
       },
       tos: {
-        label: "Terms of Service"
+        label: "服务条款"
       },
       policy: {
-        label: "Privacy Policy"
+        label: "隐私政策"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized application metadata"
+        label: "元数据",
+        help: "应用元数据的 JSON 序列化内容"
       },
       client_id: {
-        label: "Client ID",
-        help: "Public OAuth client identifier"
+        label: "客户端 ID",
+        help: "公开的 OAuth 客户端标识"
       },
       client_secret: {
-        label: "Client Secret",
-        help: "OAuth client secret (hashed/encrypted at rest)"
+        label: "客户端密钥",
+        help: "OAuth 客户端密钥（静态存储时会哈希/加密）"
       },
       redirect_uris: {
-        label: "Redirect URIs",
-        help: "JSON-serialized list of allowed redirect URIs"
+        label: "重定向 URI",
+        help: "允许的重定向 URI 的 JSON 序列化列表"
       },
       post_logout_redirect_uris: {
-        label: "Post-logout Redirect URIs",
-        help: "JSON-serialized list of allowed post-logout redirect URIs"
+        label: "登出后重定向 URI",
+        help: "允许的登出后重定向 URI 的 JSON 序列化列表"
       },
       type: {
-        label: "Client Type",
+        label: "客户端类型",
         options: {
-          web: "web",
-          native: "native",
-          useragentbased: "user-agent-based",
-          public: "public"
+          web: "Web 应用",
+          native: "原生应用",
+          useragentbased: "基于用户代理",
+          public: "公开"
         }
       },
       public: {
-        label: "Public Client",
-        help: "Marks the client as a public (non-confidential) OAuth client"
+        label: "公开客户端",
+        help: "将客户端标记为公开（非机密）OAuth 客户端"
       },
       require_pkce: {
-        label: "Require PKCE"
+        label: "要求 PKCE"
       },
       token_endpoint_auth_method: {
-        label: "Token Endpoint Auth Method",
-        help: "e.g. client_secret_basic, client_secret_post, none"
+        label: "令牌端点认证方式",
+        help: "例如 client_secret_basic、client_secret_post、none"
       },
       grant_types: {
-        label: "Grant Types",
-        help: "JSON-serialized list of allowed grant types"
+        label: "授权类型",
+        help: "允许的授权类型 JSON 序列化列表"
       },
       response_types: {
-        label: "Response Types",
-        help: "JSON-serialized list of allowed response types"
+        label: "响应类型",
+        help: "允许的响应类型 JSON 序列化列表"
       },
       scopes: {
-        label: "Allowed Scopes",
-        help: "JSON-serialized list of scopes the client may request"
+        label: "允许的范围",
+        help: "客户端可申请的 scopes 的 JSON 序列化列表"
       },
       subject_type: {
-        label: "Subject Type",
-        help: "OIDC subject type (e.g. public, pairwise)"
+        label: "主体类型",
+        help: "OIDC 主体类型（例如 public、pairwise）"
       },
       disabled: {
-        label: "Disabled"
+        label: "已禁用"
       },
       skip_consent: {
-        label: "Skip Consent",
-        help: "Treat as a trusted client and bypass the consent screen"
+        label: "跳过同意",
+        help: "视为受信任客户端并跳过授权同意页"
       },
       enable_end_session: {
-        label: "Enable End Session",
-        help: "Allow the client to call the OIDC end-session endpoint"
+        label: "启用 End Session",
+        help: "允许客户端调用 OIDC end-session 端点"
       },
       software_id: {
-        label: "Software ID"
+        label: "软件 ID"
       },
       software_version: {
-        label: "Software Version"
+        label: "软件版本"
       },
       software_statement: {
-        label: "Software Statement",
-        help: "Signed JWT asserting the client metadata (RFC 7591 §2.3)"
+        label: "软件声明",
+        help: "用于声明客户端元数据的签名 JWT（RFC 7591 §2.3）"
       },
       user_id: {
-        label: "Owner User",
-        help: "User who registered this application"
+        label: "所有者用户",
+        help: "注册该应用的用户"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "引用 ID",
+        help: "调用方提供的关联标识符"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       disabled_apps: {
-        label: "Disabled"
+        label: "已禁用"
       },
       all_apps: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_oauth_access_token: {
-    label: "OAuth Access Token",
-    pluralLabel: "OAuth Access Tokens",
-    description: "Opaque OAuth access tokens issued to client applications",
+    label: "OAuth 访问令牌",
+    pluralLabel: "OAuth 访问令牌",
+    description: "签发给客户端应用的 OAuth 访问令牌",
     fields: {
       id: {
         label: "ID"
       },
       token: {
-        label: "Token",
-        help: "Opaque access token value"
+        label: "令牌",
+        help: "不透明的访问令牌值"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "客户端 ID",
+        help: "指向 sys_oauth_application.client_id 的外键"
       },
       session_id: {
-        label: "Session",
-        help: "Foreign key to sys_session.id"
+        label: "会话",
+        help: "指向 sys_session.id 的外键"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "用户",
+        help: "指向 sys_user.id 的外键"
       },
       refresh_id: {
-        label: "Refresh Token",
-        help: "Foreign key to sys_oauth_refresh_token.id"
+        label: "刷新令牌",
+        help: "指向 sys_oauth_refresh_token.id 的外键"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "引用 ID",
+        help: "调用方提供的关联标识符"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes granted to this token"
+        label: "范围",
+        help: "授予该令牌的 scopes 的 JSON 序列化列表"
       },
       expires_at: {
-        label: "Expires At"
+        label: "过期时间"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       }
     }
   },
   sys_oauth_refresh_token: {
-    label: "OAuth Refresh Token",
-    pluralLabel: "OAuth Refresh Tokens",
-    description: "Opaque OAuth refresh tokens (linked to a session)",
+    label: "OAuth 刷新令牌",
+    pluralLabel: "OAuth 刷新令牌",
+    description: "OAuth 刷新令牌（关联到会话）",
     fields: {
       id: {
         label: "ID"
       },
       token: {
-        label: "Token",
-        help: "Opaque refresh token value"
+        label: "令牌",
+        help: "不透明的刷新令牌值"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "客户端 ID",
+        help: "指向 sys_oauth_application.client_id 的外键"
       },
       session_id: {
-        label: "Session",
-        help: "Foreign key to sys_session.id"
+        label: "会话",
+        help: "指向 sys_session.id 的外键"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "用户",
+        help: "指向 sys_user.id 的外键"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "引用 ID",
+        help: "调用方提供的关联标识符"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes granted to this token"
+        label: "范围",
+        help: "授予该令牌的 scopes 的 JSON 序列化列表"
       },
       expires_at: {
-        label: "Expires At"
+        label: "过期时间"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       revoked: {
-        label: "Revoked At",
-        help: "Timestamp at which this refresh token was revoked"
+        label: "撤销时间",
+        help: "该刷新令牌被撤销的时间戳"
       },
       auth_time: {
-        label: "Auth Time",
-        help: "When the user originally authenticated for this token chain"
+        label: "认证时间",
+        help: "该令牌链中用户最初完成认证的时间"
       }
     }
   },
   sys_oauth_consent: {
-    label: "OAuth Consent",
-    pluralLabel: "OAuth Consents",
-    description: "User consent records for OAuth client applications",
+    label: "OAuth 同意记录",
+    pluralLabel: "OAuth 同意记录",
+    description: "用户对 OAuth 客户端应用的授权同意记录",
     fields: {
       id: {
         label: "ID"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "客户端 ID",
+        help: "指向 sys_oauth_application.client_id 的外键"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "用户",
+        help: "指向 sys_user.id 的外键"
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "引用 ID",
+        help: "调用方提供的关联标识符"
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes the user consented to"
+        label: "范围",
+        help: "用户同意的 scopes 的 JSON 序列化列表"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_jwks: {
-    label: "JWKS Key",
-    pluralLabel: "JWKS Keys",
-    description: "Asymmetric key pairs used to sign and verify issued JWTs",
+    label: "签名密钥 (JWKS)",
+    pluralLabel: "签名密钥 (JWKS)",
+    description: "用于签发和验证 JWT 的非对称密钥对",
     fields: {
       id: {
-        label: "Key ID",
-        help: "JWK `kid` value"
+        label: "密钥 ID",
+        help: "JWK `kid` 值"
       },
       public_key: {
-        label: "Public Key",
-        help: "JSON-serialized JWK public key"
+        label: "公钥",
+        help: "JWK 公钥的 JSON 序列化内容"
       },
       private_key: {
-        label: "Private Key",
-        help: "JSON-serialized JWK private key (encrypted at rest)"
+        label: "私钥",
+        help: "JWK 私钥的 JSON 序列化内容（静态存储时加密）"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       expires_at: {
-        label: "Expires At",
-        help: "When the key may no longer be used to verify tokens"
+        label: "过期时间",
+        help: "该密钥不再用于验证令牌的时间"
       }
     }
   },
   sys_role: {
-    label: "Role",
-    pluralLabel: "Roles",
-    description: "Role definitions for RBAC access control",
+    label: "角色",
+    pluralLabel: "角色",
+    description: "用于 RBAC 访问控制的角色定义",
     fields: {
       label: {
-        label: "Display Name"
+        label: "显示名称"
       },
       name: {
-        label: "API Name",
-        help: "Unique machine name for the role (e.g. admin, editor, viewer)"
+        label: "API 名称",
+        help: "角色的唯一机器名称（例如 admin、editor、viewer）"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       permissions: {
-        label: "Permissions",
-        help: "JSON-serialized array of permission strings"
+        label: "权限",
+        help: "权限字符串数组的 JSON 序列化内容"
       },
       active: {
-        label: "Active"
+        label: "启用"
       },
       is_default: {
-        label: "Default Role",
-        help: "Automatically assigned to new users"
+        label: "默认角色",
+        help: "自动分配给新用户"
       },
       id: {
-        label: "Role ID"
+        label: "角色 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       default_roles: {
-        label: "Default"
+        label: "默认"
       },
       custom: {
-        label: "Custom"
+        label: "自定义"
       },
       all_roles: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_permission_set: {
-    label: "Permission Set",
-    pluralLabel: "Permission Sets",
-    description: "Named permission groupings for fine-grained access control",
+    label: "权限集",
+    pluralLabel: "权限集",
+    description: "用于精细化访问控制的命名权限分组",
     fields: {
       label: {
-        label: "Display Name"
+        label: "显示名称"
       },
       name: {
-        label: "API Name",
-        help: "Unique machine name for the permission set"
+        label: "API 名称",
+        help: "权限集的唯一机器名称"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       object_permissions: {
-        label: "Object Permissions",
-        help: "JSON-serialized object-level CRUD permissions"
+        label: "对象权限",
+        help: "对象级 CRUD 权限的 JSON 序列化内容"
       },
       field_permissions: {
-        label: "Field Permissions",
-        help: "JSON-serialized field-level read/write permissions"
+        label: "字段权限",
+        help: "字段级读写权限的 JSON 序列化内容"
       },
       active: {
-        label: "Active"
+        label: "启用"
       },
       id: {
-        label: "Permission Set ID"
+        label: "权限集 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       inactive: {
-        label: "Inactive"
+        label: "停用"
       },
       all_permsets: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_user_permission_set: {
-    label: "User Permission Set",
-    pluralLabel: "User Permission Sets",
-    description: "Direct assignment of a permission set to a user (optionally scoped to an organization).",
+    label: "用户权限集",
+    pluralLabel: "用户权限集",
+    description: "将权限集直接分配给用户（可按组织范围限定）。",
     fields: {
       id: {
-        label: "Assignment ID",
-        help: "UUID of the assignment."
+        label: "分配 ID",
+        help: "该分配记录的 UUID。"
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user."
+        label: "用户",
+        help: "指向 sys_user 的外键。"
       },
       permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
+        label: "权限集",
+        help: "指向 sys_permission_set 的外键。"
       },
       organization_id: {
-        label: "Organization",
-        help: "Optional organization scope. NULL = applies in every org context."
+        label: "组织",
+        help: "可选的组织范围。NULL = 在所有组织上下文中都生效。"
       },
       granted_by: {
-        label: "Granted By",
-        help: "User who granted this permission set."
+        label: "授权人",
+        help: "授予该权限集的用户。"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_role_permission_set: {
-    label: "Role Permission Set",
-    pluralLabel: "Role Permission Sets",
-    description: "Binds a permission set to a role.",
+    label: "角色权限集",
+    pluralLabel: "角色权限集",
+    description: "将权限集绑定到角色。",
     fields: {
       id: {
-        label: "Binding ID",
-        help: "UUID of the role-permission-set binding."
+        label: "绑定 ID",
+        help: "角色-权限集绑定记录的 UUID。"
       },
       role_id: {
-        label: "Role",
-        help: "Foreign key to sys_role."
+        label: "角色",
+        help: "指向 sys_role 的外键。"
       },
       permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
+        label: "权限集",
+        help: "指向 sys_permission_set 的外键。"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_record_share: {
-    label: "Record Share",
-    pluralLabel: "Record Shares",
-    description: "Per-record sharing grant — extends OWD with explicit access",
+    label: "记录共享",
+    pluralLabel: "记录共享",
+    description: "按记录粒度的共享授权——在 OWD 基础上提供显式访问",
     fields: {
       id: {
-        label: "Share ID"
+        label: "共享 ID"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name of the shared record"
+        label: "对象",
+        help: "被共享记录的短对象名"
       },
       record_id: {
-        label: "Record",
-        help: "Primary key of the shared record within object_name"
+        label: "记录",
+        help: "object_name 对应对象内该共享记录的主键"
       },
       recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that holds the grant",
+        label: "接收方类型",
+        help: "持有该授权的主体类型",
         options: {
-          user: "user",
-          group: "group",
-          role: "role",
-          role_and_subordinates: "role_and_subordinates",
-          guest: "guest"
+          user: "用户",
+          group: "组",
+          role: "角色",
+          role_and_subordinates: "角色及下级",
+          guest: "访客"
         }
       },
       recipient_id: {
-        label: "Recipient",
-        help: "ID of the user/group/role that receives access"
+        label: "接收方",
+        help: "获得访问权限的用户 / 组 / 角色 ID"
       },
       access_level: {
-        label: "Access Level",
-        help: "What the recipient can do — read | edit | full (transfer/share/delete)",
+        label: "访问级别",
+        help: "接收方可以执行的操作——read | edit | full（转移 / 共享 / 删除）",
         options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
+          read: "读取",
+          edit: "编辑",
+          full: "完全访问"
         }
       },
       source: {
-        label: "Source",
-        help: "Why this grant exists — used by the rule evaluator to reconcile",
+        label: "来源",
+        help: "该授权存在的原因——供规则求值器对账使用",
         options: {
-          manual: "manual",
-          rule: "rule",
-          team: "team",
-          inherited: "inherited"
+          manual: "手动",
+          rule: "规则",
+          team: "团队",
+          inherited: "继承"
         }
       },
       source_id: {
-        label: "Source ID",
-        help: "Rule name / team id when source != manual"
+        label: "来源 ID",
+        help: "当 source != manual 时，对应规则名 / 团队 ID"
       },
       granted_by: {
-        label: "Granted By",
-        help: "User that created the grant (manual only)"
+        label: "授权人",
+        help: "创建该授权的用户（仅手动授权）"
       },
       reason: {
-        label: "Reason",
-        help: "Optional free-text explanation surfaced to the recipient"
+        label: "原因",
+        help: "可选的自由文本说明，会展示给接收方"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       granted_to_me: {
-        label: "Granted to Me"
+        label: "授予我的"
       },
       granted_by_me: {
-        label: "Granted by Me"
+        label: "我授予的"
       },
       by_object: {
-        label: "By Object"
+        label: "按对象"
       },
       manual_grants: {
-        label: "Manual Grants"
+        label: "手动授权"
       },
       rule_grants: {
-        label: "Rule Grants"
+        label: "规则授权"
       },
       all_shares: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_sharing_rule: {
-    label: "Sharing Rule",
-    pluralLabel: "Sharing Rules",
-    description: "Declarative sharing rule that auto-materialises sys_record_share grants. Authored via defineSharingRule() in code or the Studio criteria builder.",
+    label: "共享规则",
+    pluralLabel: "共享规则",
+    description: "声明式共享规则，会自动生成 sys_record_share 授权。可在代码中通过 defineSharingRule() 编写，或在 Studio 条件构建器中维护。",
     fields: {
       id: {
-        label: "Rule ID"
+        label: "规则 ID"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this rule; null = global"
+        label: "组织",
+        help: "拥有该规则的租户；null = 全局"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case rule name"
+        label: "名称",
+        help: "唯一的 snake_case 规则名称"
       },
       label: {
-        label: "Display Label"
+        label: "显示标签"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name (e.g. opportunity, account)"
+        label: "对象",
+        help: "短对象名（例如 opportunity、account）"
       },
       criteria_json: {
-        label: "Criteria (FilterCondition JSON)",
-        help: "JSON FilterCondition matched against records of object_name. Empty = match all."
+        label: "条件（FilterCondition JSON）",
+        help: "针对 object_name 记录匹配的 JSON FilterCondition。为空表示匹配全部。"
       },
       recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth).",
+        label: "接收方类型",
+        help: "接收访问权限的主体类型——求值时会展开为用户授权。`department` 会沿 parent_department_id 树展开；`team` 为扁平结构（better-auth）。",
         options: {
-          user: "user",
-          team: "team",
-          department: "department",
-          role: "role",
-          queue: "queue"
+          user: "用户",
+          team: "团队",
+          department: "部门",
+          role: "角色",
+          queue: "队列"
         }
       },
       recipient_id: {
-        label: "Recipient",
-        help: "department id / team id / role name / queue name / user id depending on recipient_type"
+        label: "接收方",
+        help: "根据 recipient_type 填写 department id / team id / role name / queue name / user id"
       },
       access_level: {
-        label: "Access Level",
+        label: "访问级别",
         options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
+          read: "读取",
+          edit: "编辑",
+          full: "完全访问"
         }
       },
       active: {
-        label: "Active",
-        help: "Only active rules participate in lifecycle evaluation"
+        label: "启用",
+        help: "只有启用的规则才会参与生命周期求值"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       inactive: {
-        label: "Inactive"
+        label: "停用"
       },
       by_object: {
-        label: "By Object"
+        label: "按对象"
       },
       all_rules: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_audit_log: {
-    label: "Audit Log",
-    pluralLabel: "Audit Logs",
-    description: "Immutable audit trail for platform events",
+    label: "审计日志",
+    pluralLabel: "审计日志",
+    description: "平台事件的不可变审计追踪",
     fields: {
       created_at: {
-        label: "Timestamp"
+        label: "时间戳"
       },
       action: {
-        label: "Action",
-        help: "Action type (snake_case)",
+        label: "操作",
+        help: "操作类型（snake_case）",
         options: {
-          create: "create",
-          update: "update",
-          delete: "delete",
-          restore: "restore",
-          login: "login",
-          logout: "logout",
-          permission_change: "permission_change",
-          config_change: "config_change",
-          export: "export",
-          import: "import"
+          create: "创建",
+          update: "更新",
+          delete: "删除",
+          restore: "恢复",
+          login: "登录",
+          logout: "登出",
+          permission_change: "权限变更",
+          config_change: "配置变更",
+          export: "导出",
+          import: "导入"
         }
       },
       user_id: {
-        label: "Actor",
-        help: "User who performed the action (null for system actions)"
+        label: "执行人",
+        help: "执行该操作的用户（系统操作时为 null）"
       },
       object_name: {
-        label: "Object",
-        help: "Target object (e.g. sys_user, project_task)"
+        label: "对象",
+        help: "目标对象（例如 sys_user、project_task）"
       },
       record_id: {
-        label: "Record ID",
-        help: "ID of the affected record"
+        label: "记录 ID",
+        help: "受影响记录的 ID"
       },
       old_value: {
-        label: "Old Value",
-        help: "JSON-serialized previous state"
+        label: "旧值",
+        help: "旧状态的 JSON 序列化内容"
       },
       new_value: {
-        label: "New Value",
-        help: "JSON-serialized new state"
+        label: "新值",
+        help: "新状态的 JSON 序列化内容"
       },
       ip_address: {
-        label: "IP Address"
+        label: "IP 地址"
       },
       user_agent: {
-        label: "User Agent"
+        label: "用户代理"
       },
       tenant_id: {
-        label: "Tenant",
-        help: "Tenant context for multi-tenant isolation"
+        label: "租户",
+        help: "用于多租户隔离的租户上下文"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
+        label: "元数据",
+        help: "附加上下文的 JSON 序列化内容"
       },
       id: {
-        label: "Audit Log ID"
+        label: "审计日志 ID"
       }
     },
     _views: {
       recent: {
-        label: "Recent"
+        label: "最近"
       },
       writes_only: {
-        label: "Writes"
+        label: "写入"
       },
       auth_events: {
-        label: "Auth"
+        label: "认证"
       },
       config_changes: {
-        label: "Config"
+        label: "配置"
       },
       all_events: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_presence: {
-    label: "Presence",
-    pluralLabel: "Presences",
-    description: "Real-time user presence and activity tracking",
+    label: "在线状态",
+    pluralLabel: "在线状态",
+    description: "实时用户在线与活动跟踪",
     fields: {
       id: {
-        label: "Presence ID"
+        label: "在线状态 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       user_id: {
-        label: "User"
+        label: "用户"
       },
       session_id: {
-        label: "Session"
+        label: "会话"
       },
       status: {
-        label: "Status",
+        label: "状态",
         options: {
-          online: "Online",
-          away: "Away",
-          busy: "Busy",
-          offline: "Offline"
+          online: "在线",
+          away: "离开",
+          busy: "忙碌",
+          offline: "离线"
         }
       },
       last_seen: {
-        label: "Last Seen"
+        label: "最近在线时间"
       },
       current_location: {
-        label: "Current Location"
+        label: "当前位置"
       },
       device: {
-        label: "Device",
+        label: "设备",
         options: {
-          desktop: "Desktop",
-          mobile: "Mobile",
-          tablet: "Tablet",
-          other: "Other"
+          desktop: "桌面端",
+          mobile: "移动端",
+          tablet: "平板端",
+          other: "其他"
         }
       },
       custom_status: {
-        label: "Custom Status"
+        label: "自定义状态"
       },
       metadata: {
-        label: "Metadata",
-        help: "Arbitrary JSON metadata associated with the presence state (matches PresenceStateSchema.metadata)."
+        label: "元数据",
+        help: "与在线状态关联的任意 JSON 元数据（对应 PresenceStateSchema.metadata）。"
       }
     }
   },
   sys_activity: {
-    label: "Activity",
-    pluralLabel: "Activities",
-    description: "Recent activity stream entries (lightweight, denormalized)",
+    label: "活动",
+    pluralLabel: "活动",
+    description: "最近活动流条目（轻量、去规范化）",
     fields: {
       id: {
-        label: "Activity ID"
+        label: "活动 ID"
       },
       timestamp: {
-        label: "Timestamp"
+        label: "时间戳"
       },
       type: {
-        label: "Type",
+        label: "类型",
         options: {
-          created: "created",
-          updated: "updated",
-          deleted: "deleted",
-          commented: "commented",
-          mentioned: "mentioned",
-          shared: "shared",
-          assigned: "assigned",
-          completed: "completed",
-          login: "login",
-          logout: "logout",
-          system: "system"
+          created: "已创建",
+          updated: "已更新",
+          deleted: "已删除",
+          commented: "已评论",
+          mentioned: "被提及",
+          shared: "已共享",
+          assigned: "已分配",
+          completed: "已完成",
+          login: "登录",
+          logout: "登出",
+          system: "系统"
         }
       },
       summary: {
-        label: "Summary",
-        help: "Human-readable one-line summary"
+        label: "摘要",
+        help: "人类可读的单行摘要"
       },
       actor_id: {
-        label: "Actor"
+        label: "执行人"
       },
       actor_name: {
-        label: "Actor Name"
+        label: "执行人名称"
       },
       actor_avatar_url: {
-        label: "Actor Avatar"
+        label: "执行人头像"
       },
       object_name: {
-        label: "Object",
-        help: "Target object short name (e.g. account, sys_user)"
+        label: "对象",
+        help: "目标对象短名称（例如 account、sys_user）"
       },
       record_id: {
-        label: "Record ID"
+        label: "记录 ID"
       },
       record_label: {
-        label: "Record Label",
-        help: "Display label of the target record at write time"
+        label: "记录标签",
+        help: "写入时目标记录的显示标签"
       },
       url: {
         label: "URL",
-        help: "Optional deep-link to the activity target"
+        help: "指向活动目标的可选深度链接"
       },
       project_id: {
-        label: "Project",
-        help: "Project context (multi-project deployments)"
+        label: "项目",
+        help: "项目上下文（多项目部署）"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
+        label: "元数据",
+        help: "附加上下文的 JSON 序列化内容"
       }
     }
   },
   sys_comment: {
-    label: "Comment",
-    pluralLabel: "Comments",
-    description: "Threaded comments attached to records via thread_id",
+    label: "评论",
+    pluralLabel: "评论",
+    description: "通过 thread_id 附加到记录的线程化评论",
     fields: {
       id: {
-        label: "Comment ID"
+        label: "评论 ID"
       },
       thread_id: {
-        label: "Thread",
-        help: "Thread identifier — conventionally `{object}:{record_id}` (e.g. `sys_user:abc123`)"
+        label: "线程",
+        help: "线程标识——约定格式为 `{object}:{record_id}`（例如 `sys_user:abc123`）"
       },
       parent_id: {
-        label: "Parent Comment",
-        help: "Optional parent comment for nested replies"
+        label: "父评论",
+        help: "可选的父评论，用于嵌套回复"
       },
       reply_count: {
-        label: "Reply Count"
+        label: "回复数"
       },
       author_id: {
-        label: "Author"
+        label: "作者"
       },
       author_name: {
-        label: "Author Name"
+        label: "作者名称"
       },
       author_avatar_url: {
-        label: "Author Avatar"
+        label: "作者头像"
       },
       body: {
-        label: "Body",
-        help: "Comment text (Markdown supported)"
+        label: "正文",
+        help: "评论文本（支持 Markdown）"
       },
       mentions: {
-        label: "Mentions",
-        help: "JSON array of @mention objects"
+        label: "提及",
+        help: "@mention 对象的 JSON 数组"
       },
       reactions: {
-        label: "Reactions",
-        help: "JSON array of emoji reaction objects"
+        label: "回应",
+        help: "表情回应对象的 JSON 数组"
       },
       is_edited: {
-        label: "Edited"
+        label: "已编辑"
       },
       edited_at: {
-        label: "Edited At"
+        label: "编辑时间"
       },
       visibility: {
-        label: "Visibility",
+        label: "可见性",
         options: {
-          public: "public",
-          internal: "internal",
-          private: "private"
+          public: "公开",
+          internal: "内部",
+          private: "私有"
         }
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_attachment: {
-    label: "Attachment",
-    pluralLabel: "Attachments",
-    description: "Polymorphic link between a sys_file and any other record",
+    label: "附件",
+    pluralLabel: "附件",
+    description: "sys_file 与任意其他记录之间的多态关联",
     fields: {
       id: {
-        label: "Attachment ID"
+        label: "附件 ID"
       },
       parent_object: {
-        label: "Parent Object",
-        help: "Short object name of the attached-to record (e.g. account, lead)"
+        label: "父对象",
+        help: "被附加记录的短对象名（例如 account、lead）"
       },
       parent_id: {
-        label: "Parent Record",
-        help: "Primary key of the attached-to record"
+        label: "父记录",
+        help: "被附加记录的主键"
       },
       file_id: {
-        label: "File",
-        help: "The sys_file storage entry being attached"
+        label: "文件",
+        help: "被附加的 sys_file 存储条目"
       },
       file_name: {
-        label: "File Name",
-        help: "Denormalised copy of sys_file.name for fast list rendering"
+        label: "文件名",
+        help: "sys_file.name 的去规范化副本，用于快速列表渲染"
       },
       mime_type: {
-        label: "MIME Type"
+        label: "MIME 类型"
       },
       size: {
-        label: "Size (bytes)"
+        label: "大小（字节）"
       },
       share_type: {
-        label: "Share Type",
-        help: "viewer | collaborator | inferred (inherited from parent record)",
+        label: "共享类型",
+        help: "viewer | collaborator | inferred（继承自父记录）",
         options: {
-          viewer: "viewer",
-          collaborator: "collaborator",
-          inferred: "inferred"
+          viewer: "查看者",
+          collaborator: "协作者",
+          inferred: "推断"
         }
       },
       visibility: {
-        label: "Visibility",
+        label: "可见性",
         options: {
-          internal: "internal",
-          all_users: "all_users",
-          shared_users: "shared_users"
+          internal: "内部",
+          all_users: "全部用户",
+          shared_users: "共享用户"
         }
       },
       uploaded_by: {
-        label: "Uploaded By"
+        label: "上传人"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_notification: {
-    label: "Notification",
-    pluralLabel: "Notifications",
-    description: "Per-user notification inbox entries",
+    label: "通知",
+    pluralLabel: "通知",
+    description: "按用户存储的通知收件箱条目",
     fields: {
       id: {
-        label: "Notification ID"
+        label: "通知 ID"
       },
       recipient_id: {
-        label: "Recipient",
-        help: "User the notification is delivered to"
+        label: "接收方",
+        help: "接收该通知的用户"
       },
       type: {
-        label: "Type",
-        help: "Notification category — drives icon + sort priority",
+        label: "类型",
+        help: "通知类别——决定图标和排序优先级",
         options: {
-          mention: "mention",
-          assignment: "assignment",
-          comment_reply: "comment_reply",
-          lead_converted: "lead_converted",
-          task_due: "task_due",
-          system: "system"
+          mention: "提及",
+          assignment: "分配",
+          comment_reply: "评论回复",
+          lead_converted: "线索转化",
+          task_due: "任务到期",
+          system: "系统"
         }
       },
       title: {
-        label: "Title"
+        label: "标题"
       },
       body: {
-        label: "Body",
-        help: "Optional secondary text (one-line summary)"
+        label: "正文",
+        help: "可选的补充文本（单行摘要）"
       },
       source_object: {
-        label: "Source Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
+        label: "来源对象",
+        help: "关联记录的对象名称（例如 lead、opportunity）"
       },
       source_id: {
-        label: "Source Record",
-        help: "Record id within source_object"
+        label: "来源记录",
+        help: "source_object 中的记录 ID"
       },
       url: {
-        label: "Deep Link",
-        help: "Optional URL to navigate to when clicked"
+        label: "深度链接",
+        help: "点击后跳转的可选 URL"
       },
       actor_id: {
-        label: "Actor",
-        help: "User who caused the notification (mentioner, assigner)"
+        label: "执行人",
+        help: "触发该通知的用户（提及人、分配人）"
       },
       actor_name: {
-        label: "Actor Name"
+        label: "执行人名称"
       },
       is_read: {
-        label: "Read",
-        help: "True once recipient acknowledges"
+        label: "已读",
+        help: "接收人确认后为 true"
       },
       read_at: {
-        label: "Read At"
+        label: "读取时间"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       unread: {
-        label: "Unread"
+        label: "未读"
       },
       mine: {
-        label: "Mine"
+        label: "我的"
       },
       all_notifications: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_email: {
-    label: "Email",
-    pluralLabel: "Emails",
-    description: "Outbound email delivery log",
+    label: "邮件",
+    pluralLabel: "邮件",
+    description: "外发邮件投递日志",
     fields: {
       id: {
-        label: "Email ID"
+        label: "邮件 ID"
       },
       message_id: {
         label: "Message-ID",
-        help: "RFC-5322 Message-ID assigned by the transport"
+        help: "传输层分配的 RFC-5322 Message-ID"
       },
       from_address: {
-        label: "From"
+        label: "发件人"
       },
       to_addresses: {
-        label: "To",
-        help: "Comma-separated recipient addresses"
+        label: "收件人",
+        help: "以逗号分隔的收件人地址"
       },
       cc_addresses: {
-        label: "Cc"
+        label: "抄送"
       },
       bcc_addresses: {
-        label: "Bcc"
+        label: "密送"
       },
       reply_to: {
-        label: "Reply-To"
+        label: "回复地址"
       },
       subject: {
-        label: "Subject"
+        label: "主题"
       },
       body_text: {
-        label: "Body (text)"
+        label: "正文（文本）"
       },
       body_html: {
-        label: "Body (HTML)"
+        label: "正文（HTML）"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state — queued by IEmailService.send before transport call",
+        label: "状态",
+        help: "生命周期状态——在调用传输层之前由 IEmailService.send 排队",
         options: {
-          queued: "queued",
-          sent: "sent",
-          failed: "failed"
+          queued: "排队中",
+          sent: "已发送",
+          failed: "失败"
         }
       },
       error: {
-        label: "Error",
-        help: "Transport error message when status=failed"
+        label: "错误",
+        help: "status=failed 时的传输错误信息"
       },
       attempt_count: {
-        label: "Attempts",
-        help: "Number of delivery attempts performed by the service"
+        label: "尝试次数",
+        help: "服务执行的投递尝试次数"
       },
       sent_at: {
-        label: "Sent At",
-        help: "Set when status transitions to \"sent\""
+        label: "发送时间",
+        help: "当状态切换为 `sent` 时设置"
       },
       related_object: {
-        label: "Related Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
+        label: "关联对象",
+        help: "关联记录的对象名称（例如 lead、opportunity）"
       },
       related_id: {
-        label: "Related Record",
-        help: "Record id within related_object"
+        label: "关联记录",
+        help: "related_object 中的记录 ID"
       },
       sent_by: {
-        label: "Sent By"
+        label: "发送人"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_email_template: {
-    label: "Email Template",
-    pluralLabel: "Email Templates",
-    description: "Outbound email template (subject + body + variables) resolved by name+locale",
+    label: "邮件模板",
+    pluralLabel: "邮件模板",
+    description: "按名称 + 语言解析的外发邮件模板（主题、正文和变量）",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name",
-        help: "Dotted snake_case identifier (e.g. auth.password_reset)"
+        label: "名称",
+        help: "点分隔的 snake_case 标识（例如 auth.password_reset）"
       },
       label: {
-        label: "Label",
-        help: "Human-readable name shown in Studio"
+        label: "标签",
+        help: "在 Studio 中显示的人类可读名称"
       },
       category: {
-        label: "Category",
+        label: "分类",
         options: {
-          auth: "auth",
-          notification: "notification",
-          workflow: "workflow",
-          marketing: "marketing",
-          custom: "custom"
+          auth: "认证",
+          notification: "通知",
+          workflow: "工作流",
+          marketing: "营销",
+          custom: "自定义"
         }
       },
       locale: {
-        label: "Locale",
-        help: "BCP-47 locale tag (en-US, zh-CN, …)"
+        label: "语言区域",
+        help: "BCP-47 语言区域标签（en-US、zh-CN 等）"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       subject: {
-        label: "Subject",
-        help: "Subject template; supports {{var.path}} placeholders"
+        label: "主题",
+        help: "主题模板；支持 {{var.path}} 占位符"
       },
       body_html: {
-        label: "HTML Body",
-        help: "HTML body template; supports {{var.path}} placeholders"
+        label: "HTML 正文",
+        help: "HTML 正文模板；支持 {{var.path}} 占位符"
       },
       body_text: {
-        label: "Plain Text Body",
-        help: "Optional plain-text alternative (auto-derived from HTML when blank)"
+        label: "纯文本正文",
+        help: "可选的纯文本替代内容（为空时从 HTML 自动生成）"
       },
       from_name: {
-        label: "From Name"
+        label: "发件人名称"
       },
       from_address: {
-        label: "From Address"
+        label: "发件地址"
       },
       reply_to: {
-        label: "Reply-To"
+        label: "回复地址"
       },
       active: {
-        label: "Active"
+        label: "启用"
       },
       is_system: {
-        label: "System Template",
-        help: "Provided by a plugin / platform; tenants may edit but should not delete"
+        label: "系统模板",
+        help: "由插件 / 平台提供；租户可编辑但不应删除"
       },
       variables_json: {
-        label: "Variables (JSON)",
-        help: "JSON array of {name,type,required,description}"
+        label: "变量（JSON）",
+        help: "形如 {name,type,required,description} 的 JSON 数组"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_saved_report: {
-    label: "Saved Report",
-    pluralLabel: "Saved Reports",
-    description: "Persisted ObjectQL report definition — re-runnable and schedulable",
+    label: "保存的报表",
+    pluralLabel: "保存的报表",
+    description: "持久化的 ObjectQL 报表定义——可重复运行并可调度",
     fields: {
       id: {
-        label: "Report ID"
+        label: "报表 ID"
       },
       name: {
-        label: "Name"
+        label: "名称"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name the report queries"
+        label: "对象",
+        help: "该报表查询的短对象名"
       },
       query_json: {
-        label: "Query",
-        help: "ObjectQL query envelope — { filter, fields, orderBy, limit, groupBy }"
+        label: "查询",
+        help: "ObjectQL 查询封装——{ filter, fields, orderBy, limit, groupBy }"
       },
       format: {
-        label: "Format",
-        help: "Rendering used by IReportService.run() and email digests",
+        label: "格式",
+        help: "IReportService.run() 和邮件摘要使用的渲染格式",
         options: {
-          csv: "csv",
-          json: "json",
-          html_table: "html_table"
+          csv: "CSV",
+          json: "JSON",
+          html_table: "HTML 表格"
         }
       },
       owner_id: {
-        label: "Owner",
-        help: "User that owns the report definition (drives sharing)"
+        label: "所有者",
+        help: "拥有该报表定义的用户（决定共享）"
       },
       last_run_at: {
-        label: "Last Run",
-        help: "Stamped by IReportService.run() on successful execution"
+        label: "上次运行时间",
+        help: "由 IReportService.run() 在成功执行时写入"
       },
       last_row_count: {
-        label: "Last Row Count"
+        label: "上次行数"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_report_schedule: {
-    label: "Report Schedule",
-    pluralLabel: "Report Schedules",
-    description: "Recurring delivery of a sys_saved_report via email",
+    label: "报表计划",
+    pluralLabel: "报表计划",
+    description: "通过邮件周期性投递 sys_saved_report",
     fields: {
       id: {
-        label: "Schedule ID"
+        label: "计划 ID"
       },
       report_id: {
-        label: "Report"
+        label: "报表"
       },
       name: {
-        label: "Name",
-        help: "Optional label for the digest — used in the email subject"
+        label: "名称",
+        help: "摘要的可选标签——用于邮件主题"
       },
       interval_minutes: {
-        label: "Interval (minutes)",
-        help: "How often to send (1440 = daily, 10080 = weekly)"
+        label: "间隔（分钟）",
+        help: "发送频率（1440 = 每日，10080 = 每周）"
       },
       cron_expression: {
-        label: "Cron Expression",
-        help: "Optional 5/6-field cron — overrides interval_minutes when present"
+        label: "Cron 表达式",
+        help: "可选 5/6 段 Cron——存在时覆盖 interval_minutes"
       },
       timezone: {
-        label: "Timezone"
+        label: "时区"
       },
       active: {
-        label: "Active"
+        label: "启用"
       },
       recipients: {
-        label: "Recipients",
-        help: "Comma-separated email addresses"
+        label: "收件人",
+        help: "以逗号分隔的邮箱地址"
       },
       format: {
-        label: "Format",
-        help: "Render format — csv is attached, html_table is inlined",
+        label: "格式",
+        help: "渲染格式——csv 作为附件，html_table 内嵌在正文中",
         options: {
-          csv: "csv",
-          html_table: "html_table"
+          csv: "CSV",
+          html_table: "HTML 表格"
         }
       },
       subject_template: {
-        label: "Subject Template",
-        help: "Email subject; {{name}} / {{date}} / {{rows}} are substituted"
+        label: "主题模板",
+        help: "邮件主题；会替换 {{name}} / {{date}} / {{rows}}"
       },
       owner_id: {
-        label: "Owner"
+        label: "所有者"
       },
       next_run_at: {
-        label: "Next Run",
-        help: "Dispatcher loads schedules where next_run_at <= now"
+        label: "下次运行时间",
+        help: "调度器会加载 next_run_at <= now 的计划"
       },
       last_sent_at: {
-        label: "Last Sent"
+        label: "上次发送时间"
       },
       last_status: {
-        label: "Last Status",
+        label: "最近状态",
         options: {
-          ok: "ok",
-          failed: "failed",
-          skipped: "skipped"
+          ok: "成功",
+          failed: "失败",
+          skipped: "已跳过"
         }
       },
       last_error: {
-        label: "Last Error"
+        label: "最近错误"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_approval_process: {
-    label: "Approval Process",
-    pluralLabel: "Approval Processes",
-    description: "Persisted approval process definition. Authored via defineApprovalProcess() in code; visual designer is on the roadmap.",
+    label: "审批流程",
+    pluralLabel: "审批流程",
+    description: "持久化的审批流程定义。通过代码中的 defineApprovalProcess() 编写；可视化设计器在规划中。",
     fields: {
       id: {
-        label: "Process ID"
+        label: "流程 ID"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced by submitters and audit rows"
+        label: "名称",
+        help: "唯一的 snake_case 名称——由提交方和审计记录引用"
       },
       label: {
-        label: "Display Label"
+        label: "显示标签"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name this process governs"
+        label: "对象",
+        help: "该流程所管理的短对象名"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       active: {
-        label: "Active",
-        help: "Only active processes are dispatched on submission"
+        label: "启用",
+        help: "仅启用的流程会在提交时分派"
       },
       definition_json: {
-        label: "Definition",
-        help: "Serialised ApprovalProcess JSON (see @objectstack/spec/automation/approval)"
+        label: "定义",
+        help: "序列化的 ApprovalProcess JSON（参见 @objectstack/spec/automation/approval）"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       inactive: {
-        label: "Inactive"
+        label: "停用"
       },
       by_object: {
-        label: "By Object"
+        label: "按对象"
       },
       all_processes: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_approval_request: {
-    label: "Approval Request",
-    pluralLabel: "Approval Requests",
-    description: "Live approval instance tracked per submission",
+    label: "审批请求",
+    pluralLabel: "审批请求",
+    description: "按提交记录跟踪的实时审批实例",
     fields: {
       id: {
-        label: "Request ID"
+        label: "请求 ID"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this approval request (propagated from submitter context)"
+        label: "组织",
+        help: "拥有该审批请求的租户（从提交方上下文传播）"
       },
       process_name: {
-        label: "Process",
-        help: "sys_approval_process.name this request was opened against"
+        label: "流程",
+        help: "该请求对应的 sys_approval_process.name"
       },
       object_name: {
-        label: "Object"
+        label: "对象"
       },
       record_id: {
-        label: "Record ID"
+        label: "记录 ID"
       },
       submitter_id: {
-        label: "Submitter"
+        label: "提交人"
       },
       submitter_comment: {
-        label: "Submitter Comment"
+        label: "提交备注"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state of the request",
+        label: "状态",
+        help: "请求的生命周期状态",
         options: {
-          pending: "pending",
-          approved: "approved",
-          rejected: "rejected",
-          recalled: "recalled"
+          pending: "待处理",
+          approved: "已批准",
+          rejected: "已拒绝",
+          recalled: "已撤回"
         }
       },
       current_step: {
-        label: "Current Step",
-        help: "Machine name of the step awaiting approval"
+        label: "当前步骤",
+        help: "当前等待审批的步骤机器名称"
       },
       current_step_index: {
-        label: "Current Step Index"
+        label: "当前步骤索引"
       },
       pending_approvers: {
-        label: "Pending Approvers",
-        help: "Comma-separated user ids who can act on the current step"
+        label: "待审批人",
+        help: "可在当前步骤执行操作的用户 ID，逗号分隔"
       },
       payload_json: {
-        label: "Snapshot",
-        help: "Record snapshot at submission time"
+        label: "快照",
+        help: "提交时的记录快照"
       },
       completed_at: {
-        label: "Completed At"
+        label: "完成时间"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       my_pending: {
-        label: "My Pending"
+        label: "我的待办"
       },
       submitted_by_me: {
-        label: "I Submitted"
+        label: "我提交的"
       },
       completed: {
-        label: "Completed"
+        label: "已完成"
       },
       all_requests: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_approval_action: {
-    label: "Approval Action",
-    pluralLabel: "Approval Actions",
-    description: "Append-only audit trail for approval actions",
+    label: "审批动作",
+    pluralLabel: "审批动作",
+    description: "追加写入的审批操作审计记录",
     fields: {
       id: {
-        label: "Action ID"
+        label: "动作 ID"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this action (mirrors the parent request)"
+        label: "组织",
+        help: "拥有该动作的租户（与父请求保持一致）"
       },
       request_id: {
-        label: "Request"
+        label: "请求"
       },
       step_name: {
-        label: "Step",
-        help: "Machine name of the step at the time of the action"
+        label: "步骤",
+        help: "执行该动作时对应步骤的机器名称"
       },
       step_index: {
-        label: "Step Index"
+        label: "步骤索引"
       },
       action: {
-        label: "Action",
+        label: "操作",
         options: {
-          submit: "submit",
-          approve: "approve",
-          reject: "reject",
-          recall: "recall",
-          escalate: "escalate"
+          submit: "提交",
+          approve: "批准",
+          reject: "拒绝",
+          recall: "撤回",
+          escalate: "升级"
         }
       },
       actor_id: {
-        label: "Actor"
+        label: "执行人"
       },
       comment: {
-        label: "Comment"
+        label: "评论"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       }
     },
     _views: {
       recent: {
-        label: "Recent"
+        label: "最近"
       },
       by_actor: {
-        label: "By Actor"
+        label: "按执行人"
       },
       all_actions: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_job: {
-    label: "Background Job",
-    pluralLabel: "Background Jobs",
-    description: "Catalogue of registered background jobs",
+    label: "后台任务",
+    pluralLabel: "后台任务",
+    description: "已注册后台任务目录",
     fields: {
       id: {
-        label: "Job ID"
+        label: "任务 ID"
       },
       name: {
-        label: "Job Name",
-        help: "Unique job identifier (snake_case)"
+        label: "任务名称",
+        help: "唯一任务标识（snake_case）"
       },
       schedule_type: {
-        label: "Schedule Type",
+        label: "调度类型",
         options: {
-          cron: "cron",
-          interval: "interval",
-          once: "once"
+          cron: "Cron",
+          interval: "间隔",
+          once: "一次"
         }
       },
       schedule_expression: {
-        label: "Expression",
-        help: "Cron expression / interval ms / ISO datetime"
+        label: "表达式",
+        help: "Cron 表达式 / 间隔毫秒 / ISO 日期时间"
       },
       timezone: {
-        label: "Timezone"
+        label: "时区"
       },
       active: {
-        label: "Active",
-        help: "Whether the scheduler is currently running this job"
+        label: "启用",
+        help: "调度器当前是否运行该任务"
       },
       last_run_at: {
-        label: "Last Run At"
+        label: "最近运行时间"
       },
       last_status: {
-        label: "Last Status",
+        label: "最近状态",
         options: {
-          success: "success",
-          failed: "failed",
-          timeout: "timeout",
-          running: "running"
+          success: "成功",
+          failed: "失败",
+          timeout: "超时",
+          running: "运行中"
         }
       },
       last_error: {
-        label: "Last Error"
+        label: "最近错误"
       },
       run_count: {
-        label: "Run Count"
+        label: "运行次数"
       },
       failure_count: {
-        label: "Failure Count"
+        label: "失败次数"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_job_run: {
-    label: "Job Run",
-    pluralLabel: "Job Runs",
-    description: "Background job execution audit trail",
+    label: "任务执行",
+    pluralLabel: "任务执行",
+    description: "后台任务执行审计记录",
     fields: {
       id: {
-        label: "Run ID"
+        label: "执行 ID"
       },
       job_name: {
-        label: "Job"
+        label: "任务"
       },
       status: {
-        label: "Status",
+        label: "状态",
         options: {
-          running: "running",
-          success: "success",
-          failed: "failed",
-          timeout: "timeout"
+          running: "运行中",
+          success: "成功",
+          failed: "失败",
+          timeout: "超时"
         }
       },
       started_at: {
-        label: "Started At"
+        label: "开始时间"
       },
       completed_at: {
-        label: "Completed At"
+        label: "完成时间"
       },
       duration_ms: {
-        label: "Duration (ms)"
+        label: "耗时（毫秒）"
       },
       attempt: {
-        label: "Attempt",
-        help: "1 for first run, >1 for retries/replays"
+        label: "尝试",
+        help: "首次运行为 1，重试/重放则 >1"
       },
       trigger: {
-        label: "Trigger",
+        label: "触发方式",
         options: {
-          schedule: "schedule",
-          manual: "manual",
-          replay: "replay"
+          schedule: "调度",
+          manual: "手动",
+          replay: "重放"
         }
       },
       error: {
-        label: "Error"
+        label: "错误"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       }
     }
   },
   sys_job_queue: {
-    label: "Job Queue Message",
-    pluralLabel: "Job Queue Messages",
-    description: "Durable job/message queue including dead letters",
+    label: "任务队列消息",
+    pluralLabel: "任务队列消息",
+    description: "持久化任务/消息队列，包含死信消息",
     fields: {
       id: {
-        label: "Message ID"
+        label: "消息 ID"
       },
       queue: {
-        label: "Queue",
-        help: "Logical queue name (snake_case)"
+        label: "队列",
+        help: "逻辑队列名称（snake_case）"
       },
       idempotency_key: {
-        label: "Idempotency Key",
-        help: "Deduplication key within (queue, window)"
+        label: "幂等键",
+        help: "在 (queue, window) 范围内去重的键"
       },
       payload_json: {
-        label: "Payload (JSON)",
-        help: "Serialized message body"
+        label: "负载（JSON）",
+        help: "序列化的消息体"
       },
       metadata_json: {
-        label: "Metadata (JSON)",
-        help: "Serialized metadata bag (tenant_id, source_record, ...)"
+        label: "元数据（JSON）",
+        help: "序列化的元数据包（tenant_id、source_record 等）"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state",
+        label: "状态",
+        help: "生命周期状态",
         options: {
-          pending: "pending",
-          running: "running",
-          completed: "completed",
-          failed: "failed",
-          dlq: "dlq"
+          pending: "待处理",
+          running: "运行中",
+          completed: "已完成",
+          failed: "失败",
+          dlq: "死信队列"
         }
       },
       priority: {
-        label: "Priority",
-        help: "Lower = higher priority"
+        label: "优先级",
+        help: "数值越低优先级越高"
       },
       attempts: {
-        label: "Attempts"
+        label: "尝试次数"
       },
       max_attempts: {
-        label: "Max Attempts"
+        label: "最大尝试次数"
       },
       backoff_type: {
-        label: "Backoff",
+        label: "退避策略",
         options: {
-          fixed: "fixed",
-          exponential: "exponential"
+          fixed: "固定",
+          exponential: "指数"
         }
       },
       backoff_delay_ms: {
-        label: "Backoff Base (ms)"
+        label: "退避基数（毫秒）"
       },
       backoff_max_delay_ms: {
-        label: "Backoff Cap (ms)"
+        label: "退避上限（毫秒）"
       },
       scheduled_for: {
-        label: "Scheduled For",
-        help: "Earliest time a worker may lease this message"
+        label: "计划执行时间",
+        help: "工作进程可领取该消息的最早时间"
       },
       locked_by: {
-        label: "Locked By",
-        help: "Worker id holding the lease"
+        label: "锁定者",
+        help: "持有租约的工作进程 ID"
       },
       locked_until: {
-        label: "Locked Until",
-        help: "Lease expiry; if past, another worker may claim"
+        label: "锁定到",
+        help: "租约到期时间；超过后其他工作进程可重新领取"
       },
       last_error: {
-        label: "Last Error"
+        label: "最近错误"
       },
       completed_at: {
-        label: "Completed At"
+        label: "完成时间"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_webhook: {
     label: "Webhook",
-    pluralLabel: "Webhooks",
-    description: "Outbound HTTP webhook subscription. Authored via defineWebhook() in code or the Studio editor; executed by the HTTP connector plugin.",
+    pluralLabel: "Webhook",
+    description: "外发 HTTP Webhook 订阅。可在代码中通过 defineWebhook() 编写，或在 Studio 编辑器中维护；由 HTTP 连接器插件执行。",
     fields: {
       id: {
         label: "Webhook ID"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced in logs and audit"
+        label: "名称",
+        help: "唯一的 snake_case 名称——用于日志和审计引用"
       },
       label: {
-        label: "Display Label"
+        label: "显示标签"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name whose events fire this webhook (blank = manual / API-triggered)"
+        label: "对象",
+        help: "触发该 Webhook 的短对象名（留空 = 手动 / API 触发）"
       },
       triggers: {
-        label: "Triggers",
-        help: "Comma-separated event list: create,update,delete,undelete,api"
+        label: "触发器",
+        help: "以逗号分隔的事件列表：create,update,delete,undelete,api"
       },
       url: {
-        label: "Target URL",
-        help: "External endpoint that receives the POST"
+        label: "目标 URL",
+        help: "接收 POST 请求的外部端点"
       },
       method: {
-        label: "HTTP Method",
+        label: "HTTP 方法",
         help: "GET / POST / PUT / PATCH / DELETE"
       },
       description: {
-        label: "Description"
+        label: "描述"
       },
       active: {
-        label: "Active",
-        help: "Inactive webhooks are skipped by the dispatcher"
+        label: "启用",
+        help: "停用的 Webhook 会被调度器跳过"
       },
       definition_json: {
-        label: "Definition",
-        help: "Serialised Webhook JSON (see @objectstack/spec/automation/webhook) — full headers/auth/retry/payload config"
+        label: "定义",
+        help: "序列化的 Webhook JSON（参见 @objectstack/spec/automation/webhook）——包含完整的 headers/auth/retry/payload 配置"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "启用"
       },
       inactive: {
-        label: "Inactive"
+        label: "停用"
       },
       by_object: {
-        label: "By Object"
+        label: "按对象"
       },
       all_webhooks: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_metadata: {
-    label: "System Metadata",
-    pluralLabel: "System Metadata",
-    description: "Stores platform and user-scope metadata records (objects, views, flows, etc.)",
+    label: "系统元数据",
+    pluralLabel: "系统元数据",
+    description: "存储平台级和用户级元数据记录（对象、视图、流程等）",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name"
+        label: "名称"
       },
       type: {
-        label: "Metadata Type"
+        label: "元数据类型"
       },
       namespace: {
-        label: "Namespace"
+        label: "命名空间"
       },
       package_id: {
-        label: "Package ID",
-        help: "Legacy package manifest ID string. Use package_version_id for new records."
+        label: "包 ID",
+        help: "遗留包清单 ID 字符串。新记录请使用 package_version_id。"
       },
       package_version_id: {
-        label: "Package Version",
-        help: "Foreign key to sys_package_version (UUID). Null = platform-built-in or env-level override."
+        label: "包版本",
+        help: "指向 sys_package_version（UUID）的外键。Null = 平台内置或环境级覆盖。"
       },
       managed_by: {
-        label: "Managed By",
+        label: "管理方",
         options: {
-          package: "package",
-          platform: "platform",
-          user: "user"
+          package: "包",
+          platform: "平台",
+          user: "用户"
         }
       },
       scope: {
-        label: "Scope",
+        label: "范围",
         options: {
-          system: "system",
-          platform: "platform",
-          user: "user"
+          system: "系统",
+          platform: "平台",
+          user: "用户"
         }
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized metadata payload"
+        label: "元数据",
+        help: "元数据负载的 JSON 序列化内容"
       },
       extends: {
-        label: "Extends"
+        label: "继承自"
       },
       strategy: {
-        label: "Strategy",
+        label: "策略",
         options: {
-          merge: "merge",
-          replace: "replace"
+          merge: "合并",
+          replace: "替换"
         }
       },
       owner: {
-        label: "Owner"
+        label: "所有者"
       },
       state: {
-        label: "State",
+        label: "状态",
         options: {
-          draft: "draft",
-          active: "active",
-          archived: "archived",
-          deprecated: "deprecated"
+          draft: "草稿",
+          active: "启用",
+          archived: "已归档",
+          deprecated: "已废弃"
         }
       },
       organization_id: {
-        label: "Organization",
-        help: "Organization for multi-tenant isolation."
+        label: "组织",
+        help: "用于多租户隔离的组织。"
       },
       project_id: {
-        label: "Project (deprecated)",
-        help: "DEPRECATED. Use organization_id for tenant isolation."
+        label: "项目（已废弃）",
+        help: "已废弃。请使用 organization_id 进行租户隔离。"
       },
       version: {
-        label: "Version"
+        label: "版本"
       },
       checksum: {
-        label: "Checksum"
+        label: "校验和"
       },
       source: {
-        label: "Source",
+        label: "来源",
         options: {
-          filesystem: "filesystem",
-          database: "database",
-          api: "api",
-          migration: "migration"
+          filesystem: "文件系统",
+          database: "数据库",
+          api: "API",
+          migration: "迁移"
         }
       },
       tags: {
-        label: "Tags",
-        help: "JSON-serialized array of classification tags"
+        label: "标签",
+        help: "分类标签的 JSON 序列化数组"
       },
       created_by: {
-        label: "Created By"
+        label: "创建人"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_by: {
-        label: "Updated By"
+        label: "更新人"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       }
     }
   },
   sys_metadata_history: {
-    label: "Metadata History",
-    pluralLabel: "Metadata History",
-    description: "Version history and audit trail for metadata changes",
+    label: "元数据历史",
+    pluralLabel: "元数据历史",
+    description: "元数据变更的版本历史与审计记录",
     fields: {
       id: {
         label: "ID"
       },
       metadata_id: {
-        label: "Metadata"
+        label: "元数据"
       },
       name: {
-        label: "Name"
+        label: "名称"
       },
       type: {
-        label: "Metadata Type"
+        label: "元数据类型"
       },
       version: {
-        label: "Version"
+        label: "版本"
       },
       operation_type: {
-        label: "Operation Type",
+        label: "操作类型",
         options: {
-          create: "create",
-          update: "update",
-          publish: "publish",
-          revert: "revert",
-          delete: "delete"
+          create: "创建",
+          update: "更新",
+          publish: "发布",
+          revert: "回滚",
+          delete: "删除"
         }
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized metadata snapshot at this version"
+        label: "元数据",
+        help: "该版本对应的元数据快照（JSON 序列化）"
       },
       checksum: {
-        label: "Checksum"
+        label: "校验和"
       },
       previous_checksum: {
-        label: "Previous Checksum"
+        label: "上一个校验和"
       },
       change_note: {
-        label: "Change Note",
-        help: "Description of what changed in this version"
+        label: "变更说明",
+        help: "对该版本变更内容的说明"
       },
       organization_id: {
-        label: "Organization",
-        help: "Organization for multi-tenant isolation."
+        label: "组织",
+        help: "用于多租户隔离的组织。"
       },
       project_id: {
-        label: "Environment ID",
-        help: "Scopes this history entry to a specific environment."
+        label: "环境 ID",
+        help: "将该历史记录限定到特定环境。"
       },
       recorded_by: {
-        label: "Recorded By"
+        label: "记录人"
       },
       recorded_at: {
-        label: "Recorded At"
+        label: "记录时间"
       }
     }
   },
   sys_setting: {
-    label: "Setting",
-    pluralLabel: "Settings",
-    description: "Generic K/V store backing the SettingsManifest contract.",
+    label: "设置",
+    pluralLabel: "设置",
+    description: "为 SettingsManifest 合约提供支持的通用键值存储。",
     fields: {
       id: {
-        label: "Setting ID"
+        label: "设置 ID"
       },
       created_at: {
-        label: "Created At"
+        label: "创建时间"
       },
       updated_at: {
-        label: "Updated At"
+        label: "更新时间"
       },
       namespace: {
-        label: "Namespace",
-        help: "Manifest namespace (e.g. mail, branding, feature_flags)."
+        label: "命名空间",
+        help: "Manifest 命名空间（例如 mail、branding、feature_flags）。"
       },
       key: {
-        label: "Key",
-        help: "Specifier key inside the namespace (snake_case)."
+        label: "键",
+        help: "命名空间内的标识键（snake_case）。"
       },
       scope: {
-        label: "Scope",
-        help: "Which layer of the config-resolution hierarchy this row belongs to.",
+        label: "范围",
+        help: "该记录所属的配置解析层级。",
         options: {
-          global: "Global",
-          tenant: "Tenant",
-          user: "User",
-          runtime: "Runtime"
+          global: "全局",
+          tenant: "租户",
+          user: "用户",
+          runtime: "运行时"
         }
       },
       user_id: {
-        label: "User",
-        help: "Owning user when scope=user; null otherwise."
+        label: "用户",
+        help: "当 scope=user 时对应所属用户；否则为 null。"
       },
       value: {
-        label: "Value",
-        help: "JSON-encoded value. Null when encrypted=true (see value_enc)."
+        label: "值",
+        help: "JSON 编码的值。encrypted=true 时为 Null（见 value_enc）。"
       },
       encrypted: {
-        label: "Encrypted",
-        help: "When true, the value is stored encrypted-at-rest in value_enc; value column is null."
+        label: "已加密",
+        help: "为 true 时，值会以静态加密方式存储在 value_enc 中；value 列为 null。"
       },
       locked: {
-        label: "Locked",
-        help: "When true, lower-scope rows cannot override this value; writes against lower scopes return 409. Used by platform administrators to pin a global value for all tenants (Phase 2 cascade)."
+        label: "已锁定",
+        help: "为 true 时，较低范围的记录无法覆盖该值；对较低范围的写入会返回 409。平台管理员可借此为所有租户固定全局值（Phase 2 级联）。"
       },
       locked_reason: {
-        label: "Lock Reason",
-        help: "Human-readable explanation surfaced in the UI tooltip when locked=true."
+        label: "锁定原因",
+        help: "当 locked=true 时，在 UI 提示中展示的人类可读说明。"
       },
       value_enc: {
-        label: "Encrypted Value",
-        help: "Ciphertext payload (KMS-wrapped). Set only when encrypted=true."
+        label: "加密值",
+        help: "密文负载（KMS 包裹）。仅在 encrypted=true 时设置。"
       },
       updated_by: {
-        label: "Updated By",
-        help: "Last actor who wrote this row via SettingsService.set()."
+        label: "更新人",
+        help: "最近通过 SettingsService.set() 写入该记录的执行人。"
       }
     },
     _views: {
       by_namespace: {
-        label: "By Namespace"
+        label: "按命名空间"
       },
       tenant_only: {
-        label: "Tenant"
+        label: "租户"
       },
       user_only: {
-        label: "User"
+        label: "用户"
       },
       all_settings: {
-        label: "All"
+        label: "全部"
       }
     }
   },
   sys_secret: {
-    label: "Secret",
-    pluralLabel: "Secrets",
-    description: "Cipher store referenced by sys_setting handles. Never holds plaintext.",
+    label: "密钥",
+    pluralLabel: "密钥",
+    description: "由 sys_setting 句柄引用的密文存储。绝不保存明文。",
     fields: {
       id: {
         label: "ID",
-        help: "Opaque handle referenced by `sys_setting.value_enc`."
+        help: "由 `sys_setting.value_enc` 引用的不透明句柄。"
       },
       created_at: {
-        label: "Created At",
-        help: "When the cipher was first written."
+        label: "创建时间",
+        help: "首次写入该密文的时间。"
       },
       rotated_at: {
-        label: "Rotated At",
-        help: "When the cipher was last re-wrapped under a new KMS key."
+        label: "轮换时间",
+        help: "最近一次使用新 KMS 密钥重新包裹该密文的时间。"
       },
       namespace: {
-        label: "Namespace",
-        help: "Settings namespace this secret belongs to."
+        label: "命名空间",
+        help: "该密钥所属的设置命名空间。"
       },
       key: {
-        label: "Key",
-        help: "Specifier key within the namespace."
+        label: "键",
+        help: "命名空间内的标识键。"
       },
       kms_key_id: {
-        label: "KMS Key ID",
-        help: "External KMS handle (ARN, GCP resource id, or `local`)."
+        label: "KMS 密钥 ID",
+        help: "外部 KMS 句柄（ARN、GCP resource id 或 `local`）。"
       },
       alg: {
-        label: "Algorithm",
-        help: "Cipher/AEAD algorithm tag."
+        label: "算法",
+        help: "密文 / AEAD 算法标记。"
       },
       version: {
-        label: "Version",
-        help: "Bumps each time rotateKey() re-wraps this row."
+        label: "版本",
+        help: "每次 rotateKey() 重新包裹该记录时递增。"
       },
       ciphertext: {
-        label: "Ciphertext",
-        help: "Provider-encoded ciphertext blob (base64 / JSON). Implementation-defined; only the matching ICryptoProvider can read it."
+        label: "密文",
+        help: "提供方编码后的密文数据（base64 / JSON）。实现定义；仅匹配的 ICryptoProvider 可读取。"
       }
     }
   },
   sys_setting_audit: {
-    label: "Setting Audit Entry",
-    pluralLabel: "Setting Audit",
-    description: "Append-only audit trail for SettingsService mutations.",
+    label: "设置审计记录",
+    pluralLabel: "设置审计",
+    description: "SettingsService 变更的追加写入审计记录。",
     fields: {
       id: {
         label: "ID"
       },
       created_at: {
-        label: "Created At",
-        help: "When the mutation was recorded."
+        label: "创建时间",
+        help: "记录该变更的时间。"
       },
       namespace: {
-        label: "Namespace"
+        label: "命名空间"
       },
       key: {
-        label: "Key"
+        label: "键"
       },
       scope: {
-        label: "Scope",
-        help: "Cascade layer the row was written to.",
+        label: "范围",
+        help: "该记录写入的级联层。",
         options: {
-          global: "Global",
-          tenant: "Tenant",
-          user: "User"
+          global: "全局",
+          tenant: "租户",
+          user: "用户"
         }
       },
       action: {
-        label: "Action",
-        help: "Mutation kind.",
+        label: "操作",
+        help: "变更类型。",
         options: {
-          set: "Set",
-          reset: "Reset",
-          lock: "Lock",
-          unlock: "Unlock",
-          rotate: "Rotate"
+          set: "设置",
+          reset: "重置",
+          lock: "锁定",
+          unlock: "解锁",
+          rotate: "轮换"
         }
       },
       actor_id: {
-        label: "Actor",
-        help: "User who performed the mutation; null for system jobs."
+        label: "执行人",
+        help: "执行该变更的用户；系统任务时为 null。"
       },
       source: {
-        label: "Source",
-        help: "Mutation entry-point.",
+        label: "来源",
+        help: "变更入口。",
         options: {
           ui: "UI",
           api: "API",
-          migration: "Migration",
-          import: "Import",
-          system: "System"
+          migration: "迁移",
+          import: "导入",
+          system: "系统"
         }
       },
       reason: {
-        label: "Reason",
-        help: "Free-text justification provided by the actor (optional)."
+        label: "原因",
+        help: "执行人提供的自由文本说明（可选）。"
       },
       old_hash: {
-        label: "Old Hash",
-        help: "SHA-256 of the previous value (canonicalised). Null when previously unset."
+        label: "旧哈希",
+        help: "旧值（规范化后）的 SHA-256。此前未设置时为 Null。"
       },
       new_hash: {
-        label: "New Hash",
-        help: "SHA-256 of the new value (canonicalised). Null on reset."
+        label: "新哈希",
+        help: "新值（规范化后）的 SHA-256。重置时为 Null。"
       },
       encrypted: {
-        label: "Encrypted",
-        help: "True when the field carries secret material (rotation is interesting)."
+        label: "已加密",
+        help: "当字段包含密钥材料时为 true（轮换更值得关注）。"
       },
       request_id: {
-        label: "Request ID",
-        help: "Correlates with sys_audit_log / tracing."
+        label: "请求 ID",
+        help: "与 sys_audit_log / tracing 关联。"
       }
     }
   }

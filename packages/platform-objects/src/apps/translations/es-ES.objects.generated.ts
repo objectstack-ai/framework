@@ -10,2908 +10,2908 @@ import type { TranslationData } from '@objectstack/spec/system';
 
 export const esESObjects: NonNullable<TranslationData['objects']> = {
   sys_user: {
-    label: "User",
-    pluralLabel: "Users",
-    description: "User accounts for authentication",
+    label: "Usuario",
+    pluralLabel: "Usuarios",
+    description: "Cuentas de usuario para autenticación",
     fields: {
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       email: {
-        label: "Email"
+        label: "Correo electrónico"
       },
       email_verified: {
-        label: "Email Verified"
+        label: "Correo electrónico verificado"
       },
       two_factor_enabled: {
-        label: "Two-Factor Enabled",
-        help: "Whether two-factor authentication is enabled for this user. Maintained by the better-auth `twoFactor` plugin."
+        label: "Doble factor habilitado",
+        help: "Indica si la autenticación de doble factor está habilitada para este usuario. Lo mantiene el plugin `twoFactor` de better-auth."
       },
       role: {
-        label: "Platform Role",
-        help: "Platform-level role (admin, user, …). Set via the Set Platform Role action."
+        label: "Rol de plataforma",
+        help: "Rol a nivel de plataforma (admin, user, …). Se establece mediante la acción Establecer rol de plataforma."
       },
       banned: {
-        label: "Banned",
-        help: "When true, the user cannot sign in. Toggle via Ban User / Unban User actions."
+        label: "Bloqueado",
+        help: "Si es verdadero, el usuario no puede iniciar sesión. Se alterna mediante las acciones Bloquear usuario / Desbloquear usuario."
       },
       ban_reason: {
-        label: "Ban Reason"
+        label: "Motivo del bloqueo"
       },
       ban_expires: {
-        label: "Ban Expires",
-        help: "When set, the ban auto-clears at this time."
+        label: "El bloqueo caduca el",
+        help: "Si se establece, el bloqueo se elimina automáticamente en ese momento."
       },
       image: {
-        label: "Profile Image"
+        label: "Imagen de perfil"
       },
       id: {
-        label: "User ID"
+        label: "ID de usuario"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       all_users: {
-        label: "All Users"
+        label: "Todos los usuarios"
       },
       unverified: {
-        label: "Unverified"
+        label: "No verificados"
       },
       two_factor: {
-        label: "2FA Enabled"
+        label: "2FA habilitado"
       },
       banned: {
-        label: "Banned"
+        label: "Bloqueado"
       }
     },
     _actions: {
       invite_user: {
-        label: "Invite User",
-        successMessage: "Invitation sent"
+        label: "Invitar usuario",
+        successMessage: "Invitación enviada"
       },
       ban_user: {
-        label: "Ban User",
-        confirmText: "Ban this user? They will be signed out and unable to sign in until unbanned.",
-        successMessage: "User banned"
+        label: "Bloquear usuario",
+        confirmText: "¿Bloquear a este usuario? Cerrará sesión y no podrá volver a iniciarla hasta que se desbloquee.",
+        successMessage: "Usuario bloqueado"
       },
       unban_user: {
-        label: "Unban User",
-        successMessage: "User unbanned"
+        label: "Desbloquear usuario",
+        successMessage: "Usuario desbloqueado"
       },
       set_user_password: {
-        label: "Set Password",
-        successMessage: "Password updated"
+        label: "Establecer contraseña",
+        successMessage: "Contraseña actualizada"
       },
       set_user_role: {
-        label: "Set Platform Role",
-        successMessage: "Role updated"
+        label: "Establecer rol de plataforma",
+        successMessage: "Rol actualizado"
       },
       impersonate_user: {
-        label: "Impersonate User",
-        confirmText: "Start an impersonation session for this user? Use only for legitimate support cases — actions will be logged.",
-        successMessage: "Now impersonating user"
+        label: "Suplantar usuario",
+        confirmText: "¿Iniciar una sesión de suplantación para este usuario? Úsela solo para casos legítimos de soporte; las acciones se registrarán.",
+        successMessage: "Ahora está suplantando al usuario"
       }
     }
   },
   sys_session: {
-    label: "Session",
-    pluralLabel: "Sessions",
-    description: "Active user sessions",
+    label: "Sesión",
+    pluralLabel: "Sesiones",
+    description: "Sesiones de usuario activas",
     fields: {
       user_id: {
-        label: "User"
+        label: "Usuario"
       },
       expires_at: {
-        label: "Expires At"
+        label: "Caduca el"
       },
       active_organization_id: {
-        label: "Active Organization"
+        label: "Organización activa"
       },
       active_team_id: {
-        label: "Active Team"
+        label: "Equipo activo"
       },
       ip_address: {
-        label: "IP Address"
+        label: "Dirección IP"
       },
       user_agent: {
-        label: "User Agent"
+        label: "Agente de usuario"
       },
       impersonated_by: {
-        label: "Impersonated By",
-        help: "User id of the admin that started this impersonation session, if any."
+        label: "Suplantado por",
+        help: "ID del administrador que inició esta sesión de suplantación, si existe."
       },
       token: {
-        label: "Session Token",
-        help: "Opaque session token — never exposed in UI"
+        label: "Token de sesión",
+        help: "Token de sesión opaco; nunca se muestra en la UI."
       },
       id: {
-        label: "Session ID"
+        label: "ID de sesión"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       mine: {
-        label: "My Sessions"
+        label: "Mis sesiones"
       },
       all_sessions: {
-        label: "All"
+        label: "Todas"
       }
     },
     _actions: {
       revoke_my_other_sessions: {
-        label: "Sign out other devices",
-        confirmText: "Sign out of every other device where you're currently logged in? Your current session will remain active.",
-        successMessage: "All other sessions revoked"
+        label: "Cerrar sesión en otros dispositivos",
+        confirmText: "¿Cerrar sesión en todos los demás dispositivos en los que ha iniciado sesión? Su sesión actual seguirá activa.",
+        successMessage: "Se han revocado todas las demás sesiones"
       },
       revoke_session: {
-        label: "Revoke Session",
-        confirmText: "Revoke this session? The user will be signed out from that device.",
-        successMessage: "Session revoked"
+        label: "Revocar sesión",
+        confirmText: "¿Revocar esta sesión? El usuario cerrará sesión en ese dispositivo.",
+        successMessage: "Sesión revocada"
       }
     }
   },
   sys_account: {
-    label: "Account",
-    pluralLabel: "Accounts",
-    description: "OAuth and authentication provider accounts",
+    label: "Cuenta de autenticación",
+    pluralLabel: "Cuentas de autenticación",
+    description: "Cuentas de proveedores de OAuth y autenticación",
     fields: {
       id: {
-        label: "Account ID"
+        label: "ID de cuenta de autenticación"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       provider_id: {
-        label: "Provider ID",
-        help: "OAuth provider identifier (google, github, etc.)"
+        label: "ID del proveedor",
+        help: "Identificador del proveedor OAuth (google, github, etc.)."
       },
       account_id: {
-        label: "Provider Account ID",
-        help: "User's ID in the provider's system"
+        label: "ID de cuenta del proveedor",
+        help: "ID del usuario en el sistema del proveedor."
       },
       user_id: {
-        label: "User",
-        help: "Link to user table"
+        label: "Usuario",
+        help: "Enlace a la tabla de usuarios."
       },
       access_token: {
-        label: "Access Token"
+        label: "Token de acceso"
       },
       refresh_token: {
-        label: "Refresh Token"
+        label: "Token de actualización"
       },
       id_token: {
-        label: "ID Token"
+        label: "Token de ID"
       },
       access_token_expires_at: {
-        label: "Access Token Expires At"
+        label: "El token de acceso caduca el"
       },
       refresh_token_expires_at: {
-        label: "Refresh Token Expires At"
+        label: "El token de actualización caduca el"
       },
       scope: {
-        label: "OAuth Scope"
+        label: "Ámbito de OAuth"
       },
       password: {
-        label: "Password Hash",
-        help: "Hashed password for email/password provider"
+        label: "Hash de la contraseña",
+        help: "Hash de la contraseña para el proveedor de correo electrónico/contraseña."
       }
     },
     _views: {
       mine: {
-        label: "My Links"
+        label: "Mis enlaces"
       },
       by_provider: {
-        label: "By Provider"
+        label: "Por proveedor"
       },
       all_links: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_verification: {
-    label: "Verification",
-    pluralLabel: "Verifications",
-    description: "Email and phone verification tokens",
+    label: "Verificación",
+    pluralLabel: "Verificaciones",
+    description: "Tokens de verificación de correo electrónico y teléfono",
     fields: {
       id: {
-        label: "Verification ID"
+        label: "ID de verificación"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       value: {
-        label: "Verification Token",
-        help: "Token or code for verification"
+        label: "Token de verificación",
+        help: "Token o código para la verificación."
       },
       expires_at: {
-        label: "Expires At"
+        label: "Caduca el"
       },
       identifier: {
-        label: "Identifier",
-        help: "Email address or phone number"
+        label: "Identificador",
+        help: "Dirección de correo electrónico o número de teléfono."
       }
     }
   },
   sys_organization: {
-    label: "Organization",
-    pluralLabel: "Organizations",
-    description: "Organizations for multi-tenant grouping",
+    label: "Organización",
+    pluralLabel: "Organizaciones",
+    description: "Organizaciones para agrupación multi-tenant",
     fields: {
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       slug: {
         label: "Slug",
-        help: "URL-friendly identifier"
+        help: "Identificador compatible con URL."
       },
       logo: {
-        label: "Logo"
+        label: "Logotipo"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized organization metadata"
+        label: "Metadatos",
+        help: "Metadatos de la organización serializados en JSON."
       },
       id: {
-        label: "Organization ID"
+        label: "ID de organización"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       all_orgs: {
-        label: "All"
+        label: "Todas"
       }
     },
     _actions: {
       create_organization: {
-        label: "Create Organization",
-        successMessage: "Organization created"
+        label: "Crear organización",
+        successMessage: "Organización creada"
       },
       update_organization: {
-        label: "Edit Organization",
-        successMessage: "Organization updated"
+        label: "Editar organización",
+        successMessage: "Organización actualizada"
       },
       delete_organization: {
-        label: "Delete Organization",
-        confirmText: "Delete this organization? All members will lose access immediately. This cannot be undone.",
-        successMessage: "Organization deleted"
+        label: "Eliminar organización",
+        confirmText: "¿Eliminar esta organización? Todos los miembros perderán el acceso inmediatamente. Esta acción no se puede deshacer.",
+        successMessage: "Organización eliminada"
       },
       set_active_organization: {
-        label: "Set Active",
-        successMessage: "Active organization switched"
+        label: "Establecer como activa",
+        successMessage: "Organización activa cambiada"
       },
       leave_organization: {
-        label: "Leave Organization",
-        confirmText: "Leave this organization? You will lose access to all of its resources.",
-        successMessage: "You have left the organization"
+        label: "Abandonar organización",
+        confirmText: "¿Abandonar esta organización? Perderá el acceso a todos sus recursos.",
+        successMessage: "Ha abandonado la organización"
       }
     }
   },
   sys_member: {
-    label: "Member",
-    pluralLabel: "Members",
-    description: "Organization membership records",
+    label: "Miembro",
+    pluralLabel: "Miembros",
+    description: "Registros de membresía de la organización",
     fields: {
       id: {
-        label: "Member ID"
+        label: "ID de miembro"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       organization_id: {
-        label: "Organization"
+        label: "Organización"
       },
       user_id: {
-        label: "User"
+        label: "Usuario"
       },
       role: {
-        label: "Role",
-        help: "Member role within the organization",
+        label: "Rol",
+        help: "Rol del miembro dentro de la organización.",
         options: {
-          owner: "Owner",
-          admin: "Admin",
-          member: "Member"
+          owner: "Propietario",
+          admin: "Administrador",
+          member: "Miembro"
         }
       }
     },
     _actions: {
       add_member: {
-        label: "Add Member",
-        successMessage: "Member added"
+        label: "Añadir miembro",
+        successMessage: "Miembro añadido"
       },
       update_member_role: {
-        label: "Change Role",
-        successMessage: "Member role updated"
+        label: "Cambiar rol",
+        successMessage: "Rol del miembro actualizado"
       },
       remove_member: {
-        label: "Remove Member",
-        confirmText: "Remove this member from the organization? They will lose access to all org resources.",
-        successMessage: "Member removed"
+        label: "Eliminar miembro",
+        confirmText: "¿Eliminar a este miembro de la organización? Perderá el acceso a todos los recursos de la organización.",
+        successMessage: "Miembro eliminado"
       }
     }
   },
   sys_invitation: {
-    label: "Invitation",
-    pluralLabel: "Invitations",
-    description: "Organization invitations for user onboarding",
+    label: "Invitación",
+    pluralLabel: "Invitaciones",
+    description: "Invitaciones de organización para la incorporación de usuarios",
     fields: {
       id: {
-        label: "Invitation ID"
+        label: "ID de invitación"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       organization_id: {
-        label: "Organization"
+        label: "Organización"
       },
       email: {
-        label: "Email",
-        help: "Email address of the invited user"
+        label: "Correo electrónico",
+        help: "Dirección de correo electrónico del usuario invitado."
       },
       role: {
-        label: "Role",
-        help: "Role to assign upon acceptance",
+        label: "Rol",
+        help: "Rol que se asignará al aceptar.",
         options: {
-          owner: "Owner",
-          admin: "Admin",
-          member: "Member"
+          owner: "Propietario",
+          admin: "Administrador",
+          member: "Miembro"
         }
       },
       status: {
-        label: "Status",
+        label: "Estado",
         options: {
-          pending: "pending",
-          accepted: "accepted",
-          rejected: "rejected",
-          expired: "expired",
-          canceled: "canceled"
+          pending: "Pendiente",
+          accepted: "Aceptada",
+          rejected: "Rechazada",
+          expired: "Caducada",
+          canceled: "Cancelada"
         }
       },
       inviter_id: {
-        label: "Inviter",
-        help: "User who sent the invitation"
+        label: "Invitador",
+        help: "Usuario que envió la invitación."
       },
       expires_at: {
-        label: "Expires At"
+        label: "Caduca el"
       },
       team_id: {
-        label: "Team",
-        help: "Optional team to assign upon acceptance"
+        label: "Equipo",
+        help: "Equipo opcional que se asignará al aceptar."
       }
     },
     _views: {
       pending: {
-        label: "Pending"
+        label: "Pendientes"
       },
       accepted: {
-        label: "Accepted"
+        label: "Aceptadas"
       },
       expired: {
-        label: "Expired / Canceled"
+        label: "Caducadas / canceladas"
       },
       all_invitations: {
-        label: "All"
+        label: "Todas"
       }
     },
     _actions: {
       invite_user: {
-        label: "Invite User",
-        successMessage: "Invitation sent"
+        label: "Invitar usuario",
+        successMessage: "Invitación enviada"
       },
       cancel_invitation: {
-        label: "Cancel Invitation",
-        confirmText: "Cancel this invitation? The recipient will no longer be able to accept it.",
-        successMessage: "Invitation canceled"
+        label: "Cancelar invitación",
+        confirmText: "¿Cancelar esta invitación? El destinatario ya no podrá aceptarla.",
+        successMessage: "Invitación cancelada"
       },
       resend_invitation: {
-        label: "Resend Invitation",
-        successMessage: "Invitation resent"
+        label: "Reenviar invitación",
+        successMessage: "Invitación reenviada"
       }
     }
   },
   sys_team: {
-    label: "Team",
-    pluralLabel: "Teams",
-    description: "Teams within organizations for fine-grained grouping",
+    label: "Equipo",
+    pluralLabel: "Equipos",
+    description: "Equipos dentro de las organizaciones para una agrupación detallada",
     fields: {
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       organization_id: {
-        label: "Organization",
-        help: "Parent organization for this team"
+        label: "Organización",
+        help: "Organización principal de este equipo."
       },
       id: {
-        label: "Team ID"
+        label: "ID de equipo"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       by_org: {
-        label: "By Organization"
+        label: "Por organización"
       },
       all_teams: {
-        label: "All"
+        label: "Todos"
       }
     },
     _actions: {
       create_team: {
-        label: "Create Team",
-        successMessage: "Team created"
+        label: "Crear equipo",
+        successMessage: "Equipo creado"
       },
       update_team: {
-        label: "Edit Team",
-        successMessage: "Team updated"
+        label: "Editar equipo",
+        successMessage: "Equipo actualizado"
       },
       remove_team: {
-        label: "Delete Team",
-        confirmText: "Delete this team? Members will lose any team-scoped access. This cannot be undone.",
-        successMessage: "Team deleted"
+        label: "Eliminar equipo",
+        confirmText: "¿Eliminar este equipo? Los miembros perderán cualquier acceso con ámbito de equipo. Esta acción no se puede deshacer.",
+        successMessage: "Equipo eliminado"
       }
     }
   },
   sys_team_member: {
-    label: "Team Member",
-    pluralLabel: "Team Members",
-    description: "Team membership records linking users to teams",
+    label: "Miembro del equipo",
+    pluralLabel: "Miembros del equipo",
+    description: "Registros de membresía de equipo que vinculan usuarios con equipos",
     fields: {
       id: {
-        label: "Team Member ID"
+        label: "ID de miembro del equipo"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       team_id: {
-        label: "Team"
+        label: "Equipo"
       },
       user_id: {
-        label: "User"
+        label: "Usuario"
       }
     },
     _actions: {
       add_team_member: {
-        label: "Add Member",
-        successMessage: "Team member added"
+        label: "Añadir miembro",
+        successMessage: "Miembro del equipo añadido"
       },
       remove_team_member: {
-        label: "Remove from Team",
-        confirmText: "Remove this user from the team? They will lose any team-scoped access.",
-        successMessage: "Team member removed"
+        label: "Eliminar del equipo",
+        confirmText: "¿Eliminar a este usuario del equipo? Perderá cualquier acceso con ámbito de equipo.",
+        successMessage: "Miembro del equipo eliminado"
       }
     }
   },
   sys_department: {
-    label: "Department",
-    pluralLabel: "Departments",
-    description: "Hierarchical org-skeleton node (department / division / business unit / office).",
+    label: "Departamento",
+    pluralLabel: "Departamentos",
+    description: "Nodo jerárquico de la estructura organizativa (departamento / división / unidad de negocio / oficina).",
     fields: {
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       code: {
-        label: "Code",
-        help: "Short stable code (e.g. EMEA-SALES). Unique within tenant."
+        label: "Código",
+        help: "Código corto y estable (p. ej. EMEA-SALES). Único dentro del tenant."
       },
       kind: {
-        label: "Kind",
-        help: "Categorisation hint — does not change graph semantics.",
+        label: "Tipo",
+        help: "Pista de categorización; no cambia la semántica del grafo.",
         options: {
-          company: "company",
-          division: "division",
-          department: "department",
-          team: "team",
-          office: "office",
-          cost_center: "cost_center"
+          company: "Empresa",
+          division: "División",
+          department: "Departamento",
+          team: "Equipo",
+          office: "Oficina",
+          cost_center: "Centro de coste"
         }
       },
       parent_department_id: {
-        label: "Parent Department",
-        help: "Self-reference for the org tree. Null = root of tenant."
+        label: "Departamento principal",
+        help: "Autorreferencia para el árbol organizativo. Null = raíz del tenant."
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant scope."
+        label: "Organización",
+        help: "Ámbito del tenant."
       },
       manager_user_id: {
-        label: "Department Head",
-        help: "User responsible for this org unit (department head / lead)."
+        label: "Responsable del departamento",
+        help: "Usuario responsable de esta unidad organizativa (responsable o jefe de departamento)."
       },
       active: {
-        label: "Active",
-        help: "When false, members are not expanded by graph queries."
+        label: "Activo",
+        help: "Si es falso, los miembros no se expanden en las consultas del grafo."
       },
       effective_from: {
-        label: "Effective From",
-        help: "When this department came into existence (HRIS sync)."
+        label: "Vigente desde",
+        help: "Momento en que este departamento entró en funcionamiento (sincronización HRIS)."
       },
       effective_to: {
-        label: "Effective To",
-        help: "When this department was retired (HRIS sync)."
+        label: "Vigente hasta",
+        help: "Momento en que este departamento se retiró (sincronización HRIS)."
       },
       external_ref: {
-        label: "External Reference",
-        help: "ID in upstream HRIS (Workday / SAP HR / 北森)."
+        label: "Referencia externa",
+        help: "ID en el HRIS ascendente (Workday / SAP HR / 北森)."
       },
       id: {
-        label: "Department ID"
+        label: "ID de departamento"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       inactive: {
-        label: "Inactive"
+        label: "Inactivo"
       },
       by_kind: {
-        label: "By Kind"
+        label: "Por tipo"
       },
       all_departments: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_department_member: {
-    label: "Department Member",
-    pluralLabel: "Department Members",
-    description: "User assignment to a department (matrix-org friendly, effective-dated).",
+    label: "Miembro del departamento",
+    pluralLabel: "Miembros del departamento",
+    description: "Asignación de usuario a un departamento (compatible con organizaciones matriciales y con vigencia temporal).",
     fields: {
       id: {
-        label: "Member ID"
+        label: "ID de miembro"
       },
       department_id: {
-        label: "Department"
+        label: "Departamento"
       },
       user_id: {
-        label: "User"
+        label: "Usuario"
       },
       role_in_department: {
-        label: "Role in Department",
-        help: "`lead` is the day-to-day head; `deputy` may stand in for the lead in approval routing.",
+        label: "Rol en el departamento",
+        help: "`lead` es el responsable del día a día; `deputy` puede sustituir al responsable en el enrutamiento de aprobaciones.",
         options: {
-          member: "member",
-          lead: "lead",
-          deputy: "deputy"
+          member: "Miembro",
+          lead: "Responsable",
+          deputy: "Sustituto"
         }
       },
       is_primary: {
-        label: "Primary Assignment",
-        help: "When the user is in multiple departments, this marks the canonical one for reporting."
+        label: "Asignación principal",
+        help: "Cuando el usuario pertenece a varios departamentos, este marca el canónico para los informes."
       },
       effective_from: {
-        label: "Effective From"
+        label: "Vigente desde"
       },
       effective_to: {
-        label: "Effective To"
+        label: "Vigente hasta"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_api_key: {
-    label: "API Key",
-    pluralLabel: "API Keys",
-    description: "API keys for programmatic access",
+    label: "Clave de API",
+    pluralLabel: "Claves de API",
+    description: "Claves de API para acceso programático",
     fields: {
       name: {
-        label: "Name",
-        help: "Human-readable label for the API key"
+        label: "Nombre",
+        help: "Nombre visible para la clave de API."
       },
       prefix: {
-        label: "Prefix",
-        help: "Visible prefix for identifying the key (e.g., \"osk_\")"
+        label: "Prefijo",
+        help: "Prefijo visible para identificar la clave (p. ej., \"osk_\")."
       },
       user_id: {
-        label: "Owner",
-        help: "User who owns this API key"
+        label: "Propietario",
+        help: "Usuario que posee esta clave de API."
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON array of permission scopes"
+        label: "Ámbitos",
+        help: "Matriz JSON de ámbitos de permisos."
       },
       expires_at: {
-        label: "Expires At"
+        label: "Caduca el"
       },
       last_used_at: {
-        label: "Last Used At",
-        help: "Automatically updated on each API call"
+        label: "Último uso el",
+        help: "Se actualiza automáticamente en cada llamada a la API."
       },
       revoked: {
-        label: "Revoked"
+        label: "Revocado"
       },
       key: {
-        label: "Hashed Key",
-        help: "Hashed API key value — never exposed to clients"
+        label: "Clave con hash",
+        help: "Valor de la clave de API con hash; nunca se expone a los clientes."
       },
       id: {
-        label: "API Key ID"
+        label: "ID de clave de API"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       mine: {
-        label: "My Keys"
+        label: "Mis claves"
       },
       active: {
-        label: "Active"
+        label: "Activo"
       },
       revoked: {
-        label: "Revoked"
+        label: "Revocado"
       },
       all_keys: {
-        label: "All"
+        label: "Todas"
       }
     },
     _actions: {
       revoke_api_key: {
-        label: "Revoke API Key",
-        confirmText: "Revoke this API key? Any clients using it will immediately lose access.",
-        successMessage: "API key revoked"
+        label: "Revocar clave de API",
+        confirmText: "¿Revocar esta clave de API? Los clientes que la utilicen perderán el acceso inmediatamente.",
+        successMessage: "Clave de API revocada"
       },
       restore_api_key: {
-        label: "Restore API Key",
-        confirmText: "Restore this revoked API key? Existing clients holding the key will regain access.",
-        successMessage: "API key restored"
+        label: "Restaurar clave de API",
+        confirmText: "¿Restaurar esta clave de API revocada? Los clientes existentes que la conserven recuperarán el acceso.",
+        successMessage: "Clave de API restaurada"
       }
     }
   },
   sys_two_factor: {
-    label: "Two Factor",
-    pluralLabel: "Two Factor Credentials",
-    description: "Two-factor authentication credentials",
+    label: "Doble factor",
+    pluralLabel: "Credenciales de doble factor",
+    description: "Credenciales de autenticación de doble factor",
     fields: {
       id: {
-        label: "Two Factor ID"
+        label: "ID de doble factor"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       user_id: {
-        label: "User"
+        label: "Usuario"
       },
       secret: {
-        label: "Secret",
-        help: "TOTP secret key"
+        label: "Secreto",
+        help: "Clave secreta TOTP."
       },
       backup_codes: {
-        label: "Backup Codes",
-        help: "JSON-serialized backup recovery codes"
+        label: "Códigos de respaldo",
+        help: "Códigos de recuperación de respaldo serializados en JSON."
       }
     },
     _views: {
       mine: {
-        label: "My Enrollment"
+        label: "Mi configuración"
       },
       all_enrollments: {
-        label: "All"
+        label: "Todas"
       }
     },
     _actions: {
       enable_two_factor: {
-        label: "Enable 2FA",
-        successMessage: "2FA enrollment started — check response for TOTP URI and backup codes"
+        label: "Habilitar 2FA",
+        successMessage: "Se ha iniciado la configuración de 2FA; consulte la respuesta para ver la URI TOTP y los códigos de respaldo."
       },
       disable_two_factor: {
-        label: "Disable 2FA",
-        confirmText: "Disable two-factor authentication on your account?",
-        successMessage: "2FA disabled"
+        label: "Deshabilitar 2FA",
+        confirmText: "¿Deshabilitar la autenticación de doble factor en su cuenta?",
+        successMessage: "2FA deshabilitado"
       }
     }
   },
   sys_device_code: {
-    label: "Device Code",
-    pluralLabel: "Device Codes",
-    description: "OAuth 2.0 Device Authorization Grant (RFC 8628) pending requests",
+    label: "Código de dispositivo",
+    pluralLabel: "Códigos de dispositivo",
+    description: "Solicitudes pendientes de la concesión de autorización de dispositivos OAuth 2.0 (RFC 8628)",
     fields: {
       id: {
-        label: "Device Code ID"
+        label: "ID de código de dispositivo"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       device_code: {
-        label: "Device Code",
-        help: "High-entropy token returned to the polling device"
+        label: "Código de dispositivo",
+        help: "Token de alta entropía devuelto al dispositivo que realiza el sondeo."
       },
       user_code: {
-        label: "User Code",
-        help: "Short user-facing code (e.g. ABCD-EFGH)"
+        label: "Código de usuario",
+        help: "Código corto visible para el usuario (p. ej. ABCD-EFGH)."
       },
       user_id: {
-        label: "User",
-        help: "User who approved the device authorization"
+        label: "Usuario",
+        help: "Usuario que aprobó la autorización del dispositivo."
       },
       expires_at: {
-        label: "Expires At",
-        help: "When the device & user codes are no longer valid"
+        label: "Caduca el",
+        help: "Momento en que los códigos de dispositivo y de usuario dejan de ser válidos."
       },
       status: {
-        label: "Status",
-        help: "Current status: 'pending' | 'approved' | 'denied'"
+        label: "Estado",
+        help: "Estado actual: 'pending' | 'approved' | 'denied'."
       },
       last_polled_at: {
-        label: "Last Polled At",
-        help: "Timestamp of the most recent /device/token poll"
+        label: "Último sondeo el",
+        help: "Marca temporal del sondeo /device/token más reciente."
       },
       polling_interval: {
-        label: "Polling Interval (ms)",
-        help: "Server-recommended minimum polling interval, in ms"
+        label: "Intervalo de sondeo (ms)",
+        help: "Intervalo mínimo de sondeo recomendado por el servidor, en ms."
       },
       client_id: {
-        label: "Client ID",
-        help: "OAuth client identifier of the requesting device"
+        label: "ID de cliente",
+        help: "Identificador de cliente OAuth del dispositivo solicitante."
       },
       scope: {
-        label: "Scope",
-        help: "Space-separated OAuth scopes requested by the device"
+        label: "Ámbito",
+        help: "Ámbitos OAuth solicitados por el dispositivo, separados por espacios."
       }
     }
   },
   sys_user_preference: {
-    label: "User Preference",
-    pluralLabel: "User Preferences",
-    description: "Per-user key-value preferences (theme, locale, etc.)",
+    label: "Preferencia de usuario",
+    pluralLabel: "Preferencias de usuario",
+    description: "Preferencias clave-valor por usuario (tema, idioma, etc.)",
     fields: {
       id: {
-        label: "Preference ID"
+        label: "ID de preferencia"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       user_id: {
-        label: "User",
-        help: "Owner user of this preference"
+        label: "Usuario",
+        help: "Usuario propietario de esta preferencia."
       },
       key: {
-        label: "Key",
-        help: "Preference key (e.g., theme, locale, plugin.ai.auto_save)"
+        label: "Clave",
+        help: "Clave de preferencia (p. ej., theme, locale, plugin.ai.auto_save)."
       },
       value: {
-        label: "Value",
-        help: "Preference value (any JSON-serializable type)"
+        label: "Valor",
+        help: "Valor de la preferencia (cualquier tipo serializable en JSON)."
       }
     },
     _views: {
       mine: {
-        label: "My Preferences"
+        label: "Mis preferencias"
       },
       by_user: {
-        label: "By User"
+        label: "Por usuario"
       },
       all_preferences: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_oauth_application: {
-    label: "OAuth Application",
-    pluralLabel: "OAuth Applications",
-    description: "Registered OAuth/OIDC client applications",
+    label: "Aplicación OAuth",
+    pluralLabel: "Aplicaciones OAuth",
+    description: "Aplicaciones cliente OAuth/OIDC registradas",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       icon: {
-        label: "Icon",
-        help: "Logo URL shown on the consent screen"
+        label: "Icono",
+        help: "URL del logotipo que se muestra en la pantalla de consentimiento."
       },
       uri: {
-        label: "Home URI",
-        help: "Public homepage of the registered client"
+        label: "URI de inicio",
+        help: "Página principal pública del cliente registrado."
       },
       contacts: {
-        label: "Contacts",
-        help: "JSON-serialized list of contact email addresses"
+        label: "Contactos",
+        help: "Lista serializada en JSON de direcciones de correo electrónico de contacto."
       },
       tos: {
-        label: "Terms of Service"
+        label: "Términos del servicio"
       },
       policy: {
-        label: "Privacy Policy"
+        label: "Política de privacidad"
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized application metadata"
+        label: "Metadatos",
+        help: "Metadatos de la aplicación serializados en JSON."
       },
       client_id: {
-        label: "Client ID",
-        help: "Public OAuth client identifier"
+        label: "ID de cliente",
+        help: "Identificador público del cliente OAuth."
       },
       client_secret: {
-        label: "Client Secret",
-        help: "OAuth client secret (hashed/encrypted at rest)"
+        label: "Secreto de cliente",
+        help: "Secreto del cliente OAuth (con hash/cifrado en reposo)."
       },
       redirect_uris: {
-        label: "Redirect URIs",
-        help: "JSON-serialized list of allowed redirect URIs"
+        label: "URI de redirección",
+        help: "Lista serializada en JSON de URI de redirección permitidas."
       },
       post_logout_redirect_uris: {
-        label: "Post-logout Redirect URIs",
-        help: "JSON-serialized list of allowed post-logout redirect URIs"
+        label: "URI de redirección tras el cierre de sesión",
+        help: "Lista serializada en JSON de URI de redirección permitidas tras el cierre de sesión."
       },
       type: {
-        label: "Client Type",
+        label: "Tipo de cliente",
         options: {
-          web: "web",
-          native: "native",
-          useragentbased: "user-agent-based",
-          public: "public"
+          web: "Web",
+          native: "Nativa",
+          useragentbased: "Basada en agente de usuario",
+          public: "Público"
         }
       },
       public: {
-        label: "Public Client",
-        help: "Marks the client as a public (non-confidential) OAuth client"
+        label: "Cliente público",
+        help: "Marca al cliente como cliente OAuth público (no confidencial)."
       },
       require_pkce: {
-        label: "Require PKCE"
+        label: "Requerir PKCE"
       },
       token_endpoint_auth_method: {
-        label: "Token Endpoint Auth Method",
-        help: "e.g. client_secret_basic, client_secret_post, none"
+        label: "Método de autenticación del endpoint de token",
+        help: "p. ej. client_secret_basic, client_secret_post, none"
       },
       grant_types: {
-        label: "Grant Types",
-        help: "JSON-serialized list of allowed grant types"
+        label: "Tipos de concesión",
+        help: "Lista serializada en JSON de tipos de concesión permitidos."
       },
       response_types: {
-        label: "Response Types",
-        help: "JSON-serialized list of allowed response types"
+        label: "Tipos de respuesta",
+        help: "Lista serializada en JSON de tipos de respuesta permitidos."
       },
       scopes: {
-        label: "Allowed Scopes",
-        help: "JSON-serialized list of scopes the client may request"
+        label: "Ámbitos permitidos",
+        help: "Lista serializada en JSON de ámbitos que el cliente puede solicitar."
       },
       subject_type: {
-        label: "Subject Type",
-        help: "OIDC subject type (e.g. public, pairwise)"
+        label: "Tipo de sujeto",
+        help: "Tipo de sujeto OIDC (p. ej. public, pairwise)."
       },
       disabled: {
-        label: "Disabled"
+        label: "Deshabilitado"
       },
       skip_consent: {
-        label: "Skip Consent",
-        help: "Treat as a trusted client and bypass the consent screen"
+        label: "Omitir consentimiento",
+        help: "Tratar como cliente de confianza y omitir la pantalla de consentimiento."
       },
       enable_end_session: {
-        label: "Enable End Session",
-        help: "Allow the client to call the OIDC end-session endpoint"
+        label: "Habilitar finalización de sesión",
+        help: "Permitir que el cliente llame al endpoint OIDC de finalización de sesión."
       },
       software_id: {
-        label: "Software ID"
+        label: "ID de software"
       },
       software_version: {
-        label: "Software Version"
+        label: "Versión del software"
       },
       software_statement: {
-        label: "Software Statement",
-        help: "Signed JWT asserting the client metadata (RFC 7591 §2.3)"
+        label: "Declaración de software",
+        help: "JWT firmado que declara los metadatos del cliente (RFC 7591 §2.3)."
       },
       user_id: {
-        label: "Owner User",
-        help: "User who registered this application"
+        label: "Usuario propietario",
+        help: "Usuario que registró esta aplicación."
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "ID de referencia",
+        help: "Identificador de correlación proporcionado por quien llama."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       disabled_apps: {
-        label: "Disabled"
+        label: "Deshabilitado"
       },
       all_apps: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_oauth_access_token: {
-    label: "OAuth Access Token",
-    pluralLabel: "OAuth Access Tokens",
-    description: "Opaque OAuth access tokens issued to client applications",
+    label: "Token de acceso OAuth",
+    pluralLabel: "Tokens de acceso OAuth",
+    description: "Tokens de acceso OAuth opacos emitidos a aplicaciones cliente.",
     fields: {
       id: {
         label: "ID"
       },
       token: {
         label: "Token",
-        help: "Opaque access token value"
+        help: "Valor opaco del token de acceso."
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "ID de cliente",
+        help: "Clave foránea a sys_oauth_application.client_id."
       },
       session_id: {
-        label: "Session",
-        help: "Foreign key to sys_session.id"
+        label: "Sesión",
+        help: "Clave foránea a sys_session.id."
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "Usuario",
+        help: "Clave foránea a sys_user.id."
       },
       refresh_id: {
-        label: "Refresh Token",
-        help: "Foreign key to sys_oauth_refresh_token.id"
+        label: "Token de actualización",
+        help: "Clave foránea a sys_oauth_refresh_token.id."
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "ID de referencia",
+        help: "Identificador de correlación proporcionado por quien llama."
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes granted to this token"
+        label: "Ámbitos",
+        help: "Lista serializada en JSON de ámbitos concedidos a este token."
       },
       expires_at: {
-        label: "Expires At"
+        label: "Caduca el"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       }
     }
   },
   sys_oauth_refresh_token: {
-    label: "OAuth Refresh Token",
-    pluralLabel: "OAuth Refresh Tokens",
-    description: "Opaque OAuth refresh tokens (linked to a session)",
+    label: "Token de actualización OAuth",
+    pluralLabel: "Tokens de actualización OAuth",
+    description: "Tokens de actualización OAuth opacos (vinculados a una sesión).",
     fields: {
       id: {
         label: "ID"
       },
       token: {
         label: "Token",
-        help: "Opaque refresh token value"
+        help: "Valor opaco del token de actualización."
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "ID de cliente",
+        help: "Clave foránea a sys_oauth_application.client_id."
       },
       session_id: {
-        label: "Session",
-        help: "Foreign key to sys_session.id"
+        label: "Sesión",
+        help: "Clave foránea a sys_session.id."
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "Usuario",
+        help: "Clave foránea a sys_user.id."
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "ID de referencia",
+        help: "Identificador de correlación proporcionado por quien llama."
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes granted to this token"
+        label: "Ámbitos",
+        help: "Lista serializada en JSON de ámbitos concedidos a este token."
       },
       expires_at: {
-        label: "Expires At"
+        label: "Caduca el"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       revoked: {
-        label: "Revoked At",
-        help: "Timestamp at which this refresh token was revoked"
+        label: "Revocado el",
+        help: "Marca temporal en la que se revocó este token de actualización."
       },
       auth_time: {
-        label: "Auth Time",
-        help: "When the user originally authenticated for this token chain"
+        label: "Hora de autenticación",
+        help: "Momento en que el usuario se autenticó originalmente para esta cadena de tokens."
       }
     }
   },
   sys_oauth_consent: {
-    label: "OAuth Consent",
-    pluralLabel: "OAuth Consents",
-    description: "User consent records for OAuth client applications",
+    label: "Consentimiento OAuth",
+    pluralLabel: "Consentimientos OAuth",
+    description: "Registros de consentimiento de usuario para aplicaciones cliente OAuth.",
     fields: {
       id: {
         label: "ID"
       },
       client_id: {
-        label: "Client ID",
-        help: "Foreign key to sys_oauth_application.client_id"
+        label: "ID de cliente",
+        help: "Clave foránea a sys_oauth_application.client_id."
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user.id"
+        label: "Usuario",
+        help: "Clave foránea a sys_user.id."
       },
       reference_id: {
-        label: "Reference ID",
-        help: "Caller-supplied correlation identifier"
+        label: "ID de referencia",
+        help: "Identificador de correlación proporcionado por quien llama."
       },
       scopes: {
-        label: "Scopes",
-        help: "JSON-serialized list of scopes the user consented to"
+        label: "Ámbitos",
+        help: "Lista serializada en JSON de ámbitos a los que el usuario dio consentimiento."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_jwks: {
-    label: "JWKS Key",
-    pluralLabel: "JWKS Keys",
-    description: "Asymmetric key pairs used to sign and verify issued JWTs",
+    label: "Clave de firma (JWKS)",
+    pluralLabel: "Claves de firma (JWKS)",
+    description: "Pares de claves asimétricas utilizados para firmar y verificar los JWT emitidos.",
     fields: {
       id: {
-        label: "Key ID",
-        help: "JWK `kid` value"
+        label: "ID de clave",
+        help: "Valor `kid` de JWK."
       },
       public_key: {
-        label: "Public Key",
-        help: "JSON-serialized JWK public key"
+        label: "Clave pública",
+        help: "Clave pública JWK serializada en JSON."
       },
       private_key: {
-        label: "Private Key",
-        help: "JSON-serialized JWK private key (encrypted at rest)"
+        label: "Clave privada",
+        help: "Clave privada JWK serializada en JSON (cifrada en reposo)."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       expires_at: {
-        label: "Expires At",
-        help: "When the key may no longer be used to verify tokens"
+        label: "Caduca el",
+        help: "Momento en que la clave ya no podrá utilizarse para verificar tokens."
       }
     }
   },
   sys_role: {
-    label: "Role",
+    label: "Rol",
     pluralLabel: "Roles",
-    description: "Role definitions for RBAC access control",
+    description: "Definiciones de rol para el control de acceso RBAC",
     fields: {
       label: {
-        label: "Display Name"
+        label: "Nombre visible"
       },
       name: {
-        label: "API Name",
-        help: "Unique machine name for the role (e.g. admin, editor, viewer)"
+        label: "Nombre de API",
+        help: "Nombre técnico único del rol (p. ej. admin, editor, viewer)."
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       permissions: {
-        label: "Permissions",
-        help: "JSON-serialized array of permission strings"
+        label: "Permisos",
+        help: "Matriz serializada en JSON de cadenas de permisos."
       },
       active: {
-        label: "Active"
+        label: "Activo"
       },
       is_default: {
-        label: "Default Role",
-        help: "Automatically assigned to new users"
+        label: "Rol predeterminado",
+        help: "Se asigna automáticamente a los nuevos usuarios."
       },
       id: {
-        label: "Role ID"
+        label: "ID de rol"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       default_roles: {
-        label: "Default"
+        label: "Predeterminado"
       },
       custom: {
-        label: "Custom"
+        label: "Personalizado"
       },
       all_roles: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_permission_set: {
-    label: "Permission Set",
-    pluralLabel: "Permission Sets",
-    description: "Named permission groupings for fine-grained access control",
+    label: "Conjunto de permisos",
+    pluralLabel: "Conjuntos de permisos",
+    description: "Agrupaciones de permisos con nombre para un control de acceso detallado",
     fields: {
       label: {
-        label: "Display Name"
+        label: "Nombre visible"
       },
       name: {
-        label: "API Name",
-        help: "Unique machine name for the permission set"
+        label: "Nombre de API",
+        help: "Nombre técnico único del conjunto de permisos."
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       object_permissions: {
-        label: "Object Permissions",
-        help: "JSON-serialized object-level CRUD permissions"
+        label: "Permisos de objeto",
+        help: "Permisos CRUD a nivel de objeto serializados en JSON."
       },
       field_permissions: {
-        label: "Field Permissions",
-        help: "JSON-serialized field-level read/write permissions"
+        label: "Permisos de campo",
+        help: "Permisos de lectura/escritura a nivel de campo serializados en JSON."
       },
       active: {
-        label: "Active"
+        label: "Activo"
       },
       id: {
-        label: "Permission Set ID"
+        label: "ID de conjunto de permisos"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       inactive: {
-        label: "Inactive"
+        label: "Inactivo"
       },
       all_permsets: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_user_permission_set: {
-    label: "User Permission Set",
-    pluralLabel: "User Permission Sets",
-    description: "Direct assignment of a permission set to a user (optionally scoped to an organization).",
+    label: "Conjunto de permisos de usuario",
+    pluralLabel: "Conjuntos de permisos de usuario",
+    description: "Asignación directa de un conjunto de permisos a un usuario (opcionalmente con ámbito de organización).",
     fields: {
       id: {
-        label: "Assignment ID",
-        help: "UUID of the assignment."
+        label: "ID de asignación",
+        help: "UUID de la asignación."
       },
       user_id: {
-        label: "User",
-        help: "Foreign key to sys_user."
+        label: "Usuario",
+        help: "Clave foránea a sys_user."
       },
       permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
+        label: "Conjunto de permisos",
+        help: "Clave foránea a sys_permission_set."
       },
       organization_id: {
-        label: "Organization",
-        help: "Optional organization scope. NULL = applies in every org context."
+        label: "Organización",
+        help: "Ámbito de organización opcional. NULL = se aplica en cualquier contexto de organización."
       },
       granted_by: {
-        label: "Granted By",
-        help: "User who granted this permission set."
+        label: "Concedido por",
+        help: "Usuario que concedió este conjunto de permisos."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_role_permission_set: {
-    label: "Role Permission Set",
-    pluralLabel: "Role Permission Sets",
-    description: "Binds a permission set to a role.",
+    label: "Conjunto de permisos de rol",
+    pluralLabel: "Conjuntos de permisos de rol",
+    description: "Vincula un conjunto de permisos a un rol.",
     fields: {
       id: {
-        label: "Binding ID",
-        help: "UUID of the role-permission-set binding."
+        label: "ID de vinculación",
+        help: "UUID de la vinculación rol-conjunto de permisos."
       },
       role_id: {
-        label: "Role",
-        help: "Foreign key to sys_role."
+        label: "Rol",
+        help: "Clave foránea a sys_role."
       },
       permission_set_id: {
-        label: "Permission Set",
-        help: "Foreign key to sys_permission_set."
+        label: "Conjunto de permisos",
+        help: "Clave foránea a sys_permission_set."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_record_share: {
-    label: "Record Share",
-    pluralLabel: "Record Shares",
-    description: "Per-record sharing grant — extends OWD with explicit access",
+    label: "Compartición de registro",
+    pluralLabel: "Comparticiones de registro",
+    description: "Concesión de compartición por registro; amplía OWD con acceso explícito.",
     fields: {
       id: {
-        label: "Share ID"
+        label: "ID de compartición"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name of the shared record"
+        label: "Objeto",
+        help: "Nombre corto del objeto del registro compartido."
       },
       record_id: {
-        label: "Record",
-        help: "Primary key of the shared record within object_name"
+        label: "Registro",
+        help: "Clave primaria del registro compartido dentro de object_name."
       },
       recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that holds the grant",
+        label: "Tipo de destinatario",
+        help: "Tipo de principal que posee la concesión.",
         options: {
-          user: "user",
-          group: "group",
-          role: "role",
-          role_and_subordinates: "role_and_subordinates",
-          guest: "guest"
+          user: "Usuario",
+          group: "Grupo",
+          role: "Rol",
+          role_and_subordinates: "Rol y subordinados",
+          guest: "Invitado"
         }
       },
       recipient_id: {
-        label: "Recipient",
-        help: "ID of the user/group/role that receives access"
+        label: "Destinatario",
+        help: "ID del usuario/grupo/rol que recibe acceso."
       },
       access_level: {
-        label: "Access Level",
-        help: "What the recipient can do — read | edit | full (transfer/share/delete)",
+        label: "Nivel de acceso",
+        help: "Lo que puede hacer el destinatario: read | edit | full (transfer/share/delete).",
         options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
+          read: "Leer",
+          edit: "Editar",
+          full: "Total"
         }
       },
       source: {
-        label: "Source",
-        help: "Why this grant exists — used by the rule evaluator to reconcile",
+        label: "Origen",
+        help: "Motivo por el que existe esta concesión; lo utiliza el evaluador de reglas para reconciliar.",
         options: {
-          manual: "manual",
-          rule: "rule",
-          team: "team",
-          inherited: "inherited"
+          manual: "Manual",
+          rule: "Regla",
+          team: "Equipo",
+          inherited: "Heredado"
         }
       },
       source_id: {
-        label: "Source ID",
-        help: "Rule name / team id when source != manual"
+        label: "ID de origen",
+        help: "Nombre de la regla / ID del equipo cuando source != manual."
       },
       granted_by: {
-        label: "Granted By",
-        help: "User that created the grant (manual only)"
+        label: "Concedido por",
+        help: "Usuario que creó la concesión (solo manual)."
       },
       reason: {
-        label: "Reason",
-        help: "Optional free-text explanation surfaced to the recipient"
+        label: "Motivo",
+        help: "Explicación opcional en texto libre que se muestra al destinatario."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       granted_to_me: {
-        label: "Granted to Me"
+        label: "Concedidos a mí"
       },
       granted_by_me: {
-        label: "Granted by Me"
+        label: "Concedidos por mí"
       },
       by_object: {
-        label: "By Object"
+        label: "Por objeto"
       },
       manual_grants: {
-        label: "Manual Grants"
+        label: "Concesiones manuales"
       },
       rule_grants: {
-        label: "Rule Grants"
+        label: "Concesiones por regla"
       },
       all_shares: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_sharing_rule: {
-    label: "Sharing Rule",
-    pluralLabel: "Sharing Rules",
-    description: "Declarative sharing rule that auto-materialises sys_record_share grants. Authored via defineSharingRule() in code or the Studio criteria builder.",
+    label: "Regla de compartición",
+    pluralLabel: "Reglas de compartición",
+    description: "Regla de compartición declarativa que materializa automáticamente concesiones de sys_record_share. Se define mediante defineSharingRule() en código o con el generador de criterios de Studio.",
     fields: {
       id: {
-        label: "Rule ID"
+        label: "ID de regla"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this rule; null = global"
+        label: "Organización",
+        help: "Tenant que posee esta regla; null = global."
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case rule name"
+        label: "Nombre",
+        help: "Nombre de regla snake_case único."
       },
       label: {
-        label: "Display Label"
+        label: "Nombre visible"
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name (e.g. opportunity, account)"
+        label: "Objeto",
+        help: "Nombre corto del objeto (p. ej. opportunity, account)."
       },
       criteria_json: {
-        label: "Criteria (FilterCondition JSON)",
-        help: "JSON FilterCondition matched against records of object_name. Empty = match all."
+        label: "Criterios (JSON de FilterCondition)",
+        help: "FilterCondition JSON comparado con los registros de object_name. Vacío = coincide con todos."
       },
       recipient_type: {
-        label: "Recipient Type",
-        help: "Kind of principal that receives access — expanded to user grants at evaluation time. `department` walks the parent_department_id tree; `team` is flat (better-auth).",
+        label: "Tipo de destinatario",
+        help: "Tipo de principal que recibe acceso; se expande a concesiones de usuario durante la evaluación. `department` recorre el árbol parent_department_id; `team` es plano (better-auth).",
         options: {
-          user: "user",
-          team: "team",
-          department: "department",
-          role: "role",
-          queue: "queue"
+          user: "Usuario",
+          team: "Equipo",
+          department: "Departamento",
+          role: "Rol",
+          queue: "Cola"
         }
       },
       recipient_id: {
-        label: "Recipient",
-        help: "department id / team id / role name / queue name / user id depending on recipient_type"
+        label: "Destinatario",
+        help: "ID de departamento / ID de equipo / nombre del rol / nombre de la cola / ID del usuario según recipient_type."
       },
       access_level: {
-        label: "Access Level",
+        label: "Nivel de acceso",
         options: {
-          read: "read",
-          edit: "edit",
-          full: "full"
+          read: "Leer",
+          edit: "Editar",
+          full: "Total"
         }
       },
       active: {
-        label: "Active",
-        help: "Only active rules participate in lifecycle evaluation"
+        label: "Activo",
+        help: "Solo las reglas activas participan en la evaluación del ciclo de vida."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       inactive: {
-        label: "Inactive"
+        label: "Inactivo"
       },
       by_object: {
-        label: "By Object"
+        label: "Por objeto"
       },
       all_rules: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_audit_log: {
-    label: "Audit Log",
-    pluralLabel: "Audit Logs",
-    description: "Immutable audit trail for platform events",
+    label: "Registro de auditoría",
+    pluralLabel: "Registros de auditoría",
+    description: "Registro de auditoría inmutable para eventos de la plataforma",
     fields: {
       created_at: {
-        label: "Timestamp"
+        label: "Marca temporal"
       },
       action: {
-        label: "Action",
-        help: "Action type (snake_case)",
+        label: "Acción",
+        help: "Tipo de acción (snake_case).",
         options: {
-          create: "create",
-          update: "update",
-          delete: "delete",
-          restore: "restore",
-          login: "login",
-          logout: "logout",
-          permission_change: "permission_change",
-          config_change: "config_change",
-          export: "export",
-          import: "import"
+          create: "Crear",
+          update: "Actualizar",
+          delete: "Eliminar",
+          restore: "Restaurar",
+          login: "Inicio de sesión",
+          logout: "Cierre de sesión",
+          permission_change: "Cambio de permisos",
+          config_change: "Cambio de configuración",
+          export: "Exportar",
+          import: "Importar"
         }
       },
       user_id: {
         label: "Actor",
-        help: "User who performed the action (null for system actions)"
+        help: "Usuario que realizó la acción (null para acciones del sistema)."
       },
       object_name: {
-        label: "Object",
-        help: "Target object (e.g. sys_user, project_task)"
+        label: "Objeto",
+        help: "Objeto de destino (p. ej. sys_user, project_task)."
       },
       record_id: {
-        label: "Record ID",
-        help: "ID of the affected record"
+        label: "ID de registro",
+        help: "ID del registro afectado."
       },
       old_value: {
-        label: "Old Value",
-        help: "JSON-serialized previous state"
+        label: "Valor anterior",
+        help: "Estado anterior serializado en JSON."
       },
       new_value: {
-        label: "New Value",
-        help: "JSON-serialized new state"
+        label: "Valor nuevo",
+        help: "Estado nuevo serializado en JSON."
       },
       ip_address: {
-        label: "IP Address"
+        label: "Dirección IP"
       },
       user_agent: {
-        label: "User Agent"
+        label: "Agente de usuario"
       },
       tenant_id: {
         label: "Tenant",
-        help: "Tenant context for multi-tenant isolation"
+        help: "Contexto del tenant para el aislamiento multi-tenant."
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
+        label: "Metadatos",
+        help: "Contexto adicional serializado en JSON."
       },
       id: {
-        label: "Audit Log ID"
+        label: "ID de registro de auditoría"
       }
     },
     _views: {
       recent: {
-        label: "Recent"
+        label: "Recientes"
       },
       writes_only: {
-        label: "Writes"
+        label: "Escrituras"
       },
       auth_events: {
-        label: "Auth"
+        label: "Autenticación"
       },
       config_changes: {
-        label: "Config"
+        label: "Configuración"
       },
       all_events: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_presence: {
-    label: "Presence",
-    pluralLabel: "Presences",
-    description: "Real-time user presence and activity tracking",
+    label: "Presencia",
+    pluralLabel: "Presencias",
+    description: "Seguimiento en tiempo real de presencia y actividad de usuarios",
     fields: {
       id: {
-        label: "Presence ID"
+        label: "ID de presencia"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       user_id: {
-        label: "User"
+        label: "Usuario"
       },
       session_id: {
-        label: "Session"
+        label: "Sesión"
       },
       status: {
-        label: "Status",
+        label: "Estado",
         options: {
-          online: "Online",
-          away: "Away",
-          busy: "Busy",
-          offline: "Offline"
+          online: "En línea",
+          away: "Ausente",
+          busy: "Ocupado",
+          offline: "Desconectado"
         }
       },
       last_seen: {
-        label: "Last Seen"
+        label: "Visto por última vez"
       },
       current_location: {
-        label: "Current Location"
+        label: "Ubicación actual"
       },
       device: {
-        label: "Device",
+        label: "Dispositivo",
         options: {
-          desktop: "Desktop",
-          mobile: "Mobile",
-          tablet: "Tablet",
-          other: "Other"
+          desktop: "Escritorio",
+          mobile: "Móvil",
+          tablet: "Tableta",
+          other: "Otro"
         }
       },
       custom_status: {
-        label: "Custom Status"
+        label: "Estado personalizado"
       },
       metadata: {
-        label: "Metadata",
-        help: "Arbitrary JSON metadata associated with the presence state (matches PresenceStateSchema.metadata)."
+        label: "Metadatos",
+        help: "Metadatos JSON arbitrarios asociados al estado de presencia (coincide con PresenceStateSchema.metadata)."
       }
     }
   },
   sys_activity: {
-    label: "Activity",
-    pluralLabel: "Activities",
-    description: "Recent activity stream entries (lightweight, denormalized)",
+    label: "Actividad",
+    pluralLabel: "Actividades",
+    description: "Entradas recientes del flujo de actividad (ligeras y desnormalizadas).",
     fields: {
       id: {
-        label: "Activity ID"
+        label: "ID de actividad"
       },
       timestamp: {
-        label: "Timestamp"
+        label: "Marca temporal"
       },
       type: {
-        label: "Type",
+        label: "Tipo",
         options: {
-          created: "created",
-          updated: "updated",
-          deleted: "deleted",
-          commented: "commented",
-          mentioned: "mentioned",
-          shared: "shared",
-          assigned: "assigned",
-          completed: "completed",
-          login: "login",
-          logout: "logout",
-          system: "system"
+          created: "Creado",
+          updated: "Actualizado",
+          deleted: "Eliminado",
+          commented: "Comentado",
+          mentioned: "Mencionado",
+          shared: "Compartido",
+          assigned: "Asignado",
+          completed: "Completado",
+          login: "Inicio de sesión",
+          logout: "Cierre de sesión",
+          system: "Sistema"
         }
       },
       summary: {
-        label: "Summary",
-        help: "Human-readable one-line summary"
+        label: "Resumen",
+        help: "Resumen legible de una línea."
       },
       actor_id: {
         label: "Actor"
       },
       actor_name: {
-        label: "Actor Name"
+        label: "Nombre del actor"
       },
       actor_avatar_url: {
-        label: "Actor Avatar"
+        label: "Avatar del actor"
       },
       object_name: {
-        label: "Object",
-        help: "Target object short name (e.g. account, sys_user)"
+        label: "Objeto",
+        help: "Nombre corto del objeto de destino (p. ej. account, sys_user)."
       },
       record_id: {
-        label: "Record ID"
+        label: "ID de registro"
       },
       record_label: {
-        label: "Record Label",
-        help: "Display label of the target record at write time"
+        label: "Nombre visible del registro",
+        help: "Nombre visible del registro de destino en el momento de escritura."
       },
       url: {
         label: "URL",
-        help: "Optional deep-link to the activity target"
+        help: "Enlace profundo opcional al destino de la actividad."
       },
       project_id: {
-        label: "Project",
-        help: "Project context (multi-project deployments)"
+        label: "Proyecto",
+        help: "Contexto del proyecto (implementaciones multiproyecto)."
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized additional context"
+        label: "Metadatos",
+        help: "Contexto adicional serializado en JSON."
       }
     }
   },
   sys_comment: {
-    label: "Comment",
-    pluralLabel: "Comments",
-    description: "Threaded comments attached to records via thread_id",
+    label: "Comentario",
+    pluralLabel: "Comentarios",
+    description: "Comentarios en hilo adjuntos a registros mediante thread_id.",
     fields: {
       id: {
-        label: "Comment ID"
+        label: "ID de comentario"
       },
       thread_id: {
-        label: "Thread",
-        help: "Thread identifier — conventionally `{object}:{record_id}` (e.g. `sys_user:abc123`)"
+        label: "Hilo",
+        help: "Identificador del hilo; por convención `{object}:{record_id}` (p. ej. `sys_user:abc123`)."
       },
       parent_id: {
-        label: "Parent Comment",
-        help: "Optional parent comment for nested replies"
+        label: "Comentario principal",
+        help: "Comentario principal opcional para respuestas anidadas."
       },
       reply_count: {
-        label: "Reply Count"
+        label: "Número de respuestas"
       },
       author_id: {
-        label: "Author"
+        label: "Autor"
       },
       author_name: {
-        label: "Author Name"
+        label: "Nombre del autor"
       },
       author_avatar_url: {
-        label: "Author Avatar"
+        label: "Avatar del autor"
       },
       body: {
-        label: "Body",
-        help: "Comment text (Markdown supported)"
+        label: "Contenido",
+        help: "Texto del comentario (compatible con Markdown)."
       },
       mentions: {
-        label: "Mentions",
-        help: "JSON array of @mention objects"
+        label: "Menciones",
+        help: "Matriz JSON de objetos @mention."
       },
       reactions: {
-        label: "Reactions",
-        help: "JSON array of emoji reaction objects"
+        label: "Reacciones",
+        help: "Matriz JSON de objetos de reacción emoji."
       },
       is_edited: {
-        label: "Edited"
+        label: "Editado"
       },
       edited_at: {
-        label: "Edited At"
+        label: "Editado el"
       },
       visibility: {
-        label: "Visibility",
+        label: "Visibilidad",
         options: {
-          public: "public",
-          internal: "internal",
-          private: "private"
+          public: "Público",
+          internal: "Interno",
+          private: "Privado"
         }
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_attachment: {
-    label: "Attachment",
-    pluralLabel: "Attachments",
-    description: "Polymorphic link between a sys_file and any other record",
+    label: "Adjunto",
+    pluralLabel: "Adjuntos",
+    description: "Vínculo polimórfico entre un sys_file y cualquier otro registro.",
     fields: {
       id: {
-        label: "Attachment ID"
+        label: "ID de adjunto"
       },
       parent_object: {
-        label: "Parent Object",
-        help: "Short object name of the attached-to record (e.g. account, lead)"
+        label: "Objeto principal",
+        help: "Nombre corto del objeto del registro adjunto (p. ej. account, lead)."
       },
       parent_id: {
-        label: "Parent Record",
-        help: "Primary key of the attached-to record"
+        label: "Registro principal",
+        help: "Clave primaria del registro al que se adjunta."
       },
       file_id: {
-        label: "File",
-        help: "The sys_file storage entry being attached"
+        label: "Archivo",
+        help: "Entrada de almacenamiento sys_file que se está adjuntando."
       },
       file_name: {
-        label: "File Name",
-        help: "Denormalised copy of sys_file.name for fast list rendering"
+        label: "Nombre del archivo",
+        help: "Copia desnormalizada de sys_file.name para renderizado rápido de listas."
       },
       mime_type: {
-        label: "MIME Type"
+        label: "Tipo MIME"
       },
       size: {
-        label: "Size (bytes)"
+        label: "Tamaño (bytes)"
       },
       share_type: {
-        label: "Share Type",
-        help: "viewer | collaborator | inferred (inherited from parent record)",
+        label: "Tipo de compartición",
+        help: "visualizador | colaborador | inferido (heredado del registro principal)",
         options: {
-          viewer: "viewer",
-          collaborator: "collaborator",
-          inferred: "inferred"
+          viewer: "Visualizador",
+          collaborator: "Colaborador",
+          inferred: "Inferido"
         }
       },
       visibility: {
-        label: "Visibility",
+        label: "Visibilidad",
         options: {
-          internal: "internal",
-          all_users: "all_users",
-          shared_users: "shared_users"
+          internal: "Interno",
+          all_users: "Todos los usuarios",
+          shared_users: "Usuarios compartidos"
         }
       },
       uploaded_by: {
-        label: "Uploaded By"
+        label: "Subido por"
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_notification: {
-    label: "Notification",
-    pluralLabel: "Notifications",
-    description: "Per-user notification inbox entries",
+    label: "Notificación",
+    pluralLabel: "Notificaciones",
+    description: "Entradas del buzón de notificaciones por usuario",
     fields: {
       id: {
-        label: "Notification ID"
+        label: "ID de notificación"
       },
       recipient_id: {
-        label: "Recipient",
-        help: "User the notification is delivered to"
+        label: "Destinatario",
+        help: "Usuario al que se entrega la notificación."
       },
       type: {
-        label: "Type",
-        help: "Notification category — drives icon + sort priority",
+        label: "Tipo",
+        help: "Categoría de notificación; controla el icono y la prioridad de ordenación.",
         options: {
-          mention: "mention",
-          assignment: "assignment",
-          comment_reply: "comment_reply",
-          lead_converted: "lead_converted",
-          task_due: "task_due",
-          system: "system"
+          mention: "Mención",
+          assignment: "Asignación",
+          comment_reply: "Respuesta a comentario",
+          lead_converted: "Prospecto convertido",
+          task_due: "Tarea vencida",
+          system: "Sistema"
         }
       },
       title: {
-        label: "Title"
+        label: "Título"
       },
       body: {
-        label: "Body",
-        help: "Optional secondary text (one-line summary)"
+        label: "Contenido",
+        help: "Texto secundario opcional (resumen de una línea)."
       },
       source_object: {
-        label: "Source Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
+        label: "Objeto de origen",
+        help: "Nombre del objeto del registro relacionado (p. ej. lead, opportunity)."
       },
       source_id: {
-        label: "Source Record",
-        help: "Record id within source_object"
+        label: "Registro de origen",
+        help: "ID del registro dentro de source_object."
       },
       url: {
-        label: "Deep Link",
-        help: "Optional URL to navigate to when clicked"
+        label: "Enlace profundo",
+        help: "URL opcional a la que navegar al hacer clic."
       },
       actor_id: {
         label: "Actor",
-        help: "User who caused the notification (mentioner, assigner)"
+        help: "Usuario que provocó la notificación (quien menciona, quien asigna)."
       },
       actor_name: {
-        label: "Actor Name"
+        label: "Nombre del actor"
       },
       is_read: {
-        label: "Read",
-        help: "True once recipient acknowledges"
+        label: "Leído",
+        help: "Verdadero una vez que el destinatario la reconoce."
       },
       read_at: {
-        label: "Read At"
+        label: "Leído el"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       unread: {
-        label: "Unread"
+        label: "No leídas"
       },
       mine: {
-        label: "Mine"
+        label: "Mías"
       },
       all_notifications: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_email: {
-    label: "Email",
-    pluralLabel: "Emails",
-    description: "Outbound email delivery log",
+    label: "Correo",
+    pluralLabel: "Correos",
+    description: "Registro de envíos de correo salientes",
     fields: {
       id: {
-        label: "Email ID"
+        label: "ID de correo"
       },
       message_id: {
         label: "Message-ID",
-        help: "RFC-5322 Message-ID assigned by the transport"
+        help: "Message-ID RFC-5322 asignado por el transporte."
       },
       from_address: {
-        label: "From"
+        label: "De"
       },
       to_addresses: {
-        label: "To",
-        help: "Comma-separated recipient addresses"
+        label: "Para",
+        help: "Direcciones de destinatarios separadas por comas."
       },
       cc_addresses: {
         label: "Cc"
       },
       bcc_addresses: {
-        label: "Bcc"
+        label: "Cco"
       },
       reply_to: {
-        label: "Reply-To"
+        label: "Responder a"
       },
       subject: {
-        label: "Subject"
+        label: "Asunto"
       },
       body_text: {
-        label: "Body (text)"
+        label: "Contenido (texto)"
       },
       body_html: {
-        label: "Body (HTML)"
+        label: "Contenido (HTML)"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state — queued by IEmailService.send before transport call",
+        label: "Estado",
+        help: "Estado del ciclo de vida; se pone en cola mediante IEmailService.send antes de la llamada al transporte.",
         options: {
-          queued: "queued",
-          sent: "sent",
-          failed: "failed"
+          queued: "En cola",
+          sent: "Enviado",
+          failed: "Fallido"
         }
       },
       error: {
         label: "Error",
-        help: "Transport error message when status=failed"
+        help: "Mensaje de error del transporte cuando status=failed."
       },
       attempt_count: {
-        label: "Attempts",
-        help: "Number of delivery attempts performed by the service"
+        label: "Intentos",
+        help: "Número de intentos de entrega realizados por el servicio."
       },
       sent_at: {
-        label: "Sent At",
-        help: "Set when status transitions to \"sent\""
+        label: "Enviado el",
+        help: "Se establece cuando el estado pasa a \"sent\"."
       },
       related_object: {
-        label: "Related Object",
-        help: "Object name of the related record (e.g. lead, opportunity)"
+        label: "Objeto relacionado",
+        help: "Nombre del objeto del registro relacionado (p. ej. lead, opportunity)."
       },
       related_id: {
-        label: "Related Record",
-        help: "Record id within related_object"
+        label: "Registro relacionado",
+        help: "ID del registro dentro de related_object."
       },
       sent_by: {
-        label: "Sent By"
+        label: "Enviado por"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_email_template: {
-    label: "Email Template",
-    pluralLabel: "Email Templates",
-    description: "Outbound email template (subject + body + variables) resolved by name+locale",
+    label: "Plantilla de correo",
+    pluralLabel: "Plantillas de correo",
+    description: "Plantilla de correo saliente (asunto + contenido + variables) resuelta por nombre+idioma",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name",
-        help: "Dotted snake_case identifier (e.g. auth.password_reset)"
+        label: "Nombre",
+        help: "Identificador snake_case con puntos (p. ej. auth.password_reset)."
       },
       label: {
-        label: "Label",
-        help: "Human-readable name shown in Studio"
+        label: "Nombre visible",
+        help: "Nombre legible que se muestra en Studio."
       },
       category: {
-        label: "Category",
+        label: "Categoría",
         options: {
-          auth: "auth",
-          notification: "notification",
-          workflow: "workflow",
-          marketing: "marketing",
-          custom: "custom"
+          auth: "Autenticación",
+          notification: "Notificación",
+          workflow: "Flujo de trabajo",
+          marketing: "Marketing",
+          custom: "Personalizado"
         }
       },
       locale: {
-        label: "Locale",
-        help: "BCP-47 locale tag (en-US, zh-CN, …)"
+        label: "Idioma",
+        help: "Etiqueta de idioma BCP-47 (en-US, zh-CN, …)."
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       subject: {
-        label: "Subject",
-        help: "Subject template; supports {{var.path}} placeholders"
+        label: "Asunto",
+        help: "Plantilla de asunto; admite marcadores {{var.path}}."
       },
       body_html: {
-        label: "HTML Body",
-        help: "HTML body template; supports {{var.path}} placeholders"
+        label: "Contenido HTML",
+        help: "Plantilla HTML del contenido; admite marcadores {{var.path}}."
       },
       body_text: {
-        label: "Plain Text Body",
-        help: "Optional plain-text alternative (auto-derived from HTML when blank)"
+        label: "Contenido de texto sin formato",
+        help: "Alternativa opcional en texto sin formato (se deriva automáticamente del HTML cuando está vacía)."
       },
       from_name: {
-        label: "From Name"
+        label: "Nombre del remitente"
       },
       from_address: {
-        label: "From Address"
+        label: "Dirección del remitente"
       },
       reply_to: {
-        label: "Reply-To"
+        label: "Responder a"
       },
       active: {
-        label: "Active"
+        label: "Activo"
       },
       is_system: {
-        label: "System Template",
-        help: "Provided by a plugin / platform; tenants may edit but should not delete"
+        label: "Plantilla del sistema",
+        help: "La proporciona un plugin o la plataforma; los tenants pueden editarla, pero no deberían eliminarla."
       },
       variables_json: {
         label: "Variables (JSON)",
-        help: "JSON array of {name,type,required,description}"
+        help: "Matriz JSON de {name,type,required,description}."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_saved_report: {
-    label: "Saved Report",
-    pluralLabel: "Saved Reports",
-    description: "Persisted ObjectQL report definition — re-runnable and schedulable",
+    label: "Informe guardado",
+    pluralLabel: "Informes guardados",
+    description: "Definición de informe ObjectQL persistida; se puede volver a ejecutar y programar",
     fields: {
       id: {
-        label: "Report ID"
+        label: "ID de informe"
       },
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name the report queries"
+        label: "Objeto",
+        help: "Nombre corto del objeto que consulta el informe."
       },
       query_json: {
-        label: "Query",
-        help: "ObjectQL query envelope — { filter, fields, orderBy, limit, groupBy }"
+        label: "Consulta",
+        help: "Envoltorio de consulta ObjectQL: { filter, fields, orderBy, limit, groupBy }."
       },
       format: {
-        label: "Format",
-        help: "Rendering used by IReportService.run() and email digests",
+        label: "Formato",
+        help: "Renderizado utilizado por IReportService.run() y los resúmenes por correo.",
         options: {
-          csv: "csv",
-          json: "json",
-          html_table: "html_table"
+          csv: "CSV",
+          json: "JSON",
+          html_table: "Tabla HTML"
         }
       },
       owner_id: {
-        label: "Owner",
-        help: "User that owns the report definition (drives sharing)"
+        label: "Propietario",
+        help: "Usuario propietario de la definición del informe (controla la compartición)."
       },
       last_run_at: {
-        label: "Last Run",
-        help: "Stamped by IReportService.run() on successful execution"
+        label: "Última ejecución",
+        help: "Marcado por IReportService.run() tras una ejecución correcta."
       },
       last_row_count: {
-        label: "Last Row Count"
+        label: "Último recuento de filas"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_report_schedule: {
-    label: "Report Schedule",
-    pluralLabel: "Report Schedules",
-    description: "Recurring delivery of a sys_saved_report via email",
+    label: "Programación de informe",
+    pluralLabel: "Programaciones de informes",
+    description: "Entrega recurrente de un sys_saved_report por correo electrónico",
     fields: {
       id: {
-        label: "Schedule ID"
+        label: "ID de programación"
       },
       report_id: {
-        label: "Report"
+        label: "Informe"
       },
       name: {
-        label: "Name",
-        help: "Optional label for the digest — used in the email subject"
+        label: "Nombre",
+        help: "Nombre visible opcional para el resumen; se usa en el asunto del correo."
       },
       interval_minutes: {
-        label: "Interval (minutes)",
-        help: "How often to send (1440 = daily, 10080 = weekly)"
+        label: "Intervalo (minutos)",
+        help: "Frecuencia de envío (1440 = diario, 10080 = semanal)."
       },
       cron_expression: {
-        label: "Cron Expression",
-        help: "Optional 5/6-field cron — overrides interval_minutes when present"
+        label: "Expresión Cron",
+        help: "Cron opcional de 5/6 campos; sustituye a interval_minutes cuando está presente."
       },
       timezone: {
-        label: "Timezone"
+        label: "Zona horaria"
       },
       active: {
-        label: "Active"
+        label: "Activo"
       },
       recipients: {
-        label: "Recipients",
-        help: "Comma-separated email addresses"
+        label: "Destinatarios",
+        help: "Direcciones de correo electrónico separadas por comas."
       },
       format: {
-        label: "Format",
-        help: "Render format — csv is attached, html_table is inlined",
+        label: "Formato",
+        help: "Formato de renderizado; csv se adjunta y html_table se inserta en línea.",
         options: {
-          csv: "csv",
-          html_table: "html_table"
+          csv: "CSV",
+          html_table: "Tabla HTML"
         }
       },
       subject_template: {
-        label: "Subject Template",
-        help: "Email subject; {{name}} / {{date}} / {{rows}} are substituted"
+        label: "Plantilla de asunto",
+        help: "Asunto del correo; se sustituyen {{name}} / {{date}} / {{rows}}."
       },
       owner_id: {
-        label: "Owner"
+        label: "Propietario"
       },
       next_run_at: {
-        label: "Next Run",
-        help: "Dispatcher loads schedules where next_run_at <= now"
+        label: "Próxima ejecución",
+        help: "El despachador carga las programaciones cuyo next_run_at <= now."
       },
       last_sent_at: {
-        label: "Last Sent"
+        label: "Último envío"
       },
       last_status: {
-        label: "Last Status",
+        label: "Último estado",
         options: {
-          ok: "ok",
-          failed: "failed",
-          skipped: "skipped"
+          ok: "Correcto",
+          failed: "Fallido",
+          skipped: "Omitido"
         }
       },
       last_error: {
-        label: "Last Error"
+        label: "Último error"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_approval_process: {
-    label: "Approval Process",
-    pluralLabel: "Approval Processes",
-    description: "Persisted approval process definition. Authored via defineApprovalProcess() in code; visual designer is on the roadmap.",
+    label: "Proceso de aprobación",
+    pluralLabel: "Procesos de aprobación",
+    description: "Definición persistida del proceso de aprobación. Se crea mediante defineApprovalProcess() en código; el diseñador visual está en la hoja de ruta.",
     fields: {
       id: {
-        label: "Process ID"
+        label: "ID de proceso"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced by submitters and audit rows"
+        label: "Nombre",
+        help: "Nombre snake_case único; lo utilizan los remitentes y las filas de auditoría."
       },
       label: {
-        label: "Display Label"
+        label: "Nombre visible"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name this process governs"
+        label: "Objeto",
+        help: "Nombre corto del objeto que rige este proceso."
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       active: {
-        label: "Active",
-        help: "Only active processes are dispatched on submission"
+        label: "Activo",
+        help: "Solo los procesos activos se despachan al enviarse."
       },
       definition_json: {
-        label: "Definition",
-        help: "Serialised ApprovalProcess JSON (see @objectstack/spec/automation/approval)"
+        label: "Definición",
+        help: "JSON serializado de ApprovalProcess (consulte @objectstack/spec/automation/approval)."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       inactive: {
-        label: "Inactive"
+        label: "Inactivo"
       },
       by_object: {
-        label: "By Object"
+        label: "Por objeto"
       },
       all_processes: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_approval_request: {
-    label: "Approval Request",
-    pluralLabel: "Approval Requests",
-    description: "Live approval instance tracked per submission",
+    label: "Solicitud de aprobación",
+    pluralLabel: "Solicitudes de aprobación",
+    description: "Instancia activa de aprobación registrada por envío",
     fields: {
       id: {
-        label: "Request ID"
+        label: "ID de solicitud"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this approval request (propagated from submitter context)"
+        label: "Organización",
+        help: "Tenant que posee esta solicitud de aprobación (propagado desde el contexto del solicitante)."
       },
       process_name: {
-        label: "Process",
-        help: "sys_approval_process.name this request was opened against"
+        label: "Proceso",
+        help: "sys_approval_process.name contra el que se abrió esta solicitud."
       },
       object_name: {
-        label: "Object"
+        label: "Objeto"
       },
       record_id: {
-        label: "Record ID"
+        label: "ID de registro"
       },
       submitter_id: {
-        label: "Submitter"
+        label: "Solicitante"
       },
       submitter_comment: {
-        label: "Submitter Comment"
+        label: "Comentario del solicitante"
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state of the request",
+        label: "Estado",
+        help: "Estado del ciclo de vida de la solicitud.",
         options: {
-          pending: "pending",
-          approved: "approved",
-          rejected: "rejected",
-          recalled: "recalled"
+          pending: "Pendiente",
+          approved: "Aprobada",
+          rejected: "Rechazada",
+          recalled: "Retirada"
         }
       },
       current_step: {
-        label: "Current Step",
-        help: "Machine name of the step awaiting approval"
+        label: "Paso actual",
+        help: "Nombre técnico del paso pendiente de aprobación."
       },
       current_step_index: {
-        label: "Current Step Index"
+        label: "Índice del paso actual"
       },
       pending_approvers: {
-        label: "Pending Approvers",
-        help: "Comma-separated user ids who can act on the current step"
+        label: "Aprobadores pendientes",
+        help: "ID de usuario separados por comas que pueden actuar en el paso actual."
       },
       payload_json: {
-        label: "Snapshot",
-        help: "Record snapshot at submission time"
+        label: "Instantánea",
+        help: "Instantánea del registro en el momento del envío."
       },
       completed_at: {
-        label: "Completed At"
+        label: "Completado el"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       my_pending: {
-        label: "My Pending"
+        label: "Mis pendientes"
       },
       submitted_by_me: {
         label: "I Submitted"
       },
       completed: {
-        label: "Completed"
+        label: "Completadas"
       },
       all_requests: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_approval_action: {
-    label: "Approval Action",
-    pluralLabel: "Approval Actions",
-    description: "Append-only audit trail for approval actions",
+    label: "Acción de aprobación",
+    pluralLabel: "Acciones de aprobación",
+    description: "Registro de auditoría append-only para acciones de aprobación",
     fields: {
       id: {
-        label: "Action ID"
+        label: "ID de acción"
       },
       organization_id: {
-        label: "Organization",
-        help: "Tenant that owns this action (mirrors the parent request)"
+        label: "Organización",
+        help: "Tenant que posee esta acción (refleja la solicitud principal)."
       },
       request_id: {
-        label: "Request"
+        label: "Solicitud"
       },
       step_name: {
-        label: "Step",
-        help: "Machine name of the step at the time of the action"
+        label: "Paso",
+        help: "Nombre técnico del paso en el momento de la acción."
       },
       step_index: {
-        label: "Step Index"
+        label: "Índice del paso"
       },
       action: {
-        label: "Action",
+        label: "Acción",
         options: {
-          submit: "submit",
-          approve: "approve",
-          reject: "reject",
-          recall: "recall",
-          escalate: "escalate"
+          submit: "Enviar",
+          approve: "Aprobar",
+          reject: "Rechazar",
+          recall: "Retirar",
+          escalate: "Escalar"
         }
       },
       actor_id: {
         label: "Actor"
       },
       comment: {
-        label: "Comment"
+        label: "Comentario"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       }
     },
     _views: {
       recent: {
-        label: "Recent"
+        label: "Recientes"
       },
       by_actor: {
-        label: "By Actor"
+        label: "Por actor"
       },
       all_actions: {
-        label: "All"
+        label: "Todas"
       }
     }
   },
   sys_job: {
-    label: "Background Job",
-    pluralLabel: "Background Jobs",
-    description: "Catalogue of registered background jobs",
+    label: "Tarea en segundo plano",
+    pluralLabel: "Tareas en segundo plano",
+    description: "Catálogo de tareas en segundo plano registradas",
     fields: {
       id: {
-        label: "Job ID"
+        label: "ID de tarea"
       },
       name: {
-        label: "Job Name",
-        help: "Unique job identifier (snake_case)"
+        label: "Nombre de la tarea",
+        help: "Identificador único de tarea (snake_case)."
       },
       schedule_type: {
-        label: "Schedule Type",
+        label: "Tipo de programación",
         options: {
-          cron: "cron",
-          interval: "interval",
-          once: "once"
+          cron: "Cron",
+          interval: "Intervalo",
+          once: "Una vez"
         }
       },
       schedule_expression: {
-        label: "Expression",
-        help: "Cron expression / interval ms / ISO datetime"
+        label: "Expresión",
+        help: "Expresión Cron / intervalo en ms / fecha-hora ISO."
       },
       timezone: {
-        label: "Timezone"
+        label: "Zona horaria"
       },
       active: {
-        label: "Active",
-        help: "Whether the scheduler is currently running this job"
+        label: "Activo",
+        help: "Indica si el programador está ejecutando actualmente esta tarea."
       },
       last_run_at: {
-        label: "Last Run At"
+        label: "Última ejecución el"
       },
       last_status: {
-        label: "Last Status",
+        label: "Último estado",
         options: {
-          success: "success",
-          failed: "failed",
-          timeout: "timeout",
-          running: "running"
+          success: "Correcto",
+          failed: "Fallido",
+          timeout: "Tiempo de espera agotado",
+          running: "En ejecución"
         }
       },
       last_error: {
-        label: "Last Error"
+        label: "Último error"
       },
       run_count: {
-        label: "Run Count"
+        label: "Número de ejecuciones"
       },
       failure_count: {
-        label: "Failure Count"
+        label: "Número de fallos"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_job_run: {
-    label: "Job Run",
-    pluralLabel: "Job Runs",
-    description: "Background job execution audit trail",
+    label: "Ejecución de tarea",
+    pluralLabel: "Ejecuciones de tarea",
+    description: "Registro de auditoría de ejecución de tareas en segundo plano",
     fields: {
       id: {
-        label: "Run ID"
+        label: "ID de ejecución"
       },
       job_name: {
-        label: "Job"
+        label: "Tarea"
       },
       status: {
-        label: "Status",
+        label: "Estado",
         options: {
-          running: "running",
-          success: "success",
-          failed: "failed",
-          timeout: "timeout"
+          running: "En ejecución",
+          success: "Correcto",
+          failed: "Fallido",
+          timeout: "Tiempo de espera agotado"
         }
       },
       started_at: {
-        label: "Started At"
+        label: "Iniciada el"
       },
       completed_at: {
-        label: "Completed At"
+        label: "Completado el"
       },
       duration_ms: {
-        label: "Duration (ms)"
+        label: "Duración (ms)"
       },
       attempt: {
-        label: "Attempt",
-        help: "1 for first run, >1 for retries/replays"
+        label: "Intento",
+        help: "1 para la primera ejecución, >1 para reintentos/repeticiones."
       },
       trigger: {
-        label: "Trigger",
+        label: "Desencadenante",
         options: {
-          schedule: "schedule",
-          manual: "manual",
-          replay: "replay"
+          schedule: "Programación",
+          manual: "Manual",
+          replay: "Repetición"
         }
       },
       error: {
         label: "Error"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       }
     }
   },
   sys_job_queue: {
-    label: "Job Queue Message",
-    pluralLabel: "Job Queue Messages",
-    description: "Durable job/message queue including dead letters",
+    label: "Mensaje de la cola de tareas",
+    pluralLabel: "Mensajes de la cola de tareas",
+    description: "Cola duradera de tareas/mensajes, incluidos los mensajes fallidos (dead letters).",
     fields: {
       id: {
-        label: "Message ID"
+        label: "ID de mensaje"
       },
       queue: {
-        label: "Queue",
-        help: "Logical queue name (snake_case)"
+        label: "Cola",
+        help: "Nombre lógico de la cola (snake_case)."
       },
       idempotency_key: {
-        label: "Idempotency Key",
-        help: "Deduplication key within (queue, window)"
+        label: "Clave de idempotencia",
+        help: "Clave de deduplicación dentro de (queue, window)."
       },
       payload_json: {
-        label: "Payload (JSON)",
-        help: "Serialized message body"
+        label: "Carga útil (JSON)",
+        help: "Cuerpo del mensaje serializado."
       },
       metadata_json: {
-        label: "Metadata (JSON)",
-        help: "Serialized metadata bag (tenant_id, source_record, ...)"
+        label: "Metadatos (JSON)",
+        help: "Bolsa de metadatos serializada (tenant_id, source_record, ...)."
       },
       status: {
-        label: "Status",
-        help: "Lifecycle state",
+        label: "Estado",
+        help: "Estado del ciclo de vida.",
         options: {
-          pending: "pending",
-          running: "running",
-          completed: "completed",
-          failed: "failed",
-          dlq: "dlq"
+          pending: "Pendiente",
+          running: "En ejecución",
+          completed: "Completado",
+          failed: "Fallido",
+          dlq: "DLQ"
         }
       },
       priority: {
-        label: "Priority",
-        help: "Lower = higher priority"
+        label: "Prioridad",
+        help: "Menor = mayor prioridad."
       },
       attempts: {
-        label: "Attempts"
+        label: "Intentos"
       },
       max_attempts: {
-        label: "Max Attempts"
+        label: "Intentos máximos"
       },
       backoff_type: {
         label: "Backoff",
         options: {
-          fixed: "fixed",
-          exponential: "exponential"
+          fixed: "Fijo",
+          exponential: "Exponencial"
         }
       },
       backoff_delay_ms: {
-        label: "Backoff Base (ms)"
+        label: "Base de backoff (ms)"
       },
       backoff_max_delay_ms: {
-        label: "Backoff Cap (ms)"
+        label: "Límite de backoff (ms)"
       },
       scheduled_for: {
-        label: "Scheduled For",
-        help: "Earliest time a worker may lease this message"
+        label: "Programado para",
+        help: "Momento más temprano en que un worker puede tomar este mensaje en arrendamiento."
       },
       locked_by: {
-        label: "Locked By",
-        help: "Worker id holding the lease"
+        label: "Bloqueado por",
+        help: "ID del worker que mantiene el arrendamiento."
       },
       locked_until: {
-        label: "Locked Until",
-        help: "Lease expiry; if past, another worker may claim"
+        label: "Bloqueado hasta",
+        help: "Caducidad del arrendamiento; si ha pasado, otro worker puede reclamarlo."
       },
       last_error: {
-        label: "Last Error"
+        label: "Último error"
       },
       completed_at: {
-        label: "Completed At"
+        label: "Completado el"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_webhook: {
     label: "Webhook",
     pluralLabel: "Webhooks",
-    description: "Outbound HTTP webhook subscription. Authored via defineWebhook() in code or the Studio editor; executed by the HTTP connector plugin.",
+    description: "Suscripción saliente de Webhook HTTP. Se crea mediante defineWebhook() en código o con el editor de Studio; la ejecuta el plugin del conector HTTP.",
     fields: {
       id: {
-        label: "Webhook ID"
+        label: "ID de webhook"
       },
       name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced in logs and audit"
+        label: "Nombre",
+        help: "Nombre snake_case único; se usa en los registros y en la auditoría."
       },
       label: {
-        label: "Display Label"
+        label: "Nombre visible"
       },
       object_name: {
-        label: "Object",
-        help: "Short object name whose events fire this webhook (blank = manual / API-triggered)"
+        label: "Objeto",
+        help: "Nombre corto del objeto cuyos eventos activan este Webhook (vacío = activación manual / API)."
       },
       triggers: {
-        label: "Triggers",
-        help: "Comma-separated event list: create,update,delete,undelete,api"
+        label: "Desencadenantes",
+        help: "Lista de eventos separada por comas: create,update,delete,undelete,api."
       },
       url: {
-        label: "Target URL",
-        help: "External endpoint that receives the POST"
+        label: "URL de destino",
+        help: "Endpoint externo que recibe el POST."
       },
       method: {
-        label: "HTTP Method",
+        label: "Método HTTP",
         help: "GET / POST / PUT / PATCH / DELETE"
       },
       description: {
-        label: "Description"
+        label: "Descripción"
       },
       active: {
-        label: "Active",
-        help: "Inactive webhooks are skipped by the dispatcher"
+        label: "Activo",
+        help: "Los Webhooks inactivos se omiten en el despachador."
       },
       definition_json: {
-        label: "Definition",
-        help: "Serialised Webhook JSON (see @objectstack/spec/automation/webhook) — full headers/auth/retry/payload config"
+        label: "Definición",
+        help: "JSON serializado de Webhook (consulte @objectstack/spec/automation/webhook): configuración completa de cabeceras/auth/reintentos/payload."
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     },
     _views: {
       active: {
-        label: "Active"
+        label: "Activo"
       },
       inactive: {
-        label: "Inactive"
+        label: "Inactivo"
       },
       by_object: {
-        label: "By Object"
+        label: "Por objeto"
       },
       all_webhooks: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_metadata: {
-    label: "System Metadata",
-    pluralLabel: "System Metadata",
-    description: "Stores platform and user-scope metadata records (objects, views, flows, etc.)",
+    label: "Metadatos del sistema",
+    pluralLabel: "Metadatos del sistema",
+    description: "Almacena registros de metadatos de la plataforma y del ámbito de usuario (objetos, vistas, flujos, etc.)",
     fields: {
       id: {
         label: "ID"
       },
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       type: {
-        label: "Metadata Type"
+        label: "Tipo de metadatos"
       },
       namespace: {
-        label: "Namespace"
+        label: "Espacio de nombres"
       },
       package_id: {
-        label: "Package ID",
-        help: "Legacy package manifest ID string. Use package_version_id for new records."
+        label: "ID del paquete",
+        help: "Cadena de ID heredada del manifiesto del paquete. Use package_version_id para los registros nuevos."
       },
       package_version_id: {
-        label: "Package Version",
-        help: "Foreign key to sys_package_version (UUID). Null = platform-built-in or env-level override."
+        label: "Versión del paquete",
+        help: "Clave foránea a sys_package_version (UUID). Null = incorporado en la plataforma o sobrescritura a nivel de entorno."
       },
       managed_by: {
-        label: "Managed By",
+        label: "Gestionado por",
         options: {
-          package: "package",
-          platform: "platform",
-          user: "user"
+          package: "Paquete",
+          platform: "Plataforma",
+          user: "Usuario"
         }
       },
       scope: {
-        label: "Scope",
+        label: "Ámbito",
         options: {
-          system: "system",
-          platform: "platform",
-          user: "user"
+          system: "Sistema",
+          platform: "Plataforma",
+          user: "Usuario"
         }
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized metadata payload"
+        label: "Metadatos",
+        help: "Payload de metadatos serializado en JSON."
       },
       extends: {
-        label: "Extends"
+        label: "Extiende"
       },
       strategy: {
-        label: "Strategy",
+        label: "Estrategia",
         options: {
-          merge: "merge",
-          replace: "replace"
+          merge: "Fusionar",
+          replace: "Reemplazar"
         }
       },
       owner: {
-        label: "Owner"
+        label: "Propietario"
       },
       state: {
-        label: "State",
+        label: "Estado",
         options: {
-          draft: "draft",
-          active: "active",
-          archived: "archived",
-          deprecated: "deprecated"
+          draft: "Borrador",
+          active: "Activo",
+          archived: "Archivado",
+          deprecated: "Obsoleto"
         }
       },
       organization_id: {
-        label: "Organization",
-        help: "Organization for multi-tenant isolation."
+        label: "Organización",
+        help: "Organización para el aislamiento multi-tenant."
       },
       project_id: {
-        label: "Project (deprecated)",
-        help: "DEPRECATED. Use organization_id for tenant isolation."
+        label: "Proyecto (obsoleto)",
+        help: "OBSOLETO. Use organization_id para el aislamiento del tenant."
       },
       version: {
-        label: "Version"
+        label: "Versión"
       },
       checksum: {
         label: "Checksum"
       },
       source: {
-        label: "Source",
+        label: "Origen",
         options: {
-          filesystem: "filesystem",
-          database: "database",
-          api: "api",
-          migration: "migration"
+          filesystem: "Sistema de archivos",
+          database: "Base de datos",
+          api: "API",
+          migration: "Migración"
         }
       },
       tags: {
-        label: "Tags",
-        help: "JSON-serialized array of classification tags"
+        label: "Etiquetas",
+        help: "Matriz serializada en JSON de etiquetas de clasificación."
       },
       created_by: {
-        label: "Created By"
+        label: "Creado por"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_by: {
-        label: "Updated By"
+        label: "Actualizado por"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       }
     }
   },
   sys_metadata_history: {
-    label: "Metadata History",
-    pluralLabel: "Metadata History",
-    description: "Version history and audit trail for metadata changes",
+    label: "Historial de metadatos",
+    pluralLabel: "Historial de metadatos",
+    description: "Historial de versiones y registro de auditoría de cambios de metadatos",
     fields: {
       id: {
         label: "ID"
       },
       metadata_id: {
-        label: "Metadata"
+        label: "Metadatos"
       },
       name: {
-        label: "Name"
+        label: "Nombre"
       },
       type: {
-        label: "Metadata Type"
+        label: "Tipo de metadatos"
       },
       version: {
-        label: "Version"
+        label: "Versión"
       },
       operation_type: {
-        label: "Operation Type",
+        label: "Tipo de operación",
         options: {
-          create: "create",
-          update: "update",
-          publish: "publish",
-          revert: "revert",
-          delete: "delete"
+          create: "Crear",
+          update: "Actualizar",
+          publish: "Publicar",
+          revert: "Revertir",
+          delete: "Eliminar"
         }
       },
       metadata: {
-        label: "Metadata",
-        help: "JSON-serialized metadata snapshot at this version"
+        label: "Metadatos",
+        help: "Instantánea de metadatos serializada en JSON para esta versión."
       },
       checksum: {
         label: "Checksum"
       },
       previous_checksum: {
-        label: "Previous Checksum"
+        label: "Checksum anterior"
       },
       change_note: {
-        label: "Change Note",
-        help: "Description of what changed in this version"
+        label: "Nota de cambio",
+        help: "Descripción de lo que cambió en esta versión."
       },
       organization_id: {
-        label: "Organization",
-        help: "Organization for multi-tenant isolation."
+        label: "Organización",
+        help: "Organización para el aislamiento multi-tenant."
       },
       project_id: {
-        label: "Environment ID",
-        help: "Scopes this history entry to a specific environment."
+        label: "ID del entorno",
+        help: "Limita esta entrada de historial a un entorno específico."
       },
       recorded_by: {
-        label: "Recorded By"
+        label: "Registrado por"
       },
       recorded_at: {
-        label: "Recorded At"
+        label: "Registrado el"
       }
     }
   },
   sys_setting: {
-    label: "Setting",
-    pluralLabel: "Settings",
-    description: "Generic K/V store backing the SettingsManifest contract.",
+    label: "Ajuste",
+    pluralLabel: "Ajustes",
+    description: "Almacén K/V genérico que respalda el contrato SettingsManifest.",
     fields: {
       id: {
-        label: "Setting ID"
+        label: "ID de ajuste"
       },
       created_at: {
-        label: "Created At"
+        label: "Creado el"
       },
       updated_at: {
-        label: "Updated At"
+        label: "Actualizado el"
       },
       namespace: {
-        label: "Namespace",
-        help: "Manifest namespace (e.g. mail, branding, feature_flags)."
+        label: "Espacio de nombres",
+        help: "Espacio de nombres del manifiesto (p. ej. mail, branding, feature_flags)."
       },
       key: {
-        label: "Key",
-        help: "Specifier key inside the namespace (snake_case)."
+        label: "Clave",
+        help: "Clave del especificador dentro del espacio de nombres (snake_case)."
       },
       scope: {
-        label: "Scope",
-        help: "Which layer of the config-resolution hierarchy this row belongs to.",
+        label: "Ámbito",
+        help: "Capa de la jerarquía de resolución de configuración a la que pertenece esta fila.",
         options: {
           global: "Global",
           tenant: "Tenant",
-          user: "User",
+          user: "Usuario",
           runtime: "Runtime"
         }
       },
       user_id: {
-        label: "User",
-        help: "Owning user when scope=user; null otherwise."
+        label: "Usuario",
+        help: "Usuario propietario cuando scope=user; null en caso contrario."
       },
       value: {
-        label: "Value",
-        help: "JSON-encoded value. Null when encrypted=true (see value_enc)."
+        label: "Valor",
+        help: "Valor codificado en JSON. Null cuando encrypted=true (véase value_enc)."
       },
       encrypted: {
-        label: "Encrypted",
-        help: "When true, the value is stored encrypted-at-rest in value_enc; value column is null."
+        label: "Cifrado",
+        help: "Si es verdadero, el valor se almacena cifrado en reposo en value_enc; la columna value es null."
       },
       locked: {
-        label: "Locked",
-        help: "When true, lower-scope rows cannot override this value; writes against lower scopes return 409. Used by platform administrators to pin a global value for all tenants (Phase 2 cascade)."
+        label: "Bloqueado",
+        help: "Si es verdadero, las filas de ámbitos inferiores no pueden sobrescribir este valor; las escrituras contra ámbitos inferiores devuelven 409. Lo utilizan los administradores de la plataforma para fijar un valor global para todos los tenants (cascada Fase 2)."
       },
       locked_reason: {
-        label: "Lock Reason",
-        help: "Human-readable explanation surfaced in the UI tooltip when locked=true."
+        label: "Motivo del bloqueo",
+        help: "Explicación legible que se muestra en el tooltip de la UI cuando locked=true."
       },
       value_enc: {
-        label: "Encrypted Value",
-        help: "Ciphertext payload (KMS-wrapped). Set only when encrypted=true."
+        label: "Valor cifrado",
+        help: "Payload de texto cifrado (envuelto con KMS). Se establece solo cuando encrypted=true."
       },
       updated_by: {
-        label: "Updated By",
-        help: "Last actor who wrote this row via SettingsService.set()."
+        label: "Actualizado por",
+        help: "Último actor que escribió esta fila mediante SettingsService.set()."
       }
     },
     _views: {
       by_namespace: {
-        label: "By Namespace"
+        label: "Por espacio de nombres"
       },
       tenant_only: {
         label: "Tenant"
       },
       user_only: {
-        label: "User"
+        label: "Usuario"
       },
       all_settings: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
   sys_secret: {
-    label: "Secret",
-    pluralLabel: "Secrets",
-    description: "Cipher store referenced by sys_setting handles. Never holds plaintext.",
+    label: "Secreto",
+    pluralLabel: "Secretos",
+    description: "Almacén cifrado al que hacen referencia los identificadores de sys_setting. Nunca contiene texto sin formato.",
     fields: {
       id: {
         label: "ID",
-        help: "Opaque handle referenced by `sys_setting.value_enc`."
+        help: "Identificador opaco al que hace referencia `sys_setting.value_enc`."
       },
       created_at: {
-        label: "Created At",
-        help: "When the cipher was first written."
+        label: "Creado el",
+        help: "Momento en que se escribió por primera vez el cifrado."
       },
       rotated_at: {
-        label: "Rotated At",
-        help: "When the cipher was last re-wrapped under a new KMS key."
+        label: "Rotado el",
+        help: "Momento en que el cifrado se volvió a envolver por última vez con una nueva clave KMS."
       },
       namespace: {
-        label: "Namespace",
-        help: "Settings namespace this secret belongs to."
+        label: "Espacio de nombres",
+        help: "Espacio de nombres de ajustes al que pertenece este secreto."
       },
       key: {
-        label: "Key",
-        help: "Specifier key within the namespace."
+        label: "Clave",
+        help: "Clave del especificador dentro del espacio de nombres."
       },
       kms_key_id: {
-        label: "KMS Key ID",
-        help: "External KMS handle (ARN, GCP resource id, or `local`)."
+        label: "ID de clave KMS",
+        help: "Identificador externo de KMS (ARN, ID de recurso de GCP o `local`)."
       },
       alg: {
-        label: "Algorithm",
-        help: "Cipher/AEAD algorithm tag."
+        label: "Algoritmo",
+        help: "Etiqueta del algoritmo de cifrado/AEAD."
       },
       version: {
-        label: "Version",
-        help: "Bumps each time rotateKey() re-wraps this row."
+        label: "Versión",
+        help: "Se incrementa cada vez que rotateKey() vuelve a envolver esta fila."
       },
       ciphertext: {
-        label: "Ciphertext",
-        help: "Provider-encoded ciphertext blob (base64 / JSON). Implementation-defined; only the matching ICryptoProvider can read it."
+        label: "Texto cifrado",
+        help: "Blob de texto cifrado codificado por el proveedor (base64 / JSON). La implementación lo define; solo el ICryptoProvider correspondiente puede leerlo."
       }
     }
   },
   sys_setting_audit: {
-    label: "Setting Audit Entry",
-    pluralLabel: "Setting Audit",
-    description: "Append-only audit trail for SettingsService mutations.",
+    label: "Registro de auditoría de ajustes",
+    pluralLabel: "Auditoría de ajustes",
+    description: "Registro de auditoría append-only para mutaciones de SettingsService.",
     fields: {
       id: {
         label: "ID"
       },
       created_at: {
-        label: "Created At",
-        help: "When the mutation was recorded."
+        label: "Creado el",
+        help: "Momento en que se registró la mutación."
       },
       namespace: {
-        label: "Namespace"
+        label: "Espacio de nombres"
       },
       key: {
-        label: "Key"
+        label: "Clave"
       },
       scope: {
-        label: "Scope",
-        help: "Cascade layer the row was written to.",
+        label: "Ámbito",
+        help: "Capa de cascada en la que se escribió la fila.",
         options: {
           global: "Global",
           tenant: "Tenant",
-          user: "User"
+          user: "Usuario"
         }
       },
       action: {
-        label: "Action",
-        help: "Mutation kind.",
+        label: "Acción",
+        help: "Tipo de mutación.",
         options: {
-          set: "Set",
-          reset: "Reset",
-          lock: "Lock",
-          unlock: "Unlock",
-          rotate: "Rotate"
+          set: "Establecer",
+          reset: "Restablecer",
+          lock: "Bloquear",
+          unlock: "Desbloquear",
+          rotate: "Rotar"
         }
       },
       actor_id: {
         label: "Actor",
-        help: "User who performed the mutation; null for system jobs."
+        help: "Usuario que realizó la mutación; null para tareas del sistema."
       },
       source: {
-        label: "Source",
-        help: "Mutation entry-point.",
+        label: "Origen",
+        help: "Punto de entrada de la mutación.",
         options: {
           ui: "UI",
           api: "API",
-          migration: "Migration",
-          import: "Import",
+          migration: "Migración",
+          import: "Importar",
           system: "System"
         }
       },
       reason: {
-        label: "Reason",
-        help: "Free-text justification provided by the actor (optional)."
+        label: "Motivo",
+        help: "Justificación en texto libre proporcionada por el actor (opcional)."
       },
       old_hash: {
         label: "Old Hash",
-        help: "SHA-256 of the previous value (canonicalised). Null when previously unset."
+        help: "SHA-256 del valor anterior (canonicalizado). Null cuando antes no estaba establecido."
       },
       new_hash: {
         label: "New Hash",
-        help: "SHA-256 of the new value (canonicalised). Null on reset."
+        help: "SHA-256 del valor nuevo (canonicalizado). Null al restablecer."
       },
       encrypted: {
-        label: "Encrypted",
-        help: "True when the field carries secret material (rotation is interesting)."
+        label: "Cifrado",
+        help: "Verdadero cuando el campo contiene material secreto (la rotación es relevante)."
       },
       request_id: {
-        label: "Request ID",
-        help: "Correlates with sys_audit_log / tracing."
+        label: "ID de solicitud",
+        help: "Se correlaciona con sys_audit_log / tracing."
       }
     }
   }
