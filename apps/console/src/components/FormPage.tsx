@@ -108,14 +108,14 @@ interface RenderableSection {
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 /** Coerce a `columns` literal into a numeric 1..4. */
-function normalizeColumns(c: unknown): 1 | 2 | 3 | 4 {
+export function normalizeColumns(c: unknown): 1 | 2 | 3 | 4 {
   const n = typeof c === 'string' ? parseInt(c, 10) : (c as number);
   if (n === 1 || n === 2 || n === 3 || n === 4) return n;
   return 2;
 }
 
 /** Normalize field options from various Object schema shapes into `{value,label}`. */
-function normalizeOptions(opts: unknown): Array<{ value: string; label: string }> | undefined {
+export function normalizeOptions(opts: unknown): Array<{ value: string; label: string }> | undefined {
   if (!Array.isArray(opts)) return undefined;
   return opts.map((o) => {
     if (typeof o === 'string') return { value: o, label: o };
@@ -133,7 +133,7 @@ function normalizeOptions(opts: unknown): Array<{ value: string; label: string }
  * field definitions to produce concrete rows the renderer can draw.
  * Field-level FormField overrides take precedence over object defaults.
  */
-function buildSections(
+export function buildSections(
   form: FormViewSpec,
   objectSchema: ObjectSchemaPayload | null,
 ): RenderableSection[] {
@@ -173,7 +173,7 @@ function buildSections(
 }
 
 /** Apply `?prefill_<field>=<value>` query params to the initial form state. */
-function readPrefill(
+export function readPrefill(
   fields: RenderableField[],
   search: URLSearchParams,
 ): Record<string, unknown> {
