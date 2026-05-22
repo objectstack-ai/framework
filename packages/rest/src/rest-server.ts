@@ -2179,11 +2179,39 @@ export class RestServer {
                     } catch (e: any) {
                         logError('[REST] Public form schema load failed:', e);
                     }
+                    // Anonymous public forms must NEVER include a lookup or
+                    // master-detail field unless the form designer has
+                    // explicitly opted-in via `publicPicker` on that field's
+                    // section entry (mirroring Airtable's "Allow linking to
+                    // existing records" toggle). Strip non-conforming
+                    // lookups defensively here so a stray spec mistake can
+                    // never expose unrestricted record search to the
+                    // internet — the related `/forms/:slug/lookup/:field`
+                    // endpoint also re-validates `publicPicker` server-side.
+                    const safeForm = (() => {
+                        if (!match.form || !Array.isArray(match.form.sections)) return match.form;
+                        const allow = (name: string, cfg: any): boolean => {
+                            const def = objectSchema?.fields?.[name];
+                            const t = def?.type;
+                            if (t !== 'lookup' && t !== 'master_detail') return true;
+                            return !!cfg?.publicPicker;
+                        };
+                        const sections = match.form.sections.map((sec: any) => {
+                            const fields = (sec?.fields ?? []).filter((f: any) => {
+                                const name = typeof f === 'string' ? f : f?.field;
+                                if (!name) return false;
+                                const cfg = typeof f === 'string' ? {} : f;
+                                return allow(name, cfg);
+                            });
+                            return { ...sec, fields };
+                        });
+                        return { ...match.form, sections };
+                    })();
                     res.json({
                         slug,
                         object: match.object,
                         label: match.view?.label ?? match.form?.label,
-                        form: match.form,
+                        form: safeForm,
                         objectSchema,
                     });
                 } catch (error: any) {
@@ -2273,6 +2301,148 @@ export class RestServer {
             },
             metadata: {
                 summary: 'Submit an anonymous public form',
+                tags: ['forms', 'public'],
+            },
+        });
+
+        // GET /forms/:slug/lookup/:field — scoped picker for public-form
+        // lookup widgets. Mirrors Airtable's per-form linked-record search:
+        // the field MUST be declared in the form spec with an explicit
+        // `publicPicker` block; otherwise the request is rejected with 403.
+        // Records are projected to `publicPicker.displayFields`, capped at
+        // `publicPicker.maxResults` (hard ceiling 50), and pre-filtered by
+        // `publicPicker.filter`. Anonymous visitors can search but cannot
+        // enumerate / paginate, so a leaked endpoint cannot exfiltrate the
+        // table.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${basePath}/forms/:slug/lookup/:field`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const slug = String(req.params?.slug ?? '').trim();
+                    const fieldName = String(req.params?.field ?? '').trim();
+                    if (!slug || !fieldName) {
+                        res.status(400).json({ code: 'INVALID_REQUEST', error: 'slug and field are required' });
+                        return;
+                    }
+                    const match = await resolveFormBySlug(projectId, req, slug);
+                    if (!match) {
+                        res.status(404).json({
+                            code: 'FORM_NOT_FOUND',
+                            error: `No public form configured at /forms/${slug}`,
+                        });
+                        return;
+                    }
+
+                    // Locate the field config and require an opt-in
+                    // `publicPicker` block. Without it the lookup is
+                    // considered private — return 403, not 404, so a
+                    // misconfigured form is loud rather than silent.
+                    let fieldCfg: any = null;
+                    for (const sec of match.form?.sections ?? []) {
+                        for (const f of sec?.fields ?? []) {
+                            const name = typeof f === 'string' ? f : f?.field;
+                            if (name === fieldName) {
+                                fieldCfg = typeof f === 'string' ? {} : f;
+                                break;
+                            }
+                        }
+                        if (fieldCfg) break;
+                    }
+                    const picker = fieldCfg?.publicPicker;
+                    if (!picker) {
+                        res.status(403).json({
+                            code: 'LOOKUP_NOT_PUBLIC',
+                            error: `Field "${fieldName}" is not enabled for public lookup on this form`,
+                        });
+                        return;
+                    }
+
+                    // Resolve the referenced object — prefer the explicit
+                    // `publicPicker.object` override, fall back to the
+                    // field def on the parent object.
+                    const p = await this.resolveProtocol(projectId, req);
+                    let referenceTo: string | undefined = picker.object;
+                    if (!referenceTo && typeof (p as any).getMetaItems === 'function') {
+                        try {
+                            const r: any = await (p as any).getMetaItems({
+                                type: 'object',
+                                ...(projectId ? { projectId } : {}),
+                            });
+                            const items: any[] = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
+                            const obj = items.find((o: any) => o?.name === match.object);
+                            const def = obj?.fields?.[fieldName];
+                            referenceTo = def?.referenceTo ?? def?.target ?? def?.options?.objectName;
+                        } catch {/* ignore */}
+                    }
+                    if (!referenceTo) {
+                        res.status(500).json({
+                            code: 'LOOKUP_TARGET_MISSING',
+                            error: `Could not resolve referenced object for "${fieldName}"`,
+                        });
+                        return;
+                    }
+
+                    const displayFields: string[] = Array.isArray(picker.displayFields) && picker.displayFields.length > 0
+                        ? picker.displayFields.slice(0, 5)
+                        : ['name'];
+                    const hardCap = 50;
+                    const maxResults = Math.min(Math.max(1, Number(picker.maxResults) || 20), hardCap);
+                    const q = String(req.query?.q ?? '').trim().slice(0, 100);
+
+                    // Compose filters: form-defined static filter first,
+                    // then the search predicate over displayFields. The
+                    // search predicate uses `contains` on the first
+                    // display field so non-indexed columns still work.
+                    const filters: any[] = [];
+                    if (Array.isArray(picker.filter)) filters.push(...picker.filter);
+                    if (q) filters.push({ field: displayFields[0], operator: 'contains', value: q });
+
+                    const context: any = {
+                        permissions: ['guest_portal'],
+                        anonymous: true,
+                    };
+
+                    const result: any = await (p as any).findData({
+                        object: referenceTo,
+                        query: {
+                            limit: maxResults,
+                            offset: 0,
+                            filters,
+                            select: ['id', ...displayFields],
+                            sort: picker.sort ?? [{ field: displayFields[0], order: 'asc' }],
+                        },
+                        ...(projectId ? { projectId } : {}),
+                        context,
+                    } as any);
+
+                    // Project the response server-side too — never trust
+                    // that the driver respected `select`.
+                    const rows: any[] = Array.isArray(result?.data) ? result.data : Array.isArray(result?.items) ? result.items : [];
+                    const projected = rows.slice(0, maxResults).map((row: any) => {
+                        const out: any = { id: row?.id };
+                        for (const f of displayFields) {
+                            if (row && Object.prototype.hasOwnProperty.call(row, f)) out[f] = row[f];
+                        }
+                        return out;
+                    });
+                    res.json({
+                        data: projected,
+                        total: projected.length,
+                        truncated: rows.length >= maxResults,
+                        displayFields,
+                    });
+                } catch (error: any) {
+                    const mapped = mapDataError(error);
+                    if (!isExpectedDataStatus(mapped.status)) {
+                        logError('[REST] Public form lookup error:', error);
+                    }
+                    res.status(mapped.status).json(mapped.body);
+                }
+            },
+            metadata: {
+                summary: 'Scoped lookup picker for a public form field (anonymous)',
                 tags: ['forms', 'public'],
             },
         });
