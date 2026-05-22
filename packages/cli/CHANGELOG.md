@@ -1,5 +1,71 @@
 # @objectstack/cli
 
+## 5.0.0
+
+### Patch Changes
+
+- 9e51868: Server-side artifact-file watcher; CLI no longer posts to the HMR
+  endpoint on recompile (ADR-0008 M0 PR-8).
+
+  `MetadataPlugin.start()` now attaches a chokidar watcher on the
+  `artifactSource.path` when running in local-file mode with `watch !==
+false`. On every artifact change it re-invokes `_loadFromLocalFile`
+  and broadcasts a `reload` event through the HMR hub. This replaces
+  the previous arrangement where `os dev`'s watch-recompile loop POSTed
+  `/api/v1/dev/metadata-events` to trigger a reload — the server is now
+  autonomous.
+
+  The CLI `dev` command's recompile loop drops the POST call; the
+  `/api/v1/dev/metadata-events` route remains available for external
+  trigger sources (cloud webhooks, git hooks, ad-hoc curl).
+
+  `MetadataPlugin.stop()` closes the artifact watcher cleanly.
+
+- Updated dependencies [5e9dcb4]
+- Updated dependencies [f139a24]
+- Updated dependencies [4eb9f8c]
+- Updated dependencies [2f7e42a]
+- Updated dependencies [602cce7]
+- Updated dependencies [1e625b8]
+- Updated dependencies [6ee42b8]
+- Updated dependencies [888a5c1]
+- Updated dependencies [5cfdc85]
+- Updated dependencies [09f005a]
+- Updated dependencies [7825394]
+- Updated dependencies [96ad4df]
+- Updated dependencies [df18ae9]
+- Updated dependencies [2f9073a]
+  - @objectstack/objectql@5.0.0
+  - @objectstack/runtime@5.0.0
+  - @objectstack/rest@5.0.0
+  - @objectstack/spec@5.0.0
+  - @objectstack/client@5.0.0
+  - @objectstack/plugin-sharing@5.0.0
+  - @objectstack/plugin-approvals@5.0.0
+  - @objectstack/plugin-audit@5.0.0
+  - @objectstack/plugin-auth@5.0.0
+  - @objectstack/plugin-email@5.0.0
+  - @objectstack/plugin-reports@5.0.0
+  - @objectstack/plugin-security@5.0.0
+  - @objectstack/service-ai@5.0.0
+  - @objectstack/service-job@5.0.0
+  - @objectstack/service-queue@5.0.0
+  - @objectstack/service-realtime@5.0.0
+  - @objectstack/service-settings@5.0.0
+  - @objectstack/core@5.0.0
+  - @objectstack/driver-memory@5.0.0
+  - @objectstack/driver-mongodb@5.0.0
+  - @objectstack/driver-sql@5.0.0
+  - @objectstack/driver-turso@5.0.0
+  - @objectstack/plugin-hono-server@5.0.0
+  - @objectstack/plugin-mcp-server@5.0.0
+  - @objectstack/service-analytics@5.0.0
+  - @objectstack/service-automation@5.0.0
+  - @objectstack/service-cache@5.0.0
+  - @objectstack/service-feed@5.0.0
+  - @objectstack/service-package@5.0.0
+  - @objectstack/service-storage@5.0.0
+
 ## 4.2.0
 
 ### Patch Changes
