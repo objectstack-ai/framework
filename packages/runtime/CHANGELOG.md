@@ -1,5 +1,21 @@
 # @objectstack/runtime
 
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [75f4ee6]
+- Updated dependencies [823d559]
+  - @objectstack/spec@5.1.0
+  - @objectstack/core@5.1.0
+  - @objectstack/formula@5.1.0
+  - @objectstack/observability@5.1.0
+  - @objectstack/plugin-auth@5.1.0
+  - @objectstack/plugin-security@5.1.0
+  - @objectstack/rest@5.1.0
+  - @objectstack/service-i18n@5.1.0
+  - @objectstack/types@5.1.0
+
 ## 5.0.0
 
 ### Minor Changes

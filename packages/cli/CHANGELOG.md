@@ -1,5 +1,42 @@
 # @objectstack/cli
 
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [75f4ee6]
+- Updated dependencies [823d559]
+  - @objectstack/spec@5.1.0
+  - @objectstack/objectql@5.1.0
+  - @objectstack/client@5.1.0
+  - @objectstack/core@5.1.0
+  - @objectstack/driver-memory@5.1.0
+  - @objectstack/driver-mongodb@5.1.0
+  - @objectstack/driver-sql@5.1.0
+  - @objectstack/driver-turso@5.1.0
+  - @objectstack/plugin-approvals@5.1.0
+  - @objectstack/plugin-audit@5.1.0
+  - @objectstack/plugin-auth@5.1.0
+  - @objectstack/plugin-email@5.1.0
+  - @objectstack/plugin-hono-server@5.1.0
+  - @objectstack/plugin-mcp-server@5.1.0
+  - @objectstack/plugin-reports@5.1.0
+  - @objectstack/plugin-security@5.1.0
+  - @objectstack/plugin-sharing@5.1.0
+  - @objectstack/rest@5.1.0
+  - @objectstack/runtime@5.1.0
+  - @objectstack/service-ai@5.1.0
+  - @objectstack/service-analytics@5.1.0
+  - @objectstack/service-automation@5.1.0
+  - @objectstack/service-cache@5.1.0
+  - @objectstack/service-feed@5.1.0
+  - @objectstack/service-job@5.1.0
+  - @objectstack/service-package@5.1.0
+  - @objectstack/service-queue@5.1.0
+  - @objectstack/service-realtime@5.1.0
+  - @objectstack/service-settings@5.1.0
+  - @objectstack/service-storage@5.1.0
+
 ## 5.0.0
 
 ### Patch Changes
