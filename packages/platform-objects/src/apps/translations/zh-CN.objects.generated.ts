@@ -2229,7 +2229,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     },
     _views: {
       my_pending: {
-        label: "我的待办"
+        label: "我的待办",
+        emptyState: {
+          title: "暂无待审批",
+          message: "您已处理完所有待办。"
+        }
       },
       submitted_by_me: {
         label: "我提交的"
