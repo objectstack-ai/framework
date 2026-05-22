@@ -495,10 +495,16 @@ The plan is intentionally staged so each milestone is **independently shippable*
 
 1. `packages/metadata-postgres/`:
    - `PostgresRepository` with `metadata_items` + `metadata_events` tables
-   - `LISTEN/NOTIFY` for `watch`
+   - `watch()` is **scoped to the local process** (in-memory EventEmitter
+     fed by the writer); cross-replica push (`LISTEN/NOTIFY`,
+     pub/sub, etc.) is explicitly **out of scope** — see
+     [§0 amendment](#0-2026-04-13-amendment--drop-project-and-branch-from-metaref)
+     style note in the Status section: single-instance deployments
+     are the supported topology, and the watch contract only promises
+     consistency within one repository instance.
    - Migration files under `packages/metadata-postgres/migrations/`
 2. Multi-tenant scoping:
-   - `MetaRef.org/branch` propagation through HTTP middleware → kernel context → repository
+   - `MetaRef.org` propagation through HTTP middleware → kernel context → repository
    - Per-tenant row-level guards
 3. Tooling API:
    - `GET /api/v1/tooling/meta/:type/:name` (returns `{ item, version, hash }`)
@@ -625,11 +631,11 @@ The M0 milestone is itself decomposed into shippable PRs. Each PR is independent
 |:---|:---|:---|:---|
 | Canonicalize is non-idempotent in edge cases (e.g. number precision, key order in nested objects) | Med | High (silent change storm) | Property-tested in PR-1; fuzz with `fast-check` |
 | chokidar misses events on macOS atomic rename | Med | Med (stale until manual refresh) | Already a known issue; fall back to polling every 5s for safety |
-| `LISTEN/NOTIFY` payload size exceeds 8KB in Postgres | Low | Med (drop notify, leave replicas stale) | Payload carries only `(seq, type, name)`; consumers re-fetch |
 | Multi-replica `seq` collisions on writes | Med | High (corrupted log) | Use Postgres `SERIAL` column on `metadata_events`; never trust client-supplied seq |
 | Cache invalidation causes thundering herd on hot ref | Low | Med (DB load spike) | Coalesce concurrent fetches via in-flight promise map |
 | Migration from existing `MetadataManager` breaks downstream consumers | Med | High (regression) | Keep `MetadataManager` as a deprecated wrapper for one release cycle; new code uses Repository |
 | Overlay merge semantics change with `LayeredRepository` | Med | Med (different precedence than ADR-0005) | Add explicit precedence test suite; document in ADR-0005 amendment |
+| Multi-replica deployments observe diverging overlay state (no cross-process push) | Med | Med (replicas serve stale overlay until next read) | **Accepted, not mitigated.** Single-instance is the supported topology. Operators running multiple replicas must accept eventual consistency on each replica's next overlay read, or front the metadata path with a single writer. |
 
 ---
 

@@ -561,6 +561,31 @@ const ObjectSchemaBase = z.object({
   keyPrefix: z.string().max(5).optional().describe('Short prefix for record IDs (e.g., "001" for Account)'),
 
   /**
+   * Detail-page UI hints
+   *
+   * Per-object overrides for the synthesized record detail page (kind:'auto'
+   * / slotted defaults). Each flag is consumed by the UI runtime
+   * (`@object-ui/plugin-detail`'s `buildDefaultPageSchema`) when no explicit
+   * `Page` covers this object. Authored full Pages should set these regions
+   * directly instead.
+   *
+   * - `renderViaSchema=false` opts the object out of the schema-driven
+   *   rendering path entirely (legacy `RecordDetailView`).
+   * - `hideReferenceRail=true` suppresses the right-hand reference-rail
+   *   (related-list summary cards) so the form gets full width — useful for
+   *   catalog/atomic objects (Product, Task) where lateral relationships
+   *   aren't the user's main job.
+   * - `hideRelatedTab=true` suppresses the "Related" tab. By default the
+   *   synth removes the Related tab automatically when the rail is shown to
+   *   avoid duplication; set this flag to force hide/show regardless.
+   */
+  detail: z.object({
+    renderViaSchema: z.boolean().optional().describe('Opt this object out of the schema-driven detail renderer'),
+    hideReferenceRail: z.boolean().optional().describe('Suppress the right-hand reference-rail on the detail page'),
+    hideRelatedTab: z.boolean().optional().describe('Suppress the Related tab on the detail page'),
+  }).passthrough().optional().describe('Detail-page UI hints consumed by @object-ui/plugin-detail synth'),
+
+  /**
    * Object Actions
    * 
    * Actions associated with this object. Populated automatically by `defineStack()`

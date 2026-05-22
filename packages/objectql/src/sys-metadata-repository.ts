@@ -20,10 +20,15 @@
  *     entry has `allowOrgOverride: false` (Prime Directive #8)
  *
  * What this layer does NOT do (deferred to M1):
- *   - cross-replica change-log replay (no append-only `metadata_events`
- *     table yet; LISTEN/NOTIFY plumbing comes with PostgresRepository)
+ *   - durable change log (no append-only `sys_metadata_history` writes yet)
  *   - history() — emits empty AsyncIterable
  *   - hashSpec backfill for legacy rows missing `checksum`
+ *
+ * What this layer does NOT do (and will not, by design):
+ *   - cross-replica push notifications (LISTEN/NOTIFY, pub/sub, etc.).
+ *     The watch() contract is scoped to the local repository instance.
+ *     Multi-replica deployments are not a supported topology for the
+ *     metadata overlay — see ADR-0008 §11.
  *
  * Schema mapping (ADR-0008 PR-10d.2):
  *   Repository concept      sys_metadata column

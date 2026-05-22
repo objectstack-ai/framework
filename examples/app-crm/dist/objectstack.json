@@ -11532,6 +11532,9 @@
         "trash": true,
         "mru": true,
         "clone": true
+      },
+      "detail": {
+        "hideReferenceRail": true
       }
     },
     {
@@ -12913,6 +12916,9 @@
         "trash": true,
         "mru": true,
         "clone": true
+      },
+      "detail": {
+        "hideReferenceRail": true
       }
     }
   ],
