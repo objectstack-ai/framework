@@ -413,6 +413,37 @@ export class ObjectStackClient {
         });
         return this.unwrapResponse(res);
     },
+
+    /**
+     * Get the durable change-log for a specific metadata item.
+     * Returns events recorded in `sys_metadata_history` for every
+     * overlay put/delete, ordered by `event_seq` ascending. Non-overlay
+     * metadata types return an empty list.
+     */
+    getHistory: async (
+        type: string,
+        name: string,
+        options?: { sinceSeq?: number; limit?: number },
+    ): Promise<{ events: Array<{
+        seq: number;
+        op: string;
+        ref: { org?: string; type: string; name: string };
+        hash: string | null;
+        parentHash: string | null;
+        actor: string;
+        message?: string;
+        ts: string;
+        source: string;
+    }> }> => {
+        const route = this.getRoute('metadata');
+        const params = new URLSearchParams();
+        if (options?.sinceSeq !== undefined) params.set('sinceSeq', String(options.sinceSeq));
+        if (options?.limit !== undefined) params.set('limit', String(options.limit));
+        const qs = params.toString();
+        const url = `${this.baseUrl}${route}/${encodeURIComponent(type)}/${encodeURIComponent(name)}/history${qs ? `?${qs}` : ''}`;
+        const res = await this.fetch(url);
+        return this.unwrapResponse(res);
+    },
     
     /**
      * Get object metadata with cache support
@@ -3282,6 +3313,20 @@ export class ScopedProjectClient {
       const res = await this.parent._fetch(this.url(`/meta/${encodeURIComponent(type)}/${encodeURIComponent(name)}`), {
         method: 'DELETE',
       });
+      return this.parent._unwrap(res);
+    },
+    getHistory: async (
+      type: string,
+      name: string,
+      options?: { sinceSeq?: number; limit?: number },
+    ) => {
+      const params = new URLSearchParams();
+      if (options?.sinceSeq !== undefined) params.set('sinceSeq', String(options.sinceSeq));
+      if (options?.limit !== undefined) params.set('limit', String(options.limit));
+      const qs = params.toString();
+      const res = await this.parent._fetch(
+        this.url(`/meta/${encodeURIComponent(type)}/${encodeURIComponent(name)}/history${qs ? `?${qs}` : ''}`),
+      );
       return this.parent._unwrap(res);
     },
   };

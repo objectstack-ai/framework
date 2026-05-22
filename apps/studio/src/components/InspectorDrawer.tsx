@@ -26,7 +26,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, RefreshCw, ExternalLink, Code2 } from 'lucide-react';
+import { Copy, RefreshCw, ExternalLink, Code2, History as HistoryIcon } from 'lucide-react';
 import { useInspector } from '@/hooks/useInspector';
 import { toast } from '@/hooks/use-toast';
 
@@ -35,6 +35,18 @@ interface RefHit {
   name: string;
   packageId?: string;
   reason: string;
+}
+
+interface HistoryEvent {
+  seq: number;
+  op: string;
+  ref: { org?: string; type: string; name: string };
+  hash: string | null;
+  parentHash: string | null;
+  actor: string;
+  message?: string;
+  ts: string;
+  source: string;
 }
 
 function apiPathFor(type: string, name: string): string {
@@ -65,6 +77,7 @@ export function InspectorDrawer() {
   const [tab, setTab] = useState('api');
   const [source, setSource] = useState<string>('');
   const [refs, setRefs] = useState<RefHit[] | null>(null);
+  const [history, setHistory] = useState<HistoryEvent[] | null>(null);
   const [loading, setLoading] = useState(false);
 
   const apiPath = target ? apiPathFor(target.type, target.name) : '';
@@ -147,6 +160,40 @@ export function InspectorDrawer() {
     };
   }, [target?.type, target?.name, tab, open, client]);
 
+  // Load history when target/tab changes — calls the durable change-log
+  // endpoint backed by sys_metadata_history (M1).
+  useEffect(() => {
+    if (!target || !open || tab !== 'history') return;
+    if (history !== null) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const result: any = await (client.meta as any).getHistory(target.type, target.name);
+        if (!cancelled) setHistory(Array.isArray(result?.events) ? result.events : []);
+      } catch (e: any) {
+        if (!cancelled) {
+          toast({
+            title: 'Failed to load history',
+            description: e?.message ?? String(e),
+            variant: 'destructive',
+          });
+          setHistory([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [target?.type, target?.name, tab, open, client, history]);
+
+  // Reset history cache when target changes so we re-fetch on switch.
+  useEffect(() => {
+    setHistory(null);
+  }, [target?.type, target?.name]);
+
   const sampleBody = useMemo(() => {
     if (!target) return '';
     if (target.type === 'object') return '{ "name": "Sample" }';
@@ -192,10 +239,11 @@ export function InspectorDrawer() {
         {target && (
           <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
             <div className="px-4 pt-3">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="api">API</TabsTrigger>
                 <TabsTrigger value="source">Source</TabsTrigger>
                 <TabsTrigger value="refs">Refs</TabsTrigger>
+                <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
             </div>
 
@@ -313,6 +361,79 @@ export function InspectorDrawer() {
                   </p>
                 )}
               </TabsContent>
+
+              <TabsContent value="history" className="m-0">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground">
+                    Durable change log (sys_metadata_history)
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setHistory(null)}
+                    title="Refresh"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                {loading && <div className="text-xs text-muted-foreground">Loading…</div>}
+                {!loading && history && history.length === 0 && (
+                  <div className="text-xs text-muted-foreground rounded border border-dashed p-4 text-center">
+                    No history yet — this item has no overlay changes recorded.
+                    {!isOverlayType(target.type) && (
+                      <div className="mt-2 text-[10px]">
+                        ({target.type} is not an overlay-tracked metadata type.)
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!loading && history && history.length > 0 && (
+                  <ol className="space-y-2 relative before:absolute before:left-[7px] before:top-1.5 before:bottom-1.5 before:w-px before:bg-border">
+                    {history.slice().reverse().map((ev) => (
+                      <li key={ev.seq} className="relative pl-6">
+                        <span
+                          className={`absolute left-0 top-1.5 inline-block h-3.5 w-3.5 rounded-full border-2 border-background ${opColor(ev.op)}`}
+                          aria-hidden
+                        />
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className="font-mono text-[10px] uppercase">
+                            {ev.op}
+                          </Badge>
+                          <span className="text-xs font-mono text-muted-foreground">
+                            #{ev.seq}
+                          </span>
+                          <span className="text-xs">{ev.actor}</span>
+                          <span className="text-[10px] text-muted-foreground ml-auto">
+                            {formatRelative(ev.ts)}
+                          </span>
+                        </div>
+                        {ev.message && (
+                          <div className="text-xs mt-1 italic text-foreground">{ev.message}</div>
+                        )}
+                        <div className="text-[10px] text-muted-foreground mt-1 font-mono break-all">
+                          {ev.hash ? (
+                            <span title={ev.hash}>{ev.hash.slice(0, 17)}…</span>
+                          ) : (
+                            <span className="opacity-60">∅ (tombstone)</span>
+                          )}
+                          {ev.parentHash && (
+                            <>
+                              <span className="mx-1">←</span>
+                              <span title={ev.parentHash}>{ev.parentHash.slice(0, 17)}…</span>
+                            </>
+                          )}
+                          <span className="ml-2">via {ev.source}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {!loading && history === null && (
+                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                    <HistoryIcon className="h-3.5 w-3.5" /> Loading history…
+                  </div>
+                )}
+              </TabsContent>
             </div>
           </Tabs>
         )}
@@ -342,4 +463,39 @@ function PreBlock({ value, multiline }: { value: string; multiline?: boolean }) 
       {value}
     </pre>
   );
+}
+
+const OVERLAY_TYPES = new Set(['view', 'dashboard', 'report', 'email_template']);
+function isOverlayType(type: string): boolean {
+  const t = type.endsWith('s') ? type.slice(0, -1) : type;
+  return OVERLAY_TYPES.has(t) || OVERLAY_TYPES.has(type);
+}
+
+function opColor(op: string): string {
+  switch (op) {
+    case 'create': return 'bg-emerald-500';
+    case 'update': return 'bg-sky-500';
+    case 'delete': return 'bg-rose-500';
+    case 'publish': return 'bg-violet-500';
+    case 'revert': return 'bg-amber-500';
+    default: return 'bg-muted-foreground';
+  }
+}
+
+function formatRelative(iso: string): string {
+  try {
+    const then = new Date(iso).getTime();
+    const now = Date.now();
+    const diffSec = Math.round((now - then) / 1000);
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.round(diffHr / 24);
+    if (diffDay < 30) return `${diffDay}d ago`;
+    return new Date(iso).toLocaleDateString();
+  } catch {
+    return iso;
+  }
 }
