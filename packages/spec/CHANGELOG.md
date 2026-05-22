@@ -1,5 +1,14 @@
 # @objectstack/spec
 
+## 5.0.0
+
+### Minor Changes
+
+- 2f9073a: Add `_sections` to `ObjectTranslationData` so per-section labels on detail
+  pages can be authored alongside `_views` and `_actions`. Convention:
+  `objects.<object>._sections.<section_name>.label`. Consumed by
+  `@object-ui/plugin-detail` when sections declare a stable `name`.
+
 ## 4.2.0
 
 ### Minor Changes
