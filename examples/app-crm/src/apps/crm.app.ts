@@ -54,7 +54,9 @@ export const CrmApp = App.create({
       expanded: true,
       children: [
         { id: 'nav_campaign', type: 'object', objectName: 'campaign', label: 'Campaigns', icon: 'megaphone' },
-        { id: 'nav_lead_marketing', type: 'object', objectName: 'lead', label: 'Leads', icon: 'user-plus' },
+        // Lead lives in Sales (where reps convert them daily). Marketing
+        // surfaces lead generation via Campaigns; users jump to a specific
+        // lead from the campaign detail or via global search.
       ],
     },
     {
@@ -72,9 +74,10 @@ export const CrmApp = App.create({
       label: 'Analytics',
       icon: 'chart-area',
       children: [
+        // Analytics hosts cross-functional executive views only. Operational
+        // dashboards (Sales / Service) live in their owning functional group
+        // to keep each item in exactly one place.
         { id: 'nav_exec_dashboard', type: 'dashboard', dashboardName: 'executive_dashboard', label: 'Executive Dashboard', icon: 'gauge' },
-        { id: 'nav_analytics_sales_db', type: 'dashboard', dashboardName: 'sales_dashboard', label: 'Sales Analytics', icon: 'chart-line' },
-        { id: 'nav_analytics_service_db', type: 'dashboard', dashboardName: 'service_dashboard', label: 'Service Analytics', icon: 'chart-pie' },
       ],
     },
     {

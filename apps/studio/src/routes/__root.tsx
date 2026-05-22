@@ -14,22 +14,29 @@ import { builtInPlugins } from '../plugins/built-in';
 import { useObjectStackClient } from '../hooks/useObjectStackClient';
 import { SessionProvider, useSession } from '../hooks/useSession';
 import { gotoAccountLogin } from '@/lib/auth-redirect';
+import { config } from '@/lib/config';
 
 /**
  * Single-tenant Studio shell. Login is delegated to apps/account; if the
  * session call comes back empty we bounce there. There is no per-project
  * routing, no organization switch, no public-route exemption — Studio is
  * purely a metadata browser + runtime debugger on top of one backend.
+ *
+ * In MSW mode (everything in-browser, no real backend) we skip the
+ * redirect — there's no account app to bounce to and the kernel doesn't
+ * authenticate. The TopBar still shows the "MSW" badge so this is
+ * impossible to confuse with a production deployment.
  */
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useSession();
+  const isMsw = config.mode === 'msw';
 
   useEffect(() => {
     if (loading) return;
-    if (!user) {
+    if (!user && !isMsw) {
       gotoAccountLogin(window.location.pathname + window.location.search);
     }
-  }, [user, loading]);
+  }, [user, loading, isMsw]);
 
   if (loading) {
     return (
@@ -39,7 +46,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) return null;
+  if (!user && !isMsw) return null;
 
   return (
     <SidebarProvider>
@@ -55,7 +62,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function AuthedAiChatPanel() {
   const { user } = useSession();
-  if (!user) return null;
+  if (!user && config.mode !== 'msw') return null;
   return <AiChatPanel />;
 }
 

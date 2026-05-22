@@ -13018,13 +13018,6 @@
               "icon": "megaphone",
               "type": "object",
               "objectName": "campaign"
-            },
-            {
-              "id": "nav_lead_marketing",
-              "label": "Leads",
-              "icon": "user-plus",
-              "type": "object",
-              "objectName": "lead"
             }
           ]
         },
@@ -13057,20 +13050,6 @@
               "icon": "gauge",
               "type": "dashboard",
               "dashboardName": "executive_dashboard"
-            },
-            {
-              "id": "nav_analytics_sales_db",
-              "label": "Sales Analytics",
-              "icon": "chart-line",
-              "type": "dashboard",
-              "dashboardName": "sales_dashboard"
-            },
-            {
-              "id": "nav_analytics_service_db",
-              "label": "Service Analytics",
-              "icon": "chart-pie",
-              "type": "dashboard",
-              "dashboardName": "service_dashboard"
             }
           ]
         },
