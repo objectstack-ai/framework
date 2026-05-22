@@ -15,6 +15,10 @@ export type { ObjectContributor, SchemaRegistryOptions } from './registry.js';
 // Export Protocol Implementation
 export { ObjectStackProtocolImplementation } from './protocol.js';
 
+// ADR-0008 PR-10b: MetadataRepository wrapper over the existing sys_metadata table.
+export { SysMetadataRepository } from './sys-metadata-repository.js';
+export type { SysMetadataEngine, SysMetadataRepositoryOptions } from './sys-metadata-repository.js';
+
 // Export Engine
 export { ObjectQL, ObjectRepository, ScopedContext } from './engine.js';
 export type { ObjectQLHostContext, HookHandler, HookEntry, OperationContext, EngineMiddleware } from './engine.js';
