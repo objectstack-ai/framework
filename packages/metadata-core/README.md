@@ -1,0 +1,40 @@
+# @objectstack/metadata-core
+
+Repository contracts for the ObjectStack metadata lifecycle. Defines the
+**types, canonicalization, errors and pluggable `MetadataRepository`
+interface** described in [ADR-0008](../../docs/adr/0008-metadata-repository-and-change-log.md).
+
+This package is **definitions only** — it has no I/O, no file system
+access, no database driver. Implementations live in:
+
+- `@objectstack/metadata-core` (`InMemoryRepository` — included here for
+  tests and edge runtimes)
+- `@objectstack/metadata` (`FileSystemRepository`, `LayeredRepository`)
+- `@objectstack/metadata-postgres` (M1+)
+
+## Exports
+
+```typescript
+import {
+  // Types
+  MetaRef, MetadataItem, MetadataItemHeader, MetadataEvent, MetadataOp,
+  PutOptions, PutResult, DeleteOptions, ListFilter, WatchFilter,
+
+  // Zod schemas (for runtime validation)
+  MetaRefSchema, MetadataItemSchema, MetadataEventSchema,
+
+  // Interface
+  MetadataRepository,
+
+  // Canonicalization
+  canonicalize, hashSpec,
+
+  // Errors
+  ConflictError, NotFoundError, SchemaValidationError,
+
+  // Reference impl
+  InMemoryRepository,
+} from '@objectstack/metadata-core';
+```
+
+See ADR-0008 §2 for the full architectural rationale.
