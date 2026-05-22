@@ -1,5 +1,124 @@
 # @objectstack/runtime
 
+## 5.0.0
+
+### Minor Changes
+
+- 5e9dcb4: **BREAKING — metadata: remove `project` and `branch` from `MetaRef`**
+
+  The metadata layer no longer models project or branch. Customisation is now
+  scoped purely to **organisation**. Project remains exclusively as an artifact
+  packaging concept (the `objectstack.json` bundle envelope); branching is left
+  to Git.
+
+  What changed:
+
+  - `MetaRef` is now `{ org, type, name, version? }` (was
+    `{ org, project, branch, type, name, version? }`). `refKey()` is the two
+    segment string `${org}/${type}/${name}` (was five segments).
+  - `MetadataItem.seq` is monotonic **per org** (was per branch).
+  - `BranchRef`, `MergeStrategy`, `MergeResult` types and the optional
+    `fork`/`merge` methods on `MetadataRepository` are removed.
+  - `ListFilter` / `WatchFilter` / `HistoryOptions` no longer accept `project`
+    or `branch`.
+  - `FileSystemRepository` disk layout simplified to
+    `<root>/<type>/<name>.json` (was `<root>/<project>/<branch>/<type>/<name>.json`);
+    change-log path is now `.objectstack/.log/main.jsonl` regardless of any
+    branch concept. Constructor no longer accepts `project` / `branch`.
+  - `SysMetadataRepository`: removed `projectLabel` / `branchLabel` options;
+    the `sys_metadata` schema's `project_id` / `branch` columns (if present)
+    are ignored. A future major release will `DROP` them.
+  - `MetadataManager.setRepository(repo, opts)` no longer takes an opts object
+    with `branch`.
+
+  Migration:
+
+  ```diff
+  -const ref = { org: 'acme', project: 'crm', branch: 'main', type: 'view', name: 'home' };
+  +const ref = { org: 'acme', type: 'view', name: 'home' };
+
+  -new FileSystemRepository({ root, org: 'acme', project: 'crm', branch: 'main' });
+  +new FileSystemRepository({ root, org: 'acme' });
+  ```
+
+  Existing `sys_metadata` rows continue to load; the deprecated columns are
+  ignored at read time.
+
+### Patch Changes
+
+- 96ad4df: Fix dev-mode HMR data-reload for `*.view.ts` / `*.flow.ts` source-file edits.
+
+  Three coordinated fixes close the long-standing gap where editing a
+  declarative-metadata source file in dev (e.g. `case.view.ts`) would
+  recompile `dist/objectstack.json` but the running server kept serving
+  the stale boot-time value:
+
+  1. **`@objectstack/objectql`** — `ObjectStackProtocolImplementation.getMetaItem`
+     now consults `MetadataService` (HMR-aware) **before** the in-memory
+     `SchemaRegistry` (boot-time cache). Previously the registry shadowed
+     freshly-registered values: `manager.register('view','case',newDef)`
+     updated MetadataManager but `getMetaItem` returned the stale registry
+     copy because step 2 (registry) ran before step 3 (service). Reordered
+     to "1. sys_metadata overlay → 2. MetadataService → 3. SchemaRegistry".
+
+  2. **`@objectstack/runtime`** — `createStandaloneStack` now enables the
+     `MetadataPlugin` artifact-file watcher in non-production environments
+     (`NODE_ENV !== 'production'`). Previously hard-coded to `watch: false`,
+     leaving nothing watching `dist/objectstack.json` when the CLI dev mode
+     recompiled it.
+
+  3. **`@objectstack/metadata`** & **`@objectstack/metadata-fs`** — Both
+     chokidar watchers now use `usePolling: true` to avoid `fs.watch`
+     EMFILE on macOS / busy dev hosts where the native file-descriptor
+     pool can be exhausted by other long-running node processes.
+
+  With these three changes:
+
+  - CLI edits source → recompile artifact (~400ms)
+  - Server's polling chokidar detects artifact change → `_loadFromLocalFile`
+  - `_loadFromLocalFile` calls `manager.register(type, name, item)`
+  - MetadataService now has the fresh value
+  - Read path returns the fresh value via the new step-2 lookup
+  - Studio SSE listeners re-render
+
+- df18ae9: Fix dev-mode HMR data-reload for view metadata.
+
+  `MetadataPlugin._parseAndRegisterArtifact` previously required a top-level
+  `name` on every artifact item and silently skipped those without one.
+  View bundles in the compiled artifact carry no top-level `name` (their
+  identity is the target object, encoded under `list.data.object` /
+  `form.data.object` — same pattern used by `ObjectQL.SchemaRegistry`'s
+  `resolveMetadataItemName`). As a result, artifact-loaded views never
+  reached `MetadataManager`, and HMR file pushes never affected the read
+  path: API responses kept returning the boot-time `SchemaRegistry` copy.
+
+  This change derives the registration key from `list.data.object` (or
+  `form.data.object`) when no top-level `name` is present, mirroring the
+  ObjectQL convention.
+
+  Also splits the `MetadataPlugin` watch flag into two independent
+  options so dev mode can enable artifact-file HMR without paying the
+  cost of the source-file scanner:
+
+  - `watch` — controls `NodeMetadataManager`'s recursive source scan
+    (default `false`; turning it on in artifact mode would polling-scan
+    the entire project root including `node_modules`).
+  - `artifactWatch` — controls the cheap single-file polling watcher on
+    the compiled artifact (`dist/objectstack.json`). The standalone stack
+    enables this automatically when `NODE_ENV !== 'production'`.
+
+- Updated dependencies [5cfdc85]
+- Updated dependencies [2f9073a]
+  - @objectstack/rest@5.0.0
+  - @objectstack/spec@5.0.0
+  - @objectstack/plugin-auth@5.0.0
+  - @objectstack/plugin-security@5.0.0
+  - @objectstack/core@5.0.0
+  - @objectstack/formula@5.0.0
+  - @objectstack/observability@5.0.0
+  - @objectstack/service-i18n@5.0.0
+  - @objectstack/types@5.0.0
+
 ## 4.2.0
 
 ### Patch Changes

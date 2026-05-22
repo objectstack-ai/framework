@@ -1,5 +1,104 @@
 # @objectstack/studio
 
+## 5.0.0
+
+### Major Changes
+
+- bb32755: Publish `@objectstack/account` and `@objectstack/console` to npm (major release).
+
+  Previously both apps were marked `private: true`, which prevented `changeset publish`
+  from releasing them. The CLI (`@objectstack/cli`) resolves these packages from
+  `node_modules/@objectstack/{account,console,studio}` to serve their built `dist`
+  assets, so third-party projects could not consume them via `pnpm add`.
+
+  - Removed `private: true` from `apps/account` and `apps/console`.
+  - Added `publishConfig.access: public` to `account`, `console`, and `studio` for
+    scoped-package publish safety.
+
+### Minor Changes
+
+- ddf8080: ADR-0008 M0 PR-9: thread the canonical server-side change-log `seq` from
+  `MetadataRepository` events through to the Studio HMR badge. The
+  `useMetadataHmr()` hook now exposes `lastSeq` alongside the local
+  `version` counter, and the badge tooltip renders "Repo seq: #N" so
+  operators can correlate Studio reloads with what other replicas observe.
+  Legacy chokidar-driven events still work — they simply leave `seq`
+  undefined and consumers fall back to the local counter.
+
+### Patch Changes
+
+- e15885f: Fix multiple live-preview rendering bugs surfaced by end-to-end browser
+  verification:
+
+  - **Grid empty render** – `@object-ui/plugin-grid` serialises `sort:[{field,order}]`
+    into a space-delimited `$orderby` string which `@object-ui/data-objectstack`
+    then iterates with `Object.entries()` (character indices), producing
+    `sort=0,1,2,…` and zero records. The Studio data-source adapter now
+    intercepts and repairs malformed `$orderby` before it reaches the server.
+  - **`listViews` sub-tabs** – `MetadataPreview` now discovers and renders tab
+    entries from a view's `listViews.*` map in addition to top-level keys
+    (`grid`, `kanban`, `calendar`, `form`, …), labels resolved from
+    `spec.label` with sensible defaults.
+  - **Kanban schema transform** – CRM-style specs nest grouping under
+    `kanban.{groupByField, columns}` and carry a `data:{provider,object}`
+    block. `MetadataPreview` now promotes `groupByField → groupBy`, exposes
+    card fields, and strips the `data:` field that would otherwise cause
+    `@object-ui/plugin-kanban` to treat it as pre-fetched records and skip
+    its data fetch entirely.
+  - **Calendar schema transform** – Analogous: promote
+    `calendar.{startDateField, endDateField, titleField, colorField}` to
+    the schema root and drop the `data:` provider block so the calendar
+    fetches real records.
+
+- ba9f04a: Studio: timeline + dashboard preview renderers
+
+  Previously `view + timeline` and `dashboard` metadata fell through to the
+  "Unsupported" JSON inspector. They now render against the same live
+  DataSource as the rest of Studio:
+
+  - **TimelinePreview** — vertical chronological list grouped by date,
+    honouring `timeline.{startDateField, endDateField, titleField,
+groupByField, colorField}`. Status-coloured dots, start→end ranges.
+  - **DashboardPreview** — CSS-grid layout (12-col by default, driven by
+    `layout.{x,y,w,h}`) that renders each widget by type: `metric` /
+    `gauge` / `area` as a big aggregate value; `donut` / `pie` / `bar` /
+    `column` as horizontal bar charts of grouped buckets; `table` as a
+    small data table fed by `dataSource.find`.
+
+  Both renderers are intentionally minimal — designed for "preview the
+  spec with real data," not pixel-perfect production rendering.
+
+- Updated dependencies [5e9dcb4]
+- Updated dependencies [8b298c7]
+- Updated dependencies [f139a24]
+- Updated dependencies [4eb9f8c]
+- Updated dependencies [2f7e42a]
+- Updated dependencies [602cce7]
+- Updated dependencies [1e625b8]
+- Updated dependencies [6ee42b8]
+- Updated dependencies [888a5c1]
+- Updated dependencies [5cfdc85]
+- Updated dependencies [09f005a]
+- Updated dependencies [7825394]
+- Updated dependencies [96ad4df]
+- Updated dependencies [df18ae9]
+- Updated dependencies [9e51868]
+- Updated dependencies [ddf8080]
+- Updated dependencies [2f9073a]
+  - @objectstack/metadata@5.0.0
+  - @objectstack/objectql@5.0.0
+  - @objectstack/runtime@5.0.0
+  - @objectstack/platform-objects@5.0.0
+  - @objectstack/spec@5.0.0
+  - @objectstack/client@5.0.0
+  - @objectstack/plugin-msw@5.0.0
+  - @objectstack/service-ai@5.0.0
+  - @objectstack/client-react@5.0.0
+  - @objectstack/driver-memory@5.0.0
+  - @objectstack/service-analytics@5.0.0
+  - @objectstack/service-automation@5.0.0
+  - @objectstack/service-feed@5.0.0
+
 ## 4.2.0
 
 ### Patch Changes
