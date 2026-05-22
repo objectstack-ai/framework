@@ -1,5 +1,24 @@
 # @objectstack/studio
 
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [823d559]
+  - @objectstack/platform-objects@5.1.0
+  - @objectstack/spec@5.1.0
+  - @objectstack/objectql@5.1.0
+  - @objectstack/metadata@5.1.0
+  - @objectstack/service-ai@5.1.0
+  - @objectstack/client@5.1.0
+  - @objectstack/client-react@5.1.0
+  - @objectstack/driver-memory@5.1.0
+  - @objectstack/plugin-msw@5.1.0
+  - @objectstack/runtime@5.1.0
+  - @objectstack/service-analytics@5.1.0
+  - @objectstack/service-automation@5.1.0
+  - @objectstack/service-feed@5.1.0
+
 ## 5.0.0
 
 ### Major Changes

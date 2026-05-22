@@ -1,5 +1,16 @@
 # @objectstack/example-crm
 
+## 4.0.10
+
+### Patch Changes
+
+- Updated dependencies [823d559]
+  - @objectstack/spec@5.1.0
+  - @objectstack/driver-mongodb@5.1.0
+  - @objectstack/runtime@5.1.0
+  - @objectstack/service-analytics@5.1.0
+  - @objectstack/service-automation@5.1.0
+
 ## 4.0.9
 
 ### Patch Changes

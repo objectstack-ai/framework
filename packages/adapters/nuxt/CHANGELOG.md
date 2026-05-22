@@ -1,5 +1,7 @@
 # @objectstack/nuxt
 
+## 5.1.0
+
 ## 5.0.0
 
 ### Patch Changes

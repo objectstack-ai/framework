@@ -1,5 +1,14 @@
 # @objectstack/service-realtime
 
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [823d559]
+  - @objectstack/platform-objects@5.1.0
+  - @objectstack/spec@5.1.0
+  - @objectstack/core@5.1.0
+
 ## 5.0.0
 
 ### Patch Changes
