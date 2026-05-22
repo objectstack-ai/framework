@@ -1,5 +1,27 @@
 # @objectstack/plugin-sharing
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [5e9dcb4]
+- Updated dependencies [f139a24]
+- Updated dependencies [4eb9f8c]
+- Updated dependencies [2f7e42a]
+- Updated dependencies [602cce7]
+- Updated dependencies [1e625b8]
+- Updated dependencies [6ee42b8]
+- Updated dependencies [888a5c1]
+- Updated dependencies [5cfdc85]
+- Updated dependencies [09f005a]
+- Updated dependencies [7825394]
+- Updated dependencies [96ad4df]
+- Updated dependencies [2f9073a]
+  - @objectstack/objectql@5.0.0
+  - @objectstack/platform-objects@5.0.0
+  - @objectstack/spec@5.0.0
+  - @objectstack/core@5.0.0
+
 ## 4.2.0
 
 ### Patch Changes

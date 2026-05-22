@@ -1,5 +1,233 @@
 # @objectstack/objectql
 
+## 5.0.0
+
+### Minor Changes
+
+- 5e9dcb4: **BREAKING — metadata: remove `project` and `branch` from `MetaRef`**
+
+  The metadata layer no longer models project or branch. Customisation is now
+  scoped purely to **organisation**. Project remains exclusively as an artifact
+  packaging concept (the `objectstack.json` bundle envelope); branching is left
+  to Git.
+
+  What changed:
+
+  - `MetaRef` is now `{ org, type, name, version? }` (was
+    `{ org, project, branch, type, name, version? }`). `refKey()` is the two
+    segment string `${org}/${type}/${name}` (was five segments).
+  - `MetadataItem.seq` is monotonic **per org** (was per branch).
+  - `BranchRef`, `MergeStrategy`, `MergeResult` types and the optional
+    `fork`/`merge` methods on `MetadataRepository` are removed.
+  - `ListFilter` / `WatchFilter` / `HistoryOptions` no longer accept `project`
+    or `branch`.
+  - `FileSystemRepository` disk layout simplified to
+    `<root>/<type>/<name>.json` (was `<root>/<project>/<branch>/<type>/<name>.json`);
+    change-log path is now `.objectstack/.log/main.jsonl` regardless of any
+    branch concept. Constructor no longer accepts `project` / `branch`.
+  - `SysMetadataRepository`: removed `projectLabel` / `branchLabel` options;
+    the `sys_metadata` schema's `project_id` / `branch` columns (if present)
+    are ignored. A future major release will `DROP` them.
+  - `MetadataManager.setRepository(repo, opts)` no longer takes an opts object
+    with `branch`.
+
+  Migration:
+
+  ```diff
+  -const ref = { org: 'acme', project: 'crm', branch: 'main', type: 'view', name: 'home' };
+  +const ref = { org: 'acme', type: 'view', name: 'home' };
+
+  -new FileSystemRepository({ root, org: 'acme', project: 'crm', branch: 'main' });
+  +new FileSystemRepository({ root, org: 'acme' });
+  ```
+
+  Existing `sys_metadata` rows continue to load; the deprecated columns are
+  ignored at read time.
+
+- f139a24: Subscribe `ObjectQLPlugin` to `metadata.subscribe('object', …)` so the
+  `SchemaRegistry` merge cache is invalidated and the affected object
+  re-registered on every object metadata change (ADR-0008 M0 PR-7).
+
+  Combined with the PR-6 metadata ↔ repository bridge, this closes the
+  Studio HMR loop end-to-end: editing an object definition (file, REST
+  write, or Studio inline edit) emits a `MetadataEvent`, which flows
+  through `MetadataManager.subscribe('object', …)` into ObjectQL, which
+  drops the cached merged definition and re-fetches the canonical body
+  from the metadata service. Subsequent reads see the new schema with
+  no server restart.
+
+  Additions:
+
+  - `SchemaRegistry.invalidate(fqnOrName)` and `invalidateAll()` —
+    public hooks for event-driven cache eviction; contributors are
+    preserved so `resolveObject` recomputes against the next call.
+  - `ObjectQLPlugin.start()` wires the subscription when the metadata
+    service exposes `subscribe()`. The handler invalidates, re-fetches
+    via `metadata.get('object', name)`, and re-registers with the
+    original `packageId` / `namespace`. Deletes only invalidate.
+  - `ObjectQLPlugin.stop()` drains the subscription handles so test
+    reloads don't leak watchers.
+
+- 2f7e42a: ADR-0008 M0 PR-10b: introduce `SysMetadataRepository` — a
+  `MetadataRepository` wrapper over the existing `sys_metadata` table.
+  M0 keeps single-row update semantics (append-only event log is M1
+  work). Whitelist enforcement, optimistic locking via content hash,
+  and in-process watch fan-out are all live. Not yet wired into any
+  production write path — PR-10c will compose it under a
+  LayeredRepository.
+- 888a5c1: PR-10d.3 — feature flag for `SysMetadataRepository.put` write path in `saveMetaItem`.
+
+  - `ObjectStackProtocolImplementation` now accepts an `options.useRepositoryWritePath` flag
+    (also honored via `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH=1`) that routes overlay writes
+    through `SysMetadataRepository.put`, appending to the change-log and emitting HMR `seq`.
+  - `saveMetaItem` request grew optional `parentVersion` (If-Match) and `actor` fields.
+    `ConflictError` is mapped to a 409 `metadata_conflict` API error.
+  - Plural metadata type aliases (`views`, `dashboards`, ...) are normalized to singular
+    before the repo's overlay-allowlist gate.
+  - `SysMetadataRepository.put`/`delete` now update/delete by row `id` (the engine's
+    strict `.update` semantics require an id or `multi:true`).
+  - `sys_metadata.checksum` column widened from 64 → 71 chars to hold the `"sha256:"`
+    prefix produced by `hashSpec()`.
+  - Default behaviour unchanged: legacy raw-engine path remains until PR-10d.4 flips the
+    flag and removes it.
+
+- 09f005a: PR-10d.5 — Flip default of `useRepositoryWritePath` to `true`.
+
+  `saveMetaItem` now routes overlay-allowed metadata types (view, dashboard,
+  report, email_template) through `SysMetadataRepository.put` by default —
+  every write appends to the change log and emits a watch event with a
+  monotonic `seq` for HMR / replay.
+
+  Non-overlay-allowed types (`object`, `flow`, `agent`, ...) still take the
+  legacy raw-engine path. This preserves control-plane bootstrap behaviour
+  (which writes `object`/`flow` definitions via `saveMetaItem` and is
+  permitted by the outer protocol gate to write any type when `projectId`
+  is undefined).
+
+  Opt-out remains available during the deprecation window:
+
+  - Constructor: `new ObjectStackProtocolImplementation(engine, …, { useRepositoryWritePath: false })`
+  - Env var: `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH=0`
+
+  The legacy raw-engine branch for overlay-allowed types is scheduled for
+  removal in PR-10d.6 once this default has soaked for one release.
+
+### Patch Changes
+
+- 4eb9f8c: ADR-0008 M0 PR-10a: pin overlay-whitelist + canonical-hash invariants
+  before re-expressing the overlay path as a LayeredRepository. No
+  runtime change — adds 28 regression tests that fail loud if a future
+  PR weakens the shared-DB tenancy contract or breaks hash stability.
+- 602cce7: test(objectql): integration coverage for `LayeredRepository` composed of
+  `SysMetadataRepository` (top, writable overlay) over `InMemoryRepository`
+  (bottom, artifact baseline). Verifies read fallthrough, overlay-wins
+  precedence, write routing, delete behavior, event source tagging across
+  layers, and merged-list semantics. Part of ADR-0008 PR-10c.
+- 1e625b8: feat(objectql): hash-compat dry-run probe for the legacy → repository
+  write-path migration (ADR-0008 PR-10d.1). Pure-function `runDryRun()` plus
+  a CLI (`scripts/dry-run-hash-compat.ts`) that audits a snapshot of
+  `sys_metadata` for invalid JSON, non-object bodies, unstable hashes across
+  canonical round-trip, and duplicate overlay keys. Exits non-zero when
+  incompatibilities are found. 14 unit tests covering happy paths, error
+  classifications (`invalid_json`, `non_object_body`, `unstable_hash`,
+  `missing_metadata`, `duplicate_overlay_key`), and boundary conditions
+  (empty snapshot, deep nesting, unicode).
+- 6ee42b8: fix(objectql): SysMetadataRepository reuses the existing `checksum` column
+  instead of writing a non-existent `_hash` column (ADR-0008 PR-10d.2). The
+  production `sys_metadata` schema (`packages/platform-objects`) already
+  ships with `checksum: text(64)` — perfect for sha256 hex — and `version:
+number` for the monotonic counter. No DDL migration is required for
+  PR-10d.3 cutover; legacy rows with NULL checksum will be lazily
+  backfilled on first put().
+
+  Also extends the PR-10d.1 dry-run probe with two new checks
+  (`checksum_missing` warning, `checksum_drift` error) and three additional
+  tests, taking objectql to 325/325 green.
+
+- 5cfdc85: PR-10d.4 — REST plumbing for the metadata repository write path.
+
+  - `PUT /api/v1/meta/:type/:name` (and the compound `:type/:section/:name` variant)
+    now forwards the `If-Match` header to `saveMetaItem` as `parentVersion`, and
+    `X-Actor` (or `req.user.id`) as `actor`. ETag-style quotes are stripped.
+  - A failed optimistic-lock check surfaces as HTTP 409 with body
+    `{ "error": "...", "code": "metadata_conflict" }` (no protocol changes —
+    `sendError` already honoured `error.status` + `error.code`).
+  - Added a real-engine integration test for the repository write path
+    (`protocol-save-meta-repo-path-real-engine.test.ts`) — addresses the
+    PR-10d.3 rubber-duck stub-drift concern by exercising
+    `ObjectStackProtocolImplementation.saveMetaItem` through `new ObjectQL()`
+    with an inline in-memory driver. Covers insert→update version bump,
+    parentVersion conflict, checksum length, and plural→singular normalization.
+
+  Default behaviour unchanged: the repository write path remains opt-in via
+  `options.useRepositoryWritePath` / `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH=1`.
+  Flag flip and legacy path removal will follow in a separate post-soak PR.
+
+- 7825394: PR-10d.6 — remove `useRepositoryWritePath` feature flag.
+
+  Overlay-allowed metadata types (`view`, `dashboard`, `report`,
+  `email_template`) now unconditionally route through
+  `SysMetadataRepository.put` (change-log + HMR `seq`). The legacy
+  raw-engine branch is retained for non-overlay types (`object`, `flow`,
+  `agent`, etc.) used during control-plane bootstrap, since the repository
+  `assertAllowed()` whitelist would reject them.
+
+  Removed:
+
+  - `ObjectStackProtocolImplementation` constructor option
+    `{ useRepositoryWritePath: boolean }`.
+  - `OBJECTSTACK_USE_REPOSITORY_WRITE_PATH` environment variable.
+
+  There is no opt-out: behavior is now equivalent to the PR-10d.5 default.
+
+- 96ad4df: Fix dev-mode HMR data-reload for `*.view.ts` / `*.flow.ts` source-file edits.
+
+  Three coordinated fixes close the long-standing gap where editing a
+  declarative-metadata source file in dev (e.g. `case.view.ts`) would
+  recompile `dist/objectstack.json` but the running server kept serving
+  the stale boot-time value:
+
+  1. **`@objectstack/objectql`** — `ObjectStackProtocolImplementation.getMetaItem`
+     now consults `MetadataService` (HMR-aware) **before** the in-memory
+     `SchemaRegistry` (boot-time cache). Previously the registry shadowed
+     freshly-registered values: `manager.register('view','case',newDef)`
+     updated MetadataManager but `getMetaItem` returned the stale registry
+     copy because step 2 (registry) ran before step 3 (service). Reordered
+     to "1. sys_metadata overlay → 2. MetadataService → 3. SchemaRegistry".
+
+  2. **`@objectstack/runtime`** — `createStandaloneStack` now enables the
+     `MetadataPlugin` artifact-file watcher in non-production environments
+     (`NODE_ENV !== 'production'`). Previously hard-coded to `watch: false`,
+     leaving nothing watching `dist/objectstack.json` when the CLI dev mode
+     recompiled it.
+
+  3. **`@objectstack/metadata`** & **`@objectstack/metadata-fs`** — Both
+     chokidar watchers now use `usePolling: true` to avoid `fs.watch`
+     EMFILE on macOS / busy dev hosts where the native file-descriptor
+     pool can be exhausted by other long-running node processes.
+
+  With these three changes:
+
+  - CLI edits source → recompile artifact (~400ms)
+  - Server's polling chokidar detects artifact change → `_loadFromLocalFile`
+  - `_loadFromLocalFile` calls `manager.register(type, name, item)`
+  - MetadataService now has the fresh value
+  - Read path returns the fresh value via the new step-2 lookup
+  - Studio SSE listeners re-render
+
+- Updated dependencies [5e9dcb4]
+- Updated dependencies [4150fe4]
+- Updated dependencies [8337cdb]
+- Updated dependencies [58835a6]
+- Updated dependencies [8cc30b4]
+- Updated dependencies [32ce912]
+- Updated dependencies [2f9073a]
+  - @objectstack/metadata-core@5.0.0
+  - @objectstack/spec@5.0.0
+  - @objectstack/core@5.0.0
+  - @objectstack/formula@5.0.0
+  - @objectstack/types@5.0.0
+
 ## 4.2.0
 
 ### Minor Changes
