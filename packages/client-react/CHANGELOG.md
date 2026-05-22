@@ -1,5 +1,14 @@
 # @objectstack/client-react
 
+## 4.1.1
+
+### Patch Changes
+
+- Updated dependencies [5326c6b]
+  - @objectstack/client@4.1.1
+  - @objectstack/spec@4.1.1
+  - @objectstack/core@4.1.1
+
 ## 4.1.0
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @objectstack/plugin-sharing
 
+## 4.1.1
+
+### Patch Changes
+
+- @objectstack/spec@4.1.1
+- @objectstack/core@4.1.1
+- @objectstack/objectql@4.1.1
+- @objectstack/platform-objects@4.1.1
+
 ## 4.0.1
 
 ### Patch Changes

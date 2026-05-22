@@ -1,5 +1,11 @@
 # @objectstack/platform-objects
 
+## 4.1.1
+
+### Patch Changes
+
+- @objectstack/spec@4.1.1
+
 ## 4.1.0
 
 ### Patch Changes

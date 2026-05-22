@@ -1,5 +1,41 @@
 # @objectstack/cli
 
+## 4.1.1
+
+### Patch Changes
+
+- Updated dependencies [5326c6b]
+  - @objectstack/client@4.1.1
+  - @objectstack/spec@4.1.1
+  - @objectstack/core@4.1.1
+  - @objectstack/objectql@4.1.1
+  - @objectstack/runtime@4.1.1
+  - @objectstack/rest@4.1.1
+  - @objectstack/driver-memory@4.1.1
+  - @objectstack/driver-sql@4.1.1
+  - @objectstack/driver-turso@4.1.1
+  - @objectstack/driver-mongodb@4.1.1
+  - @objectstack/plugin-approvals@4.1.1
+  - @objectstack/plugin-audit@4.1.1
+  - @objectstack/plugin-auth@4.1.1
+  - @objectstack/plugin-email@4.1.1
+  - @objectstack/plugin-hono-server@4.1.1
+  - @objectstack/plugin-mcp-server@4.1.1
+  - @objectstack/plugin-reports@4.1.1
+  - @objectstack/plugin-security@4.1.1
+  - @objectstack/plugin-sharing@4.1.1
+  - @objectstack/service-ai@4.1.1
+  - @objectstack/service-analytics@4.1.1
+  - @objectstack/service-automation@4.1.1
+  - @objectstack/service-cache@4.1.1
+  - @objectstack/service-feed@4.1.1
+  - @objectstack/service-job@4.1.1
+  - @objectstack/service-package@4.1.1
+  - @objectstack/service-queue@4.1.1
+  - @objectstack/service-realtime@4.1.1
+  - @objectstack/service-settings@4.1.1
+  - @objectstack/service-storage@4.1.1
+
 ## 4.1.0
 
 ### Minor Changes

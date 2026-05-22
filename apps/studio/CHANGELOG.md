@@ -1,5 +1,35 @@
 # @objectstack/studio
 
+## 4.1.1
+
+### Patch Changes
+
+- 5326c6b: Studio developer UX overhaul.
+
+  - **Inspector drawer** (right Sheet, toggle via header button or `]`) with API / Source / Refs tabs that auto-populate from the current resource detail page.
+  - **Problems panel** (status bar pill + `[`) that subscribes to object/view/flow/hook changes and surfaces unknown object refs, missing field refs, and broken triggers with deep-links back to source.
+  - **Keyboard shortcuts**: `g o|f|v|a|s|p` navigation, `[` problems, `]` inspector, `?` help dialog.
+  - **Resource actions menu** (`⋯` on detail page header): Copy as curl / fetch() / `defineX()` TypeScript / Metadata JSON; Open in VS Code; Open API endpoint.
+  - **Welcome onboarding** empty-state in the developer overview when a package has no metadata.
+  - New `StudioShell` wrapper; `TopBar` gains a `rightSlot` prop for Inspector / Help buttons.
+
+  `@objectstack/client`: surface plain-string `error` bodies (e.g. `RECORD_LOCKED: …`) in fetch error messages instead of swallowing them as `Bad Request`.
+
+- Updated dependencies [5326c6b]
+  - @objectstack/client@4.1.1
+  - @objectstack/client-react@4.1.1
+  - @objectstack/spec@4.1.1
+  - @objectstack/metadata@4.1.1
+  - @objectstack/objectql@4.1.1
+  - @objectstack/platform-objects@4.1.1
+  - @objectstack/runtime@4.1.1
+  - @objectstack/driver-memory@4.1.1
+  - @objectstack/plugin-msw@4.1.1
+  - @objectstack/service-ai@4.1.1
+  - @objectstack/service-analytics@4.1.1
+  - @objectstack/service-automation@4.1.1
+  - @objectstack/service-feed@4.1.1
+
 ## 4.1.0
 
 ### Patch Changes

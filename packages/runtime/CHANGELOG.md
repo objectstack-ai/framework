@@ -1,5 +1,18 @@
 # @objectstack/runtime
 
+## 4.1.1
+
+### Patch Changes
+
+- @objectstack/spec@4.1.1
+- @objectstack/core@4.1.1
+- @objectstack/types@4.1.1
+- @objectstack/formula@4.1.1
+- @objectstack/rest@4.1.1
+- @objectstack/plugin-auth@4.1.1
+- @objectstack/plugin-security@4.1.1
+- @objectstack/service-i18n@4.1.1
+
 ## 4.1.0
 
 ### Minor Changes

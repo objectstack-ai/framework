@@ -1,5 +1,15 @@
 # @objectstack/example-crm
 
+## 4.0.7
+
+### Patch Changes
+
+- @objectstack/spec@4.1.1
+- @objectstack/runtime@4.1.1
+- @objectstack/driver-mongodb@4.1.1
+- @objectstack/service-analytics@4.1.1
+- @objectstack/service-automation@4.1.1
+
 ## 4.0.6
 
 ### Patch Changes
