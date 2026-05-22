@@ -1,10 +1,10 @@
 ---
-"@objectstack/account": patch
-"@objectstack/console": patch
-"@objectstack/studio": patch
+"@objectstack/account": major
+"@objectstack/console": major
+"@objectstack/studio": major
 ---
 
-Publish `@objectstack/account` and `@objectstack/console` to npm.
+Publish `@objectstack/account` and `@objectstack/console` to npm (major release).
 
 Previously both apps were marked `private: true`, which prevented `changeset publish`
 from releasing them. The CLI (`@objectstack/cli`) resolves these packages from

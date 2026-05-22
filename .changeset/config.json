@@ -11,7 +11,10 @@
       "@objectstack/client-react",
       "@objectstack/types",
       "@objectstack/metadata",
+      "@objectstack/metadata-core",
+      "@objectstack/metadata-fs",
       "@objectstack/objectql",
+      "@objectstack/observability",
       "@objectstack/formula",
       "@objectstack/platform-objects",
       "@objectstack/runtime",
@@ -54,7 +57,6 @@
       "@objectstack/service-storage",
       "@objectstack/account",
       "@objectstack/console",
-      "@objectstack/docs",
       "create-objectstack",
       "objectstack-vscode"
     ]
