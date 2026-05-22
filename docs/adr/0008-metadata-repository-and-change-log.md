@@ -107,7 +107,7 @@ We adopt all eight.
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ CHANGE LOG  (append-only, monotonic, per-branch)                │
-│   - Single sequence number per (org, project, branch)            │
+│   - Single sequence number per (org, branch)                     │
 │   - Persists in same backend as the Repository (FS journal / DB) │
 │   - Sole mechanism for notifying *anyone* about a change         │
 └─────────────────────────┬───────────────────────────────────────┘
@@ -156,7 +156,13 @@ TS source files, YAML, Studio UI forms and CRDT documents are *editing views* th
 ```typescript
 interface MetaRef {
   org: string;        // 'acme' or 'system' for built-ins
-  project: string;    // 'crm', 'erp', …
+  // NOTE (2026-05-22): The earlier draft of this ADR included a
+  // `project` field. Per ADR-0006 v4, `sys_project` no longer exists
+  // — the dev-workspace identity is carried by `sys_package` /
+  // `sys_package_version`. The scope tuple is therefore (org, branch).
+  // A future "code identity" field is expected to come back as
+  // `package: string` (the immutable package slug), but that is
+  // deferred to M2 alongside branch promotion.
   branch: string;     // 'main', 'feature-x', 'pr-42'
   type: MetadataType; // 'view' | 'object' | 'flow' | 'agent' | 'tool' | 'dashboard' | …
   name: string;       // 'case', 'sales_pipeline', …
@@ -165,7 +171,7 @@ interface MetaRef {
 }
 ```
 
-All four scopes are mandatory at the storage layer. Higher layers may default `org=system`, `project=current`, `branch=main` for convenience.
+All three scopes are mandatory at the storage layer. Higher layers may default `org=system`, `branch=main` for convenience.
 
 ### 2.4 Event shape
 
@@ -173,7 +179,7 @@ All four scopes are mandatory at the storage layer. Higher layers may default `o
 type MetadataOp = 'create' | 'update' | 'delete' | 'rename';
 
 interface MetadataEvent {
-  seq: number;            // monotonic per (org, project, branch)
+  seq: number;            // monotonic per (org, branch)
   op: MetadataOp;
   ref: MetaRef;
   hash: string | null;    // null for delete
@@ -248,8 +254,8 @@ export interface MetadataRepository {
 - `put` is **read-only** by default in this implementation — the file system is owned by the developer's IDE. Cloud-mode Studio inline edits will use the Postgres backend instead. (Optional opt-in `writeMode: 'patch'` for future "Studio writes back to source files".)
 
 **`PostgresRepository`** (M1)
-- Schema: `metadata_items(org, project, branch, type, name, version, parent_version, body, hash, actor, message, ts, deleted)` with `(org, project, branch, type, name)` partial-unique index on `deleted=false`.
-- Change log table: `metadata_events(seq SERIAL, org, project, branch, op, type, name, hash, parent_hash, actor, ts, source)`.
+- Schema: `metadata_items(org, branch, type, name, version, parent_version, body, hash, actor, message, ts, deleted)` with `(org, branch, type, name)` partial-unique index on `deleted=false`.
+- Change log table: `metadata_events(seq SERIAL, org, branch, op, type, name, hash, parent_hash, actor, ts, source)`.
 - `watch` implemented via `LISTEN metadata_events`; multi-replica safe because every server `LISTEN`s independently.
 - `put` runs inside a transaction with `SELECT … FOR UPDATE` on the current head to enforce optimistic locking.
 
@@ -324,10 +330,10 @@ Key invariants:
 
 | Layer | Scope key |
 |:---|:---|
-| Repository | `org / project / branch` is part of every read and every write |
+| Repository | `org / branch` is part of every read and every write |
 | Cache | Same — cache key includes all four parts of `MetaRef` |
-| Change log | Per `(org, project, branch)` monotonic sequence |
-| Registry | Each kernel instance is bound to one `(org, project, branch, env)` quadruple; one server may host many kernels (ADR-0004) |
+| Change log | Per `(org, branch)` monotonic sequence |
+| Registry | Each kernel instance is bound to one `(org, branch, env)` triple; one server may host many kernels (ADR-0004) |
 
 Cross-org references are not allowed at the protocol level; they go through marketplace **packages** (ADR-0003).
 
@@ -459,7 +465,7 @@ The plan is intentionally staged so each milestone is **independently shippable*
    - `LISTEN/NOTIFY` for `watch`
    - Migration files under `packages/metadata-postgres/migrations/`
 2. Multi-tenant scoping:
-   - `MetaRef.org/project/branch` propagation through HTTP middleware → kernel context → repository
+   - `MetaRef.org/branch` propagation through HTTP middleware → kernel context → repository
    - Per-tenant row-level guards
 3. Tooling API:
    - `GET /api/v1/tooling/meta/:type/:name` (returns `{ item, version, hash }`)
@@ -599,7 +605,7 @@ The M0 milestone is itself decomposed into shippable PRs. Each PR is independent
 1. **Should `MetadataEvent` carry the full new spec or just the hash?** Carrying the spec saves a round-trip on the consumer but bloats the event log. Likely answer: carry hash only; consumers fetch via cache.
 2. **How do we represent rename atomically?** Two events (`delete`+`create`) or a single `rename` op? Going with a single `rename` op for cache-friendliness.
 3. **What's the canonical hash function?** sha256 over canonicalized JSON. Algorithm pluggable but default fixed.
-4. **Per-branch change log table or one big table?** Single table with index on `(org, project, branch, seq)`; partitioning if scale demands.
+4. **Per-branch change log table or one big table?** Single table with index on `(org, branch, seq)`; partitioning if scale demands.
 5. **Do we sync built-in metadata between server and client (offline mode)?** No in M3; only tenant edits sync.
 6. **Where do schema-version codemods live?** New `packages/metadata-codemods/`; auto-discovered via plugin registry.
 

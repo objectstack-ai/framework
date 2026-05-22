@@ -1,11 +1,37 @@
 # ADR-0005: Metadata Customization Overlay (Artifact + sys_metadata Delta)
 
-**Status**: Accepted (2026-05-16)
+**Status**: Accepted (2026-05-16) · **Amended** (2026-05-22, see "Amendment: post-ADR-0006 v4 scope")
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0003](./0003-package-as-first-class-citizen.md) (Package as first-class citizen), [ADR-0004](./0004-cloud-multi-kernel.md) (Cloud + per-project kernels)
+**Amended by**: [ADR-0006 v4](./0006-project-environment-split.v4.md) (drops `sys_project` entirely), [ADR-0008](./0008-metadata-repository-and-change-log.md) (re-expresses overlay as `LayeredRepository`)
 **Consumers**: `@objectstack/objectql`, `@objectstack/runtime`, `@objectstack/rest`, `apps/studio`, all customer-facing tenants
 
 ---
+
+## Amendment: post-ADR-0006 v4 scope (2026-05-22)
+
+ADR-0006 v4 **dropped the `sys_project` table** and the dev-workspace
+Project concept entirely. As a consequence:
+
+- **`project_id` is no longer an overlay scope key.** The remaining
+  scope keys are `organization_id` and (when ADR-0008 M1 lands)
+  `branch`. The column physically named `project_id` on `sys_metadata`
+  is treated as a legacy alias and will be renamed/dropped in the
+  ADR-0008 PR-10 migration.
+- All references to `this.projectId` in `packages/objectql/src/protocol.ts`
+  are deprecated. New code must consult `organization_id` (and, in M1,
+  the branch ref) only.
+- The `(type, name, project_id)` UNIQUE index is superseded by
+  `(type, name, organization_id)` (already in place since the
+  2026-05-19 hotfix) and will become `(type, name, organization_id, branch)`
+  in ADR-0008 M1.
+- "Per-project overlay" is no longer a coherent concept — it was a
+  Phase-1 transitional model. The supported scopes are
+  **platform-global** (no overlay row) and **per-organization**.
+
+Everything below this block reflects the pre-amendment design and is
+retained for historical traceability. Where it says `project_id`,
+read `organization_id` (or, in built-in metadata contexts, "no scope key").
 
 ## Context
 

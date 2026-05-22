@@ -103,8 +103,14 @@ export const MetadataRecordSchema = lazySchema(() => z.object({
   /** Tenant ID for multi-tenant isolation (alias of organizationId in some contexts) */
   tenantId: z.string().optional().describe('Tenant identifier for multi-tenant isolation'),
 
-  /** Project ID — null means platform-global, set means project-scoped */
-  projectId: z.string().optional().describe('Project ID — null = platform-global, set = project-scoped'),
+  /**
+   * @deprecated Since ADR-0006 v4 / ADR-0005 amendment (2026-05-22).
+   * `sys_project` no longer exists; the overlay scope is
+   * `organization_id` only (and, in ADR-0008 M1, `branch`).
+   * Retained as a nullable legacy column for backwards-compat reads;
+   * new writes must leave it unset. Will be dropped in ADR-0008 PR-10.
+   */
+  projectId: z.string().optional().describe('Deprecated (ADR-0006 v4): legacy project_id column. New code must use organization_id only.'),
 
   /** Version number for optimistic concurrency */
   version: z.number().default(1).describe('Record version for optimistic concurrency control'),
@@ -406,8 +412,12 @@ export const MetadataHistoryRecordSchema = lazySchema(() => z.object({
   /** Organization ID for multi-tenant isolation */
   organizationId: z.string().optional().describe('Organization identifier for multi-tenant isolation'),
 
-  /** Project ID — scopes this history entry to a specific environment */
-  projectId: z.string().optional().describe('Project ID — null = platform-global, set = project-scoped'),
+  /**
+   * @deprecated Since ADR-0006 v4 (2026-05-22). `sys_project` is gone;
+   * history rows are scoped by `organization_id` (and `branch` once
+   * ADR-0008 M1 lands). Kept nullable for legacy rows.
+   */
+  projectId: z.string().optional().describe('Deprecated (ADR-0006 v4): legacy project_id column. New writes leave unset.'),
 
   /** Audit: who made this change */
   recordedBy: z.string().optional().describe('User who made this change'),
