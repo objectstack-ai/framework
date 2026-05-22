@@ -1,0 +1,84 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
+/**
+ * Logs — request log · event log · audit trail.
+ *
+ * Placeholder route until the runtime exposes the ring-buffered log
+ * endpoints. Surfaces the IA so devs know the slot exists.
+ */
+
+import { createFileRoute } from '@tanstack/react-router';
+import { ScrollText, Webhook, ShieldAlert } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+
+function LogsPage() {
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="border-b px-6 py-4">
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+          <ScrollText className="h-5 w-5" /> Logs
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Live request log, event log, and audit trail. Powered by the runtime ring
+          buffer — no setup required once the backend ships it.
+        </p>
+      </div>
+      <div className="flex-1 overflow-auto p-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Webhook className="h-4 w-4" /> Request log
+              </CardTitle>
+              <CardDescription>
+                Every REST request the runtime served, with status, latency, and
+                auth context.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-xs text-muted-foreground">
+                Awaiting <code>/api/v1/_debug/requests</code>.
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ScrollText className="h-4 w-4" /> Event log
+              </CardTitle>
+              <CardDescription>
+                Hooks, flows, and triggers — what fired, with which payload, and
+                what they returned.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-xs text-muted-foreground">
+                Awaiting <code>/api/v1/_debug/events</code>.
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldAlert className="h-4 w-4" /> Audit trail
+              </CardTitle>
+              <CardDescription>
+                Every metadata mutation persisted to the audit object —
+                who-changed-what-when.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-xs text-muted-foreground">
+                Awaiting <code>plugin-audit</code> wiring.
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const Route = createFileRoute('/$package/logs/')({
+  component: LogsPage,
+});

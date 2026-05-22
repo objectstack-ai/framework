@@ -31,6 +31,7 @@ import { PackageSwitcher } from '@/components/package-switcher';
 import { UserMenu } from '@/components/user-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { usePackages } from '@/hooks/usePackages';
+import { CommandPalette } from '@/components/CommandPalette';
 
 const META_TYPE_LABELS: Record<string, string> = {
   action: 'Actions',
@@ -191,9 +192,16 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
-        <div className="relative hidden lg:flex items-center">
+        <div
+          className="relative hidden lg:flex items-center cursor-pointer"
+          onClick={() => window.dispatchEvent(new CustomEvent('studio:command-palette:open'))}
+        >
           <Search className="absolute left-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input placeholder="Search..." className="h-8 w-[200px] pl-8 pr-10 text-sm" readOnly />
+          <Input
+            placeholder="Search… objects, forms, views"
+            className="h-8 w-[260px] pl-8 pr-10 text-sm cursor-pointer"
+            readOnly
+          />
           <kbd className="absolute right-2 pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
             <span className="text-xs">⌘</span>K
           </kbd>
@@ -212,6 +220,7 @@ export function TopBar() {
         </div>
         <UserMenu />
       </div>
+      <CommandPalette selectedPackage={selectedPackage} />
     </header>
   );
 }

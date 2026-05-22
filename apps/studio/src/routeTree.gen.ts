@@ -13,6 +13,15 @@ import { Route as PackageRouteImport } from './routes/$package'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PackageIndexRouteImport } from './routes/$package.index'
 import { Route as PackagePublicFormsRouteImport } from './routes/$package.public-forms'
+import { Route as PackageViewsIndexRouteImport } from './routes/$package.views.index'
+import { Route as PackageSecurityIndexRouteImport } from './routes/$package.security.index'
+import { Route as PackagePlaygroundIndexRouteImport } from './routes/$package.playground.index'
+import { Route as PackageObjectsIndexRouteImport } from './routes/$package.objects.index'
+import { Route as PackageLogsIndexRouteImport } from './routes/$package.logs.index'
+import { Route as PackageFormsIndexRouteImport } from './routes/$package.forms.index'
+import { Route as PackageAutomationsIndexRouteImport } from './routes/$package.automations.index'
+import { Route as PackageApisIndexRouteImport } from './routes/$package.apis.index'
+import { Route as PackageAiIndexRouteImport } from './routes/$package.ai.index'
 import { Route as PackageObjectsNameRouteImport } from './routes/$package.objects.$name'
 import { Route as PackageMetadataTypeNameRouteImport } from './routes/$package.metadata.$type.$name'
 
@@ -36,6 +45,51 @@ const PackagePublicFormsRoute = PackagePublicFormsRouteImport.update({
   path: '/public-forms',
   getParentRoute: () => PackageRoute,
 } as any)
+const PackageViewsIndexRoute = PackageViewsIndexRouteImport.update({
+  id: '/views/',
+  path: '/views/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageSecurityIndexRoute = PackageSecurityIndexRouteImport.update({
+  id: '/security/',
+  path: '/security/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackagePlaygroundIndexRoute = PackagePlaygroundIndexRouteImport.update({
+  id: '/playground/',
+  path: '/playground/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageObjectsIndexRoute = PackageObjectsIndexRouteImport.update({
+  id: '/objects/',
+  path: '/objects/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageLogsIndexRoute = PackageLogsIndexRouteImport.update({
+  id: '/logs/',
+  path: '/logs/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageFormsIndexRoute = PackageFormsIndexRouteImport.update({
+  id: '/forms/',
+  path: '/forms/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageAutomationsIndexRoute = PackageAutomationsIndexRouteImport.update({
+  id: '/automations/',
+  path: '/automations/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageApisIndexRoute = PackageApisIndexRouteImport.update({
+  id: '/apis/',
+  path: '/apis/',
+  getParentRoute: () => PackageRoute,
+} as any)
+const PackageAiIndexRoute = PackageAiIndexRouteImport.update({
+  id: '/ai/',
+  path: '/ai/',
+  getParentRoute: () => PackageRoute,
+} as any)
 const PackageObjectsNameRoute = PackageObjectsNameRouteImport.update({
   id: '/objects/$name',
   path: '/objects/$name',
@@ -53,6 +107,15 @@ export interface FileRoutesByFullPath {
   '/$package/public-forms': typeof PackagePublicFormsRoute
   '/$package/': typeof PackageIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
+  '/$package/ai/': typeof PackageAiIndexRoute
+  '/$package/apis/': typeof PackageApisIndexRoute
+  '/$package/automations/': typeof PackageAutomationsIndexRoute
+  '/$package/forms/': typeof PackageFormsIndexRoute
+  '/$package/logs/': typeof PackageLogsIndexRoute
+  '/$package/objects/': typeof PackageObjectsIndexRoute
+  '/$package/playground/': typeof PackagePlaygroundIndexRoute
+  '/$package/security/': typeof PackageSecurityIndexRoute
+  '/$package/views/': typeof PackageViewsIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
 export interface FileRoutesByTo {
@@ -60,6 +123,15 @@ export interface FileRoutesByTo {
   '/$package/public-forms': typeof PackagePublicFormsRoute
   '/$package': typeof PackageIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
+  '/$package/ai': typeof PackageAiIndexRoute
+  '/$package/apis': typeof PackageApisIndexRoute
+  '/$package/automations': typeof PackageAutomationsIndexRoute
+  '/$package/forms': typeof PackageFormsIndexRoute
+  '/$package/logs': typeof PackageLogsIndexRoute
+  '/$package/objects': typeof PackageObjectsIndexRoute
+  '/$package/playground': typeof PackagePlaygroundIndexRoute
+  '/$package/security': typeof PackageSecurityIndexRoute
+  '/$package/views': typeof PackageViewsIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
 export interface FileRoutesById {
@@ -69,6 +141,15 @@ export interface FileRoutesById {
   '/$package/public-forms': typeof PackagePublicFormsRoute
   '/$package/': typeof PackageIndexRoute
   '/$package/objects/$name': typeof PackageObjectsNameRoute
+  '/$package/ai/': typeof PackageAiIndexRoute
+  '/$package/apis/': typeof PackageApisIndexRoute
+  '/$package/automations/': typeof PackageAutomationsIndexRoute
+  '/$package/forms/': typeof PackageFormsIndexRoute
+  '/$package/logs/': typeof PackageLogsIndexRoute
+  '/$package/objects/': typeof PackageObjectsIndexRoute
+  '/$package/playground/': typeof PackagePlaygroundIndexRoute
+  '/$package/security/': typeof PackageSecurityIndexRoute
+  '/$package/views/': typeof PackageViewsIndexRoute
   '/$package/metadata/$type/$name': typeof PackageMetadataTypeNameRoute
 }
 export interface FileRouteTypes {
@@ -79,6 +160,15 @@ export interface FileRouteTypes {
     | '/$package/public-forms'
     | '/$package/'
     | '/$package/objects/$name'
+    | '/$package/ai/'
+    | '/$package/apis/'
+    | '/$package/automations/'
+    | '/$package/forms/'
+    | '/$package/logs/'
+    | '/$package/objects/'
+    | '/$package/playground/'
+    | '/$package/security/'
+    | '/$package/views/'
     | '/$package/metadata/$type/$name'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -86,6 +176,15 @@ export interface FileRouteTypes {
     | '/$package/public-forms'
     | '/$package'
     | '/$package/objects/$name'
+    | '/$package/ai'
+    | '/$package/apis'
+    | '/$package/automations'
+    | '/$package/forms'
+    | '/$package/logs'
+    | '/$package/objects'
+    | '/$package/playground'
+    | '/$package/security'
+    | '/$package/views'
     | '/$package/metadata/$type/$name'
   id:
     | '__root__'
@@ -94,6 +193,15 @@ export interface FileRouteTypes {
     | '/$package/public-forms'
     | '/$package/'
     | '/$package/objects/$name'
+    | '/$package/ai/'
+    | '/$package/apis/'
+    | '/$package/automations/'
+    | '/$package/forms/'
+    | '/$package/logs/'
+    | '/$package/objects/'
+    | '/$package/playground/'
+    | '/$package/security/'
+    | '/$package/views/'
     | '/$package/metadata/$type/$name'
   fileRoutesById: FileRoutesById
 }
@@ -132,6 +240,69 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PackagePublicFormsRouteImport
       parentRoute: typeof PackageRoute
     }
+    '/$package/views/': {
+      id: '/$package/views/'
+      path: '/views'
+      fullPath: '/$package/views/'
+      preLoaderRoute: typeof PackageViewsIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/security/': {
+      id: '/$package/security/'
+      path: '/security'
+      fullPath: '/$package/security/'
+      preLoaderRoute: typeof PackageSecurityIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/playground/': {
+      id: '/$package/playground/'
+      path: '/playground'
+      fullPath: '/$package/playground/'
+      preLoaderRoute: typeof PackagePlaygroundIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/objects/': {
+      id: '/$package/objects/'
+      path: '/objects'
+      fullPath: '/$package/objects/'
+      preLoaderRoute: typeof PackageObjectsIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/logs/': {
+      id: '/$package/logs/'
+      path: '/logs'
+      fullPath: '/$package/logs/'
+      preLoaderRoute: typeof PackageLogsIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/forms/': {
+      id: '/$package/forms/'
+      path: '/forms'
+      fullPath: '/$package/forms/'
+      preLoaderRoute: typeof PackageFormsIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/automations/': {
+      id: '/$package/automations/'
+      path: '/automations'
+      fullPath: '/$package/automations/'
+      preLoaderRoute: typeof PackageAutomationsIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/apis/': {
+      id: '/$package/apis/'
+      path: '/apis'
+      fullPath: '/$package/apis/'
+      preLoaderRoute: typeof PackageApisIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
+    '/$package/ai/': {
+      id: '/$package/ai/'
+      path: '/ai'
+      fullPath: '/$package/ai/'
+      preLoaderRoute: typeof PackageAiIndexRouteImport
+      parentRoute: typeof PackageRoute
+    }
     '/$package/objects/$name': {
       id: '/$package/objects/$name'
       path: '/objects/$name'
@@ -153,6 +324,15 @@ interface PackageRouteChildren {
   PackagePublicFormsRoute: typeof PackagePublicFormsRoute
   PackageIndexRoute: typeof PackageIndexRoute
   PackageObjectsNameRoute: typeof PackageObjectsNameRoute
+  PackageAiIndexRoute: typeof PackageAiIndexRoute
+  PackageApisIndexRoute: typeof PackageApisIndexRoute
+  PackageAutomationsIndexRoute: typeof PackageAutomationsIndexRoute
+  PackageFormsIndexRoute: typeof PackageFormsIndexRoute
+  PackageLogsIndexRoute: typeof PackageLogsIndexRoute
+  PackageObjectsIndexRoute: typeof PackageObjectsIndexRoute
+  PackagePlaygroundIndexRoute: typeof PackagePlaygroundIndexRoute
+  PackageSecurityIndexRoute: typeof PackageSecurityIndexRoute
+  PackageViewsIndexRoute: typeof PackageViewsIndexRoute
   PackageMetadataTypeNameRoute: typeof PackageMetadataTypeNameRoute
 }
 
@@ -160,6 +340,15 @@ const PackageRouteChildren: PackageRouteChildren = {
   PackagePublicFormsRoute: PackagePublicFormsRoute,
   PackageIndexRoute: PackageIndexRoute,
   PackageObjectsNameRoute: PackageObjectsNameRoute,
+  PackageAiIndexRoute: PackageAiIndexRoute,
+  PackageApisIndexRoute: PackageApisIndexRoute,
+  PackageAutomationsIndexRoute: PackageAutomationsIndexRoute,
+  PackageFormsIndexRoute: PackageFormsIndexRoute,
+  PackageLogsIndexRoute: PackageLogsIndexRoute,
+  PackageObjectsIndexRoute: PackageObjectsIndexRoute,
+  PackagePlaygroundIndexRoute: PackagePlaygroundIndexRoute,
+  PackageSecurityIndexRoute: PackageSecurityIndexRoute,
+  PackageViewsIndexRoute: PackageViewsIndexRoute,
   PackageMetadataTypeNameRoute: PackageMetadataTypeNameRoute,
 }
 
