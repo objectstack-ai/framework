@@ -1,13 +1,15 @@
 {
   "name": "@objectstack/console",
   "version": "4.2.0",
-  "private": true,
-  "type": "module",
   "description": "ObjectStack Console - opinionated, fork-ready runtime console built on @object-ui/app-shell with the full plugin set wired up.",
   "license": "Apache-2.0",
+  "type": "module",
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

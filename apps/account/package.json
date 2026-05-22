@@ -3,11 +3,13 @@
   "version": "4.2.0",
   "description": "ObjectStack Account - End-user account & organization self-service portal",
   "license": "Apache-2.0",
-  "private": true,
   "type": "module",
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
