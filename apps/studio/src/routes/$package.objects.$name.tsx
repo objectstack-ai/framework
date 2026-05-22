@@ -84,6 +84,15 @@ function ObjectHubComponent() {
       try {
         const r = await client.meta.getItems('view', { packageId });
         const items = r?.items || (Array.isArray(r) ? r : []);
+        // Multi-view docs expose nested list/form/listViews with their own
+        // data.object reference; the object on the doc spec is the *primary*
+        // bound object. Match on any sub-view's object as well.
+        const getDocObject = (it: any): string | undefined =>
+          it?.spec?.object ??
+          it?.spec?.spec?.object ??
+          it?.spec?.list?.data?.object ??
+          it?.spec?.form?.data?.object ??
+          it?.spec?.data?.object;
         const mine = items
           .map((it: any) => ({
             name: it.name,
@@ -91,11 +100,13 @@ function ObjectHubComponent() {
             spec: it.spec ?? it,
             type: 'view',
           }))
-          .filter((it: FilteredItem) => (it.spec?.object ?? it.spec?.spec?.object) === name);
+          .filter((it: FilteredItem) => getDocObject(it) === name);
         const isForm = (s: any) =>
-          !!(s?.sections || s?.groups || s?.type === 'simple' || s?.type === 'tabbed' || s?.type === 'wizard' || s?.viewType === 'form');
+          !!(s?.sections || s?.groups || s?.form || s?.type === 'simple' || s?.type === 'tabbed' || s?.type === 'wizard' || s?.viewType === 'form');
+        const isView = (s: any) =>
+          !!(s?.list || s?.listViews || (s?.type && ['grid', 'kanban', 'calendar', 'gantt', 'list', 'table'].includes(s?.type)) || s?.viewType === 'list' || s?.viewType === 'kanban');
         setForms(mine.filter((it: FilteredItem) => isForm(it.spec)));
-        setViews(mine.filter((it: FilteredItem) => !isForm(it.spec)));
+        setViews(mine.filter((it: FilteredItem) => isView(it.spec) || !isForm(it.spec)));
       } catch {
         setViews([]);
         setForms([]);

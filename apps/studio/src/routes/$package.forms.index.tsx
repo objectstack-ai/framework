@@ -98,7 +98,7 @@ function PublicFormsList() {
       for (const it of items) {
         const spec = it?.spec ?? it;
         // Only proper FormViews are publishable (skip list / kanban / etc.)
-        const isForm = !!(spec?.sections || spec?.groups || spec?.type === 'simple' || spec?.type === 'tabbed' || spec?.type === 'wizard');
+        const isForm = !!(spec?.sections || spec?.groups || spec?.form || spec?.type === 'simple' || spec?.type === 'tabbed' || spec?.type === 'wizard' || spec?.viewType === 'form');
         if (!isForm) continue;
         const sharing = spec?.sharing;
         const link: string | undefined = sharing?.publicLink;

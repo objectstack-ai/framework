@@ -23,11 +23,12 @@
 
 import { Suspense, lazy, useMemo, useState } from 'react';
 import * as React from 'react';
-import { ObjectForm } from '@object-ui/plugin-form';
 import { ObjectGrid } from '@object-ui/plugin-grid';
 import { ObjectKanban } from '@object-ui/plugin-kanban';
 import { DetailView } from '@object-ui/plugin-detail';
 import { useObjectUiDataSource } from '@/hooks/useObjectUiDataSource';
+import { LiveFormPreview } from './LiveFormPreview';
+import { LivePreviewStatusBar } from './LivePreviewStatusBar';
 import { AlertCircle, Eye, LayoutGrid, KanbanSquare, Calendar as CalendarIcon, FileText, ListChecks } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -136,16 +137,7 @@ export function MetadataPreview({
     switch (viewType) {
       case 'form':
         return (
-          <ObjectForm
-            schema={{
-              type: 'object-form',
-              objectName: resolvedObject,
-              mode: 'create',
-              ...subSpec,
-            }}
-            dataSource={dataSource}
-            className={className}
-          />
+          <LiveFormPreview spec={subSpec} objectName={resolvedObject} className={className} />
         );
       case 'kanban':
       case 'board':
@@ -206,6 +198,16 @@ export function MetadataPreview({
     }
   }, [type, name, spec, objectName, className, dataSource, effectiveSub]);
 
+  // Whether the current sub-view renders its own status bar (LiveFormPreview does).
+  const isFormSub = (effectiveSub === 'form') ||
+    (type === 'view' && !effectiveSub && (spec?.viewType === 'form' || (!spec?.viewType && (spec?.sections || spec?.groups))));
+
+  const resolvedObjectName = useMemo(() => {
+    if (type === 'object') return name ?? '';
+    const subSpec: any = effectiveSub ? spec?.[effectiveSub] : spec;
+    return subSpec?.data?.object || subSpec?.objectName || spec?.data?.object || spec?.objectName || objectName || name || '';
+  }, [type, name, spec, objectName, effectiveSub]);
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-dashed px-4 py-2 text-xs text-muted-foreground">
@@ -234,7 +236,10 @@ export function MetadataPreview({
           </div>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">{rendered}</div>
+      <div className={isFormSub ? 'min-h-0 flex-1 overflow-hidden' : 'min-h-0 flex-1 overflow-auto p-4'}>
+        {rendered}
+      </div>
+      {!isFormSub && <LivePreviewStatusBar objectName={resolvedObjectName} />}
     </div>
   );
 }

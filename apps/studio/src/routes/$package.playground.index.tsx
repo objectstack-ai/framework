@@ -13,7 +13,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useClient } from '@objectstack/client-react';
 import { ApiConsolePage } from '@/components/ApiConsolePage';
-import { FormPreview } from '@/components/FormPreview';
+import { LiveFormPreview } from '@/components/LiveFormPreview';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -145,7 +145,6 @@ function FormPreviewTab() {
   const client = useClient();
   const [forms, setForms] = useState<FormRow[]>([]);
   const [selected, setSelected] = useState<string>('');
-  const [objSchema, setObjSchema] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -153,8 +152,15 @@ function FormPreviewTab() {
     (async () => {
       setLoading(true);
       try {
-        const items = await (client as any).meta.getItems('view');
-        const rows: FormRow[] = (items ?? [])
+        const resp = await (client as any).meta.getItems('view');
+        const items: any[] = Array.isArray(resp)
+          ? resp
+          : Array.isArray(resp?.items)
+            ? resp.items
+            : Array.isArray(resp?.data?.items)
+              ? resp.data.items
+              : [];
+        const rows: FormRow[] = items
           .map((it: any) => ({
             name: it.name,
             label: it.label ?? it.spec?.label,
@@ -167,6 +173,7 @@ function FormPreviewTab() {
               s.viewType === 'form' ||
               !!s.sections ||
               !!s.groups ||
+              !!s.form ||
               ['simple', 'tabbed', 'wizard'].includes(s.type)
             );
           });
@@ -185,24 +192,6 @@ function FormPreviewTab() {
   }, [client]);
 
   const current = useMemo(() => forms.find((f) => f.name === selected), [forms, selected]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setObjSchema(null);
-    const obj = current?.object;
-    if (!obj) return;
-    (async () => {
-      try {
-        const o = await (client as any).meta.getItem('object', obj);
-        if (!cancelled) setObjSchema(o?.spec ?? o);
-      } catch {
-        /* preview can render without an object schema */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [client, current?.object]);
 
   if (loading) {
     return (
@@ -257,7 +246,14 @@ function FormPreviewTab() {
           </div>
         </CardHeader>
       </Card>
-      {current && <FormPreview spec={current.spec} objectSchema={objSchema} />}
+      {current && (
+        <div className="h-[640px] overflow-hidden rounded-lg border">
+          <LiveFormPreview
+            spec={current.spec?.form ?? current.spec}
+            objectName={current.object ?? current.spec?.object ?? ''}
+          />
+        </div>
+      )}
     </div>
   );
 }
