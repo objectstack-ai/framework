@@ -25,8 +25,8 @@ import {
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Boxes, Cpu, Search } from 'lucide-react';
-import { config } from '@/lib/config';
+import { Boxes, Search } from 'lucide-react';
+
 import { PackageSwitcher } from '@/components/package-switcher';
 import { UserMenu } from '@/components/user-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -237,10 +237,6 @@ export function TopBar() {
             {apiBadge}
           </Badge>
         )}
-        <Badge variant="secondary" className="text-[10px] gap-1 font-mono hidden sm:flex">
-          <Cpu className="h-2.5 w-2.5" />
-          {config.mode.toUpperCase()}
-        </Badge>
         <div className="hidden sm:block">
           <ThemeToggle />
         </div>

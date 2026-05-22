@@ -19,14 +19,25 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Search } from 'lucide-react';
+import { Eye, Search } from 'lucide-react';
 import { useClient, useMetadataSubscriptionCallback } from '@objectstack/client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { MetadataPreview } from './MetadataPreview';
 import { navItemForType } from './studio-nav';
 import type { LucideIcon } from 'lucide-react';
+
+/** Metadata types we can render a live preview for via @object-ui. */
+const PREVIEWABLE_TYPES = new Set(['object', 'view', 'dashboard']);
 
 export interface MetadataListPageProps {
   /** Display title (e.g. "Objects", "Forms"). */
@@ -78,6 +89,7 @@ export function MetadataListPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [previewRow, setPreviewRow] = useState<Row | null>(null);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
@@ -229,10 +241,11 @@ export function MetadataListPage({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((row) => {
               const Icon = iconForType?.(row.type) ?? navItemForType(row.type)?.icon;
+              const canPreview = PREVIEWABLE_TYPES.has(row.type);
               return (
                 <Card
                   key={`${row.type}:${row.name}`}
-                  className="cursor-pointer transition hover:border-primary hover:shadow-sm"
+                  className="group cursor-pointer transition hover:border-primary hover:shadow-sm"
                   onClick={() => openRow(row)}
                 >
                   <CardContent className="flex flex-col gap-2 p-4">
@@ -245,7 +258,22 @@ export function MetadataListPage({
                         {row.type}
                       </Badge>
                     </div>
-                    <code className="truncate text-xs text-muted-foreground">{row.name}</code>
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="truncate text-xs text-muted-foreground">{row.name}</code>
+                      {canPreview && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 gap-1 px-1.5 text-[11px]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewRow(row);
+                          }}
+                        >
+                          <Eye className="h-3 w-3" /> Preview
+                        </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -253,6 +281,26 @@ export function MetadataListPage({
           </div>
         )}
       </div>
+
+      <Dialog open={!!previewRow} onOpenChange={(o) => !o && setPreviewRow(null)}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{previewRow?.label ?? previewRow?.name}</DialogTitle>
+            <DialogDescription>
+              Live preview rendered with @object-ui against the configured backend.
+            </DialogDescription>
+          </DialogHeader>
+          {previewRow && (
+            <div className="h-[70vh] overflow-hidden">
+              <MetadataPreview
+                type={previewRow.type}
+                name={previewRow.name}
+                spec={previewRow.raw?.spec ?? previewRow.raw}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

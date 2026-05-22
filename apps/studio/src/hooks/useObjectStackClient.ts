@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ObjectStackClient } from '@objectstack/client';
 import { useClient } from '@objectstack/client-react';
-import { getApiBaseUrl, config } from '../lib/config';
+import { getApiBaseUrl } from '../lib/config';
 
 /**
  * Hook to create and manage the ObjectStack client instance.
@@ -17,7 +17,7 @@ export function useObjectStackClient() {
 
   useEffect(() => {
     const baseUrl = getApiBaseUrl();
-    console.log(`[Studio] Connecting to API: ${baseUrl} (mode: ${config.mode})`);
+    console.log(`[Studio] Connecting to API: ${baseUrl || '(same-origin / proxy)'}`);
     setClient(new ObjectStackClient({ baseUrl }));
   }, []);
 

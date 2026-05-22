@@ -8,9 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Package, Database, Layers, Globe, Terminal, Box,
-  RefreshCw, ExternalLink, Code2, Cpu
+  RefreshCw, ExternalLink, Code2
 } from 'lucide-react';
-import { config } from '@/lib/config';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 
 interface DeveloperOverviewProps {
@@ -98,10 +97,6 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="font-mono text-xs gap-1">
-            <Cpu className="h-3 w-3" />
-            {config.mode.toUpperCase()}
-          </Badge>
           <Button variant="outline" size="sm" onClick={loadStats} disabled={stats.loading}>
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${stats.loading ? 'animate-spin' : ''}`} />
             Refresh

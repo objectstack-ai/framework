@@ -1,50 +1,35 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Console Application Configuration
- * 
- * Supports two runtime modes:
- * - MSW Mode: Uses Mock Service Worker with in-browser ObjectStack kernel
- * - Server Mode: Connects to a real ObjectStack server
- * 
- * Auto-detection: When served under /_studio/ (embedded in CLI via --ui),
- * the console automatically switches to Server mode with same-origin API.
+ * Studio runtime configuration.
+ *
+ * Studio is a thin SPA that always talks to a real ObjectStack backend
+ * over HTTP — there is no in-browser MSW mode. When served standalone
+ * (Vite dev at :5173) the backend is reached via the dev-server proxy
+ * to localhost:3000; when embedded under `/_studio/` (CLI `--ui`,
+ * Vercel deployment, self-host) it uses same-origin requests.
+ *
+ * Single-project mode is communicated by the backend at
+ * `/api/v1/studio/runtime-config` and resolved before first render so
+ * route guards (see `__root.tsx`) make the right decision on first paint.
  */
-
-export type RuntimeMode = 'msw' | 'server';
 
 export interface ConsoleConfig {
   /**
-   * Runtime mode
-   * - 'msw': Mock Service Worker mode (browser-based kernel)
-   * - 'server': Connect to real ObjectStack server
-   */
-  mode: RuntimeMode;
-
-  /**
-   * Server base URL (used in 'server' mode)
-   * This should be the server root, not including /api/v1
-   * Empty string means same-origin (used in embedded mode)
-   * @default 'http://localhost:3000'
+   * Server base URL.
+   * Empty string ⇒ same-origin (embedded mode under `/_studio/`).
+   * Otherwise the API root (no trailing `/api/v1`).
    */
   serverUrl: string;
-
-  /**
-   * MSW API base path (used in 'msw' mode)
-   * This should be empty string since client adds /api/v1/... internally
-   * @default ''
-   */
-  mswBasePath: string;
 
   /**
    * Single-project mode. When true the backend is serving exactly one
    * synthetic project (no control plane, no org/project selection). The
    * frontend uses this to hide the Org/Project switchers, skip the
-   * /login → /organizations → /projects funnel, and route `/` straight to the
-   * default project workspace. Driven by a server-injected flag (see
-   * `initRuntimeConfig`), which in turn reflects the server's
-   * `OS_MODE` environment variable (or the deprecated
-   * `OS_MULTI_PROJECT` legacy alias).
+   * /login → /organizations → /projects funnel, and route `/` straight
+   * to the default project workspace. Driven by a server-injected flag
+   * (see `initRuntimeConfig`), which in turn reflects the server's
+   * `OS_MODE` environment variable.
    */
   singleProject: boolean;
 
@@ -55,70 +40,31 @@ export interface ConsoleConfig {
   defaultOrgId: string | null;
 }
 
-/**
- * Detect if running in embedded mode (served under /_studio/ by CLI)
- */
+/** True when served under `/_studio/` (CLI --ui, Vercel, self-host). */
 function isEmbedded(): boolean {
   return typeof window !== 'undefined' && window.location.pathname.startsWith('/_studio');
 }
 
-/**
- * Get runtime mode from environment.
- * Priority: ?mode= URL param → VITE_RUNTIME_MODE env → embedded detection → default 'msw'
- */
-function getRuntimeMode(): RuntimeMode {
-  if (typeof window !== 'undefined') {
-    const urlMode = new URLSearchParams(window.location.search).get('mode');
-    if (urlMode === 'msw' || urlMode === 'server') return urlMode;
-  }
-
-  if (import.meta.env.VITE_RUNTIME_MODE === 'server') return 'server';
-  if (isEmbedded()) return 'server';
-
-  return 'msw';
-}
-
-/**
- * Resolve the server URL based on environment and context
- */
+/** Resolve the server URL. */
 function resolveServerUrl(): string {
-  // Explicit env var takes priority (including empty string for same-origin)
   if (import.meta.env.VITE_SERVER_URL != null) {
     return import.meta.env.VITE_SERVER_URL;
   }
-  
-  // Embedded mode: same-origin API
-  if (isEmbedded()) {
-    return '';
-  }
-  
-  return 'http://localhost:3000';
+  // Embedded under /_studio/ → same-origin.
+  if (isEmbedded()) return '';
+  // Standalone Vite dev → empty string, the dev server proxies /api → :3000.
+  return '';
 }
 
-/**
- * Default configuration values
- */
 const defaultConfig: ConsoleConfig = {
-  mode: getRuntimeMode(),
   serverUrl: resolveServerUrl(),
-  mswBasePath: '',  // Empty - client adds /api/v1/... internally
   singleProject: false,
   defaultProjectId: null,
   defaultOrgId: null,
 };
 
-/**
- * Current application configuration
- */
-export const config: ConsoleConfig = {
-  ...defaultConfig,
-};
+export const config: ConsoleConfig = { ...defaultConfig };
 
-/**
- * Runtime config the studio backend injects at `/api/v1/studio/runtime-config`.
- * Unknown/older backends omit the endpoint entirely; in that case the
- * frontend falls back to multi-project defaults (i.e. the original behaviour).
- */
 interface StudioRuntimeConfig {
   singleProject?: boolean;
   defaultProjectId?: string | null;
@@ -130,19 +76,9 @@ interface StudioRuntimeConfig {
  *
  * Must be awaited before the app renders so `config.singleProject` is
  * definitive by the time `__root.tsx` decides whether to redirect to
- * `/login`. In MSW mode no fetch happens — the `VITE_STUDIO_SINGLE_PROJECT`
- * env var is the only override available.
+ * `/login`.
  */
 export async function initRuntimeConfig(): Promise<void> {
-  if (isMswMode()) {
-    if (import.meta.env.VITE_STUDIO_SINGLE_PROJECT === 'true') {
-      config.singleProject = true;
-      config.defaultProjectId = config.defaultProjectId ?? 'proj_local';
-      config.defaultOrgId = config.defaultOrgId ?? 'org_local';
-    }
-    return;
-  }
-
   const base = getApiBaseUrl();
   try {
     const res = await fetch(`${base}/api/v1/studio/runtime-config`, {
@@ -161,44 +97,19 @@ export async function initRuntimeConfig(): Promise<void> {
   }
 }
 
-/**
- * Check if running in MSW mode
- */
-export function isMswMode(): boolean {
-  return config.mode === 'msw';
-}
-
-/**
- * Check if running in Server mode
- */
-export function isServerMode(): boolean {
-  return config.mode === 'server';
-}
-
-/**
- * Get the API base URL based on current mode
- */
+/** API base URL for `fetch()`. */
 export function getApiBaseUrl(): string {
-  if (isServerMode()) {
-    return config.serverUrl;
-  }
-  return config.mswBasePath;
+  return config.serverUrl;
 }
 
-/**
- * Update configuration at runtime
- * Useful for switching modes programmatically
- */
+/** Update configuration at runtime (testing helper). */
 export function updateConfig(updates: Partial<ConsoleConfig>): void {
   Object.assign(config, updates);
 }
 
-/**
- * Log current configuration (for debugging)
- */
+/** Log current configuration (debugging). */
 export function logConfig(): void {
-  console.log('[Console Config]', {
-    mode: config.mode,
+  console.log('[Studio Config]', {
     apiBaseUrl: getApiBaseUrl(),
     serverUrl: config.serverUrl,
     singleProject: config.singleProject,
@@ -206,5 +117,3 @@ export function logConfig(): void {
     defaultOrgId: config.defaultOrgId,
   });
 }
-
-

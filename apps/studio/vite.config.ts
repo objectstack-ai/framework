@@ -69,8 +69,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: [
-      'msw', 
-      'msw/browser',
       '@objectstack/spec',
       '@objectstack/spec/data', // Force pre-bundling for CJS compatibility
       '@objectstack/spec/system',

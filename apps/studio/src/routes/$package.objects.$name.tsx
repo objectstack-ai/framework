@@ -21,7 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useClient } from '@objectstack/client-react';
 import { PluginHost } from '../plugins';
-import { FormPreview } from '@/components/FormPreview';
+import { MetadataPreview } from '@/components/MetadataPreview';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,7 @@ function ObjectHubComponent() {
   const [forms, setForms] = useState<FilteredItem[]>([]);
   const [hooks, setHooks] = useState<FilteredItem[]>([]);
   const [object, setObject] = useState<any>(null);
-  const [previewForm, setPreviewForm] = useState<FilteredItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<FilteredItem | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -186,6 +186,19 @@ function ObjectHubComponent() {
               items={views}
               empty="No views bound to this object yet."
               onOpen={(n) => navigate({ to: `/${packageId}/metadata/view/${n}` })}
+              extraActions={(it) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1 px-2 text-xs"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPreviewItem(it);
+                  }}
+                >
+                  <Eye className="h-3 w-3" /> Preview
+                </Button>
+              )}
             />
           </TabsContent>
           <TabsContent value="forms" className="m-0 h-full overflow-auto p-6">
@@ -205,7 +218,7 @@ function ObjectHubComponent() {
                       className="h-7 gap-1 px-2 text-xs"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPreviewForm(it);
+                        setPreviewItem(it);
                       }}
                     >
                       <Eye className="h-3 w-3" /> Preview
@@ -252,20 +265,21 @@ function ObjectHubComponent() {
         </Tabs>
       </div>
 
-      <Dialog open={!!previewForm} onOpenChange={(o) => !o && setPreviewForm(null)}>
-        <DialogContent className="max-w-3xl">
+      <Dialog open={!!previewItem} onOpenChange={(o) => !o && setPreviewItem(null)}>
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>{previewForm?.label ?? previewForm?.name}</DialogTitle>
+            <DialogTitle>{previewItem?.label ?? previewItem?.name}</DialogTitle>
             <DialogDescription>
-              Read-only preview rendered from the FormView spec.
+              Live preview rendered with @object-ui against the configured backend.
             </DialogDescription>
           </DialogHeader>
-          {previewForm && (
-            <div className="max-h-[70vh] overflow-y-auto">
-              <FormPreview
-                spec={previewForm.spec}
-                objectSchema={object}
-                showBadge={false}
+          {previewItem && (
+            <div className="h-[70vh] overflow-hidden">
+              <MetadataPreview
+                type="view"
+                name={previewItem.name}
+                spec={previewItem.spec}
+                objectName={name}
               />
             </div>
           )}

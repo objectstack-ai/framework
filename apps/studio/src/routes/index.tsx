@@ -4,26 +4,21 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useSession } from '@/hooks/useSession';
 import { usePackages } from '@/hooks/usePackages';
-import { config } from '@/lib/config';
 
 /**
  * Landing route. Studio assumes a signed-in user and at least one
  * installed package. We redirect to the first package's workspace so the
  * sidebar and breadcrumbs land on a known state. If no packages are
  * installed, we stay on this page and tell the user to install one.
- *
- * In MSW mode (in-browser kernel, no auth backend) we don't require a
- * user — the kernel still serves packages.
  */
 function IndexLanding() {
   const navigate = useNavigate();
   const { user, loading: sessionLoading } = useSession();
   const { packages, loading: packagesLoading } = usePackages();
-  const isMsw = config.mode === 'msw';
 
   useEffect(() => {
     if (sessionLoading) return;
-    if (!user && !isMsw) return;
+    if (!user) return;
     if (packagesLoading) return;
     const first = packages[0];
     if (first?.manifest?.id) {
@@ -33,7 +28,7 @@ function IndexLanding() {
         replace: true,
       });
     }
-  }, [user, sessionLoading, packages, packagesLoading, navigate, isMsw]);
+  }, [user, sessionLoading, packages, packagesLoading, navigate]);
 
   if (sessionLoading || packagesLoading) {
     return (
