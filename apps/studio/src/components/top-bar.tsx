@@ -105,12 +105,38 @@ export function TopBar() {
     if (location.pathname === '/') return 'home';
     if (params.package && params.name && !params.type) return 'object';
     if (params.package && params.type && params.name) return 'metadata';
+    if (params.package) {
+      // Flat nav routes: /:pkg/objects, /:pkg/forms, /:pkg/views, …
+      const seg = location.pathname
+        .replace(new RegExp(`^/+${params.package}/?`), '')
+        .replace(/\/.*$/, '');
+      if (seg && ['objects', 'forms', 'views', 'automations', 'ai', 'security', 'apis', 'playground', 'logs'].includes(seg)) {
+        return `nav:${seg}`;
+      }
+    }
     if (params.package && !params.name && !params.type) return 'package-overview';
     return 'default';
   }, [location.pathname, params]);
 
+  const NAV_LABELS: Record<string, string> = {
+    objects: 'Objects',
+    forms: 'Forms',
+    views: 'Views & Apps',
+    automations: 'Automations',
+    ai: 'AI',
+    security: 'Security',
+    apis: 'APIs',
+    playground: 'Playground',
+    logs: 'Logs',
+  };
+
   const breadcrumbs = useMemo(() => {
     const items: Array<{ label: string; href?: string }> = [];
+    if (viewType.startsWith('nav:')) {
+      const key = viewType.slice(4);
+      items.push({ label: NAV_LABELS[key] ?? key });
+      return items;
+    }
     switch (viewType) {
       case 'home':
         items.push({ label: 'Home' });

@@ -8,8 +8,8 @@ function SecurityListComponent() {
   return (
     <MetadataListPage
       title="Security"
-      subtitle="Roles, profiles, permission sets, sharing rules, and policies."
-      types={['role', 'profile', 'permission', 'sharingRule', 'policy']}
+      subtitle="Roles, profiles, and permission definitions for this package."
+      types={['role', 'profile', 'permission']}
       packageId={packageId}
     />
   );

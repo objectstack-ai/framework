@@ -35,8 +35,8 @@ export interface MetadataListPageProps {
   subtitle: string;
   /** Metadata types to surface (e.g. ['view', 'app', 'dashboard']). */
   types: string[];
-  /** Package id (URL parameter). */
-  packageId: string;
+  /** Package id (URL parameter). Empty / 'all' / falsy → query all packages. */
+  packageId: string | null | undefined;
   /** Optional client-side filter — used by Forms to keep only `viewType === 'form'`. */
   filterItem?: (item: any, type: string) => boolean;
   /** Optional extra header content (e.g. publish button). */
@@ -81,14 +81,15 @@ export function MetadataListPage({
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
-    if (!packageId) return;
     setLoading(true);
     setError(null);
     try {
       const all: Row[] = [];
+      // 'all' (no-filter sentinel) and falsy → query without package filter.
+      const opts = packageId && packageId !== 'all' ? { packageId } : undefined;
       for (const type of types) {
         try {
-          const res = await client.meta.getItems(type, { packageId });
+          const res = await client.meta.getItems(type, opts);
           const items: any[] = res?.items || (Array.isArray(res) ? res : []);
           for (const item of items) {
             if (filterItem && !filterItem(item, type)) continue;
@@ -151,10 +152,11 @@ export function MetadataListPage({
   };
 
   const openRow = (row: Row) => {
+    const pkg = packageId || 'all';
     if (row.type === 'object') {
-      navigate({ to: `/${packageId}/objects/${row.name}` });
+      navigate({ to: `/${pkg}/objects/${row.name}` });
     } else {
-      navigate({ to: `/${packageId}/metadata/${row.type}/${row.name}` });
+      navigate({ to: `/${pkg}/metadata/${row.type}/${row.name}` });
     }
   };
 
@@ -211,9 +213,16 @@ export function MetadataListPage({
           <div className="py-12 text-center text-sm text-destructive">Failed: {error}</div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <p className="text-sm text-muted-foreground">
-              {rows.length === 0 ? `No ${title.toLowerCase()} yet.` : 'No matches.'}
+            <p className="text-sm font-medium">
+              {rows.length === 0
+                ? packageId && packageId !== 'all'
+                  ? `No ${title.toLowerCase()} in this package yet.`
+                  : `No ${title.toLowerCase()} found.`
+                : 'No matches.'}
             </p>
+            {rows.length === 0 && (
+              <p className="max-w-md text-xs text-muted-foreground">{subtitle}</p>
+            )}
             {emptyCta}
           </div>
         ) : (

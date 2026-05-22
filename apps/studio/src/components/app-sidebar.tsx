@@ -43,19 +43,22 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  // Active package id for navigation. Falls back to first package; the URL
+  // segment "all" is used as the sentinel for "全部 (All packages)" mode.
+  const urlSegment = location.pathname.split('/').filter(Boolean)[0];
   const pkgId =
-    selectedPackage?.manifest?.id ?? packages[0]?.manifest?.id ?? null;
+    selectedPackage?.manifest?.id ??
+    (urlSegment === 'all' ? 'all' : packages[0]?.manifest?.id) ??
+    null;
 
   const isActive = (key: string): boolean => {
-    if (!pkgId) return false;
     const path = location.pathname.replace(/\/$/, '');
-    const root = `/${pkgId}`;
+    // Active package segment in the URL — may be a real id or "all".
+    const seg = urlSegment ?? '';
+    const root = seg ? `/${seg}` : '';
+    if (!seg) return false;
     if (key === 'home') return path === root;
-    if (path.startsWith(`${root}/${key}`)) return true;
-    // Legacy back-compat: /pkg/objects/$name still highlights Objects
-    if (key === 'objects' && path.startsWith(`${root}/objects`)) return true;
-    // Legacy metadata viewer (/pkg/metadata/$type/$name) — try to map back to nav item
-    return false;
+    return path.startsWith(`${root}/${key}`);
   };
 
   return (

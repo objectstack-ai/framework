@@ -8,14 +8,14 @@ function ViewsListComponent() {
   return (
     <MetadataListPage
       title="Views & Apps"
-      subtitle="Grids, kanbans, dashboards, reports, themes, and app navigation."
+      subtitle="Grids, kanbans, dashboards, reports, pages, and app navigation. Form views have their own page under Forms."
       // Exclude form views — those have a dedicated /forms page.
       filterItem={(item, type) => {
         if (type !== 'view') return true;
         const vt = item?.spec?.viewType ?? item?.viewType;
         return vt !== 'form';
       }}
-      types={['app', 'view', 'page', 'dashboard', 'report', 'theme']}
+      types={['app', 'view', 'page', 'dashboard', 'report']}
       packageId={packageId}
     />
   );

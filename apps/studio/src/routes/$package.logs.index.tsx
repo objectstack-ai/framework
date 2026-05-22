@@ -7,11 +7,13 @@
  * endpoints. Surfaces the IA so devs know the slot exists.
  */
 
-import { createFileRoute } from '@tanstack/react-router';
-import { ScrollText, Webhook, ShieldAlert } from 'lucide-react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { ScrollText, Webhook, ShieldAlert, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 function LogsPage() {
+  const { package: packageId } = Route.useParams();
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b px-6 py-4">
@@ -68,9 +70,12 @@ function LogsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-xs text-muted-foreground">
-                Awaiting <code>plugin-audit</code> wiring.
-              </div>
+              <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                <Link to="/$package/objects/$name" params={{ package: packageId, name: 'sys_audit_log' }}>
+                  Open sys_audit_log
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>

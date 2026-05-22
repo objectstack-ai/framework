@@ -8,8 +8,8 @@ function AiListComponent() {
   return (
     <MetadataListPage
       title="AI"
-      subtitle="Agents, tools, and RAG pipelines. Use Playground → Agent to test live."
-      types={['agent', 'tool', 'ragPipeline']}
+      subtitle="Agents, tools, and skills. Pick an agent and chat with it from the right-hand assistant panel, or invoke a tool from Playground → Tool."
+      types={['agent', 'tool', 'skill']}
       packageId={packageId}
     />
   );

@@ -264,13 +264,23 @@ function PublicFormsList() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <FormInput className="h-4 w-4" />
-              Public forms
+              Forms
             </CardTitle>
             <CardDescription>
-              Anonymous form views with{' '}
-              <code className="text-xs">sharing.allowAnonymous</code> enabled. Each
-              row is wired to{' '}
-              <code className="text-xs">GET / POST /api/v1/forms/:slug</code>.{' '}
+              Every <code className="text-xs">FormView</code> in this package. The list below
+              focuses on <strong>published public forms</strong> — anonymous form views with{' '}
+              <code className="text-xs">sharing.allowAnonymous</code> enabled, wired to{' '}
+              <code className="text-xs">GET / POST /api/v1/forms/:slug</code>. Internal
+              FormViews still render at <code className="text-xs">/forms/:name</code> in
+              console; preview any of them from the{' '}
+              <Link
+                to="/$package/playground"
+                params={{ package: packageId }}
+                className="underline underline-offset-2"
+              >
+                Playground → Form preview
+              </Link>{' '}
+              tab.{' '}
               <a
                 href="/docs/guides/public-forms"
                 className="underline underline-offset-2"

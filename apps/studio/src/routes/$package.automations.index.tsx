@@ -8,8 +8,8 @@ function AutomationsListComponent() {
   return (
     <MetadataListPage
       title="Automations"
-      subtitle="Flows, workflows, approvals, webhooks, and lifecycle hooks."
-      types={['flow', 'workflow', 'approval', 'webhook', 'hook']}
+      subtitle="Flows, workflows, approvals, hooks, and triggers — every metadata item that reacts to events."
+      types={['flow', 'workflow', 'approval', 'hook', 'trigger', 'function']}
       packageId={packageId}
     />
   );
