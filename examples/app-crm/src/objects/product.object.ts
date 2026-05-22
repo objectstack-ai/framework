@@ -16,6 +16,13 @@ export const Product = ObjectSchema.create({
   titleFormat: '{product_code} - {name}',
   compactLayout: ['product_code', 'name', 'category', 'is_active'],
 
+  // Product detail pages are catalog-style — users edit attributes in
+  // place, they don't browse lateral relationships. Suppress the
+  // Reference Rail so the single-column form gets full width.
+  detail: {
+    hideReferenceRail: true,
+  },
+
   fieldGroups: [
     { key: 'basic',    label: 'Product Information', icon: 'info' },
     { key: 'pricing',  label: 'Pricing & Billing',   icon: 'dollar-sign' },

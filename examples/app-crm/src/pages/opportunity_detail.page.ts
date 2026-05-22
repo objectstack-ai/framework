@@ -196,6 +196,39 @@ export const OpportunityDetailPage: Page = {
         },
       ],
     },
+    {
+      name: 'aside',
+      width: 'small',
+      className: 'hidden xl:flex flex-col gap-4',
+      components: [
+        {
+          type: 'record:reference_rail',
+          id: 'opp_reference_rail',
+          properties: {
+            entries: [
+              {
+                objectName: 'quote',
+                relationshipField: 'opportunity',
+                title: 'Quotes',
+                limit: 3,
+              },
+              {
+                objectName: 'opportunity_line_item',
+                relationshipField: 'opportunity',
+                title: 'Products',
+                limit: 3,
+              },
+              {
+                objectName: 'task',
+                relationshipField: 'related_to_opportunity',
+                title: 'Open Tasks',
+                limit: 3,
+              },
+            ],
+          },
+        },
+      ],
+    },
   ],
 
   isDefault: true,
