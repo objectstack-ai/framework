@@ -289,6 +289,9 @@ importers:
       vite:
         specifier: ^8.0.13
         version: 8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@opentelemetry/api@1.9.1)(@types/node@25.9.1)(@vitest/coverage-v8@4.1.7)(happy-dom@20.9.0)(msw@2.14.6(@types/node@25.9.1)(typescript@6.0.3))(vite@8.0.13(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0))
 
   apps/docs:
     dependencies:
@@ -356,24 +359,9 @@ importers:
 
   apps/studio:
     dependencies:
-      '@ai-sdk/anthropic':
-        specifier: ^3.0.78
-        version: 3.0.78(zod@4.4.3)
-      '@ai-sdk/gateway':
-        specifier: ^3.0.116
-        version: 3.0.116(zod@4.4.3)
-      '@ai-sdk/google':
-        specifier: ^3.0.75
-        version: 3.0.75(zod@4.4.3)
-      '@ai-sdk/openai':
-        specifier: ^3.0.64
-        version: 3.0.64(zod@4.4.3)
       '@ai-sdk/react':
         specifier: ^3.0.187
         version: 3.0.187(react@19.2.6)(zod@4.4.3)
-      '@hono/node-server':
-        specifier: ^2.0.3
-        version: 2.0.3(hono@4.12.21)
       '@objectstack/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -383,12 +371,6 @@ importers:
       '@objectstack/driver-memory':
         specifier: workspace:*
         version: link:../../packages/plugins/driver-memory
-      '@objectstack/driver-turso':
-        specifier: workspace:*
-        version: link:../../packages/plugins/driver-turso
-      '@objectstack/hono':
-        specifier: workspace:*
-        version: link:../../packages/adapters/hono
       '@objectstack/metadata':
         specifier: workspace:*
         version: link:../../packages/metadata
@@ -398,18 +380,9 @@ importers:
       '@objectstack/platform-objects':
         specifier: workspace:*
         version: link:../../packages/platform-objects
-      '@objectstack/plugin-audit':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-audit
-      '@objectstack/plugin-auth':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-auth
       '@objectstack/plugin-msw':
         specifier: workspace:*
         version: link:../../packages/plugins/plugin-msw
-      '@objectstack/plugin-security':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-security
       '@objectstack/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -485,9 +458,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      hono:
-        specifier: ^4.12.21
-        version: 4.12.21
       lucide-react:
         specifier: ^1.16.0
         version: 1.16.0(react@19.2.6)

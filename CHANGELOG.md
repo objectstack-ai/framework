@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed — Unused Studio dependencies
+
+Dropped 10 packages from `apps/studio` that no source files reference
+after the single-tenant simplification: `@ai-sdk/anthropic`,
+`@ai-sdk/gateway`, `@ai-sdk/google`, `@ai-sdk/openai`,
+`@hono/node-server`, `hono`, `@objectstack/hono`,
+`@objectstack/plugin-audit`, `@objectstack/plugin-auth`,
+`@objectstack/plugin-security`, `@objectstack/driver-turso`. Verified
+with full build + 84 vitest pass.
+
 ### Added — Studio FormView publishing UI
 
 The `/$package/public-forms` preset now ships with two dialogs:
