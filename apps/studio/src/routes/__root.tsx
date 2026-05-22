@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { AiChatPanel } from '@/components/AiChatPanel';
 import { ProductionGuardProvider } from '@/components/production-guard';
 import { TopBar } from '@/components/top-bar';
+import { StudioAccessDenied } from '@/components/StudioAccessDenied';
 import { PluginRegistryProvider } from '../plugins';
 import { builtInPlugins } from '../plugins/built-in';
 import { useObjectStackClient } from '../hooks/useObjectStackClient';
@@ -17,12 +18,13 @@ import { gotoAccountLogin } from '@/lib/auth-redirect';
 
 /**
  * Single-tenant Studio shell. Login is delegated to apps/account; if the
- * session call comes back empty we bounce there. There is no per-project
- * routing, no organization switch, no public-route exemption — Studio is
- * purely a metadata browser + runtime debugger on top of one backend.
+ * session call comes back empty we bounce there. Studio is the
+ * developer/admin surface of ObjectStack and requires `user.role ===
+ * 'admin'` — non-admins get a friendly stop page instead of being
+ * silently bounced into a login loop.
  */
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useSession();
+  const { user, loading, logout } = useSession();
 
   useEffect(() => {
     if (loading) return;
@@ -41,6 +43,19 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   if (!user) return null;
 
+  // Admin gate — Studio is not for ordinary end users.
+  if (user.role !== 'admin') {
+    return (
+      <StudioAccessDenied
+        user={user}
+        onSwitchAccount={async () => {
+          await logout();
+          gotoAccountLogin(window.location.pathname + window.location.search);
+        }}
+      />
+    );
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full flex-col">
@@ -55,7 +70,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 function AuthedAiChatPanel() {
   const { user } = useSession();
-  if (!user) return null;
+  if (!user || user.role !== 'admin') return null;
   return <AiChatPanel />;
 }
 

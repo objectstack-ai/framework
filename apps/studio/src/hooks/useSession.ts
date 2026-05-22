@@ -33,6 +33,14 @@ export interface SessionUser {
   name?: string;
   image?: string | null;
   emailVerified?: boolean;
+  /**
+   * Derived role from better-auth `customSession` (see
+   * `packages/plugins/plugin-auth/src/auth-manager.ts`). Set to `'admin'`
+   * when the user is a platform admin or an admin/owner of the active
+   * organization. Studio uses this to gate access — only admins are
+   * permitted past the shell.
+   */
+  role?: string;
 }
 
 export interface SessionData {
