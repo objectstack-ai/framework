@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Docs — Forms guide expanded for public + internal modes
+
+`content/docs/guides/public-forms.mdx` (kept slug for backwards links)
+now documents the unified Forms model: public `/f/:slug` *and* internal
+`/forms/:name`, URL prefill, the `submitBehavior` union, the new
+`type: 'form'` action, and the `defaultDetailForm` ObjectSchema binding.
+
 ### Added — `defaultDetailForm` on ObjectSchema
 
 Objects can now declare which named FormView powers their record-detail

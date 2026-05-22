@@ -1,11 +1,25 @@
 ---
-title: Public Forms (Web-to-Lead / Web-to-Case)
-description: Collect submissions from unauthenticated visitors using a FormView with sharing.allowAnonymous, served by the canonical GET/POST /api/v1/forms/:slug endpoints.
+title: Forms (Public + Internal)
+description: Render any FormView either publicly (anonymous, /f/:slug) or internally (authed operators, /forms/:name). The same metadata drives both, with URL prefill, configurable post-submit behavior, defaultDetailForm record binding, and declarative open-form actions.
 ---
 
-# Public Forms
+# Forms
 
-A **public form** is an embeddable Airtable / Salesforce *Web-to-Lead* style form that lets unauthenticated visitors create records on a single object. The shape is 100% metadata — you declare a `FormView` with `sharing.allowAnonymous: true`, give it a `publicLink`, and the framework wires up the anonymous REST endpoints automatically.
+ObjectStack Forms are Airtable-style **metadata-driven** forms with two render modes that share **one** spec and **one** renderer:
+
+| Mode | Route | Auth | Spec source | Submit target |
+|---|---|---|---|---|
+| **Public** | `/console/f/:slug` | anonymous | `GET /api/v1/forms/:slug` (resolved by `sharing.publicLink`) | `POST /api/v1/forms/:slug/submit` (field whitelist + `guest_portal` profile) |
+| **Internal** | `/console/forms/:name` | authed | `GET /api/v1/meta/view/:name` (+ `meta/object/:object`) | `POST /api/v1/data/:object` (full RBAC) |
+
+Both modes:
+
+- Use the same `FormView` Zod schema (`@objectstack/spec/ui`)
+- Render through the same `<FormPage>` React component in `apps/console`
+- Honor `?prefill_<field>=<value>` URL params
+- Honor `submitBehavior` (thank-you / redirect / continue / next-record)
+
+A **public form** is the Salesforce *Web-to-Lead* style embeddable form — declare a `FormView` with `sharing.allowAnonymous: true`, give it a `publicLink`, and the framework wires the anonymous REST endpoints automatically.
 
 ## Architecture at a glance
 
@@ -218,9 +232,135 @@ async function submit(slug: string, payload: Record<string, unknown>) {
 }
 ```
 
-The ObjectUI console ships a ready-made `PublicFormPage` at `/console/f/:slug` that does exactly this.
+The ObjectUI console ships a unified `FormPage` renderer at `/console/f/:slug` (public) and `/console/forms/:name` (internal) that does exactly this.
 
-## 6. Security checklist
+## 7. Internal forms (`/console/forms/:name`)
+
+Sometimes you want the same FormView metadata to power an authed operator flow — "new lead", "new ticket", a queue triage screen. Set the FormView up normally (no `sharing.allowAnonymous`) and navigate to `/console/forms/<view_name>`:
+
+```ts
+// examples/app-crm/src/views/lead.view.ts
+export default defineView({
+  name: 'lead_views',
+  object: 'lead',
+  formViews: {
+    quick_create: {
+      type: 'simple',
+      sections: [
+        {
+          label: 'Lead',
+          columns: 2,
+          fields: [
+            { field: 'first_name', required: true },
+            { field: 'last_name', required: true },
+            { field: 'email', required: true },
+            { field: 'company' },
+            { field: 'lead_source' },
+          ],
+        },
+      ],
+    },
+  },
+});
+```
+
+Operators hit `/console/forms/quick_create`. The renderer:
+
+- Loads metadata via `GET /api/v1/meta/view/quick_create`
+- Pulls the object schema via `GET /api/v1/meta/object/lead`
+- Submits to `POST /api/v1/data/lead` carrying the auth cookie
+
+Permissions are enforced server-side just like every other authed write — no `guest_portal` profile required.
+
+## 8. URL prefill
+
+Both modes accept `?prefill_<field_name>=<value>` query params. Use this to seed forms from email links, CRM segments, or campaign pages:
+
+```
+/console/f/contact-us?prefill_company=Acme&prefill_email=ada@example.com
+/console/forms/quick_create?prefill_lead_source=event_booth_2026
+```
+
+The renderer maps each `prefill_<name>` param to the corresponding form field. Values are still subject to validation and (for public mode) the server-side whitelist — prefill is a UX shortcut, not a permissions bypass.
+
+## 9. `submitBehavior` — what happens after submit
+
+Add a `submitBehavior` discriminated union to a FormView to control the post-submit experience:
+
+```ts
+formViews: {
+  web_to_lead: {
+    type: 'simple',
+    sections: [/* … */],
+    sharing: { enabled: true, allowAnonymous: true, publicLink: '/forms/contact-us' },
+
+    // Default: show a thank-you panel
+    submitBehavior: {
+      kind: 'thank-you',
+      title: 'Thanks!',
+      message: 'A specialist will reach out within 24 hours.',
+    },
+
+    // Or: redirect (great for marketing pages)
+    // submitBehavior: { kind: 'redirect', url: 'https://example.com/thanks', delayMs: 500 },
+
+    // Or: reset the form for another response (kiosks, batch entry)
+    // submitBehavior: { kind: 'continue' },
+
+    // Or: advance to the next record in a queue (internal mode only)
+    // submitBehavior: { kind: 'next-record' },
+  },
+},
+```
+
+| `kind` | Renderer behavior |
+|---|---|
+| `thank-you` *(default)* | Replace the form with a confirmation panel (`title`, `message`). |
+| `redirect` | `window.location.assign(url)` after `delayMs` (defaults to 0). |
+| `continue` | Re-read prefill values and reset state — user can submit another response without reload. |
+| `next-record` | Stub for queue contexts; falls back to thank-you when no queue is wired. |
+
+## 10. `type: 'form'` action — declarative form launchers
+
+App actions can declare `type: 'form'` to open a FormView without resorting to free-form URLs. The `target` is the FormView name; the runtime navigates to `/console/forms/:name`.
+
+```ts
+// examples/app-crm/src/actions/new-lead.action.ts
+import { defineAction } from '@objectstack/spec';
+
+export default defineAction({
+  name: 'new_lead',
+  label: 'New Lead',
+  type: 'form',
+  target: 'quick_create', // FormView name
+});
+```
+
+Compared to `{ type: 'url', target: '/console/forms/quick_create' }`, the `'form'` variant is portable across runtimes — Studio/console/native shells can route it through their own form renderer instead of a raw navigation.
+
+## 11. `defaultDetailForm` — bind a FormView to record detail
+
+Set `defaultDetailForm` on an object schema to pin the FormView used by the record-detail / edit screen. This is the Airtable Interface-form binding pattern.
+
+```ts
+// examples/app-crm/src/objects/lead.object.ts
+export default defineObject({
+  name: 'lead',
+  label: 'Lead',
+  defaultDetailForm: 'quick_create', // → views.formViews.quick_create
+  fields: { /* … */ },
+});
+```
+
+Resolution order at runtime:
+
+1. `views.formViews[defaultDetailForm]` if set
+2. `views.form` (the unnamed default form view)
+3. Auto-generated grid layout from object fields
+
+The same FormView can therefore drive **three** experiences — public collection, internal quick-create, and record-detail editing — without duplicating layout metadata.
+
+## 12. Security checklist (public mode)
 
 - [x] **Whitelist enforced server-side** — clients cannot widen the field set by hand-crafting JSON.
 - [x] **Hook strips server-controlled fields** — `owner`, `status`, `internal_notes`, `is_*` flags, conversion fields are removed even if they survive the whitelist.
