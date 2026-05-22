@@ -21,8 +21,8 @@ function LogsPage() {
           <ScrollText className="h-5 w-5" /> Logs
         </h1>
         <p className="text-sm text-muted-foreground">
-          Live request log, event log, and audit trail. Powered by the runtime ring
-          buffer — no setup required once the backend ships it.
+          See what your runtime is doing right now — every request, every event,
+          every change to your data.
         </p>
       </div>
       <div className="flex-1 overflow-auto p-6">
@@ -39,7 +39,7 @@ function LogsPage() {
             </CardHeader>
             <CardContent>
               <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-xs text-muted-foreground">
-                Awaiting <code>/api/v1/_debug/requests</code>.
+                Coming soon. Requests will stream here in real time.
               </div>
             </CardContent>
           </Card>
@@ -55,7 +55,7 @@ function LogsPage() {
             </CardHeader>
             <CardContent>
               <div className="rounded-md border border-dashed bg-muted/30 p-6 text-center text-xs text-muted-foreground">
-                Awaiting <code>/api/v1/_debug/events</code>.
+                Coming soon. Hook and flow runs will stream here.
               </div>
             </CardContent>
           </Card>

@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useClient } from '@objectstack/client-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -269,20 +269,8 @@ function PublicFormsList() {
               Forms
             </CardTitle>
             <CardDescription>
-              Every <code className="text-xs">FormView</code> in this package. The list below
-              focuses on <strong>published public forms</strong> — anonymous form views with{' '}
-              <code className="text-xs">sharing.allowAnonymous</code> enabled, wired to{' '}
-              <code className="text-xs">GET / POST /api/v1/forms/:slug</code>. Internal
-              FormViews still render at <code className="text-xs">/forms/:name</code> in
-              console; preview any of them from the{' '}
-              <Link
-                to="/$package/playground"
-                params={{ package: packageId }}
-                className="underline underline-offset-2"
-              >
-                Playground → Form preview
-              </Link>{' '}
-              tab.{' '}
+              Forms anyone can fill out — no login required. Publish a form to get a
+              shareable link; submissions land directly in the bound object.{' '}
               <a
                 href="/docs/guides/public-forms"
                 className="underline underline-offset-2"
@@ -320,9 +308,8 @@ function PublicFormsList() {
             <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
               <p className="font-medium text-foreground">No public forms yet</p>
               <p className="mt-1">
-                Declare a <code className="text-xs">FormView</code> with{' '}
-                <code className="text-xs">sharing.allowAnonymous: true</code> and a{' '}
-                <code className="text-xs">publicLink</code>, then refresh.
+                Click <strong>Publish form…</strong> above to share an existing form, or
+                build a new one in Views &amp; Apps and mark it public.
               </p>
             </div>
           )}

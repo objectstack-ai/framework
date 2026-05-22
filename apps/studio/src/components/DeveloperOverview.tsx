@@ -7,11 +7,41 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Package, Database, Layers, Globe, Terminal, Box,
+  Package, Database, Layers, Globe, Box,
   RefreshCw, ExternalLink, Code2
 } from 'lucide-react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
+
+/**
+ * The metadata backend currently exposes both the canonical camelCase
+ * type name (e.g. `sharingRule`) and a legacy snake_case alias
+ * (`sharing_rule`) for the same underlying type. Surfacing both in the
+ * registry view confuses users into thinking they are different
+ * things, so we collapse alias pairs by their normalized key, keep the
+ * camelCase variant where available, and sum the counts.
+ */
+function dedupeRegistryEntries(
+  types: string[],
+  counts: Record<string, number>,
+): Array<[string, number]> {
+  const byKey = new Map<string, { name: string; count: number }>();
+  const norm = (t: string) => t.replace(/_/g, '').toLowerCase();
+  const isCamel = (t: string) => !t.includes('_');
+  for (const t of types) {
+    const key = norm(t);
+    const count = counts[t] ?? 0;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { name: t, count });
+      continue;
+    }
+    // Prefer the camelCase variant for display; sum counts.
+    const preferred = isCamel(t) && !isCamel(existing.name) ? t : existing.name;
+    byKey.set(key, { name: preferred, count: existing.count + count });
+  }
+  return Array.from(byKey.values()).map(({ name, count }) => [name, count] as [string, number]);
+}
 
 interface DeveloperOverviewProps {
   packages: InstalledPackage[];
@@ -94,12 +124,13 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Terminal className="h-6 w-6" />
-            Developer Console
+          <h1 className="text-2xl font-bold tracking-tight">
+            {selectedPackage?.manifest?.name || 'Overview'}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Inspect metadata, manage packages, and explore the ObjectStack runtime.
+            {selectedPackage?.manifest?.id
+              ? `Everything in ${selectedPackage.manifest.id} at a glance.`
+              : 'Everything installed across this runtime at a glance.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -151,15 +182,15 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => onNavigate('apis')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">API Endpoints</CardTitle>
+            <CardTitle className="text-sm font-medium">REST API</CardTitle>
             <Globe className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono text-sm pt-1">/api/v1</div>
+            <div className="text-2xl font-bold">Live</div>
             <p className="text-xs text-muted-foreground mt-1">
-              REST · data · meta · packages
+              Auto-generated under <code className="font-mono">/api/v1</code>
             </p>
           </CardContent>
         </Card>
@@ -223,10 +254,10 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
               {stats.metadata.types.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-4 text-center">Loading...</p>
               ) : (
-                stats.metadata.types
-                  .filter(t => (stats.metadata.counts[t] || 0) > 0)
-                  .sort((a, b) => (stats.metadata.counts[b] || 0) - (stats.metadata.counts[a] || 0))
-                  .map(type => (
+                dedupeRegistryEntries(stats.metadata.types, stats.metadata.counts)
+                  .filter(([, count]) => count > 0)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([type, count]) => (
                     <div
                       key={type}
                       className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-default"
@@ -236,15 +267,10 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
                         <span className="text-sm font-mono">{type}</span>
                       </div>
                       <Badge variant="secondary" className="text-xs font-mono">
-                        {stats.metadata.counts[type]}
+                        {count}
                       </Badge>
                     </div>
                   ))
-              )}
-              {stats.metadata.types.filter(t => (stats.metadata.counts[t] || 0) === 0).length > 0 && (
-                <p className="text-xs text-muted-foreground pt-2 px-3">
-                  + {stats.metadata.types.filter(t => (stats.metadata.counts[t] || 0) === 0).length} empty types
-                </p>
               )}
             </div>
           </CardContent>

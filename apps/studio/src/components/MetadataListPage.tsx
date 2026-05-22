@@ -62,6 +62,7 @@ interface Row {
   type: string;
   name: string;
   label: string;
+  description?: string;
   updatedAt?: string;
   raw: any;
 }
@@ -71,6 +72,11 @@ function resolveLabel(val: unknown): string {
   if (val && typeof val === 'object' && 'defaultValue' in val) return String((val as any).defaultValue);
   if (val && typeof val === 'object' && 'key' in val) return String((val as any).key);
   return '';
+}
+
+function resolveDescription(val: unknown): string | undefined {
+  const s = resolveLabel(val);
+  return s ? s : undefined;
 }
 
 export function MetadataListPage({
@@ -109,6 +115,7 @@ export function MetadataListPage({
               type,
               name: item.name || item.id || 'unknown',
               label: resolveLabel(item.label) || item.name || 'Untitled',
+              description: resolveDescription(item.description),
               updatedAt: item.updatedAt || item._updatedAt,
               raw: item,
             });
@@ -241,38 +248,61 @@ export function MetadataListPage({
             {filtered.map((row) => {
               const Icon = iconForType?.(row.type) ?? navItemForType(row.type)?.icon;
               const canPreview = PREVIEWABLE_TYPES.has(row.type);
+              // Only show per-card type badge when the page mixes multiple
+              // metadata types — otherwise it's noise (the page title
+              // already conveys the type).
+              const showTypeBadge = types.length > 1;
               return (
                 <Card
                   key={`${row.type}:${row.name}`}
                   className="group cursor-pointer transition hover:border-primary hover:shadow-sm"
                   onClick={() => openRow(row)}
                 >
-                  <CardContent className="flex flex-col gap-2 p-4">
+                  <CardContent className="flex flex-col gap-1.5 p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
                         {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
-                        <span className="truncate font-medium">{row.label}</span>
-                      </div>
-                      <Badge variant="secondary" className="shrink-0 text-[10px]">
-                        {row.type}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <code className="truncate text-xs text-muted-foreground">{row.name}</code>
-                      {canPreview && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 gap-1 px-1.5 text-[11px]"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewRow(row);
-                          }}
+                        <span
+                          className="truncate font-medium"
+                          title={row.label}
                         >
-                          <Eye className="h-3 w-3" /> Preview
-                        </Button>
-                      )}
+                          {row.label}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {showTypeBadge && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {typeLabel(row.type)}
+                          </Badge>
+                        )}
+                        {canPreview && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 transition group-hover:opacity-100"
+                            title="Preview"
+                            aria-label={`Preview ${row.label}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewRow(row);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
+                    {row.description ? (
+                      <p
+                        className="line-clamp-2 text-xs text-muted-foreground"
+                        title={row.description}
+                      >
+                        {row.description}
+                      </p>
+                    ) : null}
+                    <code className="truncate text-[11px] text-muted-foreground/70" title={row.name}>
+                      {row.name}
+                    </code>
                   </CardContent>
                 </Card>
               );
