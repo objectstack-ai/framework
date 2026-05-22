@@ -39,6 +39,13 @@ export interface MetadataHmrEvent {
   name: string;
   path?: string;
   timestamp: number;
+  /**
+   * Canonical server-side sequence number (ADR-0008). Monotonically
+   * increasing across all replicas of the same metadata branch. Absent
+   * for legacy chokidar-driven events; consumers should fall back to
+   * the locally-maintained `version` counter in that case.
+   */
+  seq?: number;
 }
 
 export type HmrConnectionState =
@@ -57,6 +64,13 @@ export interface MetadataHmrContextValue {
   state: HmrConnectionState;
   /** ISO timestamp (ms epoch) of the last event, or null. */
   lastEventAt: number | null;
+  /**
+   * Highest canonical server `seq` observed on this connection. Tracks
+   * the ADR-0008 change-log position; undefined until the first
+   * repo-originated event is received (legacy chokidar-only servers
+   * never populate it).
+   */
+  lastSeq?: number;
   /** Subscribe to events. Returns an unsubscribe function. */
   subscribe: (listener: (event: MetadataHmrEvent) => void) => () => void;
 }
@@ -68,6 +82,7 @@ const HmrContext = createContext<MetadataHmrContextValue>({
   lastEvent: null,
   state: 'disabled',
   lastEventAt: null,
+  lastSeq: undefined,
   subscribe: noopSubscribe,
 });
 
@@ -101,6 +116,7 @@ export function MetadataHmrProvider({
     enabled ? 'connecting' : 'disabled',
   );
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
+  const [lastSeq, setLastSeq] = useState<number | undefined>(undefined);
 
   // External listeners (subscribe API). Use a ref so adding/removing
   // listeners doesn't trigger re-renders or reconnects.
@@ -136,6 +152,9 @@ export function MetadataHmrProvider({
         setLastEvent(data);
         setLastEventAt(data.timestamp ?? Date.now());
         setVersion((v) => v + 1);
+        if (typeof data.seq === 'number') {
+          setLastSeq((prev) => (prev === undefined || data.seq! > prev ? data.seq : prev));
+        }
         for (const listener of listenersRef.current) {
           try { listener(data); } catch { /* noop */ }
         }
@@ -215,8 +234,8 @@ export function MetadataHmrProvider({
   }, [enabled, url, reconnectDelayMs]);
 
   const value = useMemo<MetadataHmrContextValue>(
-    () => ({ version, lastEvent, state, lastEventAt, subscribe }),
-    [version, lastEvent, state, lastEventAt, subscribe],
+    () => ({ version, lastEvent, state, lastEventAt, lastSeq, subscribe }),
+    [version, lastEvent, state, lastEventAt, lastSeq, subscribe],
   );
 
   return <HmrContext.Provider value={value}>{children}</HmrContext.Provider>;

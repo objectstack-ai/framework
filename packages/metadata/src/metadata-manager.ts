@@ -1481,6 +1481,12 @@ export class MetadataManager implements IMetadataService {
       data: undefined,
       timestamp: evt.ts,
     };
+    // Carry the canonical server-side `seq` so downstream consumers
+    // (HMR SSE route → Studio status badge) can render an accurate
+    // "N changes since boot" matching what other replicas observe.
+    // Non-typed extra property on purpose — extending MetadataWatchEvent
+    // is a spec-package change deferred to a later PR.
+    (legacyEvent as Record<string, unknown>).seq = evt.seq;
     this.notifyWatchers(type, legacyEvent);
   }
 

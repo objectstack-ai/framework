@@ -35,6 +35,8 @@ interface ChangeEvent {
   name: string;
   path?: string;
   timestamp: number;
+  /** Canonical repo seq (ADR-0008); absent for legacy chokidar events. */
+  seq?: number;
 }
 
 interface ReloadEvent {
@@ -104,7 +106,12 @@ export function registerMetadataHmrRoutes(
           name: evt.name ?? '',
           path: evt.path,
           timestamp: Number.isFinite(ts) ? ts : Date.now(),
-        });
+          // Forward the canonical server-side sequence number when the
+          // event originated from a MetadataRepository (ADR-0008). Legacy
+          // chokidar-driven events have no seq — clients fall back to
+          // their local counter in that case.
+          ...(typeof evt.seq === 'number' ? { seq: evt.seq } : {}),
+        } as BroadcastEvent);
       });
     }
     fsHookInstalled = true;

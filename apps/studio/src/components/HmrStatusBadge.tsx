@@ -52,7 +52,7 @@ const STATE_CONFIG = {
 } as const;
 
 export function HmrStatusBadge() {
-  const { state, version, lastEvent, lastEventAt } = useMetadataHmr();
+  const { state, version, lastEvent, lastEventAt, lastSeq } = useMetadataHmr();
   const [pulsing, setPulsing] = useState(false);
 
   // Pulse for ~700ms each time a new event arrives.
@@ -92,6 +92,9 @@ export function HmrStatusBadge() {
             <p className="font-medium">Metadata HMR</p>
             <p className="text-muted-foreground">State: {state}</p>
             <p className="text-muted-foreground">Events: {version}</p>
+            {typeof lastSeq === 'number' && (
+              <p className="text-muted-foreground">Repo seq: #{lastSeq}</p>
+            )}
             <p className="text-muted-foreground">Last: {lastAtLabel}</p>
             {lastEvent && (
               <p className="text-muted-foreground">
