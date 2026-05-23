@@ -346,6 +346,12 @@
       "deny": "Deny",
       "denying": "Denying…",
       "cancel": "Cancel"
+    },
+    "shell": {
+      "tenantHostHint": "You are signing in to this workspace"
+    },
+    "userMenu": {
+      "signingOut": "Signing you out…"
     }
   },
   "acceptInvitation": {

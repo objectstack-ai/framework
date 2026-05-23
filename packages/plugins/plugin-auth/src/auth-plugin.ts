@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
+import type { BetterAuthOptions } from 'better-auth';
 import { AuthConfig } from '@objectstack/spec/system';
 import {
   SETUP_APP,
@@ -49,6 +50,17 @@ export interface AuthPluginOptions extends Partial<AuthConfig> {
    * {@link AuthManagerOptions.additionalOrgRoles} for details.
    */
   additionalOrgRoles?: string[];
+
+  /**
+   * Pass-through to better-auth's `databaseHooks` option. Used by
+   * platform consumers (objectos kernel) to attach a
+   * `user.create.after` hook that auto-provisions a personal
+   * organization for JIT-created SSO users — better-auth's adapter
+   * bypasses kernel-level ObjectQL middleware, so this is the only
+   * hook point that fires for every user creation path (email signup,
+   * social/OIDC sign-in, admin-created accounts).
+   */
+  databaseHooks?: BetterAuthOptions['databaseHooks'];
 }
 
 /**

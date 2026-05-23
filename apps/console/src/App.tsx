@@ -28,6 +28,7 @@ import { AccountLoginRedirect } from './components/AccountLoginRedirect';
 import { CloudAwareRootRedirect } from './components/CloudAwareRootRedirect';
 import { FormPage } from './components/FormPage';
 import { MetadataHmrReloader } from './components/MetadataHmrReloader';
+import { SignOutOverlay } from './components/SignOutOverlay';
 import {
   gotoAccountLogin,
   gotoAccountRegister,
@@ -166,6 +167,7 @@ export function App() {
       <UploadProvider adapter={uploadAdapter}>
         <Toaster position="bottom-right" />
         <MetadataHmrReloader />
+        <SignOutOverlay />
       <BrowserRouter basename={BASENAME}>
         <ConsoleShell>
           <Routes>

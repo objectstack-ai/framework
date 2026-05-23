@@ -13,6 +13,15 @@
  *
  * On < lg the brand panel is hidden and a compact brand tile sits above the
  * form so the page stays cohesive on mobile.
+ *
+ * **Tenant pill.** The whole Account SPA is shipped verbatim with every
+ * objectos tenant subdomain AND with the cloud control-plane, so the
+ * login pages on `cloud.objectos.app` and `demo.objectos.app` would
+ * otherwise be byte-identical. When the form is rendered on a host
+ * other than the canonical cloud host, AuthShell surfaces a small pill
+ * with the current hostname under the brand mark, so users coming back
+ * from an SSO bounce can tell which app they're about to sign in to.
+ * It also overrides `document.title` to include the host.
  */
 
 import * as React from 'react';
@@ -31,6 +40,23 @@ export interface AuthShellProps {
   formWidth?: 'sm' | 'md';
 }
 
+/**
+ * Hosts that ARE the canonical cloud control-plane — for these we hide the
+ * tenant pill because the brand wordmark + page chrome is already the
+ * identifier. Matches `cloud.<root>` for the common public domain and
+ * `cloud.localhost` (or `cloud.localhost:NNNN`) for local dev.
+ */
+function isCanonicalCloudHost(host: string): boolean {
+  const bare = host.split(':')[0]!.toLowerCase();
+  return /^cloud\./.test(bare);
+}
+
+function currentHost(): string | null {
+  if (typeof window === 'undefined') return null;
+  const host = window.location.host;
+  return host || null;
+}
+
 export function AuthShell({
   children,
   headline,
@@ -39,20 +65,45 @@ export function AuthShell({
 }: AuthShellProps) {
   const { t } = useObjectTranslation();
   const widthCls = formWidth === 'md' ? 'max-w-md' : 'max-w-sm';
+
+  const host = currentHost();
+  const showTenantPill = !!host && !isCanonicalCloudHost(host);
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined' || !host) return;
+    const original = document.title;
+    document.title = showTenantPill ? `${host} · ObjectStack` : original;
+    return () => {
+      document.title = original;
+    };
+  }, [host, showTenantPill]);
+
   return (
     <div className="relative grid min-h-svh w-full lg:grid-cols-2">
       {/* Left: form column */}
       <div className="flex flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
         <div className={cn('flex w-full flex-col gap-6', widthCls)}>
-          <a
-            href="#"
-            className="flex items-center gap-2 self-center font-semibold tracking-tight"
-          >
-            <div className="flex size-7 items-center justify-center rounded-md bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/30">
-              <GalleryVerticalEnd className="size-4" />
-            </div>
-            <span>ObjectStack</span>
-          </a>
+          <div className="flex flex-col items-center gap-1 self-center">
+            <a
+              href="#"
+              className="flex items-center gap-2 font-semibold tracking-tight"
+            >
+              <div className="flex size-7 items-center justify-center rounded-md bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/30">
+                <GalleryVerticalEnd className="size-4" />
+              </div>
+              <span>ObjectStack</span>
+            </a>
+            {showTenantPill ? (
+              <span
+                className="rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-foreground"
+                title={t('auth.shell.tenantHostHint', {
+                  defaultValue: 'You are signing in to this workspace',
+                })}
+              >
+                {host}
+              </span>
+            ) : null}
+          </div>
           {children}
         </div>
       </div>

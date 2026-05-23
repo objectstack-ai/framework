@@ -346,6 +346,12 @@
       "deny": "拒绝",
       "denying": "拒绝中…",
       "cancel": "取消"
+    },
+    "shell": {
+      "tenantHostHint": "你正在登录此工作区"
+    },
+    "userMenu": {
+      "signingOut": "正在退出…"
     }
   },
   "acceptInvitation": {

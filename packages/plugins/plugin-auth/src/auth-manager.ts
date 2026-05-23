@@ -94,6 +94,21 @@ export interface AuthManagerOptions extends Partial<AuthConfig> {
    * placeholder). Defaults to `'ObjectStack'` when omitted.
    */
   appName?: string;
+
+  /**
+   * Pass-through to better-auth's `databaseHooks` option. better-auth fires
+   * these around its own adapter writes (e.g. when `genericOAuth` creates
+   * a JIT user during SSO login), which the kernel-level ObjectQL
+   * middleware does NOT observe — better-auth's adapter goes through
+   * `dataEngine` directly, bypassing the `ql.registerMiddleware` chain.
+   *
+   * The platform uses this to attach a `user.create.after` hook that
+   * auto-provisions a personal organization for every newly-created user
+   * (mirroring what SecurityPlugin's middleware does for direct
+   * ObjectQL inserts) so SSO-arriving users don't land on the empty
+   * "create organization" screen.
+   */
+  databaseHooks?: BetterAuthOptions['databaseHooks'];
 }
 
 /**
@@ -297,6 +312,11 @@ export class AuthManager {
 
       // better-auth plugins — registered based on AuthPluginConfig flags
       plugins,
+
+      // Database hooks (fired by better-auth's adapter writes — these run
+      // for SSO JIT-provisioning too, unlike kernel-level ObjectQL
+      // middleware which better-auth's adapter bypasses).
+      ...(this.config.databaseHooks ? { databaseHooks: this.config.databaseHooks } : {}),
 
       // Trusted origins for CSRF protection (supports wildcards like "https://*.example.com")
       // Auto-includes origins from CORS_ORIGIN env var so CORS and CSRF stay in sync.

@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast';
 import { useSession } from '@/hooks/useSession';
 import { SocialSignInButtons } from '@/components/auth/social-sign-in-buttons';
 import { AuthShell } from '@/components/auth/auth-shell';
+import { TransitionOverlay } from '@/components/auth/transition-overlay';
 
 export const Route = createFileRoute('/login')({
   validateSearch: (
@@ -188,6 +189,11 @@ function LoginPage() {
 
   return (
     <AuthShell>
+      {submitting ? (
+        <TransitionOverlay
+          message={t('auth.login.signingIn', { defaultValue: 'Signing you in…' })}
+        />
+      ) : null}
       <div className="flex flex-col gap-6">
         {ssoTarget ? (
           <div

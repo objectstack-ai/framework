@@ -19,3 +19,5 @@ export {
   SECURITY_PLUGIN_ID,
   SECURITY_PLUGIN_VERSION,
 } from './manifest.js';
+export { ensureUserHasOrganization } from './ensure-user-has-organization.js';
+export { cloneTenantSeedData } from './clone-tenant-seed-data.js';

@@ -253,6 +253,38 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                     // so cookies stay isolated per project subdomain.
                     trustedOrigins: trustedOriginsList.length ? trustedOriginsList : undefined,
                     ...(oidcProviders ? { oidcProviders } : {}),
+                    // Auto-provision a personal organization for every new
+                    // user. SecurityPlugin's ObjectQL middleware does this
+                    // for direct `ql.insert` calls, but better-auth's
+                    // adapter writes through `dataEngine` directly,
+                    // bypassing that middleware — so JIT-created SSO users
+                    // would otherwise land on the empty "create
+                    // organization" screen on first login.
+                    databaseHooks: {
+                        user: {
+                            create: {
+                                after: async (user: { id: string; email?: string; name?: string }) => {
+                                    try {
+                                        const ql = kernel.getService<any>('objectql');
+                                        if (!ql) return;
+                                        const [{ ensureUserHasOrganization, cloneTenantSeedData }] = await Promise.all([
+                                            import('@objectstack/plugin-security'),
+                                        ]);
+                                        await ensureUserHasOrganization(ql, user, {
+                                            logger: this.logger as any,
+                                            cloneSeedData: cloneTenantSeedData,
+                                        });
+                                    } catch (e: any) {
+                                        this.logger.warn?.('[ArtifactKernelFactory] auto-org provisioning hook failed', {
+                                            projectId,
+                                            userId: user?.id,
+                                            error: e?.message,
+                                        });
+                                    }
+                                },
+                            },
+                        },
+                    },
                 } as any));
                 if (oidcProviders) {
                     this.logger.info?.('[ArtifactKernelFactory] platform SSO wired', {
