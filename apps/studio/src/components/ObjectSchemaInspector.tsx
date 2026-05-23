@@ -14,6 +14,7 @@ import {
   Search, Copy, Check, Key, Hash, Type, ToggleLeft,
   List, Link, Calculator, Calendar, FileText, CircleDot, Code2,
   DollarSign, Percent, Mail, Phone, Link as LinkIcon, MapPin, Braces, Clock, Sigma,
+  FileCode, Map,
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -45,6 +46,8 @@ const FIELD_TYPE_ICONS: Record<string, React.ElementType> = {
   address: MapPin,
   json: Braces,
   object: Braces,
+  markdown: FileCode,
+  location: Map,
 };
 
 const FIELD_TYPE_COLORS: Record<string, string> = {
@@ -71,6 +74,8 @@ const FIELD_TYPE_COLORS: Record<string, string> = {
   address: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800',
   json: 'text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-950 dark:border-slate-800',
   object: 'text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-950 dark:border-slate-800',
+  markdown: 'text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-950 dark:border-slate-800',
+  location: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800',
 };
 
 function CopyButton({ text }: { text: string }) {
@@ -239,7 +244,7 @@ export function ObjectSchemaInspector({ objectApiName }: ObjectSchemaInspectorPr
                             Required
                           </Badge>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Optional</span>
+                          <span className="text-xs text-muted-foreground/40">—</span>
                         )}
                       </TableCell>
                       <TableCell className="py-2">
