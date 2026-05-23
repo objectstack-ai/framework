@@ -1,19 +1,41 @@
-// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+// Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * @objectstack/plugin-webhooks
+ * @objectstack/plugin-webhook-outbox
  *
- * Outbound webhook delivery for `data.record.created`,
- * `data.record.updated`, and `data.record.deleted` events. Subscribes to
- * the realtime service, fans events out to one or more configured HTTP
- * sinks, signs each request with HMAC-SHA256, and retries transient
- * failures with exponential backoff.
+ * Persistent, cluster-aware webhook outbox + dispatcher.
+ *
+ * Implements stages 3–5 of the pipeline in
+ * `content/docs/concepts/webhook-delivery.mdx` (Persist · Dispatch ·
+ * Retry). Stages 1–2 (Event capture · Match) integrate via the
+ * `webhook.outbox.enqueue()` service consumers call after persistence.
+ *
+ * The first real cross-node consumer of `cluster.lock`.
  */
 
-export { WebhooksPlugin } from './webhooks-plugin.js';
+export {
+    WebhookOutboxPlugin,
+    type WebhookOutboxPluginOptions,
+} from './webhook-outbox-plugin.js';
+
+export { WebhookDispatcher, type DispatcherOptions } from './dispatcher.js';
+export { MemoryWebhookOutbox } from './memory-outbox.js';
+export { hashPartition } from './partition.js';
+export {
+    sendOnce,
+    classifyAttempt,
+    nextRetryDelayMs,
+    DEFAULT_TIMEOUT_MS,
+    type AttemptOutcome,
+    type FetchImpl,
+} from './http-sender.js';
 export type {
-  WebhooksPluginOptions,
-  WebhookSink,
-  WebhookDeliveryRecord,
-  WebhookDeliveryStatus,
-} from './webhooks-plugin.js';
+    AckFailure,
+    AckResult,
+    AckSuccess,
+    ClaimOptions,
+    DeliveryStatus,
+    EnqueueInput,
+    IWebhookOutbox,
+    WebhookDelivery,
+} from './outbox.js';

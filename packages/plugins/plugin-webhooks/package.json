@@ -2,33 +2,36 @@
   "name": "@objectstack/plugin-webhooks",
   "version": "5.1.0",
   "license": "Apache-2.0",
-  "description": "Outbound webhook delivery plugin for ObjectStack — fan-out data.record.* events to external HTTP(S) sinks with HMAC signing and retry.",
+  "description": "Persistent, cluster-aware webhook dispatcher. Durable outbox + per-partition cluster.lock for exactly-once-ish delivery across nodes. See content/docs/concepts/webhook-delivery.mdx.",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "scripts": {
-    "build": "tsup --config ../../../tsup.config.ts",
-    "test": "vitest run --passWithNoTests"
+    "build": "tsup",
+    "test": "vitest run"
   },
   "dependencies": {
     "@objectstack/core": "workspace:*",
-    "@objectstack/spec": "workspace:*"
+    "@objectstack/spec": "workspace:*",
+    "@objectstack/service-cluster": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
-  "keywords": [
-    "objectstack",
-    "plugin",
-    "webhooks",
-    "events"
-  ]
+  "keywords": ["objectstack", "plugin", "webhook", "outbox", "cluster"],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/plugins/plugin-webhooks"
+  }
 }
