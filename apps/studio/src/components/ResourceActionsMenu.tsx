@@ -16,6 +16,7 @@
  */
 
 import { useCallback } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useClient } from '@objectstack/client-react';
 import {
   DropdownMenu,
@@ -26,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Copy, Code2, ExternalLink, Terminal } from 'lucide-react';
+import { MoreHorizontal, Copy, Code2, ExternalLink, Terminal, FileCode2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface ResourceActionsMenuProps {
@@ -137,6 +138,16 @@ export function ResourceActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem asChild>
+          <Link
+            to="/$package/metadata/$type/$name"
+            params={{ package: packageId ?? '', type, name }}
+          >
+            <FileCode2 className="h-3.5 w-3.5 mr-2" />
+            View source
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Copy as…</DropdownMenuLabel>
         <DropdownMenuItem onClick={copyCurl}>
           <Terminal className="h-3.5 w-3.5 mr-2" />

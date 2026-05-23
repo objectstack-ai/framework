@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useClient } from '@objectstack/client-react';
 import { PluginHost } from '../plugins';
 import { ObjectRelatedPanel } from '@/components/object-related/ObjectRelatedPanel';
@@ -20,8 +20,7 @@ import { useSetInspectorTarget } from '@/hooks/useInspector';
 import { usePackages } from '@/hooks/usePackages';
 import { useMetadataHmr } from '@/hooks/useMetadataHmr';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Database, Layers, Code2, Columns3, Hash } from 'lucide-react';
+import { Database, Layers, Columns3, Hash } from 'lucide-react';
 import { RELATED_TYPES, itemReferencesObject } from '@/components/object-related/detector';
 
 function resolveLabel(val: unknown): string {
@@ -104,32 +103,29 @@ function ObjectHubComponent() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <Tabs value={tab} onValueChange={setTab} className="flex h-full flex-col overflow-hidden">
-        <div className="border-b px-6 pt-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
-                <Database className="h-4 w-4 text-muted-foreground" />
+        <div className="border-b px-6 pt-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <Database className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
+              <h1 className="truncate text-lg font-semibold tracking-tight">
                 {objectLabel}
-                <code className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                  {name}
-                </code>
               </h1>
-              {object?.description && (
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{object.description}</p>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                {name}
+              </code>
+              <div className="hidden items-center gap-3 text-[11px] text-muted-foreground md:flex">
                 {fieldCount !== null && (
-                  <span className="inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1">
                     <Columns3 className="h-3 w-3" />
                     <span className="font-medium tabular-nums text-foreground">{fieldCount}</span>
-                    <span>field{fieldCount === 1 ? '' : 's'}</span>
+                    <span>fields</span>
                   </span>
                 )}
                 {relatedCount !== null && relatedCount > 0 && (
                   <button
                     type="button"
                     onClick={() => setTab('related')}
-                    className="inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 transition hover:border-primary/40 hover:text-foreground"
+                    className="inline-flex items-center gap-1 transition hover:text-foreground"
                   >
                     <Layers className="h-3 w-3" />
                     <span className="font-medium tabular-nums text-foreground">{relatedCount}</span>
@@ -137,30 +133,22 @@ function ObjectHubComponent() {
                   </button>
                 )}
                 {recordCount !== null && (
-                  <span className="inline-flex items-center gap-1 rounded-md border bg-background px-1.5 py-0.5">
+                  <span className="inline-flex items-center gap-1">
                     <Hash className="h-3 w-3" />
                     <span className="font-medium tabular-nums text-foreground">
                       {recordCount.toLocaleString()}{recordCountIsLowerBound ? '+' : ''}
                     </span>
-                    <span>record{recordCount === 1 ? '' : 's'}</span>
+                    <span>records</span>
                   </span>
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link
-                  to="/$package/metadata/$type/$name"
-                  params={{ package: packageId, type: 'object', name }}
-                >
-                  <Code2 className="h-3.5 w-3.5" />
-                  <span className="ml-1.5">View source</span>
-                </Link>
-              </Button>
-              <ResourceActionsMenu type="object" name={name} packageId={packageId} />
-            </div>
+            <ResourceActionsMenu type="object" name={name} packageId={packageId} />
           </div>
-          <TabsList className="mt-3">
+          {object?.description && (
+            <p className="mt-1 ml-8 truncate text-xs text-muted-foreground">{object.description}</p>
+          )}
+          <TabsList className="mt-2">
             <TabsTrigger value="designer" className="gap-1.5">
               <Database className="h-3.5 w-3.5" /> Designer
             </TabsTrigger>
