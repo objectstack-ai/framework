@@ -1,0 +1,454 @@
+---
+title: Cluster Semantics
+description: How ObjectStack stays correct from a single laptop to a multi-node cluster — event scope, service scope, leader election, and metadata versioning.
+---
+
+# Cluster Semantics
+
+> **Status:** Accepted · **Audience:** Plugin authors, runtime engineers
+>
+> **TL;DR** — ObjectStack runs identically on a laptop and on a 10-node cluster. To
+> make that true, a small number of runtime primitives need explicit semantics
+> in the protocol layer: how events propagate, whether a service is one-per-node
+> or one-per-cluster, and how metadata changes invalidate caches everywhere at
+> once. This document fixes those semantics.
+
+## 1. Why this document exists
+
+The protocol layer (`@objectstack/spec`) was designed top-down: it describes
+**what** the system looks like (objects, fields, views, flows, agents) and
+deliberately stays silent about **where** code runs. That silence was correct
+during bootstrap — it let us ship the metadata-first vision without prematurely
+locking in a runtime topology.
+
+It is no longer correct. As ObjectStack approaches its first production
+deployments, three classes of bugs become inevitable on any multi-node setup:
+
+1. **Stale caches.** Node A updates an object's `label`; Node B continues to
+   serve the old value from its in-process metadata cache because the change
+   event never crossed the process boundary.
+2. **Duplicated work.** A `schedule`-triggered Flow fires once on every node;
+   a single nightly job runs N times.
+3. **Lost or doubled deliveries.** Two webhook dispatchers pick up the same
+   pending row; an external system receives the same event twice with no
+   safe way to deduplicate.
+
+These are not implementation bugs. They are **protocol omissions** — the spec
+never told plugin authors what "emit an event" or "register a job service"
+should mean when more than one process is involved.
+
+This document closes those omissions. It is the source of truth for cluster
+behaviour and the basis for the `kernel/cluster.zod.ts` schema that codifies
+it.
+
+## 2. Design principles
+
+Every decision below follows three non-negotiable rules.
+
+**P1 — Single-machine remains zero-config.** A developer who runs
+`pnpm dev` must never need Redis, a message broker, or any external state.
+The default driver for every cluster primitive is in-process; the API surface
+is identical to the distributed driver.
+
+**P2 — Distributed semantics live in the protocol, not in the implementation.**
+A plugin author should be able to write *one* version of their code that is
+correct on both topologies. They achieve that by declaring intent ("this job
+runs once per cluster", "this event should reach every node") in metadata or
+through context APIs — never by branching on `if (cluster) { ... }`.
+
+**P3 — Default to the safe semantic, not the cheap one.** When in doubt,
+events stay node-local, services stay node-singletons, and leader-elected work
+is opt-in. This guarantees that a plugin written without thinking about
+clustering still behaves correctly when deployed to one — it just may not
+benefit from horizontal scale until annotated.
+
+## 3. The four cluster primitives
+
+The protocol exposes exactly four primitives. Everything else (caches, queues,
+schedulers, realtime fan-out, webhook delivery, audit shipping) is built on
+top of them.
+
+| Primitive       | Question it answers                              | Default driver | Distributed driver |
+|-----------------|--------------------------------------------------|----------------|--------------------|
+| **PubSub**      | "How does Node A tell Nodes B…N that X happened?" | in-memory      | Redis / NATS / Postgres LISTEN |
+| **Lock**        | "Who, if anyone, is currently holding key `K`?"   | in-memory mutex| Redis SETNX / Postgres advisory lock |
+| **KV**          | "What is the current value of key `K`?"           | in-memory map  | Redis / Postgres   |
+| **Counter**     | "What is the monotonic next number for series `S`?"| in-process int | Redis INCR / Postgres sequence |
+
+These four are the minimum sufficient set. Higher-level facilities
+(`runOnce`, `withLock`, `broadcast`, `leaderElect`, cache invalidation) are
+*derived*; their semantics are defined in §5.
+
+### Why these four and not more
+
+- **No native job queue primitive.** A job queue is `KV + Lock + PubSub`
+  composed; expressing it directly in the cluster layer would couple the
+  protocol to a specific queue shape. `service-queue` builds on the primitives
+  instead.
+- **No native cache primitive.** Caches are `KV + PubSub` (read the value,
+  subscribe to the invalidation channel). `service-cache` builds on the
+  primitives instead.
+- **No native stream/Kafka primitive.** Streaming is intentionally out of
+  scope for v1. It can be added as a fifth primitive later without changing
+  the four above.
+
+## 4. Event scope and delivery semantics
+
+The single biggest source of cluster bugs is "I called `eventBus.emit(...)`
+and assumed everyone would hear it". Every emit must answer three questions:
+
+### 4.1 Scope — who receives this event?
+
+```ts
+scope: 'local' | 'cluster' | 'tenant'
+```
+
+- **`local`** *(default)* — Delivered only to handlers in the emitting
+  process. Use for: in-request hooks, derived-state recomputation that the
+  emitting node will use itself, anything cheap to recompute.
+- **`cluster`** — Delivered to *every* node in the cluster, including the
+  emitter. Use for: cache invalidations, configuration reloads, metadata
+  changes, anything where every node must converge to the same view.
+- **`tenant`** — Same as `cluster`, but delivery is partitioned by `tenantId`
+  so only nodes currently serving that tenant receive it. Use for: tenant-
+  scoped cache invalidations on large multi-tenant deployments where
+  broadcasting to all nodes would waste bandwidth.
+
+> **Default rationale.** `local` is safe by accident: a plugin author who
+> never thinks about clustering produces code that runs identically on one
+> or N nodes — it just doesn't gain any cluster-aware behaviour until they
+> opt in.
+
+### 4.2 Delivery semantics — what guarantees does the bus offer?
+
+```ts
+deliverySemantics: 'best-effort' | 'at-least-once' | 'exactly-once'
+```
+
+- **`best-effort`** *(default for `local`)* — In-process delivery. Lost if
+  a handler throws or the process crashes before the handler runs. Use for:
+  UI hints, telemetry, anything where loss is recoverable.
+- **`at-least-once`** *(default for `cluster` / `tenant`)* — Persisted to
+  the transport (Redis Streams, Postgres outbox table) before publish
+  returns. Survives node crash. Handlers must be **idempotent** —
+  duplicates are possible during retry. Use for: webhook outbox, audit
+  shipping, async job enqueue.
+- **`exactly-once`** — Reserved keyword; **not implemented in v1**. The
+  protocol accepts it so future runtimes can add it without a breaking
+  change. Today the runtime rejects it at startup with a clear error.
+
+### 4.3 Partition key — what ordering does the bus preserve?
+
+```ts
+partitionKey?: string
+```
+
+When set, the bus guarantees that two events with the same `partitionKey`
+are delivered to handlers **in emit order**, even with multiple consumers.
+Events with different partition keys may interleave freely. Typical
+partition keys: record id, tenant id, conversation id.
+
+When unset, no ordering is guaranteed — handlers may run in parallel and
+out of emit order.
+
+### 4.4 The combined contract
+
+```ts
+eventBus.emit('account.updated', payload, {
+  scope: 'cluster',
+  deliverySemantics: 'at-least-once',
+  partitionKey: payload.id,
+})
+```
+
+This is the **only** correct way to invalidate a per-record cache entry
+across a cluster: the `cluster` scope reaches every node, `at-least-once`
+guarantees no node misses the invalidation across a crash, and
+`partitionKey` ensures that two rapid updates to the same record are
+applied in order.
+
+## 5. Service scope and leader election
+
+Every service registered with the kernel must declare its **cluster scope**.
+This is independent of DI lifecycle scope (`singleton` / `transient` /
+`scoped`); it answers a different question.
+
+| `clusterScope` | Meaning |
+|----------------|---------|
+| `node` *(default)* | One instance per Node.js process. Every node runs its own copy. State is local. Examples: HTTP request handlers, in-memory caches, formatters. |
+| `cluster` | Logically a single instance across the whole cluster. At most one node may be doing the work at a time. State is shared via KV / DB. Examples: cron scheduler, webhook dispatcher, queue worker pool coordinator, migration runner. |
+
+A `cluster`-scoped service must declare **how** the single-active-instance
+invariant is maintained:
+
+```ts
+leaderStrategy: 'leader-elected' | 'partitioned' | 'idempotent-broadcast'
+```
+
+- **`leader-elected`** — Exactly one node holds the leadership lock at any
+  time; non-leader nodes idle. The runtime handles election via the `Lock`
+  primitive (heartbeat + TTL). Use for: cron schedulers, anything that must
+  run "once per tick".
+- **`partitioned`** — Every node runs the service, but each instance owns a
+  disjoint partition of the work (typically hashed on `partitionKey`). Use
+  for: webhook dispatchers (partition by `webhook_id`), high-throughput
+  workers.
+- **`idempotent-broadcast`** — Every node runs the service on every input,
+  and the work itself is idempotent (writes use UPSERT, side effects are
+  keyed). Use for: cache invalidation handlers, projection rebuilders.
+
+> **Default rationale.** `node` is the only safe default. A plugin author
+> who forgets to declare scope gets the single-machine behaviour, which is
+> always correct; opting up to `cluster` is an explicit decision.
+
+### 5.1 What the runtime gives you for free
+
+When a service declares `clusterScope: 'cluster'`, the runtime automatically:
+
+1. Wraps `onEnable` so the work only starts after lock acquisition (for
+   `leader-elected`).
+2. Refreshes the lock TTL via heartbeat while the node is healthy.
+3. Releases the lock on `onDisable` or graceful shutdown.
+4. Emits `cluster:leader-changed` events so dependent services can react.
+
+A plugin author writing a cron scheduler does **not** write any lock code —
+they declare scope and strategy, and the runtime does the rest.
+
+## 6. Metadata versioning and cache coherence
+
+Metadata is the most cache-hot data in the system. Every read path —
+ObjectQL planning, REST routing, UI rendering, permission checks —
+touches it. Making it correct across a cluster requires two things the
+current protocol lacks: a **monotonic version per item** and a
+**well-defined invalidation event**.
+
+### 6.1 Monotonic version
+
+Every persisted metadata record gains a `version: bigint` column that
+increments on every write (already present in
+`system/metadata-persistence.zod.ts` as `version: number` for optimistic
+concurrency — this ADR formalises and widens it to `bigint` so caches can
+compare freshness across long-running clusters without overflow).
+
+Caches store `{value, version}`. On any incoming change notification the
+cache compares the incoming version with the stored one:
+
+- Incoming version `>` stored → invalidate (apply new value or evict)
+- Incoming version `≤` stored → ignore (out-of-order notification, already
+  superseded)
+
+This eliminates a whole class of bugs where a slow-arriving "old"
+invalidation evicts a "newer" value the node has already learned about.
+
+### 6.2 The `metadata:changed` event
+
+Whenever a metadata record is written (create / update / delete / publish),
+the persistence layer **must** emit:
+
+```ts
+eventBus.emit('metadata:changed', {
+  type: 'object' | 'view' | 'flow' | …,
+  name: '<machine-name>',
+  tenantId?: '<tenant>',
+  version: <new-version>,
+  operation: 'create' | 'update' | 'delete' | 'publish',
+}, {
+  scope: 'cluster',
+  deliverySemantics: 'at-least-once',
+  partitionKey: `${type}:${name}`,
+})
+```
+
+The partition key guarantees that two rapid updates to the same item are
+applied to every node's cache in the order they occurred. The `at-least-
+once` guarantee means a node briefly partitioned from the bus will catch
+up on reconnect (the transport replays from the last acknowledged offset).
+
+### 6.3 Reader contract
+
+All metadata readers (registry, loader, query engine) must:
+
+1. Subscribe to `metadata:changed` on startup.
+2. Compare incoming `version` with cached `version` before evicting.
+3. Treat missing `version` as `0` (legacy compatibility).
+
+## 7. Plugin author guidance
+
+This section is a quick reference for plugin authors. The full details live
+in §4-§6; this is the cheat sheet.
+
+### 7.1 "I want to fire an event"
+
+Pick scope first, then delivery, then partition key:
+
+| You want to…                                | scope     | delivery        | partitionKey  |
+|---------------------------------------------|-----------|-----------------|---------------|
+| Tell the current request's response builder | `local`   | `best-effort`   | —             |
+| Invalidate one cache entry everywhere       | `cluster` | `at-least-once` | the cache key |
+| Recompute a derived value for one record    | `cluster` | `at-least-once` | record id     |
+| Push a UI update to a specific tenant       | `tenant`  | `at-least-once` | tenant id     |
+| Audit / webhook outbox                      | `cluster` | `at-least-once` | event id      |
+
+If none of the above apply, stay with the defaults (`local` +
+`best-effort`) — they are always correct on a single node and never wrong
+on a cluster, they just don't propagate.
+
+### 7.2 "I want to register a service"
+
+Ask: **if I deploy 5 nodes, should there be 5 of these or 1?**
+
+- **5** → `clusterScope: 'node'` (default). You're done.
+- **1** → `clusterScope: 'cluster'` + pick a `leaderStrategy`:
+  - "Wakes on a timer / cron" → `leader-elected`
+  - "Pulls from a shared queue" → `partitioned`
+  - "Reacts to events with idempotent writes" → `idempotent-broadcast`
+
+### 7.3 "I want to read metadata in a long-lived cache"
+
+You don't write a cache. You ask the kernel for one:
+
+```ts
+const cache = ctx.cluster.cache<ObjectMetadata>({
+  key: m => `obj:${m.name}`,
+  version: m => m.version,
+  invalidateOn: { type: 'object' },
+})
+```
+
+The runtime wires `metadata:changed` subscription, version comparison, and
+the underlying KV automatically. No `if (cluster)` branches in your code.
+
+### 7.4 What you must never do
+
+- Never call `setInterval` for cluster-wide periodic work — declare a
+  `cluster`-scoped service with `leader-elected`.
+- Never `SELECT … WHERE status = 'pending' LIMIT 1` without a row lock —
+  use `SELECT … FOR UPDATE SKIP LOCKED` (Postgres) or
+  `UPDATE … RETURNING` with a `claimed_by` column.
+- Never write into a process-local `Map` and assume other nodes see it —
+  use `ctx.cluster.kv` for shared state.
+- Never `import Redis from 'redis'` directly — go through
+  `ctx.cluster.{pubsub, lock, kv, counter}`.
+
+## 8. Configuration surface
+
+Cluster behaviour is configured once, at the stack level. The protocol
+ships a single optional field on `defineStack()`:
+
+```ts
+defineStack({
+  // …existing fields…
+  cluster: {
+    driver: 'memory',   // default — single-process
+    // driver: 'redis', url: process.env.REDIS_URL,
+    // driver: 'postgres', useExistingPool: true,
+    // driver: 'nats', url: process.env.NATS_URL,
+
+    nodeId: process.env.NODE_ID,           // optional, auto-generated if absent
+    heartbeatMs: 5000,                     // leader-election heartbeat
+    lockTtlMs: 15000,                      // 3× heartbeat is the safe ratio
+
+    tenantIsolation: 'channel-prefix',     // 'channel-prefix' | 'none'
+  },
+})
+```
+
+Every cluster primitive selects its implementation from `cluster.driver`.
+When the field is absent, the kernel uses the in-memory driver and a
+single-line warning is logged in `production` mode: *"running in single-
+node cluster mode; horizontal scale will be incorrect until cluster.driver
+is configured."*
+
+### 8.1 Driver matrix
+
+| Driver       | PubSub                | Lock                       | KV                  | Counter        |
+|--------------|-----------------------|----------------------------|---------------------|----------------|
+| `memory`     | EventEmitter          | in-proc mutex              | Map                 | int            |
+| `redis`      | Redis Pub/Sub Streams | SETNX + TTL + Lua release  | GET/SET             | INCR           |
+| `postgres`   | `LISTEN/NOTIFY`       | advisory locks             | dedicated KV table  | sequence       |
+| `nats`       | NATS subjects + JetStream | KV bucket lock         | KV bucket           | KV INCR        |
+
+The `postgres` driver is the recommended starting point for production:
+zero new infrastructure (reuses the existing DB), good enough for tens of
+nodes, and trivially debuggable with `psql`. Move to `redis` or `nats` when
+throughput exceeds what Postgres LISTEN/NOTIFY can sustain (~10k msg/s).
+
+## 9. Industry alignment
+
+These choices follow patterns proven across the enterprise platform
+ecosystem; none are novel.
+
+- **Salesforce Platform Events** — cluster-wide pub/sub with at-least-once
+  delivery; tenant-partitioned channels. Maps directly to our `scope:
+  'cluster'` + `'tenant'`.
+- **ServiceNow Cluster Cache + Event Management** — version-stamped cache
+  with invalidation broadcast; leader-elected schedulers. Maps to §6 and
+  `leader-elected` strategy.
+- **Odoo `bus.bus`** — Postgres `LISTEN/NOTIFY` for cross-worker fan-out.
+  Validates our `postgres` driver as the right default starting point.
+- **Notion / Linear** — Redis pub/sub for realtime fan-out with
+  per-document partitioning. Validates `partitionKey` ordering as the
+  right primitive.
+- **Kubernetes leader election** — `Lease` objects with TTL + heartbeat.
+  The `leader-elected` strategy in §5 follows the same pattern.
+
+## 10. Migration plan
+
+This ADR is **additive**. Existing plugins continue to compile and run
+unchanged. The protocol additions (a new `cluster.zod.ts` file plus
+optional fields on existing schemas) ship in spec v5.x without breaking
+v4 consumers.
+
+### Phase 1 — Protocol (this work, ~1 day)
+
+1. Add `kernel/cluster.zod.ts` — schemas for `EventScope`,
+   `DeliverySemantics`, `ClusterScope`, `LeaderStrategy`, `ClusterConfig`.
+2. Extend `events/core.zod.ts` `EventMetadataSchema` with optional
+   `scope`, `deliverySemantics`, `partitionKey`.
+3. Extend `kernel/service-registry.zod.ts` `ServiceMetadataSchema` and
+   `ServiceFactoryRegistrationSchema` with optional `clusterScope`,
+   `leaderStrategy`.
+4. Add optional `cluster` field to `stack.zod.ts`.
+
+No runtime changes. After this phase the protocol *describes* cluster
+semantics; nothing *enforces* them.
+
+### Phase 2 — In-memory runtime (~2 days)
+
+Implement `service-cluster` with the `memory` driver only. Every cluster
+primitive works; behaviour on one node is identical to today. This phase
+proves the API shape against real callers (EventBus, service-cache,
+service-job) before committing to a wire format.
+
+### Phase 3 — Postgres driver (~3 days)
+
+Implement `postgres` driver (LISTEN/NOTIFY + advisory locks + KV table).
+First real multi-node deployment becomes possible. No new infrastructure
+for users who already run Postgres.
+
+### Phase 4 — Existing services migrate (~3 days, opportunistic)
+
+- `service-job` declares `clusterScope: 'cluster' / 'leader-elected'`.
+- `service-cache` switches to `ctx.cluster.cache(...)` factory.
+- `service-realtime` adds cross-node fan-out via PubSub.
+- Webhook dispatcher (planned) uses `partitioned` strategy from day one.
+
+### Phase 5 — Redis / NATS drivers (deferred, customer-driven)
+
+Added when a customer reports throughput needs exceeding the Postgres
+driver. No protocol changes required at that point — only a new
+implementation.
+
+## 11. Non-goals (v1)
+
+- **Exactly-once delivery** — accepted as a keyword in the protocol,
+  rejected at runtime startup. Implementing it correctly requires
+  distributed transactions or idempotency tokens that are out of scope
+  for v1.
+- **Cross-region replication** — single-region clusters only. Multi-region
+  is a future ADR.
+- **Streaming protocol** — Kafka-style consumer groups not modelled here.
+  Will arrive as a fifth primitive when needed.
+- **Schemaful event registry enforcement at the bus layer** — event names
+  are validated by metadata, not by the bus. The bus stays string-typed
+  for plugin extensibility.

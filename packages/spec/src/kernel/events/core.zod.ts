@@ -13,6 +13,7 @@ import { EventNameSchema } from '../../shared/identifiers.zod';
  * Lower numbers = higher priority
  */
 import { lazySchema } from '../../shared/lazy-schema';
+import { EventClusterOptionsSchema } from '../cluster.zod';
 export const EventPriority = z.enum([
   'critical',   // 0 - Process immediately, block if necessary
   'high',       // 1 - Process soon, minimal delay
@@ -51,6 +52,20 @@ export const EventMetadataSchema = lazySchema(() => z.object({
   correlationId: z.string().optional().describe('Correlation ID for event tracing'),
   causationId: z.string().optional().describe('ID of the event that caused this event'),
   priority: EventPriority.optional().default('normal').describe('Event priority'),
+
+  /**
+   * Cluster routing & ordering options.
+   *
+   * Optional for backward compatibility — events without this field
+   * default to `{ scope: 'local', deliverySemantics: 'best-effort' }`,
+   * which is identical to the pre-v5.2 behaviour. Plugins that need
+   * cross-node delivery, ordering, or persisted at-least-once semantics
+   * MUST set the relevant fields.
+   *
+   * @see content/docs/concepts/cluster-semantics.mdx §4
+   */
+  cluster: EventClusterOptionsSchema.optional()
+    .describe('Per-emit cluster routing & delivery options. See cluster-semantics.mdx §4.'),
 }));
 
 // ==========================================

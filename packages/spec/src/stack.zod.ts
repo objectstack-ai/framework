@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 import { ManifestSchema } from './kernel/manifest.zod';
+import { ClusterCapabilityConfigSchema } from './kernel/cluster.zod';
 import { DatasourceSchema } from './data/datasource.zod';
 import { TranslationBundleSchema, TranslationConfigSchema } from './system/translation.zod';
 import { objectStackErrorMap, formatZodError } from './shared/error-map.zod';
@@ -1108,6 +1109,18 @@ export const ObjectOSCapabilitiesSchema = lazySchema(() => z.object({
   
   /** Plugin System */
   pluginSystem: z.boolean().default(false).describe('Plugin/extension system'),
+
+  /**
+   * Cluster Capability Configuration.
+   *
+   * Governs cross-process behaviour: PubSub, Lock, KV, Counter primitives;
+   * event scope & delivery semantics; service leader election. Optional;
+   * when absent the kernel uses the in-memory driver (single-process).
+   *
+   * @see content/docs/concepts/cluster-semantics.mdx
+   */
+  cluster: ClusterCapabilityConfigSchema.optional()
+    .describe('Cluster transport & semantics configuration.'),
   
   /** Active Features & Flags */
   features: z.array(FeatureFlagSchema).optional().describe('Active Feature Flags'),

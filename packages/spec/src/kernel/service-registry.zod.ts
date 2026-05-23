@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { z } from 'zod';
+import { ServiceClusterAnnotationsSchema } from './cluster.zod';
 
 /**
  * Service Registry Protocol
@@ -73,6 +74,16 @@ export const ServiceMetadataSchema = lazySchema(() => z.object({
    */
   metadata: z.record(z.string(), z.unknown()).optional()
     .describe('Additional service-specific metadata'),
+
+  /**
+   * Cluster annotations governing how this service behaves in a
+   * multi-node deployment. Optional — omitting it is equivalent to
+   * `{ clusterScope: 'node' }`, which is correct on a single machine.
+   *
+   * @see content/docs/concepts/cluster-semantics.mdx §5
+   */
+  cluster: ServiceClusterAnnotationsSchema.optional()
+    .describe('Cluster scope & leader strategy. See cluster-semantics.mdx §5.'),
 }));
 
 export type ServiceMetadata = z.infer<typeof ServiceMetadataSchema>;
@@ -170,6 +181,12 @@ export const ServiceFactoryRegistrationSchema = lazySchema(() => z.object({
    */
   singleton: z.boolean().optional().default(true)
     .describe('Whether to cache the factory result (singleton pattern)'),
+
+  /**
+   * Cluster annotations. See `ServiceMetadataSchema.cluster`.
+   */
+  cluster: ServiceClusterAnnotationsSchema.optional()
+    .describe('Cluster scope & leader strategy for this service.'),
 }));
 
 export type ServiceFactoryRegistration = z.infer<typeof ServiceFactoryRegistrationSchema>;

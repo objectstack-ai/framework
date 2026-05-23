@@ -1,6 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 export * from './cli-extension.zod';
+export * from './cluster.zod';
 export * from './context.zod';
 export * from './dependency-resolution.zod';
 export * from './dev-plugin.zod';
