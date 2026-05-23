@@ -45,6 +45,7 @@ import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
 import { iconForMetadataType, typeLabel, navItemForType } from '@/components/studio-nav';
 import { QuickStartCard } from '@/components/QuickStartCard';
+import { CreateMetadataDialog } from '@/components/CreateMetadataDialog';
 
 function dedupeRegistryEntries(
   types: string[],
@@ -104,6 +105,12 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
   const client = useScopedClient(params.projectId);
   const packageId = selectedPackage?.manifest?.id;
   const { items: recent, clear: clearRecent } = useRecentItems(packageId);
+
+  // When a Quick Start tile is clicked we open the CreateMetadataDialog
+  // pre-scoped to that one metadata type. This closes the loop the
+  // launchpad promises (Home → "what would you like to build?") and
+  // saves the user from a list-page detour just to find '+ New'.
+  const [createType, setCreateType] = useState<string | null>(null);
 
   const [stats, setStats] = useState<SystemStats>({
     packages: { total: 0, enabled: 0 },
@@ -198,28 +205,28 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
               tone="sky"
               title="Object"
               description="Define a new data model with fields, validations, and relationships."
-              onClick={() => onNavigate('objects')}
+              onClick={() => setCreateType('object')}
             />
             <QuickStartCard
               icon={LayoutGrid}
               tone="violet"
               title="View"
               description="Lay out a grid, kanban, calendar, or gantt for any object."
-              onClick={() => onNavigate('views')}
+              onClick={() => setCreateType('view')}
             />
             <QuickStartCard
               icon={FileSpreadsheet}
               tone="emerald"
               title="Form"
               description="Build a form to collect data — internal record entry or public intake."
-              onClick={() => onNavigate('forms')}
+              onClick={() => setCreateType('view')}
             />
             <QuickStartCard
               icon={Workflow}
               tone="amber"
               title="Flow"
               description="Wire trigger-based automation across objects, services, and AI."
-              onClick={() => onNavigate('automations')}
+              onClick={() => setCreateType('flow')}
             />
           </div>
         </section>
@@ -359,6 +366,13 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
           </span>
         </footer>
       </div>
+
+      <CreateMetadataDialog
+        open={createType !== null}
+        onOpenChange={(o) => { if (!o) setCreateType(null); }}
+        types={createType ? [createType] : []}
+        packageId={packageId}
+      />
     </div>
   );
 }

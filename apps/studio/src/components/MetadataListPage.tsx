@@ -259,16 +259,33 @@ export function MetadataListPage({
         ) : error ? (
           <div className="py-12 text-center text-sm text-destructive">Failed: {error}</div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <p className="text-sm font-medium">
-              {rows.length === 0
-                ? packageId && packageId !== 'all'
-                  ? `Nothing in ${title} for this package yet.`
-                  : `Nothing in ${title} yet.`
-                : 'No matches.'}
-            </p>
+          <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+            {/* Tinted icon medallion: hints at the kind of thing the user is about to create. */}
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-muted to-muted/40 ring-1 ring-border">
+              {(() => {
+                const Icon = iconForType?.(types[0]) ?? iconForMetadataType(types[0]);
+                return Icon ? <Icon className="h-6 w-6 text-muted-foreground" /> : <Plus className="h-6 w-6 text-muted-foreground" />;
+              })()}
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-base font-semibold">
+                {rows.length === 0
+                  ? packageId && packageId !== 'all'
+                    ? `No ${title.toLowerCase()} in this package yet`
+                    : `No ${title.toLowerCase()} yet`
+                  : `No ${title.toLowerCase()} match "${query}"`}
+              </p>
+              {rows.length === 0 ? (
+                <p className="max-w-md text-xs text-muted-foreground">{subtitle}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Try adjusting your search or type filter.</p>
+              )}
+            </div>
             {rows.length === 0 && (
-              <p className="max-w-md text-xs text-muted-foreground">{subtitle}</p>
+              <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-3.5 w-3.5" />
+                Create your first {types.length === 1 ? typeLabel(types[0]) : title.toLowerCase().replace(/s$/, '')}
+              </Button>
             )}
             {emptyCta}
           </div>
