@@ -3,6 +3,7 @@
 import { ObjectKernel, Plugin, IHttpServer, ObjectKernelConfig } from '@objectstack/core';
 import {
     ClusterServicePlugin,
+    MetadataClusterBridgePlugin,
     type ClusterServicePluginOptions,
 } from '@objectstack/service-cluster';
 import type { ClusterCapabilityConfigInput } from '@objectstack/spec/kernel';
@@ -65,6 +66,10 @@ export class Runtime {
         if (config.cluster !== false) {
             const opts = this.normalizeClusterOptions(config.cluster);
             this.kernel.use(new ClusterServicePlugin(opts));
+            // Bridge metadata cache invalidation across nodes. Late-binds
+            // via kernel:ready so it picks up a metadata service whether
+            // it's registered by a plugin or directly.
+            this.kernel.use(new MetadataClusterBridgePlugin());
         }
     }
 

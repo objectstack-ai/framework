@@ -30,6 +30,8 @@ import type {
   MetadataTypeInfo,
   IRealtimeService,
   RealtimeEventPayload,
+  IPubSub,
+  Unsubscribe,
 } from '@objectstack/spec/contracts';
 import type {
   MetadataQuery,
@@ -59,6 +61,22 @@ import type {
  * Watch callback function (legacy)
  */
 export type WatchCallback = (event: MetadataWatchEvent) => void | Promise<void>;
+
+/**
+ * Payload format for cluster-wide metadata change broadcasts.
+ *
+ * Published on channel `metadata.changed` by any node mutating metadata
+ * and consumed by peers to invalidate their local caches. Aligns with
+ * `MetadataChangedEventPayload` in `cluster-semantics.mdx` §5.
+ */
+export interface ClusterMetadataChangedPayload {
+  /** Origin nodeId — used for loopback suppression. */
+  originNode?: string;
+  /** Metadata type (object, view, dashboard, …). */
+  type: string;
+  /** The legacy watch event replayed verbatim on peer nodes. */
+  event: MetadataWatchEvent;
+}
 
 export interface MetadataManagerOptions extends MetadataManagerConfig {
   loaders?: MetadataLoader[];
@@ -106,6 +124,21 @@ export class MetadataManager implements IMetadataService {
 
   // Realtime service for event publishing
   private realtimeService?: IRealtimeService;
+
+  // ── Cluster wiring (cluster-semantics.mdx §5) ────────────────────────
+  // When attached via `attachClusterPubSub()`, metadata-change events
+  // become cluster-wide:
+  //   • Local notifyWatchers() publishes on `metadata.changed` so peers
+  //     can invalidate their caches.
+  //   • Subscribed remote events are replayed into the local watch hub
+  //     so existing consumers (ObjectQLPlugin, Studio HMR, …) see
+  //     uniform behavior regardless of which node initiated the change.
+  // `originNode` on the payload prevents loopback; `partitionKey` keeps
+  // per-object ordering on partitioned drivers.
+  private clusterPubSub?: IPubSub;
+  private clusterNodeId?: string;
+  private clusterUnsubscribe?: Unsubscribe;
+  private static readonly CLUSTER_CHANNEL = 'metadata.changed';
 
   // ── ADR-0008 PR-6: optional Repository for event-source integration ──
   // When set, the manager streams `repo.watch()` events into the watch
@@ -1491,6 +1524,29 @@ export class MetadataManager implements IMetadataService {
   }
 
   protected notifyWatchers(type: string, event: MetadataWatchEvent) {
+    this.notifyWatchersLocal(type, event);
+
+    // Cluster fan-out (cluster-semantics.mdx §5). Best-effort: a publish
+    // failure must never block the local update.
+    if (this.clusterPubSub) {
+      const payload: ClusterMetadataChangedPayload = {
+        originNode: this.clusterNodeId,
+        type,
+        event,
+      };
+      const key = `${type}:${(event as { name?: string }).name ?? ''}`;
+      void this.clusterPubSub
+        .publish(MetadataManager.CLUSTER_CHANNEL, payload, { partitionKey: key })
+        .catch((err) => {
+          this.logger.error('Cluster metadata publish failed', undefined, {
+            type,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+  }
+
+  private notifyWatchersLocal(type: string, event: MetadataWatchEvent) {
     const callbacks = this.watchCallbacks.get(type);
     if (!callbacks) return;
 
@@ -1504,6 +1560,66 @@ export class MetadataManager implements IMetadataService {
         });
       }
     }
+  }
+
+  /**
+   * Attach a cluster pub/sub transport so metadata-change events fan
+   * out to peer nodes and remote events replay into local watchers.
+   *
+   * The bridge plugin in @objectstack/service-cluster calls this once
+   * per kernel boot after both cluster and metadata services are
+   * registered. Passing the same MetadataManager twice no-ops; passing
+   * a different transport replaces the prior subscription.
+   *
+   * Pass `nodeId` matching the local cluster's nodeId so loopback
+   * suppression works.
+   *
+   * @returns disposer that unsubscribes from cluster events.
+   */
+  attachClusterPubSub(pubsub: IPubSub, nodeId: string): () => void {
+    // Idempotent on (pubsub, nodeId) — re-attaching same pair short-circuits.
+    if (this.clusterPubSub === pubsub && this.clusterNodeId === nodeId) {
+      return () => this.detachClusterPubSub();
+    }
+    this.detachClusterPubSub();
+    this.clusterPubSub = pubsub;
+    this.clusterNodeId = nodeId;
+    this.clusterUnsubscribe = pubsub.subscribe<ClusterMetadataChangedPayload>(
+      MetadataManager.CLUSTER_CHANNEL,
+      (msg) => {
+        const p = msg.payload;
+        // Loopback guard — never replay events we just emitted.
+        if (p?.originNode && p.originNode === this.clusterNodeId) return;
+        if (!p?.type || !p.event) return;
+        // Defer to setImmediate so a slow local handler can't back-pressure
+        // the pubsub dispatch loop on memory drivers.
+        setImmediate(() => {
+          try {
+            this.notifyWatchersLocal(p.type, p.event);
+          } catch (err) {
+            this.logger.error('Cluster remote replay failed', undefined, {
+              type: p.type,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        });
+      },
+    );
+    this.logger.info('MetadataManager attached to cluster pubsub', {
+      nodeId,
+      channel: MetadataManager.CLUSTER_CHANNEL,
+    });
+    return () => this.detachClusterPubSub();
+  }
+
+  /** Tear down cluster wiring. Safe to call multiple times. */
+  detachClusterPubSub(): void {
+    if (this.clusterUnsubscribe) {
+      try { this.clusterUnsubscribe(); } catch { /* idempotent */ }
+      this.clusterUnsubscribe = undefined;
+    }
+    this.clusterPubSub = undefined;
+    this.clusterNodeId = undefined;
   }
 
   // ==========================================

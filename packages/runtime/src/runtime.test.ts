@@ -24,12 +24,13 @@ describe('Runtime', () => {
         expect(runtime.getKernel()).toBeDefined();
     });
 
-    it('auto-registers the cluster service plugin', () => {
+    it('auto-registers the cluster service plugin and metadata bridge', () => {
         const runtime = new Runtime();
         const kernel = runtime.getKernel();
-        expect(kernel.use).toHaveBeenCalledTimes(1);
-        const plugin = (kernel.use as any).mock.calls[0][0];
-        expect(plugin.name).toBe('com.objectstack.service.cluster');
+        expect(kernel.use).toHaveBeenCalledTimes(2);
+        const names = (kernel.use as any).mock.calls.map((c: any[]) => c[0].name);
+        expect(names).toContain('com.objectstack.service.cluster');
+        expect(names).toContain('com.objectstack.service.metadata-cluster-bridge');
     });
 
     it('skips cluster auto-registration when cluster:false', () => {

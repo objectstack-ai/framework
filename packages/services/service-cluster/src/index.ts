@@ -29,6 +29,8 @@ export {
     type ClusterServicePluginOptions,
 } from './cluster-service-plugin.js';
 
+export { MetadataClusterBridgePlugin } from './metadata-cluster-bridge-plugin.js';
+
 // Re-export contracts for convenience.
 export type {
     IClusterService,
