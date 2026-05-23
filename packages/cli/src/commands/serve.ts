@@ -75,7 +75,7 @@ export default class Serve extends Command {
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
     ui: Flags.boolean({ description: 'Enable Studio UI at /_studio/ (default: true)', default: true, allowNo: true }),
     console: Flags.boolean({
-      description: 'Mount the Console UI at /console/ when the package is installed (default: true). When disabled, Studio claims the root redirect.',
+      description: 'Mount the Console UI at /_console/ when the package is installed (default: true). When disabled, Studio claims the root redirect.',
       default: true,
       allowNo: true,
     }),
@@ -1448,11 +1448,10 @@ export default class Serve extends Command {
         // ── Console portal ──────────────────────────────────────────
         // The opinionated, fork-ready runtime console (`@object-ui/console`,
         // published from the objectstack-ai/objectui monorepo) mounts under
-        // `/console/` (no underscore — matches the published plugin's
-        // slug and how objectui's dev server serves it). When present,
-        // it owns the root redirect (preferred default UI). It is
-        // optional — we only mount it when the package resolves and a
-        // pre-built `dist/` is present.
+        // `/_console/` exactly like Studio/Account. When present, it owns
+        // root `/` redirect (preferred default UI). It is optional — we
+        // only mount it when the package resolves and a pre-built `dist/`
+        // is present.
         if (consolePath) {
           if (consoleWillMount) {
             const consoleDistPath = path.join(consolePath, 'dist');

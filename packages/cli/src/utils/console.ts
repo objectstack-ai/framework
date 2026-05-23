@@ -6,11 +6,10 @@
  * Mirrors `studio.ts` / `account.ts` but for the opinionated, fork-ready
  * runtime console — published as `@object-ui/console` from the
  * objectstack-ai/objectui monorepo. The Console SPA is mounted at
- * `/console/` (the slug declared by the published ConsolePlugin), which
- * matches how the SPA is built (`base: '/console/'`) and how objectui's
- * own dev server serves it — so URLs are identical in dev and prod.
- * Note: studio/account use a `_` prefix because they're framework
- * internal tools; the Console is the user-facing default UI.
+ * `/_console/` by every deployment that opts in (CLI dev server,
+ * self-host, Vercel) — exactly the same convention as `_studio` and
+ * `_account`. The Console is built with `base: '/_console/'`, so its
+ * pre-built `dist/` is served verbatim.
  *
  * History:
  *   - Was previously consumed as a workspace package (`@objectstack/console`
@@ -27,7 +26,7 @@ import { pathToFileURL } from 'url';
 // ─── Constants ──────────────────────────────────────────────────────
 
 /** URL mount path for the Console portal inside the ObjectStack server */
-export const CONSOLE_PATH = '/console';
+export const CONSOLE_PATH = '/_console';
 
 /** npm package name for the upstream Console SPA. */
 const CONSOLE_PACKAGE = '@object-ui/console';
