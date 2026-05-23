@@ -20,6 +20,20 @@ import {
   Globe,
   FlaskConical,
   ScrollText,
+  Database,
+  Table,
+  LayoutDashboard,
+  FileBarChart,
+  FileText,
+  CircuitBoard,
+  Webhook,
+  CheckCircle2,
+  Zap,
+  Sparkles,
+  Wrench,
+  User,
+  KeyRound,
+  Share2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -166,4 +180,37 @@ export const METADATA_TYPE_LABELS: Record<string, string> = {
  */
 export function typeLabel(type: string): string {
   return METADATA_TYPE_LABELS[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+/**
+ * Per-type icon overrides — distinguishes peers within a nav category so
+ * cards in a mixed list (e.g. Hook vs Flow, Role vs Permission) read at a
+ * glance instead of all sharing the category icon.
+ */
+export const METADATA_TYPE_ICONS: Record<string, LucideIcon> = {
+  object: Database,
+  view: Table,
+  app: AppWindow,
+  page: FileText,
+  dashboard: LayoutDashboard,
+  report: FileBarChart,
+  flow: CircuitBoard,
+  workflow: Workflow,
+  approval: CheckCircle2,
+  hook: Webhook,
+  trigger: Zap,
+  function: Wrench,
+  agent: Bot,
+  tool: Wrench,
+  skill: Sparkles,
+  role: User,
+  profile: User,
+  permission: KeyRound,
+  policy: Shield,
+  sharingRule: Share2,
+};
+
+/** Get the icon for a given metadata type, with a sensible default. */
+export function iconForMetadataType(type: string): LucideIcon | undefined {
+  return METADATA_TYPE_ICONS[type] ?? navItemForType(type)?.icon;
 }

@@ -33,7 +33,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { MetadataPreview } from './MetadataPreview';
-import { navItemForType, typeLabel } from './studio-nav';
+import { iconForMetadataType, typeLabel } from './studio-nav';
 import type { LucideIcon } from 'lucide-react';
 
 /** Metadata types we can render a live preview for via @object-ui. */
@@ -79,6 +79,86 @@ function resolveDescription(val: unknown): string | undefined {
   return s ? s : undefined;
 }
 
+/** Convert `snake_case` / `kebab-case` machine name → Title Case for display. */
+function humanizeName(name: string): string {
+  if (!name) return '';
+  return name
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Pick a human-readable display label for any metadata item.
+ *
+ * Falls back through:
+ *   1. top-level `label`
+ *   2. nested `list.label` / `form.label` (legacy view-set files)
+ *   3. humanised machine `name`
+ *   4. literal "Untitled"
+ */
+function pickLabel(item: any): string {
+  const top = resolveLabel(item?.label);
+  if (top) return top;
+  const nested =
+    resolveLabel(item?.list?.label) ||
+    resolveLabel(item?.form?.label) ||
+    resolveLabel(item?.spec?.label);
+  if (nested) return nested;
+  return humanizeName(item?.name) || 'Untitled';
+}
+
+/**
+ * Synthesise a one-line description when the item has none, so list
+ * cards never look empty / mis-aligned. Keep it factual — never invent
+ * data, just summarise what the spec already says.
+ */
+function pickDescription(item: any, type: string): string | undefined {
+  const direct = resolveDescription(item?.description);
+  if (direct) return direct;
+  switch (type) {
+    case 'view': {
+      // legacy view-set file: { list, form, formViews, listViews }
+      const parts: string[] = [];
+      if (item?.list) parts.push('list');
+      if (item?.form) parts.push('form');
+      const extra = (item?.listViews?.length ?? 0) + (item?.formViews?.length ?? 0);
+      if (extra > 0) parts.push(`${extra} variant${extra === 1 ? '' : 's'}`);
+      return parts.length ? `Default ${parts.join(' + ')} for ${item?.name}` : undefined;
+    }
+    case 'agent': {
+      const m = item?.model;
+      const modelStr =
+        typeof m === 'string'
+          ? m
+          : m && typeof m === 'object'
+          ? [m.provider, m.model].filter(Boolean).join('/')
+          : undefined;
+      const role = item?.role;
+      const roleStr = typeof role === 'string' && role ? role.charAt(0).toUpperCase() + role.slice(1) : undefined;
+      if (modelStr && roleStr) return `${roleStr} agent · ${modelStr}`;
+      if (modelStr) return `Model: ${modelStr}`;
+      if (roleStr) return `${roleStr} agent`;
+      return undefined;
+    }
+    case 'hook': {
+      const obj = item?.object;
+      const events = Array.isArray(item?.events) ? item.events.join(', ') : item?.events;
+      if (obj && events) return `${obj} · ${events}`;
+      if (obj) return `Listens on ${obj}`;
+      return undefined;
+    }
+    case 'flow': {
+      const obj = item?.object || item?.trigger?.object;
+      if (obj) return `Flow on ${obj}`;
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 export function MetadataListPage({
   title,
   subtitle,
@@ -114,8 +194,8 @@ export function MetadataListPage({
             all.push({
               type,
               name: item.name || item.id || 'unknown',
-              label: resolveLabel(item.label) || item.name || 'Untitled',
-              description: resolveDescription(item.description),
+              label: pickLabel(item),
+              description: pickDescription(item, type),
               updatedAt: item.updatedAt || item._updatedAt,
               raw: item,
             });
@@ -246,7 +326,7 @@ export function MetadataListPage({
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((row) => {
-              const Icon = iconForType?.(row.type) ?? navItemForType(row.type)?.icon;
+              const Icon = iconForType?.(row.type) ?? iconForMetadataType(row.type);
               const canPreview = PREVIEWABLE_TYPES.has(row.type);
               // Only show per-card type badge when the page mixes multiple
               // metadata types — otherwise it's noise (the page title

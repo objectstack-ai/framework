@@ -7,7 +7,7 @@ import { PluginHost } from '../plugins';
 import { usePackages } from '../hooks/usePackages';
 import { useSetInspectorTarget } from '@/hooks/useInspector';
 import { ResourceActionsMenu } from '@/components/ResourceActionsMenu';
-import { navItemForType, typeLabel } from '@/components/studio-nav';
+import { iconForMetadataType, typeLabel } from '@/components/studio-nav';
 import { Badge } from '@/components/ui/badge';
 
 function resolveLabel(val: unknown): string {
@@ -45,7 +45,7 @@ function MetadataViewComponent() {
 
   const label = resolveLabel(item?.label) || name;
   const description = resolveLabel(item?.description);
-  const Icon = navItemForType(type)?.icon;
+  const Icon = iconForMetadataType(type);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
