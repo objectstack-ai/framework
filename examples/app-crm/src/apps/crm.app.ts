@@ -7,6 +7,12 @@ export const CrmApp = App.create({
   label: 'Enterprise CRM',
   icon: 'briefcase',
   defaultAgent: 'sales_copilot',
+  // Land on the Sales Dashboard rather than the first nav item (Leads).
+  // Sales reps and managers both benefit from a KPI overview ("pipeline
+  // covered? deals at risk? this week's quota?") on entry. The Lead list
+  // is just one of many objects and isn't a meaningful starting point
+  // for users whose primary work is Opportunities / Accounts.
+  homePageId: 'nav_sales_dashboard',
   branding: {
     primaryColor: '#4169E1',
     logo: '/assets/crm-logo.png',
