@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useClient } from '@objectstack/client-react';
 import { useParams } from '@tanstack/react-router';
 import { useScopedClient } from '@/hooks/useObjectStackClient';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Search, Copy, Check, Key, Hash, Type, ToggleLeft,
-  List, Link, Calculator, Calendar, FileText, CircleDot, Code2,
+  List, Link, Calculator, Calendar, FileText, CircleDot,
   DollarSign, Percent, Mail, Phone, Link as LinkIcon, MapPin, Braces, Clock, Sigma,
   FileCode, Map,
 } from 'lucide-react';
@@ -129,24 +128,20 @@ export function ObjectSchemaInspector({ objectApiName }: ObjectSchemaInspectorPr
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader><Skeleton className="h-6 w-48" /></CardHeader>
-        <CardContent className="space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </CardContent>
-      </Card>
+      <div className="space-y-3 p-4">
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
     );
   }
 
   if (!def) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          Object definition not found: <code className="font-mono">{objectApiName}</code>
-        </CardContent>
-      </Card>
+      <div className="flex flex-1 items-center justify-center py-12 text-center text-sm text-muted-foreground">
+        Object definition not found: <code className="ml-1 font-mono">{objectApiName}</code>
+      </div>
     );
   }
 
@@ -178,41 +173,34 @@ export function ObjectSchemaInspector({ objectApiName }: ObjectSchemaInspectorPr
     : fieldEntries;
 
   return (
-    <div className="space-y-4 p-4">
-      {/* Field search + table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Code2 className="h-4 w-4" />
-              Field Definitions
-            </CardTitle>
-            <Badge variant="secondary" className="text-xs">{filtered.length} / {fieldEntries.length}</Badge>
-          </div>
-          <div className="relative mt-2">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Filter fields by name, label, or type..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-8 text-sm"
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead className="font-medium">Field Name</TableHead>
-                  <TableHead className="font-medium">Label</TableHead>
-                  <TableHead className="font-medium">Type</TableHead>
-                  <TableHead className="font-medium">Required</TableHead>
-                  <TableHead className="font-medium">Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-3 border-b bg-muted/20 px-4 py-2">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Filter fields by name, label, or type…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 pl-9 text-sm"
+          />
+        </div>
+        <span className="ml-auto whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
+          {searchQuery ? `${filtered.length} of ${fieldEntries.length}` : `${fieldEntries.length} fields`}
+        </span>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="sticky top-0 z-10 bg-background hover:bg-transparent">
+              <TableHead className="w-8"></TableHead>
+              <TableHead className="font-medium">Field Name</TableHead>
+              <TableHead className="font-medium">Label</TableHead>
+              <TableHead className="font-medium">Type</TableHead>
+              <TableHead className="font-medium">Required</TableHead>
+              <TableHead className="font-medium">Details</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
                 {filtered.map((field, idx) => {
                   const FieldIcon = FIELD_TYPE_ICONS[field.type] || CircleDot;
                   const colorClass = FIELD_TYPE_COLORS[field.type] || 'text-gray-600 bg-gray-50 border-gray-200 dark:text-gray-400 dark:bg-gray-950 dark:border-gray-800';
@@ -288,9 +276,7 @@ export function ObjectSchemaInspector({ objectApiName }: ObjectSchemaInspectorPr
                 )}
               </TableBody>
             </Table>
-          </div>
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }
