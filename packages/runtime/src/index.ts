@@ -84,6 +84,8 @@ export { createObjectOSStack } from './cloud/objectos-stack.js';
 export type { ObjectOSStackConfig, ObjectOSStackResult } from './cloud/objectos-stack.js';
 export { MarketplaceProxyPlugin } from './cloud/marketplace-proxy-plugin.js';
 export type { MarketplaceProxyPluginConfig } from './cloud/marketplace-proxy-plugin.js';
+export { MarketplaceInstallLocalPlugin } from './cloud/marketplace-install-local-plugin.js';
+export type { MarketplaceInstallLocalPluginConfig } from './cloud/marketplace-install-local-plugin.js';
 export { ArtifactApiClient } from './cloud/artifact-api-client.js';
 export type {
     ArtifactApiClientConfig,

@@ -829,9 +829,18 @@ export default class Serve extends Command {
           && cloudUrlForMarketplace.toLowerCase() !== 'off') {
         try {
           const runtimePkg = '@objectstack/runtime';
-          const { MarketplaceProxyPlugin } = await import(/* webpackIgnore: true */ runtimePkg);
+          const { MarketplaceProxyPlugin, MarketplaceInstallLocalPlugin } = await import(/* webpackIgnore: true */ runtimePkg);
           await kernel.use(new MarketplaceProxyPlugin({ controlPlaneUrl: cloudUrlForMarketplace }));
           trackPlugin('MarketplaceProxy');
+          // Pair the catalog proxy with the install-local handler. The two
+          // share the same /api/v1/marketplace prefix; the proxy delegates
+          // /install-local to this plugin (see proxy `next()` check).
+          try {
+            await kernel.use(new MarketplaceInstallLocalPlugin({ controlPlaneUrl: cloudUrlForMarketplace }));
+            trackPlugin('MarketplaceInstallLocal');
+          } catch (err: any) {
+            console.warn(chalk.yellow(`  ⚠ MarketplaceInstallLocalPlugin auto-inject failed: ${err?.message ?? err}`));
+          }
         } catch (err: any) {
           console.warn(chalk.yellow(`  ⚠ MarketplaceProxyPlugin auto-inject failed: ${err?.message ?? err}`));
         }

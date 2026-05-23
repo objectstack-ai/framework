@@ -70,7 +70,7 @@ export class MarketplaceProxyPlugin implements Plugin {
             const rawApp = httpServer.getRawApp();
             const cloudUrl = this.cloudUrl;
 
-            const handler = async (c: any) => {
+            const handler = async (c: any, next: any) => {
                 if (!cloudUrl) {
                     return c.json({
                         success: false,
@@ -82,6 +82,13 @@ export class MarketplaceProxyPlugin implements Plugin {
                 }
                 try {
                     const incomingUrl = new URL(c.req.url);
+                    // Do NOT proxy install-local — those are owned by
+                    // MarketplaceInstallLocalPlugin and must hit this
+                    // runtime, never cloud. Pass through so Hono can match
+                    // the install-local route registered on the same app.
+                    if (incomingUrl.pathname.startsWith(`${MARKETPLACE_PREFIX}/install-local`)) {
+                        return next();
+                    }
                     // Preserve the full /api/v1/marketplace/... path on cloud.
                     const target = `${cloudUrl}${incomingUrl.pathname}${incomingUrl.search}`;
 
