@@ -251,7 +251,16 @@ export function FlowViewer({ metadataName, data, packageId }: MetadataViewerProp
                           {e.source} <span className="text-muted-foreground">→</span> {e.target}
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground break-all">
-                          {e.condition ?? '—'}
+                          {(() => {
+                            const c = e.condition;
+                            if (c == null) return '—';
+                            if (typeof c === 'string') return c;
+                            if (typeof c === 'object' && 'source' in c) {
+                              const src = (c as { source?: unknown }).source;
+                              return typeof src === 'string' ? src : JSON.stringify(c);
+                            }
+                            return JSON.stringify(c);
+                          })()}
                         </TableCell>
                         <TableCell className="text-xs">{e.isDefault ? '✓' : '—'}</TableCell>
                       </TableRow>
