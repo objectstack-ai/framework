@@ -71,7 +71,7 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
+      <SidebarHeader className="border-b">
         <SidebarMenu>
           <SidebarMenuItem>
             <CollapseButton />
@@ -121,13 +121,14 @@ function CollapseButton() {
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
   return (
     <SidebarMenuButton
+      size="sm"
       onClick={toggleSidebar}
       tooltip={collapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)'}
       aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      className="text-muted-foreground hover:text-foreground"
+      className="h-7 text-muted-foreground hover:text-foreground"
     >
       <Icon className="size-4" />
-      <span>{collapsed ? 'Expand' : 'Collapse'}</span>
+      <span className="text-xs">{collapsed ? 'Expand' : 'Collapse'}</span>
     </SidebarMenuButton>
   );
 }
