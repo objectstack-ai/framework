@@ -127,6 +127,28 @@ export const SETUP_APP: App = {
       ],
     },
     {
+      id: 'group_integrations',
+      type: 'group',
+      label: 'Integrations',
+      icon: 'plug',
+      children: [
+        // Outbound HTTP integrations. `sys_webhook` always ships with
+        // platform-objects, so the Webhooks entry is always visible.
+        // `sys_webhook_delivery` is the durable outbox row from
+        // `@objectstack/plugin-webhooks/schema` — gated on `requiresObject`
+        // so the Deliveries entry only renders when the plugin has been
+        // wired into `defineStack({ objects: [SysWebhookDelivery, ...] })`.
+        //
+        // This is the canonical demonstration of "everything is an object":
+        // managing webhooks (configuration) and inspecting deliveries
+        // (operational telemetry) reuses the same generic ObjectView /
+        // ObjectListView UI as any business object — no bespoke webhook
+        // admin page.
+        { id: 'nav_webhooks', type: 'object', label: 'Webhooks', objectName: 'sys_webhook', icon: 'webhook' },
+        { id: 'nav_webhook_deliveries', type: 'object', label: 'Webhook Deliveries', objectName: 'sys_webhook_delivery', icon: 'send', requiresObject: 'sys_webhook_delivery' },
+      ],
+    },
+    {
       id: 'group_advanced',
       type: 'group',
       label: 'Advanced',

@@ -29,6 +29,8 @@ import {
   SysMetadataHistoryObject,
 } from './metadata/index.js';
 import { SysSetting } from './system/index.js';
+import { SETUP_APP } from './apps/index.js';
+import { AppSchema } from '@objectstack/spec/ui';
 
 const systemObjects = [
   ['SysUser', SysUser, 'sys_user'],
@@ -128,6 +130,26 @@ describe('@objectstack/platform-objects', () => {
       expect(wildcard.allowCreate).toBe(false);
       expect(wildcard.allowEdit).toBe(false);
       expect(wildcard.allowDelete).toBe(false);
+    });
+  });
+
+  describe('SETUP_APP', () => {
+    it('parses cleanly through AppSchema', () => {
+      expect(() => AppSchema.parse(SETUP_APP)).not.toThrow();
+    });
+
+    it('exposes an Integrations group with Webhooks + Webhook Deliveries', () => {
+      const group = SETUP_APP.navigation?.find((n) => n.id === 'group_integrations');
+      expect(group).toBeDefined();
+      expect(group?.type).toBe('group');
+      const children = (group as { children?: Array<{ id: string; objectName?: string; requiresObject?: string }> }).children ?? [];
+      const webhooks = children.find((c) => c.id === 'nav_webhooks');
+      const deliveries = children.find((c) => c.id === 'nav_webhook_deliveries');
+      expect(webhooks?.objectName).toBe('sys_webhook');
+      expect(deliveries?.objectName).toBe('sys_webhook_delivery');
+      // Deliveries schema is plugin-owned, so the nav entry must
+      // gracefully hide when the plugin isn't installed.
+      expect(deliveries?.requiresObject).toBe('sys_webhook_delivery');
     });
   });
 });
