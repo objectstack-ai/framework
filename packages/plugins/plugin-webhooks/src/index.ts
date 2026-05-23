@@ -29,6 +29,11 @@ export {
 
 export { WebhookDispatcher, type DispatcherOptions } from './dispatcher.js';
 export { MemoryWebhookOutbox } from './memory-outbox.js';
+export { AutoEnqueuer, type AutoEnqueuerOptions } from './auto-enqueuer.js';
+export {
+    DeliveryRetentionSweeper,
+    type DeliveryRetentionOptions,
+} from './retention.js';
 export { hashPartition } from './partition.js';
 export {
     sendOnce,
