@@ -1,0 +1,556 @@
+---
+title: Webhook Delivery
+description: How ObjectStack reliably ships outbound HTTP notifications — from event to receiver — with at-least-once guarantees, signed payloads, and observable retries.
+---
+
+# Webhook Delivery
+
+> **Status:** Accepted · **Audience:** Plugin authors, runtime engineers,
+> integration partners
+>
+> **TL;DR** — Webhooks are the lingua franca of SaaS integration. ObjectStack
+> already defines a `Webhook` config schema; this document defines the
+> **delivery runtime** that turns config into actual HTTP requests reaching
+> external systems — durably, with signatures, with retries, and safely
+> across a cluster. Builds directly on the cluster primitives from
+> `cluster-semantics.mdx`.
+
+## 1. Why this document exists
+
+The protocol already has `WebhookSchema` in `automation/webhook.zod.ts`
+(URL, method, headers, retry policy, secret, triggers). That schema
+describes a **configuration** — what a user wants to happen — but says
+nothing about the **runtime** that makes it happen. Today there is no
+single answer to:
+
+- When `account` is updated on Node A, does Node B's webhook config
+  fire? Or only Node A's?
+- If the receiver returns 502, who retries? After how long? How many
+  times?
+- If we crash mid-delivery, does the customer receive 0, 1, or 2 copies?
+- How does the receiver know the request really came from us and not
+  from an attacker spoofing our hostname?
+- If 1,000 webhooks fire from a bulk import, do they all hit the
+  external system in 200ms (and get rate-limited away), or do we shape
+  the traffic?
+
+These are not optional features — every production webhook implementation
+in the industry (Stripe, GitHub, Slack, Shopify) had to answer them. We
+codify the answers here so plugin authors and integration partners can
+rely on a stable contract.
+
+## 2. Design principles
+
+**P1 — At-least-once, never at-most-once.** Receivers MUST be prepared
+for duplicates. We never silently drop a delivery, but we also never
+guarantee uniqueness — that requires receiver-side idempotency keys, which
+we provide but cannot enforce.
+
+**P2 — Durable before fast.** Every delivery is persisted before it is
+attempted. A node crash mid-flight loses at most the in-flight HTTP
+attempt; the next node picks the row up from the queue.
+
+**P3 — Signed by default.** Every outbound request carries a signature
+the receiver can verify with a shared secret. Customers can detect
+spoofing without writing custom auth.
+
+**P4 — Safe egress.** The dispatcher refuses to send to localhost,
+private IP ranges, or the metadata endpoints of common cloud providers
+unless the operator explicitly allowlists them. Webhooks are a textbook
+SSRF vector; the runtime defends against it.
+
+**P5 — Observable.** Every delivery attempt is visible to the owner of
+the webhook: status, response code, latency, retry schedule, manual
+redelivery. The Studio surfaces this without custom UI code by reusing
+the standard object/view machinery.
+
+## 3. Data model
+
+Two persisted objects underpin the runtime. Both are defined as
+ObjectStack `defineObject()` schemas so they participate in CRUD,
+permissions, audit, and Studio UI without bespoke code.
+
+### 3.1 `sys_webhook`
+
+The subscription record. One row per "I want to receive events of type X
+at URL Y". Replaces the in-memory `WebhookSchema` for runtime use; the
+static config schema remains for `defineStack({ integrations })`-style
+declarative wiring.
+
+| Field              | Type                  | Notes                                                      |
+|--------------------|-----------------------|------------------------------------------------------------|
+| `id`               | uuid                  | Primary key.                                               |
+| `owner_org_id`     | string                | Tenant / org owning the subscription. Required.            |
+| `name`             | snake_case identifier | Human-friendly name for the subscription.                  |
+| `url`              | URL                   | Destination. Validated against egress allowlist on save.   |
+| `events`           | string[]              | Event-type globs: `account.*`, `*.created`, `*`.           |
+| `object_filter`    | string[] ?            | Optional object-name allowlist (`['account','contact']`).  |
+| `headers`          | record\<string,string\> ? | Custom headers (no `authorization` — use `secret`).        |
+| `secret_encrypted` | string                | Encrypted shared secret. Never returned via API in clear.  |
+| `secret_hint`      | string                | Last 4 chars of secret for UI display (`whsec_…1234`).     |
+| `retry_policy`     | json                  | `{ maxAttempts, initialDelayMs, maxDelayMs, backoff }`.    |
+| `timeout_ms`       | int                   | Per-attempt timeout. Default 30s.                          |
+| `enabled`          | boolean               | Soft toggle; disables delivery without losing history.     |
+| `created_by`       | string                | User id of creator.                                        |
+| `created_at`       | timestamp             | Standard audit columns.                                    |
+| `updated_at`       | timestamp             |                                                            |
+
+### 3.2 `sys_webhook_delivery`
+
+The outbox + audit. One row per attempt-cycle. Persisted **before** any
+HTTP call; updated after each attempt. This table is the durability
+boundary — if it has a `pending` row, the dispatcher will eventually
+deliver it.
+
+| Field            | Type                  | Notes                                                  |
+|------------------|-----------------------|--------------------------------------------------------|
+| `id`             | uuid                  | Primary key. Also used as the receiver-side idempotency key. |
+| `webhook_id`     | uuid                  | FK → `sys_webhook`.                                    |
+| `event_id`       | string                | Origin event id (correlation across deliveries).       |
+| `event_type`     | string                | E.g. `account.updated`.                                |
+| `payload`        | json                  | The full payload that will be POSTed.                  |
+| `status`         | enum                  | `pending` / `in_flight` / `success` / `failed` / `dead`. |
+| `attempts`       | int                   | Count of HTTP requests issued.                         |
+| `claimed_by`     | string ?              | Node id holding the row (NULL when not in flight).     |
+| `claimed_at`     | timestamp ?           | When the claim was taken.                              |
+| `next_retry_at`  | timestamp ?           | When the next retry is eligible. NULL once dead.       |
+| `last_attempted_at` | timestamp ?        | Most recent attempt start.                             |
+| `response_code`  | int ?                 | Last HTTP status code received.                        |
+| `response_headers` | json ?              | Truncated to first ~4 KB.                              |
+| `response_body`  | text ?                | Truncated to first ~16 KB.                             |
+| `duration_ms`    | int ?                 | Last attempt round-trip.                               |
+| `error`          | text ?                | Last transport-level error (DNS, connect, timeout).    |
+| `created_at`     | timestamp             |                                                        |
+| `updated_at`     | timestamp             |                                                        |
+
+> **Why store full payload?** Receivers may be down for hours; we must
+> retry the *exact* bytes we promised to send. Recomputing payload from
+> source data risks drift if the underlying record changed.
+
+## 4. The delivery pipeline
+
+Five stages, each implemented as a thin layer over an existing primitive.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Event   eventBus.emit('data:account:updated', payload,       │
+│            { scope: 'cluster', deliverySemantics: 'at-least-    │
+│              once', partitionKey: payload.id })                 │
+└──────────────────────────┬──────────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Match   subscriber filters sys_webhook by events[]/object,   │
+│            multiplies one event into N delivery rows            │
+└──────────────────────────┬──────────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Persist INSERT sys_webhook_delivery (status=pending)         │
+│            ── this is the durability boundary ──                │
+└──────────────────────────┬──────────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Dispatch  worker claims with                                 │
+│              SELECT … FOR UPDATE SKIP LOCKED LIMIT N;           │
+│              issues POST; writes back result                    │
+└──────────────────────────┬──────────────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Retry   on failure: compute next_retry_at = now + backoff,   │
+│            status=pending. on terminal failure: status=dead.    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 4.1 Stage 1 — Event emission
+
+Producers (CRUD handlers, flow nodes, manual API triggers) emit a
+**cluster-scoped, at-least-once** event with the record id as
+`partitionKey`. These three settings together guarantee:
+
+- Every node sees the event (subscribers may live anywhere).
+- Even on producer crash mid-emit, the event survives.
+- Two rapid updates to the same record arrive at the subscriber
+  in order, so no "stale → fresh → stale" replay reaches the receiver.
+
+### 4.2 Stage 2 — Matching
+
+The subscriber is a single cluster-wide service
+(`clusterScope: 'cluster', leaderStrategy: 'idempotent-broadcast'` —
+running on every node is fine because the INSERT in stage 3 is keyed by
+`(event_id, webhook_id)` UNIQUE, so duplicates collapse).
+
+For each incoming event the subscriber:
+
+1. Loads `sys_webhook` rows where `enabled = true` AND
+   `(events globs match event_type)` AND
+   `(object_filter is NULL OR object_filter contains event.object)`.
+2. For each match, builds the canonical payload (§5).
+3. Inserts a `sys_webhook_delivery` row.
+
+### 4.3 Stage 3 — Persist
+
+A single `INSERT … ON CONFLICT DO NOTHING` per match. The
+`(event_id, webhook_id)` uniqueness constraint absorbs duplicate event
+deliveries from `at-least-once` semantics. After this stage the event
+producer is no longer involved; the rest is the dispatcher's problem.
+
+### 4.4 Stage 4 — Dispatcher worker
+
+The dispatcher is a `cluster`-scoped service with
+`leaderStrategy: 'partitioned'`. Each node owns a hash-partition of
+`webhook_id`s, so the same webhook's deliveries always land on the same
+node — useful for per-receiver rate limiting and connection reuse.
+
+Loop body, run every 250ms on each node:
+
+```sql
+UPDATE sys_webhook_delivery
+SET status = 'in_flight',
+    claimed_by = $node_id,
+    claimed_at = now(),
+    attempts = attempts + 1,
+    last_attempted_at = now()
+WHERE id IN (
+  SELECT id FROM sys_webhook_delivery
+  WHERE status = 'pending'
+    AND (next_retry_at IS NULL OR next_retry_at <= now())
+    AND hashtext(webhook_id::text) % $partition_count = $partition_index
+  ORDER BY next_retry_at NULLS FIRST
+  LIMIT $batch_size
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING *;
+```
+
+`FOR UPDATE SKIP LOCKED` is the single mechanism that prevents two
+nodes from delivering the same row. It is provided by Postgres natively
+and emulated in the SQL driver layer for other engines.
+
+After each HTTP attempt the row is updated with the result. If the
+request succeeded (2xx), `status = 'success'`. Otherwise `status` returns
+to `pending` (with bumped `next_retry_at`) or, if `attempts >=
+retry_policy.maxAttempts`, becomes `dead`.
+
+### 4.5 Stage 5 — Retry backoff
+
+The default retry policy is:
+
+| Attempt | Delay from previous |
+|---------|---------------------|
+| 1       | immediate           |
+| 2       | 1s                  |
+| 3       | 10s                 |
+| 4       | 1m                  |
+| 5       | 10m                 |
+| 6       | 1h                  |
+| 7       | 6h                  |
+| 8       | 24h, then `dead`    |
+
+This matches Stripe's published schedule almost exactly and gives ~1.5
+days of recovery window — enough for receivers to come back from
+weekend-long outages without manual intervention.
+
+Each delay is multiplied by a jitter factor uniformly distributed in
+`[0.8, 1.2]` to avoid retry stampedes when many receivers recover at the
+same time.
+
+## 5. Payload format
+
+Stable across versions. Receivers parse it once and never need to change
+their parser when we add new event types.
+
+```json
+{
+  "id": "evt_01HXXXXXXXXXXXXXX",
+  "type": "account.updated",
+  "created": 1730000000,
+  "api_version": "2026-05-23",
+  "object": "account",
+  "tenant_id": "tnt_abc",
+  "data": {
+    "current":  { "id": "acc_123", "name": "Acme Inc.", ... },
+    "previous": { "id": "acc_123", "name": "Acme Co.",  ... }
+  },
+  "actor": {
+    "type": "user",
+    "id":   "usr_456",
+    "label":"Jane Doe"
+  },
+  "context": {
+    "request_id":  "req_789",
+    "correlation_id": "corr_abc",
+    "project_id":  "proj_xyz",
+    "environment": "production"
+  }
+}
+```
+
+Notes:
+
+- **`id`** — globally unique event id. Also the `sys_webhook_delivery.id`
+  for this attempt; receivers use it as their idempotency key.
+- **`type`** — dotted `{object}.{operation}`. Stable enum; new types are
+  additive.
+- **`api_version`** — calendar versioning (`YYYY-MM-DD`). Webhook
+  subscriptions can pin a version so payload-shape changes are opt-in,
+  not forced.
+- **`data.previous`** — present on `updated` events; `null` elsewhere.
+- **`actor`** — distinguishes user-initiated changes from system /
+  flow / agent / API-key origins.
+- **`context.request_id`** — links the webhook back to the originating
+  REST call in audit logs and traces.
+
+## 6. Signing & verification
+
+Adapted from Stripe's signing scheme. Industry standard, well-documented
+on the receiver side, includes replay protection.
+
+### 6.1 Outbound header
+
+```
+X-ObjectStack-Signature:
+  t=1730000000,
+  v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
+```
+
+Where:
+
+- `t` is the Unix timestamp (seconds) when the signature was generated.
+- `v1` is `HEX( HMAC-SHA256( webhook.secret, "{t}.{request_body}" ) )`.
+
+The `v` prefix (here `v1`) is a version marker — future signature
+schemes (e.g. SHA-3, Ed25519) ship as `v2=…`, `v3=…` and may be sent
+alongside `v1` during transitions.
+
+### 6.2 Receiver-side verification
+
+Receivers MUST:
+
+1. Read `t` and `v1` from the header.
+2. Reject the request if `abs(now - t) > 300` (5 minutes — replay window).
+3. Recompute `HMAC-SHA256(secret, "{t}.{raw_body}")` over the raw request
+   body bytes (no JSON re-encode — whitespace matters).
+4. Compare with `v1` in **constant time** (e.g. `hmac.compare_digest`).
+5. Reject if not equal.
+
+A reference verifier in TypeScript, Python, and Go ships in the
+documentation site under `guides/webhook-receivers/`.
+
+### 6.3 Secret rotation
+
+`POST /api/v1/webhooks/:id/rotate` generates a new secret, returns it
+**once** in the response, and stores both old and new for a 24-hour
+grace period. During grace, outbound requests are signed with the new
+secret but the API returns the old secret's `secret_hint` so customers
+can identify which secret was active when a delivery was made.
+
+## 7. Egress safety (SSRF defence)
+
+Webhooks are a textbook SSRF vector: an internal user can point a webhook
+at `http://169.254.169.254/latest/meta-data/` and exfiltrate cloud
+credentials through the response body in `sys_webhook_delivery`. The
+runtime defends in three layers.
+
+### 7.1 URL validation at save time
+
+`sys_webhook.url` is validated against a blocklist on insert/update:
+
+- Reject `localhost`, `127.0.0.0/8`, `::1`.
+- Reject RFC 1918 private ranges (`10.0.0.0/8`, `172.16.0.0/12`,
+  `192.168.0.0/16`) unless `cluster.egress.allowPrivate = true`.
+- Reject link-local (`169.254.0.0/16`) and cloud-metadata IPs
+  (`169.254.169.254` AWS/Azure/GCP, `100.100.100.200` Alibaba) **always**.
+- Reject schemes other than `https://` in production; `http://` allowed
+  only when `runtime.mode === 'development'`.
+
+### 7.2 DNS-time re-validation
+
+DNS responses are re-checked at request time, not just at save time, to
+defeat DNS rebinding attacks. Resolved IPs that fall in a blocked range
+abort the request with `status = failed, error = 'dns_rebound'`.
+
+### 7.3 Response body capping
+
+`response_body` is truncated to 16 KB before persistence. This bounds
+the worst-case exfiltration even if the URL slips through validation —
+an attacker cannot pull megabytes of internal data through a single
+delivery row.
+
+## 8. REST surface
+
+All endpoints under `/api/v1/webhooks/`. CRUD comes for free from the
+`sys_webhook` object; the table below lists the dispatcher-specific
+extensions.
+
+| Method | Path                                          | Purpose                                                |
+|--------|-----------------------------------------------|--------------------------------------------------------|
+| GET    | `/webhooks`                                   | List subscriptions for the current org.                |
+| POST   | `/webhooks`                                   | Create. Server generates `secret`, returns it **once**. |
+| GET    | `/webhooks/:id`                               | Read. `secret` is never returned — only `secret_hint`. |
+| PATCH  | `/webhooks/:id`                               | Update url / events / filters / retry policy.          |
+| DELETE | `/webhooks/:id`                               | Delete. Pending deliveries are cancelled.              |
+| POST   | `/webhooks/:id/test`                          | Send a synthetic payload to verify connectivity.       |
+| POST   | `/webhooks/:id/rotate`                        | Rotate the signing secret (24h grace).                 |
+| GET    | `/webhooks/:id/deliveries`                    | Paginated delivery history with filters.               |
+| GET    | `/webhooks/:id/deliveries/:delivery_id`       | Full request/response for one attempt-cycle.           |
+| POST   | `/webhooks/:id/deliveries/:delivery_id/redeliver` | Re-queue a previously failed/dead delivery.        |
+
+The CRUD endpoints are auto-generated from the `sys_webhook` object
+schema; only the last five require custom handlers in `plugin-webhooks`.
+
+## 9. Concurrency & rate-limiting
+
+Each dispatcher partition runs at most `maxConcurrency` (default 16) HTTP
+requests in flight. Beyond that, claimed rows wait in an in-memory
+queue. This caps per-node outbound load.
+
+For per-receiver rate limiting (some receivers like Slack publish strict
+limits), the dispatcher tracks `requests_in_last_second` per
+`hostname(url)` and delays further requests to that host with the same
+exponential backoff used for retries. This shields well-behaved
+receivers from being driven into 429s by our bulk traffic.
+
+## 10. Observability
+
+Three views into the runtime:
+
+1. **`sys_webhook_delivery` table** — the source of truth. Standard
+   ObjectStack list/detail views show status, latency, response, retry
+   schedule. Studio surfaces this under the webhook's detail page.
+2. **OpenTelemetry spans** — every dispatch attempt opens a span with
+   `webhook.id`, `webhook.event_type`, `webhook.attempt`,
+   `http.url`, `http.status_code`. Spans link to the parent request via
+   `context.correlation_id` so a webhook delivery can be traced back to
+   the user click that produced the event.
+3. **Prometheus metrics** — exposed by the dispatcher:
+   - `webhook_deliveries_total{status}` counter
+   - `webhook_delivery_duration_ms` histogram
+   - `webhook_queue_depth{partition}` gauge
+   - `webhook_dead_total{webhook_id}` counter (alertable)
+
+## 11. Multi-tenancy
+
+Every `sys_webhook` row is owned by an `owner_org_id`. The protocol
+enforces:
+
+- **Read isolation** — users can only see webhooks belonging to orgs
+  they have membership in. Enforced by the standard RBAC layer.
+- **Egress isolation** — when `cluster.tenantIsolation = 'channel-prefix'`,
+  dispatcher partitioning includes `(org_id, webhook_id)` so one tenant's
+  bulk import cannot starve another tenant's webhook throughput on the
+  same node.
+- **Quota** — `sys_webhook.retry_policy.maxAttempts` is capped by the
+  tenant plan; free plans get `maxAttempts ≤ 3`, paid plans up to 12.
+
+## 12. Failure modes & guarantees
+
+A precise table of what the runtime promises and what it does not.
+
+| Failure                                  | Guarantee                                                   |
+|------------------------------------------|-------------------------------------------------------------|
+| Producer node crashes mid-emit           | Event durably in transport bus (at-least-once), redelivered on producer restart. |
+| Subscriber node crashes after persist    | Row exists in `sys_webhook_delivery`, another node picks it up. |
+| Dispatcher node crashes mid-HTTP         | Row stays `in_flight` with `claimed_by`; reaper re-pends it after `claim_ttl` (default 60s). |
+| Receiver returns 5xx                     | Retry per backoff schedule until `maxAttempts`.             |
+| Receiver returns 4xx                     | Treated as terminal — no retry, status `dead` immediately. Exception: 408 / 429 are retried. |
+| Receiver returns 2xx                     | `status = success`, no more attempts.                       |
+| DNS / connect / TLS error                | Treated as 5xx — retry per backoff.                         |
+| Timeout (per-attempt)                    | Treated as 5xx — retry per backoff.                         |
+| Network partition between dispatcher and DB | Worker pauses; row stays `pending`. On reconnect, normal claim resumes. |
+| Two events for the same record arrive out of order | `partitionKey` ordering at the event bus prevents this. Receiver still sees deliveries in emit order. |
+| Duplicate delivery (at-least-once)       | Receiver gets the same `evt_…` id twice. Must dedupe — we provide the key, can't enforce. |
+
+## 13. Plugin location & layering
+
+```
+packages/plugins/plugin-webhooks/
+├── src/
+│   ├── plugin.ts              # lifecycle hooks (onEnable wires subscriber + dispatcher)
+│   ├── objects/
+│   │   ├── sys_webhook.ts            # defineObject() — schema, RBAC, indexes
+│   │   └── sys_webhook_delivery.ts   # defineObject() — schema, RBAC, indexes
+│   ├── subscriber.ts          # EventBus subscriber → INSERT pending rows
+│   ├── dispatcher.ts          # cluster-scoped service, partitioned, drains queue
+│   ├── signer.ts              # HMAC-SHA256 signing, version v1
+│   ├── egress.ts              # URL validation + DNS re-check + cap
+│   ├── reaper.ts              # cluster-singleton leader-elected: reclaim stuck in_flight rows
+│   └── rest/
+│       ├── test.ts            # POST /webhooks/:id/test
+│       ├── rotate.ts          # POST /webhooks/:id/rotate
+│       ├── deliveries.ts      # GET /webhooks/:id/deliveries
+│       └── redeliver.ts       # POST /webhooks/:id/deliveries/:did/redeliver
+└── test/
+    └── …
+```
+
+The plugin depends on:
+
+- `@objectstack/spec` for `WebhookSchema` (existing) and cluster
+  primitives (new in `cluster-semantics.mdx`).
+- `service-cluster` for `pubsub` / `lock` / `kv`.
+- `service-queue` (optional) — if present, the dispatcher delegates queue
+  storage to it; if absent, it uses the `sys_webhook_delivery` table
+  directly with `FOR UPDATE SKIP LOCKED`.
+
+## 14. Industry alignment
+
+Every design choice matches one or more established systems:
+
+- **Stripe webhooks** — signing scheme (`t=…,v1=…`), 5-minute replay
+  window, retry schedule shape, signed-secret rotation.
+- **GitHub webhooks** — event-type globs, redelivery UI, per-delivery
+  detail page with request/response bytes.
+- **Shopify webhooks** — HMAC-SHA256 header, `X-Shopify-Topic` event
+  hint (we use `type` in payload instead — simpler).
+- **AWS EventBridge / SQS** — at-least-once durability, dead-letter
+  queue model (our `status = dead`).
+- **Kubernetes admission webhooks** — egress validation and TLS-only
+  enforcement.
+
+## 15. Migration plan
+
+Three phases. Each phase delivers visible user value.
+
+### Phase 1 — Spec (~1 day)
+
+1. `system/webhook-delivery.zod.ts` (new) — `SysWebhookSchema`,
+   `SysWebhookDeliverySchema`, `WebhookSignatureHeaderSchema`,
+   `WebhookEventPayloadSchema`. These are persistence schemas distinct
+   from the existing `automation/webhook.zod.ts` config schema.
+2. Documentation cross-links between the two ("static config" vs
+   "runtime subscription").
+
+### Phase 2 — Plugin skeleton + memory dispatcher (~2 days)
+
+- `plugin-webhooks` package with the object definitions wired.
+- In-process dispatcher using `service-cluster` memory driver.
+- Sign + verify + egress safety + retry backoff working.
+- Manual `POST /webhooks/:id/test` proves the path end-to-end.
+
+### Phase 3 — Production dispatcher (~2 days)
+
+- `FOR UPDATE SKIP LOCKED` claim loop (Postgres driver).
+- Reaper for stuck `in_flight` rows.
+- Partitioned cluster scope.
+- Prometheus metrics + OTel spans.
+- Studio UI: deliveries list, detail drawer, redeliver button (reuses
+  existing object/view machinery — zero custom React).
+
+### Phase 4 — Hardening (opportunistic)
+
+- Per-receiver rate limiting.
+- Webhook receiver reference verifiers (TS / Python / Go) in docs.
+- Bulk-import shaping (dispatcher slows when queue depth > threshold).
+
+## 16. Non-goals (v1)
+
+- **Inbound webhooks.** Receiving HTTP from third parties is a separate
+  protocol (`WebhookReceiverSchema` already exists). The two systems
+  share no runtime.
+- **Webhook chaining / fan-in.** No "if receiver returns a payload,
+  emit a new event". Out of scope.
+- **GraphQL subscriptions / WebSocket fan-out.** Different transport,
+  different durability model, separate ADR.
+- **Stream / batch deliveries.** Each event is one HTTP request. Batching
+  is a future enhancement.
+- **Custom payload templates.** v1 ships one canonical payload format
+  (§5). Per-webhook templates are a future feature.
