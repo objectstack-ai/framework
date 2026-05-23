@@ -9,17 +9,29 @@ introduced the first real **metadata-as-code write loop**.
 
 **New capabilities:**
 
-- **Dev-only write API** (`@objectstack/cli`): mounts
-  `POST /_studio/api/metadata/file` and `GET /_studio/api/metadata/layout`
+- **Dev-only write API** (`@objectstack/cli`): mounts three endpoints
   under the same Hono app that serves Studio. Whitelisted to
   project-relative paths under a `src/` directory with `.ts/.tsx/.json`
   extensions; rejects path traversal, absolute paths, existing files
   (unless `mode: 'overwrite'`). Only registered when `isDev === true`.
+    - `GET  /_studio/api/metadata/layout`         — resolves on-disk srcRoot.
+    - `POST /_studio/api/metadata/file`           — write whole new file.
+    - `POST /_studio/api/metadata/field-patch`    — ts-morph powered
+      surgery on a single field inside `ObjectSchema.create({...})` /
+      `defineObject({...})`. Handles `Field.X({...})` and
+      `Field.lookup('rel', {...})` shapes; treats `null` / `''` / `false`
+      as "remove this property" so source stays minimal.
 - **"Create file" button** in `CreateMetadataDialog`: clicking now
   scaffolds a real file on disk and lets HMR reload the runtime.
   `Copy snippet` remains as a fallback for production hosts.
-- **Layout discovery**: the dialog probes the host for the on-disk
-  source root, so it works equally for single-app projects
+- **"Save" button** in `FieldDetailDrawer`: the three inline-edited
+  properties (label / description / required) now persist directly to
+  the parent `.object.ts` file via the field-patch endpoint. Shows
+  "Saving…" spinner, success toast, and exits edit mode on success.
+  Falls back to Copy snippet when the host doesn't expose the dev
+  write API.
+- **Layout discovery**: dialogs and drawers probe the host for the
+  on-disk source root, so they work equally for single-app projects
   (`<cwd>/src/...`) and monorepo packages (`packages/<id>/src/...`).
 
 **UX polish (carried over earlier in the iteration):**

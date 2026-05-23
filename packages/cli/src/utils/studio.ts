@@ -452,6 +452,46 @@ export function createStudioWriteApiPlugin(cwd: string, options: { isDev: boolea
       });
 
       ctx.logger?.info?.(`Studio write API mounted at ${STUDIO_PATH}/api/metadata/* (dev mode)`);
+
+      app.post(`${STUDIO_PATH}/api/metadata/field-patch`, async (c: any) => {
+        let body: any;
+        try { body = await c.req.json(); } catch {
+          return respond(c, 400, { ok: false, error: 'invalid json body' });
+        }
+        const rel = typeof body?.path === 'string' ? body.path : '';
+        const fieldKey = typeof body?.field === 'string' ? body.field : '';
+        const patch = body?.patch && typeof body.patch === 'object' ? body.patch : null;
+        if (!rel || !fieldKey || !patch) {
+          return respond(c, 400, { ok: false, error: 'path, field and patch are required' });
+        }
+        if (path.isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {
+          return respond(c, 400, { ok: false, error: 'path must be a project-relative path without `..`' });
+        }
+        if (path.extname(rel).toLowerCase() !== '.ts') {
+          return respond(c, 400, { ok: false, error: 'field-patch only supports .ts files' });
+        }
+        const abs = path.resolve(projectRoot, rel);
+        if (!abs.startsWith(projectRoot + path.sep)) {
+          return respond(c, 400, { ok: false, error: 'path escapes project root' });
+        }
+        if (!path.relative(projectRoot, abs).split(path.sep).includes('src')) {
+          return respond(c, 400, { ok: false, error: 'path must live under a src/ directory' });
+        }
+        if (!fs.existsSync(abs)) {
+          return respond(c, 404, { ok: false, error: 'file not found' });
+        }
+
+        try {
+          const { patchObjectFieldFile } = await import('./studio-field-patch.js');
+          const result = await patchObjectFieldFile(abs, fieldKey, patch);
+          if (!result.ok) return respond(c, 400, result);
+          ctx.logger?.info?.(`Studio field-patch: ${rel} field=${fieldKey} keys=${Object.keys(patch).join(',')}`);
+          return respond(c, 200, { ok: true, path: rel, field: fieldKey });
+        } catch (err: any) {
+          ctx.logger?.error?.(`Studio field-patch failed: ${err?.message}`);
+          return respond(c, 500, { ok: false, error: err?.message ?? String(err) });
+        }
+      });
     },
   };
 }

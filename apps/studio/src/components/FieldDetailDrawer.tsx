@@ -34,7 +34,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Copy, ExternalLink, Check, Pencil } from 'lucide-react';
+import { Copy, ExternalLink, Check, Pencil, Save } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export interface FieldSpec {
@@ -85,6 +85,30 @@ function fieldSnippet(field: FieldSpec): string {
 export function FieldDetailDrawer({ field, objectName, packageId, onClose }: FieldDetailDrawerProps) {
   const [copied, setCopied] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [srcRoot, setSrcRoot] = useState<string | null>(null);
+
+  // Probe the host once when a field opens to learn the on-disk
+  // srcRoot. If the host doesn't expose the dev write API the probe
+  // returns null and we hide the Save button.
+  useEffect(() => {
+    if (!field) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = packageId && packageId !== 'all'
+          ? `/_studio/api/metadata/layout?package=${encodeURIComponent(packageId)}`
+          : '/_studio/api/metadata/layout';
+        const resp = await fetch(url);
+        if (!resp.ok) { if (!cancelled) setSrcRoot(null); return; }
+        const data = await resp.json().catch(() => null);
+        if (!cancelled) setSrcRoot(data?.srcRoot ?? null);
+      } catch {
+        if (!cancelled) setSrcRoot(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [field, packageId]);
 
   // Local editable mirrors of the three most-tweaked properties.
   // We keep them as local state so edits are debounce-free; the original
@@ -144,6 +168,49 @@ export function FieldDetailDrawer({ field, objectName, packageId, onClose }: Fie
       toast({ title: 'Clipboard unavailable', variant: 'destructive' as any });
     }
   }, [effectiveField, dirty]);
+
+  const canSave = srcRoot != null && dirty && field != null;
+
+  const saveEdits = useCallback(async () => {
+    if (!canSave || !field) return;
+    setSaving(true);
+    try {
+      const filePath = `${srcRoot}/objects/${objectName}.object.ts`;
+      // Send only the keys that actually changed so we never clobber
+      // an unrelated property the user didn't touch in the UI.
+      const patch: Record<string, unknown> = {};
+      if (editLabel !== (field.label ?? '')) patch.label = editLabel || null;
+      if (editDescription !== ((field.description as string) ?? '')) patch.description = editDescription || null;
+      if (editRequired !== Boolean(field.required)) patch.required = editRequired;
+      const resp = await fetch('/_studio/api/metadata/field-patch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: filePath, field: field.name, patch }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data?.ok) {
+        toast({
+          title: 'Save failed',
+          description: data?.error ?? `HTTP ${resp.status}`,
+          variant: 'destructive' as any,
+        });
+        return;
+      }
+      toast({
+        title: 'Field updated',
+        description: `${filePath} — HMR will reload momentarily.`,
+      });
+      setEditMode(false);
+    } catch (err: any) {
+      toast({
+        title: 'Save failed',
+        description: err?.message ?? String(err),
+        variant: 'destructive' as any,
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [canSave, field, srcRoot, objectName, editLabel, editDescription, editRequired]);
 
   if (!field || !effectiveField) return null;
 
@@ -263,11 +330,21 @@ export function FieldDetailDrawer({ field, objectName, packageId, onClose }: Fie
 
         {editMode && dirty && (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-[11px] dark:border-amber-900 dark:bg-amber-950/30">
-            <p className="font-medium text-amber-900 dark:text-amber-200">Unsaved snippet edit</p>
+            <p className="font-medium text-amber-900 dark:text-amber-200">Unsaved changes</p>
             <p className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
-              Click <span className="font-medium">Copy snippet</span> then paste over the existing
-              <code className="mx-0.5 rounded bg-amber-100/60 px-1 dark:bg-amber-900/30">{field.name}</code>
-              definition in the <code className="rounded bg-amber-100/60 px-1 dark:bg-amber-900/30">.object.ts</code> file.
+              {srcRoot != null ? (
+                <>
+                  Click <span className="font-medium">Save</span> to write changes to the
+                  <code className="mx-0.5 rounded bg-amber-100/60 px-1 dark:bg-amber-900/30">.object.ts</code>
+                  source file. HMR will reload Studio in &lt; 1 s.
+                </>
+              ) : (
+                <>
+                  Click <span className="font-medium">Copy snippet</span> then paste over the existing
+                  <code className="mx-0.5 rounded bg-amber-100/60 px-1 dark:bg-amber-900/30">{field.name}</code>
+                  definition in the <code className="rounded bg-amber-100/60 px-1 dark:bg-amber-900/30">.object.ts</code> file.
+                </>
+              )}
             </p>
           </div>
         )}
@@ -278,7 +355,7 @@ export function FieldDetailDrawer({ field, objectName, packageId, onClose }: Fie
             Open in VS Code
           </Button>
           <Button
-            variant={dirty ? 'default' : 'outline'}
+            variant={dirty && !canSave ? 'default' : 'outline'}
             size="sm"
             onClick={copySnippet}
             className="flex-1 gap-1.5"
@@ -286,7 +363,30 @@ export function FieldDetailDrawer({ field, objectName, packageId, onClose }: Fie
             {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : dirty ? 'Copy edited snippet' : 'Copy snippet'}
           </Button>
+          {srcRoot != null && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={saveEdits}
+              disabled={!canSave || saving}
+              className="flex-1 gap-1.5"
+              title={dirty ? 'Write changes to the .object.ts file' : 'No edits to save'}
+            >
+              {saving ? (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          )}
         </div>
+
+        {editMode && dirty && srcRoot == null && (
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Save unavailable — host runtime doesn't expose the dev write API. Use Copy snippet instead.
+          </p>
+        )}
 
         <p className="mt-4 text-[10px] text-muted-foreground">
           Field definitions live in the object's <code className="rounded bg-muted px-1 py-0.5">.object.ts</code> source.
