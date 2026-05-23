@@ -94,22 +94,27 @@ export async function addObjectField(
       const bodyStart = openBrace.getEnd();
       const bodyEnd = closeBrace.getStart();
 
-      // Detect existing indentation: prefer the first prop's leading
-      // whitespace; otherwise derive from the closing brace's indentation
-      // + 2 spaces.
+      // Detect existing indentation by sniffing the original source:
+      //   propIndent  — leading whitespace before the first existing prop
+      //   closeIndent — leading whitespace before the existing close brace
+      // Both are read verbatim so the new prop and the close brace land at
+      // the exact columns the file already uses (handles 2-space, 4-space,
+      // tabs, or anything else without guessing the indent step).
+      const sniffIndent = (pos: number): string => {
+        let i = pos - 1;
+        while (i >= 0 && (fullText[i] === ' ' || fullText[i] === '\t')) i--;
+        return fullText.slice(i + 1, pos);
+      };
       const firstProp = fieldsObj.getProperties()[0];
-      let propIndent = '    ';
+      const closeIndent = sniffIndent(closeBrace.getStart());
+      let propIndent: string;
       if (firstProp && firstProp.isKind(SyntaxKind.PropertyAssignment)) {
-        const start = firstProp.getStart();
-        let i = start - 1;
-        while (i >= 0 && (fullText[i] === ' ' || fullText[i] === '\t')) i--;
-        propIndent = fullText.slice(i + 1, start);
+        propIndent = sniffIndent(firstProp.getStart());
       } else {
-        // Derive from close brace indent
-        let i = closeBrace.getStart() - 1;
-        while (i >= 0 && (fullText[i] === ' ' || fullText[i] === '\t')) i--;
-        const braceIndent = fullText.slice(i + 1, closeBrace.getStart());
-        propIndent = braceIndent + '  ';
+        // Empty `{}` — give the new prop one step beyond the close brace.
+        // Default to two spaces; if the close-brace indent looks tab-based,
+        // use a tab.
+        propIndent = closeIndent + (closeIndent.includes('\t') ? '\t' : '  ');
       }
 
       // Body region between braces; rebuild with the new prop appended,
@@ -119,8 +124,6 @@ export async function addObjectField(
       let trimmed = body.replace(/\s+$/, '');
       if (trimmed && !trimmed.endsWith(',')) trimmed += ',';
       const isEmpty = trimmed.length === 0;
-      // Compute close-brace indent (one level less than propIndent).
-      const closeIndent = propIndent.replace(/  $/, '');
       const newBody = isEmpty
         ? `\n${propIndent}${fieldName}: ${initializer},\n${closeIndent}`
         : `${trimmed}\n${propIndent}${fieldName}: ${initializer},\n${closeIndent}`;
