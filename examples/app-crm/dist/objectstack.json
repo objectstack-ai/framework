@@ -26227,6 +26227,7 @@
     "auth",
     "ui",
     "approvals",
-    "sharing"
+    "sharing",
+    "webhooks"
   ]
 }

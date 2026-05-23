@@ -38,6 +38,89 @@ import {
 } from '../utils/console.js';
 import dotenvFlow from 'dotenv-flow';
 
+// ---------------------------------------------------------------------------
+// Observability bootstrap for `objectstack serve`
+//
+// Reads OS_OBS_* env vars and returns a `{ metrics, errorReporter }` block
+// to hand off to `createDispatcherPlugin`. Default is fully noop so the
+// CLI imposes no runtime cost when observability isn't configured.
+//
+// Env knobs (also documented in apps/cloud/server/observability.ts — keep
+// the two in sync if you tweak names):
+//   OS_OBS_EXPORTER       noop (default) | console | json | otlp
+//   OS_OTLP_ENDPOINT      OTLP/HTTP root, e.g. https://otlp.grafana.net/otlp
+//   OS_OTLP_HEADERS       comma-separated Key=Value; values may be URL-encoded
+//                         (Grafana ships `Authorization=Basic%20<base64>`)
+//   OS_OBS_SERVICE_NAME   resource attr, default `objectstack`
+//   OS_OBS_DEPLOYMENT_ENV resource attr, default `production`
+//   OS_OTLP_FLUSH_MS      buffer flush interval (default 10000)
+// ---------------------------------------------------------------------------
+
+function parseObsHeaders(spec: string | undefined): Record<string, string> {
+  if (!spec) return {};
+  const out: Record<string, string> = {};
+  for (const pair of spec.split(',')) {
+    const i = pair.indexOf('=');
+    if (i < 0) continue;
+    const k = pair.slice(0, i).trim();
+    const raw = pair.slice(i + 1).trim();
+    if (!k) continue;
+    let v = raw;
+    try { v = decodeURIComponent(raw); } catch { /* keep raw */ }
+    out[k] = v;
+  }
+  return out;
+}
+
+async function buildServeObservability(): Promise<{ metrics: any; errorReporter: any } | undefined> {
+  const exporter = (process.env.OS_OBS_EXPORTER ?? 'noop').toLowerCase();
+  if (exporter === 'noop') return undefined; // dispatcher falls back to its own NoopMetricsRegistry
+  let mod: any;
+  try {
+    mod = await import('@objectstack/observability');
+  } catch {
+    return undefined; // observability pkg not installed — silently skip
+  }
+  try {
+    let metrics: any;
+    if (exporter === 'console' || exporter === 'json') {
+      metrics = new mod.ConsoleMetricsRegistry();
+    } else if (exporter === 'otlp') {
+      const endpoint = process.env.OS_OTLP_ENDPOINT;
+      if (!endpoint) {
+        console.warn('[observability] OS_OBS_EXPORTER=otlp but OS_OTLP_ENDPOINT is empty — falling back to noop');
+        return undefined;
+      }
+      const resource = {
+        'service.name': process.env.OS_OBS_SERVICE_NAME ?? 'objectstack',
+        'deployment.environment': process.env.OS_OBS_DEPLOYMENT_ENV ?? 'production',
+      };
+      metrics = new mod.OtlpHttpMetricsRegistry({
+        endpoint,
+        headers: parseObsHeaders(process.env.OS_OTLP_HEADERS),
+        resource,
+        onError: (err: unknown) => {
+          console.warn('[observability] OTLP export failed:', (err as any)?.message ?? err);
+        },
+      });
+      const flushMs = Number(process.env.OS_OTLP_FLUSH_MS ?? '10000');
+      if (flushMs > 0) {
+        const timer = setInterval(() => {
+          (metrics as any).flush?.().catch(() => { /* swallowed via onError */ });
+        }, flushMs);
+        if (typeof (timer as any).unref === 'function') (timer as any).unref();
+      }
+    } else {
+      return undefined;
+    }
+    const errorReporter = new mod.ConsoleErrorReporter();
+    return { metrics, errorReporter };
+  } catch (err) {
+    console.warn('[observability] init failed; falling back to noop:', (err as any)?.message ?? err);
+    return undefined;
+  }
+}
+
 // Helper to find available port
 const getAvailablePort = async (startPort: number): Promise<number> => {
   const isPortAvailable = (port: number): Promise<boolean> => {
@@ -1125,8 +1208,17 @@ export default class Serve extends Command {
         // Register Dispatcher plugin (auth, graphql, analytics, packages, hub, storage, automation)
         try {
           const { createDispatcherPlugin } = await import('@objectstack/runtime');
+          // Auto-wire observability from env so production deployments
+          // can ship metrics / errors to OTLP backends (Grafana Cloud,
+          // Honeycomb, etc.) without app-level glue. Falls back to noop
+          // when OS_OBS_EXPORTER is unset / unknown — zero-cost when
+          // off, and never crashes boot if exporter init throws.
+          const observability = await buildServeObservability();
           await kernel.use(
-            createDispatcherPlugin({ scoping: { enableProjectScoping, projectResolution } }),
+            createDispatcherPlugin({
+              scoping: { enableProjectScoping, projectResolution },
+              observability,
+            }),
           );
           trackPlugin('Dispatcher');
         } catch (e: any) {
@@ -1264,6 +1356,11 @@ export default class Serve extends Command {
           pkg: '@objectstack/service-settings',
           export: 'SettingsServicePlugin',
           nameMatch: ['service-settings', 'SettingsServicePlugin'],
+        },
+        webhooks: {
+          pkg: '@objectstack/plugin-webhooks',
+          export: 'WebhookOutboxPlugin',
+          nameMatch: ['plugin-webhook-outbox', 'WebhookOutboxPlugin'],
         },
       };
 

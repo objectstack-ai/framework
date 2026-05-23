@@ -144,7 +144,7 @@ export const SETUP_APP: App = {
         // (operational telemetry) reuses the same generic ObjectView /
         // ObjectListView UI as any business object — no bespoke webhook
         // admin page.
-        { id: 'nav_webhooks', type: 'object', label: 'Webhooks', objectName: 'sys_webhook', icon: 'webhook' },
+        { id: 'nav_webhooks', type: 'object', label: 'Webhooks', objectName: 'sys_webhook', icon: 'webhook', requiresObject: 'sys_webhook' },
         { id: 'nav_webhook_deliveries', type: 'object', label: 'Webhook Deliveries', objectName: 'sys_webhook_delivery', icon: 'send', requiresObject: 'sys_webhook_delivery' },
       ],
     },

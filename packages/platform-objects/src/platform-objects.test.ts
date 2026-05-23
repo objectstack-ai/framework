@@ -147,8 +147,10 @@ describe('@objectstack/platform-objects', () => {
       const deliveries = children.find((c) => c.id === 'nav_webhook_deliveries');
       expect(webhooks?.objectName).toBe('sys_webhook');
       expect(deliveries?.objectName).toBe('sys_webhook_delivery');
-      // Deliveries schema is plugin-owned, so the nav entry must
-      // gracefully hide when the plugin isn't installed.
+      // Both entries are plugin-owned (WebhookOutboxPlugin registers
+      // sys_webhook + sys_webhook_delivery), so they must gracefully
+      // hide when the plugin isn't installed in the stack.
+      expect(webhooks?.requiresObject).toBe('sys_webhook');
       expect(deliveries?.requiresObject).toBe('sys_webhook_delivery');
     });
   });

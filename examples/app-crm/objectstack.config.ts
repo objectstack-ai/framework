@@ -53,7 +53,7 @@ export default defineStack({
   // preset — see `ALWAYS_CAPS` in packages/cli/src/commands/serve.ts.
   // Listed below only the *opt-in* capabilities this stack actually
   // wants on top of that slate.
-  requires: ['ai', 'automation', 'analytics', 'auth', 'ui', 'approvals', 'sharing'],
+  requires: ['ai', 'automation', 'analytics', 'auth', 'ui', 'approvals', 'sharing', 'webhooks'],
 
   objects: Object.values(objects),
   actions: Object.values(actions),

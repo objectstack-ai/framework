@@ -6,6 +6,7 @@ import type {
     IDataEngine,
     IRealtimeService,
 } from '@objectstack/spec/contracts';
+import { SysWebhook } from '@objectstack/platform-objects/integration';
 import { AutoEnqueuer, type AutoEnqueuerOptions } from './auto-enqueuer.js';
 import { WebhookDispatcher, type DispatcherOptions } from './dispatcher.js';
 import { MemoryWebhookOutbox } from './memory-outbox.js';
@@ -14,6 +15,7 @@ import {
     DeliveryRetentionSweeper,
     type DeliveryRetentionOptions,
 } from './retention.js';
+import { SysWebhookDelivery } from './sys-webhook-delivery.object.js';
 
 export interface WebhookOutboxPluginOptions
     extends Partial<Omit<DispatcherOptions, 'cluster' | 'outbox' | 'nodeId'>> {
@@ -95,7 +97,7 @@ export class WebhookOutboxPlugin implements Plugin {
     name = 'com.objectstack.plugin-webhook-outbox';
     version = '1.1.0';
     type = 'standard' as const;
-    dependencies = ['com.objectstack.service-cluster'];
+    dependencies = ['com.objectstack.service.cluster'];
 
     private dispatcher: WebhookDispatcher | undefined;
     private autoEnqueuer: AutoEnqueuer | undefined;
@@ -111,6 +113,33 @@ export class WebhookOutboxPlugin implements Plugin {
                 'WebhookOutboxPlugin: required service "cluster" not found — register ClusterServicePlugin first',
             );
         }
+
+        // Register the schemas this plugin owns at runtime. `sys_webhook`
+        // (config) lives in @objectstack/platform-objects but no other
+        // plugin claims it — the webhook plugin is the natural owner
+        // since it's the consumer of those rows. `sys_webhook_delivery`
+        // (telemetry) is plugin-private. Registering them here means a
+        // stack just needs `plugins: [new WebhookOutboxPlugin(...)]`
+        // and both objects auto-appear in REST/Studio/Setup nav.
+        const manifest = ctx.getService<{ register(m: any): void }>('manifest');
+        if (manifest && typeof manifest.register === 'function') {
+            manifest.register({
+                id: 'com.objectstack.plugin-webhook-outbox.schema',
+                namespace: 'sys',
+                version: this.version,
+                type: 'plugin',
+                scope: 'system',
+                name: 'Webhook Outbox Schemas',
+                description:
+                    'Registers sys_webhook (configuration) and sys_webhook_delivery (durable outbox telemetry).',
+                objects: [SysWebhook, SysWebhookDelivery],
+            });
+        } else {
+            ctx.logger.warn?.(
+                '[webhook-outbox] manifest service unavailable — sys_webhook / sys_webhook_delivery will NOT appear in REST or Studio nav. Register MetadataService before WebhookOutboxPlugin.',
+            );
+        }
+
         const outbox = this.resolveOutbox(ctx);
         this.outboxInstance = outbox;
         const nodeId =

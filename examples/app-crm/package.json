@@ -25,7 +25,8 @@
     "@objectstack/service-analytics": "workspace:*",
     "@objectstack/service-automation": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "pg": "^8.21.0"
+    "pg": "^8.21.0",
+    "@objectstack/plugin-webhooks": "workspace:*"
   },
   "devDependencies": {
     "@objectstack/cli": "workspace:*",
