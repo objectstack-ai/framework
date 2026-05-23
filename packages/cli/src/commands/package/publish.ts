@@ -154,6 +154,25 @@ export default class PackagePublish extends Command {
         'marketplace catalog. Used by first-party CI / dogfood publishes.',
       default: false,
     }),
+    readme: Flags.string({
+      description:
+        'Inline marketplace README (markdown). Required for marketplace listings unless ' +
+        'already stored on the package row. Mutually exclusive with --readme-file.',
+    }),
+    'readme-file': Flags.string({
+      description: 'Path to a marketplace README file (markdown). Read at publish time.',
+    }),
+    'icon-url': Flags.string({
+      description:
+        'Public http(s) icon URL shown in the marketplace catalog. Required for ' +
+        'marketplace listings unless already stored on the package row.',
+    }),
+    'homepage-url': Flags.string({
+      description: 'Public project / docs URL (optional, surfaced in the catalog).',
+    }),
+    license: Flags.string({
+      description: 'SPDX license identifier (e.g. Apache-2.0, MIT).',
+    }),
     note: Flags.string({
       char: 'n',
       description: 'Release notes (markdown ok)',
@@ -246,6 +265,28 @@ export default class PackagePublish extends Command {
       if (flags.description) pkgBody.description = flags.description;
       if (flags.category) pkgBody.category = flags.category;
       if (flags.org) pkgBody.owner_org_id = flags.org;
+      if (flags['icon-url']) pkgBody.icon_url = flags['icon-url'];
+      if (flags['homepage-url']) pkgBody.homepage_url = flags['homepage-url'];
+      if (flags.license) pkgBody.license = flags.license;
+      // Resolve readme: --readme wins, then --readme-file. Don't auto-discover
+      // a README.md in cwd — that often leaks dev notes into the catalog.
+      if (flags.readme && flags['readme-file']) {
+        printError('Pass either --readme or --readme-file, not both.');
+        this.exit(1);
+        return;
+      }
+      if (flags.readme) {
+        pkgBody.readme = flags.readme;
+      } else if (flags['readme-file']) {
+        const readmePath = resolvePath(process.cwd(), flags['readme-file']);
+        try {
+          pkgBody.readme = await readFile(readmePath, 'utf-8');
+        } catch (err: any) {
+          printError(`Cannot read --readme-file '${readmePath}': ${err.message}`);
+          this.exit(1);
+          return;
+        }
+      }
 
       const pkgRes = await this.postJson(`${baseUrl}/api/v1/cloud/packages`, pkgBody, token, flags.timeout);
       if (!pkgRes.ok) {
@@ -283,6 +324,19 @@ export default class PackagePublish extends Command {
       );
       if (!verRes.ok) {
         printError(`Publish version failed (${verRes.status}): ${verRes.error}`);
+        // 422 surfaces marketplace policy violations — show them so the author
+        // knows what to fix without crawling the server log.
+        const failViolations = Array.isArray(verRes.body?.violations) ? verRes.body.violations : [];
+        if (failViolations.length > 0) {
+          console.log('');
+          console.log('  Marketplace policy violations:');
+          for (const v of failViolations) console.log(`    • ${v}`);
+          console.log('');
+          console.log(
+            '  Fix the items above on the sys_package row (use --readme / --readme-file,\n' +
+            '  --icon-url, --description, --category) and re-run with --submit or --auto-approve.',
+          );
+        }
         this.exit(1);
         return;
       }
