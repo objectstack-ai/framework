@@ -46,6 +46,31 @@ function LoginPage() {
   const navigate = useNavigate();
   const { redirect } = Route.useSearch();
   const client = useClient() as any;
+
+  // SSO-handoff banner.
+  //
+  // When the user lands on this login form via a `/oauth2/authorize`
+  // bounce from a relying-party project (better-auth redirects the
+  // unauthenticated user here, preserving `client_id` & `redirect_uri`
+  // in the query string), the page looks visually identical to the
+  // project's own login form they just left — both are this same SPA.
+  // Without context, a slow network makes "Continue with ObjectStack"
+  // appear broken: click, wait, see a login form again.
+  //
+  // We surface the relying-party hostname so the user knows where
+  // they're being signed in to continue to.
+  let ssoTarget: string | null = null;
+  if (typeof window !== 'undefined') {
+    const sp = new URLSearchParams(window.location.search);
+    const redirectUri = sp.get('redirect_uri');
+    if (sp.has('client_id') && redirectUri) {
+      try {
+        ssoTarget = new URL(redirectUri).host;
+      } catch {
+        ssoTarget = null;
+      }
+    }
+  }
   const {
     session,
     user,
@@ -164,6 +189,20 @@ function LoginPage() {
   return (
     <AuthShell>
       <div className="flex flex-col gap-6">
+        {ssoTarget ? (
+          <div
+            role="status"
+            className="flex items-start gap-3 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground"
+          >
+            <span className="mt-0.5 inline-block size-2 shrink-0 rounded-full bg-primary" />
+            <span>
+              {t('auth.login.ssoHandoff', {
+                target: ssoTarget,
+                defaultValue: `Sign in to ObjectStack to continue to ${ssoTarget}`,
+              })}
+            </span>
+          </div>
+        ) : null}
         <Card className="border-border/60 shadow-sm shadow-primary/5 backdrop-blur supports-[backdrop-filter]:bg-card/95">
               <CardHeader className="text-center">
                 <CardTitle className="text-xl tracking-tight">{t('auth.login.title')}</CardTitle>

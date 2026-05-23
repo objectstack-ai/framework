@@ -236,7 +236,8 @@
     "social": {
       "continueWith": "Continue with",
       "signUpWith": "Sign up with",
-      "orContinueEmail": "or continue with email"
+      "orContinueEmail": "or continue with email",
+      "redirectingTo": "Redirecting to {{provider}}…"
     },
     "login": {
       "title": "Welcome back",
@@ -248,6 +249,8 @@
       "signUp": "Sign up",
       "welcomeToast": "Welcome back",
       "failed": "Sign in failed",
+      "signingIn": "Signing you in…",
+      "ssoHandoff": "Sign in to ObjectStack to continue to {{target}}",
       "brandHeadline": "The AI-native backend for business software.",
       "brandSubline": "One identity, every workspace. Sign in to manage your account, organizations and connected apps."
     },
