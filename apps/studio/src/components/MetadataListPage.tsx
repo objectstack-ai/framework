@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronRight, Eye, LayoutGrid, List, Search } from 'lucide-react';
+import { ChevronRight, Eye, LayoutGrid, List, Plus, Search } from 'lucide-react';
 import { useClient, useMetadataSubscriptionCallback } from '@objectstack/client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { CreateMetadataDialog } from './CreateMetadataDialog';
 import { MetadataPreview } from './MetadataPreview';
 import { iconForMetadataType, typeLabel } from './studio-nav';
 import { pickLabel, pickDescription } from '@/lib/metadata-display';
@@ -86,6 +87,7 @@ export function MetadataListPage({
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [previewRow, setPreviewRow] = useState<Row | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'cards' | 'compact'>(() => {
     if (typeof window === 'undefined') return 'cards';
@@ -239,6 +241,14 @@ export function MetadataListPage({
               <List className="h-3.5 w-3.5" />
             </Button>
           </div>
+          <Button
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </Button>
           {rightSlot && <div className="flex items-center gap-2">{rightSlot}</div>}
         </div>
       </div>
@@ -364,6 +374,13 @@ export function MetadataListPage({
           )}
         </DialogContent>
       </Dialog>
+
+      <CreateMetadataDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        types={types}
+        packageId={packageId}
+      />
     </div>
   );
 }
