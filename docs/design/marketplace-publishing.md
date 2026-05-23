@@ -230,6 +230,22 @@ POST /api/v1/marketplace/install
 - One-click install
 - Configuration wizard
 
+**5. Tenant Console (in-runtime):**
+- Each ObjectOS runtime exposes `/api/v1/marketplace/*` via `MarketplaceProxyPlugin`,
+  forwarding read-only requests to the configured `controlPlaneUrl` (Cloud).
+- The console SPA (`@object-ui/console`) provides:
+  - `/system/marketplace` — browse approved + listed packages with search/category filters
+  - `/system/marketplace/:packageId` — detail page (readme, versions, license, homepage)
+  - "Install" dialog: env Select + sample-data Checkbox, calls
+    `POST cloud.../api/v1/actions/sys_package/install_package` with `credentials: 'include'`
+  - When no cloud session is present (no cookie), the dialog falls back to an
+    "Open on cloud" deep link to `cloud.objectos.app/apps/cloud-control/sys_package/{id}`
+- Discoverability: the System Sidebar exposes "App Marketplace" under the system
+  fallback navigation; the System Settings hub page also surfaces an "App Marketplace"
+  card. No additional roles or tenant-side configuration are required — only
+  `OS_CLOUD_URL` (a.k.a. `controlPlaneUrl`) must be set on the runtime. When unset,
+  the proxy returns `503` and the entry remains discoverable but inert.
+
 ### 4.3 Installation Flow
 
 1. Fetch manifest from artifact storage
