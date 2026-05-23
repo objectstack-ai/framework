@@ -86,6 +86,7 @@ export { MarketplaceProxyPlugin } from './cloud/marketplace-proxy-plugin.js';
 export type { MarketplaceProxyPluginConfig } from './cloud/marketplace-proxy-plugin.js';
 export { MarketplaceInstallLocalPlugin } from './cloud/marketplace-install-local-plugin.js';
 export type { MarketplaceInstallLocalPluginConfig } from './cloud/marketplace-install-local-plugin.js';
+export { DEFAULT_CLOUD_URL, resolveCloudUrl } from './cloud/cloud-url.js';
 export { ArtifactApiClient } from './cloud/artifact-api-client.js';
 export type {
     ArtifactApiClientConfig,

@@ -44,13 +44,16 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Plugin, PluginContext } from '@objectstack/core';
+import { resolveCloudUrl } from './cloud-url.js';
 
 const ROUTE_BASE = '/api/v1/marketplace/install-local';
 const DEFAULT_DIR = '.objectstack/installed-packages';
 
 export interface MarketplaceInstallLocalPluginConfig {
-    /** Cloud control-plane base URL. When unset the install endpoint
-     *  returns 503 (marketplace catalog requires cloud). */
+    /** Cloud control-plane base URL. When unset, falls back to OS_CLOUD_URL
+     *  and then to the public ObjectStack cloud so a fresh `objectstack dev`
+     *  can install from the marketplace without configuration. Set
+     *  OS_CLOUD_URL=off to disable (the install endpoint then returns 503). */
     controlPlaneUrl?: string;
     /** Override the on-disk cache directory. Defaults to
      *  `<cwd>/.objectstack/installed-packages`. */
@@ -79,7 +82,7 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
     private readonly storageDir: string;
 
     constructor(config: MarketplaceInstallLocalPluginConfig = {}) {
-        this.cloudUrl = (config.controlPlaneUrl ?? '').replace(/\/+$/, '');
+        this.cloudUrl = resolveCloudUrl(config.controlPlaneUrl);
         this.storageDir = config.storageDir
             ? resolve(config.storageDir)
             : resolve(process.cwd(), DEFAULT_DIR);

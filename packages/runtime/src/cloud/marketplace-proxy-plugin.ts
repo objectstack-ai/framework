@@ -27,14 +27,19 @@
  */
 
 import type { Plugin, PluginContext } from '@objectstack/core';
+import { resolveCloudUrl } from './cloud-url.js';
 
 const MARKETPLACE_PREFIX = '/api/v1/marketplace';
 
 export interface MarketplaceProxyPluginConfig {
     /**
-     * Control-plane base URL (e.g. https://cloud.objectos.app). When unset
-     * the plugin mounts a stub that responds 503 — the SPA renders an
-     * empty-state explaining marketplace is unavailable in this runtime.
+     * Control-plane base URL (e.g. https://cloud.objectos.app). When the
+     * caller passes nothing AND the runtime has no OS_CLOUD_URL set, the
+     * plugin falls back to the public ObjectStack-operated cloud so that
+     * `objectstack dev` can browse the marketplace out of the box. Set
+     * OS_CLOUD_URL=off (or `local`) to opt out — the plugin then mounts
+     * a stub that responds 503 and the SPA renders an empty-state
+     * explaining marketplace is unavailable in this runtime.
      */
     controlPlaneUrl?: string;
 }
@@ -46,7 +51,7 @@ export class MarketplaceProxyPlugin implements Plugin {
     private readonly cloudUrl: string;
 
     constructor(config: MarketplaceProxyPluginConfig = {}) {
-        this.cloudUrl = (config.controlPlaneUrl ?? '').replace(/\/+$/, '');
+        this.cloudUrl = resolveCloudUrl(config.controlPlaneUrl);
     }
 
     init = async (_ctx: PluginContext): Promise<void> => {

@@ -813,34 +813,42 @@ export default class Serve extends Command {
         }
       }
 
-      // 5b. Auto-register MarketplaceProxyPlugin when OS_CLOUD_URL is set
-      // and no marketplace proxy is already configured. This forwards
-      // /api/v1/marketplace/* from the local dev kernel to the configured
-      // cloud control-plane so the runtime console's marketplace browse UI
-      // works in `objectstack dev` without manually wiring the plugin into
-      // every user's objectstack.config.ts.
+      // 5b. Auto-register MarketplaceProxyPlugin so the runtime console's
+      // marketplace browse UI works in `objectstack dev` without manually
+      // wiring the plugin into every user's objectstack.config.ts.
+      //
+      // The default control-plane URL is the public ObjectStack cloud —
+      // users get a working marketplace out of the box. Override with
+      // OS_CLOUD_URL=<your-cloud>, or opt out with OS_CLOUD_URL=off
+      // / =local for fully air-gapped setups.
       const hasMarketplaceProxy = plugins.some(
         (p: any) => p?.name === 'com.objectstack.runtime.marketplace-proxy'
           || p?.constructor?.name === 'MarketplaceProxyPlugin'
       );
-      const cloudUrlForMarketplace = process.env.OS_CLOUD_URL?.trim();
-      if (!hasMarketplaceProxy && cloudUrlForMarketplace
-          && cloudUrlForMarketplace.toLowerCase() !== 'local'
-          && cloudUrlForMarketplace.toLowerCase() !== 'off') {
+      if (!hasMarketplaceProxy) {
         try {
           const runtimePkg = '@objectstack/runtime';
-          const { MarketplaceProxyPlugin, MarketplaceInstallLocalPlugin } = await import(/* webpackIgnore: true */ runtimePkg);
-          await kernel.use(new MarketplaceProxyPlugin({ controlPlaneUrl: cloudUrlForMarketplace }));
-          trackPlugin('MarketplaceProxy');
-          // Pair the catalog proxy with the install-local handler. The two
-          // share the same /api/v1/marketplace prefix; the proxy delegates
-          // /install-local to this plugin (see proxy `next()` check).
-          try {
-            await kernel.use(new MarketplaceInstallLocalPlugin({ controlPlaneUrl: cloudUrlForMarketplace }));
-            trackPlugin('MarketplaceInstallLocal');
-          } catch (err: any) {
-            console.warn(chalk.yellow(`  ⚠ MarketplaceInstallLocalPlugin auto-inject failed: ${err?.message ?? err}`));
+          const { MarketplaceProxyPlugin, MarketplaceInstallLocalPlugin, resolveCloudUrl } = await import(/* webpackIgnore: true */ runtimePkg);
+          const effectiveCloudUrl = (typeof resolveCloudUrl === 'function'
+            ? resolveCloudUrl()
+            : (process.env.OS_CLOUD_URL?.trim() || 'https://cloud.objectos.app')) as string;
+          if (effectiveCloudUrl) {
+            await kernel.use(new MarketplaceProxyPlugin({ controlPlaneUrl: effectiveCloudUrl }));
+            trackPlugin('MarketplaceProxy');
+            // Pair the catalog proxy with the install-local handler. The two
+            // share the same /api/v1/marketplace prefix; the proxy delegates
+            // /install-local to this plugin (see proxy `next()` check).
+            try {
+              await kernel.use(new MarketplaceInstallLocalPlugin({ controlPlaneUrl: effectiveCloudUrl }));
+              trackPlugin('MarketplaceInstallLocal');
+            } catch (err: any) {
+              console.warn(chalk.yellow(`  ⚠ MarketplaceInstallLocalPlugin auto-inject failed: ${err?.message ?? err}`));
+            }
+            if (!process.env.OS_CLOUD_URL) {
+              console.log(chalk.dim(`  · Marketplace pointed at default cloud (${effectiveCloudUrl}). Override with OS_CLOUD_URL, or disable with OS_CLOUD_URL=off.`));
+            }
           }
+          // else: user disabled cloud via OS_CLOUD_URL=off/local — skip.
         } catch (err: any) {
           console.warn(chalk.yellow(`  ⚠ MarketplaceProxyPlugin auto-inject failed: ${err?.message ?? err}`));
         }
