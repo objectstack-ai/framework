@@ -15,7 +15,7 @@
  * a real persist call without touching the dialog's contract.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter,
@@ -27,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Type, FileText, Hash, ToggleLeft, List, Link as LinkIcon, Calculator,
   Calendar, Mail, Phone, MapPin, Braces, DollarSign, Percent, Clock,
-  ExternalLink, Copy, Check,
+  ExternalLink, Copy, Check, FilePlus,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -43,105 +43,68 @@ interface FieldTypeOption {
   label: string;
   icon: React.ElementType;
   description: string;
-  snippet: (name: string, label: string) => string;
+  /**
+   * Type-specific extra props as a list of `key: value` lines that
+   * appear between `label` and the closing brace of the inner object
+   * literal. e.g. `["type: 'text'", "maxLength: 255"]`.
+   * Keeping the props structured lets us emit both the file-level
+   * snippet (for clipboard) AND the bare initializer (for the
+   * field-add endpoint) without string surgery.
+   */
+  extraProps: (name: string, label: string) => string[];
 }
 
-const indent = '  ';
-const wrap = (name: string, label: string, body: string) =>
-  `${indent}${name}: {\n${indent}  name: '${name}',\n${indent}  label: '${label}',\n${body}${indent}},`;
-
 const FIELD_TYPES: FieldTypeOption[] = [
-  {
-    type: 'text', label: 'Single-line text', icon: Type,
-    description: 'Short string up to 255 chars',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'text',\n${indent}  maxLength: 255,\n`),
-  },
-  {
-    type: 'longtext', label: 'Long text', icon: FileText,
-    description: 'Multi-paragraph text, no length cap',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'longtext',\n`),
-  },
-  {
-    type: 'number', label: 'Number', icon: Hash,
-    description: 'Integer or decimal',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'number',\n`),
-  },
-  {
-    type: 'currency', label: 'Currency', icon: DollarSign,
-    description: 'Monetary amount (locale-aware)',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'currency',\n`),
-  },
-  {
-    type: 'percent', label: 'Percent', icon: Percent,
-    description: '0–100 with % display',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'percent',\n`),
-  },
-  {
-    type: 'boolean', label: 'Boolean', icon: ToggleLeft,
-    description: 'true / false toggle',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'boolean',\n${indent}  defaultValue: false,\n`),
-  },
-  {
-    type: 'select', label: 'Single-select', icon: List,
-    description: 'Pick one from a fixed option list',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'select',\n${indent}  options: [\n${indent}    { value: 'option_a', label: 'Option A' },\n${indent}    { value: 'option_b', label: 'Option B' },\n${indent}  ],\n`),
-  },
-  {
-    type: 'multiselect', label: 'Multi-select', icon: List,
-    description: 'Pick many from a fixed option list',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'multiselect',\n${indent}  options: [\n${indent}    { value: 'tag_a', label: 'Tag A' },\n${indent}    { value: 'tag_b', label: 'Tag B' },\n${indent}  ],\n`),
-  },
-  {
-    type: 'lookup', label: 'Lookup / Reference', icon: LinkIcon,
-    description: 'Link to another object',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'lookup',\n${indent}  reference: 'TARGET_OBJECT_NAME',\n`),
-  },
-  {
-    type: 'formula', label: 'Formula', icon: Calculator,
-    description: 'Computed value (CEL expression)',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'formula',\n${indent}  formula: '// CEL expression',\n`),
-  },
-  {
-    type: 'date', label: 'Date', icon: Calendar,
-    description: 'Day, no time component',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'date',\n`),
-  },
-  {
-    type: 'datetime', label: 'Date & time', icon: Calendar,
-    description: 'Instant with timezone',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'datetime',\n`),
-  },
-  {
-    type: 'time', label: 'Time', icon: Clock,
-    description: 'Clock time, no date',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'time',\n`),
-  },
-  {
-    type: 'email', label: 'Email', icon: Mail,
-    description: 'Validated email address',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'email',\n`),
-  },
-  {
-    type: 'phone', label: 'Phone', icon: Phone,
-    description: 'Phone number (free-form)',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'phone',\n`),
-  },
-  {
-    type: 'url', label: 'URL', icon: LinkIcon,
-    description: 'Validated http(s) URL',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'url',\n`),
-  },
-  {
-    type: 'address', label: 'Address', icon: MapPin,
-    description: 'Structured postal address',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'address',\n`),
-  },
-  {
-    type: 'json', label: 'JSON', icon: Braces,
-    description: 'Arbitrary JSON blob',
-    snippet: (n, l) => wrap(n, l, `${indent}  type: 'json',\n`),
-  },
+  { type: 'text', label: 'Single-line text', icon: Type, description: 'Short string up to 255 chars',
+    extraProps: () => ["type: 'text'", 'maxLength: 255'] },
+  { type: 'longtext', label: 'Long text', icon: FileText, description: 'Multi-paragraph text, no length cap',
+    extraProps: () => ["type: 'longtext'"] },
+  { type: 'number', label: 'Number', icon: Hash, description: 'Integer or decimal',
+    extraProps: () => ["type: 'number'"] },
+  { type: 'currency', label: 'Currency', icon: DollarSign, description: 'Monetary amount (locale-aware)',
+    extraProps: () => ["type: 'currency'"] },
+  { type: 'percent', label: 'Percent', icon: Percent, description: '0–100 with % display',
+    extraProps: () => ["type: 'percent'"] },
+  { type: 'boolean', label: 'Boolean', icon: ToggleLeft, description: 'true / false toggle',
+    extraProps: () => ["type: 'boolean'", 'defaultValue: false'] },
+  { type: 'select', label: 'Single-select', icon: List, description: 'Pick one from a fixed option list',
+    extraProps: () => ["type: 'select'", "options: [{ value: 'option_a', label: 'Option A' }, { value: 'option_b', label: 'Option B' }]"] },
+  { type: 'multiselect', label: 'Multi-select', icon: List, description: 'Pick many from a fixed option list',
+    extraProps: () => ["type: 'multiselect'", "options: [{ value: 'tag_a', label: 'Tag A' }, { value: 'tag_b', label: 'Tag B' }]"] },
+  { type: 'lookup', label: 'Lookup / Reference', icon: LinkIcon, description: 'Link to another object',
+    extraProps: () => ["type: 'lookup'", "reference: 'TARGET_OBJECT_NAME'"] },
+  { type: 'formula', label: 'Formula', icon: Calculator, description: 'Computed value (CEL expression)',
+    extraProps: () => ["type: 'formula'", "formula: '// CEL expression'"] },
+  { type: 'date', label: 'Date', icon: Calendar, description: 'Day, no time component',
+    extraProps: () => ["type: 'date'"] },
+  { type: 'datetime', label: 'Date & time', icon: Calendar, description: 'Instant with timezone',
+    extraProps: () => ["type: 'datetime'"] },
+  { type: 'time', label: 'Time', icon: Clock, description: 'Clock time, no date',
+    extraProps: () => ["type: 'time'"] },
+  { type: 'email', label: 'Email', icon: Mail, description: 'Validated email address',
+    extraProps: () => ["type: 'email'"] },
+  { type: 'phone', label: 'Phone', icon: Phone, description: 'Phone number (free-form)',
+    extraProps: () => ["type: 'phone'"] },
+  { type: 'url', label: 'URL', icon: LinkIcon, description: 'Validated http(s) URL',
+    extraProps: () => ["type: 'url'"] },
+  { type: 'address', label: 'Address', icon: MapPin, description: 'Structured postal address',
+    extraProps: () => ["type: 'address'"] },
+  { type: 'json', label: 'JSON', icon: Braces, description: 'Arbitrary JSON blob',
+    extraProps: () => ["type: 'json'"] },
 ];
+
+/** Build the file-level snippet (what users copy + paste). */
+function buildSnippet(opt: FieldTypeOption, name: string, label: string): string {
+  const props = [`name: '${name}'`, `label: '${label}'`, ...opt.extraProps(name, label)];
+  const indent = '  ';
+  return `${indent}${name}: {\n${props.map((p) => `${indent}  ${p}`).join(',\n')},\n${indent}},`;
+}
+
+/** Build just the right-hand-side initializer (for the field-add endpoint). */
+function buildInitializer(opt: FieldTypeOption, name: string, label: string): string {
+  const props = [`name: '${name}'`, `label: '${label}'`, ...opt.extraProps(name, label)];
+  return `{ ${props.join(', ')} }`;
+}
 
 function toSnakeCase(s: string): string {
   return s
@@ -156,11 +119,46 @@ export function AddFieldDialog({ open, onOpenChange, objectName, packageId }: Ad
   const [selectedType, setSelectedType] = useState<string>('text');
   const [fieldLabel, setFieldLabel] = useState<string>('New field');
   const [copied, setCopied] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [srcRoot, setSrcRoot] = useState<string | null>(null);
 
   const fieldName = useMemo(() => toSnakeCase(fieldLabel) || 'new_field', [fieldLabel]);
 
   const selected = FIELD_TYPES.find(t => t.type === selectedType) || FIELD_TYPES[0];
-  const snippet = useMemo(() => selected.snippet(fieldName, fieldLabel || 'New field'), [selected, fieldName, fieldLabel]);
+  const snippet = useMemo(
+    () => buildSnippet(selected, fieldName, fieldLabel || 'New field'),
+    [selected, fieldName, fieldLabel],
+  );
+  const initializer = useMemo(
+    () => buildInitializer(selected, fieldName, fieldLabel || 'New field'),
+    [selected, fieldName, fieldLabel],
+  );
+
+  // Probe the dev write API for the on-disk source root. Same shape as
+  // CreateMetadataDialog — when 404'd, falls back to copy-only flow.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = packageId
+          ? `/_studio/api/metadata/layout?package=${encodeURIComponent(packageId)}`
+          : '/_studio/api/metadata/layout';
+        const resp = await fetch(url);
+        if (!resp.ok) { if (!cancelled) setSrcRoot(null); return; }
+        const data = await resp.json().catch(() => null);
+        if (!cancelled) setSrcRoot(data?.srcRoot ?? null);
+      } catch { if (!cancelled) setSrcRoot(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [open, packageId]);
+
+  // Canonical path of the host object's source file — convention is
+  // `<srcRoot>/objects/<object_name>.object.ts`.
+  const objectFilePath = useMemo(() => {
+    if (!srcRoot) return null;
+    return `${srcRoot}/objects/${objectName}.object.ts`;
+  }, [srcRoot, objectName]);
 
   const copySnippet = useCallback(async () => {
     try {
@@ -173,10 +171,56 @@ export function AddFieldDialog({ open, onOpenChange, objectName, packageId }: Ad
     }
   }, [snippet, fieldName]);
 
+  const createOnDisk = useCallback(async () => {
+    if (!objectFilePath) return;
+    setCreating(true);
+    try {
+      const resp = await fetch('/_studio/api/metadata/field-add', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: objectFilePath, fieldName, initializer }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data?.ok) {
+        if (resp.status === 409) {
+          toast({
+            title: 'Field already exists',
+            description: `\`${fieldName}\` is already defined on ${objectName}.`,
+            variant: 'destructive' as any,
+          });
+        } else if (resp.status === 404) {
+          toast({
+            title: 'Object source not found',
+            description: `Expected ${objectFilePath} — open it in your editor and paste manually.`,
+            variant: 'destructive' as any,
+          });
+        } else {
+          toast({
+            title: 'Add failed',
+            description: data?.error ?? `HTTP ${resp.status}`,
+            variant: 'destructive' as any,
+          });
+        }
+        return;
+      }
+      toast({
+        title: 'Field added',
+        description: `${fieldName} appended to ${objectName} — HMR will reload shortly.`,
+      });
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: 'Add failed', description: err?.message ?? String(err), variant: 'destructive' as any });
+    } finally {
+      setCreating(false);
+    }
+  }, [objectFilePath, fieldName, initializer, objectName, onOpenChange]);
+
   const openVsCode = useCallback(() => {
     const uri = `vscode://objectstack.vscode-objectstack/open?type=object&name=${encodeURIComponent(objectName)}${packageId ? `&package=${encodeURIComponent(packageId)}` : ''}`;
     window.location.href = uri;
   }, [objectName, packageId]);
+
+  const canCreate = !!objectFilePath;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -244,13 +288,27 @@ export function AddFieldDialog({ open, onOpenChange, objectName, packageId }: Ad
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" size="sm" onClick={openVsCode} className="gap-1.5">
+          <Button variant="ghost" size="sm" onClick={openVsCode} className="gap-1.5">
             <ExternalLink className="h-3.5 w-3.5" />
-            Open .object.ts in VS Code
+            Open in VS Code
           </Button>
-          <Button size="sm" onClick={copySnippet} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={copySnippet} className="gap-1.5">
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? 'Copied — paste into fields: { … }' : 'Copy snippet'}
+            {copied ? 'Copied' : 'Copy snippet'}
+          </Button>
+          <Button
+            size="sm"
+            onClick={createOnDisk}
+            disabled={!canCreate || creating}
+            className="gap-1.5"
+            title={canCreate ? `Append ${fieldName} to ${objectName}.object.ts` : 'Dev write API unavailable'}
+          >
+            {creating ? (
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+            ) : (
+              <FilePlus className="h-3.5 w-3.5" />
+            )}
+            {creating ? 'Adding…' : 'Add to object'}
           </Button>
         </DialogFooter>
       </DialogContent>

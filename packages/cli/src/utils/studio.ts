@@ -453,22 +453,18 @@ export function createStudioWriteApiPlugin(cwd: string, options: { isDev: boolea
 
       ctx.logger?.info?.(`Studio write API mounted at ${STUDIO_PATH}/api/metadata/* (dev mode)`);
 
-      app.post(`${STUDIO_PATH}/api/metadata/field-patch`, async (c: any) => {
-        let body: any;
-        try { body = await c.req.json(); } catch {
-          return respond(c, 400, { ok: false, error: 'invalid json body' });
-        }
-        const rel = typeof body?.path === 'string' ? body.path : '';
-        const fieldKey = typeof body?.field === 'string' ? body.field : '';
-        const patch = body?.patch && typeof body.patch === 'object' ? body.patch : null;
-        if (!rel || !fieldKey || !patch) {
-          return respond(c, 400, { ok: false, error: 'path, field and patch are required' });
-        }
+      /**
+       * Shared validation for endpoints that mutate an existing `.ts`
+       * source file by relative path. Returns `{ abs }` on success or
+       * a respond() Response when validation fails.
+       */
+      const validateTsPath = (c: any, rel: string): { abs: string } | any => {
+        if (!rel) return respond(c, 400, { ok: false, error: 'path is required' });
         if (path.isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) {
           return respond(c, 400, { ok: false, error: 'path must be a project-relative path without `..`' });
         }
         if (path.extname(rel).toLowerCase() !== '.ts') {
-          return respond(c, 400, { ok: false, error: 'field-patch only supports .ts files' });
+          return respond(c, 400, { ok: false, error: 'only .ts files are supported' });
         }
         const abs = path.resolve(projectRoot, rel);
         if (!abs.startsWith(projectRoot + path.sep)) {
@@ -480,15 +476,86 @@ export function createStudioWriteApiPlugin(cwd: string, options: { isDev: boolea
         if (!fs.existsSync(abs)) {
           return respond(c, 404, { ok: false, error: 'file not found' });
         }
+        return { abs };
+      };
+
+      app.post(`${STUDIO_PATH}/api/metadata/field-patch`, async (c: any) => {
+        let body: any;
+        try { body = await c.req.json(); } catch {
+          return respond(c, 400, { ok: false, error: 'invalid json body' });
+        }
+        const rel = typeof body?.path === 'string' ? body.path : '';
+        const fieldKey = typeof body?.field === 'string' ? body.field : '';
+        const patch = body?.patch && typeof body.patch === 'object' ? body.patch : null;
+        if (!fieldKey || !patch) {
+          return respond(c, 400, { ok: false, error: 'field and patch are required' });
+        }
+        const v = validateTsPath(c, rel);
+        if (!v.abs) return v;
 
         try {
           const { patchObjectFieldFile } = await import('./studio-field-patch.js');
-          const result = await patchObjectFieldFile(abs, fieldKey, patch);
+          const result = await patchObjectFieldFile(v.abs, fieldKey, patch);
           if (!result.ok) return respond(c, 400, result);
           ctx.logger?.info?.(`Studio field-patch: ${rel} field=${fieldKey} keys=${Object.keys(patch).join(',')}`);
           return respond(c, 200, { ok: true, path: rel, field: fieldKey });
         } catch (err: any) {
           ctx.logger?.error?.(`Studio field-patch failed: ${err?.message}`);
+          return respond(c, 500, { ok: false, error: err?.message ?? String(err) });
+        }
+      });
+
+      app.post(`${STUDIO_PATH}/api/metadata/field-add`, async (c: any) => {
+        let body: any;
+        try { body = await c.req.json(); } catch {
+          return respond(c, 400, { ok: false, error: 'invalid json body' });
+        }
+        const rel = typeof body?.path === 'string' ? body.path : '';
+        const fieldName = typeof body?.fieldName === 'string' ? body.fieldName : '';
+        const initializer = typeof body?.initializer === 'string' ? body.initializer : '';
+        if (!fieldName || !initializer) {
+          return respond(c, 400, { ok: false, error: 'fieldName and initializer are required' });
+        }
+        const v = validateTsPath(c, rel);
+        if (!v.abs) return v;
+
+        try {
+          const { addObjectField } = await import('./studio-field-patch.js');
+          const result = await addObjectField(v.abs, fieldName, initializer);
+          if (!result.ok) {
+            // Existing field is a 409 conflict; other errors stay 400.
+            const status = result.error.includes('already exists') ? 409 : 400;
+            return respond(c, status, result);
+          }
+          ctx.logger?.info?.(`Studio field-add: ${rel} field=${fieldName}`);
+          return respond(c, 200, { ok: true, path: rel, field: fieldName });
+        } catch (err: any) {
+          ctx.logger?.error?.(`Studio field-add failed: ${err?.message}`);
+          return respond(c, 500, { ok: false, error: err?.message ?? String(err) });
+        }
+      });
+
+      app.post(`${STUDIO_PATH}/api/metadata/field-reorder`, async (c: any) => {
+        let body: any;
+        try { body = await c.req.json(); } catch {
+          return respond(c, 400, { ok: false, error: 'invalid json body' });
+        }
+        const rel = typeof body?.path === 'string' ? body.path : '';
+        const order = Array.isArray(body?.order) ? (body.order as unknown[]).filter((s) => typeof s === 'string') as string[] : null;
+        if (!order || order.length === 0) {
+          return respond(c, 400, { ok: false, error: 'order is required (non-empty string[])' });
+        }
+        const v = validateTsPath(c, rel);
+        if (!v.abs) return v;
+
+        try {
+          const { reorderObjectFields } = await import('./studio-field-patch.js');
+          const result = await reorderObjectFields(v.abs, order);
+          if (!result.ok) return respond(c, 400, result);
+          ctx.logger?.info?.(`Studio field-reorder: ${rel} (${order.length} fields)`);
+          return respond(c, 200, { ok: true, path: rel, count: order.length });
+        } catch (err: any) {
+          ctx.logger?.error?.(`Studio field-reorder failed: ${err?.message}`);
           return respond(c, 500, { ok: false, error: err?.message ?? String(err) });
         }
       });
