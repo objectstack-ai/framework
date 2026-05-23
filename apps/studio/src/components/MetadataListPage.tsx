@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Eye, Search } from 'lucide-react';
+import { Eye, LayoutGrid, List, Search } from 'lucide-react';
 import { useClient, useMetadataSubscriptionCallback } from '@objectstack/client-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +35,7 @@ import {
 import { MetadataPreview } from './MetadataPreview';
 import { iconForMetadataType, typeLabel } from './studio-nav';
 import { pickLabel, pickDescription } from '@/lib/metadata-display';
+import { formatRelative } from '@/lib/format-relative';
 import type { LucideIcon } from 'lucide-react';
 
 /** Metadata types we can render a live preview for via @object-ui. */
@@ -86,6 +87,13 @@ export function MetadataListPage({
   const [query, setQuery] = useState('');
   const [previewRow, setPreviewRow] = useState<Row | null>(null);
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'cards' | 'compact'>(() => {
+    if (typeof window === 'undefined') return 'cards';
+    return (localStorage.getItem('studio.listViewMode') as 'cards' | 'compact') || 'cards';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('studio.listViewMode', viewMode);
+  }, [viewMode]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -210,6 +218,30 @@ export function MetadataListPage({
               })}
             </div>
           )}
+          <div className="ml-auto inline-flex rounded-md border bg-background p-0.5">
+            <Button
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 gap-1 px-2"
+              onClick={() => setViewMode('cards')}
+              title="Card view"
+              aria-label="Card view"
+              aria-pressed={viewMode === 'cards'}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 gap-1 px-2"
+              onClick={() => setViewMode('compact')}
+              title="Compact list"
+              aria-label="Compact list"
+              aria-pressed={viewMode === 'compact'}
+            >
+              <List className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -232,6 +264,14 @@ export function MetadataListPage({
             )}
             {emptyCta}
           </div>
+        ) : viewMode === 'compact' ? (
+          <CompactList
+            rows={filtered}
+            showTypeBadge={types.length > 1}
+            iconForType={iconForType}
+            onOpen={openRow}
+            onPreview={setPreviewRow}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((row) => {
@@ -252,7 +292,7 @@ export function MetadataListPage({
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
                         <span
-                          className="truncate font-medium"
+                          className="line-clamp-2 break-words font-medium leading-snug"
                           title={row.label}
                         >
                           {row.label}
@@ -268,7 +308,7 @@ export function MetadataListPage({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 transition group-hover:opacity-100"
+                            className="h-6 w-6 opacity-40 transition group-hover:opacity-100"
                             title="Preview"
                             aria-label={`Preview ${row.label}`}
                             onClick={(e) => {
@@ -289,9 +329,16 @@ export function MetadataListPage({
                         {row.description}
                       </p>
                     ) : null}
-                    <code className="truncate text-[11px] text-muted-foreground/70" title={row.name}>
-                      {row.name}
-                    </code>
+                    <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                      <code className="truncate text-[11px] text-muted-foreground/70" title={row.name}>
+                        {row.name}
+                      </code>
+                      {row.updatedAt && (
+                        <span className="shrink-0 text-[10px] text-muted-foreground/70" title={row.updatedAt}>
+                          {formatRelative(row.updatedAt)}
+                        </span>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -319,6 +366,76 @@ export function MetadataListPage({
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+interface CompactListProps {
+  rows: Row[];
+  showTypeBadge: boolean;
+  iconForType?: (type: string) => LucideIcon | undefined;
+  onOpen: (row: Row) => void;
+  onPreview: (row: Row) => void;
+}
+
+function CompactList({ rows, showTypeBadge, iconForType, onOpen, onPreview }: CompactListProps) {
+  return (
+    <div className="divide-y rounded-md border bg-card">
+      {rows.map((row) => {
+        const Icon = iconForType?.(row.type) ?? iconForMetadataType(row.type);
+        const canPreview = PREVIEWABLE_TYPES.has(row.type);
+        return (
+          <div
+            key={`${row.type}:${row.name}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(row)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen(row);
+              }
+            }}
+            className="group grid cursor-pointer grid-cols-[auto_minmax(0,2fr)_minmax(0,3fr)_auto_auto] items-center gap-3 px-3 py-2 text-sm transition hover:bg-muted/40 focus:bg-muted/40 focus:outline-none"
+          >
+            {Icon ? <Icon className="h-4 w-4 shrink-0 text-muted-foreground" /> : <span className="w-4" />}
+            <div className="min-w-0">
+              <div className="truncate font-medium" title={row.label}>{row.label}</div>
+              <code className="truncate text-[11px] text-muted-foreground/70" title={row.name}>
+                {row.name}
+              </code>
+            </div>
+            <p className="line-clamp-1 text-xs text-muted-foreground" title={row.description ?? ''}>
+              {row.description ?? ''}
+            </p>
+            <div className="flex items-center gap-2">
+              {showTypeBadge && (
+                <Badge variant="secondary" className="text-[10px]">{typeLabel(row.type)}</Badge>
+              )}
+              {row.updatedAt && (
+                <span className="hidden text-[10px] text-muted-foreground/70 md:inline" title={row.updatedAt}>
+                  {formatRelative(row.updatedAt)}
+                </span>
+              )}
+            </div>
+            {canPreview ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 opacity-40 transition group-hover:opacity-100"
+                title="Preview"
+                aria-label={`Preview ${row.label}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPreview(row);
+                }}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            ) : <span className="w-6" />}
+          </div>
+        );
+      })}
     </div>
   );
 }
