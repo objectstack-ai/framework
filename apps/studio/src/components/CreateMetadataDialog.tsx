@@ -285,7 +285,7 @@ export function CreateMetadataDialog({
               id="cmd-label"
               value={label}
               onChange={e => setLabel(e.target.value)}
-              placeholder="My new view"
+              placeholder={template ? `My new ${template.label.toLowerCase()}` : 'My new item'}
               autoFocus
             />
             <p className="text-[10px] text-muted-foreground">
@@ -298,7 +298,7 @@ export function CreateMetadataDialog({
               id="cmd-name"
               value={machineName}
               onChange={e => { setMachineName(toSnakeCase(e.target.value)); setMachineEdited(true); }}
-              placeholder="my_new_view"
+              placeholder={template ? `my_new_${template.type}` : 'my_new_item'}
               className="font-mono"
             />
             <p className="text-[10px] text-muted-foreground">
