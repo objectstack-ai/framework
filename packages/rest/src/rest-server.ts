@@ -759,13 +759,44 @@ export class RestServer {
                     }
                 }
             } catch { /* fall through with empty perms */ }
+            // Pre-resolve fellow-org user IDs so RLS can scope identity
+            // tables (sys_user) to org collaborators. Cap at 1000. See
+            // `@objectstack/runtime/security/resolve-execution-context.ts`
+            // for the mirror implementation in the dispatcher path.
+            let org_user_ids: string[] = [userId];
+            if (tenantId) {
+                try {
+                    let ql: any;
+                    if (kernel) {
+                        ql = await kernel.getServiceAsync('objectql').catch(() => undefined);
+                    }
+                    if (!ql && this.objectQLProvider) {
+                        ql = await this.objectQLProvider(projectId).catch(() => undefined);
+                    }
+                    if (ql && typeof ql.find === 'function') {
+                        const sysOpts = { context: { isSystem: true } };
+                        const memberRows = await ql.find('sys_member', {
+                            where: { organization_id: tenantId },
+                            limit: 1000,
+                            ...sysOpts,
+                        } as any).catch(() => []);
+                        const ids = new Set<string>([userId]);
+                        for (const m of (memberRows ?? []) as any[]) {
+                            const uid = m.user_id ?? m.userId;
+                            if (typeof uid === 'string' && uid.length > 0) ids.add(uid);
+                        }
+                        org_user_ids = Array.from(ids);
+                    }
+                } catch { /* fall back to self-only */ }
+            }
             return {
                 userId,
                 tenantId,
                 roles,
                 permissions,
                 isSystem: false,
-            };
+                org_user_ids,
+            } as any;
         } catch {
             return undefined;
         }

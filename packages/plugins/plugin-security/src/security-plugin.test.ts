@@ -744,6 +744,43 @@ describe('RLSCompiler', () => {
     expect(filter).toEqual({ id: { $in: ['role-a', 'role-b'] } });
   });
 
+  it('should compile IN expression against pre-resolved org_user_ids', () => {
+    // Covers the sys_user_org_members policy that lets members see
+    // fellow collaborators in the active organization. The runtime
+    // resolver populates ctx.org_user_ids from sys_member; the
+    // compiler reads it as an arbitrary current_user.* property.
+    const compiler = new RLSCompiler();
+    const policy: any = {
+      object: 'sys_user',
+      operation: 'select',
+      using: 'id IN (current_user.org_user_ids)',
+    };
+    const ctx: any = {
+      userId: 'u1',
+      tenantId: 'org-1',
+      roles: [],
+      org_user_ids: ['u1', 'u2', 'u3'],
+    };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual({ id: { $in: ['u1', 'u2', 'u3'] } });
+  });
+
+  it('should fail-closed for IN when org_user_ids is empty', () => {
+    // No active org → no fellow members. The IN policy drops out;
+    // since it was the only policy supplied, the compiler returns
+    // the deny sentinel (zero rows). Real callers usually pair this
+    // with a sys_user_self policy so the user still sees their own row.
+    const compiler = new RLSCompiler();
+    const policy: any = {
+      object: 'sys_user',
+      operation: 'select',
+      using: 'id IN (current_user.org_user_ids)',
+    };
+    const ctx: any = { userId: 'u1', tenantId: null, roles: [], org_user_ids: [] };
+    const filter = compiler.compileFilter([policy], ctx);
+    expect(filter).toEqual(RLS_DENY_FILTER);
+  });
+
   it('should OR-combine multiple policies', () => {
     const compiler = new RLSCompiler();
     const p1: any = { object: 'task', operation: 'select', using: 'owner_id = current_user.id' };

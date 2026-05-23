@@ -183,6 +183,36 @@ export async function resolveExecutionContext(opts: ResolveOptions): Promise<Exe
     }
   }
 
+  // 3a. Resolve fellow-organization user IDs so RLS can scope identity
+  //     tables (`sys_user`) to collaborators in the active org via
+  //     `id IN (current_user.org_user_ids)`. Without this, the default
+  //     `id = current_user.id` policy on sys_user makes @-mention pickers,
+  //     owner/assignee lookups and reviewer selectors all return just the
+  //     current user. Hard-capped at 1000 members per request — large
+  //     enterprises should plug in a cache or directory adapter.
+  if (tenantId) {
+    const orgMembers = await tryFind(
+      ql,
+      'sys_member',
+      { organization_id: tenantId },
+      1000,
+    );
+    const orgUserIds = Array.from(
+      new Set(
+        orgMembers
+          .map((m) => m.user_id ?? m.userId)
+          .filter((v): v is string => typeof v === 'string' && v.length > 0),
+      ),
+    );
+    // Always include self even if the sys_member lookup misfires (e.g.
+    // API key auth where the user is recognised but not in sys_member).
+    if (!orgUserIds.includes(userId)) orgUserIds.push(userId);
+    (ctx as any).org_user_ids = orgUserIds;
+  } else {
+    // No active org → at minimum the user can see themselves.
+    (ctx as any).org_user_ids = [userId];
+  }
+
   // Resolve user-scoped permission sets.
   const upsRows = await tryFind(
     ql,

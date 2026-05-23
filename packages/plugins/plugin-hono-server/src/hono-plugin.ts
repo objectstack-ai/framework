@@ -461,13 +461,39 @@ export class HonoServerPlugin implements Plugin {
                 } catch {
                     /* fall through with whatever we resolved so far */
                 }
+                // Resolve fellow-org user IDs so identity-table RLS (sys_user
+                // org-members policy) can scope @-mention pickers, owner
+                // lookups and reviewer selectors to the active organization.
+                // Mirrors the resolvers in `@objectstack/rest` and
+                // `@objectstack/runtime` so all three REST entry-points
+                // produce a consistent ExecutionContext shape.
+                let orgUserIds: string[] = [userId];
+                if (tenantId) {
+                    try {
+                        const ql = getObjectQL();
+                        const sysCtx = { context: { isSystem: true } };
+                        const memberRows = await ql?.find?.(
+                            'sys_member',
+                            { where: { organization_id: tenantId }, limit: 1000, ...sysCtx } as any,
+                        ).catch(() => []);
+                        const ids = new Set<string>([userId]);
+                        for (const m of (memberRows ?? []) as any[]) {
+                            const uid = m.user_id ?? m.userId;
+                            if (typeof uid === 'string' && uid.length > 0) ids.add(uid);
+                        }
+                        orgUserIds = Array.from(ids);
+                    } catch {
+                        /* fall back to self-only */
+                    }
+                }
                 return {
                     userId,
                     tenantId,
                     roles,
                     permissions,
                     isSystem: false,
-                };
+                    org_user_ids: orgUserIds,
+                } as any;
             } catch {
                 return undefined;
             }

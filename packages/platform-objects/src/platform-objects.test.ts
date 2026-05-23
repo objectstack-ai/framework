@@ -103,6 +103,7 @@ describe('@objectstack/platform-objects', () => {
         'sys_session_self',
         'sys_team_member_self',
         'sys_two_factor_self',
+        'sys_user_org_members',
         'sys_user_preference_self',
         'sys_user_self',
         'tenant_isolation',

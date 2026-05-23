@@ -151,6 +151,20 @@ export const defaultPermissionSets: PermissionSet[] = [
         operation: 'select',
         using: 'id = current_user.id',
       },
+      // Org collaborators: members can see other users in the same
+      // organization. Without this, owner/assignee lookups, @-mention
+      // suggestions, reviewer pickers and team-roster surfaces all
+      // collapse to just the current user. `org_user_ids` is
+      // pre-resolved by runtime/resolve-execution-context from
+      // `sys_member` for the active organization. Sensitive credential
+      // tables (`sys_account`, `sys_session`, `sys_api_key`, …) keep
+      // their stricter self-only carve-outs above.
+      {
+        name: 'sys_user_org_members',
+        object: 'sys_user',
+        operation: 'select',
+        using: 'id IN (current_user.org_user_ids)',
+      },
       {
         name: 'sys_session_self',
         object: 'sys_session',
@@ -248,8 +262,14 @@ export const defaultPermissionSets: PermissionSet[] = [
         operation: 'select',
         using: 'id = current_user.id',
       },
-      // ── Per-user visibility on better-auth tables that lack
-      //    `organization_id` (matches the `member_default` carve-outs).
+      // Org collaborators (read-only): see `sys_user_org_members` in
+      // `member_default` for rationale.
+      {
+        name: 'sys_user_org_members',
+        object: 'sys_user',
+        operation: 'select',
+        using: 'id IN (current_user.org_user_ids)',
+      },
       {
         name: 'sys_session_self',
         object: 'sys_session',

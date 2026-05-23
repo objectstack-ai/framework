@@ -18,6 +18,14 @@ interface RLSUserContext {
    */
   organization_id?: string;
   roles?: string[];
+  /**
+   * IDs of all users that share the active organization with the
+   * current user (incl. self). Pre-resolved by the runtime so RLS can
+   * scope identity tables like `sys_user` via
+   * `id IN (current_user.org_user_ids)` without needing subquery
+   * support in the compiler.
+   */
+  org_user_ids?: string[];
   [key: string]: unknown;
 }
 
@@ -70,6 +78,7 @@ export class RLSCompiler {
       id: executionContext?.userId,
       organization_id: executionContext?.tenantId,
       roles: executionContext?.roles,
+      org_user_ids: (executionContext as any)?.org_user_ids,
     };
 
     const filters: Record<string, unknown>[] = [];

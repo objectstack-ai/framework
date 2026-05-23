@@ -30,6 +30,15 @@ export const ExecutionContextSchema = lazySchema(() => z.object({
   
   /** Aggregated permission names (resolved from PermissionSet) */
   permissions: z.array(z.string()).default([]),
+
+  /**
+   * IDs of all users in the active organization. Pre-resolved so RLS
+   * expressions can scope visibility of identity tables (`sys_user`)
+   * via `IN (current_user.org_user_ids)` without needing subquery
+   * support in the RLS compiler. Populated by the runtime's
+   * resolveExecutionContext from `sys_member`.
+   */
+  org_user_ids: z.array(z.string()).optional(),
   
   /** Whether this is a system-level operation (bypasses permission checks) */
   isSystem: z.boolean().default(false),
