@@ -19,6 +19,7 @@ import { ResourceActionsMenu } from '@/components/ResourceActionsMenu';
 import { useSetInspectorTarget } from '@/hooks/useInspector';
 import { usePackages } from '@/hooks/usePackages';
 import { useMetadataHmr } from '@/hooks/useMetadataHmr';
+import { useRecentItems } from '@/hooks/useRecentItems';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Database, Layers, Columns3, Hash } from 'lucide-react';
 import { RELATED_TYPES, itemReferencesObject } from '@/components/object-related/detector';
@@ -42,15 +43,24 @@ function ObjectHubComponent() {
   const [recordCountIsLowerBound, setRecordCountIsLowerBound] = useState(false);
 
   useSetInspectorTarget({ type: 'object', name, packageId: resolvedPackageId });
+  const { record: recordRecent } = useRecentItems(resolvedPackageId);
 
   useEffect(() => {
     let cancelled = false;
     client.meta
       .getItem('object', name)
-      .then((obj: any) => { if (!cancelled) setObject(obj?.spec ?? obj ?? null); })
+      .then((obj: any) => {
+        if (cancelled) return;
+        const spec = obj?.spec ?? obj ?? null;
+        setObject(spec);
+        // Record the visit in the recent-items MRU so the home page
+        // surface it. We only have a useful label after the spec loads.
+        const label = resolveLabel(spec?.label) || spec?.name || name;
+        recordRecent({ type: 'object', name, label });
+      })
       .catch(() => { if (!cancelled) setObject(null); });
     return () => { cancelled = true; };
-  }, [client, name, hmrVersion]);
+  }, [client, name, hmrVersion, recordRecent]);
 
   // Background: tally related-metadata items + live record count for the header chips.
   useEffect(() => {

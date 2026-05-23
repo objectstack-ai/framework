@@ -6,6 +6,7 @@ import { useClient } from '@objectstack/client-react';
 import { PluginHost } from '../plugins';
 import { usePackages } from '../hooks/usePackages';
 import { useSetInspectorTarget } from '@/hooks/useInspector';
+import { useRecentItems } from '@/hooks/useRecentItems';
 import { ResourceActionsMenu } from '@/components/ResourceActionsMenu';
 import { iconForMetadataType, typeLabel } from '@/components/studio-nav';
 import { pickLabel, pickDescription, humanizeName } from '@/lib/metadata-display';
@@ -16,6 +17,7 @@ function MetadataViewComponent() {
   const { selectedPackage } = usePackages(packageId);
   const resolvedPkgId = selectedPackage?.manifest?.id ?? packageId;
   useSetInspectorTarget({ type, name, packageId: resolvedPkgId });
+  const { record: recordRecent } = useRecentItems(resolvedPkgId);
 
   const client = useClient();
   const [item, setItem] = useState<any>(null);
@@ -29,13 +31,16 @@ function MetadataViewComponent() {
           name,
           resolvedPkgId ? { packageId: resolvedPkgId } : undefined,
         );
-        if (!cancelled) setItem(it);
+        if (cancelled) return;
+        setItem(it);
+        const label = pickLabel({ ...(it || {}), name }) || humanizeName(name) || name;
+        recordRecent({ type, name, label });
       } catch {
         if (!cancelled) setItem(null);
       }
     })();
     return () => { cancelled = true; };
-  }, [client, type, name, resolvedPkgId]);
+  }, [client, type, name, resolvedPkgId, recordRecent]);
 
   const label = item ? pickLabel({ ...item, name }) : humanizeName(name) || name;
   const description = item ? pickDescription(item, type) : undefined;

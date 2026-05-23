@@ -13,6 +13,14 @@ function PackageIndexComponent() {
     // Map common overview links → existing studio routes. Anything we
     // don't have a dedicated page for (e.g. "packages") just stays put.
     const safePackage = packageId;
+    // Recent-items uses "metadata:{type}" to navigate to a non-object
+    // metadata item (views, forms, flows, agents, …). The destination
+    // is the unified metadata viewer route.
+    if (view.startsWith('metadata:') && detail) {
+      const type = view.slice('metadata:'.length);
+      navigate({ to: `/${safePackage}/metadata/${type}/${detail}` as any });
+      return;
+    }
     switch (view) {
       case 'home':
       case 'overview':

@@ -79,6 +79,40 @@ const FIELD_TYPE_COLORS: Record<string, string> = {
   location: 'text-rose-600 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950 dark:border-rose-800',
 };
 
+/**
+ * Human-readable explanation for each field type, surfaced as a hover
+ * tooltip on the colored type chip. Kept here (not pulled from
+ * AddFieldDialog) to avoid a cross-import that would make the dialog
+ * load on the Fields panel mount. Each entry is one short sentence.
+ */
+const FIELD_TYPE_DESCRIPTIONS: Record<string, string> = {
+  text: 'Short string up to 255 characters.',
+  longtext: 'Multi-paragraph text, no length cap.',
+  textarea: 'Multi-line plain text.',
+  richtext: 'Rich-text HTML body.',
+  number: 'Integer or decimal value.',
+  currency: 'Monetary amount (locale-aware display).',
+  percent: 'Percentage 0–100, rendered with % suffix.',
+  autonumber: 'Auto-incrementing sequential number.',
+  boolean: 'True / false toggle.',
+  select: 'Pick one value from a fixed option list.',
+  multiselect: 'Pick many values from a fixed option list.',
+  lookup: 'Reference to a record in another object.',
+  reference: 'Reference to a record in another object.',
+  formula: 'Computed value from a CEL expression.',
+  date: 'Calendar day, no time component.',
+  datetime: 'Instant in time with timezone.',
+  time: 'Clock time, no date component.',
+  email: 'Validated email address.',
+  phone: 'Phone number, free-form.',
+  url: 'Validated http(s) URL.',
+  address: 'Structured postal address.',
+  json: 'Arbitrary JSON blob (free shape).',
+  object: 'Embedded JSON object.',
+  markdown: 'Markdown-formatted body text.',
+  location: 'Latitude / longitude pair.',
+};
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e: React.MouseEvent) => {
@@ -241,11 +275,24 @@ export function ObjectSchemaInspector({ objectApiName }: ObjectSchemaInspectorPr
                       </TableCell>
                       <TableCell className="py-2 text-sm">{field.label}</TableCell>
                       <TableCell className="py-2">
-                        <Badge variant="outline" className={`gap-1 text-xs ${colorClass}`}>
-                          <FieldIcon className="h-3 w-3" />
-                          {field.type}
-                          {field.multiple && '[]'}
-                        </Badge>
+                        <TooltipProvider delayDuration={250}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="outline" className={`gap-1 text-xs cursor-help ${colorClass}`}>
+                                <FieldIcon className="h-3 w-3" />
+                                {field.type}
+                                {field.multiple && '[]'}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <p className="text-xs">
+                                <span className="font-mono font-medium">{field.type}{field.multiple ? '[]' : ''}</span>
+                                {' — '}
+                                {FIELD_TYPE_DESCRIPTIONS[field.type] || 'Custom field type.'}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell className="py-2">
                         {field.required ? (
