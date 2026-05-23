@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { InstalledPackage } from '@objectstack/spec/kernel';
 import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
+import { iconForMetadataType, typeLabel } from '@/components/studio-nav';
 
 /**
  * The metadata backend currently exposes both the canonical camelCase
@@ -257,20 +258,24 @@ export function DeveloperOverview({ packages, selectedPackage, onNavigate = () =
                 dedupeRegistryEntries(stats.metadata.types, stats.metadata.counts)
                   .filter(([, count]) => count > 0)
                   .sort((a, b) => b[1] - a[1])
-                  .map(([type, count]) => (
-                    <div
-                      key={type}
-                      className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-default"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm font-mono">{type}</span>
+                  .map(([type, count]) => {
+                    const Icon = iconForMetadataType(type) ?? Code2;
+                    return (
+                      <div
+                        key={type}
+                        className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-default"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm">{typeLabel(type)}</span>
+                          <code className="text-[10px] text-muted-foreground/60 font-mono">{type}</code>
+                        </div>
+                        <Badge variant="secondary" className="text-xs font-mono">
+                          {count}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary" className="text-xs font-mono">
-                        {count}
-                      </Badge>
-                    </div>
-                  ))
+                    );
+                  })
               )}
             </div>
           </CardContent>

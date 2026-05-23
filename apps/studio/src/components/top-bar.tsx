@@ -48,6 +48,7 @@ const META_TYPE_LABELS: Record<string, string> = {
   view: 'Views',
   app: 'Apps',
   tool: 'Tools',
+  skill: 'Skills',
   workflow: 'Workflows',
   approval: 'Approvals',
   webhook: 'Webhooks',
@@ -57,11 +58,25 @@ const META_TYPE_LABELS: Record<string, string> = {
   connector: 'Connectors',
   object: 'Objects',
   hook: 'Hooks',
+  trigger: 'Triggers',
+  function: 'Functions',
   mapping: 'Mappings',
   analyticsCube: 'Analytics Cubes',
   page: 'Pages',
   theme: 'Themes',
 };
+
+/** Pluralise + Title Case fallback when a type isn't in {@link META_TYPE_LABELS}. */
+function pluralMetaLabel(type: string): string {
+  if (META_TYPE_LABELS[type]) return META_TYPE_LABELS[type];
+  // Convert camelCase/snake_case to spaced Title Case, then add 's'.
+  const spaced = type
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  const titled = spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return titled.endsWith('s') ? titled : `${titled}s`;
+}
 
 function StudioBrand() {
   return (
@@ -151,7 +166,7 @@ export function TopBar({ rightSlot }: { rightSlot?: React.ReactNode } = {}) {
         break;
       case 'metadata':
         if (params.type) {
-          items.push({ label: META_TYPE_LABELS[params.type] || params.type });
+          items.push({ label: pluralMetaLabel(params.type) });
         }
         if (params.name) items.push({ label: params.name });
         break;

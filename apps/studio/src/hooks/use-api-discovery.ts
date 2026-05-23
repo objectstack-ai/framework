@@ -288,14 +288,21 @@ export function useApiDiscovery(projectId?: string) {
         // Objects may not be available
       }
 
-      // 5. Build dynamic data endpoints for each object
-      const dataEndpoints: EndpointDef[] = objectNames.flatMap(name => [
-        { method: 'GET' as HttpMethod, path: `${scopePrefix}/data/${name}`, desc: `List ${name}`, group: `Data: ${name}` },
-        { method: 'POST' as HttpMethod, path: `${scopePrefix}/data/${name}`, desc: `Create ${name}`, group: `Data: ${name}`, bodyTemplate: { name: 'example' } },
-        { method: 'GET' as HttpMethod, path: `${scopePrefix}/data/${name}/:id`, desc: `Get ${name} by ID`, group: `Data: ${name}` },
-        { method: 'PATCH' as HttpMethod, path: `${scopePrefix}/data/${name}/:id`, desc: `Update ${name}`, group: `Data: ${name}`, bodyTemplate: { name: 'updated' } },
-        { method: 'DELETE' as HttpMethod, path: `${scopePrefix}/data/${name}/:id`, desc: `Delete ${name}`, group: `Data: ${name}` },
-      ]);
+      // 5. Build dynamic data endpoints for each object.
+       // Collapse `sys_*` framework tables into a single "System tables" group
+       // so the user's own objects (account, contact, …) aren't drowned out by
+       // 30+ system rows in the playground sidebar.
+      const dataEndpoints: EndpointDef[] = objectNames.flatMap(name => {
+        const isSystem = name.startsWith('sys_');
+        const group = isSystem ? 'Data: system tables' : `Data: ${name}`;
+        return [
+          { method: 'GET' as HttpMethod, path: `${scopePrefix}/data/${name}`, desc: `List ${name}`, group },
+          { method: 'POST' as HttpMethod, path: `${scopePrefix}/data/${name}`, desc: `Create ${name}`, group, bodyTemplate: { name: 'example' } },
+          { method: 'GET' as HttpMethod, path: `${scopePrefix}/data/${name}/:id`, desc: `Get ${name} by ID`, group },
+          { method: 'PATCH' as HttpMethod, path: `${scopePrefix}/data/${name}/:id`, desc: `Update ${name}`, group, bodyTemplate: { name: 'updated' } },
+          { method: 'DELETE' as HttpMethod, path: `${scopePrefix}/data/${name}/:id`, desc: `Delete ${name}`, group },
+        ];
+      });
 
       // 6. Build metadata endpoints for each type
       const metaEndpoints: EndpointDef[] = metaTypes

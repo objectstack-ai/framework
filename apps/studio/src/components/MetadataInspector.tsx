@@ -250,8 +250,10 @@ export function MetadataInspector({ metaType, metaName, packageId }: MetadataIns
     );
   }
 
-  // Build a filtered view of all properties
-  const allKeys = Object.keys(item);
+  // Build a filtered view of all properties. Hide internal underscore-prefixed
+  // keys (_packageId, _updatedAt, _id, …) — they're framework bookkeeping, not
+  // user-authored metadata.
+  const allKeys = Object.keys(item).filter((k) => !k.startsWith('_'));
   const filteredKeys = searchQuery
     ? allKeys.filter(k =>
         k.toLowerCase().includes(searchQuery.toLowerCase()) ||

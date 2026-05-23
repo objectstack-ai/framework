@@ -8,7 +8,7 @@ import { usePackages } from '../hooks/usePackages';
 import { useSetInspectorTarget } from '@/hooks/useInspector';
 import { ResourceActionsMenu } from '@/components/ResourceActionsMenu';
 import { iconForMetadataType, typeLabel } from '@/components/studio-nav';
-import { pickLabel, pickDescription } from '@/lib/metadata-display';
+import { pickLabel, pickDescription, humanizeName } from '@/lib/metadata-display';
 import { Badge } from '@/components/ui/badge';
 
 function MetadataViewComponent() {
@@ -37,9 +37,12 @@ function MetadataViewComponent() {
     return () => { cancelled = true; };
   }, [client, type, name, resolvedPkgId]);
 
-  const label = item ? pickLabel({ ...item, name }) : name;
+  const label = item ? pickLabel({ ...item, name }) : humanizeName(name) || name;
   const description = item ? pickDescription(item, type) : undefined;
   const Icon = iconForMetadataType(type);
+  // Hide the redundant machine-name chip when it'd just repeat the label
+  // (e.g. labelless items where label was humanised from the same name).
+  const showNameChip = label !== name;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -52,9 +55,11 @@ function MetadataViewComponent() {
             >
               {Icon && <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />}
               <span className="truncate">{label}</span>
-              <code className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                {name}
-              </code>
+              {showNameChip && (
+                <code className="ml-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                  {name}
+                </code>
+              )}
               <Badge variant="secondary" className="text-[10px]">
                 {typeLabel(type)}
               </Badge>
