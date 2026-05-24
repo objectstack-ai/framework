@@ -15,6 +15,7 @@ import {
     DeliveryRetentionSweeper,
     type DeliveryRetentionOptions,
 } from './retention.js';
+import { SqlWebhookOutbox } from './sql-outbox.js';
 import { SysWebhookDelivery } from './sys-webhook-delivery.object.js';
 
 export interface WebhookOutboxPluginOptions
@@ -171,11 +172,13 @@ export class WebhookOutboxPlugin implements Plugin {
         }
 
         // Loud warning when running with the in-memory outbox in production —
-        // it loses data on restart and never shares rows across nodes.
+        // it loses data on restart and never shares rows across nodes. With
+        // the auto-pick logic above this only fires when no IDataEngine is
+        // available, but flag it loudly anyway.
         const usingMemoryOutbox = outbox instanceof MemoryWebhookOutbox;
         if (usingMemoryOutbox && process.env.NODE_ENV === 'production') {
             ctx.logger.warn?.(
-                '[webhook-outbox] MemoryWebhookOutbox in production — webhook deliveries WILL be lost on process exit. Pass `outbox: (ctx) => new SqlWebhookOutbox(ctx.getService("objectql"), { partitionCount: 8 })` from `@objectstack/plugin-webhooks/sql`.',
+                '[webhook-outbox] MemoryWebhookOutbox in production — webhook deliveries WILL be lost on process exit. Ensure ObjectQL is registered before WebhookOutboxPlugin so the SQL outbox can auto-select.',
             );
         }
 
@@ -189,6 +192,20 @@ export class WebhookOutboxPlugin implements Plugin {
             (ctx as any).hook('kernel:ready', async () => {
                 await this.bootAutoEnqueue(ctx, autoEnqueueOpt);
                 this.bootRetention(ctx, retentionOpt);
+            });
+        }
+
+        // Admin REST endpoint — POST /api/v1/webhooks/redeliver { deliveryId }.
+        // Wired in `kernel:ready` so the auth + http services are guaranteed
+        // resolvable. Gated on a session cookie so anonymous callers cannot
+        // replay deliveries; finer-grained RBAC (e.g. "only admins") can be
+        // layered on later — for now any signed-in user with access to the
+        // Setup app can redeliver. The action is also `disabled`-gated by
+        // status on the Studio side so the button only lights up on
+        // success / failed / dead rows.
+        if (typeof (ctx as any).hook === 'function') {
+            (ctx as any).hook('kernel:ready', () => {
+                this.registerAdminRoutes(ctx);
             });
         }
 
@@ -209,9 +226,32 @@ export class WebhookOutboxPlugin implements Plugin {
 
     private resolveOutbox(ctx: PluginContext): IWebhookOutbox {
         const opt = this.options.outbox;
-        if (!opt) return new MemoryWebhookOutbox();
-        if (typeof opt === 'function') return (opt as (c: PluginContext) => IWebhookOutbox)(ctx);
-        return opt;
+        if (opt) {
+            return typeof opt === 'function'
+                ? (opt as (c: PluginContext) => IWebhookOutbox)(ctx)
+                : opt;
+        }
+        // No explicit override — auto-pick the right backend for the host.
+        // SqlWebhookOutbox needs an `IDataEngine`; if one is resolvable
+        // (the usual case in CLI-served stacks), use it so durable rows
+        // in `sys_webhook_delivery` actually round-trip through the
+        // dispatcher and the redeliver REST endpoint. Memory is only a
+        // last-resort fallback for tests / edge environments without an
+        // engine.
+        const engine = this.tryGetService<IDataEngine>(ctx, ['objectql', 'data']);
+        if (engine) {
+            const partitionCount = this.options.partitionCount ?? 8;
+            const sql = new SqlWebhookOutbox(engine, { partitionCount });
+            ctx.logger.info?.(
+                '[webhook-outbox] auto-selected SqlWebhookOutbox (objectql engine detected)',
+                { partitionCount },
+            );
+            return sql;
+        }
+        ctx.logger.warn?.(
+            '[webhook-outbox] no IDataEngine available — falling back to MemoryWebhookOutbox. Deliveries will NOT survive process restart and the redeliver REST endpoint will not see rows written through ObjectQL.',
+        );
+        return new MemoryWebhookOutbox();
     }
 
     private async bootAutoEnqueue(
@@ -276,5 +316,127 @@ export class WebhookOutboxPlugin implements Plugin {
             }
         }
         return undefined;
+    }
+
+    /**
+     * Mount POST /api/v1/webhooks/redeliver on the host Hono app, if one
+     * is available. Silently no-ops in environments without an HTTP
+     * server (MSW, edge tests, pure library use). Auth is delegated to
+     * the better-auth session cookie — every authenticated user counts.
+     */
+    private registerAdminRoutes(ctx: PluginContext): void {
+        const http = this.tryGetService<any>(ctx, ['http-server']);
+        if (!http || typeof http.getRawApp !== 'function') {
+            ctx.logger.debug?.(
+                '[webhook-outbox] HTTP server not available; redeliver REST endpoint not mounted',
+            );
+            return;
+        }
+        const rawApp = http.getRawApp();
+        const outbox = this.outboxInstance;
+        if (!rawApp || !outbox) return;
+
+        rawApp.post('/api/v1/webhooks/redeliver', async (c: any) => {
+            // Auth gate — require a signed-in session.
+            const userId = await this.resolveSessionUserId(ctx, c);
+            if (!userId) {
+                return c.json(
+                    {
+                        success: false,
+                        error: 'unauthenticated',
+                        message: 'Sign in to redeliver webhook deliveries.',
+                    },
+                    401,
+                );
+            }
+            let body: any;
+            try {
+                body = await c.req.json();
+            } catch {
+                return c.json(
+                    {
+                        success: false,
+                        error: 'invalid_body',
+                        message: 'Request body must be JSON.',
+                    },
+                    400,
+                );
+            }
+            const deliveryId =
+                typeof body?.deliveryId === 'string' ? body.deliveryId.trim() : '';
+            if (!deliveryId) {
+                return c.json(
+                    {
+                        success: false,
+                        error: 'missing_delivery_id',
+                        message: 'Body must include `deliveryId: string`.',
+                    },
+                    400,
+                );
+            }
+            try {
+                const row = await outbox.redeliver(deliveryId);
+                ctx.logger.info?.('[webhook-outbox] redelivered', {
+                    deliveryId,
+                    requestedBy: userId,
+                });
+                return c.json({ success: true, data: { id: row.id, status: row.status } });
+            } catch (err: any) {
+                const code = err?.code;
+                if (code === 'not_found') {
+                    return c.json(
+                        { success: false, error: 'not_found', message: err.message },
+                        404,
+                    );
+                }
+                if (code === 'not_eligible') {
+                    return c.json(
+                        { success: false, error: 'not_eligible', message: err.message },
+                        409,
+                    );
+                }
+                ctx.logger.error?.(
+                    '[webhook-outbox] redeliver failed',
+                    err as Error,
+                );
+                return c.json(
+                    {
+                        success: false,
+                        error: 'internal_error',
+                        message: err?.message ?? String(err),
+                    },
+                    500,
+                );
+            }
+        });
+
+        ctx.logger.info?.(
+            '[webhook-outbox] redeliver endpoint mounted at POST /api/v1/webhooks/redeliver',
+        );
+    }
+
+    /**
+     * Resolve the requesting user's id from a better-auth session cookie.
+     * Returns `undefined` for anonymous callers — the caller decides
+     * whether that's a 401.
+     */
+    private async resolveSessionUserId(
+        ctx: PluginContext,
+        c: any,
+    ): Promise<string | undefined> {
+        try {
+            const authService: any = this.tryGetService<any>(ctx, ['auth']);
+            if (!authService) return undefined;
+            let api: any = authService.api;
+            if (!api && typeof authService.getApi === 'function') {
+                api = await authService.getApi();
+            }
+            if (!api?.getSession) return undefined;
+            const session = await api.getSession({ headers: c.req.raw.headers });
+            const uid = session?.user?.id;
+            return typeof uid === 'string' && uid.length > 0 ? uid : undefined;
+        } catch {
+            return undefined;
+        }
     }
 }

@@ -10,6 +10,7 @@ import type {
     IWebhookOutbox,
     WebhookDelivery,
 } from './outbox.js';
+import { RedeliverError } from './outbox.js';
 import { hashPartition } from './partition.js';
 import { SYS_WEBHOOK_DELIVERY } from './schema.js';
 
@@ -252,6 +253,66 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
             where: filter?.status ? { status: filter.status } : {},
         })) as DeliveryRow[];
         return rows.map((r) => this.toDelivery(r));
+    }
+
+    async redeliver(id: string): Promise<WebhookDelivery> {
+        const current = (await this.engine.findOne(this.objectName, {
+            where: { id },
+        })) as DeliveryRow | null;
+        if (!current) {
+            throw new RedeliverError(
+                `Delivery row '${id}' not found`,
+                'not_found',
+            );
+        }
+        if (
+            current.status !== 'success' &&
+            current.status !== 'failed' &&
+            current.status !== 'dead'
+        ) {
+            throw new RedeliverError(
+                `Delivery row '${id}' is '${current.status}', expected one of: success, failed, dead`,
+                'not_eligible',
+            );
+        }
+        const now = Date.now();
+        // Guarded UPDATE — re-check status server-side so two concurrent
+        // redeliver calls cannot both flip the row, and so a dispatcher
+        // tick that flipped the row to in_flight between our SELECT and
+        // UPDATE cannot be clobbered.
+        await this.engine.update(
+            this.objectName,
+            {
+                status: 'pending',
+                attempts: 0,
+                claimed_by: null,
+                claimed_at: null,
+                next_retry_at: null,
+                last_attempted_at: null,
+                response_code: null,
+                response_body: null,
+                error: null,
+                updated_at: now,
+            },
+            {
+                where: {
+                    id,
+                    status: { $in: ['success', 'failed', 'dead'] },
+                },
+                multi: false,
+            },
+        );
+        const after = (await this.engine.findOne(this.objectName, {
+            where: { id },
+        })) as DeliveryRow | null;
+        if (!after || after.status !== 'pending') {
+            // Lost the race — another writer flipped the row.
+            throw new RedeliverError(
+                `Delivery row '${id}' state changed during redeliver`,
+                'not_eligible',
+            );
+        }
+        return this.toDelivery(after);
     }
 
     private toDelivery(r: DeliveryRow): WebhookDelivery {

@@ -42,6 +42,28 @@ export const SysWebhookDelivery = ObjectSchema.create({
     titleFormat: '{event_type} → {url}',
     compactLayout: ['event_type', 'url', 'status', 'attempts', 'next_retry_at'],
 
+    actions: [
+        {
+            name: 'redeliver',
+            label: 'Redeliver',
+            icon: 'refresh-cw',
+            variant: 'secondary',
+            locations: ['list_item', 'record_header'],
+            type: 'api',
+            target: '/api/v1/webhooks/redeliver',
+            method: 'POST',
+            recordIdParam: 'deliveryId',
+            confirmText:
+                'Replay this delivery? The receiver will get the original payload again — they must be idempotent on the X-Objectstack-Delivery header.',
+            successMessage: 'Queued for redelivery',
+            refreshAfter: true,
+            // Only terminal rows are safe to replay. Pending / in_flight rows
+            // are either already queued or actively being sent — replaying
+            // would double-deliver.
+            disabled: "!(status in ['success', 'failed', 'dead'])",
+        },
+    ],
+
     listViews: {
         recent: {
             type: 'grid',

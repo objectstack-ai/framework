@@ -9,6 +9,7 @@ import type {
     IWebhookOutbox,
     WebhookDelivery,
 } from './outbox.js';
+import { RedeliverError } from './outbox.js';
 import { hashPartition } from './partition.js';
 
 /**
@@ -123,5 +124,32 @@ export class MemoryWebhookOutbox implements IWebhookOutbox {
     async list(filter?: { status?: DeliveryStatus }): Promise<WebhookDelivery[]> {
         const all = Array.from(this.rows.values()).map((r) => ({ ...r }));
         return filter?.status ? all.filter((r) => r.status === filter.status) : all;
+    }
+
+    async redeliver(id: string): Promise<WebhookDelivery> {
+        const row = this.rows.get(id);
+        if (!row) {
+            throw new RedeliverError(
+                `Delivery row '${id}' not found`,
+                'not_found',
+            );
+        }
+        if (row.status !== 'success' && row.status !== 'failed' && row.status !== 'dead') {
+            throw new RedeliverError(
+                `Delivery row '${id}' is '${row.status}', expected one of: success, failed, dead`,
+                'not_eligible',
+            );
+        }
+        const now = Date.now();
+        row.status = 'pending';
+        row.attempts = 0;
+        row.claimedBy = undefined;
+        row.claimedAt = undefined;
+        row.nextRetryAt = undefined;
+        row.error = undefined;
+        row.responseCode = undefined;
+        row.responseBody = undefined;
+        row.updatedAt = now;
+        return { ...row };
     }
 }

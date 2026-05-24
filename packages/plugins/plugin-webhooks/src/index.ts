@@ -53,3 +53,4 @@ export type {
     IWebhookOutbox,
     WebhookDelivery,
 } from './outbox.js';
+export { RedeliverError } from './outbox.js';

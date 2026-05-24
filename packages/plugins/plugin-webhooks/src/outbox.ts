@@ -114,6 +114,22 @@ export interface AckFailure {
 export type AckResult = AckSuccess | AckFailure;
 
 /**
+ * Error raised by `IWebhookOutbox.redeliver` when the requested row is
+ * either missing or in a non-terminal state. The dispatcher / admin UI
+ * surfaces this verbatim to the caller — never throw it for transient
+ * conditions (transport errors should bubble as native `Error`).
+ */
+export class RedeliverError extends Error {
+    constructor(
+        message: string,
+        readonly code: 'not_found' | 'not_eligible',
+    ) {
+        super(message);
+        this.name = 'RedeliverError';
+    }
+}
+
+/**
  * Pluggable storage backend for delivery rows. Implementations MUST make
  * `claim()` atomic across concurrent callers — that property is the
  * exactly-once guarantee.
@@ -138,4 +154,22 @@ export interface IWebhookOutbox {
 
     /** Snapshot accessor for tests / admin tooling. */
     list(filter?: { status?: DeliveryStatus }): Promise<WebhookDelivery[]>;
+
+    /**
+     * Reset a terminal row back to `pending` so the dispatcher will pick
+     * it up again on its next tick.
+     *
+     * - Eligible source states: `success`, `failed`, `dead`.
+     * - Rejects `pending` / `in_flight` rows — replaying those would
+     *   double-deliver because they're either already queued or actively
+     *   being sent.
+     * - Resets `attempts=0` so the retry budget restarts.
+     * - Clears `claimed_by`, `claimed_at`, `next_retry_at`, `error`,
+     *   `response_code`, `response_body`. URL / payload / secret are NOT
+     *   touched — replay reproduces the original POST byte-for-byte.
+     *
+     * Throws `RedeliverError` with code `not_found` or `not_eligible`.
+     * Returns the post-reset row.
+     */
+    redeliver(id: string): Promise<WebhookDelivery>;
 }
