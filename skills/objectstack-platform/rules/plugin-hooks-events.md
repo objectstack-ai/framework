@@ -8,7 +8,7 @@
 
 For comprehensive plugin hooks and event system documentation, see:
 
-**→ [objectstack-hooks/references/plugin-hooks.md](../../objectstack-hooks/references/plugin-hooks.md)**
+**→ [objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)**
 
 The canonical reference includes:
 - Complete hook registration API (`ctx.hook`, `ctx.trigger`)
@@ -150,9 +150,9 @@ Hooks execute in **registration order** within each plugin, then by **plugin ini
 
 ## See Also
 
-- **[objectstack-hooks/SKILL.md](../../objectstack-hooks/SKILL.md)** — Complete hooks system overview
-- **[objectstack-hooks/references/plugin-hooks.md](../../objectstack-hooks/references/plugin-hooks.md)** — Full plugin hooks documentation
-- **[objectstack-hooks/references/data-hooks.md](../../objectstack-hooks/references/data-hooks.md)** — Data lifecycle hooks
+- **[objectstack-data/SKILL.md#lifecycle-hooks](../../objectstack-data/SKILL.md#lifecycle-hooks)** — Complete hooks system overview
+- **[objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)** — Full plugin hooks documentation
+- **[objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)** — Data lifecycle hooks
 - **[Plugin Lifecycle](./plugin-lifecycle.md)** — 3-phase plugin lifecycle
 - **[Service Registry](./service-registry.md)** — DI container and service management
 
@@ -160,4 +160,4 @@ Hooks execute in **registration order** within each plugin, then by **plugin ini
 
 **For complete documentation with detailed examples, hook context API, testing strategies, and performance optimization, see the canonical reference:**
 
-→ **[objectstack-hooks/references/plugin-hooks.md](../../objectstack-hooks/references/plugin-hooks.md)**
+→ **[objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)**

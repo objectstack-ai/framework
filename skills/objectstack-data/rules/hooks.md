@@ -8,7 +8,7 @@
 
 For comprehensive data lifecycle hooks documentation, see:
 
-**→ [objectstack-hooks/references/data-hooks.md](../../objectstack-hooks/references/data-hooks.md)**
+**→ [objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)**
 
 The canonical reference includes:
 - All 14 lifecycle events (beforeFind, afterFind, beforeInsert, afterInsert, beforeUpdate, afterUpdate, beforeDelete, afterDelete, beforeCount, afterCount, beforeAggregate, afterAggregate, beforeFindOne, afterFindOne)
@@ -133,13 +133,13 @@ export default {
 
 ## See Also
 
-- **[objectstack-hooks/SKILL.md](../../objectstack-hooks/SKILL.md)** — Complete hooks system overview
-- **[objectstack-hooks/references/data-hooks.md](../../objectstack-hooks/references/data-hooks.md)** — Full data hooks documentation
-- **[objectstack-hooks/references/plugin-hooks.md](../../objectstack-hooks/references/plugin-hooks.md)** — Plugin hook system
+- **[objectstack-data/SKILL.md#lifecycle-hooks](../../objectstack-data/SKILL.md#lifecycle-hooks)** — Complete hooks system overview
+- **[objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)** — Full data hooks documentation
+- **[objectstack-platform/references/plugin-hooks.md](../../objectstack-platform/references/plugin-hooks.md)** — Plugin hook system
 - **[objectstack-automation](../../objectstack-automation/SKILL.md)** — Flows and Workflows for advanced automation
 
 ---
 
 **For complete documentation with detailed examples, context API reference, testing strategies, and performance optimization, see the canonical reference:**
 
-→ **[objectstack-hooks/references/data-hooks.md](../../objectstack-hooks/references/data-hooks.md)**
+→ **[objectstack-data/references/data-hooks.md](../../objectstack-data/references/data-hooks.md)**

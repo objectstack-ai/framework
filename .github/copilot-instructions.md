@@ -98,14 +98,15 @@ objectstack-ai/spec/
 │   #   https://github.com/objectstack-ai/hotcrm
 │
 ├── skills/                # 🤖 AI skill definitions (for Claude Code, Copilot, Cursor)
-│   ├── objectstack-schema/
+│   ├── objectstack-platform/
+│   ├── objectstack-data/
 │   ├── objectstack-query/
 │   ├── objectstack-api/
 │   ├── objectstack-ui/
 │   ├── objectstack-automation/
 │   ├── objectstack-ai/
-│   ├── objectstack-plugin/
 │   ├── objectstack-i18n/
+│   ├── objectstack-seed/
 │   └── objectstack-formula/
 │
 └── content/docs/          # 📝 Documentation content
@@ -239,9 +240,8 @@ The `skills/` directory contains domain-specific AI skill definitions. When work
 
 | Skill | Path | Use When |
 |:---|:---|:---|
-| **Quickstart** | `skills/objectstack-quickstart/SKILL.md` | Project creation, defineStack(), drivers, adapters, bootstrap |
-| **Plugin** | `skills/objectstack-plugin/SKILL.md` | Plugin lifecycle, DI, EventBus, Kernel config |
-| Schema Design | `skills/objectstack-schema/SKILL.md` | Designing Objects, Fields, Relations, Validations |
+| **Platform** | `skills/objectstack-platform/SKILL.md` | Project creation, defineStack(), drivers, adapters, bootstrap, plugin lifecycle, DI, EventBus, Kernel config |
+| **Data** | `skills/objectstack-data/SKILL.md` | Designing Objects, Fields, Relations, Validations, and data lifecycle hooks |
 | Query Design | `skills/objectstack-query/SKILL.md` | Filters, sorting, pagination, aggregation, joins |
 | API Design | `skills/objectstack-api/SKILL.md` | Designing REST/GraphQL endpoints |
 | UI Design | `skills/objectstack-ui/SKILL.md` | Designing Views, Dashboards, Apps |

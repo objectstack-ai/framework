@@ -113,7 +113,7 @@ use()  → init()  → start()  → [running]  → stop()  → unload()
 
 - 📖 Docs: <https://objectstack.ai/docs>
 - 📚 API Reference: <https://objectstack.ai/docs/references/kernel>
-- 🤖 Skill: [`skills/objectstack-plugin/SKILL.md`](../../skills/objectstack-plugin/SKILL.md)
+- 🤖 Skill: [`skills/objectstack-platform/SKILL.md`](../../skills/objectstack-platform/SKILL.md)
 
 ## License
 

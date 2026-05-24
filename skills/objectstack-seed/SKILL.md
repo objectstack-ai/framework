@@ -8,7 +8,7 @@ description: >
   "initial records", "defineDataset", "test data", "reference data", "load data",
   "import records", "populate object".
   Do NOT use for querying or filtering records — use objectstack-query instead.
-  Do NOT use for defining the object schema itself — use objectstack-schema instead.
+  Do NOT use for defining the object schema itself — use objectstack-data instead.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+
 metadata:
@@ -30,7 +30,7 @@ selection, relationship references, and best practices for idempotent data loadi
 
 | Need | Use instead |
 |:-----|:------------|
-| Define object schema or fields | **objectstack-schema** |
+| Define object schema or fields | **objectstack-data** |
 | Query, filter, or aggregate records | **objectstack-query** |
 | Define REST API endpoints | **objectstack-api** |
 | Create automation flows or triggers | **objectstack-automation** |
@@ -452,5 +452,5 @@ This pattern is the baseline for realistic demo + test seed packs in metadata ap
 ## References
 
 - [references/_index.md](./references/_index.md) — Zod schema pointers (Dataset, etc.)
-- [objectstack-schema](../objectstack-schema/SKILL.md) — Object & field schema design
+- [objectstack-data](../objectstack-data/SKILL.md) — Object & field schema design
 - [objectstack-query](../objectstack-query/SKILL.md) — Querying seeded data

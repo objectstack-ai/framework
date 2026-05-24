@@ -8,7 +8,7 @@ description: >
   "group by", "where clause", "$eq", "$contains", "$in", "search records",
   "count records", "sum", "average", "window function", "join", "expand",
   "cursor pagination", "offset pagination", "ObjectQL", "query DSL".
-  Do NOT use for defining objects, fields, or relationships — use objectstack-schema instead.
+  Do NOT use for defining objects, fields, or relationships — use objectstack-data instead.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
@@ -31,10 +31,10 @@ system for related records.
 
 | Need | Use instead |
 |:-----|:------------|
-| Define objects, fields, or relationships | **objectstack-schema** |
+| Define objects, fields, or relationships | **objectstack-data** |
 | Define REST API endpoints or auth | **objectstack-api** |
 | Build views, dashboards, or apps | **objectstack-ui** |
-| Create a plugin or register services | **objectstack-plugin** |
+| Create a plugin or register services | **objectstack-platform** |
 
 ---
 
@@ -242,7 +242,7 @@ Sort with `orderBy` — an array of sort nodes:
 **Rules:**
 - Order of array elements defines sort priority
 - Default `order` is `'asc'` — you can omit it for ascending sorts
-- Sort fields should be indexed for performance (see **objectstack-schema** indexing rules)
+- Sort fields should be indexed for performance (see **objectstack-data** indexing rules)
 
 ---
 

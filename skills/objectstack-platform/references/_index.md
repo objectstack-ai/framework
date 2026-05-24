@@ -1,4 +1,4 @@
-# objectstack-quickstart — Schema References
+# objectstack-platform — Schema References
 
 > **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
@@ -10,13 +10,23 @@ from `node_modules` — there is no local copy in the skill bundle.
 
 - `node_modules/@objectstack/spec/src/data/dataset.zod.ts` — Data Import Strategy
 - `node_modules/@objectstack/spec/src/data/datasource.zod.ts` — Driver Identifier
+- `node_modules/@objectstack/spec/src/kernel/context.zod.ts` — Runtime Mode Enum
+- `node_modules/@objectstack/spec/src/kernel/feature.zod.ts` — Feature Rollout Strategy
 - `node_modules/@objectstack/spec/src/kernel/manifest.zod.ts` — Schema for the ObjectStack Manifest.
+- `node_modules/@objectstack/spec/src/kernel/metadata-plugin.zod.ts` — Metadata Plugin Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-capability.zod.ts` — Plugin Capability Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-lifecycle-events.zod.ts` — Plugin Lifecycle Events Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-loading.zod.ts` — Plugin Loading Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin.zod.ts` — Upgrade Context Schema
+- `node_modules/@objectstack/spec/src/kernel/service-registry.zod.ts` — Service Registry Protocol
 
 ## Transitive dependencies
 
-- `node_modules/@objectstack/spec/src/kernel/plugin-capability.zod.ts` — Plugin Capability Protocol
-- `node_modules/@objectstack/spec/src/kernel/plugin-loading.zod.ts` — Plugin Loading Protocol
-- `node_modules/@objectstack/spec/src/kernel/plugin.zod.ts` — Upgrade Context Schema
+- `node_modules/@objectstack/spec/src/kernel/cluster.zod.ts` — Cluster Protocol
+- `node_modules/@objectstack/spec/src/kernel/metadata-customization.zod.ts` — Metadata Customization Layer Protocol
+- `node_modules/@objectstack/spec/src/kernel/metadata-loader.zod.ts` — Metadata Loader Protocol
+- `node_modules/@objectstack/spec/src/shared/expression.zod.ts` — Expression Protocol
+- `node_modules/@objectstack/spec/src/shared/identifiers.zod.ts` — System Identifier Schema
 - `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
 
 ## How to read these

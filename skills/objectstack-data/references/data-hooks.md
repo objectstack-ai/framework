@@ -1,18 +1,9 @@
----
-name: objectstack-hooks
-description: >
-  Write ObjectStack data lifecycle hooks for third-party plugins and applications.
-  Use when implementing business logic, validation, side effects, or data transformations
-  during CRUD operations. Covers hook registration, handler patterns, context API,
-  error handling, async execution, and integration with the ObjectQL engine.
-license: Apache-2.0
-compatibility: Requires @objectstack/spec v4+, @objectstack/objectql v4+
-metadata:
-  author: objectstack-ai
-  version: "1.0"
-  domain: hooks
-  tags: hooks, lifecycle, validation, business-logic, side-effects, data-enrichment
----
+# Data Lifecycle Hooks — Reference
+
+Reference companion to `objectstack-data/SKILL.md`. Comprehensive guide to
+the 14 data lifecycle events, registration modes, the `HookContext` API,
+and common patterns (validation, defaults, audit logging, workflows).
+
 
 # Writing Hooks — ObjectStack Data Lifecycle
 
@@ -1038,7 +1029,7 @@ const conditionalHook: Hook = {
 
 - [`@objectstack/spec/src/data/hook.zod.ts`](../../../node_modules/@objectstack/spec/src/data/hook.zod.ts) — Hook schema definition, HookContext interface
 - [Examples: app-todo](../../examples/app-todo/src/objects/task.hook.ts) — Simple task hook
-- [Project hooks pattern](../../objectstack-hooks/SKILL.md#complete-hook-examples) — Advanced lifecycle hook examples
+- [Project hooks pattern](../SKILL.md#lifecycle-hooks) — Hook integration in the data skill
 
 ---
 

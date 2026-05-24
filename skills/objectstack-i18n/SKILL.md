@@ -709,6 +709,6 @@ shapes; do not rely on memory of property names.
 
 ## See Also
 
-- **objectstack-schema** — For understanding object and field metadata structure
+- **objectstack-data** — For understanding object and field metadata structure
 - **objectstack-ui** — For view, app, and action translations
 - **objectstack-automation** — For workflow and flow message translations

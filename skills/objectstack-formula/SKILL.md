@@ -9,7 +9,7 @@ description: >
   date", "TODAY()", "ISBLANK", "CONCAT", "Salesforce formula", "expression",
   "CEL", "F`...`", "P`...`", "cel`...`".
   Do NOT use for: SQL fragments (driver-native), cron schedules (use cron
-  dialect), or L2 hook bodies (use objectstack-hooks).
+  dialect), or L2 hook bodies (use objectstack-data).
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+ and @objectstack/formula
 metadata:
@@ -39,10 +39,10 @@ formula / condition / predicate / dynamic-seed metadata.
 
 | Need | Use instead |
 |:---|:---|
-| Define a `type: 'formula'` field | objectstack-schema (and embed CEL via `F\`...\``) |
+| Define a `type: 'formula'` field | objectstack-data (and embed CEL via `F\`...\``) |
 | Define seed records | objectstack-seed (use `cel\`...\`` for dynamic dates) |
 | Author flow / automation step | objectstack-automation (use `P\`...\`` for `condition`) |
-| Author L2 hook body (TS code) | objectstack-hooks |
+| Author L2 hook body (TS code) | objectstack-data |
 | Cron schedule | objectstack-automation (`schedule.expression` is `cron` dialect) |
 | SQL fragment | driver-native; not unified into the expression registry |
 

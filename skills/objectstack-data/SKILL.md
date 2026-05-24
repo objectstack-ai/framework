@@ -1,23 +1,28 @@
 ---
-name: objectstack-schema
+name: objectstack-data
 description: >
-  Design ObjectStack data schemas (Objects, Fields, Validations, Indexes).
-  Use when creating or modifying business object definitions, choosing field types,
-  configuring relationships, or setting up validation rules in an ObjectStack project.
-  ALWAYS use this skill when you see: "define object", "add field", "create table",
-  "data model", "schema design", "relationship", "validation rule", "index",
-  "master_detail", "lookup field", "field type", "object definition".
-  Do NOT use for querying, filtering, or aggregating data — use objectstack-query instead.
+  Design ObjectStack data schemas (Objects, Fields, Validations, Indexes) and
+  the data lifecycle hooks that run on top of them. Use when creating or
+  modifying business object definitions, choosing field types, configuring
+  relationships, setting up validation rules, or implementing data-level
+  hooks (beforeInsert / afterUpdate / …) in an ObjectStack project.
+  ALWAYS use this skill when you see: "define object", "add field", "create
+  table", "data model", "schema design", "relationship", "validation rule",
+  "index", "master_detail", "lookup field", "field type", "object definition",
+  "data hook", "lifecycle hook", "beforeInsert", "afterUpdate", "afterDelete".
+  Do NOT use for querying, filtering, or aggregating data — use
+  objectstack-query instead. For plugin-level hooks and kernel events, use
+  objectstack-platform.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "3.0"
-  domain: schema
-  tags: object, field, validation, index, relationship, hooks, schema, data-model
+  version: "4.0"
+  domain: data
+  tags: object, field, validation, index, relationship, hooks, schema, data-model, lifecycle
 ---
 
-# Schema Design — ObjectStack Data Protocol
+# Data Modeling — ObjectStack Data Protocol
 
 Expert instructions for designing business data schemas using the ObjectStack
 specification. This skill covers Object definitions, Field type selection,
@@ -32,7 +37,7 @@ relationship modelling, validation rules, index strategy, and lifecycle hooks.
 | Query, filter, or aggregate records | **objectstack-query** |
 | Define REST API endpoints or auth | **objectstack-api** |
 | Build views, dashboards, or apps | **objectstack-ui** |
-| Create a plugin or register services | **objectstack-plugin** |
+| Create a plugin or register services | **objectstack-platform** |
 
 ---
 
@@ -144,7 +149,7 @@ For comprehensive documentation with incorrect/correct examples:
 - **[Relationships](./rules/relationships.md)** — lookup vs master_detail, junction patterns, delete behaviors
 - **[Validation Rules](./rules/validation.md)** — All validation types, script inversion, severity levels
 - **[Index Strategy](./rules/indexing.md)** — btree/gin/gist/fulltext, composite indexes, partial indexes
-- **[Lifecycle Hooks](./rules/hooks.md)** — Data lifecycle hooks reference (→ [objectstack-hooks](../objectstack-hooks/SKILL.md))
+- **[Lifecycle Hooks](./rules/hooks.md)** — Hook quick reference (→ see [references/data-hooks.md](./references/data-hooks.md) for the full 14-event guide)
 
 ---
 
@@ -296,7 +301,9 @@ const accountHook: Hook = {
 export default accountHook;
 ```
 
-See [rules/hooks.md](./rules/hooks.md) for quick reference, or [objectstack-hooks](../objectstack-hooks/SKILL.md) for complete documentation of all 14 lifecycle events and patterns.
+See [rules/hooks.md](./rules/hooks.md) for the quick reference, or
+[references/data-hooks.md](./references/data-hooks.md) for complete
+documentation of all 14 lifecycle events, registration modes, and patterns.
 
 ---
 

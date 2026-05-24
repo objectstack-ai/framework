@@ -35,7 +35,7 @@ const SPEC_PKG = '@objectstack/spec';
 // Paths are relative to packages/spec/src/ (category/file.zod.ts)
 
 const SKILL_MAP: Record<string, string[]> = {
-  'objectstack-schema': [
+  'objectstack-data': [
     'data/field.zod.ts',
     'data/object.zod.ts',
     'data/validation.zod.ts',
@@ -90,12 +90,12 @@ const SKILL_MAP: Record<string, string[]> = {
     'ui/report.zod.ts',
     'ui/theme.zod.ts',
   ],
-  'objectstack-quickstart': [
+  'objectstack-platform': [
+    // project setup (was objectstack-quickstart)
     'kernel/manifest.zod.ts',
     'data/datasource.zod.ts',
     'data/dataset.zod.ts',
-  ],
-  'objectstack-plugin': [
+    // plugin development (was objectstack-plugin)
     'kernel/plugin.zod.ts',
     'kernel/context.zod.ts',
     'kernel/service-registry.zod.ts',
@@ -107,9 +107,6 @@ const SKILL_MAP: Record<string, string[]> = {
   ],
   'objectstack-seed': [
     'data/dataset.zod.ts',
-  ],
-  'objectstack-hooks': [
-    'data/hook.zod.ts',
   ],
   'objectstack-i18n': [
     'system/translation.zod.ts',

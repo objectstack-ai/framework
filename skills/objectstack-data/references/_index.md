@@ -1,4 +1,4 @@
-# objectstack-schema — Schema References
+# objectstack-data — Schema References
 
 > **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
