@@ -4,7 +4,7 @@ import { HookContext, Hook } from '@objectstack/spec/data';
 
 const taskHook: Hook = {
   name: 'task_logic',
-  object: 'task',
+  object: 'todo_task',
   events: ['beforeInsert', 'afterUpdate'],
   handler: async (ctx: HookContext) => {
     if (ctx.event === 'beforeInsert') {

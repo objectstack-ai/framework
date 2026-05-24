@@ -6,7 +6,7 @@ import type { Action } from '@objectstack/spec/ui';
 export const CompleteTaskAction: Action = {
   name: 'complete_task',
   label: 'Mark Complete',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'check-circle',
   type: 'script',
   target: 'completeTask',
@@ -19,7 +19,7 @@ export const CompleteTaskAction: Action = {
 export const StartTaskAction: Action = {
   name: 'start_task',
   label: 'Start Task',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'play-circle',
   type: 'script',
   target: 'startTask',
@@ -32,7 +32,7 @@ export const StartTaskAction: Action = {
 export const DeferTaskAction: Action = {
   name: 'defer_task',
   label: 'Defer Task',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'clock',
   type: 'modal',
   target: 'defer_task_modal',
@@ -59,7 +59,7 @@ export const DeferTaskAction: Action = {
 export const SetReminderAction: Action = {
   name: 'set_reminder',
   label: 'Set Reminder',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'bell',
   type: 'modal',
   target: 'set_reminder_modal',
@@ -80,7 +80,7 @@ export const SetReminderAction: Action = {
 export const CloneTaskAction: Action = {
   name: 'clone_task',
   label: 'Clone Task',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'copy',
   type: 'script',
   target: 'cloneTask',
@@ -93,7 +93,7 @@ export const CloneTaskAction: Action = {
 export const MassCompleteTasksAction: Action = {
   name: 'mass_complete',
   label: 'Complete Selected',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'check-square',
   type: 'script',
   target: 'massCompleteTasks',
@@ -106,7 +106,7 @@ export const MassCompleteTasksAction: Action = {
 export const DeleteCompletedAction: Action = {
   name: 'delete_completed',
   label: 'Delete Completed',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'trash-2',
   type: 'script',
   target: 'deleteCompletedTasks',
@@ -119,7 +119,7 @@ export const DeleteCompletedAction: Action = {
 export const ExportToCsvAction: Action = {
   name: 'export_csv',
   label: 'Export to CSV',
-  objectName: 'task',
+  objectName: 'todo_task',
   icon: 'download',
   type: 'script',
   target: 'exportTasksToCSV',

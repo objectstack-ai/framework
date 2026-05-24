@@ -1,6 +1,6 @@
 
 import { ObjectKernel, DriverPlugin, AppPlugin } from '@objectstack/runtime';
-import { InMemoryDriver } from '@objectstack/driver-memory';
+import { SqliteWasmDriver } from '@objectstack/driver-sqlite-wasm';
 import { ObjectQLPlugin } from '@objectstack/objectql';
 import TodoApp from '../objectstack.config';
 
@@ -11,7 +11,7 @@ import TodoApp from '../objectstack.config';
 
   // Core Services
   await kernel.use(new ObjectQLPlugin());
-  await kernel.use(new DriverPlugin(new InMemoryDriver(), 'memory'));
+  await kernel.use(new DriverPlugin(new SqliteWasmDriver({ filename: ':memory:' })));
 
   // Load App with Data
   await kernel.use(new AppPlugin(TodoApp));

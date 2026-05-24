@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@objectstack/client": "workspace:*",
-    "@objectstack/driver-memory": "workspace:^",
+    "@objectstack/driver-sqlite-wasm": "workspace:^",
     "@objectstack/objectql": "workspace:^",
     "@objectstack/runtime": "workspace:^",
     "@objectstack/spec": "workspace:*"

@@ -4,7 +4,7 @@ import { P, cel, tmpl } from '@objectstack/spec';
 import { ObjectSchema, Field } from '@objectstack/spec/data';
 
 export const Task = ObjectSchema.create({
-  name: 'task',
+  name: 'todo_task',
   label: 'Task',
   pluralLabel: 'Tasks',
   icon: 'check-square',
@@ -204,7 +204,7 @@ export const Task = ObjectSchema.create({
   workflows: [
     {
       name: 'set_completed_flag',
-      objectName: 'task',
+      objectName: 'todo_task',
       triggerType: 'on_create_or_update',
       criteria: P`record.status != previous.status`,
       active: true,
@@ -219,7 +219,7 @@ export const Task = ObjectSchema.create({
     },
     {
       name: 'set_completed_date',
-      objectName: 'task',
+      objectName: 'todo_task',
       triggerType: 'on_update',
       criteria: P`record.status != previous.status && record.status == "completed"`,
       active: true,
@@ -240,7 +240,7 @@ export const Task = ObjectSchema.create({
     },
     {
       name: 'check_overdue',
-      objectName: 'task',
+      objectName: 'todo_task',
       triggerType: 'on_create_or_update',
       criteria: P`record.due_date < today() && record.is_completed == false`,
       active: true,
@@ -255,7 +255,7 @@ export const Task = ObjectSchema.create({
     },
     {
       name: 'notify_on_urgent',
-      objectName: 'task',
+      objectName: 'todo_task',
       triggerType: 'on_create_or_update',
       criteria: P`record.priority == "urgent" && record.is_completed == false`,
       active: true,

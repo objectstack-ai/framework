@@ -27,7 +27,7 @@
  * │ (metadata)       │    │ (implementation)  │    │ (wiring / lifecycle)   │
  * │                  │    │                   │    │                        │
  * │ target:          │───▶│ export function   │───▶│ engine.registerAction  │
- * │ 'completeTask'   │    │ completeTask()    │    │ ('task','completeTask',│
+ * │ 'completeTask'   │    │ completeTask()    │    │ ('todo_task','completeTask',│
  * │                  │    │                   │    │  completeTask)         │
  * └─────────────────┘    └──────────────────┘    └────────────────────────┘
  * ```
@@ -79,18 +79,18 @@ export function registerTaskActionHandlers(engine: {
   registerAction(objectName: string, actionName: string, handler: (ctx: any) => unknown): void;
 }): void {
   // ─── Script-type actions (server-side handlers) ────────────────────
-  engine.registerAction('task', 'completeTask', completeTask);
-  engine.registerAction('task', 'startTask', startTask);
-  engine.registerAction('task', 'cloneTask', cloneTask);
-  engine.registerAction('task', 'massCompleteTasks', massCompleteTasks);
-  engine.registerAction('task', 'deleteCompletedTasks', deleteCompletedTasks);
-  engine.registerAction('task', 'exportTasksToCSV', exportTasksToCSV);
+  engine.registerAction('todo_task', 'completeTask', completeTask);
+  engine.registerAction('todo_task', 'startTask', startTask);
+  engine.registerAction('todo_task', 'cloneTask', cloneTask);
+  engine.registerAction('todo_task', 'massCompleteTasks', massCompleteTasks);
+  engine.registerAction('todo_task', 'deleteCompletedTasks', deleteCompletedTasks);
+  engine.registerAction('todo_task', 'exportTasksToCSV', exportTasksToCSV);
 
   // ─── Modal-type actions (server-side form submission handlers) ─────
   // These process the params collected by the modal UI before the
   // engine updates the record. The modal target (e.g. 'defer_task_modal')
   // tells the UI which modal page to open; the handler below processes
   // the submitted form data.
-  engine.registerAction('task', 'deferTask', deferTask);
-  engine.registerAction('task', 'setReminder', setReminder);
+  engine.registerAction('todo_task', 'deferTask', deferTask);
+  engine.registerAction('todo_task', 'setReminder', setReminder);
 }

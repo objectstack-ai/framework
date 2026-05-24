@@ -514,6 +514,7 @@ export default class Serve extends Command {
            if (/^mysql2?:\/\//i.test(u)) return 'mysql';
            if (/^libsql:\/\//i.test(u)) return 'turso';
            if (/^https?:\/\//i.test(u) && /\.turso\./i.test(u)) return 'turso';
+           if (/^wasm-sqlite:\/\//i.test(u) || /\.wasm\.db$/i.test(u)) return 'sqlite-wasm';
            if (/^file:/i.test(u) || /^sqlite:/i.test(u) || u === ':memory:' || /\.(db|sqlite|sqlite3)$/i.test(u)) return 'sqlite';
            return '';
          };
@@ -541,6 +542,16 @@ export default class Serve extends Command {
              }) as any));
              trackPlugin('SqlDriver');
              resolvedDriverLabel = 'SqlDriver(sqlite)';
+             resolvedDatabaseUrl = databaseUrl ?? ':memory:';
+           } else if (driverType === 'sqlite-wasm' || driverType === 'wasm-sqlite' || driverType === 'wasm') {
+             const { SqliteWasmDriver } = await import('@objectstack/driver-sqlite-wasm');
+             const filePath = (databaseUrl ?? ':memory:').replace(/^file:/, '').replace(/^wasm-sqlite:\/\//, '').replace(/^sqlite:/, '');
+             await kernel.use(new DriverPlugin(new SqliteWasmDriver({
+               filename: filePath,
+               persist: 'on-disconnect',
+             }) as any));
+             trackPlugin('SqliteWasmDriver');
+             resolvedDriverLabel = 'SqliteWasmDriver';
              resolvedDatabaseUrl = databaseUrl ?? ':memory:';
            } else if (driverType === 'postgres' || driverType === 'postgresql' || driverType === 'pg') {
              const { SqlDriver } = await import('@objectstack/driver-sql');

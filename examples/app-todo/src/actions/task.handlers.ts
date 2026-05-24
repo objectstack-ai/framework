@@ -9,8 +9,8 @@
  *
  * @example Registration (in a plugin or config bootstrap):
  * ```ts
- * engine.registerAction('task', 'completeTask', completeTask);
- * engine.registerAction('task', 'startTask', startTask);
+ * engine.registerAction('todo_task', 'completeTask', completeTask);
+ * engine.registerAction('todo_task', 'startTask', startTask);
  * ```
  */
 
@@ -34,7 +34,7 @@ interface ActionContext {
 /** Mark a single task as complete */
 export async function completeTask(ctx: ActionContext): Promise<void> {
   const { record, engine, user } = ctx;
-  await engine.update('task', record.id as string, {
+  await engine.update('todo_task', record.id as string, {
     status: 'completed',
     completed_at: new Date().toISOString(),
     completed_by: user.id,
@@ -44,7 +44,7 @@ export async function completeTask(ctx: ActionContext): Promise<void> {
 /** Mark a task as in-progress */
 export async function startTask(ctx: ActionContext): Promise<void> {
   const { record, engine } = ctx;
-  await engine.update('task', record.id as string, {
+  await engine.update('todo_task', record.id as string, {
     status: 'in_progress',
     started_at: new Date().toISOString(),
   });
@@ -54,7 +54,7 @@ export async function startTask(ctx: ActionContext): Promise<void> {
 export async function cloneTask(ctx: ActionContext): Promise<{ id: string }> {
   const { record, engine } = ctx;
   const { id, created_at, updated_at, completed_at, completed_by, ...fields } = record as Record<string, unknown>;
-  return engine.insert('task', {
+  return engine.insert('todo_task', {
     ...fields,
     status: 'not_started',
     subject: `Copy of ${fields.subject ?? 'Untitled'}`,
@@ -67,7 +67,7 @@ export async function massCompleteTasks(ctx: ActionContext): Promise<void> {
   const ids = (params?.selectedIds ?? []) as string[];
   const now = new Date().toISOString();
   for (const id of ids) {
-    await engine.update('task', id, {
+    await engine.update('todo_task', id, {
       status: 'completed',
       completed_at: now,
       completed_by: user.id,
@@ -78,17 +78,17 @@ export async function massCompleteTasks(ctx: ActionContext): Promise<void> {
 /** Delete all completed tasks */
 export async function deleteCompletedTasks(ctx: ActionContext): Promise<void> {
   const { engine } = ctx;
-  const completed = await engine.find('task', { status: 'completed' });
+  const completed = await engine.find('todo_task', { status: 'completed' });
   const ids = completed.map((r) => r.id as string);
   if (ids.length > 0) {
-    await engine.delete('task', ids);
+    await engine.delete('todo_task', ids);
   }
 }
 
 /** Defer a task by updating its due date (modal form submission handler) */
 export async function deferTask(ctx: ActionContext): Promise<void> {
   const { record, engine, params } = ctx;
-  await engine.update('task', record.id as string, {
+  await engine.update('todo_task', record.id as string, {
     due_date: params?.new_due_date ? String(params.new_due_date) : null,
     defer_reason: params?.reason ? String(params.reason) : null,
     status: 'waiting',
@@ -98,7 +98,7 @@ export async function deferTask(ctx: ActionContext): Promise<void> {
 /** Set a reminder on a task (modal form submission handler) */
 export async function setReminder(ctx: ActionContext): Promise<void> {
   const { record, engine, params } = ctx;
-  await engine.update('task', record.id as string, {
+  await engine.update('todo_task', record.id as string, {
     reminder_date: params?.reminder_date ? String(params.reminder_date) : null,
     has_reminder: true,
   });
@@ -107,7 +107,7 @@ export async function setReminder(ctx: ActionContext): Promise<void> {
 /** Export tasks to CSV format */
 export async function exportTasksToCSV(ctx: ActionContext): Promise<string> {
   const { engine } = ctx;
-  const tasks = await engine.find('task', {});
+  const tasks = await engine.find('todo_task', {});
   const header = 'subject,status,priority,category,due_date';
   const rows = tasks.map((t) =>
     [t.subject, t.status, t.priority, t.category, t.due_date ?? ''].join(','),

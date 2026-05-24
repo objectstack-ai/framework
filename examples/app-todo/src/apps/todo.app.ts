@@ -19,11 +19,11 @@ export const TodoApp = App.create({
       label: 'Tasks',
       icon: 'check-square',
       children: [
-        { id: 'nav_all_tasks', type: 'object', objectName: 'task', label: 'All Tasks', icon: 'list' },
-        { id: 'nav_my_tasks', type: 'object', objectName: 'task', label: 'My Tasks', icon: 'user-check' },
-        { id: 'nav_overdue', type: 'object', objectName: 'task', label: 'Overdue', icon: 'alert-circle' },
-        { id: 'nav_today', type: 'object', objectName: 'task', label: 'Due Today', icon: 'calendar' },
-        { id: 'nav_upcoming', type: 'object', objectName: 'task', label: 'Upcoming', icon: 'calendar-plus' },
+        { id: 'nav_all_tasks', type: 'object', objectName: 'todo_task', label: 'All Tasks', icon: 'list' },
+        { id: 'nav_my_tasks', type: 'object', objectName: 'todo_task', label: 'My Tasks', icon: 'user-check' },
+        { id: 'nav_overdue', type: 'object', objectName: 'todo_task', label: 'Overdue', icon: 'alert-circle' },
+        { id: 'nav_today', type: 'object', objectName: 'todo_task', label: 'Due Today', icon: 'calendar' },
+        { id: 'nav_upcoming', type: 'object', objectName: 'todo_task', label: 'Upcoming', icon: 'calendar-plus' },
       ]
     },
     {

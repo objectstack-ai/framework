@@ -7,7 +7,7 @@ export const TasksByStatusReport: ReportInput = {
   name: 'tasks_by_status',
   label: 'Tasks by Status',
   description: 'Summary of tasks grouped by status',
-  objectName: 'task',
+  objectName: 'todo_task',
   type: 'summary',
   columns: [
     { field: 'subject', label: 'Subject' },
@@ -23,7 +23,7 @@ export const TasksByPriorityReport: ReportInput = {
   name: 'tasks_by_priority',
   label: 'Tasks by Priority',
   description: 'Summary of tasks grouped by priority level',
-  objectName: 'task',
+  objectName: 'todo_task',
   type: 'summary',
   columns: [
     { field: 'subject', label: 'Subject' },
@@ -40,7 +40,7 @@ export const TasksByOwnerReport: ReportInput = {
   name: 'tasks_by_owner',
   label: 'Tasks by Owner',
   description: 'Task summary by assignee',
-  objectName: 'task',
+  objectName: 'todo_task',
   type: 'summary',
   columns: [
     { field: 'subject', label: 'Subject' },
@@ -59,7 +59,7 @@ export const OverdueTasksReport: ReportInput = {
   name: 'overdue_tasks',
   label: 'Overdue Tasks',
   description: 'All overdue tasks that need attention',
-  objectName: 'task',
+  objectName: 'todo_task',
   type: 'tabular',
   columns: [
     { field: 'subject', label: 'Subject' },
@@ -76,7 +76,7 @@ export const CompletedTasksReport: ReportInput = {
   name: 'completed_tasks',
   label: 'Completed Tasks',
   description: 'All completed tasks with time tracking',
-  objectName: 'task',
+  objectName: 'todo_task',
   type: 'summary',
   columns: [
     { field: 'subject', label: 'Subject' },
@@ -93,7 +93,7 @@ export const TimeTrackingReport: ReportInput = {
   name: 'time_tracking',
   label: 'Time Tracking Report',
   description: 'Estimated vs actual hours analysis',
-  objectName: 'task',
+  objectName: 'todo_task',
   type: 'matrix',
   columns: [
     { field: 'estimated_hours', label: 'Estimated Hours', aggregate: 'sum' },

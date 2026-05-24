@@ -14,10 +14,10 @@ export const TaskReminderFlow: Flow = {
   ],
 
   nodes: [
-    { id: 'start', type: 'start', label: 'Start (Daily 8 AM)', config: { schedule: '0 8 * * *', objectName: 'task' } },
+    { id: 'start', type: 'start', label: 'Start (Daily 8 AM)', config: { schedule: '0 8 * * *', objectName: 'todo_task' } },
     {
       id: 'get_upcoming_tasks', type: 'get_record', label: 'Get Tasks Due Tomorrow',
-      config: { objectName: 'task', filter: { due_date: '{tomorrow}', is_completed: false }, outputVariable: 'tasksToRemind', getAll: true },
+      config: { objectName: 'todo_task', filter: { due_date: '{tomorrow}', is_completed: false }, outputVariable: 'tasksToRemind', getAll: true },
     },
     {
       id: 'loop_tasks', type: 'loop', label: 'Loop Through Tasks',
@@ -58,11 +58,11 @@ export const OverdueEscalationFlow: Flow = {
   ],
 
   nodes: [
-    { id: 'start', type: 'start', label: 'Start (Daily 9 AM)', config: { schedule: '0 9 * * *', objectName: 'task' } },
+    { id: 'start', type: 'start', label: 'Start (Daily 9 AM)', config: { schedule: '0 9 * * *', objectName: 'todo_task' } },
     {
       id: 'get_overdue_tasks', type: 'get_record', label: 'Get Severely Overdue Tasks',
       config: {
-        objectName: 'task',
+        objectName: 'todo_task',
         filter: { due_date: { $lt: '{3_days_ago}' }, is_completed: false, is_overdue: true },
         outputVariable: 'overdueTasks', getAll: true,
       },
@@ -74,7 +74,7 @@ export const OverdueEscalationFlow: Flow = {
     {
       id: 'update_priority', type: 'update_record', label: 'Escalate Priority',
       config: {
-        objectName: 'task',
+        objectName: 'todo_task',
         filter: { id: '{currentTask.id}' },
         fields: { priority: 'urgent', tags: ['important', 'follow_up'] },
       },
@@ -116,10 +116,10 @@ export const TaskCompletionFlow: Flow = {
   ],
 
   nodes: [
-    { id: 'start', type: 'start', label: 'Start', config: { objectName: 'task', triggerCondition: 'record.status != previous.status && record.status == "completed"' } },
+    { id: 'start', type: 'start', label: 'Start', config: { objectName: 'todo_task', triggerCondition: 'record.status != previous.status && record.status == "completed"' } },
     {
       id: 'get_task', type: 'get_record', label: 'Get Completed Task',
-      config: { objectName: 'task', filter: { id: '{taskId}' }, outputVariable: 'completedTask' },
+      config: { objectName: 'todo_task', filter: { id: '{taskId}' }, outputVariable: 'completedTask' },
     },
     {
       id: 'check_recurring', type: 'decision', label: 'Is Recurring Task?',
@@ -128,7 +128,7 @@ export const TaskCompletionFlow: Flow = {
     {
       id: 'create_next_task', type: 'create_record', label: 'Create Next Recurring Task',
       config: {
-        objectName: 'task',
+        objectName: 'todo_task',
         fields: {
           subject: '{completedTask.subject}', description: '{completedTask.description}',
           priority: '{completedTask.priority}', category: '{completedTask.category}',
@@ -183,7 +183,7 @@ export const QuickAddTaskFlow: Flow = {
     {
       id: 'create_task', type: 'create_record', label: 'Create Task',
       config: {
-        objectName: 'task',
+        objectName: 'todo_task',
         fields: { subject: '{subject}', priority: '{priority}', due_date: '{dueDate}', category: '{category}', status: 'not_started', owner: '{$User.Id}' },
         outputVariable: 'newTaskId',
       },

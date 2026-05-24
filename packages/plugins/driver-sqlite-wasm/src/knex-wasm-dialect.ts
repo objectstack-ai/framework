@@ -46,14 +46,17 @@ function formatBindings(bindings: unknown[] | undefined): unknown[] {
 }
 
 /**
- * Statements that should return rows. Aligns with the dispatch performed by
- * the upstream `Client_SQLite3._query` so Knex sees identical shapes.
+ * Mirrors the dispatch in upstream `Client_SQLite3._query`: only
+ * `insert/update/counter/del` go through the row-less write path (and even
+ * those switch to the read path when a `RETURNING` clause is requested).
+ * Everything else — `select`, `first`, `pluck`, `columnInfo`, raw PRAGMA,
+ * DDL with no `method` — is read with `all`/row iteration so Knex sees the
+ * same response shape it would from better-sqlite3.
  */
 function isReadMethod(method?: string, returning?: unknown): boolean {
-  if (!method) return true;
-  if (method === 'select' || method === 'first' || method === 'pluck') return true;
-  if ((method === 'insert' || method === 'update') && returning) return true;
-  return false;
+  if (method === 'insert' || method === 'update') return !!returning ? true : false;
+  if (method === 'counter' || method === 'del') return false;
+  return true;
 }
 
 class Client_WasmSqlite extends Client_SQLite3 {
@@ -92,6 +95,22 @@ class Client_WasmSqlite extends Client_SQLite3 {
 
     const db = connection.raw;
     const bindings = formatBindings(obj.bindings);
+
+    // DDL / transactional control statements have no Knex `method`. sql.js's
+    // `prepare`+`step` silently no-ops on many of these (e.g. CREATE TABLE),
+    // so route them through `run` which is implemented via `exec` and
+    // actually mutates the database.
+    const isDdl =
+      !obj.method &&
+      /^\s*(CREATE|ALTER|DROP|PRAGMA|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|REINDEX|VACUUM|ATTACH|DETACH|TRUNCATE)\b/i.test(
+        obj.sql,
+      );
+    if (isDdl) {
+      db.run(obj.sql, bindings as any);
+      obj.response = [];
+      connection.markDirty('run');
+      return obj;
+    }
 
     if (isReadMethod(obj.method, obj.returning)) {
       const stmt = db.prepare(obj.sql);
