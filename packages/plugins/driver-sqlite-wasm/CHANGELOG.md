@@ -1,5 +1,18 @@
 # @objectstack/driver-sqlite-wasm
 
+## 6.1.1
+
+### Patch Changes
+
+- 084ee2f: Sync `@objectstack/driver-sqlite-wasm` into the v6 fixed-version group so it
+  releases in lockstep with the rest of the framework. The package was
+  previously stuck at 5.2.1 on npm while every other `@objectstack/*` package
+  moved to 6.0.0, which broke StackBlitz/WebContainer installs of templates
+  that pin `^6.0.0`.
+  - @objectstack/spec@6.1.1
+  - @objectstack/core@6.1.1
+  - @objectstack/driver-sql@6.1.1
+
 ## 5.2.2
 
 ### Patch Changes

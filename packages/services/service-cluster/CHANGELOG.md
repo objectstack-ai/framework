@@ -1,5 +1,12 @@
 # @objectstack/service-cluster
 
+## 5.1.4
+
+### Patch Changes
+
+- @objectstack/spec@6.1.1
+- @objectstack/core@6.1.1
+
 ## 5.1.3
 
 ### Patch Changes

@@ -1,5 +1,44 @@
 # @objectstack/cli
 
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [084ee2f]
+  - @objectstack/driver-sqlite-wasm@6.1.1
+  - @objectstack/runtime@6.1.1
+  - @objectstack/spec@6.1.1
+  - @objectstack/core@6.1.1
+  - @objectstack/client@6.1.1
+  - @objectstack/objectql@6.1.1
+  - @objectstack/observability@6.1.1
+  - @objectstack/rest@6.1.1
+  - @objectstack/driver-memory@6.1.1
+  - @objectstack/driver-sql@6.1.1
+  - @objectstack/driver-turso@6.1.1
+  - @objectstack/driver-mongodb@6.1.1
+  - @objectstack/plugin-approvals@6.1.1
+  - @objectstack/plugin-audit@6.1.1
+  - @objectstack/plugin-auth@6.1.1
+  - @objectstack/plugin-email@6.1.1
+  - @objectstack/plugin-hono-server@6.1.1
+  - @objectstack/plugin-mcp-server@6.1.1
+  - @objectstack/plugin-reports@6.1.1
+  - @objectstack/plugin-security@6.1.1
+  - @objectstack/plugin-sharing@6.1.1
+  - @objectstack/plugin-webhooks@6.1.1
+  - @objectstack/service-ai@6.1.1
+  - @objectstack/service-analytics@6.1.1
+  - @objectstack/service-automation@6.1.1
+  - @objectstack/service-cache@6.1.1
+  - @objectstack/service-feed@6.1.1
+  - @objectstack/service-job@6.1.1
+  - @objectstack/service-package@6.1.1
+  - @objectstack/service-queue@6.1.1
+  - @objectstack/service-realtime@6.1.1
+  - @objectstack/service-settings@6.1.1
+  - @objectstack/service-storage@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

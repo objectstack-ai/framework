@@ -1,5 +1,11 @@
 # @objectstack/types
 
+## 6.1.1
+
+### Patch Changes
+
+- @objectstack/spec@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes
