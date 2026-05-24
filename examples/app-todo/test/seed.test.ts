@@ -7,6 +7,8 @@ import TodoApp from '../objectstack.config';
 (async () => {
   console.log('🧪 Verifying Seeding...');
 
+  process.env.OS_MULTI_TENANT = 'false';
+
   const kernel = new ObjectKernel();
 
   // Core Services
@@ -24,7 +26,7 @@ import TodoApp from '../objectstack.config';
   if (!ql) throw new Error('ObjectQL Missing');
 
   try {
-    const tasks = await ql.find('task', {});
+    const tasks = await ql.find('todo_task', {});
     console.log('✅ Found Tasks:', tasks.length);
     console.log(JSON.stringify(tasks, null, 2));
 

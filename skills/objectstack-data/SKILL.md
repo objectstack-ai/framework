@@ -1,25 +1,21 @@
 ---
 name: objectstack-data
 description: >
-  Design ObjectStack data schemas (Objects, Fields, Validations, Indexes) and
-  the data lifecycle hooks that run on top of them. Use when creating or
-  modifying business object definitions, choosing field types, configuring
-  relationships, setting up validation rules, or implementing data-level
-  hooks (beforeInsert / afterUpdate / …) in an ObjectStack project.
-  ALWAYS use this skill when you see: "define object", "add field", "create
-  table", "data model", "schema design", "relationship", "validation rule",
-  "index", "master_detail", "lookup field", "field type", "object definition",
-  "data hook", "lifecycle hook", "beforeInsert", "afterUpdate", "afterDelete".
-  Do NOT use for querying, filtering, or aggregating data — use
-  objectstack-query instead. For plugin-level hooks and kernel events, use
-  objectstack-platform.
+  Design ObjectStack data schemas — objects, fields, relationships,
+  validations, indexes, lifecycle hooks, permissions, and row-level security.
+  Use when the user is creating or modifying `*.object.ts` files, picking
+  field types, modelling relationships, writing `beforeInsert`/`afterUpdate`
+  hooks, or configuring per-object access control. Do not use for querying
+  data (see objectstack-query) or for plugin / kernel hooks (see
+  objectstack-platform). CEL expressions in formulas / validations / sharing
+  rules: load objectstack-formula alongside.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "4.0"
+  version: "4.1"
   domain: data
-  tags: object, field, validation, index, relationship, hooks, schema, data-model, lifecycle
+  tags: object, field, validation, index, relationship, hook, schema, permission, rls, security
 ---
 
 # Data Modeling — ObjectStack Data Protocol

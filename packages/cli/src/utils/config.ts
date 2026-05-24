@@ -13,6 +13,30 @@ export interface LoadedConfig {
 }
 
 /**
+ * Keep workspace packages and known native/driver deps external so they
+ * are resolved at runtime via real Node ESM dynamic imports. Bundling
+ * them through esbuild collapses each package's `createRequire(import.meta.url)`
+ * chain into inline `require(...)` calls that throw in pure-ESM mode.
+ *
+ * Shared between `loadConfig()` and `serve.ts`'s direct `bundleRequire` call.
+ */
+export const BUNDLE_REQUIRE_EXTERNALS: (string | RegExp)[] = [
+  /^@objectstack\//,
+  'sql.js',
+  'knex',
+  'better-sqlite3',
+  'pg',
+  'mysql',
+  'mysql2',
+  'mongodb',
+  'tedious',
+  'oracledb',
+  'sqlite3',
+  'libsql',
+  '@libsql/client',
+];
+
+/**
  * Resolve the config file path. Supports:
  * - explicit path (objectstack.config.ts)
  * - auto-detection (searches for objectstack.config.{ts,js,mjs})
@@ -58,6 +82,7 @@ export async function loadConfig(source?: string): Promise<LoadedConfig> {
 
   const { mod } = await bundleRequire({
     filepath: absolutePath,
+    external: BUNDLE_REQUIRE_EXTERNALS,
   });
 
   const baseConfig = mod.default || mod;

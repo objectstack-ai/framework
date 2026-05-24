@@ -76,7 +76,6 @@ export const Task = ObjectSchema.create({
     // Assignment
     owner: Field.lookup('user', {
       label: 'Assigned To',
-      required: true,
     }),
     
     // Tags

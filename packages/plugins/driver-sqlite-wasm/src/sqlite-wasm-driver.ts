@@ -13,7 +13,7 @@
 import type { SqlJsStatic } from 'sql.js';
 import { SqlDriver, type SqlDriverConfig } from '@objectstack/driver-sql';
 
-import { Client_WasmSqlite } from './knex-wasm-dialect.js';
+import { getClient_WasmSqlite } from './knex-wasm-dialect.js';
 import type {
   PersistMode,
   WasmConnectionOptions,
@@ -93,7 +93,7 @@ export class SqliteWasmDriver extends SqlDriver {
       // Knex accepts a Client class as `client`. The dialect's `driverName`
       // is `'wasm-sqlite'` and its `dialect` is `'sqlite3'` so the SQLite
       // query compiler is reused.
-      client: Client_WasmSqlite as any,
+      client: getClient_WasmSqlite() as any,
       connection: {
         filename: config.filename,
         persist: config.persist,

@@ -6,7 +6,7 @@ import fs from 'fs';
 import net from 'net';
 import chalk from 'chalk';
 import { bundleRequire } from 'bundle-require';
-import { loadConfig } from '../utils/config.js';
+import { loadConfig, BUNDLE_REQUIRE_EXTERNALS } from '../utils/config.js';
 import { isHostConfig, shouldBootWithLibrary } from '../utils/plugin-detection.js';
 import {
   printHeader,
@@ -325,7 +325,7 @@ export default class Serve extends Command {
         ? { mod: { default: {} as any } }
         : flags.prebuilt
           ? { mod: await import(absolutePath.startsWith('/') ? `file://${absolutePath}` : absolutePath) }
-          : await bundleRequire({ filepath: absolutePath });
+          : await bundleRequire({ filepath: absolutePath, external: BUNDLE_REQUIRE_EXTERNALS });
 
       let config = mod.default || mod;
 

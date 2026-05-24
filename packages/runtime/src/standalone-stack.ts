@@ -28,7 +28,7 @@ import { loadArtifactBundle, isHttpUrl } from './load-artifact-bundle.js';
 export const StandaloneStackConfigSchema = z.object({
     databaseUrl: z.string().optional(),
     databaseAuthToken: z.string().optional(),
-    databaseDriver: z.enum(['sqlite', 'turso', 'memory', 'postgres', 'mongodb']).optional(),
+    databaseDriver: z.enum(['sqlite', 'sqlite-wasm', 'turso', 'memory', 'postgres', 'mongodb']).optional(),
     environmentId: z.string().optional(),
     artifactPath: z.string().optional(),
 });
@@ -51,13 +51,15 @@ export interface StandaloneStackResult {
     manifest?: any;
 }
 
-type ResolvedDriverKind = 'memory' | 'turso' | 'postgres' | 'mongodb' | 'sqlite';
+type ResolvedDriverKind = 'memory' | 'turso' | 'postgres' | 'mongodb' | 'sqlite' | 'sqlite-wasm';
 
 function detectDriverFromUrl(dbUrl: string): ResolvedDriverKind {
     if (/^memory:\/\//i.test(dbUrl)) return 'memory';
     if (/^(libsql|https?):\/\//i.test(dbUrl)) return 'turso';
     if (/^(postgres(ql)?|pg):\/\//i.test(dbUrl)) return 'postgres';
     if (/^mongodb(\+srv)?:\/\//i.test(dbUrl)) return 'mongodb';
+    if (/^wasm-sqlite:\/\//i.test(dbUrl)) return 'sqlite-wasm';
+    if (/\.wasm\.db$/i.test(dbUrl)) return 'sqlite-wasm';
     if (/^file:/i.test(dbUrl)) return 'sqlite';
     // Bare path without a scheme — treat as a sqlite file path.
     if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(dbUrl)) return 'sqlite';
@@ -128,6 +130,20 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
             );
         }
         driverPlugin = new DriverPlugin(new MongoDBDriver({ url: dbUrl }) as any);
+    } else if (dbDriver === 'sqlite-wasm') {
+        const { SqliteWasmDriver } = await import('@objectstack/driver-sqlite-wasm' as any);
+        const filename = dbUrl
+            .replace(/^wasm-sqlite:(\/\/)?/i, '')
+            .replace(/^file:(\/\/)?/i, '');
+        if (filename && filename !== ':memory:') {
+            mkdirSync(resolvePath(filename, '..'), { recursive: true });
+        }
+        driverPlugin = new DriverPlugin(
+            new SqliteWasmDriver({
+                filename: filename || ':memory:',
+                persist: filename && filename !== ':memory:' ? 'on-write' : undefined,
+            }) as any,
+        );
     } else {
         // sqlite
         const { SqlDriver } = await import('@objectstack/driver-sql');
