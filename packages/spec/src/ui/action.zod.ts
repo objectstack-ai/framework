@@ -203,6 +203,15 @@ export const ActionSchema = lazySchema(() => z.object({
   bulkEnabled: z.boolean().optional().describe('Whether this action can be applied to multiple selected records'),
 
   /**
+   * AI exposure opt-out. When `false`, this action is **not** auto-registered
+   * as an AI tool (see service-ai's `registerActionsAsTools`). When unset or
+   * `true` the platform decides based on safety heuristics (script-type, no
+   * confirmation gate, not destructive). Use this for sensitive ops you want
+   * to keep human-only even though they otherwise look safe.
+   */
+  aiExposed: z.boolean().optional().describe('Set to false to keep this action out of the AI tool registry.'),
+
+  /**
    * Row-context: when the action runs from a list_item location, this body key
    * receives the row's id (or the field named by `recordIdField`). Defaults to
    * `id` when omitted but `recordIdField` is set; otherwise no injection.

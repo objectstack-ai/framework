@@ -56,6 +56,15 @@ export {
   setActivePackageTool,
 } from './tools/package-tools.js';
 
+// Action tools (write-side: turn declarative Actions into AI-callable tools)
+export {
+  registerActionsAsTools,
+  actionToToolDefinition,
+  actionToolName,
+  actionSkipReason,
+} from './tools/action-tools.js';
+export type { ActionToolsContext } from './tools/action-tools.js';
+
 // Agent runtime
 export { AgentRuntime } from './agent-runtime.js';
 export type { AgentChatContext } from './agent-runtime.js';
@@ -66,6 +75,13 @@ export type { SkillContext, SkillSummary } from './skill-registry.js';
 
 // Built-in agents
 export { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
+
+// Built-in skills
+export {
+  DATA_EXPLORER_SKILL,
+  METADATA_AUTHORING_SKILL,
+  ACTIONS_EXECUTOR_SKILL,
+} from './skills/index.js';
 
 // Object definitions
 export { AiConversationObject, AiMessageObject, AiTraceObject } from './objects/index.js';

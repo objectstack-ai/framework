@@ -204,6 +204,20 @@ export class SkillRegistry {
     const resolved: AIToolDefinition[] = [];
     for (const skill of skills) {
       for (const toolName of skill.tools) {
+        // Support trailing-wildcard patterns like `action_*` so a skill
+        // can subscribe to a *family* of dynamically registered tools
+        // (built-in `actions_executor` uses this for the `action_<name>`
+        // tools materialised from each object's declarative Action list).
+        if (toolName.endsWith('*')) {
+          const prefix = toolName.slice(0, -1);
+          for (const def of availableTools) {
+            if (!def.name.startsWith(prefix)) continue;
+            if (seen.has(def.name)) continue;
+            resolved.push(def);
+            seen.add(def.name);
+          }
+          continue;
+        }
         if (seen.has(toolName)) continue;
         const def = toolMap.get(toolName);
         if (def) {

@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "objectstack test",
     "test:ai": "tsx test/ai.test.ts",
-    "test:agent": "tsx test/ai-agent.test.ts"
+    "test:agent": "tsx test/ai-agent.test.ts",
+    "test:action": "tsx test/ai-action.test.ts"
   },
   "dependencies": {
     "@objectstack/client": "workspace:*",

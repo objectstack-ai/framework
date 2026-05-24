@@ -1041,7 +1041,7 @@ describe('DATA_CHAT_AGENT', () => {
 
   it('should reference the data_explorer skill (capability bundle moved to skill metadata)', () => {
     expect(DATA_CHAT_AGENT.tools ?? []).toHaveLength(0);
-    expect(DATA_CHAT_AGENT.skills).toEqual(['data_explorer']);
+    expect(DATA_CHAT_AGENT.skills).toEqual(['data_explorer', 'actions_executor']);
   });
 
   it('should have guardrails configured', () => {

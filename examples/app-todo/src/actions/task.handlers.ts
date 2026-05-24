@@ -33,11 +33,10 @@ interface ActionContext {
 
 /** Mark a single task as complete */
 export async function completeTask(ctx: ActionContext): Promise<void> {
-  const { record, engine, user } = ctx;
+  const { record, engine } = ctx;
   await engine.update('todo_task', record.id as string, {
     status: 'completed',
-    completed_at: new Date().toISOString(),
-    completed_by: user.id,
+    completed_date: new Date().toISOString(),
   });
 }
 
@@ -46,14 +45,13 @@ export async function startTask(ctx: ActionContext): Promise<void> {
   const { record, engine } = ctx;
   await engine.update('todo_task', record.id as string, {
     status: 'in_progress',
-    started_at: new Date().toISOString(),
   });
 }
 
 /** Clone a task (duplicate with reset status) */
 export async function cloneTask(ctx: ActionContext): Promise<{ id: string }> {
   const { record, engine } = ctx;
-  const { id, created_at, updated_at, completed_at, completed_by, ...fields } = record as Record<string, unknown>;
+  const { id, created_at, updated_at, completed_date, ...fields } = record as Record<string, unknown>;
   return engine.insert('todo_task', {
     ...fields,
     status: 'not_started',
@@ -63,14 +61,13 @@ export async function cloneTask(ctx: ActionContext): Promise<{ id: string }> {
 
 /** Mark all selected tasks as complete (bulk) */
 export async function massCompleteTasks(ctx: ActionContext): Promise<void> {
-  const { params, engine, user } = ctx;
+  const { params, engine } = ctx;
   const ids = (params?.selectedIds ?? []) as string[];
   const now = new Date().toISOString();
   for (const id of ids) {
     await engine.update('todo_task', id, {
       status: 'completed',
-      completed_at: now,
-      completed_by: user.id,
+      completed_date: now,
     });
   }
 }

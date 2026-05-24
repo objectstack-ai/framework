@@ -15,10 +15,11 @@ import { AiTraceView } from './views/index.js';
 import { registerDataTools } from './tools/data-tools.js';
 import { registerMetadataTools } from './tools/metadata-tools.js';
 import { registerQueryDataTool } from './tools/query-data.tool.js';
+import { registerActionsAsTools } from './tools/action-tools.js';
 import { AgentRuntime } from './agent-runtime.js';
 import { SkillRegistry } from './skill-registry.js';
 import { DATA_CHAT_AGENT, METADATA_ASSISTANT_AGENT } from './agents/index.js';
-import { DATA_EXPLORER_SKILL, METADATA_AUTHORING_SKILL } from './skills/index.js';
+import { DATA_EXPLORER_SKILL, METADATA_AUTHORING_SKILL, ACTIONS_EXECUTOR_SKILL } from './skills/index.js';
 import { VercelLLMAdapter } from './adapters/vercel-adapter.js';
 import { MemoryLLMAdapter } from './adapters/memory-adapter.js';
 import { ModelRegistry } from './model-registry.js';
@@ -339,6 +340,37 @@ export class AIServicePlugin implements Plugin {
             dataEngine,
           });
           ctx.logger.info('[AI] query_data tool registered');
+
+          // Register actions-as-tools: enumerate every object's actions[]
+          // and surface the script-type ones as `action_<name>` tools.
+          // This is what gives agents the ability to *do things* (mark
+          // task complete, clone record, ...) — the write-side counterpart
+          // to query_data.
+          try {
+            const { registered, skipped } = await registerActionsAsTools(
+              this.service.toolRegistry,
+              {
+                metadata: metadataService,
+                dataEngine,
+              },
+            );
+            if (registered.length > 0) {
+              ctx.logger.info(
+                `[AI] ${registered.length} action tool(s) registered: ${registered.join(', ')}`,
+              );
+            }
+            if (skipped.length > 0) {
+              ctx.logger.debug(
+                `[AI] Skipped ${skipped.length} action(s) for AI exposure`,
+                { skipped },
+              );
+            }
+          } catch (err) {
+            ctx.logger.warn(
+              '[AI] Failed to register action tools',
+              err instanceof Error ? { error: err.message } : { error: String(err) },
+            );
+          }
         }
 
         // Register data tools as metadata (for Studio visibility)
@@ -406,6 +438,25 @@ export class AIServicePlugin implements Plugin {
             }
           } catch (err) {
             ctx.logger.warn('[AI] Failed to register data_explorer skill', err instanceof Error ? { error: err.message } : { error: String(err) });
+          }
+
+          // Register the built-in actions_executor skill (write-side bundle for data_chat)
+          try {
+            const skillExists =
+              typeof metadataService.exists === 'function'
+                ? await withTimeout(metadataService.exists('skill', ACTIONS_EXECUTOR_SKILL.name))
+                : false;
+
+            if (skillExists === null) {
+              ctx.logger.warn('[AI] Metadata service timed out checking actions_executor skill, skipping');
+            } else if (!skillExists) {
+              await withTimeout(metadataService.register('skill', ACTIONS_EXECUTOR_SKILL.name, ACTIONS_EXECUTOR_SKILL));
+              ctx.logger.info('[AI] actions_executor skill registered');
+            } else {
+              ctx.logger.debug('[AI] actions_executor skill already exists, skipping auto-registration');
+            }
+          } catch (err) {
+            ctx.logger.warn('[AI] Failed to register actions_executor skill', err instanceof Error ? { error: err.message } : { error: String(err) });
           }
         }
       }

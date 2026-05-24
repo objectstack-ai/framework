@@ -2,3 +2,4 @@
 
 export { DATA_EXPLORER_SKILL } from './data-explorer-skill.js';
 export { METADATA_AUTHORING_SKILL } from './metadata-authoring-skill.js';
+export { ACTIONS_EXECUTOR_SKILL } from './actions-executor-skill.js';

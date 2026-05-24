@@ -43,7 +43,8 @@ Always answer in the same language the user is using. Detailed tool-usage guidan
   },
 
   // Capability bundle lives on the skill; the agent only references it.
-  skills: ['data_explorer'],
+  // `data_explorer` = read side, `actions_executor` = write side.
+  skills: ['data_explorer', 'actions_executor'],
 
   active: true,
   visibility: 'global',

@@ -70,9 +70,17 @@ export const SkillSchema = lazySchema(() => z.object({
 
   /**
    * References to tool names that belong to this skill.
-   * Tools must be registered as first-class metadata (type: 'tool').
+   *
+   * - Plain names (`create_case`) match a tool with that exact name.
+   * - Trailing-wildcard patterns (`action_*`) match every tool whose
+   *   name starts with the prefix. Useful for subscribing to a family
+   *   of dynamically registered tools (e.g. the `action_<name>` tools
+   *   materialised from each object's declarative Action list).
+   *
+   * Tools should also be registered as first-class metadata
+   * (type: 'tool') unless they are dynamically materialised at runtime.
    */
-  tools: z.array(z.string().regex(/^[a-z_][a-z0-9_]*$/)).describe('Tool names belonging to this skill'),
+  tools: z.array(z.string().regex(/^[a-z_][a-z0-9_]*\*?$/)).describe('Tool names belonging to this skill (supports trailing wildcard, e.g. `action_*`)'),
 
   /**
    * Natural language phrases that trigger skill activation.
