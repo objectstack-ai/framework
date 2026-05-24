@@ -94,7 +94,8 @@
     "json-schema",
     "prompts",
     "llms.txt",
-    "README.md"
+    "README.md",
+    "src/**/*.zod.ts"
   ],
   "scripts": {
     "build": "pnpm gen:schema && pnpm gen:openapi && tsup && NODE_OPTIONS=\"--max-old-space-size=4096\" BUILD_DTS=true tsup",

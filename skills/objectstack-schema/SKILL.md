@@ -352,14 +352,8 @@ When extending an object you do not own:
 
 ## References
 
-- [rules/naming.md](./rules/naming.md) — Naming conventions with incorrect/correct examples
-- [rules/field-types.md](./rules/field-types.md) — All 48 field types with decision tree
-- [rules/relationships.md](./rules/relationships.md) — lookup vs master_detail, patterns
-- [rules/validation.md](./rules/validation.md) — All validation types, script inversion
-- [rules/indexing.md](./rules/indexing.md) — Index types, composite/partial strategies
-- [rules/hooks.md](./rules/hooks.md) — Data lifecycle hooks quick reference (→ [objectstack-hooks](../objectstack-hooks/references/data-hooks.md))
-- [references/data/field.zod.ts](./references/data/field.zod.ts) — FieldType enum, FieldSchema
-- [references/data/object.zod.ts](./references/data/object.zod.ts) — ObjectSchema, capabilities, `ObjectFieldGroupSchema`
-- [references/data/validation.zod.ts](./references/data/validation.zod.ts) — Validation rule types
-- [references/data/hook.zod.ts](./references/data/hook.zod.ts) — Hook schema, HookContext
-- [Schema index](./references/_index.md) — All bundled schemas with dependency tree
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

@@ -1,17 +1,30 @@
-# objectstack-quickstart — Zod Schema Reference
+# objectstack-quickstart — Schema References
 
-> **Auto-generated** by `build-skill-references.ts`.
-> These files are copied from `packages/spec/src/` for AI agent consumption.
+> **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
 
-## Core Schemas
+Schemas live in the published `@objectstack/spec` package. Read them directly
+from `node_modules` — there is no local copy in the skill bundle.
 
-- [`data/dataset.zod.ts`](./data/dataset.zod.ts) — Data Import Strategy
-- [`data/datasource.zod.ts`](./data/datasource.zod.ts) — Driver Identifier
-- [`kernel/manifest.zod.ts`](./kernel/manifest.zod.ts) — Schema for the ObjectStack Manifest.
+## Core schemas
 
-## Dependencies (auto-resolved)
+- `node_modules/@objectstack/spec/src/data/dataset.zod.ts` — Data Import Strategy
+- `node_modules/@objectstack/spec/src/data/datasource.zod.ts` — Driver Identifier
+- `node_modules/@objectstack/spec/src/kernel/manifest.zod.ts` — Schema for the ObjectStack Manifest.
 
-- [`kernel/plugin-capability.zod.ts`](./kernel/plugin-capability.zod.ts) — Plugin Capability Protocol
-- [`kernel/plugin-loading.zod.ts`](./kernel/plugin-loading.zod.ts) — Plugin Loading Protocol
-- [`kernel/plugin.zod.ts`](./kernel/plugin.zod.ts) — Upgrade Context Schema
+## Transitive dependencies
+
+- `node_modules/@objectstack/spec/src/kernel/plugin-capability.zod.ts` — Plugin Capability Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-loading.zod.ts` — Plugin Loading Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin.zod.ts` — Upgrade Context Schema
+- `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
+
+## How to read these
+
+1. The schemas are runtime Zod definitions. Use `Read` on the absolute
+   path under `node_modules/@objectstack/spec/src/` to inspect field shapes,
+   `.describe()` text, enums, and refinements.
+2. TypeScript types: `import type { … } from '@objectstack/spec'` (or the
+   matching subpath export).
+3. Runtime values: `import { … } from '@objectstack/spec'` — the package
+   re-exports every schema and helper.

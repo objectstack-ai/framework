@@ -1,23 +1,35 @@
-# objectstack-ai — Zod Schema Reference
+# objectstack-ai — Schema References
 
-> **Auto-generated** by `build-skill-references.ts`.
-> These files are copied from `packages/spec/src/` for AI agent consumption.
+> **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
 
-## Core Schemas
+Schemas live in the published `@objectstack/spec` package. Read them directly
+from `node_modules` — there is no local copy in the skill bundle.
 
-- [`ai/agent.zod.ts`](./ai/agent.zod.ts) — AI Model Configuration
-- [`ai/conversation.zod.ts`](./ai/conversation.zod.ts) — AI Conversation Memory Protocol
-- [`ai/mcp.zod.ts`](./ai/mcp.zod.ts) — Model Context Protocol (MCP)
-- [`ai/model-registry.zod.ts`](./ai/model-registry.zod.ts) — AI Model Registry Protocol
-- [`ai/nlq.zod.ts`](./ai/nlq.zod.ts) — Natural Language Query (NLQ) Protocol
-- [`ai/orchestration.zod.ts`](./ai/orchestration.zod.ts) — AI Agentic Orchestration Protocol
-- [`ai/rag-pipeline.zod.ts`](./ai/rag-pipeline.zod.ts) — RAG (Retrieval-Augmented Generation) Pipeline Protocol
-- [`ai/skill.zod.ts`](./ai/skill.zod.ts) — Skill Trigger Condition Schema
-- [`ai/tool.zod.ts`](./ai/tool.zod.ts) — Tool Category
+## Core schemas
 
-## Dependencies (auto-resolved)
+- `node_modules/@objectstack/spec/src/ai/agent.zod.ts` — AI Model Configuration
+- `node_modules/@objectstack/spec/src/ai/conversation.zod.ts` — AI Conversation Memory Protocol
+- `node_modules/@objectstack/spec/src/ai/embedding.zod.ts` — Embedding & Vector Store Primitives
+- `node_modules/@objectstack/spec/src/ai/mcp.zod.ts` — Model Context Protocol (MCP) — Reference & Binding Primitives
+- `node_modules/@objectstack/spec/src/ai/model-registry.zod.ts` — AI Model Registry Protocol
+- `node_modules/@objectstack/spec/src/ai/skill.zod.ts` — Skill Trigger Condition Schema
+- `node_modules/@objectstack/spec/src/ai/tool.zod.ts` — Tool Category
+- `node_modules/@objectstack/spec/src/ai/usage.zod.ts` — AI Usage Primitives
 
-- [`ai/cost.zod.ts`](./ai/cost.zod.ts) — AI Cost Tracking Protocol
-- [`automation/state-machine.zod.ts`](./automation/state-machine.zod.ts) — XState-inspired State Machine Protocol
-- [`shared/identifiers.zod.ts`](./shared/identifiers.zod.ts) — System Identifier Schema
+## Transitive dependencies
+
+- `node_modules/@objectstack/spec/src/automation/state-machine.zod.ts` — XState-inspired State Machine Protocol
+- `node_modules/@objectstack/spec/src/shared/expression.zod.ts` — Expression Protocol
+- `node_modules/@objectstack/spec/src/shared/identifiers.zod.ts` — System Identifier Schema
+- `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
+
+## How to read these
+
+1. The schemas are runtime Zod definitions. Use `Read` on the absolute
+   path under `node_modules/@objectstack/spec/src/` to inspect field shapes,
+   `.describe()` text, enums, and refinements.
+2. TypeScript types: `import type { … } from '@objectstack/spec'` (or the
+   matching subpath export).
+3. Runtime values: `import { … } from '@objectstack/spec'` — the package
+   re-exports every schema and helper.

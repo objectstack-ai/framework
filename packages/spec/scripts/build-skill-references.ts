@@ -3,18 +3,22 @@
 /**
  * Build Skill References
  *
- * Copies Zod schema source files into each skill's `references/zod/` folder
- * so that AI agents can read the precise type definitions directly — without
- * needing access to the monorepo source tree.
+ * Generates an `_index.md` file per skill that points to Zod schema source
+ * files inside the consumer's `node_modules/@objectstack/spec/src/`.
  *
- * Usage: tsx scripts/build-skill-references.ts
+ * Skills do NOT bundle copies of the schemas — when a skill is installed
+ * into a metadata-driven project (e.g. via skills.sh), `@objectstack/spec`
+ * is always present as a dependency. Pointing at the published source files
+ * keeps a single source of truth and stays version-aligned automatically.
  *
  * The script:
  * 1. Reads a declarative mapping of { skill → core zod files }
- * 2. Recursively resolves local `import … from` dependencies
- * 3. Copies all resolved files into `skills/{name}/references/zod/`
- *    preserving the category-based directory structure
- * 4. Generates an `_index.md` per skill listing all bundled schemas
+ * 2. Recursively resolves local `import … from` dependencies (so the index
+ *    surfaces shared schemas an agent will need to follow)
+ * 3. Writes `skills/{name}/references/_index.md` with pointers + one-line
+ *    descriptions extracted from each file's leading JSDoc comment
+ *
+ * Usage: tsx scripts/build-skill-references.ts
  */
 
 import fs from 'fs';
@@ -25,6 +29,7 @@ import path from 'path';
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const SPEC_SRC = path.resolve(__dirname, '../src');
 const SKILLS_DIR = path.resolve(REPO_ROOT, 'skills');
+const SPEC_PKG = '@objectstack/spec';
 
 // ── Skill → Zod file mapping ────────────────────────────────────────────────
 // Paths are relative to packages/spec/src/ (category/file.zod.ts)
@@ -46,12 +51,11 @@ const SKILL_MAP: Record<string, string[]> = {
     'ai/agent.zod.ts',
     'ai/tool.zod.ts',
     'ai/skill.zod.ts',
-    'ai/rag-pipeline.zod.ts',
     'ai/model-registry.zod.ts',
     'ai/conversation.zod.ts',
     'ai/mcp.zod.ts',
-    'ai/orchestration.zod.ts',
-    'ai/nlq.zod.ts',
+    'ai/embedding.zod.ts',
+    'ai/usage.zod.ts',
   ],
   'objectstack-api': [
     'api/endpoint.zod.ts',
@@ -101,144 +105,161 @@ const SKILL_MAP: Record<string, string[]> = {
     'kernel/feature.zod.ts',
     'kernel/metadata-plugin.zod.ts',
   ],
+  'objectstack-seed': [
+    'data/dataset.zod.ts',
+  ],
+  'objectstack-hooks': [
+    'data/hook.zod.ts',
+  ],
+  'objectstack-i18n': [
+    'system/translation.zod.ts',
+    'ui/i18n.zod.ts',
+  ],
 };
 
 // ── Import resolver ──────────────────────────────────────────────────────────
 
-/**
- * Extract local imports from a .zod.ts file.
- * Returns paths relative to SPEC_SRC (e.g. "shared/identifiers.zod.ts").
- * Ignores external imports (zod, node modules).
- */
 function extractLocalImports(filePath: string): string[] {
   const content = fs.readFileSync(filePath, 'utf-8');
   const imports: string[] = [];
-  // Match: import { ... } from './foo.zod'  or  '../shared/bar.zod'
   const re = /^import\s+.*\s+from\s+['"](\.[^'"]+)['"]/gm;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content)) !== null) {
-    const importSpec = match[1]; // e.g. '../shared/identifiers.zod'
+    const importSpec = match[1];
     const dir = path.dirname(filePath);
     let resolved = path.resolve(dir, importSpec);
-    // Append .ts if needed
-    if (!resolved.endsWith('.ts')) {
-      resolved += '.ts';
-    }
+    if (!resolved.endsWith('.ts')) resolved += '.ts';
     if (fs.existsSync(resolved)) {
-      // Convert back to relative from SPEC_SRC
-      const rel = path.relative(SPEC_SRC, resolved);
-      imports.push(rel);
+      imports.push(path.relative(SPEC_SRC, resolved));
     }
   }
   return imports;
 }
 
-/**
- * Recursively resolve all dependencies for a set of entry files.
- * Returns deduplicated set of all files (entries + transitive deps),
- * all relative to SPEC_SRC.
- */
 function resolveAll(entryFiles: string[]): string[] {
   const visited = new Set<string>();
   const queue = [...entryFiles];
-
   while (queue.length > 0) {
     const rel = queue.shift()!;
     if (visited.has(rel)) continue;
-    visited.add(rel);
-
     const abs = path.resolve(SPEC_SRC, rel);
     if (!fs.existsSync(abs)) {
-      console.warn(`  ⚠ File not found: ${rel}`);
+      console.warn(`  ⚠ File not found: ${rel} (skipped)`);
       continue;
     }
-    const deps = extractLocalImports(abs);
-    for (const dep of deps) {
-      if (!visited.has(dep)) {
-        queue.push(dep);
-      }
+    visited.add(rel);
+    for (const dep of extractLocalImports(abs)) {
+      if (!visited.has(dep)) queue.push(dep);
     }
   }
-
   return [...visited].sort();
 }
 
 // ── JSDoc description extractor ──────────────────────────────────────────────
 
-/**
- * Extract a short description from a file's first JSDoc comment.
- * Takes only the first sentence/line. Falls back to exported schema names.
- */
 function extractDescription(filePath: string): string {
   const content = fs.readFileSync(filePath, 'utf-8');
-  // Try to grab the first top-level JSDoc comment
-  const jsdocRe = /\/\*\*\s*\n([\s\S]*?)\*\//;
-  const jsdocMatch = content.match(jsdocRe);
+  const jsdocMatch = content.match(/\/\*\*\s*\n([\s\S]*?)\*\//);
   if (jsdocMatch) {
     const lines = jsdocMatch[1]
       .split('\n')
       .map((line) => line.replace(/^\s*\*\s?/, '').trim())
       .filter((line) => line && !line.startsWith('@') && !line.startsWith('```'));
-    // Take only the first non-empty line as a short description
     const firstLine = lines[0];
     if (firstLine && firstLine.length > 5) {
-      // Strip leading markdown heading markers
       const clean = firstLine.replace(/^#+\s*/, '');
-      // Truncate to first sentence or 120 chars
       const sentence = clean.split(/\.\s/)[0];
       return sentence.length > 120 ? sentence.slice(0, 117) + '...' : sentence;
     }
   }
-  // Fallback: list exported schema names
   const exports: string[] = [];
-  const exportRe = /export\s+const\s+(\w+Schema|\w+)\s*(?:[:=])/g;
+  const re = /export\s+const\s+(\w+Schema|\w+)\s*(?:[:=])/g;
   let m: RegExpExecArray | null;
-  while ((m = exportRe.exec(content)) !== null) {
-    exports.push(m[1]);
-  }
+  while ((m = re.exec(content)) !== null) exports.push(m[1]);
   if (exports.length > 0) return `Exports: ${exports.slice(0, 5).join(', ')}`;
   return '';
 }
 
 // ── Index generator ──────────────────────────────────────────────────────────
 
+function pointerPath(rel: string): string {
+  return `node_modules/${SPEC_PKG}/src/${rel}`;
+}
+
 function generateIndex(skillName: string, coreFiles: string[], allFiles: string[]): string {
   const coreSet = new Set(coreFiles);
   const lines: string[] = [
-    `# ${skillName} — Zod Schema Reference`,
+    `# ${skillName} — Schema References`,
     '',
-    '> **Auto-generated** by `build-skill-references.ts`.',
-    '> These files are copied from `packages/spec/src/` for AI agent consumption.',
-    '> Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.',
+    '> **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.',
+    `> Do not edit — re-run \`pnpm --filter ${SPEC_PKG} run gen:skill-refs\` to update.`,
     '',
-    '## Core Schemas',
+    `Schemas live in the published \`${SPEC_PKG}\` package. Read them directly`,
+    'from `node_modules` — there is no local copy in the skill bundle.',
+    '',
+    '## Core schemas',
     '',
   ];
 
   for (const f of allFiles.filter((f) => coreSet.has(f))) {
     const desc = extractDescription(path.resolve(SPEC_SRC, f));
-    lines.push(`- [\`${f}\`](./${f})${desc ? ` — ${desc}` : ''}`);
+    lines.push(`- \`${pointerPath(f)}\`${desc ? ` — ${desc}` : ''}`);
   }
 
   const deps = allFiles.filter((f) => !coreSet.has(f));
   if (deps.length > 0) {
-    lines.push('', '## Dependencies (auto-resolved)', '');
+    lines.push('', '## Transitive dependencies', '');
     for (const f of deps) {
       const desc = extractDescription(path.resolve(SPEC_SRC, f));
-      lines.push(`- [\`${f}\`](./${f})${desc ? ` — ${desc}` : ''}`);
+      lines.push(`- \`${pointerPath(f)}\`${desc ? ` — ${desc}` : ''}`);
     }
   }
 
-  lines.push('');
+  lines.push(
+    '',
+    '## How to read these',
+    '',
+    `1. The schemas are runtime Zod definitions. Use \`Read\` on the absolute`,
+    `   path under \`node_modules/${SPEC_PKG}/src/\` to inspect field shapes,`,
+    `   \`.describe()\` text, enums, and refinements.`,
+    `2. TypeScript types: \`import type { … } from '${SPEC_PKG}'\` (or the`,
+    '   matching subpath export).',
+    '3. Runtime values: `import { … } from \'' + SPEC_PKG + '\'` — the package',
+    '   re-exports every schema and helper.',
+    '',
+  );
+
   return lines.join('\n');
+}
+
+// ── Cleanup helper ───────────────────────────────────────────────────────────
+
+function cleanReferencesDir(refsDir: string) {
+  if (!fs.existsSync(refsDir)) {
+    fs.mkdirSync(refsDir, { recursive: true });
+    return;
+  }
+  for (const entry of fs.readdirSync(refsDir)) {
+    // Keep hand-written markdown other than _index.md untouched.
+    if (entry === '_index.md') {
+      fs.rmSync(path.resolve(refsDir, entry));
+      continue;
+    }
+    const entryPath = path.resolve(refsDir, entry);
+    const stat = fs.statSync(entryPath);
+    if (stat.isDirectory()) {
+      fs.rmSync(entryPath, { recursive: true });
+    } else if (entry.endsWith('.zod.ts')) {
+      fs.rmSync(entryPath);
+    }
+  }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 function main() {
-  console.log('🔗 Building skill Zod references...\n');
-
-  let totalFiles = 0;
+  console.log('🔗 Building skill schema reference indexes...\n');
+  let totalSkills = 0;
 
   for (const [skillName, coreFiles] of Object.entries(SKILL_MAP)) {
     const skillDir = path.resolve(SKILLS_DIR, skillName);
@@ -248,47 +269,20 @@ function main() {
     }
 
     console.log(`📦 ${skillName}`);
-
-    // Resolve full dependency tree
     const allFiles = resolveAll(coreFiles);
-    console.log(`   ${coreFiles.length} core + ${allFiles.length - coreFiles.length} deps = ${allFiles.length} files`);
+    console.log(`   ${coreFiles.length} core + ${allFiles.length - coreFiles.length} deps`);
 
-    // Target directory — directly under references/ (no zod/ subdirectory)
     const refsDir = path.resolve(skillDir, 'references');
+    cleanReferencesDir(refsDir);
 
-    // Clean previous generated files (preserve directory, remove .zod.ts and _index.md)
-    if (fs.existsSync(refsDir)) {
-      // Remove old zod/ subdirectory if it exists (migration from previous structure)
-      const oldZodDir = path.resolve(refsDir, 'zod');
-      if (fs.existsSync(oldZodDir)) {
-        fs.rmSync(oldZodDir, { recursive: true });
-      }
-      // Remove generated category directories and _index.md
-      for (const entry of fs.readdirSync(refsDir)) {
-        const entryPath = path.resolve(refsDir, entry);
-        const stat = fs.statSync(entryPath);
-        if (stat.isDirectory() || entry === '_index.md' || entry.endsWith('.zod.ts')) {
-          fs.rmSync(entryPath, { recursive: true });
-        }
-      }
-    }
-
-    // Copy files preserving directory structure
-    for (const rel of allFiles) {
-      const src = path.resolve(SPEC_SRC, rel);
-      const dest = path.resolve(refsDir, rel);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.copyFileSync(src, dest);
-    }
-
-    // Generate _index.md
-    const indexContent = generateIndex(skillName, coreFiles, allFiles);
-    fs.writeFileSync(path.resolve(refsDir, '_index.md'), indexContent);
-
-    totalFiles += allFiles.length;
+    fs.writeFileSync(
+      path.resolve(refsDir, '_index.md'),
+      generateIndex(skillName, coreFiles, allFiles),
+    );
+    totalSkills += 1;
   }
 
-  console.log(`\n✅ Done — ${totalFiles} files copied across ${Object.keys(SKILL_MAP).length} skills`);
+  console.log(`\n✅ Done — ${totalSkills} skill index files written`);
 }
 
 main();

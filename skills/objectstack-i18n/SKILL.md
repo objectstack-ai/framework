@@ -702,12 +702,10 @@ export default {
 
 ## References
 
-- [translation.zod.ts](./references/system/translation.zod.ts) — Translation schemas (AppTranslationBundle, ObjectTranslationNode, Coverage, Diff)
-- [i18n-service.ts](./references/contracts/i18n-service.ts) — II18nService interface contract
-- [i18n.zod.ts](./references/ui/i18n.zod.ts) — UI-level i18n object schema
-- [Schema index](./references/_index.md) — All bundled schemas
-
----
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
 
 ## See Also
 

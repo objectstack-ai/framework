@@ -543,9 +543,8 @@ only fall back to custom query code when schema limits require it.
 
 ## References
 
-- [rules/filters.md](./rules/filters.md) — Complete filter operator reference
-- [rules/aggregation.md](./rules/aggregation.md) — Aggregation, GroupBy, window functions
-- [rules/pagination.md](./rules/pagination.md) — Offset vs cursor pagination patterns
-- [references/data/query.zod.ts](./references/data/query.zod.ts) — QuerySchema, AggregationNode, JoinNode
-- [references/data/filter.zod.ts](./references/data/filter.zod.ts) — FilterCondition, FieldOperators
-- [Schema index](./references/_index.md) — All bundled schemas
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

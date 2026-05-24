@@ -670,14 +670,8 @@ the selected row in `list_item` contexts.
 
 ## References
 
-- [view.zod.ts](./references/ui/view.zod.ts) — Grid/kanban/calendar views, columns, filters
-- [app.zod.ts](./references/ui/app.zod.ts) — App definition, navigation items
-- [dashboard.zod.ts](./references/ui/dashboard.zod.ts) — Dashboard widgets, layout, data queries
-- [chart.zod.ts](./references/ui/chart.zod.ts) — 25+ chart types, axis config, legends
-- [action.zod.ts](./references/ui/action.zod.ts) — UI actions, parameters, confirmation
-- [page.zod.ts](./references/ui/page.zod.ts) — Page layouts, SDUI, slot definitions
-- [widget.zod.ts](./references/ui/widget.zod.ts) — Widget definitions, data bindings
-- [component.zod.ts](./references/ui/component.zod.ts) — Component registry, props schema
-- [report.zod.ts](./references/ui/report.zod.ts) — Report definitions, grouping, aggregations
-- [theme.zod.ts](./references/ui/theme.zod.ts) — Design tokens, color modes, typography
-- [Schema index](./references/_index.md) — All bundled schemas with dependency tree
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

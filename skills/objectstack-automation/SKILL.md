@@ -444,12 +444,8 @@ metadata first; reserve custom code for edge-case integrations.
 
 ## References
 
-- [flow.zod.ts](./references/automation/flow.zod.ts) — Flow types, 18 node types, variables
-- [workflow.zod.ts](./references/automation/workflow.zod.ts) — Workflow rules, trigger types, actions
-- [trigger-registry.zod.ts](./references/automation/trigger-registry.zod.ts) — Trigger definitions
-- [approval.zod.ts](./references/automation/approval.zod.ts) — Approval process, steps, escalation
-- [state-machine.zod.ts](./references/automation/state-machine.zod.ts) — State machine transitions
-- [execution.zod.ts](./references/automation/execution.zod.ts) — Execution state, history, scheduling
-- [webhook.zod.ts](./references/automation/webhook.zod.ts) — Webhook triggers, delivery, retry
-- [node-executor.zod.ts](./references/automation/node-executor.zod.ts) — Flow node execution runtime
-- [Schema index](./references/_index.md) — All bundled schemas with dependency tree
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

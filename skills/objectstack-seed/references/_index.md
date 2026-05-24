@@ -1,4 +1,4 @@
-# objectstack-hooks — Schema References
+# objectstack-seed — Schema References
 
 > **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
@@ -8,12 +8,10 @@ from `node_modules` — there is no local copy in the skill bundle.
 
 ## Core schemas
 
-- `node_modules/@objectstack/spec/src/data/hook.zod.ts` — Hook Lifecycle Events
+- `node_modules/@objectstack/spec/src/data/dataset.zod.ts` — Data Import Strategy
 
 ## Transitive dependencies
 
-- `node_modules/@objectstack/spec/src/data/hook-body.zod.ts` — Capability tokens a script body may request.
-- `node_modules/@objectstack/spec/src/shared/expression.zod.ts` — Expression Protocol
 - `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
 
 ## How to read these

@@ -338,13 +338,8 @@ const aiService = kernel.resolve<AIService>('ai');
 
 ## References
 
-- [endpoint.zod.ts](./references/api/endpoint.zod.ts) — Custom endpoint definitions
-- [auth.zod.ts](./references/api/auth.zod.ts) — Auth providers, login types, session
-- [realtime.zod.ts](./references/api/realtime.zod.ts) — WebSocket/SSE subscriptions
-- [rest-server.zod.ts](./references/api/rest-server.zod.ts) — REST server config, routing
-- [graphql.zod.ts](./references/api/graphql.zod.ts) — GraphQL schema, resolvers, subscriptions
-- [websocket.zod.ts](./references/api/websocket.zod.ts) — WebSocket protocol, channels, messages
-- [errors.zod.ts](./references/api/errors.zod.ts) — Error response schemas, status codes
-- [batch.zod.ts](./references/api/batch.zod.ts) — Batch operations, bulk request/response
-- [versioning.zod.ts](./references/api/versioning.zod.ts) — API versioning strategies, deprecation
-- [Schema index](./references/_index.md) — All bundled schemas with dependency tree
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

@@ -359,13 +359,8 @@ logic into **skills**, and wire domain knowledge through **RAG pipelines**.
 
 ## References
 
-- [agent.zod.ts](./references/ai/agent.zod.ts) — AgentSchema, model config, guardrails
-- [tool.zod.ts](./references/ai/tool.zod.ts) — ToolSchema, categories, parameters
-- [skill.zod.ts](./references/ai/skill.zod.ts) — SkillSchema, trigger conditions
-- [rag-pipeline.zod.ts](./references/ai/rag-pipeline.zod.ts) — RAG, chunking, retrieval, embeddings
-- [model-registry.zod.ts](./references/ai/model-registry.zod.ts) — LLM providers, model versioning
-- [conversation.zod.ts](./references/ai/conversation.zod.ts) — Chat context, message history, turns
-- [mcp.zod.ts](./references/ai/mcp.zod.ts) — MCP protocol, tool/resource/prompt schemas
-- [orchestration.zod.ts](./references/ai/orchestration.zod.ts) — Multi-agent orchestration patterns
-- [nlq.zod.ts](./references/ai/nlq.zod.ts) — Natural language query schemas
-- [Schema index](./references/_index.md) — All bundled schemas with dependency tree
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

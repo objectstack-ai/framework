@@ -451,7 +451,6 @@ This pattern is the baseline for realistic demo + test seed packs in metadata ap
 
 ## References
 
-- [references/dataset.zod.ts](./references/dataset.zod.ts) — `DatasetSchema`, `DatasetMode`, `defineDataset()` source
-- [packages/spec/src/data/dataset.zod.ts](../../packages/spec/src/data/dataset.zod.ts) — Canonical source
+- [references/_index.md](./references/_index.md) — Zod schema pointers (Dataset, etc.)
 - [objectstack-schema](../objectstack-schema/SKILL.md) — Object & field schema design
 - [objectstack-query](../objectstack-query/SKILL.md) — Querying seeded data

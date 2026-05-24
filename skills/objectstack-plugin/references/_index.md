@@ -1,22 +1,37 @@
-# objectstack-plugin — Zod Schema Reference
+# objectstack-plugin — Schema References
 
-> **Auto-generated** by `build-skill-references.ts`.
-> These files are copied from `packages/spec/src/` for AI agent consumption.
+> **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
 
-## Core Schemas
+Schemas live in the published `@objectstack/spec` package. Read them directly
+from `node_modules` — there is no local copy in the skill bundle.
 
-- [`kernel/context.zod.ts`](./kernel/context.zod.ts) — Runtime Mode Enum
-- [`kernel/feature.zod.ts`](./kernel/feature.zod.ts) — Feature Rollout Strategy
-- [`kernel/metadata-plugin.zod.ts`](./kernel/metadata-plugin.zod.ts) — Metadata Plugin Protocol
-- [`kernel/plugin-capability.zod.ts`](./kernel/plugin-capability.zod.ts) — Plugin Capability Protocol
-- [`kernel/plugin-lifecycle-events.zod.ts`](./kernel/plugin-lifecycle-events.zod.ts) — Plugin Lifecycle Events Protocol
-- [`kernel/plugin-loading.zod.ts`](./kernel/plugin-loading.zod.ts) — Plugin Loading Protocol
-- [`kernel/plugin.zod.ts`](./kernel/plugin.zod.ts) — Upgrade Context Schema
-- [`kernel/service-registry.zod.ts`](./kernel/service-registry.zod.ts) — Service Registry Protocol
+## Core schemas
 
-## Dependencies (auto-resolved)
+- `node_modules/@objectstack/spec/src/kernel/context.zod.ts` — Runtime Mode Enum
+- `node_modules/@objectstack/spec/src/kernel/feature.zod.ts` — Feature Rollout Strategy
+- `node_modules/@objectstack/spec/src/kernel/metadata-plugin.zod.ts` — Metadata Plugin Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-capability.zod.ts` — Plugin Capability Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-lifecycle-events.zod.ts` — Plugin Lifecycle Events Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin-loading.zod.ts` — Plugin Loading Protocol
+- `node_modules/@objectstack/spec/src/kernel/plugin.zod.ts` — Upgrade Context Schema
+- `node_modules/@objectstack/spec/src/kernel/service-registry.zod.ts` — Service Registry Protocol
 
-- [`kernel/metadata-customization.zod.ts`](./kernel/metadata-customization.zod.ts) — Metadata Customization Layer Protocol
-- [`kernel/metadata-loader.zod.ts`](./kernel/metadata-loader.zod.ts) — Metadata Loader Protocol
-- [`shared/identifiers.zod.ts`](./shared/identifiers.zod.ts) — System Identifier Schema
+## Transitive dependencies
+
+- `node_modules/@objectstack/spec/src/kernel/cluster.zod.ts` — Cluster Protocol
+- `node_modules/@objectstack/spec/src/kernel/metadata-customization.zod.ts` — Metadata Customization Layer Protocol
+- `node_modules/@objectstack/spec/src/kernel/metadata-loader.zod.ts` — Metadata Loader Protocol
+- `node_modules/@objectstack/spec/src/shared/expression.zod.ts` — Expression Protocol
+- `node_modules/@objectstack/spec/src/shared/identifiers.zod.ts` — System Identifier Schema
+- `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
+
+## How to read these
+
+1. The schemas are runtime Zod definitions. Use `Read` on the absolute
+   path under `node_modules/@objectstack/spec/src/` to inspect field shapes,
+   `.describe()` text, enums, and refinements.
+2. TypeScript types: `import type { … } from '@objectstack/spec'` (or the
+   matching subpath export).
+3. Runtime values: `import { … } from '@objectstack/spec'` — the package
+   re-exports every schema and helper.

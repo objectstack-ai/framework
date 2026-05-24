@@ -421,11 +421,8 @@ Strategies: `boolean` | `percentage` | `user_list` | `group` | `custom`
 
 ## References
 
-- [rules/plugin-lifecycle.md](./rules/plugin-lifecycle.md) — 3-phase lifecycle, dependencies, complete examples
-- [rules/service-registry.md](./rules/service-registry.md) — DI container, factories, core fallbacks
-- [rules/hooks-events.md](./rules/hooks-events.md) — Plugin hooks quick reference (→ [objectstack-hooks](../objectstack-hooks/references/plugin-hooks.md))
-- [references/kernel/plugin.zod.ts](./references/kernel/plugin.zod.ts) — PluginContext schema, lifecycle hooks
-- [references/kernel/context.zod.ts](./references/kernel/context.zod.ts) — RuntimeMode, KernelContext
-- [references/kernel/service-registry.zod.ts](./references/kernel/service-registry.zod.ts) — Service scope types
-- [references/kernel/feature.zod.ts](./references/kernel/feature.zod.ts) — Feature flag strategies
-- [references/_index.md](./references/_index.md) — Complete schema index
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.
+

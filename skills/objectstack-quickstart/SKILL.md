@@ -687,15 +687,7 @@ os dev --ui
 
 ## Zod Schema References
 
-When you need precise type definitions, read these bundled reference files:
-
-| File | What It Contains |
-|:-----|:-----------------|
-| [`references/kernel/manifest.zod.ts`](./references/kernel/manifest.zod.ts) | Manifest schema (id, namespace, version, type) |
-| [`references/data/datasource.zod.ts`](./references/data/datasource.zod.ts) | Datasource connection config |
-| [`references/data/dataset.zod.ts`](./references/data/dataset.zod.ts) | Seed data schema (mode, externalId, records) |
-
-For the full `defineStack()` / `composeStacks()` implementation, read
-[`packages/spec/src/stack.zod.ts`](../../packages/spec/src/stack.zod.ts) directly.
-
-Read `references/_index.md` for the complete list with descriptions.
+See [references/_index.md](./references/_index.md) for the full list of Zod
+schemas (with one-line descriptions) — pointers into
+`node_modules/@objectstack/spec/src/`. Always `Read` the source for exact field
+shapes; do not rely on memory of property names.

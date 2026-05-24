@@ -1,19 +1,26 @@
-# objectstack-i18n — Zod Schema Reference
+# objectstack-i18n — Schema References
 
-> **Auto-generated** by `build-skill-references.ts`.
-> These files are copied from `packages/spec/src/` for AI agent consumption.
+> **Auto-generated** by `packages/spec/scripts/build-skill-references.ts`.
 > Do not edit — re-run `pnpm --filter @objectstack/spec run gen:skill-refs` to update.
 
-## Core Schemas
+Schemas live in the published `@objectstack/spec` package. Read them directly
+from `node_modules` — there is no local copy in the skill bundle.
 
-- [`system/translation.zod.ts`](./system/translation.zod.ts) — Translation schemas: AppTranslationBundle, ObjectTranslationNode, TranslationConfig, TranslationCoverageResult, TranslationDiffItem
-- [`contracts/i18n-service.ts`](./contracts/i18n-service.ts) — II18nService interface contract
-- [`ui/i18n.zod.ts`](./ui/i18n.zod.ts) — UI-level i18n object schema
+## Core schemas
 
-## Dependencies (auto-resolved)
+- `node_modules/@objectstack/spec/src/system/translation.zod.ts` — Field Translation Schema
+- `node_modules/@objectstack/spec/src/ui/i18n.zod.ts` — I18n Object Schema
 
-These schemas are included in the references for completeness but are primarily managed by other skills:
+## Transitive dependencies
 
-- **objectstack-schema** — Object, Field schemas (source for translation extraction)
-- **objectstack-ui** — View, App, Dashboard schemas (UI translation sources)
-- **objectstack-automation** — Flow, Workflow schemas (automation message translations)
+- `node_modules/@objectstack/spec/src/shared/lazy-schema.ts` — Wrap a Zod schema constructor so its body is only evaluated on first use.
+
+## How to read these
+
+1. The schemas are runtime Zod definitions. Use `Read` on the absolute
+   path under `node_modules/@objectstack/spec/src/` to inspect field shapes,
+   `.describe()` text, enums, and refinements.
+2. TypeScript types: `import type { … } from '@objectstack/spec'` (or the
+   matching subpath export).
+3. Runtime values: `import { … } from '@objectstack/spec'` — the package
+   re-exports every schema and helper.
