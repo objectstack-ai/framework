@@ -1,30 +1,23 @@
 ---
 name: objectstack-platform
 description: >
-  Bootstrap, configure, and extend ObjectStack runtimes. Covers both
-  end-user project setup (defineStack, drivers, adapters, CLI scaffolding)
-  and platform extension (plugins, kernel services, hook/event system,
-  bootstrap lifecycle). Use when creating a new project, writing
-  objectstack.config.ts, picking drivers/adapters, scaffolding apps,
-  developing plugins, registering services in DI, wiring kernel hooks
-  (kernel:ready, data:*), or debugging plugin loading.
-  ALWAYS use this skill when you see: "create a project", "new app", "init",
-  "get started", "scaffold", "bootstrap", "project setup", "objectstack.config",
-  "defineStack", "driver selection", "adapter", "project structure",
-  "create a plugin", "register a service", "kernel config", "plugin lifecycle",
-  "ObjectKernel", "LiteKernel", "DI", "dependency injection",
-  "service registry", "health check", "graceful shutdown", "extend the platform",
-  "write an extension", "kernel:ready", "ctx.hook", "plugin event".
-  Do NOT use for data schema design (use objectstack-data) or query patterns
-  (use objectstack-query). For data lifecycle hooks (beforeInsert/afterUpdate),
-  use objectstack-data — plugin hooks here are kernel/service-level events.
+  Bootstrap, configure, extend, and operate ObjectStack runtimes. Covers
+  project setup (`defineStack`, drivers, adapters, scaffolding), plugin and
+  service development (PluginContext, DI, kernel hooks like `kernel:ready`
+  and `data:*`), and operations (CLI commands, migrations, deployment, test
+  harnesses via LiteKernel). Use when the user is writing
+  `objectstack.config.ts`, building a plugin or driver, wiring a framework
+  adapter, running `os` CLI commands, or planning deployment. Do not use for
+  data schema design (see objectstack-data) or query patterns (see
+  objectstack-query); data lifecycle hooks (beforeInsert / afterUpdate)
+  belong in objectstack-data — only kernel / service-level events live here.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+, @objectstack/core v4+, Node 18+, pnpm 8+
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: platform
-  tags: project, scaffold, init, defineStack, driver, adapter, bootstrap, config, plugin, kernel, service, hook, event, DI, lifecycle, extension
+  tags: project, defineStack, driver, adapter, plugin, kernel, service, DI, lifecycle, cli, deploy, ops
 ---
 
 # Platform — ObjectStack Bootstrap & Plugin System
@@ -191,41 +184,20 @@ export default defineStack({
 
 ### Full Configuration Reference
 
-`defineStack()` accepts an `ObjectStackDefinitionInput` with these top-level keys:
+`defineStack()` accepts an `ObjectStackDefinitionInput`. Each top-level key
+holds a collection of one metadata kind — `objects`, `views`, `apps`,
+`pages`, `dashboards`, `reports`, `actions`, `flows`, `workflows`,
+`approvals`, `agents`, `ragPipelines`, `hooks`, `apis`, `webhooks`,
+`roles`, `permissions`, `sharingRules`, `policies`, `themes`,
+`translations`, `i18n`, `datasources`, `data` (seed), `plugins`,
+`devPlugins`, `manifest`, `objectExtensions`, `mappings`,
+`analyticsCubes`, `connectors`.
 
-| Key | Type | Description |
-|:----|:-----|:------------|
-| `manifest` | `Manifest` | Package identity (id, namespace, version, type, name) |
-| `objects` | `Object[]` or Map | Business object definitions |
-| `objectExtensions` | `ObjectExtension[]` | Fields to merge into objects from other packages |
-| `apps` | `App[]` or Map | Application definitions with navigation |
-| `views` | `View[]` or Map | List/form view definitions |
-| `pages` | `Page[]` or Map | Custom page definitions |
-| `dashboards` | `Dashboard[]` or Map | Dashboard definitions |
-| `reports` | `Report[]` or Map | Analytics reports |
-| `actions` | `Action[]` or Map | Global and object-scoped actions |
-| `themes` | `Theme[]` | UI themes |
-| `workflows` | `WorkflowRule[]` | Event-driven workflow rules |
-| `approvals` | `ApprovalProcess[]` | Approval process definitions |
-| `flows` | `Flow[]` or Map | Screen and autolaunched flows |
-| `roles` | `Role[]` | User role hierarchy |
-| `permissions` | `PermissionSet[]` | Permission sets / profiles |
-| `sharingRules` | `SharingRule[]` | Record sharing rules |
-| `policies` | `Policy[]` | Security / compliance policies |
-| `apis` | `ApiEndpoint[]` | Custom API endpoints |
-| `webhooks` | `Webhook[]` | Outbound webhooks |
-| `agents` | `Agent[]` or Map | AI agents and assistants |
-| `ragPipelines` | `RAGPipeline[]` | RAG pipeline configurations |
-| `hooks` | `Hook[]` | Object lifecycle hooks |
-| `mappings` | `Mapping[]` | Data import/export mappings |
-| `analyticsCubes` | `Cube[]` | Analytics semantic layer cubes |
-| `connectors` | `Connector[]` | External system connectors |
-| `data` | `Dataset[]` | Seed data / fixtures |
-| `datasources` | `Datasource[]` | External data connections |
-| `translations` | `TranslationBundle[]` | I18n translation bundles |
-| `i18n` | `TranslationConfig` | Internationalization settings |
-| `plugins` | `Plugin[]` | Runtime plugins to load |
-| `devPlugins` | `Plugin[]` | Dev-only plugins (equivalent to devDependencies) |
+For the exact Zod shape — including which keys are optional and what types
+the collection items take — read
+`node_modules/@objectstack/spec/src/stack.zod.ts`
+(`ObjectStackDefinitionInputSchema`). Each collection's item shape lives in
+its own domain folder (`data/object.zod.ts`, `ui/view.zod.ts`, …).
 
 ### Map Format (Key → Name)
 
@@ -572,43 +544,17 @@ export default defineStack({
 
 ## CLI Commands
 
-| Command | Alias | Description |
-|:--------|:------|:------------|
-| `os init` | | Initialize a new project in current directory |
-| `os dev` | | Start dev server with hot reload |
-| `os serve` | | Start production server |
-| `os studio` | | Open Studio UI in browser |
-| `os compile` | | Compile metadata for production |
-| `os validate` | | Validate all metadata schemas and cross-references |
-| `os info` | | Display project metadata summary |
-| `os generate` | `os g` | Scaffold new objects, views, flows, etc. |
-| `os test` | | Run project tests (vitest) |
-| `os doctor` | | Diagnose common project issues |
-| `os plugin list` | | List installed plugins |
-| `os plugin add` | | Install a plugin from registry |
-| `os plugin remove` | | Uninstall a plugin |
-
-### Typical Development Workflow
+Daily commands are covered in **Part 3 — Operations** below
+([jump there](#part-3--operations-cli-testing-deployment)). High-level cheat
+sheet for the bootstrap loop:
 
 ```bash
-# 1. Create project
 npx create-objectstack my-app --template full-stack
-cd my-app
-
-# 2. Install dependencies
-pnpm install
-
-# 3. Start development with Studio UI
-os dev --ui
-
-# 4. Validate metadata
-os validate
-
-# 5. Compile for production
-os compile
-
-# 6. Serve in production
-os serve --port 3000
+cd my-app && pnpm install
+os dev --ui          # dev server + Studio
+os validate          # metadata cross-reference checks
+os compile           # produce dist/ artifact
+os serve --port 3000 # production
 ```
 
 ---
@@ -1094,6 +1040,114 @@ export default defineStack({
 ```
 
 Strategies: `boolean` | `percentage` | `user_list` | `group` | `custom`
+
+---
+---
+
+# Part 3 — Operations: CLI, Testing, Deployment
+
+The `@objectstack/cli` package ships an `os` binary (alias: `objectstack`).
+Every project gets the same command surface — `pnpm install` does not need to
+be re-run when commands are added.
+
+## Daily-loop commands
+
+| Command | What it does |
+|:--------|:-------------|
+| `os init` | Scaffold a new project (alternative to `npx create-objectstack`) |
+| `os dev` | Start the dev server with hot metadata reload |
+| `os studio` | Launch Studio UI against the local stack |
+| `os validate` | Validate `objectstack.config.ts` (Zod + cross-reference checks) |
+| `os lint` | Style/convention lint on metadata files |
+| `os info` | Print resolved stack info (env, drivers, adapter, plugin list) |
+| `os doctor` | Diagnose common setup issues |
+
+## Build & runtime
+
+| Command | What it does |
+|:--------|:-------------|
+| `os build` | Compile TS metadata, bundle, and produce `dist/` |
+| `os compile` | Compile to portable JSON artifact (for runtime hydration) |
+| `os serve` | Serve a compiled stack in production mode |
+| `os start` | Production-grade boot (validates env, applies migrations, starts adapter) |
+| `os generate <kind>` | Scaffold an object / view / flow / agent from a template |
+
+## Data & migrations
+
+| Command | What it does |
+|:--------|:-------------|
+| `os data seed` | Run all `defineDataset()` entries scoped to current env |
+| `os data export` / `import` | Bulk import / export records as JSONL |
+| `os diff` | Show schema diff between local and target environment |
+| `os meta apply` | Apply metadata + data migrations to the target |
+| `os rollback` | Roll back the most recent migration batch |
+
+## Environments & deploy
+
+| Command | What it does |
+|:--------|:-------------|
+| `os login` / `logout` / `whoami` | Auth against the ObjectStack cloud control plane |
+| `os environments list` / `create` / `switch` | Manage cloud environments (prod/staging/dev) |
+| `os publish` | Push the compiled stack to a cloud environment |
+| `os register` | Register the local stack as a deployable target |
+| `os cloud …` | Cloud-specific subcommands (logs, metrics, status) |
+
+## Testing pattern
+
+Use `LiteKernel` for unit / integration tests — it skips the cloud bits and
+plugin discovery, so tests run in milliseconds:
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { LiteKernel } from '@objectstack/core';
+import stack from '../objectstack.config';
+
+describe('account hooks', () => {
+  it('defaults industry to "Other"', async () => {
+    const kernel = await LiteKernel.create({ stack });
+    const created = await kernel.api('account').create({ name: 'Acme' });
+    expect(created.industry).toBe('Other');
+    await kernel.shutdown();
+  });
+});
+```
+
+- **Seed in tests:** call `kernel.seed(SeedData)` after create. See
+  **objectstack-seed** for env-scoped fixtures (`env: ['test']`).
+- **Reset between tests:** prefer `await kernel.reset()` over recreating —
+  it's an order of magnitude faster.
+- **HTTP-level tests:** mount the adapter (Hono / Express) on a random
+  port and use `fetch`. The adapter is just middleware.
+
+## Deployment targets
+
+| Target | Driver | Adapter | Notes |
+|:-------|:-------|:--------|:------|
+| Node.js server | `driver-postgres` / `driver-sqlite` | `adapter-hono` / `adapter-express` | Default — works anywhere Node runs |
+| Edge (Cloudflare Workers, Vercel Edge) | `driver-turso` / `driver-d1` | `adapter-hono` | Cold-start friendly; LiteKernel only |
+| Serverless (Lambda, Vercel functions) | `driver-postgres` (with pooler) | `adapter-nextjs` / `adapter-express` | Mind cold-start: prefer LiteKernel |
+| Browser / WebContainer | `driver-sqlite-wasm` | none (in-process) | Studio playground, demos |
+| Docker / Kubernetes | any | any | Use `os start` as the entrypoint |
+
+## Health & observability
+
+- **Health endpoint:** the adapter auto-exposes `GET /healthz` and
+  `GET /readyz` when the kernel reports ready (see "Health Monitoring"
+  earlier in this skill).
+- **Logs:** plugins log via `ctx.logger`. Configure the sink in
+  `defineStack({ logging: { sink: 'pino' | 'console' | custom } })`.
+- **Metrics:** the kernel exposes a `metrics` service; install
+  `@objectstack/plugin-prometheus` for an OpenMetrics scrape endpoint.
+
+## Common ops pitfalls
+
+| Symptom | Likely cause |
+|:--------|:-------------|
+| `os dev` hangs at "Loading metadata…" | Circular import in `objectstack.config.ts` — run `os validate` |
+| Migrations apply locally but not in cloud | `env` scoping on the dataset excludes the target environment |
+| Adapter 404s on auto-generated routes | `enable.apiEnabled: false` on the object, or missing `os build` |
+| LiteKernel test passes, ObjectKernel boot fails | Test missed a plugin dependency — list with `os info` |
+| Hot reload misses new objects | Barrel `src/objects/index.ts` not re-exporting — check the file |
 
 ---
 

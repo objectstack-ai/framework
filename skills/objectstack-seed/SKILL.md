@@ -1,21 +1,20 @@
 ---
 name: objectstack-seed
 description: >
-  Define and manage seed data (fixtures) for ObjectStack objects using defineDataset().
-  Use when populating system bootstrap data, reference data, demo/test fixtures, or
-  any initial records for an ObjectStack project.
-  ALWAYS use this skill when you see: "seed data", "fixtures", "demo data", "bootstrap data",
-  "initial records", "defineDataset", "test data", "reference data", "load data",
-  "import records", "populate object".
-  Do NOT use for querying or filtering records — use objectstack-query instead.
-  Do NOT use for defining the object schema itself — use objectstack-data instead.
+  Author idempotent seed datasets with `defineDataset()` — bootstrap rows,
+  reference data, demo / test fixtures, environment-scoped imports. Use
+  when the user is adding `*.seed.ts` files, picking an import mode
+  (upsert / insert / update / ignore / replace), or scoping records to
+  prod/dev/test. Do not use for defining the object schema (see
+  objectstack-data) or for querying records (see objectstack-query). CEL
+  expressions for dynamic seed values: load objectstack-formula alongside.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: seed
-  tags: seed, dataset, fixtures, bootstrap, demo, reference-data, import, upsert
+  tags: seed, dataset, fixtures, bootstrap, demo, import, upsert, env-scoping
 ---
 
 # Seed Data & Fixtures — ObjectStack Data Protocol

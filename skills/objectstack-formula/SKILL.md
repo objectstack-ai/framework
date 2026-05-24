@@ -1,15 +1,12 @@
 ---
 name: objectstack-formula
 description: >
-  Author CEL expressions for ObjectStack formulas, predicates (validation /
-  sharing / visibility), conditions, and dynamic seed values.
-  ALWAYS use this skill when you see: "formula field", "computed field",
-  "validation rule", "sharing rule", "visibleOn", "conditionalRequired",
-  "hook condition", "flow decision", "predicate", "criteria", "dynamic seed
-  date", "TODAY()", "ISBLANK", "CONCAT", "Salesforce formula", "expression",
-  "CEL", "F`...`", "P`...`", "cel`...`".
-  Do NOT use for: SQL fragments (driver-native), cron schedules (use cron
-  dialect), or L2 hook bodies (use objectstack-data).
+  Author CEL expressions used across ObjectStack — formula fields,
+  validation / sharing / visibility predicates, flow conditions, and dynamic
+  seed values. Use whenever the user is writing an `F`, `P`, or `cel`
+  tagged-template literal, or asks "how do I express X as a formula /
+  predicate". Do not use for SQL fragments (driver-native), cron schedules
+  (cron dialect), or L2 hook bodies (those belong in objectstack-data).
 license: Apache-2.0
 compatibility: Requires @objectstack/spec v4+ and @objectstack/formula
 metadata:

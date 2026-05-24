@@ -1,17 +1,22 @@
 ---
 name: objectstack-api
 description: >
-  Design ObjectStack REST APIs, endpoints, service contracts, and integration
-  protocols. Use when defining API routes, configuring authentication,
-  setting up service discovery, or designing inter-service communication
-  in an ObjectStack project.
+  Design the server-side API surface that an ObjectStack runtime exposes —
+  REST/GraphQL endpoints, auth providers, realtime channels, error envelopes,
+  batch/versioning contracts. Use when the user is adding `*.endpoint.ts`,
+  configuring auth providers, defining custom routes, or extending the
+  REST/GraphQL generator. Do not use for: consuming an ObjectStack API from
+  a client (that is just standard HTTP — no skill needed); the auto-generated
+  CRUD endpoints (those follow from objectstack-data); request-side query
+  syntax (see objectstack-query). CEL expressions in route guards or auth
+  predicates: load objectstack-formula alongside.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: api
-  tags: rest, endpoint, service, datasource
+  tags: rest, graphql, endpoint, auth, realtime, server
 ---
 
 # API Design — ObjectStack API Protocol

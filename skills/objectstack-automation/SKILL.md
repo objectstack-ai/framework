@@ -1,16 +1,20 @@
 ---
 name: objectstack-automation
 description: >
-  Design ObjectStack automation (Flows, Workflows, Triggers, Approvals).
-  Use when building visual logic flows, state machines, scheduled jobs,
-  approval processes, or event-driven automations in an ObjectStack project.
+  Design ObjectStack automation — Flows (visual logic), Workflows
+  (declarative rules), Triggers, Approvals, scheduled jobs, and webhooks.
+  Use when the user is adding `*.flow.ts` / `*.workflow.ts`, wiring an
+  event-driven rule, or modelling an approval chain. Do not use for data
+  lifecycle hooks at the object layer (see objectstack-data) or for kernel
+  / plugin events (see objectstack-platform). CEL expressions in flow
+  conditions / workflow predicates: load objectstack-formula alongside.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: automation
-  tags: flow, workflow, trigger, approval, state-machine
+  tags: flow, workflow, trigger, approval, state-machine, scheduled, webhook
 ---
 
 # Automation Design — ObjectStack Automation Protocol

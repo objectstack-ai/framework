@@ -1,17 +1,19 @@
 ---
 name: objectstack-ai
 description: >
-  Design ObjectStack AI agents, skills, tools, and RAG pipelines.
-  Use when configuring autonomous agents, defining agent skills and tool sets,
-  setting up retrieval-augmented generation, or integrating LLM models
-  in an ObjectStack project.
+  Design ObjectStack AI agents, tools, skills, conversations, model registry
+  entries, and MCP integrations. Use when the user is adding `*.agent.ts` /
+  `*.tool.ts` / `*.skill.ts`, configuring an LLM provider, wiring agent
+  tools, or designing an embedding/RAG flow on top of ObjectStack data. Do
+  not use for general LLM prompting questions unrelated to ObjectStack
+  metadata.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: ai
-  tags: agent, skill, tool, rag, llm
+  tags: agent, tool, skill, conversation, llm, embedding, mcp
 ---
 
 # AI Agent Design — ObjectStack AI Protocol

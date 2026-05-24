@@ -1,16 +1,19 @@
 ---
 name: objectstack-i18n
 description: >
-  Design internationalization (i18n) strategies for ObjectStack applications.
-  Use when creating multi-locale translation bundles, managing translation coverage,
-  configuring locale settings, or designing object-first translation structures.
+  Author ObjectStack translation bundles — object/field labels, view text,
+  app navigation strings, automation messages — and configure locale
+  fallback, coverage reporting, and the per-locale source layout. Use when
+  the user is adding `*.translation.ts` files, wiring a new locale, or
+  resolving missing-translation warnings. Do not use for general i18n
+  library questions unrelated to ObjectStack bundles.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "1.0"
-  domain: system
-  tags: i18n, translation, locale, internationalization, l10n
+  version: "1.1"
+  domain: i18n
+  tags: i18n, translation, locale, l10n, bundle, coverage
 ---
 
 # Internationalization — ObjectStack I18n Protocol
@@ -246,58 +249,22 @@ const zh: AppTranslationBundle = {
 
 ## Object-Level Translation Structure
 
-### ObjectTranslationNode
+All translatable content for a single object is aggregated under
+`o.{object_name}` with these sub-keys:
 
-All translatable content for a single object is aggregated under `o.{object_name}`:
+| Sub-key | Holds |
+|:--------|:------|
+| `label` / `pluralLabel` / `description` / `helpText` | Object-level text |
+| `fields.{field_name}` | `label`, `help`, `placeholder`, `options` per field |
+| `_options.{picklist_name}` | Object-scoped picklist option labels |
+| `_views.{view_name}` | View label / description |
+| `_sections.{section_name}` | Form section / tab labels |
+| `_actions.{action_name}` | Action label + `confirmMessage` |
+| `_notifications.{key}` / `_errors.{code}` | Per-object messages |
 
-```typescript
-interface ObjectTranslationNode {
-  /** Singular label */
-  label: string;
-  /** Plural label */
-  pluralLabel?: string;
-  /** Description */
-  description?: string;
-  /** Help text */
-  helpText?: string;
-
-  /** Field translations */
-  fields?: Record<string, FieldTranslation>;
-
-  /** Object-scoped picklist options */
-  _options?: Record<string, Record<string, string>>;
-
-  /** View translations */
-  _views?: Record<string, { label?: string; description?: string }>;
-
-  /** Section translations (form tabs/sections) */
-  _sections?: Record<string, { label?: string }>;
-
-  /** Action translations */
-  _actions?: Record<string, { label?: string; confirmMessage?: string }>;
-
-  /** Notification translations */
-  _notifications?: Record<string, { title?: string; body?: string }>;
-
-  /** Error message translations */
-  _errors?: Record<string, string>;
-}
-```
-
-### FieldTranslation
-
-```typescript
-interface FieldTranslation {
-  /** Translated field label */
-  label?: string;
-  /** Help text */
-  help?: string;
-  /** Placeholder text for form inputs */
-  placeholder?: string;
-  /** Option value → translated label map */
-  options?: Record<string, string>;
-}
-```
+For the exact Zod shape (and any field that may have been added since), read
+`node_modules/@objectstack/spec/src/system/translation.zod.ts` —
+`ObjectTranslationNodeSchema` and `FieldTranslationSchema`.
 
 ---
 
@@ -351,24 +318,12 @@ console.log(coverage);
 
 ### TranslationDiffItem
 
-```typescript
-interface TranslationDiffItem {
-  /** Dot-path translation key */
-  key: string;
-  /** Diff status: 'missing' | 'redundant' | 'stale' */
-  status: 'missing' | 'redundant' | 'stale';
-  /** Object name (if applicable) */
-  objectName?: string;
-  /** Locale code */
-  locale: string;
-  /** Hash of source metadata for stale detection */
-  sourceHash?: string;
-  /** AI-suggested translation */
-  aiSuggested?: string;
-  /** AI confidence score (0-1) */
-  aiConfidence?: number;
-}
-```
+Each item in `coverage.items` carries `key` (dot path), `status`
+(`missing | redundant | stale`), `objectName`, `locale`, optional
+`sourceHash` for stale detection, and AI-enrichment fields (`aiSuggested`,
+`aiConfidence`) when `suggestTranslations()` has been run. Full Zod shape:
+`node_modules/@objectstack/spec/src/system/translation.zod.ts` —
+`TranslationDiffItemSchema`.
 
 ---
 
@@ -447,42 +402,21 @@ i18n: { messageFormat: 'icu' }
 
 ### Service Contract
 
-```typescript
-interface II18nService {
-  /** Translate a key */
-  t(key: string, locale: string, params?: Record<string, unknown>): string;
+`II18nService` is the kernel service that loads bundles, resolves keys with
+fallback chains, reports coverage, and (optionally) generates AI
+suggestions. Methods:
 
-  /** Get all translations for a locale */
-  getTranslations(locale: string): Record<string, unknown>;
+- **`t(key, locale, params?)`** — resolve a single key with interpolation
+- **`getTranslations(locale)`** — full snapshot for a locale
+- **`loadTranslations(locale, bundle)`** — programmatic load
+- **`getLocales()`** / **`getDefaultLocale()`** / **`setDefaultLocale()`**
+- **`getAppBundle(locale)`** / **`loadAppBundle(locale, bundle)`** — object-first format
+- **`getCoverage(locale, objectName?)`** — diff vs metadata
+- **`suggestTranslations(locale, items)`** — AI-fill missing keys
 
-  /** Load translations */
-  loadTranslations(locale: string, translations: Record<string, unknown>): void;
-
-  /** List available locales */
-  getLocales(): string[];
-
-  /** Get default locale */
-  getDefaultLocale?(): string;
-
-  /** Set default locale */
-  setDefaultLocale?(locale: string): void;
-
-  /** Get object-first bundle */
-  getAppBundle?(locale: string): AppTranslationBundle | undefined;
-
-  /** Load object-first bundle */
-  loadAppBundle?(locale: string, bundle: AppTranslationBundle): void;
-
-  /** Get coverage analysis */
-  getCoverage?(locale: string, objectName?: string): TranslationCoverageResult;
-
-  /** AI-powered suggestions */
-  suggestTranslations?(
-    locale: string,
-    items: TranslationDiffItem[]
-  ): Promise<TranslationDiffItem[]>;
-}
-```
+Full TypeScript signature lives in
+`node_modules/@objectstack/spec/src/contracts/i18n-service.ts` — read it
+when you need exact parameter shapes.
 
 ### Plugin Setup
 

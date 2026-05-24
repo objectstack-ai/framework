@@ -339,6 +339,108 @@ When extending an object you do not own:
 
 ---
 
+## Security & Access Control
+
+Per-object access control is part of the schema, not a separate layer.
+Configure these alongside `fields` / `validations` / `hooks`:
+
+### Object-level permissions (RBAC)
+
+Bind CRUD operations to roles:
+
+```typescript
+permissions: {
+  read:   ['authenticated'],
+  create: ['sales', 'admin'],
+  update: ['record_owner', 'sales_manager', 'admin'],
+  delete: ['admin'],
+}
+```
+
+- Source: `node_modules/@objectstack/spec/src/security/permission.zod.ts`
+- Combine with `enable.apiMethods` to also restrict the HTTP surface.
+
+### Row-Level Security (RLS)
+
+Filter records visible to a role using a CEL predicate. Returns the rows the
+caller may see — the runtime ANDs it into every query.
+
+```typescript
+rls: [
+  {
+    name: 'own_records',
+    roles: ['sales'],
+    predicate: P`record.owner_id == os.user.id`,
+  },
+  {
+    name: 'territory_scope',
+    roles: ['sales_manager'],
+    predicate: P`record.territory in os.user.managedTerritories`,
+  },
+]
+```
+
+- Source: `node_modules/@objectstack/spec/src/security/rls.zod.ts`
+- The CEL predicate uses the same syntax as formulas — load
+  **objectstack-formula** when authoring complex predicates.
+
+### Field-level encryption
+
+Encrypt sensitive columns at rest. Decryption is automatic for callers with
+permission; raw bytes are stored otherwise.
+
+```typescript
+fields: {
+  ssn: {
+    type: 'text',
+    encryptionConfig: { algorithm: 'aes-256-gcm', keyRef: 'pii_key_v1' },
+  },
+}
+```
+
+- Source: `node_modules/@objectstack/spec/src/system/encryption.zod.ts`
+- Key rotation: bump `keyRef` and let the migration re-encrypt.
+
+### PII masking
+
+Show partial values (`****-****-1234`) to roles that can read but should not
+see the full value. Applied after RLS, before serialization.
+
+```typescript
+fields: {
+  credit_card: {
+    type: 'text',
+    maskingRule: {
+      pattern: 'last4',          // built-in: last4 | first2 | email | custom
+      visibleToRoles: ['billing_admin'],
+    },
+  },
+}
+```
+
+- Source: `node_modules/@objectstack/spec/src/system/masking.zod.ts`
+
+### Multi-tenancy
+
+For SaaS, set `tenancy` on the object schema. Combined with RLS, this
+enforces per-tenant data isolation:
+
+| Mode | Storage | When to use |
+|:-----|:--------|:------------|
+| `shared` | Single table, `tenant_id` column + RLS | Default — most cost-efficient |
+| `isolated` | Separate database per tenant | Regulatory isolation / large tenants |
+| `hybrid` | Shared schema, tenant-specific sharding | High-volume multi-tenant |
+
+### Cross-skill notes
+
+- **API auth providers** (OIDC, JWT, API key) live in **objectstack-api**.
+- **Kernel-level RBAC services** (role inheritance, custom policy engines)
+  live in **objectstack-platform**.
+- **CEL predicate syntax** (`P\`...\``, operators, functions) lives in
+  **objectstack-formula**.
+
+---
+
 ## Advanced Features Checklist
 
 | Feature | When to Consider |

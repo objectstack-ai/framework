@@ -1,16 +1,21 @@
 ---
 name: objectstack-ui
 description: >
-  Design ObjectStack user interfaces (Views, Apps, Dashboards, Reports, Actions).
-  Use when creating list views, form layouts, navigation structures, dashboard
-  widgets, or configuring user-facing actions in an ObjectStack project.
+  Author ObjectStack UI metadata — Views (list/form/kanban/calendar/gantt),
+  Apps (navigation), Pages, Dashboards, Reports, Charts, Actions. Use when
+  the user is adding `*.view.ts` / `*.app.ts` / `*.dashboard.ts` /
+  `*.action.ts` files or designing a Studio-rendered UI surface. Do not use
+  for: data schema (see objectstack-data), the React renderer
+  implementation (lives in `packages/client-react`, not metadata), or
+  Studio's own admin UI (that ships with the platform). CEL expressions in
+  visibility/conditional rules: load objectstack-formula alongside.
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: ui
-  tags: view, app, dashboard, report, action
+  tags: view, app, page, dashboard, report, chart, action, widget
 ---
 
 # UI Design — ObjectStack UI Protocol

@@ -1,20 +1,20 @@
 ---
 name: objectstack-query
 description: >
-  Construct ObjectStack queries, filters, aggregations, and data retrieval patterns.
-  Use when building query filters, sorting results, paginating records, aggregating data,
-  writing ObjectQL expressions, or implementing full-text search in an ObjectStack project.
-  ALWAYS use this skill when you see: "filter", "query", "sort", "paginate", "aggregate",
-  "group by", "where clause", "$eq", "$contains", "$in", "search records",
-  "count records", "sum", "average", "window function", "join", "expand",
-  "cursor pagination", "offset pagination", "ObjectQL", "query DSL".
-  Do NOT use for defining objects, fields, or relationships — use objectstack-data instead.
+  Construct ObjectQL queries — filters, sorting, pagination, aggregation,
+  joins/expansion, window functions, and full-text search. Use when the
+  user is writing a query DSL expression, picking pagination strategy, or
+  designing a list view's filter spec. Do not use for defining objects /
+  fields / relationships (see objectstack-data) or for designing the API
+  endpoint that exposes a query (see objectstack-api).
 license: Apache-2.0
 compatibility: Requires @objectstack/spec Zod schemas (v4+)
 metadata:
   author: objectstack-ai
-  version: "1.0"
+  version: "1.1"
   domain: query
+  tags: query, filter, sort, paginate, aggregate, ObjectQL, full-text
+---
   tags: query, filter, sort, pagination, aggregation, search, ObjectQL, DSL
 ---
 
