@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import type { IAIService, IAIConversationService, IDataEngine, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
+import type { IAIService, IAIConversationService, IAutomationService, IDataEngine, IMetadataService, LLMAdapter } from '@objectstack/spec/contracts';
 import type * as AI from '@objectstack/spec/ai';
 import { AIService } from './ai-service.js';
 import type { AIServiceConfig } from './ai-service.js';
@@ -50,7 +50,26 @@ export interface AIServicePluginOptions {
    *
    * Set to `null` to disable tracing entirely.
    */
+  /**
+   * Explicit trace recorder override. When set, auto-detection
+   * of {@link ObjectQLTraceRecorder} is skipped.
+   *
+   * Set to `null` to disable tracing entirely.
+   */
   traceRecorder?: TraceRecorder | null;
+  /**
+   * Base URL prepended to relative `target` paths for `type:'api'`
+   * actions invoked by the AI tool runtime. When unset, falls back to
+   * `process.env.OS_AI_ACTION_API_BASE_URL`. If neither is set, api
+   * actions are skipped at registration with a clear reason.
+   */
+  apiActionBaseUrl?: string;
+  /**
+   * Extra HTTP headers (e.g. `{ Authorization: 'Bearer ...' }`) applied
+   * to every `type:'api'` action dispatch. Useful for forwarding the
+   * caller's session token so server-side authorization still applies.
+   */
+  apiActionHeaders?: Record<string, string>;
 }
 
 /**
@@ -347,11 +366,25 @@ export class AIServicePlugin implements Plugin {
           // task complete, clone record, ...) — the write-side counterpart
           // to query_data.
           try {
+            // Resolve automation service (optional — flow actions get
+            // skipped gracefully if unavailable).
+            let automation: IAutomationService | undefined;
+            try {
+              automation = ctx.getService<IAutomationService>('automation');
+            } catch {
+              automation = undefined;
+            }
+            const apiBaseUrl =
+              this.options.apiActionBaseUrl ?? process.env.OS_AI_ACTION_API_BASE_URL;
+            const apiHeaders = this.options.apiActionHeaders;
             const { registered, skipped } = await registerActionsAsTools(
               this.service.toolRegistry,
               {
                 metadata: metadataService,
                 dataEngine,
+                automation,
+                apiBaseUrl,
+                apiHeaders,
               },
             );
             if (registered.length > 0) {

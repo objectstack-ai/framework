@@ -368,23 +368,14 @@ function buildHandlerEngineAdapter(engine: IDataEngine): {
 }
 
 /**
- * Create the runtime handler for a single action tool.
- *
- * Steps:
- * 1. Pull `recordId` (and other params) from the tool call.
- * 2. When the action is row-context and `recordId` is provided, load the
- *    record so the handler's `ctx.record` is populated like Studio would.
- * 3. Resolve the underlying handler via `dataEngine.executeAction` and
- *    pass the conventional `{ record, engine, user, params }` ctx.
- * 4. Wrap result/error in a stable `ActionInvocationResult` JSON envelope
- *    that the LLM can summarise.
+ * Shared entry-point: load record (when row-context), assemble user
+ * params, then delegate to the type-specific executor.
  */
 function createActionToolHandler(
   action: Action,
   ctx: ActionToolsContext,
 ): ToolHandler {
   const principal = ctx.principal ?? { id: 'ai_agent', name: 'AI Assistant' };
-  const engineAdapter = buildHandlerEngineAdapter(ctx.dataEngine);
   const requiresRecord =
     Array.isArray(action.locations) &&
     action.locations.some(
@@ -404,8 +395,8 @@ function createActionToolHandler(
       result.error = 'Action has no objectName; cannot dispatch.';
       return JSON.stringify(result);
     }
-    if (!target) {
-      result.error = 'Action has no target handler.';
+    if (!target && action.type !== 'script') {
+      result.error = 'Action has no target.';
       return JSON.stringify(result);
     }
 
@@ -444,16 +435,15 @@ function createActionToolHandler(
     const { recordId: _omit, ...userParams } = args as Record<string, unknown>;
 
     try {
-      const handlerCtx = {
-        record,
-        user: principal,
-        engine: engineAdapter,
-        params: userParams,
-      };
-      const out = await (ctx.dataEngine as IDataEngine & {
-        executeAction?: (o: string, a: string, c: unknown) => Promise<unknown>;
-      }).executeAction?.(objectName, target, handlerCtx);
-
+      let out: unknown;
+      if (action.type === 'api') {
+        out = await dispatchApiAction(action, ctx, userParams, record, recordId);
+      } else if (action.type === 'flow') {
+        out = await dispatchFlowAction(action, ctx, userParams, record, principal);
+      } else {
+        // 'script' (default) — existing behaviour.
+        out = await dispatchScriptAction(action, ctx, userParams, record, principal);
+      }
       result.ok = true;
       result.result = out ?? null;
       const successMsg =
@@ -465,6 +455,148 @@ function createActionToolHandler(
       return JSON.stringify(result);
     }
   };
+}
+
+async function dispatchScriptAction(
+  action: Action,
+  ctx: ActionToolsContext,
+  params: Record<string, unknown>,
+  record: Record<string, unknown> | undefined,
+  principal: { id: string; name?: string },
+): Promise<unknown> {
+  const engineAdapter = buildHandlerEngineAdapter(ctx.dataEngine);
+  const handlerCtx = { record, user: principal, engine: engineAdapter, params };
+  return await (ctx.dataEngine as IDataEngine & {
+    executeAction?: (o: string, a: string, c: unknown) => Promise<unknown>;
+  }).executeAction?.(action.objectName!, action.target!, handlerCtx);
+}
+
+/**
+ * Compose the HTTP body for a `type:'api'` action.
+ *
+ * Order of merge (last-wins):
+ *   1. user-collected params (wrapped if `bodyShape.wrap` is set)
+ *   2. recordId — placed flat at `recordIdParam` (using `recordIdField`
+ *      to pick the value off the record, defaulting to `id`)
+ *   3. `bodyExtra` constants (always win)
+ */
+export function buildApiRequestBody(
+  action: Action,
+  args: Record<string, unknown>,
+  record: Record<string, unknown> | undefined,
+  recordId: string | undefined,
+): Record<string, unknown> {
+  const shape = action.bodyShape;
+  const wrapKey =
+    shape && typeof shape === 'object' && 'wrap' in shape && typeof shape.wrap === 'string'
+      ? shape.wrap
+      : undefined;
+  const body: Record<string, unknown> = wrapKey ? { [wrapKey]: { ...args } } : { ...args };
+
+  if (action.recordIdParam) {
+    const idField = action.recordIdField ?? 'id';
+    const idValue = record ? record[idField] : recordId;
+    if (idValue !== undefined) body[action.recordIdParam] = idValue;
+  }
+
+  if (action.bodyExtra && typeof action.bodyExtra === 'object') {
+    Object.assign(body, action.bodyExtra as Record<string, unknown>);
+  }
+  return body;
+}
+
+async function dispatchApiAction(
+  action: Action,
+  ctx: ActionToolsContext,
+  params: Record<string, unknown>,
+  record: Record<string, unknown> | undefined,
+  recordId: string | undefined,
+): Promise<unknown> {
+  const client =
+    ctx.apiClient ??
+    (ctx.apiBaseUrl
+      ? createFetchApiClient({ baseUrl: ctx.apiBaseUrl, headers: ctx.apiHeaders })
+      : undefined);
+  if (!client) {
+    throw new Error('No apiClient configured for type:"api" action dispatch.');
+  }
+  const method = (action.method ?? 'POST') as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  const body = buildApiRequestBody(action, params, record, recordId);
+  return await client.request({
+    url: action.target!,
+    method,
+    body: method === 'GET' || method === 'DELETE' ? undefined : body,
+    headers: ctx.apiHeaders,
+  });
+}
+
+async function dispatchFlowAction(
+  action: Action,
+  ctx: ActionToolsContext,
+  params: Record<string, unknown>,
+  record: Record<string, unknown> | undefined,
+  principal: { id: string; name?: string },
+): Promise<unknown> {
+  if (!ctx.automation) {
+    throw new Error('No automation service available for type:"flow" action dispatch.');
+  }
+  const result = await ctx.automation.execute(action.target!, {
+    triggerData: { record, params, user: principal, action: action.name },
+  } as Parameters<IAutomationService['execute']>[1]);
+  if (result && typeof result === 'object' && 'success' in result && result.success === false) {
+    throw new Error(
+      `Flow '${action.target}' failed: ${(result as { error?: string }).error ?? 'unknown error'}`,
+    );
+  }
+  return result;
+}
+
+/**
+ * Default fetch-based {@link ApiActionClient}. Resolves relative `url`s
+ * against `baseUrl`, merges static `headers`, throws on non-2xx, returns
+ * the parsed JSON body (or `null` if empty).
+ */
+export function createFetchApiClient(options: {
+  baseUrl?: string;
+  headers?: Record<string, string>;
+  fetch?: typeof fetch;
+}): ApiActionClient {
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+  if (!fetchImpl) {
+    throw new Error('createFetchApiClient: no global fetch available; pass options.fetch.');
+  }
+  return {
+    async request({ url, method, body, headers }) {
+      const absolute = /^https?:\/\//.test(url) ? url : `${(options.baseUrl ?? '').replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+      const res = await fetchImpl(absolute, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers ?? {}),
+          ...(headers ?? {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      const parsed = text ? safeJsonParse(text) : null;
+      if (!res.ok) {
+        const msg =
+          parsed && typeof parsed === 'object' && 'error' in parsed
+            ? (parsed as { error: unknown }).error
+            : text;
+        throw new Error(`${method} ${absolute} → ${res.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`);
+      }
+      return parsed;
+    },
+  };
+}
+
+function safeJsonParse(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return s;
+  }
 }
 
 // ── Registration ──────────────────────────────────────────────────
@@ -505,7 +637,11 @@ export async function registerActionsAsTools(
         objectName: action.objectName ?? obj.name,
       };
 
-      const reason = actionSkipReason(normalized);
+      const reason = actionSkipReason(normalized, {
+        automation: context.automation,
+        apiClient: context.apiClient,
+        apiBaseUrl: context.apiBaseUrl,
+      });
       if (reason !== null) {
         skipped.push({ action: normalized.name, reason });
         continue;
