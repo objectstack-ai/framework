@@ -131,7 +131,7 @@ import { registerTaskActionHandlers } from '../src/actions/register-handlers';
   console.log(`   User: "${userQuestion}"`);
 
   const toolErrorsCaught: Array<{ tool: string; error: string }> = [];
-  const toolCallLog: Array<{ tool: string; args: unknown }> = [];
+  const toolCallLog: Array<{ tool: string; args: unknown; output?: string; isError?: boolean }> = [];
 
   // Tap into the registry to capture every tool invocation, since
   // chatWithTools only returns the final assistant text.
@@ -142,11 +142,19 @@ import { registerTaskActionHandlers } from '../src/actions/register-handlers';
   (origRegistry as unknown as { executeAll: Function }).executeAll = async (
     calls: Array<Record<string, unknown>>,
   ) => {
-    for (const c of calls) {
+    const out = await origExecuteAll(calls);
+    for (let i = 0; i < calls.length; i++) {
+      const c = calls[i];
       const args = c.args ?? c.input ?? c.arguments ?? {};
-      toolCallLog.push({ tool: String(c.toolName ?? c.name), args });
+      const tool = String(c.toolName ?? c.name);
+      const r = (out as Array<{ output?: unknown; isError?: boolean }>)[i];
+      const outText =
+        r && typeof r.output === 'string'
+          ? r.output
+          : JSON.stringify(r?.output ?? r);
+      toolCallLog.push({ tool, args, output: outText, isError: !!r?.isError });
     }
-    return origExecuteAll(calls);
+    return out;
   };
 
   const t0 = Date.now();
@@ -186,7 +194,8 @@ import { registerTaskActionHandlers } from '../src/actions/register-handlers';
   console.log(`   Tool invocations (${toolCallLog.length}):`);
   for (const c of toolCallLog) {
     const argStr = c.args == null ? '?' : JSON.stringify(c.args).slice(0, 200);
-    console.log(`     → ${c.tool}(${argStr})`);
+    console.log(`     → ${c.tool}(${argStr}) ${c.isError ? '✗' : '✓'}`);
+    if (c.output) console.log(`       = ${c.output.slice(0, 500)}`);
   }
   if (toolErrorsCaught.length) {
     console.log(`   Tool errors (${toolErrorsCaught.length}):`);

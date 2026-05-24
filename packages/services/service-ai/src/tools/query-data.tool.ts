@@ -33,23 +33,31 @@ export interface QueryDataToolContext {
  * Kept small and strict — every property is documented so providers like
  * OpenAI Structured Outputs and Anthropic Tool Use can render high-quality
  * prompts from the schema metadata.
+ *
+ * NOTE: `where` is intentionally typed as a JSON string rather than a free-form
+ * record. OpenAI's Structured Outputs surface rejects `propertyNames`
+ * (which Zod's `z.record(z.string(), ...)` emits), and Anthropic's tool-use
+ * surface dislikes open-ended object schemas without `additionalProperties`.
+ * Having the model emit a JSON-encoded filter sidesteps both restrictions and
+ * keeps the tool portable across providers.
  */
 const QueryPlanSchema = z.object({
   objectName: z
     .string()
     .min(1)
     .describe('The snake_case object name to query (e.g. "task", "account").'),
-  where: z
-    .record(z.string(), z.unknown())
-    .optional()
+  whereJson: z
+    .string()
+    .nullable()
     .describe(
-      'Filter conditions as key-value pairs. Use MongoDB-style operators for ' +
-      'ranges, e.g. {"amount": {"$gt": 100}}.',
+      'Filter conditions encoded as a JSON object string. Examples: ' +
+      '`{"status":"completed"}`, `{"subject":{"$contains":"Build"}}`, ' +
+      '`{"amount":{"$gt":100}}`. Pass null to match all records.',
     ),
   fields: z
     .array(z.string())
-    .optional()
-    .describe('Field names to return. Omit to return all fields.'),
+    .nullable()
+    .describe('Field names to return. Pass null to return all fields.'),
   orderBy: z
     .array(
       z.object({
@@ -57,15 +65,15 @@ const QueryPlanSchema = z.object({
         order: z.enum(['asc', 'desc']),
       }),
     )
-    .optional()
-    .describe('Sort order. First entry is primary sort key.'),
+    .nullable()
+    .describe('Sort order. First entry is primary sort key. Pass null for no sort.'),
   limit: z
     .number()
     .int()
     .min(1)
     .max(200)
-    .optional()
-    .describe('Maximum number of records (default 20, max 200).'),
+    .nullable()
+    .describe('Maximum number of records (default 20, max 200). Pass null for default.'),
 });
 
 /** Strongly-typed query plan inferred from the LLM. */
@@ -101,12 +109,6 @@ export const QUERY_DATA_TOOL: AIToolDefinition = {
           'The natural-language question to answer (paraphrase the user\'s ' +
           'request if needed for clarity).',
       },
-      model: {
-        type: 'string',
-        description:
-          'Optional model id to use for query planning. Defaults to the AI ' +
-          'service\'s default model.',
-      },
     },
     required: ['request'],
     additionalProperties: false,
@@ -124,7 +126,7 @@ export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
   const maxLimit = ctx.maxLimit ?? 100;
 
   return async (args) => {
-    const { request, model } = args as { request: string; model?: string };
+    const { request } = args as { request: string };
 
     if (!request || typeof request !== 'string') {
       return JSON.stringify({ error: 'query_data: `request` is required' });
@@ -157,7 +159,16 @@ export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
           'You translate user data questions into a single ObjectQL query plan. ' +
           'Use ONLY the objects and fields listed in the schema context below. ' +
           'Never invent field names. If the question is ambiguous, pick the ' +
-          'most likely interpretation and use a reasonable `limit`.\n\n' + snippet,
+          'most likely interpretation and use a reasonable `limit`.\n\n' +
+          'Filter operator hints:\n' +
+          '  • For partial string matches (e.g. "task named Foo", "find X"), ' +
+          'use case-insensitive substring matching with `$contains`: ' +
+          '`{"subject": {"$contains": "Foo"}}`. Do NOT use equality unless ' +
+          'the user clearly supplied the exact full value.\n' +
+          '  • For numeric/date ranges use `$gt` / `$gte` / `$lt` / `$lte`.\n' +
+          '  • For "is one of" use `$in: [...]`.\n' +
+          '  • For exact equality just write the value: `{"status": "completed"}`.\n\n' +
+          snippet,
       },
       { role: 'user', content: request },
     ];
@@ -165,7 +176,6 @@ export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
     let plan: QueryPlan;
     try {
       const generated = await ctx.ai.generateObject(planMessages, QueryPlanSchema, {
-        model,
         schemaName: 'ObjectQLQueryPlan',
         schemaDescription: 'A single ObjectQL find() query to answer the user request.',
       });
@@ -189,15 +199,34 @@ export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
 
     // 4. Execution
     const limit = Math.min(plan.limit ?? 20, maxLimit);
+    let where: Record<string, unknown> | undefined;
+    if (plan.whereJson) {
+      try {
+        const parsed = JSON.parse(plan.whereJson);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          where = parsed as Record<string, unknown>;
+        } else {
+          return JSON.stringify({
+            plan,
+            error: `whereJson must encode a JSON object, got: ${plan.whereJson}`,
+          });
+        }
+      } catch (err) {
+        return JSON.stringify({
+          plan,
+          error: `whereJson is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
     try {
       const records = await ctx.dataEngine.find(plan.objectName, {
-        where: plan.where,
-        fields: plan.fields,
-        orderBy: plan.orderBy,
+        where,
+        fields: plan.fields ?? undefined,
+        orderBy: plan.orderBy ?? undefined,
         limit,
       });
       return JSON.stringify({
-        plan,
+        plan: { ...plan, where },
         count: records.length,
         records,
       });
