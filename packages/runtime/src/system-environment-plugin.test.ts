@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, vi } from 'vitest';
-import { createSystemProjectPlugin, SYSTEM_PROJECT_ID } from './system-project-plugin.js';
+import { createSystemEnvironmentPlugin, SYSTEM_ENVIRONMENT_ID } from './system-environment-plugin.js';
 
 function makeCtx(services: Record<string, any> = {}) {
   return {
@@ -23,15 +23,15 @@ function makeCtx(services: Record<string, any> = {}) {
   };
 }
 
-describe('createSystemProjectPlugin', () => {
+describe('createSystemEnvironmentPlugin', () => {
   it('returns a plugin with name and version', () => {
-    const plugin = createSystemProjectPlugin();
-    expect(plugin.name).toBe('com.objectstack.runtime.system-project');
+    const plugin = createSystemEnvironmentPlugin();
+    expect(plugin.name).toBe('com.objectstack.runtime.system-environment');
     expect(plugin.version).toBe('1.0.0');
   });
 
   it('no-ops when provisioning service is absent (default: strict=false)', async () => {
-    const plugin = createSystemProjectPlugin();
+    const plugin = createSystemEnvironmentPlugin();
     const ctx = makeCtx({});
     await expect(plugin.start!(ctx as any)).resolves.toBeUndefined();
     expect(ctx.logger.debug).toHaveBeenCalledWith(
@@ -40,48 +40,48 @@ describe('createSystemProjectPlugin', () => {
   });
 
   it('throws when strict=true and provisioning service is absent', async () => {
-    const plugin = createSystemProjectPlugin({ strict: true });
+    const plugin = createSystemEnvironmentPlugin({ strict: true });
     const ctx = makeCtx({});
     await expect(plugin.start!(ctx as any)).rejects.toThrow(/cannot bootstrap system project/);
   });
 
-  it('invokes provisionSystemProject and logs the returned id', async () => {
-    const provisionSystemProject = vi.fn().mockResolvedValue({
-      project: { id: SYSTEM_PROJECT_ID, isSystem: true },
+  it('invokes provisionSystemEnvironment and logs the returned id', async () => {
+    const provisionSystemEnvironment = vi.fn().mockResolvedValue({
+      project: { id: SYSTEM_ENVIRONMENT_ID, isSystem: true },
       warnings: [],
     });
     const ctx = makeCtx({
-      'tenant.provisioning': { provisionSystemProject },
+      'tenant.provisioning': { provisionSystemEnvironment },
     });
-    const plugin = createSystemProjectPlugin();
+    const plugin = createSystemEnvironmentPlugin();
     await plugin.start!(ctx as any);
 
-    expect(provisionSystemProject).toHaveBeenCalledOnce();
+    expect(provisionSystemEnvironment).toHaveBeenCalledOnce();
     expect(ctx.logger.info).toHaveBeenCalledWith(
       expect.stringContaining('System project ready'),
-      expect.objectContaining({ projectId: SYSTEM_PROJECT_ID, isSystem: true }),
+      expect.objectContaining({ environmentId: SYSTEM_ENVIRONMENT_ID, isSystem: true }),
     );
   });
 
   it('resolves an alternate service name when configured', async () => {
-    const provisionSystemProject = vi.fn().mockResolvedValue({
-      project: { id: SYSTEM_PROJECT_ID },
+    const provisionSystemEnvironment = vi.fn().mockResolvedValue({
+      project: { id: SYSTEM_ENVIRONMENT_ID },
     });
     const ctx = makeCtx({
-      'custom.provisioning': { provisionSystemProject },
+      'custom.provisioning': { provisionSystemEnvironment },
     });
 
-    const plugin = createSystemProjectPlugin({ serviceName: 'custom.provisioning' });
+    const plugin = createSystemEnvironmentPlugin({ serviceName: 'custom.provisioning' });
     await plugin.start!(ctx as any);
-    expect(provisionSystemProject).toHaveBeenCalled();
+    expect(provisionSystemEnvironment).toHaveBeenCalled();
   });
 
   it('swallows provisioning errors when strict=false', async () => {
-    const provisionSystemProject = vi.fn().mockRejectedValue(new Error('control plane down'));
+    const provisionSystemEnvironment = vi.fn().mockRejectedValue(new Error('control plane down'));
     const ctx = makeCtx({
-      'tenant.provisioning': { provisionSystemProject },
+      'tenant.provisioning': { provisionSystemEnvironment },
     });
-    const plugin = createSystemProjectPlugin();
+    const plugin = createSystemEnvironmentPlugin();
     await expect(plugin.start!(ctx as any)).resolves.toBeUndefined();
     expect(ctx.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Failed to provision system project'),
@@ -90,11 +90,11 @@ describe('createSystemProjectPlugin', () => {
   });
 
   it('re-throws provisioning errors when strict=true', async () => {
-    const provisionSystemProject = vi.fn().mockRejectedValue(new Error('boom'));
+    const provisionSystemEnvironment = vi.fn().mockRejectedValue(new Error('boom'));
     const ctx = makeCtx({
-      'tenant.provisioning': { provisionSystemProject },
+      'tenant.provisioning': { provisionSystemEnvironment },
     });
-    const plugin = createSystemProjectPlugin({ strict: true });
+    const plugin = createSystemEnvironmentPlugin({ strict: true });
     await expect(plugin.start!(ctx as any)).rejects.toThrow('boom');
   });
 });

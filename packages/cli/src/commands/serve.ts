@@ -368,7 +368,7 @@ export default class Serve extends Command {
           const bootResult = await createStandaloneStack(config.standalone);
           config = { ...originalConfig, ...bootResult } as any;
         } else {
-          // Cloud / multi-project boot modes require @objectstack/service-cloud.
+          // Cloud / multi-environment boot modes require @objectstack/service-cloud.
           // When the package is unavailable (e.g. someone vendored only the
           // public framework), fail with a clear, actionable error instead of
           // an opaque module-not-found stack trace.
@@ -748,7 +748,7 @@ export default class Serve extends Command {
                 }
                 // Resolve env-registry lazily on each request — it may
                 // not be registered yet at init() time (registered by
-                // ObjectOSProjectPlugin's init which runs in plugin
+                // ObjectOSEnvironmentPlugin's init which runs in plugin
                 // dependency order; we don't want to rely on ordering).
                 const registry: any = getEnvRegistry();
                 if (!registry || typeof registry.resolveByHostname !== 'function') {
@@ -861,39 +861,39 @@ export default class Serve extends Command {
         }
       }
 
-      // 5. Auto-register Studio single-project signal in dev mode.
+      // 5. Auto-register Studio single-environment signal in dev mode.
       //
       // `objectstack dev` runs a vanilla user stack (e.g. the HotCRM
       // reference app at https://github.com/objectstack-ai/hotcrm)
       // as a single project — there is no apps/cloud control plane and no
       // org/project picker is meaningful. Without this plugin Studio would
-      // fall back to its multi-project default and ask the user to "Create
+      // fall back to its multi-environment default and ask the user to "Create
       // organization" before showing any platform metadata.
       //
       // The plugin only registers `GET /api/v1/studio/runtime-config`
-      // (returning `{ singleProject: true, defaultOrgId, defaultProjectId }`)
+      // (returning `{ singleEnvironment: true, defaultOrgId, defaultProjectId }`)
       // — no identity seed, since CLI dev mode has no sys_organization /
-      // sys_project tables to write into. Skipped when the user config
-      // already carries a single-project / multi-project plugin.
+      // sys_environment tables to write into. Skipped when the user config
+      // already carries a single-environment / multi-environment plugin.
       const hasProjectModePlugin = plugins.some((p: any) => {
         const n = p?.name ?? p?.constructor?.name ?? '';
-        return n === 'com.objectstack.studio.single-project'
-          || n === 'com.objectstack.multi-project'
+        return n === 'com.objectstack.studio.single-environment'
+          || n === 'com.objectstack.multi-environment'
           || n === 'com.objectstack.studio.runtime-config';
       });
       if (isDev && !hasProjectModePlugin) {
         try {
           const cloudPkg = '@objectstack/service-cloud';
-          const { createSingleProjectPlugin } = await import(/* webpackIgnore: true */ cloudPkg);
-          await kernel.use(createSingleProjectPlugin({
-            projectId: process.env.OS_PROJECT_ID ?? 'proj_local',
+          const { createSingleEnvironmentPlugin } = await import(/* webpackIgnore: true */ cloudPkg);
+          await kernel.use(createSingleEnvironmentPlugin({
+            environmentId: process.env.OS_ENVIRONMENT_ID ?? 'proj_local',
             orgId: process.env.OS_ORG_ID ?? 'org_local',
             orgName: 'Local',
           }));
-          trackPlugin('SingleProject');
+          trackPlugin('SingleEnvironment');
         } catch {
           // @objectstack/service-cloud not installed — Studio falls back
-          // to multi-project mode (org/project picker visible).
+          // to multi-environment mode (org/project picker visible).
         }
       }
 
@@ -967,18 +967,18 @@ export default class Serve extends Command {
           // shared OS_AUTH_SECRET would erroneously validate cookies across
           // unrelated projects. Refuse to inject in runtime mode.
           //
-          // Detect runtime mode by the presence of ObjectOSProjectPlugin
+          // Detect runtime mode by the presence of ObjectOSEnvironmentPlugin
           // (added by createObjectOSStack). OS_CLOUD_URL alone is NOT a
           // reliable signal — a regular `objectstack dev` app may set it
           // just to enable the marketplace proxy yet still want its own
           // local AuthPlugin.
           const isHostKernel = plugins.some(
-            (p: any) => p?.name === 'com.objectstack.runtime.objectos-project'
-              || p?.constructor?.name === 'ObjectOSProjectPlugin'
+            (p: any) => p?.name === 'com.objectstack.runtime.objectos-environment'
+              || p?.constructor?.name === 'ObjectOSEnvironmentPlugin'
           );
           if (isHostKernel) {
             console.warn(chalk.yellow(
-              '  ⚠ AuthPlugin skipped on host kernel — runtime mode (ObjectOSProjectPlugin detected).\n' +
+              '  ⚠ AuthPlugin skipped on host kernel — runtime mode (ObjectOSEnvironmentPlugin detected).\n' +
               '    Auth is owned per-project by ArtifactKernelFactory (see service-cloud).'
             ));
           } else if (!secret) {
@@ -1182,7 +1182,7 @@ export default class Serve extends Command {
 
       // Register REST API and Dispatcher plugins (consume http.server + protocol services)
       if (flags.server) {
-        // Read project-scoping config from the stack's top-level `api` field
+        // Read environment-scoping config from the stack's top-level `api` field
         // (e.g. { api: { enableProjectScoping: true, projectResolution: 'auto' } }).
         // Forwarded to both REST and Dispatcher plugins so they mount scoped
         // routes consistently.
@@ -1588,7 +1588,7 @@ export default class Serve extends Command {
 
       // ── Driver introspection ──────────────────────────────────────
       // When the driver was registered by an app preset / per-project
-      // factory (ProjectKernelFactory) instead of serve.ts's own
+      // factory (EnvironmentKernelFactory) instead of serve.ts's own
       // OS_DATABASE_URL fallback, `resolvedDriverLabel` is still
       // unset. Probe well-known service names so the banner can show
       // *something* useful regardless of who wired the driver.
@@ -1641,7 +1641,7 @@ export default class Serve extends Command {
  * well-known names and return a single-line label + redacted URL so the
  * startup banner can show *something* even when the driver wasn't
  * registered through this command's own `OS_DATABASE_URL` fallback
- * (e.g. when the example app's preset or `ProjectKernelFactory` wired
+ * (e.g. when the example app's preset or `EnvironmentKernelFactory` wired
  * it). Returns `null` when nothing matches; the caller treats that as
  * "no driver info available" and skips the line.
  */

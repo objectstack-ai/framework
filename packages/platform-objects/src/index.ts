@@ -14,7 +14,7 @@
  *   @objectstack/platform-objects/metadata     — sys_metadata, sys_metadata_history
  *   @objectstack/platform-objects/apps         — built-in platform Apps (Setup, ...)
  *
- * Note: control-plane / cloud-only objects (sys_project*, sys_package*, sys_app)
+ * Note: control-plane / cloud-only objects (sys_environment*, sys_package*, sys_app)
  * live in @objectstack/service-tenant per ADR-0003.
  */
 

@@ -40,8 +40,8 @@ const RECOGNISED_MODES = new Set([
   // Deprecated aliases (kept for back-compat — emit a console warning at boot).
   'project',
   'local',
-  'single-project',
-  'multi-project',
+  'single-environment',
+  'multi-environment',
 ]);
 
 export function shouldBootWithLibrary(config: any): boolean {

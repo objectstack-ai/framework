@@ -21,8 +21,8 @@ export { AppPlugin, collectBundleHooks, collectBundleFunctions, collectBundleAct
 export { SeedLoaderService } from './seed-loader.js';
 export { createDispatcherPlugin } from './dispatcher-plugin.js';
 export type { DispatcherPluginConfig } from './dispatcher-plugin.js';
-export { createSystemProjectPlugin, SYSTEM_PROJECT_ID } from './system-project-plugin.js';
-export type { SystemProjectPluginConfig } from './system-project-plugin.js';
+export { createSystemEnvironmentPlugin, SYSTEM_ENVIRONMENT_ID } from './system-environment-plugin.js';
+export type { SystemEnvironmentPluginConfig } from './system-environment-plugin.js';
 
 // Export HTTP Server Components
 export { HttpServer } from './http-server.js';
@@ -96,8 +96,8 @@ export { DEFAULT_CLOUD_URL, resolveCloudUrl } from './cloud/cloud-url.js';
 export { ArtifactApiClient } from './cloud/artifact-api-client.js';
 export type {
     ArtifactApiClientConfig,
-    ProjectArtifactResponse,
-    ProjectRuntimeConfig,
+    EnvironmentArtifactResponse,
+    EnvironmentRuntimeConfig,
     ResolvedHostname,
 } from './cloud/artifact-api-client.js';
 export { FileArtifactApiClient } from './cloud/file-artifact-api-client.js';
@@ -108,7 +108,7 @@ export { ArtifactKernelFactory } from './cloud/artifact-kernel-factory.js';
 export type { ArtifactKernelFactoryConfig } from './cloud/artifact-kernel-factory.js';
 export { AuthProxyPlugin } from './cloud/auth-proxy-plugin.js';
 export { KernelManager } from './cloud/kernel-manager.js';
-export type { ProjectKernelFactory, KernelManagerConfig } from './cloud/kernel-manager.js';
+export type { EnvironmentKernelFactory, KernelManagerConfig } from './cloud/kernel-manager.js';
 export type { EnvironmentDriverRegistry } from './cloud/environment-registry.js';
 export {
   PLATFORM_SSO_PROVIDER_ID,

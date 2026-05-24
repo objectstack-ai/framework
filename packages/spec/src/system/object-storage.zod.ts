@@ -422,7 +422,7 @@ export const StorageConnectionSchema = lazySchema(() => z.object({
   sasToken: z.string().optional().describe('Azure SAS token'),
   
   // Google Cloud Storage
-  projectId: z.string().optional().describe('GCP project ID'),
+  environmentId: z.string().optional().describe('GCP project ID'),
   credentials: z.string().optional().describe('GCP service account credentials JSON'),
   
   // Common
@@ -629,7 +629,7 @@ export const gcsStorageExample = ObjectStorageConfigSchema.parse({
   label: 'Google Cloud Storage',
   provider: 'gcs',
   connection: {
-    projectId: 'my-gcp-project',
+    environmentId: 'my-gcp-project',
     credentials: '${GCP_SERVICE_ACCOUNT_JSON}',
   },
   buckets: [

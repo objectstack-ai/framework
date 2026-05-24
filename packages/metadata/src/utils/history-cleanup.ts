@@ -78,7 +78,7 @@ export class HistoryCleanupManager {
     const driver = (this.dbLoader as any).driver as IDataDriver;
     const historyTableName = (this.dbLoader as any).historyTableName as string;
     const organizationId = (this.dbLoader as any).organizationId as string | undefined;
-    // `projectId` was removed from the metadata layer (ADR-0008 §0
+    // `environmentId` was removed from the metadata layer (ADR-0008 §0
     // amendment). Cleanup is now scoped by `organization_id` only.
 
     let deleted = 0;

@@ -1629,7 +1629,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "URL",
         help: "アクティビティターゲットへのオプションのディープリンク"
       },
-      project_id: {
+      environment_id: {
         label: "プロジェクト",
         help: "プロジェクトコンテキスト（マルチプロジェクトデプロイメント）"
       },
@@ -2624,7 +2624,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "組織",
         help: "マルチテナント分離のための組織。"
       },
-      project_id: {
+      environment_id: {
         label: "プロジェクト（非推奨）",
         help: "非推奨。テナント分離には organization_id を使用してください。"
       },
@@ -2706,7 +2706,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "組織",
         help: "マルチテナント分離のための組織。"
       },
-      project_id: {
+      environment_id: {
         label: "環境 ID",
         help: "この履歴エントリを特定の環境にスコープします。"
       },

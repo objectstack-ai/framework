@@ -4,9 +4,9 @@ import { Plugin, PluginContext } from '@objectstack/core';
 
 /**
  * The well-known UUID for the built-in system project.
- * Kept in lockstep with `ProjectProvisioningService.provisionSystemProject`.
+ * Kept in lockstep with `ProjectProvisioningService.provisionSystemEnvironment`.
  */
-export const SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
+export const SYSTEM_ENVIRONMENT_ID = '00000000-0000-0000-0000-000000000001';
 
 /**
  * Minimal surface of `ProjectProvisioningService` consumed by the plugin.
@@ -15,13 +15,13 @@ export const SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
  * the kernel service registry.
  */
 interface ProvisioningLike {
-  provisionSystemProject(): Promise<{
+  provisionSystemEnvironment(): Promise<{
     project: { id: string; isSystem?: boolean };
     warnings?: string[];
   }>;
 }
 
-export interface SystemProjectPluginConfig {
+export interface SystemEnvironmentPluginConfig {
   /**
    * Service name that resolves to a `ProjectProvisioningService`-shaped
    * object. Defaults to `tenant.provisioning` (convention used by
@@ -41,8 +41,8 @@ export interface SystemProjectPluginConfig {
  * System Project Bootstrap Plugin
  *
  * Ensures the built-in system project (well-known UUID
- * {@link SYSTEM_PROJECT_ID}) exists on the control plane the first time the
- * runtime starts. Calls are idempotent — `provisionSystemProject()` returns
+ * {@link SYSTEM_ENVIRONMENT_ID}) exists on the control plane the first time the
+ * runtime starts. Calls are idempotent — `provisionSystemEnvironment()` returns
  * the existing row when the project has already been created.
  *
  * Register AFTER the tenant service is available so the provisioning service
@@ -51,14 +51,14 @@ export interface SystemProjectPluginConfig {
  * @example
  * ```ts
  * kernel.use(tenantPlugin);
- * kernel.use(createSystemProjectPlugin());
+ * kernel.use(createSystemEnvironmentPlugin());
  * ```
  */
-export function createSystemProjectPlugin(config: SystemProjectPluginConfig = {}): Plugin {
+export function createSystemEnvironmentPlugin(config: SystemEnvironmentPluginConfig = {}): Plugin {
   const serviceName = config.serviceName ?? 'tenant.provisioning';
 
   return {
-    name: 'com.objectstack.runtime.system-project',
+    name: 'com.objectstack.runtime.system-environment',
     version: '1.0.0',
 
     init: async (_ctx: PluginContext) => {
@@ -74,29 +74,29 @@ export function createSystemProjectPlugin(config: SystemProjectPluginConfig = {}
         service = undefined;
       }
 
-      if (!service || typeof service.provisionSystemProject !== 'function') {
+      if (!service || typeof service.provisionSystemEnvironment !== 'function') {
         if (config.strict) {
           throw new Error(
-            `[SystemProjectPlugin] Provisioning service '${serviceName}' not found — cannot bootstrap system project.`,
+            `[SystemEnvironmentPlugin] Provisioning service '${serviceName}' not found — cannot bootstrap system project.`,
           );
         }
         ctx.logger.debug(
-          `[SystemProjectPlugin] Provisioning service '${serviceName}' unavailable — system project bootstrap skipped.`,
+          `[SystemEnvironmentPlugin] Provisioning service '${serviceName}' unavailable — system project bootstrap skipped.`,
         );
         return;
       }
 
       try {
-        const result = await service.provisionSystemProject();
+        const result = await service.provisionSystemEnvironment();
         const warnings = result.warnings ?? [];
-        ctx.logger.info('[SystemProjectPlugin] System project ready', {
-          projectId: result.project.id,
+        ctx.logger.info('[SystemEnvironmentPlugin] System project ready', {
+          environmentId: result.project.id,
           isSystem: result.project.isSystem,
           warnings,
         });
       } catch (err: any) {
         if (config.strict) throw err;
-        ctx.logger.warn('[SystemProjectPlugin] Failed to provision system project', {
+        ctx.logger.warn('[SystemEnvironmentPlugin] Failed to provision system project', {
           error: err?.message ?? String(err),
         });
       }

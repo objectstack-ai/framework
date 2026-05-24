@@ -47,7 +47,7 @@ export interface PluginContext {
     replaceService<T>(name: string, implementation: T): void;
 
     /**
-     * Get a scoped service instance for a given scope (e.g., projectId).
+     * Get a scoped service instance for a given scope (e.g., environmentId).
      * Creates the instance on first access; reuses on subsequent calls within the same scope.
      */
     getServiceScoped<T>(name: string, scopeId: string): Promise<T>;

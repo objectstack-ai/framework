@@ -29,7 +29,7 @@ export const StandaloneStackConfigSchema = z.object({
     databaseUrl: z.string().optional(),
     databaseAuthToken: z.string().optional(),
     databaseDriver: z.enum(['sqlite', 'turso', 'memory', 'postgres', 'mongodb']).optional(),
-    projectId: z.string().optional(),
+    environmentId: z.string().optional(),
     artifactPath: z.string().optional(),
 });
 
@@ -76,7 +76,7 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
     const { AppPlugin } = await import('./app-plugin.js');
 
     const cwd = process.cwd();
-    const projectId = cfg.projectId ?? process.env.OS_PROJECT_ID ?? 'proj_local';
+    const environmentId = cfg.environmentId ?? process.env.OS_ENVIRONMENT_ID ?? 'proj_local';
     const artifactPathInput = cfg.artifactPath
         ?? process.env.OS_ARTIFACT_PATH
         ?? resolvePath(cwd, 'dist/objectstack.json');
@@ -176,10 +176,10 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
             // Uses polling under the hood (see plugin.ts) to avoid
             // `fs.watch` EMFILE on macOS / busy dev hosts.
             artifactWatch: process.env.NODE_ENV !== 'production',
-            projectId,
+            environmentId,
             artifactSource: { mode: 'local-file', path: artifactPath },
         }),
-        new ObjectQLPlugin({ projectId }),
+        new ObjectQLPlugin({ environmentId }),
     ];
     if (artifactBundle) plugins.push(new AppPlugin(artifactBundle));
 

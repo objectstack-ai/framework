@@ -118,7 +118,7 @@ export type EnvironmentPackageInstallation = z.infer<typeof EnvironmentPackageIn
 
 /**
  * Request body for `POST /cloud/environments/:environmentId/packages`
- * (or the legacy `/cloud/projects/:projectId/packages` alias).
+ * (or the legacy `/cloud/environments/:environmentId/packages` alias).
  */
 export const InstallPackageToEnvironmentRequestSchema = lazySchema(() => z.object({
   packageVersionId: z.string().uuid().optional()

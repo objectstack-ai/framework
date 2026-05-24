@@ -109,8 +109,8 @@ export interface LoadCapabilitiesOptions {
     bundle: Record<string, unknown>;
     /** Optional logger. */
     logger?: Logger;
-    /** projectId for log breadcrumbs. */
-    projectId: string;
+    /** environmentId for log breadcrumbs. */
+    environmentId: string;
 }
 
 /**
@@ -119,7 +119,7 @@ export interface LoadCapabilitiesOptions {
  * Returns the list of plugin exports actually installed for diagnostics.
  */
 export async function loadCapabilities(opts: LoadCapabilitiesOptions): Promise<string[]> {
-    const { kernel, requires, bundle, projectId } = opts;
+    const { kernel, requires, bundle, environmentId } = opts;
     const logger: Logger = opts.logger ?? console;
     const installed: string[] = [];
 
@@ -136,7 +136,7 @@ export async function loadCapabilities(opts: LoadCapabilitiesOptions): Promise<s
             if (!Ctor) {
                 logger.warn?.(
                     `[CapabilityLoader] '${cap}': package '${spec.pkg}' did not export '${spec.export}'`,
-                    { projectId },
+                    { environmentId },
                 );
                 continue;
             }
@@ -171,19 +171,19 @@ export async function loadCapabilities(opts: LoadCapabilitiesOptions): Promise<s
 
             logger.info?.(
                 `[CapabilityLoader] '${cap}' installed (${spec.export}${spec.extras ? ' + ' + spec.extras.length + ' extras' : ''})`,
-                { projectId },
+                { environmentId },
             );
         } catch (err: any) {
             const msg = err?.message ?? String(err);
             if (msg.includes('Cannot find module') || msg.includes('ERR_MODULE_NOT_FOUND')) {
                 logger.warn?.(
                     `[CapabilityLoader] '${cap}' requested but '${spec.pkg}' not installed in host — skipped`,
-                    { projectId },
+                    { environmentId },
                 );
             } else {
                 logger.error?.(
                     `[CapabilityLoader] '${cap}' load failed: ${msg}`,
-                    { projectId },
+                    { environmentId },
                 );
             }
         }

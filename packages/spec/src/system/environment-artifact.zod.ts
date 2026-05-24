@@ -34,14 +34,14 @@ import { z } from 'zod';
 // ==========================================
 
 /** Current artifact schema version. Bump on every breaking envelope change. */
-export const PROJECT_ARTIFACT_SCHEMA_VERSION = '0.1' as const;
+export const ENVIRONMENT_ARTIFACT_SCHEMA_VERSION = '0.1' as const;
 
 /** Hash algorithms permitted for artifact checksums. */
-export const ProjectArtifactHashAlgorithmEnum = z
+export const EnvironmentArtifactHashAlgorithmEnum = z
   .enum(['sha256', 'sha384', 'sha512'])
   .describe('Hash algorithm used for the artifact checksum');
 
-export type ProjectArtifactHashAlgorithm = z.infer<typeof ProjectArtifactHashAlgorithmEnum>;
+export type EnvironmentArtifactHashAlgorithm = z.infer<typeof EnvironmentArtifactHashAlgorithmEnum>;
 
 // ==========================================
 // Checksum
@@ -53,9 +53,9 @@ export type ProjectArtifactHashAlgorithm = z.infer<typeof ProjectArtifactHashAlg
  * that the artifact bytes were not tampered with in transit and to key the
  * local artifact cache.
  */
-export const ProjectArtifactChecksumSchema = z
+export const EnvironmentArtifactChecksumSchema = z
   .object({
-    algorithm: ProjectArtifactHashAlgorithmEnum.default('sha256'),
+    algorithm: EnvironmentArtifactHashAlgorithmEnum.default('sha256'),
     value: z
       .string()
       .regex(/^[a-f0-9]+$/, 'Checksum value must be lowercase hexadecimal')
@@ -63,7 +63,7 @@ export const ProjectArtifactChecksumSchema = z
   })
   .describe('Artifact integrity checksum');
 
-export type ProjectArtifactChecksum = z.infer<typeof ProjectArtifactChecksumSchema>;
+export type EnvironmentArtifactChecksum = z.infer<typeof EnvironmentArtifactChecksumSchema>;
 
 // ==========================================
 // Function code packaging
@@ -73,18 +73,18 @@ export type ProjectArtifactChecksum = z.infer<typeof ProjectArtifactChecksumSche
  * Languages supported for inlined function code. The runtime decides how to
  * load each language; v0 only commits to JavaScript bytes shipping unmodified.
  */
-export const ProjectArtifactFunctionLanguageEnum = z
+export const EnvironmentArtifactFunctionLanguageEnum = z
   .enum(['javascript', 'typescript'])
   .describe('Source language of the function code');
 
-export type ProjectArtifactFunctionLanguage = z.infer<typeof ProjectArtifactFunctionLanguageEnum>;
+export type EnvironmentArtifactFunctionLanguage = z.infer<typeof EnvironmentArtifactFunctionLanguageEnum>;
 
 /**
  * A single function (object trigger, computed field, action, etc.) packaged
  * into the artifact. Function code is inlined as a UTF-8 string; binary or
  * out-of-band storage is reserved for a future revision via `payloadRef`.
  */
-export const ProjectArtifactFunctionSchema = z
+export const EnvironmentArtifactFunctionSchema = z
   .object({
     /** Globally unique function name (snake_case). */
     name: z
@@ -93,7 +93,7 @@ export const ProjectArtifactFunctionSchema = z
       .describe('Function machine name (snake_case)'),
 
     /** Source language of the inlined `code` field. */
-    language: ProjectArtifactFunctionLanguageEnum.default('javascript'),
+    language: EnvironmentArtifactFunctionLanguageEnum.default('javascript'),
 
     /** UTF-8 encoded function source. Must be self-contained. */
     code: z.string().describe('Inlined function source'),
@@ -119,7 +119,7 @@ export const ProjectArtifactFunctionSchema = z
   })
   .describe('A single inlined function');
 
-export type ProjectArtifactFunction = z.infer<typeof ProjectArtifactFunctionSchema>;
+export type EnvironmentArtifactFunction = z.infer<typeof EnvironmentArtifactFunctionSchema>;
 
 // ==========================================
 // Plugin / Driver requirements
@@ -130,7 +130,7 @@ export type ProjectArtifactFunction = z.infer<typeof ProjectArtifactFunctionSche
  * runtime has every plugin the project depends on before hydrating the kernel.
  * Configuration values live in **Deployment Config**, not in the artifact.
  */
-export const ProjectArtifactRequirementSchema = z
+export const EnvironmentArtifactRequirementSchema = z
   .object({
     /** Package id (reverse-domain or short id). */
     id: z.string().describe('Plugin/driver package id'),
@@ -140,20 +140,20 @@ export const ProjectArtifactRequirementSchema = z
   })
   .describe('A plugin or driver dependency declaration');
 
-export type ProjectArtifactRequirement = z.infer<typeof ProjectArtifactRequirementSchema>;
+export type EnvironmentArtifactRequirement = z.infer<typeof EnvironmentArtifactRequirementSchema>;
 
 /**
  * Project-level manifest captured inside the artifact. Mirrors the parts of
  * the package manifest the runtime needs to bootstrap; user-facing manifest
  * fields (description, icon, marketplace metadata) are excluded.
  */
-export const ProjectArtifactManifestSchema = z
+export const EnvironmentArtifactManifestSchema = z
   .object({
     /** Plugins required to run this project's metadata. */
-    plugins: z.array(ProjectArtifactRequirementSchema).optional(),
+    plugins: z.array(EnvironmentArtifactRequirementSchema).optional(),
 
     /** Drivers required to run this project's metadata. */
-    drivers: z.array(ProjectArtifactRequirementSchema).optional(),
+    drivers: z.array(EnvironmentArtifactRequirementSchema).optional(),
 
     /** Minimum platform version (mirrors `Manifest.engine`). */
     engine: z
@@ -167,7 +167,7 @@ export const ProjectArtifactManifestSchema = z
   })
   .describe('Plugin/driver requirements baked into the artifact');
 
-export type ProjectArtifactManifest = z.infer<typeof ProjectArtifactManifestSchema>;
+export type EnvironmentArtifactManifest = z.infer<typeof EnvironmentArtifactManifestSchema>;
 
 // ==========================================
 // Metadata payload
@@ -183,7 +183,7 @@ export type ProjectArtifactManifest = z.infer<typeof ProjectArtifactManifestSche
  * categories are passed through (`passthrough()`) so older ObjectOS builds can
  * boot newer artifacts safely if no breaking changes were made.
  */
-export const ProjectArtifactMetadataSchema = z
+export const EnvironmentArtifactMetadataSchema = z
   .object({
     objects: z.array(z.unknown()).optional(),
     fields: z.array(z.unknown()).optional(),
@@ -211,7 +211,7 @@ export const ProjectArtifactMetadataSchema = z
   .passthrough()
   .describe('Compiled project metadata grouped by category');
 
-export type ProjectArtifactMetadata = z.infer<typeof ProjectArtifactMetadataSchema>;
+export type EnvironmentArtifactMetadata = z.infer<typeof EnvironmentArtifactMetadataSchema>;
 
 // ==========================================
 // Out-of-band payload reference (reserved)
@@ -225,15 +225,15 @@ export type ProjectArtifactMetadata = z.infer<typeof ProjectArtifactMetadataSche
  * Defined now so the envelope shape is stable across the inline-only ↔ S3
  * transition.
  */
-export const ProjectArtifactPayloadRefSchema = z
+export const EnvironmentArtifactPayloadRefSchema = z
   .object({
     url: z.string().url().describe('Signed URL pointing at the artifact payload'),
     expiresAt: z.string().datetime().optional().describe('ISO-8601 expiry timestamp'),
-    checksum: ProjectArtifactChecksumSchema.describe('Checksum of the referenced payload'),
+    checksum: EnvironmentArtifactChecksumSchema.describe('Checksum of the referenced payload'),
   })
   .describe('Out-of-band payload reference (reserved for future use)');
 
-export type ProjectArtifactPayloadRef = z.infer<typeof ProjectArtifactPayloadRefSchema>;
+export type EnvironmentArtifactPayloadRef = z.infer<typeof EnvironmentArtifactPayloadRefSchema>;
 
 // ==========================================
 // Envelope
@@ -243,12 +243,12 @@ export type ProjectArtifactPayloadRef = z.infer<typeof ProjectArtifactPayloadRef
  * Project Artifact envelope.
  *
  * Produced by `objectstack compile`, served by the Project Artifact API
- * (`GET /api/v1/cloud/projects/:projectId/artifact`), and consumed by the
+ * (`GET /api/v1/cloud/environments/:environmentId/artifact`), and consumed by the
  * ObjectOS metadata loader to hydrate a project kernel.
  *
  * Required fields (v0):
  * - `schemaVersion`: tracks the envelope itself.
- * - `projectId`: which project this artifact belongs to.
+ * - `environmentId`: which project this artifact belongs to.
  * - `commitId`: monotonic, content-addressable identifier; cache key.
  * - `checksum`: integrity check over the artifact body.
  * - `metadata`: compiled metadata grouped by category.
@@ -259,15 +259,15 @@ export type ProjectArtifactPayloadRef = z.infer<typeof ProjectArtifactPayloadRef
  * - `builtAt`, `builtWith`: provenance.
  * - `payloadRef`: reserved for future S3 indirection.
  */
-export const ProjectArtifactSchema = z
+export const EnvironmentArtifactSchema = z
   .object({
     /** Envelope schema version. Currently always `'0.1'`. */
     schemaVersion: z
-      .literal(PROJECT_ARTIFACT_SCHEMA_VERSION)
+      .literal(ENVIRONMENT_ARTIFACT_SCHEMA_VERSION)
       .describe('Project artifact envelope schema version'),
 
     /** Stable project identifier from the control plane. */
-    projectId: z.string().min(1).describe('Project identifier (control-plane scoped)'),
+    environmentId: z.string().min(1).describe('Project identifier (control-plane scoped)'),
 
     /**
      * Monotonic, content-addressable revision id assigned by the control plane
@@ -277,7 +277,7 @@ export const ProjectArtifactSchema = z
     commitId: z.string().min(1).describe('Content-addressable revision id'),
 
     /** Integrity checksum over the canonical artifact body. */
-    checksum: ProjectArtifactChecksumSchema,
+    checksum: EnvironmentArtifactChecksumSchema,
 
     /** ISO-8601 build timestamp. */
     builtAt: z
@@ -290,21 +290,21 @@ export const ProjectArtifactSchema = z
     builtWith: z.string().optional().describe('Build tool identifier'),
 
     /** Compiled project metadata grouped by category. */
-    metadata: ProjectArtifactMetadataSchema,
+    metadata: EnvironmentArtifactMetadataSchema,
 
     /** Inlined function code. Empty array if the project has no functions. */
     functions: z
-      .array(ProjectArtifactFunctionSchema)
+      .array(EnvironmentArtifactFunctionSchema)
       .default([])
       .describe('Inlined function code packaged with the artifact'),
 
     /** Plugin/driver requirements baked at compile time. */
-    manifest: ProjectArtifactManifestSchema,
+    manifest: EnvironmentArtifactManifestSchema,
 
     /** Out-of-band payload reference (reserved). */
-    payloadRef: ProjectArtifactPayloadRefSchema.optional(),
+    payloadRef: EnvironmentArtifactPayloadRefSchema.optional(),
   })
   .describe('ObjectStack Project Artifact envelope (v0)');
 
-export type ProjectArtifact = z.infer<typeof ProjectArtifactSchema>;
-export type ProjectArtifactInput = z.input<typeof ProjectArtifactSchema>;
+export type EnvironmentArtifact = z.infer<typeof EnvironmentArtifactSchema>;
+export type EnvironmentArtifactInput = z.input<typeof EnvironmentArtifactSchema>;

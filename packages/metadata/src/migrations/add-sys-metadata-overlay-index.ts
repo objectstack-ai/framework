@@ -4,8 +4,8 @@
  * Migration: ensure overlay-uniqueness index exists on `sys_metadata`.
  *
  * ADR-0005 Phase 1 — Overlay rows must be uniquely keyed by
- * `(type, name, organization_id, project_id, scope)` for active rows only.
- * The previous `(type, name, project_id)` unique constraint pre-dated
+ * `(type, name, organization_id, environment_id, scope)` for active rows only.
+ * The previous `(type, name, environment_id)` unique constraint pre-dated
  * multi-tenant overlays and would incorrectly reject per-org customizations.
  *
  * Behaviour:
@@ -29,7 +29,7 @@ import type { IDataDriver } from '@objectstack/spec/contracts';
 
 const INDEX_NAME = 'idx_sys_metadata_overlay_active';
 const TABLE = 'sys_metadata';
-const COLUMNS = '(type, name, organization_id, project_id, scope)';
+const COLUMNS = '(type, name, organization_id, environment_id, scope)';
 const WHERE = "state = 'active'";
 
 export interface AddSysMetadataOverlayIndexResult {

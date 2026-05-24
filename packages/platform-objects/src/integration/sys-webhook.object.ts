@@ -19,7 +19,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  *
  * Platform-wide on purpose: every project (standalone, single-tenant,
  * cloud) can integrate with external systems (Slack, Stripe, internal
- * services) the same way. The control-plane-only `sys_project*`
+ * services) the same way. The control-plane-only `sys_environment*`
  * objects live in @objectstack/service-tenant; webhooks are
  * orthogonal and ship with every kernel.
  *

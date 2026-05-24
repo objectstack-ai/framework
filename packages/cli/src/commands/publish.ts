@@ -19,10 +19,10 @@ export default class Publish extends Command {
       env: 'OS_CLOUD_URL',
       default: 'http://localhost:4000',
     }),
-    project: Flags.string({
-      char: 'p',
-      description: 'Project ID (required)',
-      env: 'OS_PROJECT_ID',
+    environment: Flags.string({
+      char: 'e',
+      description: 'Environment ID (required)',
+      env: 'OS_ENVIRONMENT_ID',
       required: true,
     }),
     token: Flags.string({
@@ -76,7 +76,7 @@ export default class Publish extends Command {
       if (flags.note) qsParams.set('note', flags.note);
       if (flags.branch) qsParams.set('branch', flags.branch);
       const qs = qsParams.toString();
-      const serverUrl = `${flags.server}/api/v1/cloud/projects/${flags.project}/metadata${qs ? `?${qs}` : ''}`;
+      const serverUrl = `${flags.server}/api/v1/cloud/environments/${flags.environment}/metadata${qs ? `?${qs}` : ''}`;
       printStep(`Publishing to ${serverUrl}...`);
 
       const response = await (async () => {
@@ -124,7 +124,7 @@ export default class Publish extends Command {
 
       console.log('');
       printSuccess('Artifact published successfully');
-      printKV('  Project', flags.project);
+      printKV('  Environment', flags.environment);
       printKV('  Branch', data?.branch ?? flags.branch);
       if (data?.commitId) printKV('  Commit', data.commitId);
       const checksumStr = typeof data?.checksum === 'string'

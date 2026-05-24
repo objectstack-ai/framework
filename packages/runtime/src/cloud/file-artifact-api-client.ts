@@ -14,7 +14,7 @@
  *     baked into the container image.
  *
  * Hostname resolution is the identity function: every host resolves
- * to the same `projectId`. The runtime config (database URL +
+ * to the same `environmentId`. The runtime config (database URL +
  * driver) is synthesised from the artifact's default datasource,
  * matching what the cloud API would mint for a project whose
  * developer declared an inline datasource in `defineStack()`.
@@ -26,8 +26,8 @@
 import { readFile, stat } from 'node:fs/promises';
 import { resolve as resolvePath } from 'node:path';
 import type {
-    ProjectArtifactResponse,
-    ProjectRuntimeConfig,
+    EnvironmentArtifactResponse,
+    EnvironmentRuntimeConfig,
     ResolvedHostname,
 } from './artifact-api-client.js';
 
@@ -40,9 +40,9 @@ export interface FileArtifactApiClientConfig {
     artifactPath?: string;
     /**
      * Project id every hostname maps to. Defaults to
-     * `process.env.OS_PROJECT_ID` or `'proj_local'`.
+     * `process.env.OS_ENVIRONMENT_ID` or `'proj_local'`.
      */
-    projectId?: string;
+    environmentId?: string;
     /**
      * Organization id surfaced alongside the project. Defaults to
      * `process.env.OS_ORGANIZATION_ID` or `'org_local'`.
@@ -52,9 +52,9 @@ export interface FileArtifactApiClientConfig {
      * Override runtime config. When unset, the client tries to derive
      * one from the artifact's `datasources` array; if that fails it
      * falls back to a local-file SQLite DB at
-     * `<cwd>/.objectstack/data/<projectId>.db`.
+     * `<cwd>/.objectstack/data/<environmentId>.db`.
      */
-    runtime?: ProjectRuntimeConfig;
+    runtime?: EnvironmentRuntimeConfig;
     /**
      * Reload the artifact on every fetch instead of caching the first
      * read. Useful when iterating on a project's metadata without
@@ -67,13 +67,13 @@ export interface FileArtifactApiClientConfig {
 
 export class FileArtifactApiClient {
     private readonly artifactPath: string;
-    private readonly projectId: string;
+    private readonly environmentId: string;
     private readonly organizationId: string;
-    private readonly overrideRuntime?: ProjectRuntimeConfig;
+    private readonly overrideRuntime?: EnvironmentRuntimeConfig;
     private readonly watch: boolean;
     private readonly logger: NonNullable<FileArtifactApiClientConfig['logger']>;
 
-    private cached?: { mtimeMs: number; response: ProjectArtifactResponse };
+    private cached?: { mtimeMs: number; response: EnvironmentArtifactResponse };
 
     constructor(config: FileArtifactApiClientConfig = {}) {
         const cwd = process.cwd();
@@ -83,8 +83,8 @@ export class FileArtifactApiClient {
                 ?? process.env.OS_ARTIFACT_PATH
                 ?? 'dist/objectstack.json',
         );
-        this.projectId = config.projectId
-            ?? process.env.OS_PROJECT_ID
+        this.environmentId = config.environmentId
+            ?? process.env.OS_ENVIRONMENT_ID
             ?? 'proj_local';
         this.organizationId = config.organizationId
             ?? process.env.OS_ORGANIZATION_ID
@@ -98,22 +98,22 @@ export class FileArtifactApiClient {
         // Single-project mode: every host maps to the one configured project.
         const runtime = this.overrideRuntime ?? (await this.readRuntimeFromArtifact());
         return {
-            projectId: this.projectId,
+            environmentId: this.environmentId,
             organizationId: this.organizationId,
             ...(runtime ? { runtime } : {}),
         };
     }
 
-    async fetchArtifact(_projectId: string, _opts?: { commit?: string }): Promise<ProjectArtifactResponse | null> {
+    async fetchArtifact(_environmentId: string, _opts?: { commit?: string }): Promise<EnvironmentArtifactResponse | null> {
         return this.loadArtifact();
     }
 
-    async lookupProjectByShortId(_shortId: string): Promise<{ projectId: string; organizationId?: string } | null> {
-        return { projectId: this.projectId, organizationId: this.organizationId };
+    async lookupProjectByShortId(_shortId: string): Promise<{ environmentId: string; organizationId?: string } | null> {
+        return { environmentId: this.environmentId, organizationId: this.organizationId };
     }
 
     async fetchBranchHead(
-        _projectId: string,
+        _environmentId: string,
         _branchName: string,
     ): Promise<{ commitId: string; publishedAt?: string | null } | null> {
         const artifact = await this.loadArtifact();
@@ -122,7 +122,7 @@ export class FileArtifactApiClient {
             : null;
     }
 
-    invalidate(_projectId: string): void {
+    invalidate(_environmentId: string): void {
         this.cached = undefined;
     }
 
@@ -130,7 +130,7 @@ export class FileArtifactApiClient {
         this.cached = undefined;
     }
 
-    private async loadArtifact(): Promise<ProjectArtifactResponse | null> {
+    private async loadArtifact(): Promise<EnvironmentArtifactResponse | null> {
         try {
             const stats = await stat(this.artifactPath);
             const mtimeMs = stats.mtimeMs;
@@ -139,7 +139,7 @@ export class FileArtifactApiClient {
 
             const raw = await readFile(this.artifactPath, 'utf8');
             const parsed = JSON.parse(raw);
-            // The compiled JSON may already be a `ProjectArtifact` envelope
+            // The compiled JSON may already be a `EnvironmentArtifact` envelope
             // (with a `metadata` block) or a bare bundle. Wrap when needed.
             const isEnvelope = parsed && typeof parsed === 'object'
                 && typeof parsed.metadata === 'object'
@@ -149,9 +149,9 @@ export class FileArtifactApiClient {
                 ?? (isEnvelope ? parsed.runtime : undefined)
                 ?? this.deriveRuntimeFromMetadata(metadata)
                 ?? this.defaultLocalSqliteRuntime();
-            const response: ProjectArtifactResponse = {
+            const response: EnvironmentArtifactResponse = {
                 schemaVersion: parsed.schemaVersion ?? '1',
-                projectId: parsed.projectId ?? this.projectId,
+                environmentId: parsed.environmentId ?? this.environmentId,
                 commitId: parsed.commitId ?? 'local',
                 checksum: parsed.checksum ?? '',
                 publishedAt: parsed.publishedAt ?? new Date().toISOString(),
@@ -162,7 +162,7 @@ export class FileArtifactApiClient {
                     organizationId: this.organizationId,
                     ...runtime,
                 },
-            } as ProjectArtifactResponse;
+            } as EnvironmentArtifactResponse;
             this.cached = { mtimeMs, response };
             return response;
         } catch (err: any) {
@@ -174,12 +174,12 @@ export class FileArtifactApiClient {
         }
     }
 
-    private async readRuntimeFromArtifact(): Promise<ProjectRuntimeConfig | undefined> {
+    private async readRuntimeFromArtifact(): Promise<EnvironmentRuntimeConfig | undefined> {
         const artifact = await this.loadArtifact();
         return artifact?.runtime;
     }
 
-    private deriveRuntimeFromMetadata(metadata: any): ProjectRuntimeConfig | undefined {
+    private deriveRuntimeFromMetadata(metadata: any): EnvironmentRuntimeConfig | undefined {
         const datasources = metadata?.datasources;
         if (!Array.isArray(datasources) || datasources.length === 0) return undefined;
         const mapping: any[] | undefined = metadata?.datasourceMapping;
@@ -203,9 +203,9 @@ export class FileArtifactApiClient {
         };
     }
 
-    private defaultLocalSqliteRuntime(): ProjectRuntimeConfig {
+    private defaultLocalSqliteRuntime(): EnvironmentRuntimeConfig {
         const cwd = process.cwd();
-        const dbPath = resolvePath(cwd, '.objectstack/data', `${this.projectId}.db`);
+        const dbPath = resolvePath(cwd, '.objectstack/data', `${this.environmentId}.db`);
         return {
             databaseDriver: 'sqlite',
             databaseUrl: `file:${dbPath}`,

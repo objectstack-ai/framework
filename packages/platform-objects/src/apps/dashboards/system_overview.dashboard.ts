@@ -82,7 +82,7 @@ export const SystemOverviewDashboard = Dashboard.create({
       type: 'metric',
       object: 'sys_package_installation',
       // Cloud-only object — only registered when service-tenant is loaded.
-      // Hide this widget gracefully in single-project runtimes.
+      // Hide this widget gracefully in single-environment runtimes.
       requiresObject: 'sys_package_installation',
       layout: {
         x: 9,

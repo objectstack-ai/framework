@@ -92,18 +92,18 @@ export class AuthProxyPlugin implements Plugin {
                 try {
                     const url = new URL(c.req.url);
                     const host = url.hostname;
-                    let projectId: string | undefined;
+                    let environmentId: string | undefined;
                     try {
                         const env = await envRegistry.resolveByHostname(host);
-                        projectId = env?.projectId;
+                        environmentId = env?.environmentId;
                     } catch {
                         // ignore
                     }
-                    if (!projectId) {
+                    if (!environmentId) {
                         return c.json({ error: 'project_not_found', host }, 404);
                     }
 
-                    const projectKernel = await kernelManager.getOrCreate(projectId);
+                    const projectKernel = await kernelManager.getOrCreate(environmentId);
                     let authSvc: any;
                     try {
                         authSvc = await (projectKernel as any).getServiceAsync?.('auth');
@@ -164,7 +164,7 @@ export class AuthProxyPlugin implements Plugin {
 
                     const fn = await resolveAuthHandler(authSvc);
                     if (!fn) {
-                        return c.json({ error: 'auth_service_unavailable', projectId }, 503);
+                        return c.json({ error: 'auth_service_unavailable', environmentId }, 503);
                     }
 
                     // Forward the original Web Request directly — better-auth

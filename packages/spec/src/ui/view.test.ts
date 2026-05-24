@@ -755,7 +755,7 @@ describe('ViewSchema', () => {
           sections: [
             {
               label: 'Task Information',
-              fields: ['subject', 'project_id', 'status', 'priority'],
+              fields: ['subject', 'environment_id', 'status', 'priority'],
             },
             {
               label: 'Schedule',

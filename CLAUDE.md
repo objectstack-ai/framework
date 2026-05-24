@@ -1,5 +1,8 @@
 # ObjectStack — CLAUDE.md
 
+> **v5.0 (2026): `project` → `environment`.** The runtime concept formerly called *Project* (per-tenant business workspace; Org/Project/Branch hierarchy) is now called *Environment* throughout the codebase: CLI flags (`--environment`/`-e`), HTTP paths (`/api/v1/environments/:environmentId/...`), headers (`X-Environment-Id`), env vars (`OS_ENVIRONMENT_ID`), exported symbols (`createSystemEnvironmentPlugin`, `SYSTEM_ENVIRONMENT_ID`), DB columns (`environment_id`), and JSON schemas (`EnvironmentArtifact`) all use the new term with no aliases or deprecation shims. The word "project" elsewhere in this document still refers to the npm/monorepo sense (i.e., the framework as a software project). See `.changeset/v5-project-to-environment-rename.md` for the full breaking-change list and ADR-0006 for the rationale.
+
+
 > **Last synced with `.github/copilot-instructions.md`:** 2026-04-16
 >
 > This file is the **Claude Code** primary instruction file for ObjectStack development.
@@ -42,7 +45,7 @@ You are the **Chief Protocol Architect** for the ObjectStack ecosystem.
 This is a **metadata-driven low-code platform** monorepo (pnpm + Turborepo).
 Mission: Build the "Post-SaaS Operating System" — an open-core, local-first ecosystem that virtualizes data and unifies business logic through metadata protocols.
 
-> **North Star:** Every architecture decision must align with [`content/docs/concepts/north-star.mdx`](content/docs/concepts/north-star.mdx). That document defines the **product shape** (Studio dashboard · Org/Project/Branch hierarchy · per-project ObjectOS · compiled app artifacts) and the honest Built/Drift/Missing ledger. Read it before proposing structural changes. If a change doesn't advance §7 Built, shrink Drift, unlock Missing, or answer an Open Question — it probably shouldn't ship.
+> **North Star:** Every architecture decision must align with [`content/docs/concepts/north-star.mdx`](content/docs/concepts/north-star.mdx). That document defines the **product shape** (Studio dashboard · Org/Environment/Branch hierarchy · per-environment ObjectOS · compiled app artifacts) and the honest Built/Drift/Missing ledger. Read it before proposing structural changes. If a change doesn't advance §7 Built, shrink Drift, unlock Missing, or answer an Open Question — it probably shouldn't ship.
 
 ---
 

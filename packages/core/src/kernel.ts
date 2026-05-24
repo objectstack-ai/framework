@@ -450,7 +450,7 @@ export class ObjectKernel {
     }
 
     /**
-     * Clear all scoped service instances for a given scope (e.g., projectId).
+     * Clear all scoped service instances for a given scope (e.g., environmentId).
      * Releases driver connections and metadata caches for idle projects.
      */
     clearScope(scopeId: string): void {

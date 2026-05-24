@@ -1184,7 +1184,7 @@ describe('RestServer project-scoped routing', () => {
 
     const paths = rest.getRoutes().map(r => r.path);
     expect(paths).toContain('/api/v1/data/:object');
-    expect(paths.some(p => p.includes('/projects/:projectId'))).toBe(false);
+    expect(paths.some(p => p.includes('/environments/:environmentId'))).toBe(false);
   });
 
   it("registers both unscoped and scoped routes in 'auto' mode", () => {
@@ -1197,9 +1197,9 @@ describe('RestServer project-scoped routing', () => {
 
     const paths = rest.getRoutes().map(r => r.path);
     expect(paths).toContain('/api/v1/data/:object');
-    expect(paths).toContain('/api/v1/projects/:projectId/data/:object');
+    expect(paths).toContain('/api/v1/environments/:environmentId/data/:object');
     expect(paths).toContain('/api/v1/meta');
-    expect(paths).toContain('/api/v1/projects/:projectId/meta');
+    expect(paths).toContain('/api/v1/environments/:environmentId/meta');
   });
 
   it("only registers scoped routes in 'required' mode", () => {
@@ -1211,11 +1211,11 @@ describe('RestServer project-scoped routing', () => {
     rest.registerRoutes();
 
     const paths = rest.getRoutes().map(r => r.path);
-    expect(paths).toContain('/api/v1/projects/:projectId/data/:object');
+    expect(paths).toContain('/api/v1/environments/:environmentId/data/:object');
     expect(paths).not.toContain('/api/v1/data/:object');
   });
 
-  it('scoped CRUD handler forwards req.params.projectId into the protocol call', async () => {
+  it('scoped CRUD handler forwards req.params.environmentId into the protocol call', async () => {
     const server = createMockServer();
     const protocol = createMockProtocol();
     const rest = new RestServer(server as any, protocol as any, {
@@ -1225,21 +1225,21 @@ describe('RestServer project-scoped routing', () => {
 
     const listRoute = rest
       .getRoutes()
-      .find(r => r.path === '/api/v1/projects/:projectId/data/:object' && r.method === 'GET');
+      .find(r => r.path === '/api/v1/environments/:environmentId/data/:object' && r.method === 'GET');
     expect(listRoute).toBeDefined();
 
     const res = { json: vi.fn(), status: vi.fn().mockReturnThis() };
     await listRoute!.handler(
-      { params: { projectId: 'proj-123', object: 'task' }, query: {} },
+      { params: { environmentId: 'proj-123', object: 'task' }, query: {} },
       res,
     );
 
     expect(protocol.findData).toHaveBeenCalledWith(
-      expect.objectContaining({ object: 'task', projectId: 'proj-123' }),
+      expect.objectContaining({ object: 'task', environmentId: 'proj-123' }),
     );
   });
 
-  it('unscoped handler in auto mode does NOT set projectId on the protocol call', async () => {
+  it('unscoped handler in auto mode does NOT set environmentId on the protocol call', async () => {
     const server = createMockServer();
     const protocol = createMockProtocol();
     const rest = new RestServer(server as any, protocol as any, {
@@ -1259,13 +1259,13 @@ describe('RestServer project-scoped routing', () => {
     );
 
     expect(protocol.findData).toHaveBeenCalledWith(
-      expect.not.objectContaining({ projectId: expect.anything() }),
+      expect.not.objectContaining({ environmentId: expect.anything() }),
     );
   });
 });
 
 // ---------------------------------------------------------------------------
-// resolveProtocol resolution chain — hostname, X-Project-Id header,
+// resolveProtocol resolution chain — hostname, X-Environment-Id header,
 // default fallback, control-plane.
 // ---------------------------------------------------------------------------
 
@@ -1308,7 +1308,7 @@ describe('RestServer.resolveProtocol', () => {
     const projectKernel = makeKernel('proj_a');
     const f = makeFixture({
       envRegistry: {
-        resolveByHostname: vi.fn().mockResolvedValue({ projectId: 'proj_a' }),
+        resolveByHostname: vi.fn().mockResolvedValue({ environmentId: 'proj_a' }),
         resolveById: vi.fn(),
       },
       kernels: { proj_a: projectKernel },
@@ -1320,7 +1320,7 @@ describe('RestServer.resolveProtocol', () => {
     expect(f.kernelManager.getOrCreate).toHaveBeenCalledWith('proj_a');
   });
 
-  it('routes via X-Project-Id header when hostname resolution fails', async () => {
+  it('routes via X-Environment-Id header when hostname resolution fails', async () => {
     const projectKernel = makeKernel('proj_b');
     const resolveById = vi.fn().mockResolvedValue({ /* truthy driver */ });
     const f = makeFixture({
@@ -1331,14 +1331,14 @@ describe('RestServer.resolveProtocol', () => {
       kernels: { proj_b: projectKernel },
     });
     const result = await (f.rest as any).resolveProtocol(undefined, {
-      headers: { host: 'unknown.example.com', 'x-project-id': 'proj_b' },
+      headers: { host: 'unknown.example.com', 'x-environment-id': 'proj_b' },
     });
     expect(result).toBe(projectKernel.__projectProtocol);
     expect(resolveById).toHaveBeenCalledWith('proj_b');
     expect(f.kernelManager.getOrCreate).toHaveBeenCalledWith('proj_b');
   });
 
-  it('reads X-Project-Id from Fetch-style headers.get()', async () => {
+  it('reads X-Environment-Id from Fetch-style headers.get()', async () => {
     const projectKernel = makeKernel('proj_c');
     const resolveById = vi.fn().mockResolvedValue({});
     const f = makeFixture({
@@ -1348,7 +1348,7 @@ describe('RestServer.resolveProtocol', () => {
       },
       kernels: { proj_c: projectKernel },
     });
-    const headers = new Map<string, string>([['x-project-id', 'proj_c']]);
+    const headers = new Map<string, string>([['x-environment-id', 'proj_c']]);
     const fetchHeaders = {
       get: (k: string) => headers.get(k.toLowerCase()) ?? null,
     };
@@ -1359,7 +1359,7 @@ describe('RestServer.resolveProtocol', () => {
     expect(resolveById).toHaveBeenCalledWith('proj_c');
   });
 
-  it('ignores X-Project-Id when envRegistry rejects the id', async () => {
+  it('ignores X-Environment-Id when envRegistry rejects the id', async () => {
     const f = makeFixture({
       envRegistry: {
         resolveByHostname: vi.fn().mockResolvedValue(null),
@@ -1369,13 +1369,13 @@ describe('RestServer.resolveProtocol', () => {
       defaultProvider: () => undefined,
     });
     const result = await (f.rest as any).resolveProtocol(undefined, {
-      headers: { 'x-project-id': 'proj_bogus' },
+      headers: { 'x-environment-id': 'proj_bogus' },
     });
     expect(result).toBe(f.controlProtocol);
     expect(f.kernelManager.getOrCreate).not.toHaveBeenCalled();
   });
 
-  it('falls back to defaultProjectIdProvider when host & header miss', async () => {
+  it('falls back to defaultEnvironmentIdProvider when host & header miss', async () => {
     const projectKernel = makeKernel('proj_local');
     const f = makeFixture({
       envRegistry: {
@@ -1401,7 +1401,7 @@ describe('RestServer.resolveProtocol', () => {
       defaultProvider: () => undefined,
     });
     const result = await (f.rest as any).resolveProtocol(undefined, {
-      headers: { host: 'localhost', 'x-project-id': 'proj_unknown' },
+      headers: { host: 'localhost', 'x-environment-id': 'proj_unknown' },
     });
     expect(result).toBe(f.controlProtocol);
     expect(f.kernelManager.getOrCreate).not.toHaveBeenCalled();
@@ -1416,7 +1416,7 @@ describe('RestServer.resolveProtocol', () => {
       defaultProvider: () => 'proj_local',
     });
     const result = await (f.rest as any).resolveProtocol('platform', {
-      headers: { 'x-project-id': 'proj_local' },
+      headers: { 'x-environment-id': 'proj_local' },
     });
     expect(result).toBe(f.controlProtocol);
     expect(f.kernelManager.getOrCreate).not.toHaveBeenCalled();

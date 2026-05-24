@@ -1,6 +1,6 @@
 ---
-title: Project Artifact
-description: Project Artifact protocol schemas
+title: Environment Artifact
+description: Environment Artifact protocol schemas
 ---
 
 {/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
@@ -42,22 +42,22 @@ signed URL). The envelope shape preserves room for that indirection without
 a breaking schema bump.
 
 <Callout type="info">
-**Source:** `packages/spec/src/system/project-artifact.zod.ts`
+**Source:** `packages/spec/src/system/environment-artifact.zod.ts`
 </Callout>
 
 ## TypeScript Usage
 
 ```typescript
-import { ProjectArtifact, ProjectArtifactChecksum, ProjectArtifactFunction, ProjectArtifactFunctionLanguageEnum, ProjectArtifactHashAlgorithmEnum, ProjectArtifactManifest, ProjectArtifactMetadata, ProjectArtifactPayloadRef, ProjectArtifactRequirement } from '@objectstack/spec/system';
-import type { ProjectArtifact, ProjectArtifactChecksum, ProjectArtifactFunction, ProjectArtifactFunctionLanguageEnum, ProjectArtifactHashAlgorithmEnum, ProjectArtifactManifest, ProjectArtifactMetadata, ProjectArtifactPayloadRef, ProjectArtifactRequirement } from '@objectstack/spec/system';
+import { EnvironmentArtifact, EnvironmentArtifactChecksum, EnvironmentArtifactFunction, EnvironmentArtifactFunctionLanguageEnum, EnvironmentArtifactHashAlgorithmEnum, EnvironmentArtifactManifest, EnvironmentArtifactMetadata, EnvironmentArtifactPayloadRef, EnvironmentArtifactRequirement } from '@objectstack/spec/system';
+import type { EnvironmentArtifact, EnvironmentArtifactChecksum, EnvironmentArtifactFunction, EnvironmentArtifactFunctionLanguageEnum, EnvironmentArtifactHashAlgorithmEnum, EnvironmentArtifactManifest, EnvironmentArtifactMetadata, EnvironmentArtifactPayloadRef, EnvironmentArtifactRequirement } from '@objectstack/spec/system';
 
 // Validate data
-const result = ProjectArtifact.parse(data);
+const result = EnvironmentArtifact.parse(data);
 ```
 
 ---
 
-## ProjectArtifact
+## EnvironmentArtifact
 
 ObjectStack Project Artifact envelope (v0)
 
@@ -66,7 +66,7 @@ ObjectStack Project Artifact envelope (v0)
 | Property | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | **schemaVersion** | `string` | ✅ | Project artifact envelope schema version |
-| **projectId** | `string` | ✅ | Project identifier (control-plane scoped) |
+| **environmentId** | `string` | ✅ | Project identifier (control-plane scoped) |
 | **commitId** | `string` | ✅ | Content-addressable revision id |
 | **checksum** | `Object` | ✅ | Artifact integrity checksum |
 | **builtAt** | `string` | optional | ISO-8601 timestamp of when the artifact was built |
@@ -79,7 +79,7 @@ ObjectStack Project Artifact envelope (v0)
 
 ---
 
-## ProjectArtifactChecksum
+## EnvironmentArtifactChecksum
 
 Artifact integrity checksum
 
@@ -93,7 +93,7 @@ Artifact integrity checksum
 
 ---
 
-## ProjectArtifactFunction
+## EnvironmentArtifactFunction
 
 A single inlined function
 
@@ -110,7 +110,7 @@ A single inlined function
 
 ---
 
-## ProjectArtifactFunctionLanguageEnum
+## EnvironmentArtifactFunctionLanguageEnum
 
 Source language of the function code
 
@@ -122,7 +122,7 @@ Source language of the function code
 
 ---
 
-## ProjectArtifactHashAlgorithmEnum
+## EnvironmentArtifactHashAlgorithmEnum
 
 Hash algorithm used for the artifact checksum
 
@@ -135,7 +135,7 @@ Hash algorithm used for the artifact checksum
 
 ---
 
-## ProjectArtifactManifest
+## EnvironmentArtifactManifest
 
 Plugin/driver requirements baked into the artifact
 
@@ -150,7 +150,7 @@ Plugin/driver requirements baked into the artifact
 
 ---
 
-## ProjectArtifactMetadata
+## EnvironmentArtifactMetadata
 
 Compiled project metadata grouped by category
 
@@ -184,7 +184,7 @@ Compiled project metadata grouped by category
 
 ---
 
-## ProjectArtifactPayloadRef
+## EnvironmentArtifactPayloadRef
 
 Out-of-band payload reference (reserved for future use)
 
@@ -199,7 +199,7 @@ Out-of-band payload reference (reserved for future use)
 
 ---
 
-## ProjectArtifactRequirement
+## EnvironmentArtifactRequirement
 
 A plugin or driver dependency declaration
 

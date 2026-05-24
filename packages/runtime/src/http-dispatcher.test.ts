@@ -1338,7 +1338,7 @@ describe('HttpDispatcher', () => {
     // ------------------------------------------------------------------
     // Phase 2 — URL-param project resolution
     // ------------------------------------------------------------------
-    describe('resolveEnvironmentContext — URL-param projectId', () => {
+    describe('resolveEnvironmentContext — URL-param environmentId', () => {
         let envDispatcher: HttpDispatcher;
         let envRegistry: any;
 
@@ -1350,7 +1350,7 @@ describe('HttpDispatcher', () => {
             envDispatcher = new HttpDispatcher(kernel, envRegistry);
         });
 
-        it('resolves projectId from /projects/:id/... path before hostname / header', async () => {
+        it('resolves environmentId from /projects/:id/... path before hostname / header', async () => {
             envRegistry.resolveById = vi.fn().mockResolvedValue({ name: 'driver-for-proj-123' });
 
             const context: any = { request: { headers: { host: 'anyhost' } } };
@@ -1358,28 +1358,28 @@ describe('HttpDispatcher', () => {
             // triggers resolveEnvironmentContext with the given path.
             await (envDispatcher as any).resolveEnvironmentContext(
                 context,
-                '/api/v1/projects/proj-123/data/task',
+                '/api/v1/environments/proj-123/data/task',
             );
 
             expect(envRegistry.resolveById).toHaveBeenCalledWith('proj-123');
-            expect(context.projectId).toBe('proj-123');
+            expect(context.environmentId).toBe('proj-123');
             expect(context.dataDriver).toEqual({ name: 'driver-for-proj-123' });
             // Hostname path should NOT have been tried.
             expect(envRegistry.resolveByHostname).not.toHaveBeenCalled();
         });
 
-        it('does not treat /cloud/projects/:id as a scoping prefix', async () => {
+        it('does not treat /cloud/environments/:id as a scoping prefix', async () => {
             envRegistry.resolveById = vi.fn().mockResolvedValue({ name: 'wrong' });
 
             const context: any = { request: { headers: {} } };
             await (envDispatcher as any).resolveEnvironmentContext(
                 context,
-                '/api/v1/cloud/projects/proj-123',
+                '/api/v1/cloud/environments/proj-123',
             );
 
             // /cloud is explicitly skipped.
             expect(envRegistry.resolveById).not.toHaveBeenCalled();
-            expect(context.projectId).toBeUndefined();
+            expect(context.environmentId).toBeUndefined();
         });
 
         it('falls through to header resolution when URL-param project is unknown', async () => {
@@ -1388,21 +1388,21 @@ describe('HttpDispatcher', () => {
                 .mockResolvedValueOnce({ name: 'header-driver' }); // header lookup succeeds
 
             const context: any = {
-                request: { headers: { 'x-project-id': 'proj-header' } },
+                request: { headers: { 'x-environment-id': 'proj-header' } },
             };
             await (envDispatcher as any).resolveEnvironmentContext(
                 context,
-                '/api/v1/projects/proj-unknown/data/task',
+                '/api/v1/environments/proj-unknown/data/task',
             );
 
             expect(envRegistry.resolveById).toHaveBeenNthCalledWith(1, 'proj-unknown');
             expect(envRegistry.resolveById).toHaveBeenNthCalledWith(2, 'proj-header');
-            expect(context.projectId).toBe('proj-header');
+            expect(context.environmentId).toBe('proj-header');
         });
     });
 
     describe('enforceProjectMembership (RBAC)', () => {
-        const SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
+        const SYSTEM_ENVIRONMENT_ID = '00000000-0000-0000-0000-000000000001';
         const PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
         function buildDispatcher(opts: {
@@ -1454,10 +1454,10 @@ describe('HttpDispatcher', () => {
                 userId: 'user-1',
                 orgId: 'org-tenant',
             });
-            const ctx: any = { request: { headers: {} }, projectId: 'proj-private' };
+            const ctx: any = { request: { headers: {} }, environmentId: 'proj-private' };
             const result = await (d as any).enforceProjectMembership(
                 ctx,
-                '/api/v1/projects/proj-private/data/task',
+                '/api/v1/environments/proj-private/data/task',
             );
             expect(result).not.toBeNull();
             expect(result.status).toBe(403);
@@ -1473,10 +1473,10 @@ describe('HttpDispatcher', () => {
                 userId: 'user-1',
                 orgId: 'org-tenant',
             });
-            const ctx: any = { request: { headers: {} }, projectId: SYSTEM_PROJECT_ID };
+            const ctx: any = { request: { headers: {} }, environmentId: SYSTEM_ENVIRONMENT_ID };
             const result = await (d as any).enforceProjectMembership(
                 ctx,
-                `/api/v1/projects/${SYSTEM_PROJECT_ID}/meta`,
+                `/api/v1/environments/${SYSTEM_ENVIRONMENT_ID}/meta`,
             );
             expect(result).toBeNull();
             expect(memberQL.find).not.toHaveBeenCalled();
@@ -1488,10 +1488,10 @@ describe('HttpDispatcher', () => {
                 userId: 'staff-1',
                 orgId: PLATFORM_ORG_ID,
             });
-            const ctx: any = { request: { headers: {} }, projectId: 'proj-any' };
+            const ctx: any = { request: { headers: {} }, environmentId: 'proj-any' };
             const result = await (d as any).enforceProjectMembership(
                 ctx,
-                '/api/v1/projects/proj-any/data/task',
+                '/api/v1/environments/proj-any/data/task',
             );
             expect(result).toBeNull();
             expect(memberQL.find).not.toHaveBeenCalled();
@@ -1503,18 +1503,18 @@ describe('HttpDispatcher', () => {
                 userId: 'user-1',
                 orgId: 'org-tenant',
             });
-            const ctx: any = { request: { headers: {} }, projectId: 'proj-a' };
+            const ctx: any = { request: { headers: {} }, environmentId: 'proj-a' };
 
             const r1 = await (d as any).enforceProjectMembership(
                 ctx,
-                '/api/v1/projects/proj-a/data/task',
+                '/api/v1/environments/proj-a/data/task',
             );
             expect(r1).toBeNull();
             expect(memberQL.find).toHaveBeenCalledTimes(1);
 
             const r2 = await (d as any).enforceProjectMembership(
                 ctx,
-                '/api/v1/projects/proj-a/data/task',
+                '/api/v1/environments/proj-a/data/task',
             );
             expect(r2).toBeNull();
             expect(memberQL.find).toHaveBeenCalledTimes(1);
@@ -1527,10 +1527,10 @@ describe('HttpDispatcher', () => {
                 orgId: 'org-tenant',
                 enforce: false,
             });
-            const ctx: any = { request: { headers: {} }, projectId: 'proj-any' };
+            const ctx: any = { request: { headers: {} }, environmentId: 'proj-any' };
             const result = await (d as any).enforceProjectMembership(
                 ctx,
-                '/api/v1/projects/proj-any/data/task',
+                '/api/v1/environments/proj-any/data/task',
             );
             expect(result).toBeNull();
             expect(memberQL.find).not.toHaveBeenCalled();

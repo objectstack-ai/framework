@@ -4,8 +4,8 @@
  * Shared artifact loader used by every code path that boots a kernel
  * from an `objectstack build` artifact:
  *
- *   - `FsAppBundleResolver`         — cloud / multi-project file binding
- *   - `runtime-stack.ts:basePlugins` — single-project local boot
+ *   - `FsAppBundleResolver`         — cloud / multi-environment file binding
+ *   - `runtime-stack.ts:basePlugins` — single-environment local boot
  *   - `StandaloneStack`              — `objectstack serve --standalone`
  *   - `http-dispatcher.ts`           — in-flight artifact rebind
  *

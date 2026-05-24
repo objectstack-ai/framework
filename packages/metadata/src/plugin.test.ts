@@ -73,7 +73,7 @@ describe('MetadataPlugin._parseAndRegisterArtifact — view name resolution (PR-
         const plugin = new MetadataPlugin({
             watch: false,
             config: { bootstrap: 'eager' },
-            projectId: 'proj_test',
+            environmentId: 'proj_test',
         });
         const mgr = (plugin as any).manager as NodeMetadataManager;
 

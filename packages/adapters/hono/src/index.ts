@@ -49,15 +49,15 @@ export interface ObjectStackHonoOptions {
   /**
    * Optional {@link KernelManager}. When provided, the dispatcher will route
    * per-project requests to a project-scoped kernel resolved via
-   * `kernelManager.getOrCreate(projectId)`. When absent (self-hosted mode),
+   * `kernelManager.getOrCreate(environmentId)`. When absent (self-hosted mode),
    * all requests use the single `kernel` passed above.
    */
   kernelManager?: KernelManager;
   /**
    * Optional {@link EnvironmentDriverRegistry}. When provided, the dispatcher
-   * resolves incoming requests to a project via hostname / `X-Project-Id`
+   * resolves incoming requests to a project via hostname / `X-Environment-Id`
    * header / session before invoking the KernelManager. Required for
-   * host-based routing in cloud / multi-project mode.
+   * host-based routing in cloud / multi-environment mode.
    */
   envRegistry?: EnvironmentDriverRegistry;
 }
@@ -173,7 +173,7 @@ export function createHonoApp(options: ObjectStackHonoOptions): Hono {
       app.use('*', cors({
         origin: origin as any,
         allowMethods: corsOpts.methods || ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'],
-        allowHeaders: corsOpts.allowHeaders || ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID', 'X-Project-Id'],
+        allowHeaders: corsOpts.allowHeaders || ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Tenant-ID', 'X-Environment-Id'],
         exposeHeaders,
         credentials,
         maxAge,

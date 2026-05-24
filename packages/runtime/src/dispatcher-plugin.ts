@@ -27,9 +27,9 @@ export interface DispatcherPluginConfig {
      * routes stay in lockstep with /data and /meta.
      *
      * When `enableProjectScoping` is true and `projectResolution` is:
-     *   - `required` — only `/projects/:projectId/...` variants are registered.
+     *   - `required` — only `/environments/:environmentId/...` variants are registered.
      *   - `optional` / `auto` — both unscoped and scoped variants are registered
-     *     (the scoped handler forwards `req.params.projectId` into context).
+     *     (the scoped handler forwards `req.params.environmentId` into context).
      */
     scoping?: {
         enableProjectScoping?: boolean;
@@ -37,7 +37,7 @@ export interface DispatcherPluginConfig {
     };
 
     /**
-     * Enforce per-project membership (`sys_project_member`) on scoped
+     * Enforce per-project membership (`sys_environment_member`) on scoped
      * data-plane routes. Returns 403 for non-members unless they are
      * staff (platform org) or the project is the well-known system
      * project.
@@ -310,7 +310,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             if (!server) return;
 
             const kernel = ctx.getKernel();
-            // Default: enable membership enforcement iff project-scoping is on.
+            // Default: enable membership enforcement iff environment-scoping is on.
             // Tests / single-tenant deploys can opt out via the explicit flag.
             const enforceMembership =
                 config.enforceProjectMembership ?? (config.scoping?.enableProjectScoping ?? false);
@@ -583,7 +583,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.get(`${prefix}/cloud/projects`, async (req: any, res: any) => {
+            server.get(`${prefix}/cloud/environments`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud('/projects', 'GET', {}, req.query, { request: req });
                     sendResult(result, res);
@@ -592,7 +592,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud('/projects', 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -601,7 +601,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.get(`${prefix}/cloud/projects/:id`, async (req: any, res: any) => {
+            server.get(`${prefix}/cloud/environments/:id`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}`, 'GET', {}, req.query, { request: req });
                     sendResult(result, res);
@@ -610,7 +610,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.patch(`${prefix}/cloud/projects/:id`, async (req: any, res: any) => {
+            server.patch(`${prefix}/cloud/environments/:id`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}`, 'PATCH', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -619,7 +619,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.delete(`${prefix}/cloud/projects/:id`, async (req: any, res: any) => {
+            server.delete(`${prefix}/cloud/environments/:id`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}`, 'DELETE', {}, req.query, { request: req });
                     sendResult(result, res);
@@ -637,7 +637,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/hostname`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/hostname`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/hostname`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -646,7 +646,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.put(`${prefix}/cloud/projects/:id/hostname`, async (req: any, res: any) => {
+            server.put(`${prefix}/cloud/environments/:id/hostname`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/hostname`, 'PUT', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -655,7 +655,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/rotate-credential`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/rotate-credential`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/rotate-credential`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -665,7 +665,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             });
 
             // Alias expected by @objectstack/client: POST /projects/:id/credentials/rotate
-            server.post(`${prefix}/cloud/projects/:id/credentials/rotate`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/credentials/rotate`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/credentials/rotate`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -674,7 +674,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/activate`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/activate`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/activate`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -683,7 +683,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/retry`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/retry`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/retry`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -692,7 +692,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.get(`${prefix}/cloud/projects/:id/members`, async (req: any, res: any) => {
+            server.get(`${prefix}/cloud/environments/:id/members`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members`, 'GET', {}, req.query, { request: req });
                     sendResult(result, res);
@@ -701,7 +701,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/members`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/members`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -710,7 +710,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.patch(`${prefix}/cloud/projects/:id/members/:memberId`, async (req: any, res: any) => {
+            server.patch(`${prefix}/cloud/environments/:id/members/:memberId`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members/${req.params.memberId}`, 'PATCH', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -719,7 +719,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.delete(`${prefix}/cloud/projects/:id/members/:memberId`, async (req: any, res: any) => {
+            server.delete(`${prefix}/cloud/environments/:id/members/:memberId`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/members/${req.params.memberId}`, 'DELETE', req.body ?? {}, {}, { request: req });
                     sendResult(result, res);
@@ -729,7 +729,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             });
 
             // ── Cloud — Per-project packages ─────────────────────────────────
-            server.get(`${prefix}/cloud/projects/:id/packages`, async (req: any, res: any) => {
+            server.get(`${prefix}/cloud/environments/:id/packages`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages`, 'GET', {}, req.query, { request: req });
                     sendResult(result, res);
@@ -738,7 +738,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/packages`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/packages`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -747,7 +747,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.get(`${prefix}/cloud/projects/:id/packages/:pkgId`, async (req: any, res: any) => {
+            server.get(`${prefix}/cloud/environments/:id/packages/:pkgId`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages/${req.params.pkgId}`, 'GET', {}, req.query, { request: req });
                     sendResult(result, res);
@@ -756,7 +756,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.delete(`${prefix}/cloud/projects/:id/packages/:pkgId`, async (req: any, res: any) => {
+            server.delete(`${prefix}/cloud/environments/:id/packages/:pkgId`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages/${req.params.pkgId}`, 'DELETE', {}, {}, { request: req });
                     sendResult(result, res);
@@ -765,7 +765,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.patch(`${prefix}/cloud/projects/:id/packages/:pkgId/enable`, async (req: any, res: any) => {
+            server.patch(`${prefix}/cloud/environments/:id/packages/:pkgId/enable`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages/${req.params.pkgId}/enable`, 'PATCH', {}, {}, { request: req });
                     sendResult(result, res);
@@ -774,7 +774,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.patch(`${prefix}/cloud/projects/:id/packages/:pkgId/disable`, async (req: any, res: any) => {
+            server.patch(`${prefix}/cloud/environments/:id/packages/:pkgId/disable`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages/${req.params.pkgId}/disable`, 'PATCH', {}, {}, { request: req });
                     sendResult(result, res);
@@ -783,7 +783,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
-            server.post(`${prefix}/cloud/projects/:id/packages/:pkgId/upgrade`, async (req: any, res: any) => {
+            server.post(`${prefix}/cloud/environments/:id/packages/:pkgId/upgrade`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handleCloud(`/projects/${req.params.id}/packages/${req.params.pkgId}/upgrade`, 'POST', req.body, {}, { request: req });
                     sendResult(result, res);
@@ -848,7 +848,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
 
             // ── Automation ──────────────────────────────────────────────
             // Registered at both `${prefix}/automation/...` and
-            // `${prefix}/projects/:projectId/automation/...` when project
+            // `${prefix}/environments/:environmentId/automation/...` when project
             // scoping is enabled. Always dispatched through
             // `dispatcher.dispatch()` so the multi-kernel host can swap
             // to the per-project kernel before resolving the
@@ -987,7 +987,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 server!.post(`${base}/actions/:object/:action`, async (req: any, res: any) => {
                     try {
                         const ctx: any = { request: req };
-                        if (req.params?.projectId) ctx.projectId = req.params.projectId;
+                        if (req.params?.environmentId) ctx.environmentId = req.params.environmentId;
                         const result = await dispatcher.handleActions(`/${req.params.object}/${req.params.action}`, 'POST', req.body, ctx);
                         sendResult(result, res);
                     } catch (err: any) {
@@ -997,7 +997,7 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 server!.post(`${base}/actions/:object/:action/:recordId`, async (req: any, res: any) => {
                     try {
                         const ctx: any = { request: req };
-                        if (req.params?.projectId) ctx.projectId = req.params.projectId;
+                        if (req.params?.environmentId) ctx.environmentId = req.params.environmentId;
                         const result = await dispatcher.handleActions(`/${req.params.object}/${req.params.action}/${req.params.recordId}`, 'POST', req.body, ctx);
                         sendResult(result, res);
                     } catch (err: any) {
@@ -1010,17 +1010,17 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             const projectResolution = config.scoping?.projectResolution ?? 'auto';
 
             if (enableProjectScoping && projectResolution === 'required') {
-                registerAutomationRoutes(`${prefix}/projects/:projectId`);
-                registerActionRoutes(`${prefix}/projects/:projectId`);
-                registerAIRoutes(`${prefix}/projects/:projectId`);
+                registerAutomationRoutes(`${prefix}/environments/:environmentId`);
+                registerActionRoutes(`${prefix}/environments/:environmentId`);
+                registerAIRoutes(`${prefix}/environments/:environmentId`);
             } else {
                 registerAutomationRoutes(prefix);
                 registerActionRoutes(prefix);
                 registerAIRoutes(prefix);
                 if (enableProjectScoping) {
-                    registerAutomationRoutes(`${prefix}/projects/:projectId`);
-                    registerActionRoutes(`${prefix}/projects/:projectId`);
-                    registerAIRoutes(`${prefix}/projects/:projectId`);
+                    registerAutomationRoutes(`${prefix}/environments/:environmentId`);
+                    registerActionRoutes(`${prefix}/environments/:environmentId`);
+                    registerAIRoutes(`${prefix}/environments/:environmentId`);
                 }
             }
 
@@ -1030,17 +1030,17 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
             // Listen for route definitions emitted by service plugins.
             // The AIServicePlugin emits 'ai:routes' with RouteDefinition[].
             //
-            // When project-scoping is enabled, each AI route is mounted on
-            // BOTH `${prefix}${path}` and `${prefix}/projects/:projectId${path}`
+            // When environment-scoping is enabled, each AI route is mounted on
+            // BOTH `${prefix}${path}` and `${prefix}/environments/:environmentId${path}`
             // (or only the scoped variant when `projectResolution === 'required'`).
             const toScopedPath = (routePath: string): string => {
-                // routePath may already include /api/v1; splice /projects/:projectId
+                // routePath may already include /api/v1; splice /environments/:environmentId
                 // after the `${prefix}` portion to produce the scoped variant.
                 if (routePath.startsWith(prefix)) {
                     const tail = routePath.slice(prefix.length);
-                    return `${prefix}/projects/:projectId${tail}`;
+                    return `${prefix}/environments/:environmentId${tail}`;
                 }
-                return `/projects/:projectId${routePath}`;
+                return `/environments/:environmentId${routePath}`;
             };
 
             const mountAiRoute = (route: RouteDefinition) => {

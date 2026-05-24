@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { describe, it, expect, vi } from 'vitest';
-import { KernelManager, type ProjectKernelFactory } from './kernel-manager.js';
+import { KernelManager, type EnvironmentKernelFactory } from './kernel-manager.js';
 
 /** Build a stub "kernel" with a spy-able `shutdown()` — KernelManager only uses `.shutdown()`. */
 function makeStubKernel() {
@@ -9,18 +9,18 @@ function makeStubKernel() {
 }
 
 /**
- * Build a ProjectKernelFactory whose `create()` returns a fresh stub kernel per
+ * Build a EnvironmentKernelFactory whose `create()` returns a fresh stub kernel per
  * invocation. Optional `delayMs` lets us simulate concurrent in-flight builds.
  */
 function makeFactory(opts: { delayMs?: number } = {}) {
   const calls: string[] = [];
   const kernels = new Map<string, any>();
-  const factory: ProjectKernelFactory = {
-    create: vi.fn(async (projectId: string) => {
-      calls.push(projectId);
+  const factory: EnvironmentKernelFactory = {
+    create: vi.fn(async (environmentId: string) => {
+      calls.push(environmentId);
       if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
       const k = makeStubKernel();
-      kernels.set(`${projectId}#${calls.filter((c) => c === projectId).length}`, k);
+      kernels.set(`${environmentId}#${calls.filter((c) => c === environmentId).length}`, k);
       return k;
     }),
   };
@@ -113,7 +113,7 @@ describe('KernelManager', () => {
   });
 
   it('swallows kernel.shutdown() errors and logs them', async () => {
-    const factory: ProjectKernelFactory = {
+    const factory: EnvironmentKernelFactory = {
       create: vi.fn(async () => ({
         shutdown: vi.fn().mockRejectedValue(new Error('boom')),
       }) as any),

@@ -137,7 +137,7 @@ describe('SeedLoaderService', () => {
           name: 'task',
           fields: {
             name: { type: 'text' },
-            project_id: { type: 'master_detail', reference: 'project' },
+            environment_id: { type: 'master_detail', reference: 'project' },
           },
         },
       });

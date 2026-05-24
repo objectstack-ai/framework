@@ -21,17 +21,17 @@ type IDataDriver = Contracts.IDataDriver;
 
 export interface EnvironmentDriverRegistry {
     /** Resolve a project by hostname. Returns `null` when unknown. */
-    resolveByHostname(host: string): Promise<{ projectId: string; driver: IDataDriver } | null>;
+    resolveByHostname(host: string): Promise<{ environmentId: string; driver: IDataDriver } | null>;
 
     /** Resolve a project's driver by ID. Returns `null` when unknown. */
-    resolveById(projectId: string): Promise<IDataDriver | null>;
+    resolveById(environmentId: string): Promise<IDataDriver | null>;
 
     /**
      * Look up the cached project row + driver by ID without triggering a
      * remote/file fetch. Returns the full cached entry when fresh.
      */
-    peekById(projectId: string): { projectId: string; driver: IDataDriver; project: any } | null;
+    peekById(environmentId: string): { environmentId: string; driver: IDataDriver; project: any } | null;
 
     /** Drop cached entries for the given project. */
-    invalidate(projectId: string): void;
+    invalidate(environmentId: string): void;
 }

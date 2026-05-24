@@ -195,13 +195,13 @@ export class MetadataManager implements IMetadataService {
    *
    * @param driver - An IDataDriver instance for database operations
    * @param organizationId - Organization ID for multi-tenant isolation
-   * @param projectId - Project ID (undefined = platform-global)
+   * @param environmentId - Project ID (undefined = platform-global)
    */
-  setDatabaseDriver(driver: IDataDriver, organizationId?: string, projectId?: string): void {
-    if (projectId !== undefined) {
+  setDatabaseDriver(driver: IDataDriver, organizationId?: string, environmentId?: string): void {
+    if (environmentId !== undefined) {
       this.logger.info('Project kernel — skipping DatabaseLoader for sys_metadata (control-plane only)', {
         organizationId,
-        projectId,
+        environmentId,
       });
       return;
     }
@@ -210,7 +210,7 @@ export class MetadataManager implements IMetadataService {
       driver,
       tableName,
       organizationId,
-      projectId,
+      environmentId,
       cache: this.config.cache?.databaseLoader,
     });
     this.registerLoader(dbLoader);
@@ -225,13 +225,13 @@ export class MetadataManager implements IMetadataService {
    *
    * @param engine - An IDataEngine instance (typically the ObjectQL service)
    * @param organizationId - Organization ID for multi-tenant isolation
-   * @param projectId - Project ID (undefined = platform-global)
+   * @param environmentId - Project ID (undefined = platform-global)
    */
-  setDataEngine(engine: IDataEngine, organizationId?: string, projectId?: string): void {
-    if (projectId !== undefined) {
+  setDataEngine(engine: IDataEngine, organizationId?: string, environmentId?: string): void {
+    if (environmentId !== undefined) {
       this.logger.info('Project kernel — skipping DatabaseLoader for sys_metadata (control-plane only)', {
         organizationId,
-        projectId,
+        environmentId,
       });
       return;
     }
@@ -240,7 +240,7 @@ export class MetadataManager implements IMetadataService {
       engine,
       tableName,
       organizationId,
-      projectId,
+      environmentId,
       cache: this.config.cache?.databaseLoader,
     });
     this.registerLoader(dbLoader);

@@ -6,11 +6,11 @@
  *
  * Mirrors {@link DefaultEnvironmentDriverRegistry} from `environment-registry.ts`
  * but does **not** read from a local control-plane database. Hostname →
- * projectId resolution and per-project runtime config (database URL /
+ * environmentId resolution and per-project runtime config (database URL /
  * driver) come from the control plane API.
  *
  * The cached `project` payload exposed by `peekById()` is shaped to look
- * like a `sys_project` row so callers downstream (notably
+ * like a `sys_environment` row so callers downstream (notably
  * `ArtifactKernelFactory`) can read `id`, `organization_id`,
  * `database_url` and `database_driver` without branching.
  */
@@ -18,12 +18,12 @@
 import type * as Contracts from '@objectstack/spec/contracts';
 import { resolve as resolvePathNode } from 'node:path';
 import type { EnvironmentDriverRegistry } from './environment-registry.js';
-import type { ArtifactApiClient, ProjectRuntimeConfig } from './artifact-api-client.js';
+import type { ArtifactApiClient, EnvironmentRuntimeConfig } from './artifact-api-client.js';
 
 type IDataDriver = Contracts.IDataDriver;
 
 interface CacheEntry {
-    projectId: string;
+    environmentId: string;
     driver: IDataDriver;
     project: any;
     expiresAt: number;
@@ -52,25 +52,25 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
         this.logger = config.logger ?? console;
     }
 
-    async resolveByHostname(host: string): Promise<{ projectId: string; driver: IDataDriver } | null> {
+    async resolveByHostname(host: string): Promise<{ environmentId: string; driver: IDataDriver } | null> {
         const cached = this.hostnameCache.get(host);
         if (cached && cached.expiresAt > Date.now()) {
-            return { projectId: cached.projectId, driver: cached.driver };
+            return { environmentId: cached.environmentId, driver: cached.driver };
         }
         const key = `host:${host}`;
         const inflight = this.pending.get(key);
         if (inflight) {
             const result = await inflight;
-            return result ? { projectId: result.projectId, driver: result.driver } : null;
+            return result ? { environmentId: result.environmentId, driver: result.driver } : null;
         }
         const promise = (async (): Promise<CacheEntry | null> => {
             try {
                 const resolved = await this.client.resolveHostname(host);
                 if (!resolved) return null;
-                const entry = await this.buildCacheEntry(resolved.projectId, resolved.runtime, resolved.organizationId, host);
+                const entry = await this.buildCacheEntry(resolved.environmentId, resolved.runtime, resolved.organizationId, host);
                 if (!entry) return null;
                 this.hostnameCache.set(host, entry);
-                this.idCache.set(entry.projectId, entry);
+                this.idCache.set(entry.environmentId, entry);
                 return entry;
             } catch (err: any) {
                 this.logger.error?.('[ArtifactEnvironmentRegistry] resolveByHostname failed', {
@@ -84,14 +84,14 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
         })();
         this.pending.set(key, promise);
         const entry = await promise;
-        return entry ? { projectId: entry.projectId, driver: entry.driver } : null;
+        return entry ? { environmentId: entry.environmentId, driver: entry.driver } : null;
     }
 
-    async resolveById(projectId: string): Promise<IDataDriver | null> {
-        const cached = this.idCache.get(projectId);
+    async resolveById(environmentId: string): Promise<IDataDriver | null> {
+        const cached = this.idCache.get(environmentId);
         if (cached && cached.expiresAt > Date.now()) return cached.driver;
 
-        const key = `id:${projectId}`;
+        const key = `id:${environmentId}`;
         const inflight = this.pending.get(key);
         if (inflight) {
             const result = await inflight;
@@ -99,14 +99,14 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
         }
         const promise = (async (): Promise<CacheEntry | null> => {
             try {
-                const entry = await this.buildCacheEntry(projectId, undefined, undefined, undefined);
+                const entry = await this.buildCacheEntry(environmentId, undefined, undefined, undefined);
                 if (!entry) return null;
-                this.idCache.set(projectId, entry);
+                this.idCache.set(environmentId, entry);
                 if (entry.project?.hostname) this.hostnameCache.set(entry.project.hostname, entry);
                 return entry;
             } catch (err: any) {
                 this.logger.error?.('[ArtifactEnvironmentRegistry] resolveById failed', {
-                    projectId,
+                    environmentId,
                     error: err?.message ?? err,
                 });
                 return null;
@@ -119,47 +119,47 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
         return entry?.driver ?? null;
     }
 
-    peekById(projectId: string): { projectId: string; driver: IDataDriver; project: any } | null {
-        const cached = this.idCache.get(projectId);
+    peekById(environmentId: string): { environmentId: string; driver: IDataDriver; project: any } | null {
+        const cached = this.idCache.get(environmentId);
         if (cached && cached.expiresAt > Date.now()) {
-            return { projectId: cached.projectId, driver: cached.driver, project: cached.project };
+            return { environmentId: cached.environmentId, driver: cached.driver, project: cached.project };
         }
         return null;
     }
 
-    invalidate(projectId: string): void {
-        this.idCache.delete(projectId);
+    invalidate(environmentId: string): void {
+        this.idCache.delete(environmentId);
         for (const [host, entry] of this.hostnameCache) {
-            if (entry.projectId === projectId) this.hostnameCache.delete(host);
+            if (entry.environmentId === environmentId) this.hostnameCache.delete(host);
         }
-        this.client.invalidate(projectId);
+        this.client.invalidate(environmentId);
     }
 
     private async buildCacheEntry(
-        projectId: string,
-        runtimeFromHostname: ProjectRuntimeConfig | undefined,
+        environmentId: string,
+        runtimeFromHostname: EnvironmentRuntimeConfig | undefined,
         orgIdFromHostname: string | undefined,
         hostname: string | undefined,
     ): Promise<CacheEntry | null> {
         let runtime = runtimeFromHostname;
         let organizationId = orgIdFromHostname;
         let host = hostname;
-        let artifactProjectId = projectId;
+        let artifactProjectId = environmentId;
 
         if (!runtime || !organizationId) {
-            const artifact = await this.client.fetchArtifact(projectId);
+            const artifact = await this.client.fetchArtifact(environmentId);
             if (!artifact) {
-                this.logger.warn?.('[ArtifactEnvironmentRegistry] artifact not found', { projectId });
+                this.logger.warn?.('[ArtifactEnvironmentRegistry] artifact not found', { environmentId });
                 return null;
             }
-            artifactProjectId = artifact.projectId ?? projectId;
+            artifactProjectId = artifact.environmentId ?? environmentId;
             if (!runtime) runtime = artifact.runtime ?? extractRuntimeFromMetadata(artifact.metadata);
             if (!organizationId) organizationId = artifact.runtime?.organizationId;
             if (!host) host = artifact.runtime?.hostname;
         }
 
         if (!runtime || !runtime.databaseUrl || !runtime.databaseDriver) {
-            this.logger.warn?.('[ArtifactEnvironmentRegistry] no runtime config for project', { projectId });
+            this.logger.warn?.('[ArtifactEnvironmentRegistry] no runtime config for project', { environmentId });
             return null;
         }
 
@@ -175,7 +175,7 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
         };
 
         return {
-            projectId: artifactProjectId,
+            environmentId: artifactProjectId,
             driver,
             project: projectRow,
             expiresAt: Date.now() + this.cacheTTL,
@@ -190,7 +190,7 @@ export class ArtifactEnvironmentRegistry implements EnvironmentDriverRegistry {
  * where the developer encoded the connection inline (e.g. memory:// for
  * demos).
  */
-function extractRuntimeFromMetadata(metadata: any): ProjectRuntimeConfig | undefined {
+function extractRuntimeFromMetadata(metadata: any): EnvironmentRuntimeConfig | undefined {
     const datasources = metadata?.datasources;
     if (!Array.isArray(datasources) || datasources.length === 0) return undefined;
     const mapping: any[] | undefined = metadata?.datasourceMapping;

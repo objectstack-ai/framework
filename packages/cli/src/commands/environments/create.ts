@@ -11,7 +11,7 @@ import { readAuthConfig, writeAuthConfig } from '../../utils/auth-config.js';
  *
  * Delegates to `ProjectProvisioningService.provisionProject` on the server.
  * On success, optionally activates the new project for the current session
- * and persists `activeProjectId` into `~/.objectstack/credentials.json`
+ * and persists `activeEnvironmentId` into `~/.objectstack/credentials.json`
  * (unless `--no-activate` is passed).
  */
 export default class ProjectsCreate extends Command {
@@ -81,7 +81,7 @@ export default class ProjectsCreate extends Command {
         plan: flags.plan,
         driver: flags.driver,
         template_id: flags.template,
-        clone_from_project_id: flags['clone-from'],
+        clone_from_environment_id: flags['clone-from'],
         ...(metadata ? { metadata } : {}),
       });
 
@@ -90,7 +90,7 @@ export default class ProjectsCreate extends Command {
           await client.projects.activate(res.project.id);
           const cfg = await readAuthConfig().catch(() => null);
           if (cfg) {
-            cfg.activeProjectId = res.project.id;
+            cfg.activeEnvironmentId = res.project.id;
             cfg.lastUsedAt = new Date().toISOString();
             await writeAuthConfig(cfg);
           }

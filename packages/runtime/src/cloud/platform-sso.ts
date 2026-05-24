@@ -17,8 +17,8 @@
  * For the two sides to trust each other without runtime DB calls during
  * the SSO handshake, we use deterministic, derived client credentials:
  *
- *   - `client_id`     = `'project_' + projectId`
- *   - `client_secret` = HMAC-SHA256(baseSecret, 'oauth-client:' + projectId)
+ *   - `client_id`     = `'project_' + environmentId`
+ *   - `client_secret` = HMAC-SHA256(baseSecret, 'oauth-client:' + environmentId)
  *   - `redirect_uri`  = `https://<hostname>/api/v1/auth/oauth2/callback/<PROVIDER_ID>`
  *
  * Both cloud and project containers share the same `OS_AUTH_SECRET` (or
@@ -28,7 +28,7 @@
  * write per project and is upserted in two places:
  *
  *   1. {@link seedPlatformSsoClient} — called from the project-provisioning
- *      flow in `http-dispatcher.ts` right after the `sys_project` row is
+ *      flow in `http-dispatcher.ts` right after the `sys_environment` row is
  *      inserted, so brand-new projects can SSO from the very first request.
  *   2. {@link backfillPlatformSsoClients} — registered as a boot-time
  *      plugin in `control-plane-preset.ts` to retro-fit any pre-existing
@@ -48,13 +48,13 @@ export const PLATFORM_SSO_PROVIDER_ID = 'objectstack-cloud';
  * Derive the per-project OAuth client_id used in `sys_oauth_application`
  * (cloud side) and {@link genericOAuth} config (project side).
  */
-export function derivePlatformSsoClientId(projectId: string): string {
-    return `project_${projectId}`;
+export function derivePlatformSsoClientId(environmentId: string): string {
+    return `project_${environmentId}`;
 }
 
 /**
  * Derive the per-project OAuth client_secret deterministically from the
- * shared master secret. HMAC-SHA256(baseSecret, 'oauth-client:' + projectId)
+ * shared master secret. HMAC-SHA256(baseSecret, 'oauth-client:' + environmentId)
  * yields a 64-char hex string that is:
  *   - stable across container cold-starts (no DB lookup needed)
  *   - independent per project (compromising one does not compromise others)
@@ -66,8 +66,8 @@ export function derivePlatformSsoClientId(projectId: string): string {
  * defaults to `storeClientSecret: 'hashed'` (SHA-256 + base64url) when the JWT
  * plugin is enabled, and looks up the row by hashing the presented secret.
  */
-export function derivePlatformSsoClientSecret(baseSecret: string, projectId: string): string {
-    return createHmac('sha256', baseSecret).update(`oauth-client:${projectId}`).digest('hex');
+export function derivePlatformSsoClientSecret(baseSecret: string, environmentId: string): string {
+    return createHmac('sha256', baseSecret).update(`oauth-client:${environmentId}`).digest('hex');
 }
 
 /**
@@ -130,7 +130,7 @@ export interface SeedPlatformSsoClientOptions {
         update: (object: string, data: any, where: any, opts?: any) => Promise<any>;
     };
     /** Project id (also used to derive client_id + client_secret). */
-    projectId: string;
+    environmentId: string;
     /**
      * Project hostname (e.g. `acme-crm.objectos.app`). Optional — projects
      * may be created before a hostname is assigned, in which case no
@@ -150,19 +150,19 @@ export interface SeedPlatformSsoClientOptions {
 
 /**
  * Idempotently upsert a `sys_oauth_application` row for the given project.
- * Re-running with the same `projectId` is a no-op (the deterministic
+ * Re-running with the same `environmentId` is a no-op (the deterministic
  * `client_id` is uniquely indexed and the secret derivation is stable).
  * Re-running with a new `hostname` adds the new redirect_uri to the
  * existing row's JSON array.
  */
 export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions): Promise<void> {
-    const { ql, projectId, hostname, baseSecret, logger, throwOnError } = opts;
+    const { ql, environmentId, hostname, baseSecret, logger, throwOnError } = opts;
     if (!baseSecret) {
-        logger?.warn?.('[platform-sso] OS_AUTH_SECRET not set — skipping client seed', { projectId });
+        logger?.warn?.('[platform-sso] OS_AUTH_SECRET not set — skipping client seed', { environmentId });
         return;
     }
-    const clientId = derivePlatformSsoClientId(projectId);
-    const clientSecretPlaintext = derivePlatformSsoClientSecret(baseSecret, projectId);
+    const clientId = derivePlatformSsoClientId(environmentId);
+    const clientSecretPlaintext = derivePlatformSsoClientSecret(baseSecret, environmentId);
     const clientSecretStored = hashPlatformSsoClientSecret(clientSecretPlaintext);
     const desiredRedirect = hostname ? buildPlatformSsoRedirectUri(hostname) : null;
 
@@ -178,7 +178,7 @@ export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions):
         // Table may not exist yet (control-plane not yet migrated). Treat
         // as a no-op rather than crashing the project-create flow.
         logger?.warn?.('[platform-sso] sys_oauth_application read failed — skipping seed', {
-            projectId,
+            environmentId,
             error: (err as Error)?.message,
         });
         return;
@@ -189,8 +189,8 @@ export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions):
         const redirects = desiredRedirect ? [desiredRedirect] : [];
         try {
             await ql.insert('sys_oauth_application', {
-                id: `oauthc_${projectId}`,
-                name: `Project ${projectId}`,
+                id: `oauthc_${environmentId}`,
+                name: `Project ${environmentId}`,
                 client_id: clientId,
                 client_secret: clientSecretStored,
                 type: 'web',
@@ -206,13 +206,13 @@ export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions):
                 created_at: nowIso,
                 updated_at: nowIso,
             }, { context: { isSystem: true } });
-            logger?.info?.('[platform-sso] sys_oauth_application row created', { projectId, clientId });
+            logger?.info?.('[platform-sso] sys_oauth_application row created', { environmentId, clientId });
         } catch (err) {
             // Unique-index conflict implies a parallel writer raced us; treat
             // as success. Other errors are logged but non-fatal so they
             // don't poison the project-create response.
             logger?.warn?.('[platform-sso] sys_oauth_application create failed', {
-                projectId,
+                environmentId,
                 error: (err as Error)?.message,
             });
             if (throwOnError) throw err;
@@ -238,7 +238,7 @@ export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions):
         : currentRedirects;
 
     const repairPatch: Record<string, any> = {
-        name: existing.name || `Project ${projectId}`,
+        name: existing.name || `Project ${environmentId}`,
         client_secret: clientSecretStored,
         type: existing.type || 'web',
         redirect_uris: JSON.stringify(mergedRedirects),
@@ -260,13 +260,13 @@ export async function seedPlatformSsoClient(opts: SeedPlatformSsoClientOptions):
             { context: { isSystem: true } },
         );
         logger?.info?.('[platform-sso] sys_oauth_application repaired', {
-            projectId,
+            environmentId,
             clientId,
             redirect_uris: mergedRedirects,
         });
     } catch (err) {
         logger?.warn?.('[platform-sso] sys_oauth_application repair failed', {
-            projectId,
+            environmentId,
             error: (err as Error)?.message,
         });
         if (throwOnError) throw err;
@@ -282,7 +282,7 @@ export interface BackfillPlatformSsoClientsOptions {
 }
 
 /**
- * Scan `sys_project` and ensure every active project has a corresponding
+ * Scan `sys_environment` and ensure every active project has a corresponding
  * `sys_oauth_application` row. Intended to run once at cloud boot — the
  * happy path is dominated by the project-create hook
  * ({@link seedPlatformSsoClient}); the backfill exists so projects
@@ -293,7 +293,7 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
     scanned: number;
     seeded: number;
     alreadyExisted: number;
-    failures: Array<{ projectId: string; error: string }>;
+    failures: Array<{ environmentId: string; error: string }>;
 }> {
     const { ql, baseSecret, logger, limit = 1000 } = opts;
     if (!baseSecret) {
@@ -308,14 +308,14 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
         }, { context: { isSystem: true } });
         projects = Array.isArray(rows) ? rows : Array.isArray((rows as any)?.records) ? (rows as any).records : [];
     } catch (err) {
-        logger?.warn?.('[platform-sso] backfill: sys_project read failed', {
+        logger?.warn?.('[platform-sso] backfill: sys_environment read failed', {
             error: (err as Error)?.message,
         });
-        return { scanned: 0, seeded: 0, alreadyExisted: 0, failures: [{ projectId: '<scan>', error: (err as Error)?.message ?? String(err) }] };
+        return { scanned: 0, seeded: 0, alreadyExisted: 0, failures: [{ environmentId: '<scan>', error: (err as Error)?.message ?? String(err) }] };
     }
     let seeded = 0;
     let alreadyExisted = 0;
-    const failures: Array<{ projectId: string; error: string }> = [];
+    const failures: Array<{ environmentId: string; error: string }> = [];
     for (const p of projects) {
         if (!p?.id) continue;
         const before = await (async () => {
@@ -329,7 +329,7 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
             } catch { return null; }
         })();
         try {
-            await seedPlatformSsoClient({ ql, projectId: p.id, hostname: p.hostname, baseSecret, logger, throwOnError: true });
+            await seedPlatformSsoClient({ ql, environmentId: p.id, hostname: p.hostname, baseSecret, logger, throwOnError: true });
             if (before) alreadyExisted++;
             else {
                 // Verify the row is actually readable post-insert.
@@ -344,10 +344,10 @@ export async function backfillPlatformSsoClients(opts: BackfillPlatformSsoClient
                     } catch (err) { return { _readErr: (err as Error)?.message }; }
                 })();
                 if (after && !(after as any)._readErr) seeded++;
-                else failures.push({ projectId: p.id, error: `post-insert read returned ${after ? JSON.stringify(after) : 'null'}` });
+                else failures.push({ environmentId: p.id, error: `post-insert read returned ${after ? JSON.stringify(after) : 'null'}` });
             }
         } catch (err: any) {
-            failures.push({ projectId: p.id, error: err?.message ?? String(err) });
+            failures.push({ environmentId: p.id, error: err?.message ?? String(err) });
         }
     }
     logger?.info?.('[platform-sso] backfill complete', { scanned: projects.length, seeded, alreadyExisted, failures: failures.length });

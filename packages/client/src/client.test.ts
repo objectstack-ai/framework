@@ -900,7 +900,7 @@ describe('ScopedProjectClient', () => {
         const scoped = client.project('proj-123');
         await scoped.meta.getTypes();
         expect(fetchMock).toHaveBeenCalledWith(
-            'http://localhost:3000/api/v1/projects/proj-123/meta',
+            'http://localhost:3000/api/v1/environments/proj-123/meta',
             expect.any(Object),
         );
     });
@@ -910,7 +910,7 @@ describe('ScopedProjectClient', () => {
         const scoped = client.project('proj-123');
         await scoped.data.find('task', { top: 5 });
         const url = (fetchMock.mock.calls[0] as any[])[0] as string;
-        expect(url.startsWith('http://localhost:3000/api/v1/projects/proj-123/data/task')).toBe(true);
+        expect(url.startsWith('http://localhost:3000/api/v1/environments/proj-123/data/task')).toBe(true);
         expect(url).toContain('top=5');
     });
 
@@ -920,46 +920,46 @@ describe('ScopedProjectClient', () => {
 
         await scoped.data.get('task', 't1');
         expect(fetchMock).toHaveBeenLastCalledWith(
-            'http://localhost:3000/api/v1/projects/proj-xyz/data/task/t1',
+            'http://localhost:3000/api/v1/environments/proj-xyz/data/task/t1',
             expect.any(Object),
         );
 
         await scoped.data.create('task', { title: 'hi' });
         expect(fetchMock).toHaveBeenLastCalledWith(
-            'http://localhost:3000/api/v1/projects/proj-xyz/data/task',
+            'http://localhost:3000/api/v1/environments/proj-xyz/data/task',
             expect.objectContaining({ method: 'POST' }),
         );
 
         await scoped.data.update('task', 't1', { title: 'ok' });
         expect(fetchMock).toHaveBeenLastCalledWith(
-            'http://localhost:3000/api/v1/projects/proj-xyz/data/task/t1',
+            'http://localhost:3000/api/v1/environments/proj-xyz/data/task/t1',
             expect.objectContaining({ method: 'PATCH' }),
         );
 
         await scoped.data.delete('task', 't1');
         expect(fetchMock).toHaveBeenLastCalledWith(
-            'http://localhost:3000/api/v1/projects/proj-xyz/data/task/t1',
+            'http://localhost:3000/api/v1/environments/proj-xyz/data/task/t1',
             expect.objectContaining({ method: 'DELETE' }),
         );
     });
 
-    it('url-encodes the projectId', async () => {
+    it('url-encodes the environmentId', async () => {
         const { client, fetchMock } = createMockClient({ types: [] });
         const scoped = client.project('proj with space');
         await scoped.meta.getTypes();
         expect(fetchMock).toHaveBeenCalledWith(
-            'http://localhost:3000/api/v1/projects/proj%20with%20space/meta',
+            'http://localhost:3000/api/v1/environments/proj%20with%20space/meta',
             expect.any(Object),
         );
     });
 
-    it('throws when projectId is missing', () => {
+    it('throws when environmentId is missing', () => {
         const client = new ObjectStackClient({ baseUrl: 'http://localhost:3000' });
         // @ts-expect-error — empty string rejected at runtime
-        expect(() => client.project('')).toThrow(/projectId is required/);
+        expect(() => client.project('')).toThrow(/environmentId is required/);
     });
 
-    it('exposes projectId via getProjectId()', () => {
+    it('exposes environmentId via getProjectId()', () => {
         const client = new ObjectStackClient({ baseUrl: 'http://localhost:3000' });
         const scoped = client.project('00000000-0000-0000-0000-000000000001');
         expect(scoped.getProjectId()).toBe('00000000-0000-0000-0000-000000000001');

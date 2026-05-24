@@ -512,7 +512,7 @@ describe('Row-Level Security (RLS) Protocol', () => {
         using: `
           owner_id = current_user.id 
           OR id IN (
-            SELECT project_id FROM project_members 
+            SELECT environment_id FROM project_members 
             WHERE user_id = current_user.id
           )
         `,

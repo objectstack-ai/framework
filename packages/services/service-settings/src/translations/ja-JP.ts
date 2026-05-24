@@ -105,7 +105,7 @@ export const jaJP: TranslationData = {
         local_root: { label: 'ルートディレクトリ',
           help: 'ファイルを保存するファイルシステムパス。相対パスはサーバーの CWD から解決されます。' },
         s3_bucket: { label: 'バケット',
-          help: '共有ホストバケット。プロジェクト毎のファイルは projects/<projectId>/ プレフィックスで分離されます。' },
+          help: '共有ホストバケット。プロジェクト毎のファイルは projects/<environmentId>/ プレフィックスで分離されます。' },
         s3_region: { label: 'リージョン', help: '例: us-east-1' },
         s3_endpoint: { label: 'エンドポイント',
           help: 'S3 互換プロバイダ (R2, MinIO, Wasabi) のカスタムエンドポイント。AWS S3 の場合は空欄。' },

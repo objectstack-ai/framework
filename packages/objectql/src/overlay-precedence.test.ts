@@ -56,7 +56,7 @@ const validReport = {
     object: 'invoice',
 };
 
-function makeProtocol(opts: { projectId?: string } = {}) {
+function makeProtocol(opts: { environmentId?: string } = {}) {
     const registry = new SchemaRegistry({ multiTenant: false });
     const mockEngine: any = {
         registry,
@@ -72,7 +72,7 @@ function makeProtocol(opts: { projectId?: string } = {}) {
         mockEngine,
         undefined, // getServicesRegistry
         undefined, // getFeedService
-        opts.projectId,
+        opts.environmentId,
     );
     return { protocol, mockEngine, registry };
 }
@@ -85,9 +85,9 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
     let protocol: ObjectStackProtocolImplementation;
 
     beforeEach(() => {
-        // projectId must be defined to engage the gate — single-kernel
-        // deployments (no projectId) intentionally bypass it.
-        ({ protocol } = makeProtocol({ projectId: 'env_prod' }));
+        // environmentId must be defined to engage the gate — single-kernel
+        // deployments (no environmentId) intentionally bypass it.
+        ({ protocol } = makeProtocol({ environmentId: 'env_prod' }));
     });
 
     afterEach(() => vi.clearAllMocks());
@@ -226,11 +226,11 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
     });
 
     // ── single-kernel deployments: gate disengaged ──
-    describe('single-kernel mode (no projectId) — gate bypassed', () => {
-        it('allows object overlay when projectId is undefined', async () => {
-            // No projectId => not project-kernel mode => legacy "anything goes"
+    describe('single-kernel mode (no environmentId) — gate bypassed', () => {
+        it('allows object overlay when environmentId is undefined', async () => {
+            // No environmentId => not project-kernel mode => legacy "anything goes"
             // path used by control-plane bootstrap. ADR-0005 §"Whitelist".
-            const { protocol: localProto } = makeProtocol({ projectId: undefined });
+            const { protocol: localProto } = makeProtocol({ environmentId: undefined });
             const result = await localProto.saveMetaItem({
                 type: 'object',
                 name: 'case',

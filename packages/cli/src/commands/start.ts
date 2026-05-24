@@ -35,7 +35,7 @@ export default class Start extends Command {
 
     // Project identity
     'project-id': Flags.string({
-      description: 'Project identifier (overrides $OS_PROJECT_ID, default proj_local)',
+      description: 'Project identifier (overrides $OS_ENVIRONMENT_ID, default proj_local)',
     }),
 
     // Storage
@@ -86,14 +86,14 @@ export default class Start extends Command {
     printKV('Artifact', displayPath, '📦');
     printStep('Starting server (production mode)...');
 
-    const projectId = flags['project-id'] ?? process.env.OS_PROJECT_ID ?? 'proj_local';
+    const environmentId = flags['project-id'] ?? process.env.OS_ENVIRONMENT_ID ?? 'proj_local';
 
     // Build the env handed to `serve`. Flags win over inherited env so
     // `--database file:foo.db` overrides any pre-existing OS_DATABASE_URL.
     const localEnv: NodeJS.ProcessEnv = {
       ...process.env,
       NODE_ENV: 'production',
-      OS_PROJECT_ID: projectId,
+      OS_ENVIRONMENT_ID: environmentId,
       OS_ARTIFACT_PATH: artifactPath,
       ...(flags.port ? { PORT: String(flags.port) } : {}),
       ...(flags.database ? { OS_DATABASE_URL: flags.database } : {}),
@@ -102,7 +102,7 @@ export default class Start extends Command {
       ...(flags['auth-secret'] ? { AUTH_SECRET: flags['auth-secret'] } : {}),
     };
 
-    printKV('Project ID', projectId, '🎯');
+    printKV('Project ID', environmentId, '🎯');
     if (flags.database) printKV('Database', redactDbUrl(flags.database), '🗄️');
 
     const binPath = process.argv[1];

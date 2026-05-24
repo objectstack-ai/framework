@@ -1629,7 +1629,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "URL",
         help: "指向活动目标的可选深度链接"
       },
-      project_id: {
+      environment_id: {
         label: "项目",
         help: "项目上下文（多项目部署）"
       },
@@ -2628,7 +2628,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "组织",
         help: "用于多租户隔离的组织。"
       },
-      project_id: {
+      environment_id: {
         label: "项目（已废弃）",
         help: "已废弃。请使用 organization_id 进行租户隔离。"
       },
@@ -2710,7 +2710,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "组织",
         help: "用于多租户隔离的组织。"
       },
-      project_id: {
+      environment_id: {
         label: "环境 ID",
         help: "将该历史记录限定到特定环境。"
       },

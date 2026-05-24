@@ -618,11 +618,11 @@ describe('StorageConnectionSchema', () => {
 
   it('should accept GCP credentials', () => {
     const connection = StorageConnectionSchema.parse({
-      projectId: 'my-gcp-project',
-      credentials: '{"type":"service_account","project_id":"my-project",...}',
+      environmentId: 'my-gcp-project',
+      credentials: '{"type":"service_account","environment_id":"my-project",...}',
     });
 
-    expect(connection.projectId).toBe('my-gcp-project');
+    expect(connection.environmentId).toBe('my-gcp-project');
   });
 
   it('should accept custom endpoint with SSL settings', () => {
@@ -819,7 +819,7 @@ describe('ObjectStorageConfigSchema', () => {
       label: 'Google Cloud Storage',
       provider: 'gcs',
       connection: {
-        projectId: 'my-project',
+        environmentId: 'my-project',
         credentials: '${GCP_CREDENTIALS_JSON}',
       },
       buckets: [

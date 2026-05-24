@@ -137,12 +137,12 @@ export const SysActivity = ObjectSchema.create({
     }),
 
     // ── Context ──────────────────────────────────────────────────
-    project_id: Field.lookup('sys_project', {
-      label: 'Project',
+    environment_id: Field.lookup('sys_environment', {
+      label: 'Environment',
       required: false,
       readonly: true,
       searchable: true,
-      description: 'Project context (multi-project deployments)',
+      description: 'Environment context (multi-environment deployments)',
       group: 'Context',
     }),
 
@@ -160,7 +160,7 @@ export const SysActivity = ObjectSchema.create({
     { fields: ['actor_id'] },
     { fields: ['object_name', 'record_id'] },
     { fields: ['type'] },
-    { fields: ['project_id'] },
+    { fields: ['environment_id'] },
   ],
 
   enable: {

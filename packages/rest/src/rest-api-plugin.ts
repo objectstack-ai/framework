@@ -12,7 +12,7 @@ export interface RestApiPluginConfig {
     /**
      * Optional override for the kernel-manager service name. When the service
      * is registered (by @objectstack/runtime's MultiProjectPlugin), scoped
-     * routes resolve per-project protocols at request time.
+     * routes resolve per-environment protocols at request time.
      */
     kernelManagerServiceName?: string;
     api?: RestServerConfig;
@@ -55,8 +55,8 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             }
 
             // Optional — only present when MultiProjectPlugin is mounted. When
-            // available, RestServer will resolve a per-project protocol at
-            // request time for scoped (`/projects/:projectId/...`) routes.
+            // available, RestServer will resolve a per-environment protocol at
+            // request time for scoped (`/environments/:environmentId/...`) routes.
             let kernelManager: RestKernelManager | undefined;
             const kernelManagerService = config.kernelManagerServiceName || 'kernel-manager';
             try {
@@ -66,25 +66,25 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             }
 
             // Optional — only present in runtime mode. When available,
-            // RestServer will resolve hostname → projectId on unscoped
+            // RestServer will resolve hostname → environmentId on unscoped
             // routes so a remote runtime node can dispatch every request
-            // to the matching per-project kernel without requiring callers
-            // to know the projectId.
+            // to the matching per-environment kernel without requiring callers
+            // to know the environmentId.
             let envRegistry: any;
             try {
                 envRegistry = ctx.getService<any>('env-registry');
             } catch (e) {
-                // Not running in runtime/multi-project mode — fine.
+                // Not running in runtime/multi-environment mode — fine.
             }
 
             // Optional default-project provider — registered by
-            // `createSingleProjectPlugin` in single-project local mode.
+            // `createSingleEnvironmentPlugin` in single-environment local mode.
             // Lets RestServer route bare `/api/v1/data/...` URLs into the
             // lone project's kernel.
-            const defaultProjectIdProvider = (): string | undefined => {
+            const defaultEnvironmentIdProvider = (): string | undefined => {
                 try {
                     const dp: any = ctx.getService('default-project');
-                    return dp?.projectId;
+                    return dp?.environmentId;
                 } catch { return undefined; }
             };
 
@@ -92,7 +92,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             // single-kernel deployments where there is no kernelManager.
             // Multi-kernel paths look up auth via kernelManager.getOrCreate,
             // so this provider is the single-kernel fallback.
-            const authServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const authServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('auth');
                 } catch { return undefined; }
@@ -101,7 +101,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             // ObjectQL resolver — single-kernel fallback so resolveExecCtx
             // can run sys_member / sys_user_permission_set lookups when
             // there is no kernelManager wired (e.g. `pnpm dev:crm`).
-            const objectQLProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const objectQLProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('objectql');
                 } catch { return undefined; }
@@ -110,35 +110,35 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             // Email service resolver — used by POST /email/send. Single-
             // kernel deployments resolve from the local kernel; multi-
             // tenant paths would resolve via kernelManager.getOrCreate.
-            const emailServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const emailServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('email');
                 } catch { return undefined; }
             };
 
             // Sharing service resolver — used by /data/:object/:id/shares.
-            const sharingServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const sharingServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('sharing');
                 } catch { return undefined; }
             };
 
             // Reports service resolver — used by /reports/* routes.
-            const reportsServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const reportsServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('reports');
                 } catch { return undefined; }
             };
 
             // Approvals service resolver — used by /approvals/* routes.
-            const approvalsServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const approvalsServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('approvals');
                 } catch { return undefined; }
             };
 
             // Sharing-rule service resolver — used by /sharing/rules/* routes.
-            const sharingRulesServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const sharingRulesServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('sharingRules');
                 } catch { return undefined; }
@@ -147,7 +147,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             // i18n service resolver — used to localize view / action / object
             // metadata. Single-kernel fallback so labels and select options
             // get translated even without a full multi-tenant kernelManager.
-            const i18nServiceProvider = async (_projectId?: string): Promise<any | undefined> => {
+            const i18nServiceProvider = async (_environmentId?: string): Promise<any | undefined> => {
                 try {
                     return ctx.getService<any>('i18n');
                 } catch { return undefined; }
@@ -166,7 +166,7 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             ctx.logger.info('Hydrating REST API from Protocol...');
             
             try {
-                const restServer = new RestServer(server, protocol, config.api as any, kernelManager, envRegistry, defaultProjectIdProvider, authServiceProvider, objectQLProvider, emailServiceProvider, sharingServiceProvider, reportsServiceProvider, approvalsServiceProvider, sharingRulesServiceProvider, i18nServiceProvider);
+                const restServer = new RestServer(server, protocol, config.api as any, kernelManager, envRegistry, defaultEnvironmentIdProvider, authServiceProvider, objectQLProvider, emailServiceProvider, sharingServiceProvider, reportsServiceProvider, approvalsServiceProvider, sharingRulesServiceProvider, i18nServiceProvider);
                 restServer.registerRoutes();
 
                 ctx.logger.info('REST API successfully registered');
@@ -187,13 +187,13 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
 
                     if (enableProjectScoping && projectResolution === 'required') {
                         // Only register the scoped variant
-                        registerPackageRoutes(server, packageService, `${versionedBase}/projects/:projectId`, {
+                        registerPackageRoutes(server, packageService, `${versionedBase}/environments/:environmentId`, {
                             protocol,
                         });
                     } else {
                         registerPackageRoutes(server, packageService, versionedBase, { protocol });
                         if (enableProjectScoping) {
-                            registerPackageRoutes(server, packageService, `${versionedBase}/projects/:projectId`, {
+                            registerPackageRoutes(server, packageService, `${versionedBase}/environments/:environmentId`, {
                                 protocol,
                             });
                         }

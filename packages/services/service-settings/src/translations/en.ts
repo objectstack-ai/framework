@@ -111,7 +111,7 @@ export const en: TranslationData = {
         local_root: { label: 'Root directory',
           help: 'Filesystem path under which files are stored. Relative paths resolve from the server CWD.' },
         s3_bucket: { label: 'Bucket',
-          help: 'Shared host bucket. Per-project files are namespaced via the projects/<projectId>/ prefix.' },
+          help: 'Shared host bucket. Per-environment files are namespaced via the projects/<environmentId>/ prefix.' },
         s3_region: { label: 'Region', help: 'Example: us-east-1' },
         s3_endpoint: { label: 'Endpoint',
           help: 'Custom endpoint for S3-compatible providers (R2, MinIO, Wasabi). Leave blank for AWS S3.' },

@@ -149,12 +149,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     /**
      * Project scope applied to sys_metadata reads/writes. When undefined
      * (single-kernel deployments), rows land in / come from the
-     * platform-global bucket (`project_id IS NULL`). When set, every
+     * platform-global bucket (`environment_id IS NULL`). When set, every
      * saveMetaItem insert/update and loadMetaFromDb query is filtered by
-     * `project_id = projectId`, so per-project kernels see only their own
+     * `environment_id = environmentId`, so per-project kernels see only their own
      * metadata even if several projects share the same physical database.
      */
-    private projectId?: string;
+    private environmentId?: string;
 
     /**
      * Lazily-instantiated SysMetadataRepository per organization. Keyed by
@@ -168,12 +168,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         engine: IDataEngine,
         getServicesRegistry?: () => Map<string, any>,
         getFeedService?: () => IFeedService | undefined,
-        projectId?: string,
+        environmentId?: string,
     ) {
         this.engine = engine as ObjectQL;
         this.getServicesRegistry = getServicesRegistry;
         this.getFeedService = getFeedService;
-        this.projectId = projectId;
+        this.environmentId = environmentId;
     }
 
     /**
@@ -198,7 +198,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     /**
      * One-time guard for ensuring the overlay-uniqueness UNIQUE INDEX exists
      * on `sys_metadata`. ADR-0005: scopes overlays by
-     * `(type, name, organization_id, project_id, scope)` for active rows only.
+     * `(type, name, organization_id, environment_id, scope)` for active rows only.
      * Idempotent SQL — safe to attempt on every protocol instance.
      *
      * Inlined here (rather than importing from @objectstack/metadata/migrations)
@@ -234,7 +234,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 }
             };
             // ADR-0005 (revised 2026-05): per-env DBs replace the old
-            // "per-project" isolation, so `project_id` is no longer a
+            // "per-project" isolation, so `environment_id` is no longer a
             // discriminator. Overlay uniqueness is `(type, name,
             // organization_id)` filtered to active rows. Drop the legacy
             // composite index first so the new partial UNIQUE can claim
@@ -269,10 +269,10 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      * Exposes the project scope the protocol is bound to. Consumers like
      * the HTTP dispatcher use this to decide whether to trust the process-
      * wide SchemaRegistry or whether they must route a read through the
-     * protocol's project_id-filtered lookup.
+     * protocol's environment_id-filtered lookup.
      */
     getProjectId(): string | undefined {
-        return this.projectId;
+        return this.environmentId;
     }
 
     private requireFeedService(): IFeedService {
@@ -421,7 +421,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // prevent cross-project leakage, but DO include scope:'system' packages
         // (plugin-auth, plugin-security, plugin-audit, …) — those are globally
         // shared and must be visible at every project's meta endpoint.
-        if (this.projectId === undefined) {
+        if (this.environmentId === undefined) {
             items = [...this.engine.registry.listItems(request.type, packageId)];
             // Normalize singular/plural using explicit mapping
             if (items.length === 0) {
@@ -497,7 +497,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     }
                     // Only hydrate the global registry for unscoped calls —
                     // scoped project entries must not leak process-wide.
-                    if (this.projectId === undefined) {
+                    if (this.environmentId === undefined) {
                         this.engine.registry.registerItem(request.type, data, 'name' as any);
                     }
                 }
@@ -1824,7 +1824,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // for types whose registry entry sets `allowOrgOverride: true`.
         // Returns 403 `not_overridable` so the caller can distinguish from a
         // generic 400 (validation) or 422 (spec mismatch).
-        if (this.projectId !== undefined
+        if (this.environmentId !== undefined
             && !ObjectStackProtocolImplementation.isOverlayAllowed(request.type)) {
             const allowed = Array.from(ObjectStackProtocolImplementation.OVERLAY_ALLOWED_TYPES).join(', ');
             const err = new Error(
@@ -1887,7 +1887,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         // 2. Persist to sys_metadata as a customization overlay row.
         //    ADR-0005 (revised 2026-05): isolation key is `organization_id`
-        //    (each env = its own DB, so project_id is redundant). Org-scoped
+        //    (each env = its own DB, so environment_id is redundant). Org-scoped
         //    rows belong to the active organization in the request; env-wide
         //    overlays are written with organization_id = NULL.
         await this.ensureOverlayIndex();
@@ -1899,7 +1899,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // (`object`, `flow`, `agent`, ...) take the legacy raw-engine path
         // below — this preserves the control-plane bootstrap semantic where
         // `saveMetaItem` is permitted by the outer protocol gate to write
-        // any metadata type when `projectId` is undefined (the repository's
+        // any metadata type when `environmentId` is undefined (the repository's
         // `assertAllowed()` would 403 those writes).
         //
         // PR-10d.6 (this PR) removed the `useRepositoryWritePath` flag.
@@ -1964,7 +1964,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
 
         // Legacy raw-engine path — taken when the type is NOT overlay-allowed
-        // (control-plane bootstrap of `object`/`flow`/etc. when `projectId` is
+        // (control-plane bootstrap of `object`/`flow`/etc. when `environmentId` is
         // undefined). This branch is intentionally retained: the repository
         // write path's `assertAllowed()` would 403 these types. There is no
         // change-log / HMR machinery for non-overlay metadata because
@@ -2099,7 +2099,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         reset?: boolean;
         seq?: number;
     }> {
-        if (this.projectId !== undefined
+        if (this.environmentId !== undefined
             && !ObjectStackProtocolImplementation.isOverlayAllowed(request.type)) {
             const err = new Error(
                 `[not_overridable] Metadata type '${request.type}' has not opted into per-org overlay writes. `
@@ -2117,7 +2117,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         // so the delete (a) is wrapped in engine.transaction(), (b) appends a
         // tombstone row to sys_metadata_history, and (c) emits a watch event
         // with a monotonic `seq` for HMR. Non-overlay-allowed types (only
-        // reachable in control-plane bootstrap mode where projectId is
+        // reachable in control-plane bootstrap mode where environmentId is
         // undefined) take the legacy raw-engine path below — the repository's
         // `assertAllowed()` whitelist would 403 those deletes.
         if (useRepoPath) {
@@ -2156,8 +2156,8 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
                 // Refresh the in-memory artifact-side state on control-plane
                 // kernels (same logic as the legacy branch — see comments
-                // there for why this only runs when projectId === undefined).
-                if (this.projectId === undefined) {
+                // there for why this only runs when environmentId === undefined).
+                if (this.environmentId === undefined) {
                     try {
                         const services = this.getServicesRegistry?.();
                         const metadataService = services?.get('metadata');
@@ -2197,7 +2197,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
 
         // ── Legacy raw-engine path: only reachable in control-plane bootstrap
-        // (projectId === undefined) for non-overlay-allowed types like
+        // (environmentId === undefined) for non-overlay-allowed types like
         // `object`, `flow`, `agent`. No history row, no watch event — these
         // types don't participate in the change-log model.
         const scopedWhere: Record<string, unknown> = {
@@ -2217,7 +2217,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
             await this.engine.delete('sys_metadata', { where: { id: existing.id } });
 
-            if (this.projectId === undefined) {
+            if (this.environmentId === undefined) {
                 try {
                     const services = this.getServicesRegistry?.();
                     const metadataService = services?.get('metadata');
@@ -2251,7 +2251,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
      *
      * Per ADR-0005, project-kernel mode ALSO hydrates from sys_metadata —
      * customization overlay rows must survive restart. Scope filter
-     * (`project_id = this.projectId ?? null`) keeps tenants isolated.
+     * (`environment_id = this.environmentId ?? null`) keeps tenants isolated.
      */
     async loadMetaFromDb(): Promise<{ loaded: number; errors: number }> {
         let loaded = 0;

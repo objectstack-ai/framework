@@ -10,9 +10,9 @@ import { formatOutput } from '../../utils/output-formatter.js';
 
 /**
  * `os projects bind` — bind a locally-compiled artifact to an existing
- * multi-project server project.
+ * multi-environment server project.
  *
- * Equivalent to `PATCH /api/v1/cloud/projects/<id>` with
+ * Equivalent to `PATCH /api/v1/cloud/environments/<id>` with
  * `metadata.artifact_path = <absolute-path>`. The server's
  * AppBundleResolver picks up the path on the next per-project kernel
  * boot, registering the bundle's objects, views, and seed data.
@@ -30,7 +30,7 @@ export default class ProjectsBind extends Command {
   ];
 
   static override args = {
-    projectId: Args.string({
+    environmentId: Args.string({
       description: 'Target project id (UUID)',
       required: true,
     }),
@@ -47,7 +47,7 @@ export default class ProjectsBind extends Command {
       default: false,
     }),
     reseed: Flags.boolean({
-      description: 'After binding, also re-run schema sync + bundle seeding via /cloud/projects/:id/reseed',
+      description: 'After binding, also re-run schema sync + bundle seeding via /cloud/environments/:id/reseed',
       default: false,
     }),
     format: Flags.string({
@@ -95,7 +95,7 @@ export default class ProjectsBind extends Command {
       requireAuth(token);
 
       // Fetch existing metadata so we don't blow it away.
-      const current = await client.projects.get(args.projectId);
+      const current = await client.projects.get(args.environmentId);
       const existingMeta: Record<string, unknown> = (current?.project?.metadata && typeof current.project.metadata === 'object')
         ? { ...current.project.metadata as Record<string, unknown> }
         : {};
@@ -103,19 +103,19 @@ export default class ProjectsBind extends Command {
       delete existingMeta.artifactBindError;
       existingMeta.artifact_path = artifactAbs;
 
-      printKV('Project', args.projectId, '🎯');
+      printKV('Project', args.environmentId, '🎯');
       printKV('Artifact', artifactAbs, '📦');
 
-      const res = await client.projects.update(args.projectId, {
+      const res = await client.projects.update(args.environmentId, {
         metadata: existingMeta,
       });
 
       if (flags.reseed) {
-        printStep('Reseeding bundle (POST /cloud/projects/:id/reseed)…');
+        printStep('Reseeding bundle (POST /cloud/environments/:id/reseed)…');
         try {
           // Best-effort: server may not expose a reseed endpoint yet.
           const reseed = await (client as any).fetch?.(
-            `${(client as any).baseUrl}/api/v1/cloud/projects/${encodeURIComponent(args.projectId)}/reseed`,
+            `${(client as any).baseUrl}/api/v1/cloud/environments/${encodeURIComponent(args.environmentId)}/reseed`,
             { method: 'POST' },
           );
           if (reseed && typeof reseed.ok === 'boolean' && !reseed.ok) {
@@ -132,7 +132,7 @@ export default class ProjectsBind extends Command {
         formatOutput(res, 'yaml');
       } else {
         console.log(`\n✓ Project bound to artifact`);
-        console.log(`  ${args.projectId} → ${artifactAbs}`);
+        console.log(`  ${args.environmentId} → ${artifactAbs}`);
         console.log(`  The next request to this project will load the new bundle.`);
         console.log('');
       }

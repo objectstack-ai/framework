@@ -14,7 +14,7 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * ─────────────────────────────────────────────────────────────────────
  *  Key design points (ADR-0008 §0 amendment + M1):
  *
- *  • Keyed by `(organization_id, type, name)` only — `project_id` was
+ *  • Keyed by `(organization_id, type, name)` only — `environment_id` was
  *    removed in the branch/project-removal amendment. The original
  *    `metadata_id` column (a downgraded plain-text version of the old
  *    `sys_metadata.id` FK) was removed in the M1 follow-up — joins go

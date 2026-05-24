@@ -14,7 +14,7 @@ import ProjectsSwitch from './switch.js';
  *
  * This catches typos and missing-arg regressions without the heavy
  * lifting of a full oclif harness. Full runtime coverage lives in
- * `client.project-scoping.test.ts` (which exercises the HTTP surface)
+ * `client.environment-scoping.test.ts` (which exercises the HTTP surface)
  * and the Chrome DevTools MCP smoke test in the PR description.
  */
 

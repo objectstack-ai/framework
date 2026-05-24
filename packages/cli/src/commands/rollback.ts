@@ -8,7 +8,7 @@ export default class Rollback extends Command {
 
   static override examples = [
     '<%= config.bin %> <%= command.id %> --commit 9ce1bd48dd70',
-    'OS_PROJECT_ID=proj_crm <%= config.bin %> <%= command.id %> --commit abcdef123456',
+    'OS_ENVIRONMENT_ID=proj_crm <%= config.bin %> <%= command.id %> --commit abcdef123456',
   ];
 
   static override flags = {
@@ -18,10 +18,10 @@ export default class Rollback extends Command {
       env: 'OS_CLOUD_URL',
       default: 'http://localhost:4000',
     }),
-    project: Flags.string({
-      char: 'p',
-      description: 'Project ID (required)',
-      env: 'OS_PROJECT_ID',
+    environment: Flags.string({
+      char: 'e',
+      description: 'Environment ID (required)',
+      env: 'OS_ENVIRONMENT_ID',
       required: true,
     }),
     commit: Flags.string({
@@ -42,7 +42,7 @@ export default class Rollback extends Command {
     printHeader('Rollback / Activate Revision');
 
     try {
-      const url = `${flags.server}/api/v1/cloud/projects/${flags.project}/revisions/${flags.commit}/activate`;
+      const url = `${flags.server}/api/v1/cloud/environments/${flags.environment}/revisions/${flags.commit}/activate`;
       printStep(`POST ${url}`);
 
       const response = await fetch(url, {
@@ -71,7 +71,7 @@ export default class Rollback extends Command {
 
       console.log('');
       printSuccess('Revision activated');
-      printKV('  Project', flags.project);
+      printKV('  Environment', flags.environment);
       if (data?.commitId) printKV('  Commit', data.commitId);
       if (data?.previousCommitId) printKV('  Previous', data.previousCommitId);
       printKV('  Server', flags.server);

@@ -1,5 +1,8 @@
 # Plan: M1 — Artifact Envelope Schema (packages/spec)
 
+> **v5.0 update (2026):** Throughout this document, the term *project* has been renamed to *environment* (no aliases; CLI flags, URL paths, schemas, env vars all hard-renamed). See ADR-0006 for the rationale and `.changeset/v5-project-to-environment-rename.md` for the breaking-change list. The body below is preserved verbatim for historical context.
+
+
 ## Context
 
 ROADMAP M1 is the prerequisite for everything downstream (M2–M5, D1, D3).

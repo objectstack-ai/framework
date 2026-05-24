@@ -38,7 +38,7 @@ export default class ProjectsList extends Command {
     const { flags } = await this.parse(ProjectsList);
 
     try {
-      const { client, token, projectId: activeId } = await createApiClient({
+      const { client, token, environmentId: activeId } = await createApiClient({
         url: flags.url,
         token: flags.token,
       });

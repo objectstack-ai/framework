@@ -10,10 +10,10 @@
  * The control plane is expected to expose two endpoints:
  *
  *   GET {controlPlaneUrl}/api/v1/cloud/resolve-hostname?host={hostname}
- *     → { projectId: string, organizationId?: string, runtime?: ProjectRuntimeConfig }
+ *     → { environmentId: string, organizationId?: string, runtime?: EnvironmentRuntimeConfig }
  *
- *   GET {controlPlaneUrl}/api/v1/cloud/projects/:projectId/artifact
- *     → ProjectArtifactResponse  (ProjectArtifact + optional `runtime` block)
+ *   GET {controlPlaneUrl}/api/v1/cloud/environments/:environmentId/artifact
+ *     → EnvironmentArtifactResponse  (EnvironmentArtifact + optional `runtime` block)
  *
  * Both endpoints accept an optional `Authorization: Bearer <apiKey>`.
  *
@@ -22,7 +22,7 @@
  * for the same key share a single in-flight promise (singleflight).
  */
 
-import type { ProjectArtifact } from '@objectstack/spec/cloud';
+import type { EnvironmentArtifact } from '@objectstack/spec/cloud';
 
 /**
  * Per-project runtime config injected by the control plane alongside
@@ -30,7 +30,7 @@ import type { ProjectArtifact } from '@objectstack/spec/cloud';
  * connect to (this is *not* part of the developer-authored compiled
  * artifact — the control plane mints it when serving the API).
  */
-export interface ProjectRuntimeConfig {
+export interface EnvironmentRuntimeConfig {
     organizationId?: string;
     hostname?: string;
     /** Driver type — e.g. `sqlite`, `postgres`, `turso`, `memory`. */
@@ -52,19 +52,19 @@ export interface ProjectRuntimeConfig {
  * Hostname resolution response.
  */
 export interface ResolvedHostname {
-    projectId: string;
+    environmentId: string;
     organizationId?: string;
     /** Optional runtime config — when present, callers can skip the artifact fetch's runtime block. */
-    runtime?: ProjectRuntimeConfig;
+    runtime?: EnvironmentRuntimeConfig;
 }
 
 /**
- * Artifact response wrapping the spec's `ProjectArtifact` envelope plus
+ * Artifact response wrapping the spec's `EnvironmentArtifact` envelope plus
  * an optional `runtime` block carrying the project's database
  * connection details.
  */
-export interface ProjectArtifactResponse extends ProjectArtifact {
-    runtime?: ProjectRuntimeConfig;
+export interface EnvironmentArtifactResponse extends EnvironmentArtifact {
+    runtime?: EnvironmentRuntimeConfig;
 }
 
 export interface ArtifactApiClientConfig {
@@ -96,9 +96,9 @@ export class ArtifactApiClient {
     private readonly logger: NonNullable<ArtifactApiClientConfig['logger']>;
 
     private readonly hostnameCache = new Map<string, CacheEntry<ResolvedHostname>>();
-    private readonly artifactCache = new Map<string, CacheEntry<ProjectArtifactResponse>>();
+    private readonly artifactCache = new Map<string, CacheEntry<EnvironmentArtifactResponse>>();
     private readonly pendingHostname = new Map<string, Promise<ResolvedHostname | null>>();
-    private readonly pendingArtifact = new Map<string, Promise<ProjectArtifactResponse | null>>();
+    private readonly pendingArtifact = new Map<string, Promise<EnvironmentArtifactResponse | null>>();
 
     constructor(config: ArtifactApiClientConfig) {
         if (!config.controlPlaneUrl) {
@@ -133,9 +133,9 @@ export class ArtifactApiClient {
                 const res = await this.request(url);
                 if (res === null) return null;
                 const body = res.success === false ? null : (res.data ?? res);
-                if (!body || typeof body.projectId !== 'string' || !body.projectId) return null;
+                if (!body || typeof body.environmentId !== 'string' || !body.environmentId) return null;
                 const value: ResolvedHostname = {
-                    projectId: body.projectId,
+                    environmentId: body.environmentId,
                     organizationId: body.organizationId,
                     runtime: body.runtime,
                 };
@@ -157,9 +157,9 @@ export class ArtifactApiClient {
      * independently (the cache key includes the commit id) so the preview
      * runtime can hold multiple versions in memory simultaneously.
      */
-    async fetchArtifact(projectId: string, opts?: { commit?: string }): Promise<ProjectArtifactResponse | null> {
+    async fetchArtifact(environmentId: string, opts?: { commit?: string }): Promise<EnvironmentArtifactResponse | null> {
         const commit = opts?.commit?.trim() || '';
-        const cacheKey = commit ? `${projectId}@${commit}` : projectId;
+        const cacheKey = commit ? `${environmentId}@${commit}` : environmentId;
         const cached = this.artifactCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -169,16 +169,16 @@ export class ArtifactApiClient {
         const promise = (async () => {
             try {
                 const qs = commit ? `?commit=${encodeURIComponent(commit)}` : '';
-                const url = `${this.base}/api/v1/cloud/projects/${encodeURIComponent(projectId)}/artifact${qs}`;
+                const url = `${this.base}/api/v1/cloud/environments/${encodeURIComponent(environmentId)}/artifact${qs}`;
                 const res = await this.request(url);
                 if (res === null) return null;
                 const body = res.success === false ? null : (res.data ?? res);
                 if (!body || typeof body !== 'object') return null;
                 if (!body.metadata) {
-                    this.logger.warn?.('[ArtifactApiClient] artifact response missing `metadata`', { projectId, commit });
+                    this.logger.warn?.('[ArtifactApiClient] artifact response missing `metadata`', { environmentId, commit });
                     return null;
                 }
-                const value = body as ProjectArtifactResponse;
+                const value = body as EnvironmentArtifactResponse;
                 this.artifactCache.set(cacheKey, { value, expiresAt: Date.now() + this.cacheTtlMs });
                 return value;
             } finally {
@@ -191,33 +191,33 @@ export class ArtifactApiClient {
 
     /**
      * Resolve an 8-hex project short id (first 8 hex chars of the UUID,
-     * dashes stripped) to the full projectId. Used by the preview
+     * dashes stripped) to the full environmentId. Used by the preview
      * runtime, which encodes project ids in subdomains.
      *
      * Returns `null` on 404 or ambiguity (the control plane returns 409
      * if the prefix matches more than one project).
      */
-    async lookupProjectByShortId(shortId: string): Promise<{ projectId: string; organizationId?: string } | null> {
+    async lookupProjectByShortId(shortId: string): Promise<{ environmentId: string; organizationId?: string } | null> {
         const short = String(shortId ?? '').trim().toLowerCase();
         if (!/^[0-9a-f]{8,}$/.test(short)) return null;
-        const url = `${this.base}/api/v1/cloud/projects-by-short-id/${encodeURIComponent(short)}`;
+        const url = `${this.base}/api/v1/cloud/environments-by-short-id/${encodeURIComponent(short)}`;
         const res = await this.request(url);
         if (res === null) return null;
         const body = res.success === false ? null : (res.data ?? res);
-        if (!body || typeof body.projectId !== 'string' || !body.projectId) return null;
-        return { projectId: body.projectId, organizationId: body.organizationId };
+        if (!body || typeof body.environmentId !== 'string' || !body.environmentId) return null;
+        return { environmentId: body.environmentId, organizationId: body.organizationId };
     }
 
     /**
      * Fetch the head commit of a branch. Returns the commit id (and the
      * matching revision row's `published_at` for cache-validity checks).
-     * Reuses the existing `GET /cloud/projects/:id/branches` endpoint.
+     * Reuses the existing `GET /cloud/environments/:id/branches` endpoint.
      */
     async fetchBranchHead(
-        projectId: string,
+        environmentId: string,
         branchName: string,
     ): Promise<{ commitId: string; publishedAt?: string | null } | null> {
-        const url = `${this.base}/api/v1/cloud/projects/${encodeURIComponent(projectId)}/branches`;
+        const url = `${this.base}/api/v1/cloud/environments/${encodeURIComponent(environmentId)}/branches`;
         const res = await this.request(url);
         if (res === null) return null;
         const body = res.success === false ? null : (res.data ?? res);
@@ -229,16 +229,16 @@ export class ArtifactApiClient {
     }
 
     /** Drop cached entries for a project (and any matching hostname). */
-    invalidate(projectId: string): void {
-        // Cache keys are `${projectId}` for HEAD or `${projectId}@${commit}`
+    invalidate(environmentId: string): void {
+        // Cache keys are `${environmentId}` for HEAD or `${environmentId}@${commit}`
         // for pinned reads (preview runtime). Drop both shapes.
-        this.artifactCache.delete(projectId);
-        const prefix = `${projectId}@`;
+        this.artifactCache.delete(environmentId);
+        const prefix = `${environmentId}@`;
         for (const key of Array.from(this.artifactCache.keys())) {
             if (key.startsWith(prefix)) this.artifactCache.delete(key);
         }
         for (const [host, entry] of this.hostnameCache) {
-            if (entry.value.projectId === projectId) this.hostnameCache.delete(host);
+            if (entry.value.environmentId === environmentId) this.hostnameCache.delete(host);
         }
     }
 

@@ -6,9 +6,9 @@ import { pluralToSingular } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import type { KernelManager } from './cloud/kernel-manager.js';
 
-/** Minimal local interface — full ProjectScopeManager was removed in Phase R. */
-interface ProjectScopeManager {
-    touch(projectId: string): void;
+/** Minimal local interface — full EnvironmentScopeManager was removed in Phase R. */
+interface EnvironmentScopeManager {
+    touch(environmentId: string): void;
 }
 import {
     resolveExecutionContext,
@@ -30,7 +30,7 @@ function randomUUID(): string {
 export interface HttpProtocolContext {
     request: any;
     response?: any;
-    projectId?: string;   // Resolved environment ID
+    environmentId?: string;   // Resolved environment ID
     dataDriver?: any; // IDataDriver - Resolved environment-scoped driver
     /**
      * Identity envelope resolved by `resolveExecutionContext` and threaded
@@ -59,17 +59,17 @@ export interface HttpDispatcherOptions {
     enforceProjectMembership?: boolean;
     /**
      * Optional {@link KernelManager}. When present, the dispatcher resolves
-     * `context.projectId` first and then routes the request against the
-     * project's dedicated kernel via `kernelManager.getOrCreate(projectId)`.
-     * Requests that fail to resolve a projectId fall through to the
+     * `context.environmentId` first and then routes the request against the
+     * project's dedicated kernel via `kernelManager.getOrCreate(environmentId)`.
+     * Requests that fail to resolve a environmentId fall through to the
      * constructor-supplied kernel (self-hosted / legacy behavior).
      */
     kernelManager?: KernelManager;
     /**
-     * Optional {@link ProjectScopeManager}. When present, `touch(projectId)` is
+     * Optional {@link EnvironmentScopeManager}. When present, `touch(environmentId)` is
      * called on every scoped request so idle projects are evicted after TTL.
      */
-    scopeManager?: ProjectScopeManager;
+    scopeManager?: EnvironmentScopeManager;
 }
 
 /**
@@ -84,27 +84,27 @@ export class HttpDispatcher {
     private kernel: any; // Casting to any to access dynamic props like services, graphql
     private defaultKernel: ObjectKernel;
     private envRegistry?: any; // EnvironmentDriverRegistry
-    private defaultProject?: { projectId: string; orgId?: string };
+    private defaultProject?: { environmentId: string; orgId?: string };
     private kernelManager?: KernelManager;
-    private scopeManager?: ProjectScopeManager;
+    private scopeManager?: EnvironmentScopeManager;
     /**
      * When `true`, scoped data-plane routes enforce a
-     * `sys_project_member` lookup and return 403 for non-members.
-     * Defaults to `true` when a projectId is resolvable — legacy callers
+     * `sys_environment_member` lookup and return 403 for non-members.
+     * Defaults to `true` when a environmentId is resolvable — legacy callers
      * can opt out via the third constructor argument (see
      * `DispatcherConfig.enforceProjectMembership`).
      */
     private enforceMembership: boolean;
     /**
      * In-memory cache of positive membership checks, keyed by
-     * `${projectId}:${userId}`. Entries expire 60 seconds after insertion
+     * `${environmentId}:${userId}`. Entries expire 60 seconds after insertion
      * — a short TTL is acceptable because a user whose access was just
      * revoked sees stale access for at most one minute.
      */
     private membershipCache: Map<string, number> = new Map();
     private static readonly MEMBERSHIP_CACHE_TTL_MS = 60_000;
     /** Well-known system project id — bypassed for any authenticated user. */
-    private static readonly SYSTEM_PROJECT_ID = '00000000-0000-0000-0000-000000000001';
+    private static readonly SYSTEM_ENVIRONMENT_ID = '00000000-0000-0000-0000-000000000001';
     /** Well-known platform org id — members bypass project membership. */
     private static readonly PLATFORM_ORG_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -119,20 +119,20 @@ export class HttpDispatcher {
         this.kernelManager = options?.kernelManager ?? resolveService('kernel-manager');
         this.scopeManager = options?.scopeManager ?? resolveService('scope-manager');
         // Single-project default is resolved lazily on first request — the
-        // plugin that registers it (`createSingleProjectPlugin`) may run
+        // plugin that registers it (`createSingleEnvironmentPlugin`) may run
         // its `init()` after the HttpDispatcher is constructed.
     }
 
-    private resolveDefaultProject(): { projectId: string; orgId?: string } | undefined {
+    private resolveDefaultProject(): { environmentId: string; orgId?: string } | undefined {
         if (this.defaultProject) return this.defaultProject;
         try {
             const v = (this.kernel as any).getService?.('default-project');
-            if (v?.projectId) {
+            if (v?.environmentId) {
                 this.defaultProject = v;
                 return v;
             }
         } catch {
-            // service not registered — single-project plugin not in stack
+            // service not registered — single-environment plugin not in stack
         }
         return undefined;
     }
@@ -265,18 +265,23 @@ export class HttpDispatcher {
 
     /**
      * Parse a project UUID out of a scoped URL path such as
-     * `/api/v1/projects/abc-123/data/task` or `/projects/abc-123/meta`.
+     * `/api/v1/environments/abc-123/data/task` or `/projects/abc-123/meta`.
      * Returns `undefined` when the path does not match the scoped pattern.
      */
-    private extractProjectIdFromPath(path: string): string | undefined {
+    /**
+     * Parse an environment UUID out of a scoped URL path such as
+     * `/api/v1/environments/abc-123/data/task` or `/environments/abc-123/meta`.
+     * Returns `undefined` when the path does not match the scoped pattern.
+     */
+    private extractEnvironmentIdFromPath(path: string): string | undefined {
         if (!path) return undefined;
-        const m = path.match(/\/projects\/([^/?#]+)/);
+        const m = path.match(/\/environments\/([^/?#]+)/);
         if (!m) return undefined;
         const candidate = m[1];
-        // Guard against matching control-plane routes like /cloud/projects.
-        // `/projects/<id>` directly nested under the API prefix wins;
-        // `/cloud/projects/<id>` is a CRUD endpoint on the control plane.
-        if (path.includes('/cloud/projects/')) return undefined;
+        // Guard against matching control-plane routes like /cloud/environments.
+        // `/environments/<id>` directly nested under the API prefix wins;
+        // `/cloud/environments/<id>` is a CRUD endpoint on the control plane.
+        if (path.includes('/cloud/environments/')) return undefined;
         return candidate;
     }
 
@@ -284,14 +289,14 @@ export class HttpDispatcher {
      * Resolve environment context for incoming request.
      *
      * Precedence:
-     * 0. URL path matches `/projects/:projectId/...` OR request.params.projectId set by router
+     * 0. URL path matches `/environments/:environmentId/...` OR request.params.environmentId set by router
      *    → envRegistry.resolveById(id)
      * 1. request.headers.host → envRegistry.resolveByHostname(host)
-     * 2. request.headers['x-project-id'] → envRegistry.resolveById(id)
+     * 2. request.headers['x-environment-id'] → envRegistry.resolveById(id)
      * 3. session.activeEnvironmentId → envRegistry.resolveById(id)
      * 4. session.activeOrganizationId → find default project → envRegistry.resolveById(id)
-     * 5. single-project default (registered by `createSingleProjectPlugin`)
-     *    → envRegistry.resolveById(defaultProject.projectId). Lets bare
+     * 5. single-environment default (registered by `createSingleEnvironmentPlugin`)
+     *    → envRegistry.resolveById(defaultProject.environmentId). Lets bare
      *    `/api/v1/data/...` URLs resolve to the lone project in
      *    `cloudUrl: 'local'` deployments.
      *
@@ -304,7 +309,7 @@ export class HttpDispatcher {
         // /projects/:id/meta path still needs the project resolved so the
         // protocol can scope its answer.
         // NOTE: /auth was removed — per-project AuthPlugin needs the
-        // hostname-resolved projectId so the dispatcher kernel-swap routes
+        // hostname-resolved environmentId so the dispatcher kernel-swap routes
         // to the project's auth manager (not the host's).
         const skipPaths = ['/cloud', '/health', '/discovery'];
         if (skipPaths.some(p => path.startsWith(p))) {
@@ -317,7 +322,7 @@ export class HttpDispatcher {
         }
 
         // Headers may arrive as a Fetch API `Headers` instance (Hono's
-        // `c.req.raw`) — where `.host` / `['x-project-id']` both return
+        // `c.req.raw`) — where `.host` / `['x-environment-id']` both return
         // undefined — or as a plain object (Vercel's incoming message
         // shape). Normalise to a single `.get(name)` accessor so both
         // layouts resolve correctly.
@@ -340,13 +345,13 @@ export class HttpDispatcher {
         };
 
         try {
-            // 0. Try URL-param / path-embedded projectId (highest precedence).
-            const urlProjectId = this.extractProjectIdFromPath(path)
-                ?? context.request?.params?.projectId;
-            if (urlProjectId) {
-                const driver = await this.envRegistry.resolveById(urlProjectId);
+            // 0. Try URL-param / path-embedded environmentId (highest precedence).
+            const urlEnvironmentId = this.extractEnvironmentIdFromPath(path)
+                ?? context.request?.params?.environmentId;
+            if (urlEnvironmentId) {
+                const driver = await this.envRegistry.resolveById(urlEnvironmentId);
                 if (driver) {
-                    context.projectId = urlProjectId;
+                    context.environmentId = urlEnvironmentId;
                     context.dataDriver = driver;
                     return;
                 }
@@ -359,35 +364,35 @@ export class HttpDispatcher {
                 const hostname = host.split(':')[0];
                 const result = await this.envRegistry.resolveByHostname(hostname);
                 if (result) {
-                    context.projectId = result.projectId;
+                    context.environmentId = result.environmentId;
                     context.dataDriver = result.driver;
                     return;
                 }
             }
 
-            // 2. Try X-Project-Id header
-            const envIdHeader = getHeader('x-project-id');
+            // 2. Try X-Environment-Id header
+            const envIdHeader = getHeader('x-environment-id');
             if (envIdHeader) {
                 const driver = await this.envRegistry.resolveById(envIdHeader);
                 if (driver) {
-                    context.projectId = envIdHeader;
+                    context.environmentId = envIdHeader;
                     context.dataDriver = driver;
                     return;
                 }
             }
 
-            // 3. Try session.activeProjectId
+            // 3. Try session.activeEnvironmentId
             try {
                 const authService: any = await this.getService(CoreServiceName.enum.auth);
                 const sessionData = await authService?.api?.getSession?.({
                     headers: context.request?.headers,
                 });
 
-                const activeProjectId = sessionData?.session?.activeProjectId ?? sessionData?.session?.activeEnvironmentId;
-                if (activeProjectId) {
-                    const driver = await this.envRegistry.resolveById(activeProjectId);
+                const activeEnvironmentId = sessionData?.session?.activeEnvironmentId ?? sessionData?.session?.activeEnvironmentId;
+                if (activeEnvironmentId) {
+                    const driver = await this.envRegistry.resolveById(activeEnvironmentId);
                     if (driver) {
-                        context.projectId = activeProjectId;
+                        context.environmentId = activeEnvironmentId;
                         context.dataDriver = driver;
                         return;
                     }
@@ -412,7 +417,7 @@ export class HttpDispatcher {
                             const defaultEnv = rows[0];
                             const driver = await this.envRegistry.resolveById(defaultEnv.id);
                             if (driver) {
-                                context.projectId = defaultEnv.id;
+                                context.environmentId = defaultEnv.id;
                                 context.dataDriver = driver;
                                 return;
                             }
@@ -425,14 +430,14 @@ export class HttpDispatcher {
             }
 
             // 5. Single-project default fallback. Registered by
-            //    `createSingleProjectPlugin()` in `cloudUrl: 'local'` boot
+            //    `createSingleEnvironmentPlugin()` in `cloudUrl: 'local'` boot
             //    shapes (apps/objectos default). Lets bare URLs like
             //    `/api/v1/data/account` resolve to the lone project.
-            if (this.defaultProject?.projectId || this.resolveDefaultProject()) {
+            if (this.defaultProject?.environmentId || this.resolveDefaultProject()) {
                 const def = this.defaultProject!;
-                const driver = await this.envRegistry.resolveById(def.projectId);
+                const driver = await this.envRegistry.resolveById(def.environmentId);
                 if (driver) {
-                    context.projectId = def.projectId;
+                    context.environmentId = def.environmentId;
                     context.dataDriver = driver;
                     return;
                 }
@@ -444,13 +449,13 @@ export class HttpDispatcher {
 
     /**
      * Check whether the authenticated user is a member of
-     * `context.projectId`. Runs after {@link resolveEnvironmentContext}
+     * `context.environmentId`. Runs after {@link resolveEnvironmentContext}
      * and is a no-op when:
      *
      *   - Membership enforcement is disabled via the constructor.
      *   - The route is control-plane (`/auth/*`, `/cloud/*`, `/health`,
      *     `/discovery`) — already skipped upstream.
-     *   - No `projectId` was resolved (e.g. unscoped legacy routes).
+     *   - No `environmentId` was resolved (e.g. unscoped legacy routes).
      *   - The project is the well-known system project (bypassed so any
      *     authenticated user can read platform metadata).
      *   - The user's active organization is the platform org (staff).
@@ -470,11 +475,11 @@ export class HttpDispatcher {
         const skipPaths = ['/auth', '/cloud', '/health', '/discovery'];
         if (skipPaths.some(p => path.startsWith(p))) return null;
 
-        const projectId = context.projectId;
-        if (!projectId) return null; // Unscoped legacy routes fall through.
+        const environmentId = context.environmentId;
+        if (!environmentId) return null; // Unscoped legacy routes fall through.
 
         // System project is always reachable by any authenticated user.
-        if (projectId === HttpDispatcher.SYSTEM_PROJECT_ID) return null;
+        if (environmentId === HttpDispatcher.SYSTEM_ENVIRONMENT_ID) return null;
 
         // Read the session. If auth is not wired up, fail open — tests
         // and single-tenant setups run without auth.
@@ -498,7 +503,7 @@ export class HttpDispatcher {
         if (activeOrganizationId === HttpDispatcher.PLATFORM_ORG_ID) return null;
 
         // Check cache.
-        const cacheKey = `${projectId}:${userId}`;
+        const cacheKey = `${environmentId}:${userId}`;
         const cached = this.membershipCache.get(cacheKey);
         const now = Date.now();
         if (cached && now - cached < HttpDispatcher.MEMBERSHIP_CACHE_TTL_MS) {
@@ -508,14 +513,14 @@ export class HttpDispatcher {
             this.membershipCache.delete(cacheKey); // expired
         }
 
-        // Query sys_project_member (control plane).
+        // Query sys_environment_member (control plane).
         try {
             const qlService = await this.getObjectQLService();
             const ql = qlService ?? await this.resolveService('objectql');
             if (!ql) return null; // No QL — cannot enforce; fail open.
 
             let rows = await ql.find('sys_environment_member', {
-                where: { environment_id: projectId, user_id: userId },
+                where: { environment_id: environmentId, user_id: userId },
                 limit: 1,
             } as any);
             if (rows && (rows as any).value) rows = (rows as any).value;
@@ -527,9 +532,9 @@ export class HttpDispatcher {
             }
 
             return this.error(
-                `Forbidden: user ${userId} is not a member of project ${projectId}`,
+                `Forbidden: user ${userId} is not a member of project ${environmentId}`,
                 403,
-                { projectId, userId, type: 'PROJECT_MEMBERSHIP_REQUIRED' },
+                { environmentId, userId, type: 'PROJECT_MEMBERSHIP_REQUIRED' },
             );
         } catch (err) {
             // Control-plane lookup failure — log and fail open rather than
@@ -776,7 +781,7 @@ export class HttpDispatcher {
         // GET /metadata/types
         if (parts[0] === 'types') {
             // PRIORITY 1: Try MetadataService directly (includes both typeRegistry with agent/tool AND runtime-registered types)
-            const metadataService = await this.resolveService('metadata', _context.projectId);
+            const metadataService = await this.resolveService('metadata', _context.environmentId);
 
             if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
                 try {
@@ -809,7 +814,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success(data) };
             }
             // Fallback — try MetadataService via resolveService
-            const metaSvc = await this.resolveService('metadata', _context.projectId);
+            const metaSvc = await this.resolveService('metadata', _context.environmentId);
             if (metaSvc && typeof (metaSvc as any).getPublished === 'function') {
                 try {
                     const fallbackData = await (metaSvc as any).getPublished(type, name);
@@ -846,7 +851,7 @@ export class HttpDispatcher {
                 }
 
                 // Fallback: try MetadataService directly
-                const metaSvc = await this.resolveService('metadata', _context.projectId);
+                const metaSvc = await this.resolveService('metadata', _context.environmentId);
                 if (metaSvc && typeof (metaSvc as any).saveItem === 'function') {
                     try {
                         const data = await (metaSvc as any).saveItem(type, name, body);
@@ -865,13 +870,13 @@ export class HttpDispatcher {
                     // the process-wide SchemaRegistry is unsafe to query
                     // directly — it would return objects that other projects
                     // wrote in this same process. Route through the Protocol
-                    // service (which filters sys_metadata by project_id) in that
+                    // service (which filters sys_metadata by environment_id) in that
                     // case, and fall back to the registry only for the
                     // unscoped (single-kernel / control-plane) path.
                     const protocol = await this.resolveService('protocol') as any;
                     const scopedEnv = typeof protocol?.getProjectId === 'function'
                         ? protocol.getProjectId()
-                        : protocol?.projectId;
+                        : protocol?.environmentId;
                     const scoped = scopedEnv !== undefined;
 
                     if (scoped && typeof protocol.getMetaItem === 'function') {
@@ -923,7 +928,7 @@ export class HttpDispatcher {
                 }
 
                 // Try MetadataService for runtime-registered types
-                const metaSvc = await this.resolveService('metadata', _context.projectId);
+                const metaSvc = await this.resolveService('metadata', _context.environmentId);
                 if (metaSvc && typeof (metaSvc as any).getItem === 'function') {
                     try {
                         const data = await (metaSvc as any).getItem(singularType, name);
@@ -1002,7 +1007,7 @@ export class HttpDispatcher {
         // GET /metadata — return available metadata types
         if (parts.length === 0) {
             // Try MetadataService for registered types
-            const metadataService = await this.resolveService('metadata', _context.projectId);
+            const metadataService = await this.resolveService('metadata', _context.environmentId);
             if (metadataService && typeof (metadataService as any).getRegisteredTypes === 'function') {
                 try {
                     const types = await (metadataService as any).getRegisteredTypes();
@@ -1037,7 +1042,7 @@ export class HttpDispatcher {
         if (!_context.dataDriver && this.envRegistry) {
             return {
                 handled: true,
-                response: this.error('Project not resolved. Please specify X-Project-Id header or ensure hostname maps to a project.', 428)
+                response: this.error('Project not resolved. Please specify X-Environment-Id header or ensure hostname maps to a project.', 428)
             };
         }
 
@@ -1050,7 +1055,7 @@ export class HttpDispatcher {
             // POST /data/:object/query
             if (action === 'query' && m === 'POST') {
                 // Spec: returns FindDataResponse = { object, records, total?, hasMore? }
-                const result = await this.callData('query', { object: objectName, ...body }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const result = await this.callData('query', { object: objectName, ...body }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 return { handled: true, response: this.success(result) };
             }
 
@@ -1064,7 +1069,7 @@ export class HttpDispatcher {
                 if (select != null) allowedParams.select = select;
                 if (expand != null) allowedParams.expand = expand;
                 // Spec: returns GetDataResponse = { object, id, record }
-                const result = await this.callData('get', { object: objectName, id, ...allowedParams }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const result = await this.callData('get', { object: objectName, id, ...allowedParams }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 return { handled: true, response: this.success(result) };
             }
 
@@ -1072,7 +1077,7 @@ export class HttpDispatcher {
             if (parts.length === 2 && m === 'PATCH') {
                 const id = parts[1];
                 // Spec: returns UpdateDataResponse = { object, id, record }
-                const result = await this.callData('update', { object: objectName, id, data: body }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const result = await this.callData('update', { object: objectName, id, data: body }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 return { handled: true, response: this.success(result) };
             }
 
@@ -1080,7 +1085,7 @@ export class HttpDispatcher {
             if (parts.length === 2 && m === 'DELETE') {
                 const id = parts[1];
                 // Spec: returns DeleteDataResponse = { object, id, deleted }
-                const result = await this.callData('delete', { object: objectName, id }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const result = await this.callData('delete', { object: objectName, id }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 return { handled: true, response: this.success(result) };
             }
         } else {
@@ -1128,14 +1133,14 @@ export class HttpDispatcher {
                 }
 
                 // Spec: returns FindDataResponse = { object, records, total?, hasMore? }
-                const result = await this.callData('query', { object: objectName, query: normalized }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const result = await this.callData('query', { object: objectName, query: normalized }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 return { handled: true, response: this.success(result) };
             }
 
             // POST /data/:object (Create)
             if (m === 'POST') {
                 // Spec: returns CreateDataResponse = { object, id, record }
-                const result = await this.callData('create', { object: objectName, data: body }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const result = await this.callData('create', { object: objectName, data: body }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 const res = this.success(result);
                 res.status = 201;
                 return { handled: true, response: res };
@@ -1371,23 +1376,23 @@ export class HttpDispatcher {
      * Cloud / Environment Control-Plane routes.
      *
      *  - GET    /cloud/drivers                                 → list registered ObjectQL drivers (for env provisioning)
-     *  - GET    /cloud/projects                            → list
-     *  - POST   /cloud/projects                            → provision (driver: memory | turso | <any registered driver>)
-     *  - GET    /cloud/projects/:id                        → detail (+ db, credential, membership)
-     *  - PATCH  /cloud/projects/:id                        → update displayName / plan / status / isDefault / metadata
-     *  - DELETE /cloud/projects/:id[?force=1]              → cascade-delete the project (cred/member/package install rows + physical DB)
+     *  - GET    /cloud/environments                            → list
+     *  - POST   /cloud/environments                            → provision (driver: memory | turso | <any registered driver>)
+     *  - GET    /cloud/environments/:id                        → detail (+ db, credential, membership)
+     *  - PATCH  /cloud/environments/:id                        → update displayName / plan / status / isDefault / metadata
+     *  - DELETE /cloud/environments/:id[?force=1]              → cascade-delete the project (cred/member/package install rows + physical DB)
      *  - DELETE /cloud/organizations/:id                   → cascade-delete every project (and its DB) for the org, then drop the org
-     *  - POST   /cloud/projects/:id/retry                  → re-run provisioning for a failed environment
-     *  - POST   /cloud/projects/:id/activate               → mark as active for session (stub)
-     *  - POST   /cloud/projects/:id/credentials/rotate     → rotate credential
-     *  - GET    /cloud/projects/:id/members                → list members
-     *  - GET    /cloud/projects/:id/packages               → list installed packages
-     *  - POST   /cloud/projects/:id/packages               → install package into env
-     *  - GET    /cloud/projects/:id/packages/:pkgId        → get installation detail
-     *  - PATCH  /cloud/projects/:id/packages/:pkgId/enable  → enable package
-     *  - PATCH  /cloud/projects/:id/packages/:pkgId/disable → disable package
-     *  - DELETE /cloud/projects/:id/packages/:pkgId        → uninstall (scope=platform forbidden)
-     *  - POST   /cloud/projects/:id/packages/:pkgId/upgrade → upgrade to newer version
+     *  - POST   /cloud/environments/:id/retry                  → re-run provisioning for a failed environment
+     *  - POST   /cloud/environments/:id/activate               → mark as active for session (stub)
+     *  - POST   /cloud/environments/:id/credentials/rotate     → rotate credential
+     *  - GET    /cloud/environments/:id/members                → list members
+     *  - GET    /cloud/environments/:id/packages               → list installed packages
+     *  - POST   /cloud/environments/:id/packages               → install package into env
+     *  - GET    /cloud/environments/:id/packages/:pkgId        → get installation detail
+     *  - PATCH  /cloud/environments/:id/packages/:pkgId/enable  → enable package
+     *  - PATCH  /cloud/environments/:id/packages/:pkgId/disable → disable package
+     *  - DELETE /cloud/environments/:id/packages/:pkgId        → uninstall (scope=platform forbidden)
+     *  - POST   /cloud/environments/:id/packages/:pkgId/upgrade → upgrade to newer version
      *
      * Driver binding
      * --------------
@@ -1399,11 +1404,11 @@ export class HttpDispatcher {
      * If `driver` is omitted, the dispatcher auto-selects the first available
      * in preference order: turso → memory → any other registered driver.
      *
-     * Backed by ObjectQL sys_project / sys_project_credential /
-     * sys_project_member tables (registered by
+     * Backed by ObjectQL sys_environment / sys_environment_credential /
+     * sys_environment_member tables (registered by
      * `@objectstack/service-tenant`'s `createTenantPlugin`).
      * Physical database addressing (database_url, database_driver, etc.)
-     * is stored directly on the sys_project row.
+     * is stored directly on the sys_environment row.
      */
     /**
      * Resolve the calling user id from the request session, if any.
@@ -1620,8 +1625,8 @@ export class HttpDispatcher {
             );
         };
 
-        const buildDatabaseUrl = (driverName: string, projectId: string): string => {
-            const dbName = `env-${projectId}`;
+        const buildDatabaseUrl = (driverName: string, environmentId: string): string => {
+            const dbName = `env-${environmentId}`;
             switch (driverName) {
                 case 'memory':
                     return `memory://${dbName}`;
@@ -1648,13 +1653,13 @@ export class HttpDispatcher {
             driverName: string,
         ): Promise<{
             createDatabase(params: {
-                projectId: string;
+                environmentId: string;
                 databaseName: string;
                 region: string;
                 storageLimitMb: number;
             }): Promise<{ databaseUrl: string; plaintextSecret: string }>;
             deleteDatabase?(params: {
-                projectId: string;
+                environmentId: string;
                 databaseName: string;
                 databaseUrl?: string;
             }): Promise<void>;
@@ -1682,7 +1687,7 @@ export class HttpDispatcher {
         };
 
         // Data crosses the wire as snake_case — matching the canonical
-        // `sys_project` schema. The only post-processing is JSON-parsing the
+        // `sys_environment` schema. The only post-processing is JSON-parsing the
         // `metadata` column so consumers don't need to unwrap it.
         const cleanProjectRow = (row: any): any => {
             if (!row) return row;
@@ -1719,7 +1724,7 @@ export class HttpDispatcher {
             }
 
             // ----- POST /cloud/admin/platform-sso/backfill ----------------
-            // Idempotent admin trigger: scans `sys_project` and ensures every
+            // Idempotent admin trigger: scans `sys_environment` and ensures every
             // active project has a corresponding `sys_oauth_application` row
             // for platform SSO ("Airtable-style unified login"). Safe to call
             // any number of times — re-running with the same project is a
@@ -1775,7 +1780,7 @@ export class HttpDispatcher {
                 }
             }
 
-            // ----- /cloud/projects collection routes -----
+            // ----- /cloud/environments collection routes -----
             if (parts.length === 1 && parts[0] === 'projects' && m === 'GET') {
                 const where: Record<string, unknown> = {};
                 if (query?.organizationId) where.organization_id = query.organizationId;
@@ -1825,7 +1830,7 @@ export class HttpDispatcher {
                 if (!req.organization_id || !req.display_name) {
                     return { handled: true, response: this.error('organization_id and display_name are required', 400) };
                 }
-                const projectId = randomUUID();
+                const environmentId = randomUUID();
                 const credentialId = randomUUID();
                 const nowIso = new Date().toISOString();
 
@@ -1853,7 +1858,7 @@ export class HttpDispatcher {
                     };
                 }
                 const driver = resolved.name;
-                let plaintextSecret = `mock-token-${projectId}`;
+                let plaintextSecret = `mock-token-${environmentId}`;
 
                 // Compute hostname if not provided.
                 // Format: {org-slug}-{short-project-id}.{rootDomain}
@@ -1861,7 +1866,7 @@ export class HttpDispatcher {
                 // suffix now that projects no longer carry a user-facing slug.
                 let computedHostname = req.hostname;
                 if (!computedHostname) {
-                    const shortId = projectId.slice(0, 8);
+                    const shortId = environmentId.slice(0, 8);
                     try {
                         const orgRow = await findOne('sys_organization', { id: req.organization_id });
                         const orgSlug = orgRow?.slug || req.organization_id;
@@ -1877,7 +1882,7 @@ export class HttpDispatcher {
                 // kick off fire-and-forget provisioning, so the client
                 // gets an actionable error rather than a silent
                 // status: 'failed' + metadata.provisioningError later.
-                // The sys_project.hostname column is UNIQUE at the DB
+                // The sys_environment.hostname column is UNIQUE at the DB
                 // layer but that constraint would only trip during
                 // insert — by which point the caller has already moved
                 // on from the HTTP response.
@@ -1885,7 +1890,7 @@ export class HttpDispatcher {
                     const existing = await findOne('sys_environment', {
                         hostname: computedHostname,
                     });
-                    if (existing && existing.id !== projectId) {
+                    if (existing && existing.id !== environmentId) {
                         return {
                             handled: true,
                             response: this.error(
@@ -1896,7 +1901,7 @@ export class HttpDispatcher {
                         };
                     }
                 } catch {
-                    // sys_project table may not yet be ready (first-run cold
+                    // sys_environment table may not yet be ready (first-run cold
                     // boot) — fall through and let the DB enforce uniqueness.
                 }
 
@@ -1975,7 +1980,7 @@ export class HttpDispatcher {
                     // personal workspace as before.
                 }
                 await ql.insert(ENV, {
-                    id: projectId,
+                    id: environmentId,
                     organization_id: req.organization_id,
                     display_name: req.display_name,
                     is_default: req.is_default ?? false,
@@ -2009,7 +2014,7 @@ export class HttpDispatcher {
                     if (baseSecret) {
                         await seedPlatformSsoClient({
                             ql,
-                            projectId,
+                            environmentId,
                             hostname: computedHostname,
                             baseSecret,
                             logger: console,
@@ -2017,7 +2022,7 @@ export class HttpDispatcher {
                     }
                 } catch (ssoErr) {
                     console.warn?.('[http-dispatcher] platform SSO seed failed (non-fatal)', {
-                        projectId,
+                        environmentId,
                         error: (ssoErr as Error)?.message,
                     });
                 }
@@ -2041,15 +2046,15 @@ export class HttpDispatcher {
                             const adapter = await getRealAdapter(driver);
                             if (adapter) {
                                 const result = await adapter.createDatabase({
-                                    projectId,
-                                    databaseName: `p-${projectId.replace(/-/g, "").slice(0, 24)}`,
+                                    environmentId,
+                                    databaseName: `p-${environmentId.replace(/-/g, "").slice(0, 24)}`,
                                     region: 'us-east-1',
                                     storageLimitMb: req.storage_limit_mb ?? 1024,
                                 });
                                 databaseUrl = result.databaseUrl;
                                 if (result.plaintextSecret) plaintextSecret = result.plaintextSecret;
                             } else {
-                                databaseUrl = buildDatabaseUrl(driver, projectId);
+                                databaseUrl = buildDatabaseUrl(driver, environmentId);
                             }
                         } catch (adapterErr) {
                             // Adapter call failed (e.g. Turso API down). Surface
@@ -2072,11 +2077,11 @@ export class HttpDispatcher {
                                 database_url: databaseUrl,
                                 updated_at: seedStartedAt,
                             },
-                            { where: { id: projectId } } as any,
+                            { where: { id: environmentId } } as any,
                         );
                         await ql.insert(CRED, {
                             id: credentialId,
-                            environment_id: projectId,
+                            environment_id: environmentId,
                             secret_ciphertext: plaintextSecret,
                             encryption_key_id: 'noop',
                             authorization: 'full_access',
@@ -2086,20 +2091,20 @@ export class HttpDispatcher {
                         });
 
                         // Seed template metadata into the newly-provisioned project.
-                        // Non-fatal: errors are stored in sys_project.metadata so the
+                        // Non-fatal: errors are stored in sys_environment.metadata so the
                         // project stays `active` even if template seeding fails.
                         const templateId = req.template_id ?? 'blank';
                         if (templateId !== 'blank') {
                             try {
                                 const seeder: any = await this.resolveService('template-seeder');
                                 if (seeder) {
-                                    await seeder.seed({ projectId, templateId });
+                                    await seeder.seed({ environmentId, templateId });
                                 }
                             } catch (seedErr) {
                                 const seedMessage = seedErr instanceof Error ? seedErr.message : String(seedErr);
                                 // Persist seed error in metadata (non-fatal — project is active).
                                 try {
-                                    const existing = await findOne(ENV, { id: projectId });
+                                    const existing = await findOne(ENV, { id: environmentId });
                                     const existingMeta = typeof existing?.metadata === 'string'
                                         ? JSON.parse(existing.metadata)
                                         : (existing?.metadata ?? {});
@@ -2111,7 +2116,7 @@ export class HttpDispatcher {
                                                 templateSeedError: { message: seedMessage, templateId },
                                             }),
                                         },
-                                        { where: { id: projectId } } as any,
+                                        { where: { id: environmentId } } as any,
                                     );
                                 } catch {
                                     // Best-effort metadata update — ignore secondary failure.
@@ -2148,14 +2153,14 @@ export class HttpDispatcher {
                                 }
                                 const seeder: any = await this.resolveService('template-seeder');
                                 if (seeder?.seedBundle) {
-                                    await seeder.seedBundle({ projectId, bundle });
+                                    await seeder.seedBundle({ environmentId, bundle });
                                 } else {
                                     throw new Error('template-seeder.seedBundle is unavailable');
                                 }
                             } catch (bindErr) {
                                 const bindMessage = bindErr instanceof Error ? bindErr.message : String(bindErr);
                                 try {
-                                    const existing = await findOne(ENV, { id: projectId });
+                                    const existing = await findOne(ENV, { id: environmentId });
                                     const existingMeta = typeof existing?.metadata === 'string'
                                         ? JSON.parse(existing.metadata)
                                         : (existing?.metadata ?? {});
@@ -2167,7 +2172,7 @@ export class HttpDispatcher {
                                                 artifactBindError: { message: bindMessage, artifactPath: artifactPathRaw },
                                             }),
                                         },
-                                        { where: { id: projectId } } as any,
+                                        { where: { id: environmentId } } as any,
                                     );
                                 } catch {
                                     // Best-effort metadata update — ignore secondary failure.
@@ -2187,7 +2192,7 @@ export class HttpDispatcher {
                                 provisioned_at: finishedAt,
                                 updated_at: finishedAt,
                             },
-                            { where: { id: projectId } } as any,
+                            { where: { id: environmentId } } as any,
                         );
                     } catch (err) {
                         const message = err instanceof Error ? err.message : String(err);
@@ -2202,7 +2207,7 @@ export class HttpDispatcher {
                                 }),
                                 updated_at: failedAt,
                             },
-                            { where: { id: projectId } } as any,
+                            { where: { id: environmentId } } as any,
                         );
                     }
                 };
@@ -2230,13 +2235,13 @@ export class HttpDispatcher {
                     void runProvisioning();
                 }
 
-                const project = cleanProjectRow(await findOne(ENV, { id: projectId }));
+                const project = cleanProjectRow(await findOne(ENV, { id: environmentId }));
                 const res = this.success({ project });
                 res.status = syncProvisioning ? 201 : 202;
                 return { handled: true, response: res };
             }
 
-            // ----- /cloud/projects/:id -----
+            // ----- /cloud/environments/:id -----
             if (parts.length === 2 && parts[0] === 'projects') {
                 const id = decodeURIComponent(parts[1]);
 
@@ -2308,7 +2313,7 @@ export class HttpDispatcher {
                     if (!result.ok) {
                         return { handled: true, response: this.error(result.error ?? 'Delete failed', result.status ?? 500) };
                     }
-                    return { handled: true, response: this.success({ deleted: true, projectId: id, warnings: result.warnings }) };
+                    return { handled: true, response: this.success({ deleted: true, environmentId: id, warnings: result.warnings }) };
                 }
             }
 
@@ -2383,7 +2388,7 @@ export class HttpDispatcher {
                 };
             }
 
-            // ----- /cloud/projects/:id/hostname -----
+            // ----- /cloud/environments/:id/hostname -----
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'hostname' && (m === 'POST' || m === 'PUT')) {
                 const id = decodeURIComponent(parts[1]);
                 const hostname = body?.hostname;
@@ -2423,7 +2428,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ project: updated }) };
             }
 
-            // ----- /cloud/projects/:id/retry -----
+            // ----- /cloud/environments/:id/retry -----
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'retry' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
                 const envRow = await findOne(ENV, { id });
@@ -2495,7 +2500,7 @@ export class HttpDispatcher {
                             const adapter = await getRealAdapter(resolved.name);
                             if (adapter) {
                                 const result = await adapter.createDatabase({
-                                    projectId: id,
+                                    environmentId: id,
                                     databaseName: `p-${id.replace(/-/g, "").slice(0, 24)}`,
                                     region: 'us-east-1',
                                     storageLimitMb: envRow.storage_limit_mb ?? 1024,
@@ -2560,16 +2565,16 @@ export class HttpDispatcher {
                 return { handled: true, response: retryRes };
             }
 
-            // ----- /cloud/projects/:id/activate -----
+            // ----- /cloud/environments/:id/activate -----
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'activate' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
                 const envRow = await findOne(ENV, { id });
                 if (!envRow) return { handled: true, response: this.error(`Project '${id}' not found`, 404) };
-                // TODO: persist active_project_id on the session once session service is wired.
+                // TODO: persist active_environment_id on the session once session service is wired.
                 return { handled: true, response: this.success({ project: cleanProjectRow(envRow), sessionUpdated: false }) };
             }
 
-            // ----- /cloud/projects/:id/credentials/rotate -----
+            // ----- /cloud/environments/:id/credentials/rotate -----
             if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'credentials' && parts[3] === 'rotate' && m === 'POST') {
                 const id = decodeURIComponent(parts[1]);
                 const plaintext = body?.plaintext;
@@ -2615,7 +2620,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ credential: credMeta }) };
             }
 
-            // ----- /cloud/projects/:id/members -----
+            // ----- /cloud/environments/:id/members -----
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'members' && m === 'GET') {
                 const id = decodeURIComponent(parts[1]);
                 let rows = await ql.find(MEM, { where: { environment_id: id } } as any);
@@ -2647,7 +2652,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ members: enriched }) };
             }
 
-            // ----- POST /cloud/projects/:id/members  (invite) ---------------
+            // ----- POST /cloud/environments/:id/members  (invite) ---------------
             //   body: { email | user_id, role? = 'member' }
             // Only owner / admin may invite. Idempotent: re-inviting an
             // existing member returns 200 with the existing row instead of
@@ -2711,7 +2716,7 @@ export class HttpDispatcher {
                 }
             }
 
-            // ----- PATCH /cloud/projects/:id/members/:memberId (update role) ----
+            // ----- PATCH /cloud/environments/:id/members/:memberId (update role) ----
             //   body: { role }
             if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'members' && m === 'PATCH') {
                 const id = decodeURIComponent(parts[1]);
@@ -2753,7 +2758,7 @@ export class HttpDispatcher {
                 }
             }
 
-            // ----- DELETE /cloud/projects/:id/members/:memberId ----------------
+            // ----- DELETE /cloud/environments/:id/members/:memberId ----------------
             // Owner / admin may remove anyone. Anyone may remove themselves
             // unless they are the last owner.
             if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'members' && m === 'DELETE') {
@@ -2792,8 +2797,8 @@ export class HttpDispatcher {
                 }
             }
 
-            // ----- /cloud/projects/:envId/packages -----
-            // GET  /cloud/projects/:envId/packages
+            // ----- /cloud/environments/:envId/packages -----
+            // GET  /cloud/environments/:envId/packages
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'GET') {
                 const envId = decodeURIComponent(parts[1]);
                 let rows = await ql.find(PKG_INSTALL, { where: { environment_id: envId } } as any);
@@ -2831,7 +2836,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ packages, total: packages.length }) };
             }
 
-            // POST /cloud/projects/:envId/packages
+            // POST /cloud/environments/:envId/packages
             if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'POST') {
                 const envId = decodeURIComponent(parts[1]);
                 const { packageId, version, settings, enableOnInstall } = body ?? {};
@@ -2906,8 +2911,8 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ package: record }) };
             }
 
-            // ----- /cloud/projects/:envId/packages/:pkgId -----
-            // GET /cloud/projects/:envId/packages/:pkgId
+            // ----- /cloud/environments/:envId/packages/:pkgId -----
+            // GET /cloud/environments/:envId/packages/:pkgId
             if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'GET') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
@@ -2916,7 +2921,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ package: record }) };
             }
 
-            // DELETE /cloud/projects/:envId/packages/:pkgId
+            // DELETE /cloud/environments/:envId/packages/:pkgId
             if (parts.length === 4 && parts[0] === 'projects' && parts[2] === 'packages' && m === 'DELETE') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
@@ -2934,7 +2939,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ id: record.id, success: true }) };
             }
 
-            // PATCH /cloud/projects/:envId/packages/:pkgId/enable
+            // PATCH /cloud/environments/:envId/packages/:pkgId/enable
             if (parts.length === 5 && parts[0] === 'projects' && parts[2] === 'packages' && parts[4] === 'enable' && m === 'PATCH') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
@@ -2947,7 +2952,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ package: updated }) };
             }
 
-            // PATCH /cloud/projects/:envId/packages/:pkgId/disable
+            // PATCH /cloud/environments/:envId/packages/:pkgId/disable
             if (parts.length === 5 && parts[0] === 'projects' && parts[2] === 'packages' && parts[4] === 'disable' && m === 'PATCH') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
@@ -2965,7 +2970,7 @@ export class HttpDispatcher {
                 return { handled: true, response: this.success({ package: updated }) };
             }
 
-            // POST /cloud/projects/:envId/packages/:pkgId/upgrade
+            // POST /cloud/environments/:envId/packages/:pkgId/upgrade
             if (parts.length === 5 && parts[0] === 'projects' && parts[2] === 'packages' && parts[4] === 'upgrade' && m === 'POST') {
                 const envId = decodeURIComponent(parts[1]);
                 const pkgId = decodeURIComponent(parts[3]);
@@ -3010,7 +3015,7 @@ export class HttpDispatcher {
     /**
      * Cascade-delete a project: cred / member / package_installation rows,
      * then the physical database via the provisioning adapter, then the
-     * `sys_project` row itself. Used by both `DELETE /cloud/projects/:id`
+     * `sys_environment` row itself. Used by both `DELETE /cloud/environments/:id`
      * and the org-cascade in `DELETE /cloud/organizations/:id`.
      *
      * Idempotent and best-effort: missing rows / unreachable adapters
@@ -3018,12 +3023,12 @@ export class HttpDispatcher {
      * project can still be cleaned out.
      */
     private async deleteProjectCascade(
-        projectId: string,
+        environmentId: string,
         deps: {
             ql: any;
             findOne: (obj: string, where: Record<string, unknown>) => Promise<any | undefined>;
             getRealAdapter: (driver: string) => Promise<{
-                deleteDatabase?(params: { projectId: string; databaseName: string; databaseUrl?: string }): Promise<void>;
+                deleteDatabase?(params: { environmentId: string; databaseName: string; databaseUrl?: string }): Promise<void>;
             } | undefined>;
             force?: boolean;
         },
@@ -3032,18 +3037,18 @@ export class HttpDispatcher {
         const ENV = 'sys_environment';
         const warnings: string[] = [];
 
-        const row = await findOne(ENV, { id: projectId });
+        const row = await findOne(ENV, { id: environmentId });
         if (!row) {
-            return { ok: false, status: 404, error: `Project '${projectId}' not found`, warnings };
+            return { ok: false, status: 404, error: `Project '${environmentId}' not found`, warnings };
         }
         if (row.is_system === true || row.is_system === 1) {
-            return { ok: false, status: 409, error: `Project '${projectId}' is a system project and cannot be deleted`, warnings };
+            return { ok: false, status: 409, error: `Project '${environmentId}' is a system project and cannot be deleted`, warnings };
         }
         if ((row.is_default === true || row.is_default === 1) && !force) {
             return {
                 ok: false,
                 status: 409,
-                error: `Project '${projectId}' is the default project for its organization. Pass ?force=1 to delete it.`,
+                error: `Project '${environmentId}' is the default project for its organization. Pass ?force=1 to delete it.`,
                 warnings,
             };
         }
@@ -3056,7 +3061,7 @@ export class HttpDispatcher {
         ];
         for (const { object, field } of cascade) {
             try {
-                let rows = await ql.find(object, { where: { [field]: projectId } } as any);
+                let rows = await ql.find(object, { where: { [field]: environmentId } } as any);
                 if (rows && rows.value) rows = rows.value;
                 if (Array.isArray(rows)) {
                     for (const r of rows) {
@@ -3073,7 +3078,7 @@ export class HttpDispatcher {
                 }
             } catch (err) {
                 warnings.push(
-                    `Failed to enumerate ${object} for project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,
+                    `Failed to enumerate ${object} for project ${environmentId}: ${err instanceof Error ? err.message : String(err)}`,
                 );
             }
         }
@@ -3081,35 +3086,35 @@ export class HttpDispatcher {
         // Tear down the physical database (best-effort).
         const driver = (row.database_driver as string | undefined) ?? 'memory';
         const databaseUrl = row.database_url as string | undefined;
-        const databaseName = `p-${String(projectId).replace(/-/g, '').slice(0, 24)}`;
+        const databaseName = `p-${String(environmentId).replace(/-/g, '').slice(0, 24)}`;
         try {
             const adapter = await getRealAdapter(driver);
             if (adapter?.deleteDatabase) {
-                await adapter.deleteDatabase({ projectId, databaseName, databaseUrl });
+                await adapter.deleteDatabase({ environmentId, databaseName, databaseUrl });
             } else {
-                warnings.push(`No adapter for driver '${driver}'; physical DB for project ${projectId} not released.`);
+                warnings.push(`No adapter for driver '${driver}'; physical DB for project ${environmentId} not released.`);
             }
         } catch (err) {
             warnings.push(
-                `Failed to delete physical database for project ${projectId}: ${err instanceof Error ? err.message : String(err)}`,
+                `Failed to delete physical database for project ${environmentId}: ${err instanceof Error ? err.message : String(err)}`,
             );
         }
 
-        // Drop the sys_project row itself.
+        // Drop the sys_environment row itself.
         try {
-            await ql.delete(ENV, { where: { id: projectId } } as any);
+            await ql.delete(ENV, { where: { id: environmentId } } as any);
         } catch (err) {
             return {
                 ok: false,
                 status: 500,
-                error: `Failed to delete sys_project row: ${err instanceof Error ? err.message : String(err)}`,
+                error: `Failed to delete sys_environment row: ${err instanceof Error ? err.message : String(err)}`,
                 warnings,
             };
         }
 
         // Invalidate routing caches so subsequent requests don't resolve to a dead env.
         if (this.envRegistry?.invalidate) {
-            try { await this.envRegistry.invalidate(projectId); } catch { /* best-effort */ }
+            try { await this.envRegistry.invalidate(environmentId); } catch { /* best-effort */ }
         }
 
         return { ok: true, warnings };
@@ -3376,7 +3381,7 @@ export class HttpDispatcher {
      * mode). Falls back to the current `kernel` for singleton / legacy services.
      */
     private async resolveService(name: string, scopeId?: string) {
-        // Prefer scoped lookup on defaultKernel when scopeId is given (shared-kernel / multi-project mode)
+        // Prefer scoped lookup on defaultKernel when scopeId is given (shared-kernel / multi-environment mode)
         if (scopeId && typeof this.defaultKernel.getServiceAsync === 'function') {
             try {
                 const svc = await this.defaultKernel.getServiceAsync(name, scopeId);
@@ -3458,10 +3463,10 @@ export class HttpDispatcher {
 
         // Resolve project scope so the right project kernel's ObjectQL is
         // used. For bare URLs the URL prefix already stripped any `/projects/:id`
-        // segment, so fall back to the single-project default if unset.
-        if (!_context.projectId) {
+        // segment, so fall back to the single-environment default if unset.
+        if (!_context.environmentId) {
             const def = this.resolveDefaultProject();
-            if (def?.projectId) _context.projectId = def.projectId;
+            if (def?.environmentId) _context.environmentId = def.environmentId;
         }
 
         // Replicate the kernel swap that `dispatcher.handle()` does for
@@ -3470,9 +3475,9 @@ export class HttpDispatcher {
         // swap `getObjectQLService` would resolve the control-plane kernel
         // (where the CRM bundle's actions are NOT registered).
         let projectQl: any = null;
-        if (this.kernelManager && _context.projectId && _context.projectId !== 'platform') {
+        if (this.kernelManager && _context.environmentId && _context.environmentId !== 'platform') {
             try {
-                const projectKernel: any = await this.kernelManager.getOrCreate(_context.projectId);
+                const projectKernel: any = await this.kernelManager.getOrCreate(_context.environmentId);
                 if (projectKernel) {
                     this.kernel = projectKernel;
                     // Resolve the project kernel's own ObjectQL DIRECTLY so we
@@ -3489,7 +3494,7 @@ export class HttpDispatcher {
             }
         }
 
-        const ql: any = projectQl ?? await this.getObjectQLService(_context?.projectId);
+        const ql: any = projectQl ?? await this.getObjectQLService(_context?.environmentId);
         if (!ql || typeof ql.executeAction !== 'function') {
             return { handled: true, response: this.error('Data engine not available', 503) };
         }
@@ -3509,7 +3514,7 @@ export class HttpDispatcher {
         let record: Record<string, unknown> = {};
         if (recordId && objectName !== 'global') {
             try {
-                const got = await this.callData('get', { object: objectName, id: recordId }, _context.dataDriver, _context.projectId, _context.executionContext);
+                const got = await this.callData('get', { object: objectName, id: recordId }, _context.dataDriver, _context.environmentId, _context.executionContext);
                 if (got?.record) record = got.record;
             } catch { /* record may not exist for new-record actions; pass empty */ }
         }
@@ -3684,15 +3689,15 @@ export class HttpDispatcher {
         // Reserved virtual id 'platform' addresses the control plane through
         // the regular project URL family — never spin up a per-project kernel
         // for it (there is no projects row to look up).
-        if (this.kernelManager && context.projectId && context.projectId !== 'platform') {
-            this.kernel = await this.kernelManager.getOrCreate(context.projectId);
+        if (this.kernelManager && context.environmentId && context.environmentId !== 'platform') {
+            this.kernel = await this.kernelManager.getOrCreate(context.environmentId);
         } else {
             this.kernel = this.defaultKernel;
         }
 
         // Touch scope for TTL/LRU tracking in shared-kernel mode
-        if (this.scopeManager && context.projectId && context.projectId !== 'platform') {
-            this.scopeManager.touch(context.projectId);
+        if (this.scopeManager && context.environmentId && context.environmentId !== 'platform') {
+            this.scopeManager.touch(context.environmentId);
         }
 
         // ── Identity Resolution (RBAC/RLS/FLS context) ──
@@ -3700,8 +3705,8 @@ export class HttpDispatcher {
         // ctx.userId/roles/permissions/tenantId via opCtx.context.
         try {
             context.executionContext = await resolveExecutionContext({
-                getService: (n: string) => this.resolveService(n, context.projectId),
-                getQl: () => Promise.resolve(this.getObjectQLService(context.projectId)),
+                getService: (n: string) => this.resolveService(n, context.environmentId),
+                getQl: () => Promise.resolve(this.getObjectQLService(context.environmentId)),
                 request: context.request,
             });
         } catch {
@@ -3709,18 +3714,18 @@ export class HttpDispatcher {
         }
 
         // ── Project Membership Enforcement ──
-        // Once the projectId is known, gate scoped data/meta/AI/automation
-        // routes on `sys_project_member`. Control-plane paths, the system
+        // Once the environmentId is known, gate scoped data/meta/AI/automation
+        // routes on `sys_environment_member`. Control-plane paths, the system
         // project, and platform-org members bypass this check.
         const forbidden = await this.enforceProjectMembership(context, cleanPath);
         if (forbidden) {
             return { handled: true, response: forbidden };
         }
 
-        // Strip the `/projects/:projectId` prefix so the protocol dispatchers
+        // Strip the `/environments/:environmentId` prefix so the protocol dispatchers
         // below (meta, data, ui, automation, …) see the same shape whether
-        // the caller used host-based routing, `X-Project-Id`, or a scoped URL.
-        // `/cloud/projects/:id` is explicitly excluded — those are control
+        // the caller used host-based routing, `X-Environment-Id`, or a scoped URL.
+        // `/cloud/environments/:id` is explicitly excluded — those are control
         // plane CRUD endpoints and must reach handleCloud() unchanged.
         if (!cleanPath.startsWith('/cloud/')) {
             const scopedMatch = cleanPath.match(/^\/projects\/[^/]+(\/.*)?$/);
@@ -3815,7 +3820,7 @@ export class HttpDispatcher {
         // OpenAPI Specification
         if (cleanPath === '/openapi.json' && method === 'GET') {
              try {
-                const metaSvc = await this.resolveService('metadata', context.projectId);
+                const metaSvc = await this.resolveService('metadata', context.environmentId);
                 if (metaSvc && typeof (metaSvc as any).generateOpenApi === 'function') {
                     const result = await (metaSvc as any).generateOpenApi({});
                     return { handled: true, response: this.success(result) };
@@ -3852,7 +3857,7 @@ export class HttpDispatcher {
     async handleApiEndpoint(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
         try {
             // Attempt to find a matching endpoint in the registry
-            const metaSvc = await this.resolveService('metadata', context.projectId);
+            const metaSvc = await this.resolveService('metadata', context.environmentId);
             if (!metaSvc || typeof (metaSvc as any).matchEndpoint !== 'function') {
                 return { handled: false };
             }

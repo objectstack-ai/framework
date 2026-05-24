@@ -1,9 +1,9 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * ProjectKernelFactory backed by the control plane's Artifact API.
+ * EnvironmentKernelFactory backed by the control plane's Artifact API.
  *
- * Differs from {@link DefaultProjectKernelFactory} in two ways:
+ * Differs from {@link DefaultEnvironmentKernelFactory} in two ways:
  *
  *  1. There is no local control-plane database to query — project rows
  *     come from the {@link ArtifactEnvironmentRegistry} cache populated
@@ -23,7 +23,7 @@
  *                     persisted by ObjectStackProtocolImplementation on the
  *                     per-project engine, so the table must exist there).
  *   • AuthPlugin    — per-project, derives an HKDF secret from
- *                     `OS_AUTH_SECRET` + projectId. Each project owns its
+ *                     `OS_AUTH_SECRET` + environmentId. Each project owns its
  *                     own `sys_user/sys_session/...` tables in its own
  *                     Turso DB. Cookies are scoped to the project's
  *                     hostname (no `.<root>`-wide cross-project leak).
@@ -35,7 +35,7 @@ import { ObjectKernel } from '@objectstack/core';
 import type * as Contracts from '@objectstack/spec/contracts';
 import { DriverPlugin } from '../driver-plugin.js';
 import { AppPlugin } from '../app-plugin.js';
-import type { ProjectKernelFactory } from './kernel-manager.js';
+import type { EnvironmentKernelFactory } from './kernel-manager.js';
 import type { EnvironmentDriverRegistry } from './environment-registry.js';
 import type { ArtifactApiClient } from './artifact-api-client.js';
 import { loadCapabilities } from './capability-loader.js';
@@ -56,7 +56,7 @@ export interface ArtifactKernelFactoryConfig {
     kernelConfig?: ConstructorParameters<typeof ObjectKernel>[0];
     /**
      * Base secret used to derive per-project AuthPlugin secrets via
-     * HKDF-style HMAC-SHA256(baseSecret, projectId). Falls back to
+     * HKDF-style HMAC-SHA256(baseSecret, environmentId). Falls back to
      * `process.env.OS_AUTH_SECRET` / `AUTH_SECRET` at construction time.
      */
     authBaseSecret?: string;
@@ -64,17 +64,17 @@ export interface ArtifactKernelFactoryConfig {
 
 /**
  * Derive a deterministic per-project auth secret. HMAC-SHA256 of the
- * projectId keyed by the base secret yields a 64-char hex string that is:
+ * environmentId keyed by the base secret yields a 64-char hex string that is:
  *   - stable across container cold-starts (no DB lookup needed)
  *   - independent per project (forging a token on project A does not
  *     compromise project B)
  *   - rotatable by changing the base secret (will invalidate all sessions)
  */
-function deriveProjectAuthSecret(baseSecret: string, projectId: string): string {
-    return createHmac('sha256', baseSecret).update(`project:${projectId}`).digest('hex');
+function deriveProjectAuthSecret(baseSecret: string, environmentId: string): string {
+    return createHmac('sha256', baseSecret).update(`project:${environmentId}`).digest('hex');
 }
 
-export class ArtifactKernelFactory implements ProjectKernelFactory {
+export class ArtifactKernelFactory implements EnvironmentKernelFactory {
     private readonly client: ArtifactApiClient;
     private readonly envRegistry: EnvironmentDriverRegistry;
     private readonly logger: NonNullable<ArtifactKernelFactoryConfig['logger']>;
@@ -94,25 +94,25 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
         ).trim();
     }
 
-    async create(projectId: string): Promise<ObjectKernel> {
-        let cached = this.envRegistry.peekById(projectId);
+    async create(environmentId: string): Promise<ObjectKernel> {
+        let cached = this.envRegistry.peekById(environmentId);
         if (!cached) {
-            const driver = await this.envRegistry.resolveById(projectId);
+            const driver = await this.envRegistry.resolveById(environmentId);
             if (!driver) {
-                throw new Error(`[ArtifactKernelFactory] Could not resolve driver for project '${projectId}'`);
+                throw new Error(`[ArtifactKernelFactory] Could not resolve driver for project '${environmentId}'`);
             }
-            cached = this.envRegistry.peekById(projectId);
+            cached = this.envRegistry.peekById(environmentId);
             if (!cached) {
-                throw new Error(`[ArtifactKernelFactory] envRegistry returned a driver but no cached entry for '${projectId}'`);
+                throw new Error(`[ArtifactKernelFactory] envRegistry returned a driver but no cached entry for '${environmentId}'`);
             }
         }
 
         const driver: IDataDriver = cached.driver;
         const project = cached.project as { id: string; organization_id?: string; hostname?: string };
 
-        const artifact = await this.client.fetchArtifact(projectId);
+        const artifact = await this.client.fetchArtifact(environmentId);
         if (!artifact) {
-            throw new Error(`[ArtifactKernelFactory] Artifact not available for project '${projectId}'`);
+            throw new Error(`[ArtifactKernelFactory] Artifact not available for project '${environmentId}'`);
         }
 
         const { ObjectQLPlugin } = await import('@objectstack/objectql');
@@ -132,10 +132,10 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
         // must NOT bleed into project kernels because their auth tables
         // need provisioning. KernelManager caches kernels so this runs
         // at most once per cold-start per project.
-        await kernel.use(new ObjectQLPlugin({ projectId: projectId, skipSchemaSync: false }));
+        await kernel.use(new ObjectQLPlugin({ environmentId: environmentId, skipSchemaSync: false }));
         await kernel.use(new MetadataPlugin({
             watch: false,
-            projectId: projectId,
+            environmentId: environmentId,
             organizationId: project.organization_id,
             // ADR-0005: customization overlays (user-created views, dashboards,
             // edited objects, ...) are persisted by
@@ -154,7 +154,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
         if (this.authBaseSecret) {
             try {
                 const { AuthPlugin } = await import('@objectstack/plugin-auth');
-                const projectSecret = deriveProjectAuthSecret(this.authBaseSecret, projectId);
+                const projectSecret = deriveProjectAuthSecret(this.authBaseSecret, environmentId);
                 const baseUrl = project.hostname
                     ? (project.hostname.startsWith('http')
                         ? project.hostname
@@ -231,8 +231,8 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                         providerId: PLATFORM_SSO_PROVIDER_ID,
                         name: 'ObjectStack',
                         discoveryUrl: `${cloudBaseUrl}/.well-known/openid-configuration`,
-                        clientId: derivePlatformSsoClientId(projectId),
-                        clientSecret: derivePlatformSsoClientSecret(this.authBaseSecret, projectId),
+                        clientId: derivePlatformSsoClientId(environmentId),
+                        clientSecret: derivePlatformSsoClientSecret(this.authBaseSecret, environmentId),
                         scopes: ['openid', 'email', 'profile'],
                     }]
                     : undefined;
@@ -276,7 +276,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                                         });
                                     } catch (e: any) {
                                         this.logger.warn?.('[ArtifactKernelFactory] auto-org provisioning hook failed', {
-                                            projectId,
+                                            environmentId,
                                             userId: user?.id,
                                             error: e?.message,
                                         });
@@ -288,18 +288,18 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 } as any));
                 if (oidcProviders) {
                     this.logger.info?.('[ArtifactKernelFactory] platform SSO wired', {
-                        projectId,
+                        environmentId,
                         cloudBaseUrl,
                     });
                 }
             } catch (err: any) {
                 this.logger.warn?.('[ArtifactKernelFactory] AuthPlugin not registered', {
-                    projectId,
+                    environmentId,
                     error: err?.message,
                 });
             }
         } else {
-            this.logger.warn?.('[ArtifactKernelFactory] OS_AUTH_SECRET not set — per-project AuthPlugin skipped (auth endpoints will return 404)', { projectId });
+            this.logger.warn?.('[ArtifactKernelFactory] OS_AUTH_SECRET not set — per-project AuthPlugin skipped (auth endpoints will return 404)', { environmentId });
         }
 
         // Per-project SecurityPlugin — provides RBAC + tenant_isolation RLS
@@ -315,12 +315,12 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             await kernel.use(new SecurityPlugin({ multiTenant }) as any);
         } catch (err: any) {
             this.logger.warn?.('[ArtifactKernelFactory] SecurityPlugin not registered', {
-                projectId,
+                environmentId,
                 error: err?.message,
             });
         }
 
-        const projectName = project.hostname ?? projectId;
+        const projectName = project.hostname ?? environmentId;
         const bundle = artifact.metadata as any;
         const sys = bundle?.manifest ?? bundle;
         const packageId = sys?.packageId ?? sys?.package_id ?? bundle?.packageId;
@@ -345,11 +345,11 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 registerRoutes: false,
             } as any));
             console.warn(
-                `[ArtifactKernelFactory] I18nServicePlugin registered (project=${projectId}, translations=${trArr.length}, defaultLocale=${i18nCfg.defaultLocale ?? 'en'})`,
+                `[ArtifactKernelFactory] I18nServicePlugin registered (project=${environmentId}, translations=${trArr.length}, defaultLocale=${i18nCfg.defaultLocale ?? 'en'})`,
             );
         } catch (err: any) {
             this.logger.warn?.('[ArtifactKernelFactory] I18nServicePlugin not registered', {
-                projectId,
+                environmentId,
                 error: err?.message,
             });
         }
@@ -372,17 +372,17 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 requires,
                 bundle: { ...(bundle ?? {}), ...(sys ?? {}) } as Record<string, unknown>,
                 logger: this.logger,
-                projectId,
+                environmentId,
             });
             this.logger.info?.('[ArtifactKernelFactory] capabilities loaded', {
-                projectId,
+                environmentId,
                 requires,
                 installed,
             });
         }
 
         await kernel.use(new AppPlugin(bundle, {
-            projectId,
+            environmentId,
             organizationId: project.organization_id ?? '',
             projectName,
             packageId,
@@ -392,7 +392,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
         await kernel.bootstrap();
 
         // Pre-seed the project owner. The cloud control-plane stashed the
-        // creator's identity into `sys_project.metadata.ownerSeed` at
+        // creator's identity into `sys_environment.metadata.ownerSeed` at
         // project-create time; replay it AFTER `kernel.bootstrap()` so
         // ObjectQL/Security plugins have fully initialised and
         // `kernel.getService('objectql')` resolves. Pre-bootstrap, plugins
@@ -420,11 +420,11 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
 
             if (orgSeed?.id && orgSeed?.name) {
                 try {
-                    const { seedProjectOrganization } = await import('./project-org-seed.js');
+                    const { seedProjectOrganization } = await import('./environment-org-seed.js');
                     await seedProjectOrganization(kernel, orgSeed, this.logger);
                 } catch (e: any) {
                     this.logger.warn?.('[ArtifactKernelFactory] orgSeed threw', {
-                        projectId,
+                        environmentId,
                         error: e?.message,
                     });
                 }
@@ -432,18 +432,18 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
 
             if (ownerSeed?.userId && ownerSeed?.email) {
                 try {
-                    const { seedProjectOwner } = await import('./project-owner-seed.js');
+                    const { seedProjectOwner } = await import('./environment-owner-seed.js');
                     await seedProjectOwner(kernel, ownerSeed, this.logger);
                 } catch (e: any) {
                     this.logger.warn?.('[ArtifactKernelFactory] ownerSeed threw', {
-                        projectId,
+                        environmentId,
                         error: e?.message,
                     });
                 }
 
                 if (orgSeed?.id) {
                     try {
-                        const { seedProjectMember } = await import('./project-org-seed.js');
+                        const { seedProjectMember } = await import('./environment-org-seed.js');
                         await seedProjectMember(
                             kernel,
                             { userId: ownerSeed.userId, organizationId: orgSeed.id, role: 'owner' },
@@ -451,7 +451,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                         );
                     } catch (e: any) {
                         this.logger.warn?.('[ArtifactKernelFactory] memberSeed threw', {
-                            projectId,
+                            environmentId,
                             error: e?.message,
                         });
                     }
@@ -459,7 +459,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             }
         } catch (err: any) {
             this.logger.warn?.('[ArtifactKernelFactory] owner/org seed skipped', {
-                projectId,
+                environmentId,
                 error: err?.message,
             });
         }
@@ -515,7 +515,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                         const errs = summary?.errors?.length ?? 0;
                         if (inserted > 0 || updated > 0 || errs > 0) {
                             this.logger.info?.('[ArtifactKernelFactory] post-bootstrap seed replay', {
-                                projectId,
+                                environmentId,
                                 organizationId: primaryOrgId,
                                 datasets: datasetsNow.length,
                                 inserted,
@@ -525,7 +525,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                         }
                     } catch (e: any) {
                         this.logger.warn?.('[ArtifactKernelFactory] post-bootstrap seed replay failed', {
-                            projectId,
+                            environmentId,
                             organizationId: primaryOrgId,
                             error: e?.message,
                         });
@@ -534,7 +534,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
             }
         } catch (err: any) {
             this.logger.warn?.('[ArtifactKernelFactory] post-bootstrap seed step threw', {
-                projectId,
+                environmentId,
                 error: err?.message,
             });
         }
@@ -568,7 +568,7 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                                 loaded++;
                             } catch (err: any) {
                                 this.logger.warn?.('[ArtifactKernelFactory] i18n loadTranslations failed', {
-                                    projectId, locale, error: err?.message,
+                                    environmentId, locale, error: err?.message,
                                 });
                             }
                         }
@@ -576,19 +576,19 @@ export class ArtifactKernelFactory implements ProjectKernelFactory {
                 }
                 if (loaded > 0) {
                     this.logger.info?.('[ArtifactKernelFactory] i18n direct-load complete', {
-                        projectId, locales: loaded, bundles: trArr.length,
+                        environmentId, locales: loaded, bundles: trArr.length,
                     });
                 }
             }
         } catch (err: any) {
             this.logger.warn?.('[ArtifactKernelFactory] i18n direct-load failed', {
-                projectId,
+                environmentId,
                 error: err?.message,
             });
         }
 
         this.logger.info?.('[ArtifactKernelFactory] kernel ready', {
-            projectId,
+            environmentId,
             commitId: artifact.commitId,
             checksum: artifact.checksum,
             authEnabled: Boolean(this.authBaseSecret),

@@ -226,7 +226,7 @@ export class ObjectQL implements IDataEngine {
   // Per-engine SchemaRegistry instance.
   //
   // Historically SchemaRegistry was a process-wide singleton of static state,
-  // which broke multi-project servers: a project kernel would inherit every
+  // which broke multi-environment servers: a project kernel would inherit every
   // object registered by the control plane (e.g. sys_metadata), and
   // getDriver()'s owner lookup would route CRUD to the wrong database. Each
   // engine now owns its registry so kernels are fully isolated.
@@ -266,7 +266,7 @@ export class ObjectQL implements IDataEngine {
    * Expose the SchemaRegistry for plugins to register metadata.
    *
    * Returns the per-engine instance, NOT the class. Each ObjectQL engine
-   * owns its registry so multi-project kernels remain isolated.
+   * owns its registry so multi-environment kernels remain isolated.
    */
   get registry(): SchemaRegistry {
     return this._registry;

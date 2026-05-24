@@ -322,7 +322,7 @@ export const ExternalServiceDestinationConfigSchema = lazySchema(() => z.object(
     accessKeyId: z.string().optional(),
     secretAccessKey: z.string().optional(),
     apiKey: z.string().optional(),
-    projectId: z.string().optional(),
+    environmentId: z.string().optional(),
   }).optional(),
 
   /**

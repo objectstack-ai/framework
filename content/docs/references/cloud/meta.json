@@ -4,13 +4,13 @@
     "app-store",
     "developer-portal",
     "environment",
+    "environment-artifact",
     "environment-package",
     "marketplace",
     "marketplace-admin",
     "package",
     "package-version",
     "plugin-security",
-    "project-artifact",
     "provisioning",
     "tenant"
   ]

@@ -8,8 +8,8 @@ import { readAuthConfig, writeAuthConfig } from '../../utils/auth-config.js';
 /**
  * `os projects switch <id>` — set the active project for this CLI session.
  *
- * Calls `POST /api/v1/cloud/projects/:id/activate` to update the
- * server-side session, then persists `activeProjectId` into
+ * Calls `POST /api/v1/cloud/environments/:id/activate` to update the
+ * server-side session, then persists `activeEnvironmentId` into
  * `~/.objectstack/credentials.json` so subsequent CLI commands (and any
  * client they create via `createApiClient`) automatically target this
  * project.
@@ -55,7 +55,7 @@ export default class ProjectsSwitch extends Command {
       }
 
       const cfg = await readAuthConfig();
-      cfg.activeProjectId = project.id;
+      cfg.activeEnvironmentId = project.id;
       cfg.lastUsedAt = new Date().toISOString();
       await writeAuthConfig(cfg);
 

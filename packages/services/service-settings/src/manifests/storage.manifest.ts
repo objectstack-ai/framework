@@ -42,7 +42,7 @@ const manifest = {
     { type: 'group', id: 's3', label: 'S3', required: false,
       visible: "${data.adapter === 's3'}" },
     { type: 'text', key: 's3_bucket', label: 'Bucket', required: true,
-      description: 'Shared host bucket. Per-project files are namespaced via the projects/<projectId>/ prefix.',
+      description: 'Shared host bucket. Per-environment files are namespaced via the projects/<environmentId>/ prefix.',
       visible: "${data.adapter === 's3'}" },
     { type: 'text', key: 's3_region', label: 'Region', required: true,
       description: 'Example: us-east-1',

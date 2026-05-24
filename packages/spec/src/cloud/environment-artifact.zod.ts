@@ -7,7 +7,7 @@ import { ObjectStackDefinitionSchema } from '../stack.zod';
 /**
  * # Project Artifact Envelope (M1)
  *
- * Describes the response shape of `GET /api/v1/cloud/projects/:projectId/artifact`
+ * Describes the response shape of `GET /api/v1/cloud/environments/:environmentId/artifact`
  * — the assembled artifact ObjectOS pulls from the control plane.
  *
  * Distinct from the marketplace `PackageArtifactSchema` (a .tgz file listing).
@@ -25,12 +25,12 @@ export const Sha256DigestSchema = z
 export type Sha256Digest = z.infer<typeof Sha256DigestSchema>;
 
 // --- Artifact envelope ---
-export const ProjectArtifactSchema = lazySchema(() => z.object({
+export const EnvironmentArtifactSchema = lazySchema(() => z.object({
   /** Envelope format version. Increment on breaking changes. */
   schemaVersion: z.literal('0.1').default('0.1'),
 
   /** Control-plane project ID this artifact belongs to. */
-  projectId: z.string(),
+  environmentId: z.string(),
 
   /** Metadata revision assigned by the control plane on publish. */
   commitId: z.string(),
@@ -56,5 +56,5 @@ export const ProjectArtifactSchema = lazySchema(() => z.object({
   metadata: ObjectStackDefinitionSchema,
 }));
 
-export type ProjectArtifact      = z.infer<typeof ProjectArtifactSchema>;
-export type ProjectArtifactInput = z.input<typeof ProjectArtifactSchema>;
+export type EnvironmentArtifact      = z.infer<typeof EnvironmentArtifactSchema>;
+export type EnvironmentArtifactInput = z.input<typeof EnvironmentArtifactSchema>;

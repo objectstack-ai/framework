@@ -56,7 +56,7 @@ const BaseNavItemSchema = z.object({
    * entry if the named object is not registered in the runtime's
    * SchemaRegistry. Useful for cloud-only objects (e.g. `sys_app`,
    * `sys_package`, `sys_package_installation`) that don't exist in
-   * single-project runtimes — declaring the dependency here avoids
+   * single-environment runtimes — declaring the dependency here avoids
    * 404-when-clicked traps without hard-coding environment checks in the
    * UI.
    *

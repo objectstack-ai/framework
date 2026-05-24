@@ -90,7 +90,7 @@ export interface MetadataPluginOptions {
     /** Organization ID for metadata-scoped consumers; MetadataPlugin itself does not persist runtime metadata. */
     organizationId?: string;
     /** Project ID used by local artifact envelopes and metadata-scoped consumers. */
-    projectId?: string;
+    environmentId?: string;
     /**
      * When set, MetadataPlugin loads metadata from an artifact instead of scanning
      * the filesystem. Only `local-file` is implemented now; `artifact-api` is
@@ -440,27 +440,27 @@ export class MetadataPlugin implements Plugin {
      * metadata items into the MetadataManager.
      */
     private async _parseAndRegisterArtifact(ctx: PluginContext, raw: unknown, label: string): Promise<number> {
-        const { ProjectArtifactSchema } = await import('@objectstack/spec/cloud');
+        const { EnvironmentArtifactSchema } = await import('@objectstack/spec/cloud');
         const { ObjectStackDefinitionSchema } = await import('@objectstack/spec');
 
         let metadata: Record<string, unknown[]>;
 
         const obj = raw as any;
         if (obj?.schemaVersion && obj?.commitId && obj?.metadata !== undefined) {
-            const artifact = ProjectArtifactSchema.parse(obj);
+            const artifact = EnvironmentArtifactSchema.parse(obj);
             metadata = artifact.metadata as Record<string, unknown[]>;
         } else if (obj?.success && obj?.data?.metadata) {
             // Unwrap cloud API envelope: { success: true, data: { metadata: {...} } }
-            const artifact = ProjectArtifactSchema.parse(obj.data);
+            const artifact = EnvironmentArtifactSchema.parse(obj.data);
             metadata = artifact.metadata as Record<string, unknown[]>;
         } else {
             const def = ObjectStackDefinitionSchema.parse(obj);
             const canonical = JSON.stringify(def, Object.keys(def).sort());
             const checksum = createHash('sha256').update(canonical).digest('hex');
-            const projectId = this.options.projectId ?? 'proj_local';
-            ProjectArtifactSchema.parse({
+            const environmentId = this.options.environmentId ?? 'proj_local';
+            EnvironmentArtifactSchema.parse({
                 schemaVersion: '0.1',
-                projectId,
+                environmentId,
                 commitId: 'local-dev',
                 checksum,
                 metadata: def,
@@ -541,17 +541,17 @@ export class MetadataPlugin implements Plugin {
         ctx: PluginContext,
         src: { url: string; token?: string; commitId?: string; fetchTimeoutMs?: number },
     ): Promise<void> {
-        const projectId = this.options.projectId;
-        if (!projectId) {
-            throw new Error('[MetadataPlugin] artifact-api source requires options.projectId to be set');
+        const environmentId = this.options.environmentId;
+        if (!environmentId) {
+            throw new Error('[MetadataPlugin] artifact-api source requires options.environmentId to be set');
         }
 
         // Build the artifact URL:
-        //   ${url}/api/v1/cloud/projects/${projectId}/artifact[?commit=${commitId}]
+        //   ${url}/api/v1/cloud/environments/${environmentId}/artifact[?commit=${commitId}]
         let artifactUrl = src.url.replace(/\/+$/, '');
         // If the URL already contains /api/v1, use it as-is; otherwise append default path.
         if (!/\/api\/v\d+\/cloud\/projects\//i.test(artifactUrl)) {
-            artifactUrl = `${artifactUrl}/api/v1/cloud/projects/${projectId}/artifact`;
+            artifactUrl = `${artifactUrl}/api/v1/cloud/environments/${environmentId}/artifact`;
         }
         if (src.commitId) {
             artifactUrl += `${artifactUrl.includes('?') ? '&' : '?'}commit=${encodeURIComponent(src.commitId)}`;

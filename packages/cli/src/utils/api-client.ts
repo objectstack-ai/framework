@@ -16,10 +16,10 @@ export interface ApiClientOptions {
    */
   token?: string;
   /**
-   * Explicit project id. Overrides the stored `activeProjectId` from
+   * Explicit project id. Overrides the stored `activeEnvironmentId` from
    * `~/.objectstack/credentials.json` (written by `os projects switch`).
    */
-  projectId?: string;
+  environmentId?: string;
   /**
    * Enable debug logging
    */
@@ -33,7 +33,7 @@ export interface ApiClientOptions {
 export interface ApiClientResult {
   client: ObjectStackClient;
   token?: string;
-  projectId?: string;
+  environmentId?: string;
 }
 
 /**
@@ -53,10 +53,10 @@ export async function createApiClient(options: ApiClientOptions = {}): Promise<A
   let token = options.token || process.env.OS_TOKEN;
 
   // Resolve active project id (explicit > env > stored credentials)
-  let projectId = options.projectId || process.env.OS_PROJECT_ID;
+  let environmentId = options.environmentId || process.env.OS_ENVIRONMENT_ID;
 
   // If URL or token is missing, try to load from stored credentials
-  if (!baseUrl || !token || !projectId) {
+  if (!baseUrl || !token || !environmentId) {
     try {
       const authConfig = await readAuthConfig();
       if (!token && authConfig.token) {
@@ -65,8 +65,8 @@ export async function createApiClient(options: ApiClientOptions = {}): Promise<A
       if (!baseUrl && authConfig.url) {
         baseUrl = authConfig.url;
       }
-      if (!projectId && authConfig.activeProjectId) {
-        projectId = authConfig.activeProjectId;
+      if (!environmentId && authConfig.activeEnvironmentId) {
+        environmentId = authConfig.activeEnvironmentId;
       }
     } catch {
       // No stored credentials - commands will fail if auth is required
@@ -81,11 +81,11 @@ export async function createApiClient(options: ApiClientOptions = {}): Promise<A
   const client = new ObjectStackClient({
     baseUrl,
     token,
-    projectId,
+    environmentId,
     debug: options.debug || false,
   });
 
-  return { client, token, projectId };
+  return { client, token, environmentId };
 }
 
 /**

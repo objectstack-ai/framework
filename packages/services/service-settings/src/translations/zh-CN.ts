@@ -105,7 +105,7 @@ export const zhCN: TranslationData = {
         local_root: { label: '根目录',
           help: '文件存放的文件系统路径。相对路径相对于服务进程的工作目录。' },
         s3_bucket: { label: 'Bucket',
-          help: '共享主机 Bucket。各项目的文件通过 projects/<projectId>/ 前缀进行隔离。' },
+          help: '共享主机 Bucket。各项目的文件通过 projects/<environmentId>/ 前缀进行隔离。' },
         s3_region: { label: '区域', help: '示例:us-east-1' },
         s3_endpoint: { label: 'Endpoint',
           help: 'S3 兼容服务(R2、MinIO、Wasabi)的自定义 Endpoint;AWS S3 请留空。' },

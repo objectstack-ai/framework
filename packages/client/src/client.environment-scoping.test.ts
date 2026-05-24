@@ -5,7 +5,7 @@
  *
  * Boots a real Hono server, wires up ObjectQL + createRestApiPlugin with
  * `enableProjectScoping: true` / `projectResolution: 'auto'`, and verifies:
- *   1. Scoped `/api/v1/projects/:id/data/:object` works.
+ *   1. Scoped `/api/v1/environments/:id/data/:object` works.
  *   2. Unscoped `/api/v1/data/:object` still works (backward compat).
  *   3. Scoped meta routes return metadata.
  *   4. `projectResolution: 'required'` mode rejects unscoped requests.
@@ -78,9 +78,9 @@ describe('Project-scoped REST routing (live Hono)', () => {
         }
     }, 30_000);
 
-    it('serves scoped CRUD at /api/v1/projects/:projectId/data/:object', async () => {
+    it('serves scoped CRUD at /api/v1/environments/:environmentId/data/:object', async () => {
         const res = await fetch(
-            `${baseUrl}/api/v1/projects/proj-alpha/data/task?top=5`,
+            `${baseUrl}/api/v1/environments/proj-alpha/data/task?top=5`,
         );
         expect(res.status).toBe(200);
         const body = await res.json();
@@ -95,8 +95,8 @@ describe('Project-scoped REST routing (live Hono)', () => {
         expect(res.status).toBe(200);
     });
 
-    it('serves scoped metadata at /api/v1/projects/:projectId/meta', async () => {
-        const res = await fetch(`${baseUrl}/api/v1/projects/proj-alpha/meta`);
+    it('serves scoped metadata at /api/v1/environments/:environmentId/meta', async () => {
+        const res = await fetch(`${baseUrl}/api/v1/environments/proj-alpha/meta`);
         expect(res.status).toBe(200);
     });
 

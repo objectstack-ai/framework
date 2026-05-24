@@ -171,7 +171,7 @@ export const SETUP_APP: App = {
         //  - The marketplace-only `sys_app` / `sys_package` /
         //    `sys_package_installation` menus have been removed entirely;
         //    they are contributed by `@objectstack/service-tenant`
-        //    (control-plane) and are not present in single-project runtimes.
+        //    (control-plane) and are not present in single-environment runtimes.
         { id: 'nav_oauth_apps', type: 'object', label: 'OAuth Applications', objectName: 'sys_oauth_application', icon: 'app-window' },
         { id: 'nav_jwks', type: 'object', label: 'Signing Keys (JWKS)', objectName: 'sys_jwks', icon: 'key-round' },
         { id: 'nav_verifications', type: 'object', label: 'Verifications', objectName: 'sys_verification', icon: 'mail-check' },

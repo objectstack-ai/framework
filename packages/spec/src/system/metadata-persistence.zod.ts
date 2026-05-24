@@ -105,12 +105,12 @@ export const MetadataRecordSchema = lazySchema(() => z.object({
 
   /**
    * @deprecated Since ADR-0006 v4 / ADR-0005 amendment (2026-05-22).
-   * `sys_project` no longer exists; the overlay scope is
+   * `sys_environment` no longer exists; the overlay scope is
    * `organization_id` only (and, in ADR-0008 M1, `branch`).
    * Retained as a nullable legacy column for backwards-compat reads;
    * new writes must leave it unset. Will be dropped in ADR-0008 PR-10.
    */
-  projectId: z.string().optional().describe('Deprecated (ADR-0006 v4): legacy project_id column. New code must use organization_id only.'),
+  environmentId: z.string().optional().describe('Deprecated (ADR-0006 v4): legacy environment_id column. New code must use organization_id only.'),
 
   /** Version number for optimistic concurrency */
   version: z.number().default(1).describe('Record version for optimistic concurrency control'),
@@ -410,11 +410,11 @@ export const MetadataHistoryRecordSchema = lazySchema(() => z.object({
   organizationId: z.string().optional().describe('Organization identifier for multi-tenant isolation'),
 
   /**
-   * @deprecated Since ADR-0006 v4 (2026-05-22). `sys_project` is gone;
+   * @deprecated Since ADR-0006 v4 (2026-05-22). `sys_environment` is gone;
    * history rows are scoped by `organization_id` (and `branch` once
    * ADR-0008 M1 lands). Kept nullable for legacy rows.
    */
-  projectId: z.string().optional().describe('Deprecated (ADR-0006 v4): legacy project_id column. New writes leave unset.'),
+  environmentId: z.string().optional().describe('Deprecated (ADR-0006 v4): legacy environment_id column. New writes leave unset.'),
 
   /** Audit: who made this change */
   recordedBy: z.string().optional().describe('User who made this change'),

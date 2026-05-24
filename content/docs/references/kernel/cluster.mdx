@@ -1,0 +1,183 @@
+---
+title: Cluster
+description: Cluster protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+# Cluster Protocol
+
+Defines the runtime semantics required for ObjectStack to behave correctly
+
+when more than one Node.js process is involved. The protocol layer codifies
+
+**intent** (scope, delivery, leadership); concrete implementations
+
+(`memory`, `redis`, `postgres`, `nats`) live in `@objectstack/service-cluster`.
+
+The full design rationale is in
+
+`content/docs/concepts/cluster-semantics.mdx`. Read it before changing
+
+any of the enums here — every value has a precise contract that other
+
+subsystems depend on.
+
+<Callout type="info">
+**Source:** `packages/spec/src/kernel/cluster.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { ClusterCapabilityConfig, ClusterDriver, ClusterTenantIsolation, EventClusterOptions, EventDeliverySemantics, EventScope, MetadataChangeOperation, ServiceClusterAnnotations, ServiceClusterScope, ServiceLeaderStrategy } from '@objectstack/spec/kernel';
+import type { ClusterCapabilityConfig, ClusterDriver, ClusterTenantIsolation, EventClusterOptions, EventDeliverySemantics, EventScope, MetadataChangeOperation, ServiceClusterAnnotations, ServiceClusterScope, ServiceLeaderStrategy } from '@objectstack/spec/kernel';
+
+// Validate data
+const result = ClusterCapabilityConfig.parse(data);
+```
+
+---
+
+## ClusterCapabilityConfig
+
+Cluster capability configuration for the stack.
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **driver** | `Enum<'memory' \| 'redis' \| 'postgres' \| 'nats' \| 'custom'>` | ✅ | Cluster transport driver. Defaults to in-memory single-process. |
+| **url** | `string` | optional | Driver-specific connection URL. |
+| **useExistingPool** | `boolean` | ✅ | Reuse the main DB pool for the postgres driver. |
+| **nodeId** | `string` | optional | Stable node identifier. Auto-generated when absent. |
+| **heartbeatMs** | `integer` | ✅ | Leader-election heartbeat interval in milliseconds. |
+| **lockTtlMs** | `integer` | ✅ | Leader-election lock TTL in milliseconds (≥ 3× heartbeatMs). |
+| **tenantIsolation** | `Enum<'channel-prefix' \| 'none'>` | ✅ | Channel/key namespacing strategy for multi-tenant deployments. |
+| **driverOptions** | `Record<string, any>` | optional | Driver-specific opaque options. |
+
+
+---
+
+## ClusterDriver
+
+Cluster transport driver.
+
+### Allowed Values
+
+* `memory`
+* `redis`
+* `postgres`
+* `nats`
+* `custom`
+
+
+---
+
+## ClusterTenantIsolation
+
+How tenant traffic is separated on shared transports.
+
+### Allowed Values
+
+* `channel-prefix`
+* `none`
+
+
+---
+
+## EventClusterOptions
+
+Per-emit cluster routing & ordering options.
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **scope** | `Enum<'local' \| 'cluster' \| 'tenant'>` | ✅ | Delivery scope. Default `local` for backward compatibility. |
+| **deliverySemantics** | `Enum<'best-effort' \| 'at-least-once' \| 'exactly-once'>` | optional | Delivery guarantee. Default depends on scope. |
+| **partitionKey** | `string` | optional | Stable key that guarantees emit-order delivery for same-key events. |
+
+
+---
+
+## EventDeliverySemantics
+
+Delivery guarantee offered by the transport.
+
+### Allowed Values
+
+* `best-effort`
+* `at-least-once`
+* `exactly-once`
+
+
+---
+
+## EventScope
+
+Where the event must be delivered: local process, whole cluster, or tenant-scoped.
+
+### Allowed Values
+
+* `local`
+* `cluster`
+* `tenant`
+
+
+---
+
+## MetadataChangeOperation
+
+Persistence operation that triggered the change.
+
+### Allowed Values
+
+* `create`
+* `update`
+* `delete`
+* `publish`
+
+
+---
+
+## ServiceClusterAnnotations
+
+Service-registration annotations governing cluster behaviour.
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **clusterScope** | `Enum<'node' \| 'cluster'>` | ✅ | Per-node vs cluster-singleton presence. |
+| **leaderStrategy** | `Enum<'leader-elected' \| 'partitioned' \| 'idempotent-broadcast'>` | optional | How the cluster-singleton invariant is maintained. |
+| **clusterId** | `string` | optional | Logical cluster identity used for leader election (defaults to service name). |
+
+
+---
+
+## ServiceClusterScope
+
+Whether this service runs on every node or as a cluster singleton.
+
+### Allowed Values
+
+* `node`
+* `cluster`
+
+
+---
+
+## ServiceLeaderStrategy
+
+How the cluster-singleton invariant is enforced at runtime.
+
+### Allowed Values
+
+* `leader-elected`
+* `partitioned`
+* `idempotent-broadcast`
+
+
+---
+

@@ -5,13 +5,13 @@ import { ObjectKernel } from '@objectstack/core';
 /**
  * Factory contract for instantiating a per-project {@link ObjectKernel}.
  *
- * Given a `projectId`, the factory is expected to:
- * 1. Read control-plane metadata (`sys_project` + credentials + subscribed packages).
+ * Given a `environmentId`, the factory is expected to:
+ * 1. Read control-plane metadata (`sys_environment` + credentials + subscribed packages).
  * 2. Construct a fresh `ObjectKernel` with project-scoped driver + plugins + Apps.
  * 3. Return a **bootstrapped** kernel ready to serve requests.
  */
-export interface ProjectKernelFactory {
-  create(projectId: string): Promise<ObjectKernel>;
+export interface EnvironmentKernelFactory {
+  create(environmentId: string): Promise<ObjectKernel>;
 }
 
 interface CachedEntry {
@@ -21,7 +21,7 @@ interface CachedEntry {
 }
 
 export interface KernelManagerConfig {
-  factory: ProjectKernelFactory;
+  factory: EnvironmentKernelFactory;
   /** Maximum number of kernels to keep resident. Defaults to 32. */
   maxSize?: number;
   /**
@@ -41,11 +41,11 @@ export interface KernelManagerConfig {
  * Implements ADR-0003 multi-kernel scheduling: each project gets an
  * isolated kernel (App/plugin/metadata namespaces) that is lazily built
  * on first request and evicted under memory / idle pressure. Concurrent
- * `getOrCreate()` calls for the same projectId share a single in-flight
+ * `getOrCreate()` calls for the same environmentId share a single in-flight
  * factory invocation (singleflight).
  */
 export class KernelManager {
-  private readonly factory: ProjectKernelFactory;
+  private readonly factory: EnvironmentKernelFactory;
   private readonly maxSize: number;
   private readonly ttlMs: number;
   private readonly logger: NonNullable<KernelManagerConfig['logger']>;
@@ -59,7 +59,7 @@ export class KernelManager {
     this.logger = config.logger ?? console;
   }
 
-  /** Returns the currently cached projectIds (ordered by insertion). */
+  /** Returns the currently cached environmentIds (ordered by insertion). */
   keys(): string[] {
     return Array.from(this.cache.keys());
   }
@@ -70,54 +70,54 @@ export class KernelManager {
   }
 
   /**
-   * Resolve or construct the kernel for `projectId`.
+   * Resolve or construct the kernel for `environmentId`.
    *
    * - Cache hit (fresh): bumps `lastAccess` and returns immediately.
    * - Cache hit (TTL expired): evicts then falls through to factory.
    * - Cache miss: dedupes concurrent callers through `pending`.
    */
-  async getOrCreate(projectId: string): Promise<ObjectKernel> {
-    const existing = this.cache.get(projectId);
+  async getOrCreate(environmentId: string): Promise<ObjectKernel> {
+    const existing = this.cache.get(environmentId);
     if (existing) {
       if (this.ttlMs > 0 && Date.now() - existing.lastAccess > this.ttlMs) {
-        await this.evict(projectId);
+        await this.evict(environmentId);
       } else {
         existing.lastAccess = Date.now();
         return existing.kernel;
       }
     }
 
-    const inflight = this.pending.get(projectId);
+    const inflight = this.pending.get(environmentId);
     if (inflight) return inflight;
 
     const promise = (async () => {
-      const kernel = await this.factory.create(projectId);
+      const kernel = await this.factory.create(environmentId);
       const now = Date.now();
-      this.cache.set(projectId, { kernel, createdAt: now, lastAccess: now });
+      this.cache.set(environmentId, { kernel, createdAt: now, lastAccess: now });
       await this.enforceMaxSize();
       return kernel;
     })();
 
-    this.pending.set(projectId, promise);
+    this.pending.set(environmentId, promise);
     try {
       return await promise;
     } finally {
-      this.pending.delete(projectId);
+      this.pending.delete(environmentId);
     }
   }
 
   /**
-   * Evict the kernel for `projectId` and invoke `kernel.shutdown()`.
+   * Evict the kernel for `environmentId` and invoke `kernel.shutdown()`.
    * No-op when the entry is absent.
    */
-  async evict(projectId: string): Promise<void> {
-    const entry = this.cache.get(projectId);
+  async evict(environmentId: string): Promise<void> {
+    const entry = this.cache.get(environmentId);
     if (!entry) return;
-    this.cache.delete(projectId);
+    this.cache.delete(environmentId);
     try {
       await entry.kernel.shutdown();
     } catch (err) {
-      this.logger.error?.('[KernelManager] shutdown failed', { projectId, err });
+      this.logger.error?.('[KernelManager] shutdown failed', { environmentId, err });
     }
   }
 

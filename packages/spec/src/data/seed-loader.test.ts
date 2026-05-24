@@ -30,7 +30,7 @@ describe('ReferenceResolutionSchema', () => {
 
   it('should accept a master_detail reference', () => {
     const ref = {
-      field: 'project_id',
+      field: 'environment_id',
       targetObject: 'project',
       fieldType: 'master_detail' as const,
     };
@@ -135,7 +135,7 @@ describe('ObjectDependencyGraphSchema', () => {
           { field: 'lead_task', targetObject: 'task', fieldType: 'lookup' },
         ]},
         { object: 'task', dependsOn: ['project'], references: [
-          { field: 'project_id', targetObject: 'project', fieldType: 'master_detail' },
+          { field: 'environment_id', targetObject: 'project', fieldType: 'master_detail' },
         ]},
       ],
       insertOrder: ['project', 'task'],
@@ -516,7 +516,7 @@ describe('SeedLoaderResultSchema', () => {
             { field: 'lead_task', targetObject: 'task', fieldType: 'lookup' },
           ]},
           { object: 'task', dependsOn: ['project'], references: [
-            { field: 'project_id', targetObject: 'project', fieldType: 'master_detail' },
+            { field: 'environment_id', targetObject: 'project', fieldType: 'master_detail' },
           ]},
         ],
         insertOrder: ['project', 'task'],

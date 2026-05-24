@@ -37,8 +37,8 @@ export default class Dev extends Command {
       char: 'a',
       description: 'Path or http(s):// URL to a compiled objectstack.json (skips auto-compile; overrides $OS_ARTIFACT_PATH)',
     }),
-    'project-id': Flags.string({
-      description: 'Project identifier (overrides $OS_PROJECT_ID, default proj_local)',
+    'environment-id': Flags.string({
+      description: 'Environment identifier (overrides $OS_ENVIRONMENT_ID, default env_local)',
     }),
     database: Flags.string({
       char: 'd',
@@ -62,7 +62,7 @@ export default class Dev extends Command {
 
     printHeader('Development Mode');
 
-    // ── Single-Project Mode ──────────────────────────────────────────────────
+    // ── Single-Environment Mode ──────────────────────────────────────────────────
     const configPath = path.resolve(process.cwd(), 'objectstack.config.ts');
     const configExists = fs.existsSync(configPath);
 
@@ -106,7 +106,7 @@ export default class Dev extends Command {
 
       printStep('Starting dev server (local mode)...');
 
-      const projectId = flags['project-id'] ?? process.env.OS_PROJECT_ID ?? 'proj_local';
+      const environmentId = flags['environment-id'] ?? process.env.OS_ENVIRONMENT_ID ?? 'env_local';
       // NOTE: Do NOT set NODE_ENV='development' here. Oclif's tsx-based
       // TypeScript source loader (activated when NODE_ENV is 'test' or
       // 'development') currently mis-handles `.json` requires inside
@@ -118,14 +118,14 @@ export default class Dev extends Command {
       // any runtime modules are imported.
       const localEnv: NodeJS.ProcessEnv = {
         ...process.env,
-        OS_PROJECT_ID: projectId,
+        OS_ENVIRONMENT_ID: environmentId,
         OS_ARTIFACT_PATH: artifactPath,
         ...(flags.database ? { OS_DATABASE_URL: flags.database } : {}),
         ...(flags['database-driver'] ? { OS_DATABASE_DRIVER: flags['database-driver'] } : {}),
         ...(flags['database-auth-token'] ? { OS_DATABASE_AUTH_TOKEN: flags['database-auth-token'] } : {}),
         ...(flags['auth-secret'] ? { AUTH_SECRET: flags['auth-secret'] } : {}),
       };
-      printKV('Project ID', projectId, '🎯');
+      printKV('Environment ID', environmentId, '🎯');
       printKV('Artifact', isUrl ? artifactPath : path.relative(process.cwd(), artifactPath), '📦');
       if (flags.database) printKV('Database', redactDbUrl(flags.database), '🗄️');
 
@@ -155,7 +155,7 @@ export default class Dev extends Command {
       // Skipped when:
       //   - --watch=false (user opted out)
       //   - --artifact was passed (no source to watch)
-      //   - the project has no objectstack.config.ts
+      //   - the environment has no objectstack.config.ts
       if (flags.watch !== false && !flags.artifact && configExists) {
         this.startWatchRecompile({
           cwd: process.cwd(),

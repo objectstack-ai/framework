@@ -37,7 +37,7 @@ export interface AuthConfig {
    * read by `createApiClient` so every command lands in the right project
    * without an explicit flag.
    */
-  activeProjectId?: string;
+  activeEnvironmentId?: string;
 }
 
 /**

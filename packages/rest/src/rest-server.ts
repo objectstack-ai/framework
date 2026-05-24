@@ -73,13 +73,13 @@ function mapDataError(error: any, object?: string): { status: number; body: Reco
     const raw = String(error?.message ?? error ?? '');
     const lower = raw.toLowerCase();
 
-    // ProjectKernelFactory: project missing database_url/driver — typically
+    // EnvironmentKernelFactory: project missing database_url/driver — typically
     // means provisioning is in flight or the project record was never
     // fully provisioned. 503 (with Retry-After implied) is more accurate
     // than the default 400/500: clients can poll until the project is
     // active.
     if (
-        raw.includes('[ProjectKernelFactory]') &&
+        raw.includes('[EnvironmentKernelFactory]') &&
         (lower.includes('missing database_url') || lower.includes('not found'))
     ) {
         const isProvisioning = lower.includes("status='provisioning'") || lower.includes("status='pending'");
@@ -199,7 +199,7 @@ function sendError(res: any, error: any, object?: string): void {
  *  - 404 unknown object / project not found is a normal client mistake
  *  - 502/503 mean the underlying project is provisioning or failed; the
  *    handler will emit the response and the operator can inspect
- *    sys_project.metadata.provisioningError if needed.
+ *    sys_environment.metadata.provisioningError if needed.
  */
 function isExpectedDataStatus(status: number): boolean {
     return status === 403 || status === 404 || status === 409 || status === 502 || status === 503;
@@ -309,7 +309,7 @@ function rowsToCsv(fields: string[], rows: Array<Record<string, any>>, includeHe
  * package cycle.
  */
 export interface RestKernelManager {
-    getOrCreate(projectId: string): Promise<{
+    getOrCreate(environmentId: string): Promise<{
         getServiceAsync<T = unknown>(name: string): Promise<T>;
     }>;
 }
@@ -407,20 +407,20 @@ type NormalizedRestServerConfig = {
  */
 /**
  * Minimal env registry shape consumed by the REST server for hostname →
- * projectId resolution and `X-Project-Id` header validation on unscoped
+ * environmentId resolution and `X-Environment-Id` header validation on unscoped
  * routes. Mirrors the surface of `EnvironmentDriverRegistry` defined in
  * `@objectstack/service-cloud`.
  */
 export interface RestEnvRegistry {
-    resolveByHostname(hostname: string): Promise<{ projectId: string } | null | undefined>;
+    resolveByHostname(hostname: string): Promise<{ environmentId: string } | null | undefined>;
     /**
      * Look up a project by id. Returns a truthy value (typically an
      * `IDataDriver`) when the project exists and is bound, `null` when
      * unknown. The REST server only uses the truthiness; it does not
      * touch the driver itself (the actual driver is loaded later via
-     * `KernelManager.getOrCreate(projectId)`).
+     * `KernelManager.getOrCreate(environmentId)`).
      */
-    resolveById?(projectId: string): Promise<unknown | null>;
+    resolveById?(environmentId: string): Promise<unknown | null>;
 }
 
 export class RestServer {
@@ -429,15 +429,15 @@ export class RestServer {
     private routeManager: RouteManager;
     private kernelManager?: RestKernelManager;
     private envRegistry?: RestEnvRegistry;
-    private defaultProjectIdProvider?: () => string | undefined;
-    private authServiceProvider?: (projectId?: string) => Promise<any | undefined>;
-    private objectQLProvider?: (projectId?: string) => Promise<any | undefined>;
-    private emailServiceProvider?: (projectId?: string) => Promise<any | undefined>;
-    private sharingServiceProvider?: (projectId?: string) => Promise<any | undefined>;
-    private reportsServiceProvider?: (projectId?: string) => Promise<any | undefined>;
-    private approvalsServiceProvider?: (projectId?: string) => Promise<any | undefined>;
-    private sharingRulesServiceProvider?: (projectId?: string) => Promise<any | undefined>;
-    private i18nServiceProvider?: (projectId?: string) => Promise<any | undefined>;
+    private defaultEnvironmentIdProvider?: () => string | undefined;
+    private authServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private objectQLProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private emailServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private sharingServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private reportsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private approvalsServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private sharingRulesServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
+    private i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>;
 
     constructor(
         server: IHttpServer,
@@ -445,22 +445,22 @@ export class RestServer {
         config: RestServerConfig = {},
         kernelManager?: RestKernelManager,
         envRegistry?: RestEnvRegistry,
-        defaultProjectIdProvider?: () => string | undefined,
-        authServiceProvider?: (projectId?: string) => Promise<any | undefined>,
-        objectQLProvider?: (projectId?: string) => Promise<any | undefined>,
-        emailServiceProvider?: (projectId?: string) => Promise<any | undefined>,
-        sharingServiceProvider?: (projectId?: string) => Promise<any | undefined>,
-        reportsServiceProvider?: (projectId?: string) => Promise<any | undefined>,
-        approvalsServiceProvider?: (projectId?: string) => Promise<any | undefined>,
-        sharingRulesServiceProvider?: (projectId?: string) => Promise<any | undefined>,
-        i18nServiceProvider?: (projectId?: string) => Promise<any | undefined>,
+        defaultEnvironmentIdProvider?: () => string | undefined,
+        authServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        objectQLProvider?: (environmentId?: string) => Promise<any | undefined>,
+        emailServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        sharingServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        reportsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        approvalsServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        sharingRulesServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
+        i18nServiceProvider?: (environmentId?: string) => Promise<any | undefined>,
     ) {
         this.protocol = protocol;
         this.config = this.normalizeConfig(config);
         this.routeManager = new RouteManager(server);
         this.kernelManager = kernelManager;
         this.envRegistry = envRegistry;
-        this.defaultProjectIdProvider = defaultProjectIdProvider;
+        this.defaultEnvironmentIdProvider = defaultEnvironmentIdProvider;
         this.authServiceProvider = authServiceProvider;
         this.objectQLProvider = objectQLProvider;
         this.emailServiceProvider = emailServiceProvider;
@@ -472,20 +472,20 @@ export class RestServer {
     }
 
     /**
-     * Resolve the protocol for a given request. When `projectId` is present
+     * Resolve the protocol for a given request. When `environmentId` is present
      * and a KernelManager is wired, fetch the per-project kernel's
      * `protocol` service so metadata / data / UI reads hit the project's
      * own registry and datastore.
      *
-     * When `projectId` is absent on an unscoped route and an `envRegistry`
+     * When `environmentId` is absent on an unscoped route and an `envRegistry`
      * is wired (runtime mode), the resolution chain is:
-     *   1. Hostname → projectId (`envRegistry.resolveByHostname`)
-     *   2. `X-Project-Id` header → projectId (`envRegistry.resolveById`)
-     *   3. Default-project fallback (`defaultProjectIdProvider`, set by
-     *      `createSingleProjectPlugin`)
+     *   1. Hostname → environmentId (`envRegistry.resolveByHostname`)
+     *   2. `X-Environment-Id` header → environmentId (`envRegistry.resolveById`)
+     *   3. Default-project fallback (`defaultEnvironmentIdProvider`, set by
+     *      `createSingleEnvironmentPlugin`)
      *   4. Control-plane protocol captured at boot.
      *
-     * Special case: `projectId === 'platform'` is a reserved virtual id used
+     * Special case: `environmentId === 'platform'` is a reserved virtual id used
      * by Studio to address the control plane through the regular project
      * URL shape (`/projects/platform/...`). It is NOT a row in the projects
      * table, so we must never call `KernelManager.getOrCreate('platform')`.
@@ -493,30 +493,30 @@ export class RestServer {
      * (and any other client) speak a single, uniform URL family without
      * duplicating route logic for the platform surface.
      */
-    private async resolveProtocol(projectId?: string, req?: any): Promise<ObjectStackProtocol> {
-        if (projectId === 'platform') return this.protocol;
-        if (!projectId && req && this.envRegistry && this.kernelManager) {
+    private async resolveProtocol(environmentId?: string, req?: any): Promise<ObjectStackProtocol> {
+        if (environmentId === 'platform') return this.protocol;
+        if (!environmentId && req && this.envRegistry && this.kernelManager) {
             const host = this.extractHostname(req);
             if (host) {
                 try {
                     const result = await this.envRegistry.resolveByHostname(host);
-                    if (result?.projectId) projectId = result.projectId;
+                    if (result?.environmentId) environmentId = result.environmentId;
                 } catch {
                     // fall through to next strategy
                 }
             }
-            // 2. `X-Project-Id` request header → projectId. Lets clients
+            // 2. `X-Environment-Id` request header → environmentId. Lets clients
             //    explicitly target a project when the URL is unscoped and
             //    no hostname binding exists (e.g. a single shared origin
             //    serving multiple compiled bundles via OS_PROJECT_ARTIFACTS).
             //    We validate the id through the env registry to avoid
             //    routing to a non-existent kernel.
-            if (!projectId && typeof this.envRegistry.resolveById === 'function') {
+            if (!environmentId && typeof this.envRegistry.resolveById === 'function') {
                 const headerVal = this.extractProjectIdHeader(req);
                 if (headerVal) {
                     try {
                         const driver = await this.envRegistry.resolveById(headerVal);
-                        if (driver) projectId = headerVal;
+                        if (driver) environmentId = headerVal;
                     } catch {
                         // fall through to default fallback
                     }
@@ -524,18 +524,18 @@ export class RestServer {
             }
         }
         // 3. Single-project default fallback. Registered by
-        //    `createSingleProjectPlugin()` so bare `/api/v1/data/...` URLs
+        //    `createSingleEnvironmentPlugin()` so bare `/api/v1/data/...` URLs
         //    (no `/projects/<id>` prefix, no hostname mapping, no header)
         //    resolve to the lone project's kernel rather than the control
         //    plane.
-        if (!projectId && this.defaultProjectIdProvider) {
+        if (!environmentId && this.defaultEnvironmentIdProvider) {
             try {
-                const def = this.defaultProjectIdProvider();
-                if (def) projectId = def;
+                const def = this.defaultEnvironmentIdProvider();
+                if (def) environmentId = def;
             } catch { /* fall through */ }
         }
-        if (!projectId || !this.kernelManager) return this.protocol;
-        const kernel = await this.kernelManager.getOrCreate(projectId);
+        if (!environmentId || !this.kernelManager) return this.protocol;
+        const kernel = await this.kernelManager.getOrCreate(environmentId);
         return kernel.getServiceAsync<ObjectStackProtocol>('protocol');
     }
 
@@ -545,52 +545,52 @@ export class RestServer {
      * registered, so callers can short-circuit and skip translation rather
      * than failing.
      *
-     * Mirrors `resolveProtocol`'s lookup chain: explicit `projectId` from the
+     * Mirrors `resolveProtocol`'s lookup chain: explicit `environmentId` from the
      * route → kernel-managed `i18n` service. Control-plane / unscoped
      * requests intentionally return `undefined` because the platform kernel
      * does not own per-app translation bundles.
      */
-    private async resolveI18nService(projectId?: string, req?: any): Promise<any | undefined> {
-        if (projectId === 'platform') return undefined;
+    private async resolveI18nService(environmentId?: string, req?: any): Promise<any | undefined> {
+        if (environmentId === 'platform') return undefined;
         // Mirror resolveProtocol's fallback chain so unscoped routes (single-
-        // project dev servers, hostname-routed multi-tenants, X-Project-Id
+        // project dev servers, hostname-routed multi-tenants, X-Environment-Id
         // headers) can still pick up per-project translation bundles.
-        if (!projectId && req && this.envRegistry && this.kernelManager) {
+        if (!environmentId && req && this.envRegistry && this.kernelManager) {
             const host = this.extractHostname(req);
             if (host) {
                 try {
                     const result = await this.envRegistry.resolveByHostname(host);
-                    if (result?.projectId) projectId = result.projectId;
+                    if (result?.environmentId) environmentId = result.environmentId;
                 } catch { /* fall through */ }
             }
-            if (!projectId && typeof this.envRegistry.resolveById === 'function') {
+            if (!environmentId && typeof this.envRegistry.resolveById === 'function') {
                 const headerVal = this.extractProjectIdHeader(req);
                 if (headerVal) {
                     try {
                         const driver = await this.envRegistry.resolveById(headerVal);
-                        if (driver) projectId = headerVal;
+                        if (driver) environmentId = headerVal;
                     } catch { /* fall through */ }
                 }
             }
         }
-        if (!projectId && this.defaultProjectIdProvider) {
+        if (!environmentId && this.defaultEnvironmentIdProvider) {
             try {
-                const def = this.defaultProjectIdProvider();
-                if (def) projectId = def;
+                const def = this.defaultEnvironmentIdProvider();
+                if (def) environmentId = def;
             } catch { /* fall through */ }
         }
         // Multi-tenant kernel lookup first; falls back to the single-kernel
         // provider supplied by RestApiPlugin in dev / standalone mode.
-        if (projectId && this.kernelManager) {
+        if (environmentId && this.kernelManager) {
             try {
-                const kernel = await this.kernelManager.getOrCreate(projectId);
+                const kernel = await this.kernelManager.getOrCreate(environmentId);
                 const svc = await kernel.getServiceAsync<any>('i18n');
                 if (svc) return svc;
             } catch { /* fall through */ }
         }
         if (this.i18nServiceProvider) {
             try {
-                return await this.i18nServiceProvider(projectId);
+                return await this.i18nServiceProvider(environmentId);
             } catch { return undefined; }
         }
         return undefined;
@@ -622,47 +622,47 @@ export class RestServer {
      * `undefined` for anonymous requests so callers can pass `context` as-is
      * to the protocol layer (the SecurityPlugin treats undefined as anon).
      */
-    private async resolveExecCtx(projectId: string | undefined, req: any): Promise<any | undefined> {
+    private async resolveExecCtx(environmentId: string | undefined, req: any): Promise<any | undefined> {
         try {
             // For multi-tenant hosts (objectos), incoming requests on unscoped
-            // URLs like `/api/v1/data/:object` arrive with `projectId === undefined`.
-            // The route's protocol resolver already maps hostname → projectId
+            // URLs like `/api/v1/data/:object` arrive with `environmentId === undefined`.
+            // The route's protocol resolver already maps hostname → environmentId
             // (see resolveProtocol). We mirror that here so getSession() can
             // find the right per-project auth service. Without this, the
-            // hostname-routed requests fall through to defaultProjectIdProvider/
+            // hostname-routed requests fall through to defaultEnvironmentIdProvider/
             // authServiceProvider (neither of which is wired in objectos) and
             // every authenticated user sees 401.
-            if (!projectId && req && this.envRegistry && this.kernelManager) {
+            if (!environmentId && req && this.envRegistry && this.kernelManager) {
                 const host = this.extractHostname(req);
                 if (host) {
                     try {
                         const result = await this.envRegistry.resolveByHostname(host);
-                        if (result?.projectId) projectId = result.projectId;
+                        if (result?.environmentId) environmentId = result.environmentId;
                     } catch { /* fall through */ }
                 }
-                if (!projectId && typeof this.envRegistry.resolveById === 'function') {
+                if (!environmentId && typeof this.envRegistry.resolveById === 'function') {
                     const headerVal = this.extractProjectIdHeader(req);
                     if (headerVal) {
                         try {
                             const driver = await this.envRegistry.resolveById(headerVal);
-                            if (driver) projectId = headerVal;
+                            if (driver) environmentId = headerVal;
                         } catch { /* fall through */ }
                     }
                 }
             }
             // Look up the auth service in the right kernel. For unscoped
-            // single-project apps the kernelManager will hand us the lone
-            // tenant kernel; for multi-project hosts we use the resolved
-            // projectId.
+            // single-environment apps the kernelManager will hand us the lone
+            // tenant kernel; for multi-environment hosts we use the resolved
+            // environmentId.
             let authService: any;
             let kernel: any;
-            if (projectId && projectId !== 'platform' && this.kernelManager) {
-                kernel = await this.kernelManager.getOrCreate(projectId);
+            if (environmentId && environmentId !== 'platform' && this.kernelManager) {
+                kernel = await this.kernelManager.getOrCreate(environmentId);
                 authService = await kernel.getServiceAsync('auth').catch(() => undefined);
             }
-            if (!authService && this.defaultProjectIdProvider && this.kernelManager) {
+            if (!authService && this.defaultEnvironmentIdProvider && this.kernelManager) {
                 try {
-                    const def = this.defaultProjectIdProvider();
+                    const def = this.defaultEnvironmentIdProvider();
                     if (def) {
                         kernel = await this.kernelManager.getOrCreate(def);
                         authService = await kernel.getServiceAsync('auth').catch(() => undefined);
@@ -673,7 +673,7 @@ export class RestServer {
             // the plugin wired an `authServiceProvider` that hits the
             // local kernel directly.
             if (!authService && this.authServiceProvider) {
-                authService = await this.authServiceProvider(projectId).catch(() => undefined);
+                authService = await this.authServiceProvider(environmentId).catch(() => undefined);
             }
             if (!authService) return undefined;
             // The auth service may be the AuthManager wrapper (which exposes
@@ -719,7 +719,7 @@ export class RestServer {
                     ql = await kernel.getServiceAsync('objectql').catch(() => undefined);
                 }
                 if (!ql && this.objectQLProvider) {
-                    ql = await this.objectQLProvider(projectId).catch(() => undefined);
+                    ql = await this.objectQLProvider(environmentId).catch(() => undefined);
                 }
                 if (ql && typeof ql.find === 'function') {
                     const sysOpts = { context: { isSystem: true } };
@@ -772,7 +772,7 @@ export class RestServer {
                         ql = await kernel.getServiceAsync('objectql').catch(() => undefined);
                     }
                     if (!ql && this.objectQLProvider) {
-                        ql = await this.objectQLProvider(projectId).catch(() => undefined);
+                        ql = await this.objectQLProvider(environmentId).catch(() => undefined);
                     }
                     if (ql && typeof ql.find === 'function') {
                         const sysOpts = { context: { isSystem: true } };
@@ -855,10 +855,10 @@ export class RestServer {
      * locale yields a match. Falls through unchanged for unsupported types
      * or missing translations.
      */
-    private async translateMetaItem(req: any, type: string, projectId: string | undefined, item: any): Promise<any> {
+    private async translateMetaItem(req: any, type: string, environmentId: string | undefined, item: any): Promise<any> {
         if (!item || typeof item !== 'object') return item;
         if (type !== 'view' && type !== 'action' && type !== 'object') return item;
-        const i18n = await this.resolveI18nService(projectId, req);
+        const i18n = await this.resolveI18nService(environmentId, req);
         const bundle = this.buildTranslationBundle(i18n);
         if (!bundle) return item;
         const locale = this.extractLocale(req, i18n);
@@ -870,10 +870,10 @@ export class RestServer {
     /**
      * Translate a list of metadata documents using `translateMetaItem`.
      */
-    private async translateMetaItems(req: any, type: string, projectId: string | undefined, items: any): Promise<any> {
+    private async translateMetaItems(req: any, type: string, environmentId: string | undefined, items: any): Promise<any> {
         if (!Array.isArray(items)) return items;
         if (type !== 'view' && type !== 'action' && type !== 'object') return items;
-        const i18n = await this.resolveI18nService(projectId, req);
+        const i18n = await this.resolveI18nService(environmentId, req);
         const bundle = this.buildTranslationBundle(i18n);
         if (!bundle) return items;
         const locale = this.extractLocale(req, i18n);
@@ -912,7 +912,7 @@ export class RestServer {
     }
 
     /**
-     * Pull the `X-Project-Id` header from a Node- or Fetch-style request.
+     * Pull the `X-Environment-Id` header from a Node- or Fetch-style request.
      * Header names are case-insensitive; we probe both casings to cover
      * adapters that don't normalize headers (e.g. raw Node http).
      */
@@ -921,9 +921,9 @@ export class RestServer {
         if (!headers) return undefined;
         let val: unknown;
         if (typeof headers.get === 'function') {
-            val = headers.get('x-project-id') ?? headers.get('X-Project-Id');
+            val = headers.get('x-environment-id') ?? headers.get('X-Environment-Id');
         } else {
-            val = headers['x-project-id'] ?? headers['X-Project-Id'];
+            val = headers['x-environment-id'] ?? headers['X-Environment-Id'];
         }
         if (Array.isArray(val)) val = val[0];
         if (typeof val !== 'string') return undefined;
@@ -1012,17 +1012,17 @@ export class RestServer {
 
     /**
      * Get the project-scoped base path for a given unscoped base.
-     * Example: `/api/v1` → `/api/v1/projects/:projectId`.
+     * Example: `/api/v1` → `/api/v1/environments/:environmentId`.
      */
     private getScopedBasePath(basePath: string): string {
-        return `${basePath}/projects/:projectId`;
+        return `${basePath}/environments/:environmentId`;
     }
 
     /**
      * Register all REST API routes
      *
      * When `enableProjectScoping` is true, routes are registered under
-     * `/api/v1/projects/:projectId/...`. The `projectResolution` strategy
+     * `/api/v1/environments/:environmentId/...`. The `projectResolution` strategy
      * controls whether unscoped legacy routes remain available:
      *   - `required` → only scoped routes registered.
      *   - `optional` / `auto` → both scoped and unscoped routes registered.
@@ -1090,7 +1090,7 @@ export class RestServer {
      * Register discovery endpoints
      */
     private registerDiscoveryEndpoints(basePath: string): void {
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
         const discoveryHandler = async (req: any, res: any) => {
                 try {
                     const discovery = await this.protocol.getDiscovery();
@@ -1098,10 +1098,10 @@ export class RestServer {
                     // Override discovery information with actual server configuration
                     discovery.version = this.config.api.version;
 
-                    // Substitute the resolved projectId into the advertised routes so
-                    // clients can consume them verbatim (e.g. /api/v1/projects/abc/data).
+                    // Substitute the resolved environmentId into the advertised routes so
+                    // clients can consume them verbatim (e.g. /api/v1/environments/abc/data).
                     const realBase = isScoped
-                        ? basePath.replace(':projectId', req.params?.projectId ?? ':projectId')
+                        ? basePath.replace(':environmentId', req.params?.environmentId ?? ':environmentId')
                         : basePath;
 
                     if (discovery.routes) {
@@ -1122,7 +1122,7 @@ export class RestServer {
                         // Auth is a control-plane concern, so use the unscoped base.
                         if (discovery.routes.auth) {
                             const unscopedBase = isScoped
-                                ? basePath.replace(/\/projects\/:projectId$/, '')
+                                ? basePath.replace(/\/projects\/:environmentId$/, '')
                                 : basePath;
                             discovery.routes.auth = `${unscopedBase}/auth`;
                         }
@@ -1133,7 +1133,7 @@ export class RestServer {
                         enabled: this.config.api.enableProjectScoping,
                         resolution: this.config.api.projectResolution,
                         scoped: isScoped,
-                        projectId: isScoped ? req.params?.projectId : undefined,
+                        environmentId: isScoped ? req.params?.environmentId : undefined,
                     };
 
                     res.json(discovery);
@@ -1184,7 +1184,7 @@ export class RestServer {
      * malformed file degrades to a stub instead of crashing.
      */
     private registerOpenApiEndpoints(basePath: string): void {
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
         const openApiHandler = async (req: any, res: any) => {
             try {
@@ -1219,8 +1219,8 @@ export class RestServer {
                 //    routes for every registered data object. Falls back
                 //    silently if discovery isn't available.
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const protocol = await this.resolveProtocol(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const protocol = await this.resolveProtocol(environmentId, req);
                     const items = await protocol?.getMetaItems?.({ type: 'object' }).catch(() => null) as any;
                     const objects: string[] = Array.isArray(items?.items)
                         ? items.items.map((i: any) => i?.name).filter(Boolean)
@@ -1283,7 +1283,7 @@ export class RestServer {
             handler: async (req: any, res: any) => {
                 // Resolve the openapi.json URL relative to the current
                 // request so the docs page works for any host / scoped
-                // base path (e.g. /api/v1 vs /api/v1/projects/abc).
+                // base path (e.g. /api/v1 vs /api/v1/environments/abc).
                 const reqPath: string = req.path || req.url || `${basePath}/docs`;
                 // Strip the trailing /docs to get the API base.
                 const apiBase = reqPath.replace(/\/docs\/?$/, '');
@@ -1347,7 +1347,7 @@ export class RestServer {
     private registerMetadataEndpoints(basePath: string): void {
         const { metadata } = this.config;
         const metaPath = `${basePath}${metadata.prefix}`;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
         // GET /meta - List all metadata types
         if (metadata.endpoints.types !== false) {
@@ -1356,8 +1356,8 @@ export class RestServer {
                 path: metaPath,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
                         const types = await p.getMetaTypes();
                         res.json(types);
                     } catch (error: any) {
@@ -1380,14 +1380,14 @@ export class RestServer {
                 handler: async (req: any, res: any) => {
                     try {
                         const packageId = req.query?.package || undefined;
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
                         const items = await p.getMetaItems({
                             type: req.params.type,
                             packageId,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                         } as any);
-                        const translated = await this.translateMetaItems(req, req.params.type, projectId, items);
+                        const translated = await this.translateMetaItems(req, req.params.type, environmentId, items);
                         res.header('Vary', 'Accept-Language');
                         res.json(translated);
                     } catch (error: any) {
@@ -1409,8 +1409,8 @@ export class RestServer {
                 path: `${metaPath}/:type/:name`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
                         // Check if cached version is available
                         if (metadata.enableCache && p.getMetaItemCached) {
                             const cacheRequest = {
@@ -1422,7 +1422,7 @@ export class RestServer {
                                 type: req.params.type,
                                 name: req.params.name,
                                 cacheRequest,
-                                ...(projectId ? { projectId } : {}),
+                                ...(environmentId ? { environmentId } : {}),
                             } as any);
 
                             if (result.notModified) {
@@ -1449,7 +1449,7 @@ export class RestServer {
                             }
 
                             res.header('Vary', 'Accept-Language');
-                            res.json(await this.translateMetaItem(req, req.params.type, projectId, result.data));
+                            res.json(await this.translateMetaItem(req, req.params.type, environmentId, result.data));
                         } else {
                             // Non-cached version
                             const packageId = req.query?.package || undefined;
@@ -1459,7 +1459,7 @@ export class RestServer {
                                 packageId,
                             } as any);
                             res.header('Vary', 'Accept-Language');
-                            res.json(await this.translateMetaItem(req, req.params.type, projectId, item));
+                            res.json(await this.translateMetaItem(req, req.params.type, environmentId, item));
                         }
                     } catch (error: any) {
                         logError("[REST] Unhandled error:", error);
@@ -1481,8 +1481,8 @@ export class RestServer {
             path: `${metaPath}/:type/:name`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
                     if (!p.saveMetaItem) {
                         res.status(501).json({ error: 'Save operation not supported by protocol implementation' });
                         return;
@@ -1516,7 +1516,7 @@ export class RestServer {
                         type: req.params.type,
                         name: req.params.name,
                         item,
-                        ...(projectId ? { projectId } : {}),
+                        ...(environmentId ? { environmentId } : {}),
                         ...(parentVersion !== undefined ? { parentVersion } : {}),
                         ...(actor ? { actor } : {}),
                     } as any);
@@ -1540,8 +1540,8 @@ export class RestServer {
             path: `${metaPath}/:type/:name`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
                     if (!(p as any).deleteMetaItem) {
                         res.status(501).json({
                             error: 'Reset operation not supported by protocol implementation',
@@ -1564,7 +1564,7 @@ export class RestServer {
                     const result = await (p as any).deleteMetaItem({
                         type: req.params.type,
                         name: req.params.name,
-                        ...(projectId ? { projectId } : {}),
+                        ...(environmentId ? { environmentId } : {}),
                         ...(parentVersion !== undefined ? { parentVersion } : {}),
                         ...(actor ? { actor } : {}),
                     });
@@ -1591,8 +1591,8 @@ export class RestServer {
             path: `${metaPath}/:type/:name/history`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
                     if (!(p as any).historyMetaItem) {
                         res.status(501).json({
                             error: 'History query not supported by protocol implementation',
@@ -1608,7 +1608,7 @@ export class RestServer {
                     const result = await (p as any).historyMetaItem({
                         type: req.params.type,
                         name: req.params.name,
-                        ...(projectId ? { projectId } : {}),
+                        ...(environmentId ? { environmentId } : {}),
                         ...(sinceSeq !== undefined && Number.isFinite(sinceSeq) ? { sinceSeq } : {}),
                         ...(limit !== undefined && Number.isFinite(limit) ? { limit } : {}),
                     });
@@ -1634,8 +1634,8 @@ export class RestServer {
                 path: `${metaPath}/:type/:section/:name`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
                         const compoundName = `${req.params.section}/${req.params.name}`;
                         const packageId = req.query?.package || undefined;
                         const item = await p.getMetaItem({
@@ -1644,7 +1644,7 @@ export class RestServer {
                             packageId,
                         } as any);
                         res.header('Vary', 'Accept-Language');
-                        res.json(await this.translateMetaItem(req, req.params.type, projectId, item));
+                        res.json(await this.translateMetaItem(req, req.params.type, environmentId, item));
                     } catch (error: any) {
                         logError("[REST] Unhandled error:", error);
                         sendError(res, error);
@@ -1663,8 +1663,8 @@ export class RestServer {
             path: `${metaPath}/:type/:section/:name`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
                     if (!p.saveMetaItem) {
                         res.status(501).json({ error: 'Save operation not supported by protocol implementation' });
                         return;
@@ -1683,7 +1683,7 @@ export class RestServer {
                         type: req.params.type,
                         name: compoundName,
                         item: req.body,
-                        ...(projectId ? { projectId } : {}),
+                        ...(environmentId ? { environmentId } : {}),
                         ...(parentVersion !== undefined ? { parentVersion } : {}),
                         ...(actor ? { actor } : {}),
                     } as any);
@@ -1705,7 +1705,7 @@ export class RestServer {
      */
     private registerUiEndpoints(basePath: string): void {
         const uiPath = `${basePath}/ui`;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
         // GET /ui/view/:object/:type - Resolve view for object
         this.routeManager.register({
@@ -1713,13 +1713,13 @@ export class RestServer {
             path: `${uiPath}/view/:object/:type`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
                     if (p.getUiView) {
                         const view = await p.getUiView({
                             object: req.params.object,
                             type: req.params.type as any,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                         } as any);
                         res.json(view);
                     } else {
@@ -1743,7 +1743,7 @@ export class RestServer {
     private registerCrudEndpoints(basePath: string): void {
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
         const operations = crud.operations;
 
@@ -1754,14 +1754,14 @@ export class RestServer {
                 path: `${dataPath}/:object`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.findData({
                             object: req.params.object,
                             query: req.query,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -1789,17 +1789,17 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
                         const { select, expand } = req.query || {};
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.getData({
                             object: req.params.object,
                             id: req.params.id,
                             ...(select != null ? { select } : {}),
                             ...(expand != null ? { expand } : {}),
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -1823,14 +1823,14 @@ export class RestServer {
                 path: `${dataPath}/:object`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.createData({
                             object: req.params.object,
                             data: req.body,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.status(201).json(result);
@@ -1857,14 +1857,14 @@ export class RestServer {
                 path: `${dataPath}/:object/query`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.findData({
                             object: req.params.object,
                             query: req.body || {},
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -1888,9 +1888,9 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         // OCC: clients opt in by sending either the standard
                         // `If-Match` header or an `expectedVersion` field in
@@ -1915,7 +1915,7 @@ export class RestServer {
                             id: req.params.id,
                             data,
                             ...(expectedVersion ? { expectedVersion: String(expectedVersion) } : {}),
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -1939,9 +1939,9 @@ export class RestServer {
                 path: `${dataPath}/:object/:id`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         // OCC: same opt-in protocol as PATCH (`If-Match`
                         // header or `expectedVersion` query string). DELETE
@@ -1956,7 +1956,7 @@ export class RestServer {
                             object: req.params.object,
                             id: req.params.id,
                             ...(expectedVersion ? { expectedVersion: String(expectedVersion) } : {}),
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -1983,7 +1983,7 @@ export class RestServer {
      * POST {basePath}/data/lead/:id/convert — M10.6 lead conversion.
      */
     private registerDataActionEndpoints(basePath: string): void {
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
 
@@ -1993,9 +1993,9 @@ export class RestServer {
             path: `${dataPath}/lead/:id/convert`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
                     const convertLead = (p as any).convertLead;
                     if (typeof convertLead !== 'function') {
@@ -2035,9 +2035,9 @@ export class RestServer {
             path: `${dataPath}/:object/import`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
                     const objectName = String(req.params.object || '');
                     if (!objectName) {
@@ -2140,9 +2140,9 @@ export class RestServer {
             path: `${dataPath}/:object/export`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
                     const objectName = String(req.params.object || '');
                     if (!objectName) {
@@ -2192,7 +2192,7 @@ export class RestServer {
                     }
                     if (!fields || fields.length === 0) {
                         try {
-                            const schema = await (p as any).getObjectSchema?.(objectName, projectId);
+                            const schema = await (p as any).getObjectSchema?.(objectName, environmentId);
                             const schemaFields = schema?.fields;
                             if (Array.isArray(schemaFields)) {
                                 fields = schemaFields.map((f: any) => f.name).filter((n: any) => typeof n === 'string');
@@ -2229,7 +2229,7 @@ export class RestServer {
                                 $top: take,
                                 $skip: skip,
                             },
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         };
                         const result: any = await (p as any).findData(findArgs);
@@ -2279,15 +2279,15 @@ export class RestServer {
      * GET {basePath}/search?q=acme&objects=lead,account&limit=20&perObject=5
      */
     private registerSearchEndpoints(basePath: string): void {
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
         this.routeManager.register({
             method: 'GET',
             path: `${basePath}/search`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const p = await this.resolveProtocol(projectId, req);
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
                     const searchAll = (p as any).searchAll;
                     if (typeof searchAll !== 'function') {
@@ -2342,14 +2342,14 @@ export class RestServer {
      *   }
      */
     private registerEmailEndpoints(basePath: string): void {
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
         this.routeManager.register({
             method: 'POST',
             path: `${basePath}/email/send`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
 
                     if (!this.emailServiceProvider) {
@@ -2359,7 +2359,7 @@ export class RestServer {
                         });
                         return;
                     }
-                    const emailService = await this.emailServiceProvider(projectId).catch(() => undefined);
+                    const emailService = await this.emailServiceProvider(environmentId).catch(() => undefined);
                     if (!emailService || typeof emailService.send !== 'function') {
                         res.status(501).json({
                             code: 'NOT_IMPLEMENTED',
@@ -2446,7 +2446,7 @@ export class RestServer {
      * `mapViewSpecToEmbeddableConfig` expects.
      */
     private registerFormEndpoints(basePath: string): void {
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
         const slugMatchesPublicLink = (publicLink: string | undefined, slug: string): boolean => {
             if (!publicLink || typeof publicLink !== 'string') return false;
@@ -2485,15 +2485,15 @@ export class RestServer {
         };
 
         const resolveFormBySlug = async (
-            projectId: string | undefined,
+            environmentId: string | undefined,
             req: any,
             slug: string,
         ): Promise<{ view: any; form: any; object: string } | null> => {
-            const p = await this.resolveProtocol(projectId, req);
+            const p = await this.resolveProtocol(environmentId, req);
             if (typeof (p as any).getMetaItems !== 'function') return null;
             const result: any = await (p as any).getMetaItems({
                 type: 'view',
-                ...(projectId ? { projectId } : {}),
+                ...(environmentId ? { environmentId } : {}),
             });
             const items: any[] = Array.isArray(result?.items)
                 ? result.items
@@ -2509,13 +2509,13 @@ export class RestServer {
             path: `${basePath}/forms/:slug`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
                     const slug = String(req.params?.slug ?? '').trim();
                     if (!slug) {
                         res.status(400).json({ code: 'INVALID_REQUEST', error: 'slug is required' });
                         return;
                     }
-                    const match = await resolveFormBySlug(projectId, req, slug);
+                    const match = await resolveFormBySlug(environmentId, req, slug);
                     if (!match) {
                         res.status(404).json({
                             code: 'FORM_NOT_FOUND',
@@ -2530,11 +2530,11 @@ export class RestServer {
                     // field whitelist server-side.
                     let objectSchema: any = null;
                     try {
-                        const p = await this.resolveProtocol(projectId, req);
+                        const p = await this.resolveProtocol(environmentId, req);
                         if (typeof (p as any).getMetaItems === 'function') {
                             const r: any = await (p as any).getMetaItems({
                                 type: 'object',
-                                ...(projectId ? { projectId } : {}),
+                                ...(environmentId ? { environmentId } : {}),
                             });
                             const items: any[] = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
                             const obj = items.find((o: any) => o?.name === match.object);
@@ -2558,7 +2558,7 @@ export class RestServer {
                                 // form payload is otherwise un-translated (resolveFormBySlug
                                 // returns the raw view spec), so we hydrate the schema here.
                                 try {
-                                    const i18n = await this.resolveI18nService(projectId, req);
+                                    const i18n = await this.resolveI18nService(environmentId, req);
                                     const bundle = this.buildTranslationBundle(i18n);
                                     const locale = this.extractLocale(req, i18n);
                                     if (bundle && locale) {
@@ -2630,13 +2630,13 @@ export class RestServer {
             path: `${basePath}/forms/:slug/submit`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
                     const slug = String(req.params?.slug ?? '').trim();
                     if (!slug) {
                         res.status(400).json({ code: 'INVALID_REQUEST', error: 'slug is required' });
                         return;
                     }
-                    const match = await resolveFormBySlug(projectId, req, slug);
+                    const match = await resolveFormBySlug(environmentId, req, slug);
                     if (!match) {
                         res.status(404).json({
                             code: 'FORM_NOT_FOUND',
@@ -2678,11 +2678,11 @@ export class RestServer {
                         anonymous: true,
                     };
 
-                    const p = await this.resolveProtocol(projectId, req);
+                    const p = await this.resolveProtocol(environmentId, req);
                     const result = await p.createData({
                         object: match.object,
                         data: filteredData,
-                        ...(projectId ? { projectId } : {}),
+                        ...(environmentId ? { environmentId } : {}),
                         context,
                     } as any);
                     res.status(201).json(result);
@@ -2714,14 +2714,14 @@ export class RestServer {
             path: `${basePath}/forms/:slug/lookup/:field`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
                     const slug = String(req.params?.slug ?? '').trim();
                     const fieldName = String(req.params?.field ?? '').trim();
                     if (!slug || !fieldName) {
                         res.status(400).json({ code: 'INVALID_REQUEST', error: 'slug and field are required' });
                         return;
                     }
-                    const match = await resolveFormBySlug(projectId, req, slug);
+                    const match = await resolveFormBySlug(environmentId, req, slug);
                     if (!match) {
                         res.status(404).json({
                             code: 'FORM_NOT_FOUND',
@@ -2757,13 +2757,13 @@ export class RestServer {
                     // Resolve the referenced object — prefer the explicit
                     // `publicPicker.object` override, fall back to the
                     // field def on the parent object.
-                    const p = await this.resolveProtocol(projectId, req);
+                    const p = await this.resolveProtocol(environmentId, req);
                     let referenceTo: string | undefined = picker.object;
                     if (!referenceTo && typeof (p as any).getMetaItems === 'function') {
                         try {
                             const r: any = await (p as any).getMetaItems({
                                 type: 'object',
-                                ...(projectId ? { projectId } : {}),
+                                ...(environmentId ? { environmentId } : {}),
                             });
                             const items: any[] = Array.isArray(r?.items) ? r.items : Array.isArray(r) ? r : [];
                             const obj = items.find((o: any) => o?.name === match.object);
@@ -2808,7 +2808,7 @@ export class RestServer {
                             select: ['id', ...displayFields],
                             sort: picker.sort ?? [{ field: displayFields[0], order: 'asc' }],
                         },
-                        ...(projectId ? { projectId } : {}),
+                        ...(environmentId ? { environmentId } : {}),
                         context,
                     } as any);
 
@@ -2862,11 +2862,11 @@ export class RestServer {
     private registerSharingEndpoints(basePath: string): void {
         const { crud } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
-        const resolveService = async (projectId?: string) => {
+        const resolveService = async (environmentId?: string) => {
             if (!this.sharingServiceProvider) return undefined;
-            try { return await this.sharingServiceProvider(projectId); }
+            try { return await this.sharingServiceProvider(environmentId); }
             catch { return undefined; }
         };
         const respond501 = (res: any) => res.status(501).json({
@@ -2880,10 +2880,10 @@ export class RestServer {
             path: `${dataPath}/:object/:id/shares`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const rows = await svc.listShares(req.params.object, req.params.id, context ?? {});
                     res.json({ data: rows });
@@ -2901,10 +2901,10 @@ export class RestServer {
             path: `${dataPath}/:object/:id/shares`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const body = req.body ?? {};
                     const input = {
@@ -2945,10 +2945,10 @@ export class RestServer {
             path: `${dataPath}/:object/:id/shares/:shareId`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     await svc.revoke(req.params.shareId, context ?? {});
                     res.status(204).end();
@@ -2980,11 +2980,11 @@ export class RestServer {
         // them on `basePath` keeps them out of the `/data/:object` namespace
         // where greedy CRUD matchers would otherwise swallow them.
         const dataPath = basePath;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
-        const resolveService = async (projectId?: string) => {
+        const resolveService = async (environmentId?: string) => {
             if (!this.sharingRulesServiceProvider) return undefined;
-            try { return await this.sharingRulesServiceProvider(projectId); }
+            try { return await this.sharingRulesServiceProvider(environmentId); }
             catch { return undefined; }
         };
         const respond501 = (res: any) => res.status(501).json({
@@ -3009,10 +3009,10 @@ export class RestServer {
             path: `${dataPath}/sharing/rules`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const rows = await svc.listRules({
                         object: req.query?.object,
@@ -3030,10 +3030,10 @@ export class RestServer {
             path: `${dataPath}/sharing/rules`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const body = req.body ?? {};
                     const input = {
@@ -3060,10 +3060,10 @@ export class RestServer {
             path: `${dataPath}/sharing/rules/:idOrName`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const row = await svc.getRule(req.params.idOrName, context ?? {});
                     if (!row) return res.status(404).json({ code: 'RULE_NOT_FOUND' });
@@ -3079,10 +3079,10 @@ export class RestServer {
             path: `${dataPath}/sharing/rules/:idOrName`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     await svc.deleteRule(req.params.idOrName, context ?? {});
                     res.status(204).end();
@@ -3097,10 +3097,10 @@ export class RestServer {
             path: `${dataPath}/sharing/rules/:idOrName/evaluate`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const result = await svc.evaluateRule(req.params.idOrName, context ?? {});
                     res.json(result);
@@ -3137,11 +3137,11 @@ export class RestServer {
         // capability whose definition is tenant-wide (not a record on a
         // particular object).
         const dataPath = basePath;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
-        const resolveService = async (projectId?: string) => {
+        const resolveService = async (environmentId?: string) => {
             if (!this.reportsServiceProvider) return undefined;
-            try { return await this.reportsServiceProvider(projectId); }
+            try { return await this.reportsServiceProvider(environmentId); }
             catch { return undefined; }
         };
         const respond501 = (res: any) => res.status(501).json({
@@ -3170,10 +3170,10 @@ export class RestServer {
             path: `${dataPath}/reports`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const q = req.query ?? {};
                     const rows = await svc.listReports({ object: q.object, ownerId: q.ownerId }, context ?? {});
@@ -3192,10 +3192,10 @@ export class RestServer {
             path: `${dataPath}/reports`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     try {
                         const row = await svc.saveReport(req.body ?? {}, context ?? {});
@@ -3218,10 +3218,10 @@ export class RestServer {
             path: `${dataPath}/reports/:id`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const row = await svc.getReport(req.params.id, context ?? {});
                     if (!row) {
@@ -3243,10 +3243,10 @@ export class RestServer {
             path: `${dataPath}/reports/:id`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     await svc.deleteReport(req.params.id, context ?? {});
                     res.status(204).end();
@@ -3264,10 +3264,10 @@ export class RestServer {
             path: `${dataPath}/reports/:id/run`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     try {
                         const result = await svc.run(req.params.id, context ?? {});
@@ -3290,10 +3290,10 @@ export class RestServer {
             path: `${dataPath}/reports/:id/schedule`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const body = req.body ?? {};
                     try {
@@ -3328,10 +3328,10 @@ export class RestServer {
             path: `${dataPath}/reports/:id/schedules`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const rows = await svc.listSchedules({ reportId: req.params.id }, context ?? {});
                     res.json({ data: rows });
@@ -3349,10 +3349,10 @@ export class RestServer {
             path: `${dataPath}/reports/schedules/:scheduleId`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     await svc.unscheduleReport(req.params.scheduleId, context ?? {});
                     res.status(204).end();
@@ -3391,11 +3391,11 @@ export class RestServer {
         // record on a single CRUD object, so anchoring it on `basePath`
         // (instead of `${basePath}/data`) keeps the URL semantics honest.
         const dataPath = basePath;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
-        const resolveService = async (projectId?: string) => {
+        const resolveService = async (environmentId?: string) => {
             if (!this.approvalsServiceProvider) return undefined;
-            try { return await this.approvalsServiceProvider(projectId); }
+            try { return await this.approvalsServiceProvider(environmentId); }
             catch { return undefined; }
         };
         const respond501 = (res: any) => res.status(501).json({
@@ -3428,10 +3428,10 @@ export class RestServer {
             path: `${dataPath}/approvals/processes`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const q = req.query ?? {};
                     const rows = await svc.listProcesses({
@@ -3452,10 +3452,10 @@ export class RestServer {
             path: `${dataPath}/approvals/processes`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     try {
                         const row = await svc.defineProcess(req.body ?? {}, context ?? {});
@@ -3477,10 +3477,10 @@ export class RestServer {
             path: `${dataPath}/approvals/processes/:id`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const row = await svc.getProcess(req.params.id, context ?? {});
                     if (!row) {
@@ -3501,10 +3501,10 @@ export class RestServer {
             path: `${dataPath}/approvals/processes/:id`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     await svc.deleteProcess(req.params.id, context ?? {});
                     res.status(204).end();
@@ -3522,10 +3522,10 @@ export class RestServer {
             path: `${dataPath}/approvals/requests`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const body = req.body ?? {};
                     try {
@@ -3555,10 +3555,10 @@ export class RestServer {
             path: `${dataPath}/approvals/requests`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) {
                         // No approvals plugin loaded — return empty list rather than 501
                         // so Console badge polls don't spam the error log on deployments
@@ -3588,10 +3588,10 @@ export class RestServer {
             path: `${dataPath}/approvals/requests/:id`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const row = await svc.getRequest(req.params.id, context ?? {});
                     if (!row) {
@@ -3613,10 +3613,10 @@ export class RestServer {
                 path: `${dataPath}/approvals/requests/:id/${suffix}`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
-                        const svc = await resolveService(projectId);
+                        const svc = await resolveService(environmentId);
                         if (!svc) return respond501(res);
                         const body = req.body ?? {};
                         try {
@@ -3646,10 +3646,10 @@ export class RestServer {
             path: `${dataPath}/approvals/requests/:id/actions`,
             handler: async (req: any, res: any) => {
                 try {
-                    const projectId = isScoped ? req.params?.projectId : undefined;
-                    const context = await this.resolveExecCtx(projectId, req);
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const context = await this.resolveExecCtx(environmentId, req);
                     if (this.enforceAuth(req, res, context)) return;
-                    const svc = await resolveService(projectId);
+                    const svc = await resolveService(environmentId);
                     if (!svc) return respond501(res);
                     const rows = await svc.listActions(req.params.id, context ?? {});
                     res.json({ data: rows });
@@ -3668,7 +3668,7 @@ export class RestServer {
     private registerBatchEndpoints(basePath: string): void {
         const { crud, batch } = this.config;
         const dataPath = `${basePath}${crud.dataPrefix}`;
-        const isScoped = basePath.includes('/projects/:projectId');
+        const isScoped = basePath.includes('/environments/:environmentId');
 
         const operations = batch.operations;
 
@@ -3679,14 +3679,14 @@ export class RestServer {
                 path: `${dataPath}/:object/batch`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.batchData!({
                             object: req.params.object,
                             request: req.body,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -3709,14 +3709,14 @@ export class RestServer {
                 path: `${dataPath}/:object/createMany`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.createManyData!({
                             object: req.params.object,
                             records: req.body || [],
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.status(201).json(result);
@@ -3739,14 +3739,14 @@ export class RestServer {
                 path: `${dataPath}/:object/updateMany`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.updateManyData!({
                             object: req.params.object,
                             ...req.body,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);
@@ -3769,14 +3769,14 @@ export class RestServer {
                 path: `${dataPath}/:object/deleteMany`,
                 handler: async (req: any, res: any) => {
                     try {
-                        const projectId = isScoped ? req.params?.projectId : undefined;
-                        const p = await this.resolveProtocol(projectId, req);
-                        const context = await this.resolveExecCtx(projectId, req);
+                        const environmentId = isScoped ? req.params?.environmentId : undefined;
+                        const p = await this.resolveProtocol(environmentId, req);
+                        const context = await this.resolveExecCtx(environmentId, req);
                         if (this.enforceAuth(req, res, context)) return;
                         const result = await p.deleteManyData!({
                             object: req.params.object,
                             ...req.body,
-                            ...(projectId ? { projectId } : {}),
+                            ...(environmentId ? { environmentId } : {}),
                             ...(context ? { context } : {}),
                         } as any);
                         res.json(result);

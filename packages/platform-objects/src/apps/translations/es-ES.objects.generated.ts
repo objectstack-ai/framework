@@ -1629,7 +1629,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "URL",
         help: "Enlace profundo opcional al destino de la actividad."
       },
-      project_id: {
+      environment_id: {
         label: "Proyecto",
         help: "Contexto del proyecto (implementaciones multiproyecto)."
       },
@@ -2624,7 +2624,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Organización",
         help: "Organización para el aislamiento multi-tenant."
       },
-      project_id: {
+      environment_id: {
         label: "Proyecto (obsoleto)",
         help: "OBSOLETO. Use organization_id para el aislamiento del tenant."
       },
@@ -2706,7 +2706,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Organización",
         help: "Organización para el aislamiento multi-tenant."
       },
-      project_id: {
+      environment_id: {
         label: "ID del entorno",
         help: "Limita esta entrada de historial a un entorno específico."
       },

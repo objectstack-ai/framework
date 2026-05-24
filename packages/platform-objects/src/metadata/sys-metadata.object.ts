@@ -137,12 +137,12 @@ export const SysMetadataObject = ObjectSchema.create({
 
     /**
      * @deprecated ADR-0005 (revised 2026-05): per-env DBs replace per-project
-     * isolation. `project_id` is no longer written by saveMetaItem and not
+     * isolation. `environment_id` is no longer written by saveMetaItem and not
      * consulted by overlay reads. Kept for legacy rows; new writes leave it
      * NULL. Will be dropped in a future schema migration.
      */
-    project_id: Field.lookup('sys_project', {
-      label: 'Project (deprecated)',
+    environment_id: Field.lookup('sys_environment', {
+      label: 'Environment (deprecated)',
       required: false,
       description: 'DEPRECATED. Use organization_id for tenant isolation.',
     }),
@@ -201,7 +201,7 @@ export const SysMetadataObject = ObjectSchema.create({
   indexes: [
     // ADR-0005 (revised 2026-05): overlay uniqueness is scoped by
     // (type, name, organization_id), restricted to active rows so resets
-    // / archived versions don't collide. project_id is deprecated and
+    // / archived versions don't collide. environment_id is deprecated and
     // not part of the discriminator. The runtime layer (protocol.ts
     // ensureOverlayIndex) issues a DROP-then-CREATE migration to
     // replace any pre-existing legacy composite index in-place.

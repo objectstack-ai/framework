@@ -16,7 +16,7 @@ describe('platform-sso key derivation', () => {
         expect(derivePlatformSsoClientId('p_42')).toBe('project_p_42');
     });
 
-    it('client secret is deterministic for a given (baseSecret, projectId)', () => {
+    it('client secret is deterministic for a given (baseSecret, environmentId)', () => {
         const s1 = derivePlatformSsoClientSecret('master', 'abc');
         const s2 = derivePlatformSsoClientSecret('master', 'abc');
         expect(s1).toBe(s2);
@@ -86,7 +86,7 @@ describe('seedPlatformSsoClient', () => {
         const ql = createMockQl({ sys_oauth_application: [] });
         await seedPlatformSsoClient({
             ql,
-            projectId: 'proj1',
+            environmentId: 'proj1',
             hostname: 'one.example.com',
             baseSecret: 'master',
         });
@@ -105,15 +105,15 @@ describe('seedPlatformSsoClient', () => {
 
     it('is idempotent — second call with same hostname is a no-op', async () => {
         const ql = createMockQl({ sys_oauth_application: [] });
-        await seedPlatformSsoClient({ ql, projectId: 'p', hostname: 'h.example.com', baseSecret: 'm' });
-        await seedPlatformSsoClient({ ql, projectId: 'p', hostname: 'h.example.com', baseSecret: 'm' });
+        await seedPlatformSsoClient({ ql, environmentId: 'p', hostname: 'h.example.com', baseSecret: 'm' });
+        await seedPlatformSsoClient({ ql, environmentId: 'p', hostname: 'h.example.com', baseSecret: 'm' });
         expect(ql.tables.sys_oauth_application).toHaveLength(1);
     });
 
     it('merges a new redirect_uri into the existing row', async () => {
         const ql = createMockQl({ sys_oauth_application: [] });
-        await seedPlatformSsoClient({ ql, projectId: 'p', hostname: 'first.example.com', baseSecret: 'm' });
-        await seedPlatformSsoClient({ ql, projectId: 'p', hostname: 'second.example.com', baseSecret: 'm' });
+        await seedPlatformSsoClient({ ql, environmentId: 'p', hostname: 'first.example.com', baseSecret: 'm' });
+        await seedPlatformSsoClient({ ql, environmentId: 'p', hostname: 'second.example.com', baseSecret: 'm' });
         const uris: string[] = JSON.parse(ql.tables.sys_oauth_application[0].redirect_uris);
         expect(uris).toHaveLength(2);
         expect(uris.some((u) => u.includes('first.example.com'))).toBe(true);
@@ -135,7 +135,7 @@ describe('seedPlatformSsoClient', () => {
         });
         await seedPlatformSsoClient({
             ql,
-            projectId: 'proj1',
+            environmentId: 'proj1',
             hostname: 'one.example.com',
             baseSecret: 'master',
         });
@@ -160,7 +160,7 @@ describe('seedPlatformSsoClient', () => {
 
     it('skips seed when baseSecret is empty', async () => {
         const ql = createMockQl({ sys_oauth_application: [] });
-        await seedPlatformSsoClient({ ql, projectId: 'p', hostname: 'h.example.com', baseSecret: '' });
+        await seedPlatformSsoClient({ ql, environmentId: 'p', hostname: 'h.example.com', baseSecret: '' });
         expect(ql.tables.sys_oauth_application).toHaveLength(0);
     });
 });

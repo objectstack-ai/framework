@@ -1629,9 +1629,9 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "URL",
         help: "Optional deep-link to the activity target"
       },
-      project_id: {
+      environment_id: {
         label: "Project",
-        help: "Project context (multi-project deployments)"
+        help: "Environment context (multi-environment deployments)"
       },
       metadata: {
         label: "Metadata",
@@ -2624,7 +2624,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Organization",
         help: "Organization for multi-tenant isolation."
       },
-      project_id: {
+      environment_id: {
         label: "Project (deprecated)",
         help: "DEPRECATED. Use organization_id for tenant isolation."
       },
@@ -2706,7 +2706,7 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         label: "Organization",
         help: "Organization for multi-tenant isolation."
       },
-      project_id: {
+      environment_id: {
         label: "Environment ID",
         help: "Scopes this history entry to a specific environment."
       },

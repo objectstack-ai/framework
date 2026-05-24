@@ -1,5 +1,8 @@
 # ADR-0005: Metadata Customization Overlay (Artifact + sys_metadata Delta)
 
+> **v5.0 update (2026):** Throughout this document, the term *project* has been renamed to *environment* (no aliases; CLI flags, URL paths, schemas, env vars all hard-renamed). See ADR-0006 for the rationale and `.changeset/v5-project-to-environment-rename.md` for the breaking-change list. The body below is preserved verbatim for historical context.
+
+
 **Status**: Accepted (2026-05-16) · **Amended** (2026-05-22, see "Amendment: post-ADR-0006 v4 scope") · **Amended** (2026-04-13, branch concept removed — see [ADR-0008 §0](./0008-metadata-repository-and-change-log.md#0-2026-04-13-amendment--drop-project-and-branch-from-metaref))
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0003](./0003-package-as-first-class-citizen.md) (Package as first-class citizen), [ADR-0004](./0004-cloud-multi-kernel.md) (Cloud + per-project kernels)

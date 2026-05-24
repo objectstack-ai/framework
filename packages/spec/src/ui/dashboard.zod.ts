@@ -112,7 +112,7 @@ export const DashboardWidgetSchema = lazySchema(() => z.object({
    * not registered in the runtime's SchemaRegistry. Mirrors
    * `NavigationItem.requiresObject` so cloud-only widgets (e.g. those
    * keyed on `sys_app` / `sys_package_installation`) silently disappear
-   * in single-project runtimes instead of rendering a 404 error.
+   * in single-environment runtimes instead of rendering a 404 error.
    *
    * Defaults to the widget's `object` field when not explicitly set —
    * any widget that targets an object will be gated on that object's

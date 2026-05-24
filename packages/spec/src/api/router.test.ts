@@ -97,11 +97,11 @@ describe('RouteDefinitionSchema', () => {
     it('should accept path with multiple parameters', () => {
       const route = RouteDefinitionSchema.parse({
         method: 'GET',
-        path: '/api/projects/:projectId/tasks/:taskId',
+        path: '/api/environments/:environmentId/tasks/:taskId',
         handler: 'get_task',
       });
 
-      expect(route.path).toBe('/api/projects/:projectId/tasks/:taskId');
+      expect(route.path).toBe('/api/environments/:environmentId/tasks/:taskId');
     });
 
     it('should accept root path', () => {

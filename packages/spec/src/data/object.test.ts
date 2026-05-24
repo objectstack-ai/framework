@@ -473,7 +473,7 @@ describe('ObjectSchema', () => {
               { label: 'High', value: 'high', color: '#FF0000' },
             ],
           },
-          project_id: {
+          environment_id: {
             label: 'Project',
             type: 'master_detail',
             reference: 'project',

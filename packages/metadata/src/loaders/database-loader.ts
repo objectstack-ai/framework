@@ -25,6 +25,7 @@ import type { MetadataLoader } from './loader-interface.js';
 import { calculateChecksum } from '../utils/metadata-history-utils.js';
 import { LRUCache } from '../utils/lru-cache.js';
 import { addSysMetadataOverlayIndex } from '../migrations/add-sys-metadata-overlay-index.js';
+import { migrateProjectIdToEnvironmentId } from '../migrations/migrate-project-id-to-environment-id.js';
 
 /**
  * Cache configuration for `DatabaseLoader`.
@@ -77,10 +78,10 @@ export interface DatabaseLoaderOptions {
    * @deprecated since ADR-0008 §0 amendment (branch/project removal).
    * The metadata layer is keyed by organization only. This option is
    * accepted for back-compat but ignored — writes do not set
-   * `project_id` and filters do not constrain on it. Will be removed
+   * `environment_id` and filters do not constrain on it. Will be removed
    * in the next major release.
    */
-  projectId?: string;
+  environmentId?: string;
 
   /** Enable history tracking (default: true) */
   trackHistory?: boolean;
@@ -139,8 +140,8 @@ export class DatabaseLoader implements MetadataLoader {
     this.tableName = options.tableName ?? 'sys_metadata';
     this.historyTableName = options.historyTableName ?? 'sys_metadata_history';
     this.organizationId = options.organizationId;
-    // ADR-0008 §0: `projectId` option is accepted for back-compat but ignored.
-    void options.projectId;
+    // ADR-0008 §0: `environmentId` option is accepted for back-compat but ignored.
+    void options.environmentId;
     this.trackHistory = options.trackHistory !== false; // Default to true
 
     // Wire cache. Default: enabled with 500 entries / 60s TTL.
@@ -303,6 +304,8 @@ export class DatabaseLoader implements MetadataLoader {
           }
         }
         if (driver) {
+          // v5.0 forward migration: project_id → environment_id (idempotent).
+          await migrateProjectIdToEnvironmentId(driver).catch(() => undefined);
           await addSysMetadataOverlayIndex(driver);
         }
       } catch {
@@ -317,6 +320,12 @@ export class DatabaseLoader implements MetadataLoader {
         name: this.tableName,
       });
       this.schemaReady = true;
+      // v5.0 forward migration: project_id → environment_id (idempotent).
+      try {
+        await migrateProjectIdToEnvironmentId(this.driver!);
+      } catch {
+        // ignore — migration is best-effort on bootstrap
+      }
       // Apply ADR-0005 partial UNIQUE INDEX (best-effort, idempotent)
       try {
         await addSysMetadataOverlayIndex(this.driver!);
@@ -357,7 +366,7 @@ export class DatabaseLoader implements MetadataLoader {
 
   /**
    * Build base filter conditions for queries.
-   * Filters by organizationId when configured. `projectId` is accepted
+   * Filters by organizationId when configured. `environmentId` is accepted
    * for back-compat but no longer constrains the query — see
    * ADR-0008 §0 (branch/project removal).
    */
@@ -485,7 +494,7 @@ export class DatabaseLoader implements MetadataLoader {
       owner: row.owner as string | undefined,
       state: (row.state as MetadataRecord['state']) ?? 'active',
       organizationId: row.organization_id as string | undefined,
-      projectId: row.project_id as string | undefined,
+      environmentId: row.environment_id as string | undefined,
       version: (row.version as number) ?? 1,
       checksum: row.checksum as string | undefined,
       source: row.source as MetadataRecord['source'],

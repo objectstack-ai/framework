@@ -17,12 +17,12 @@ export { default as StartCommand } from './commands/start.js';
 export { default as TestCommand } from './commands/test.js';
 export { default as DoctorCommand } from './commands/doctor.js';
 
-// ─── Projects topic subcommands ─────────────────────────────────────
-export { default as ProjectsListCommand } from './commands/projects/list.js';
-export { default as ProjectsShowCommand } from './commands/projects/show.js';
-export { default as ProjectsCreateCommand } from './commands/projects/create.js';
-export { default as ProjectsSwitchCommand } from './commands/projects/switch.js';
-export { default as ProjectsBindCommand } from './commands/projects/bind.js';
+// ─── Environments topic subcommands ─────────────────────────────────
+export { default as EnvironmentsListCommand } from './commands/environments/list.js';
+export { default as EnvironmentsShowCommand } from './commands/environments/show.js';
+export { default as EnvironmentsCreateCommand } from './commands/environments/create.js';
+export { default as EnvironmentsSwitchCommand } from './commands/environments/switch.js';
+export { default as EnvironmentsBindCommand } from './commands/environments/bind.js';
 
 // ─── Cloud topic subcommands ────────────────────────────────────────
 export { default as CloudLoginCommand } from './commands/cloud/login.js';

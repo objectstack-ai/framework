@@ -156,8 +156,8 @@ async function createHostEnginePlugins(): Promise<Plugin[]> {
  * downstream plugins (the dispatcher, the REST API plugin) pick them up
  * automatically.
  */
-class ObjectOSProjectPlugin implements Plugin {
-    readonly name = 'com.objectstack.runtime.objectos-project';
+class ObjectOSEnvironmentPlugin implements Plugin {
+    readonly name = 'com.objectstack.runtime.objectos-environment';
     readonly version = '1.0.0';
 
     private readonly config: ObjectOSStackConfig;
@@ -207,7 +207,7 @@ class ObjectOSProjectPlugin implements Plugin {
         ctx.registerService('kernel-manager', kernelManager);
         ctx.registerService('artifact-api-client', client);
 
-        ctx.logger.info?.('ObjectOSProjectPlugin: registered env-registry + kernel-manager', {
+        ctx.logger.info?.('ObjectOSEnvironmentPlugin: registered env-registry + kernel-manager', {
             mode: this.config.controlPlaneUrl === 'file' ? 'file' : 'http',
             controlPlaneUrl: this.config.controlPlaneUrl,
         });
@@ -234,7 +234,7 @@ export async function createObjectOSStack(config: ObjectOSStackConfig): Promise<
     const enginePlugins = await createHostEnginePlugins();
 
     return {
-        plugins: [...enginePlugins, new ObjectOSProjectPlugin(merged), new AuthProxyPlugin(), new MarketplaceProxyPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl })],
+        plugins: [...enginePlugins, new ObjectOSEnvironmentPlugin(merged), new AuthProxyPlugin(), new MarketplaceProxyPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl })],
         api: {
             enableProjectScoping: true,
             projectResolution: 'auto',

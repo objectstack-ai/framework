@@ -190,7 +190,7 @@ describe('TaskCreationActionSchema', () => {
       priority: 'high',
       relatedTo: '{record.id}',
       additionalFields: {
-        project_id: '{record.project_id}',
+        environment_id: '{record.environment_id}',
         estimated_hours: 4,
       },
     };

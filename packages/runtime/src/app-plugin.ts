@@ -13,7 +13,7 @@ import { hookBodyRunnerFactory, actionBodyRunnerFactory } from './sandbox/body-r
  * usages may omit this — no catalog hooks are emitted in that case.
  */
 export interface AppPluginProjectContext {
-    projectId: string;
+    environmentId: string;
     organizationId: string;
     projectName?: string;
     /** When the app comes from a package installation, the source package id. */
@@ -470,7 +470,7 @@ export class AppPlugin implements Plugin {
         if (!appName) return;
 
         const payload = {
-            projectId: this.projectContext.projectId,
+            environmentId: this.projectContext.environmentId,
             organizationId: this.projectContext.organizationId,
             projectName: this.projectContext.projectName,
             app: {

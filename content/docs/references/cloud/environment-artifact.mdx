@@ -1,13 +1,13 @@
 ---
-title: Project Artifact
-description: Project Artifact protocol schemas
+title: Environment Artifact
+description: Environment Artifact protocol schemas
 ---
 
 {/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
 
 # Project Artifact Envelope (M1)
 
-Describes the response shape of `GET /api/v1/cloud/projects/:projectId/artifact`
+Describes the response shape of `GET /api/v1/cloud/environments/:environmentId/artifact`
 
 — the assembled artifact ObjectOS pulls from the control plane.
 
@@ -20,7 +20,7 @@ This envelope wraps the compiled `ObjectStackDefinitionSchema` produced by
 (`commitId`, `checksum`).
 
 <Callout type="info">
-**Source:** `packages/spec/src/cloud/project-artifact.zod.ts`
+**Source:** `packages/spec/src/cloud/environment-artifact.zod.ts`
 </Callout>
 
 ## TypeScript Usage

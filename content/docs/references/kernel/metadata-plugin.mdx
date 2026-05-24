@@ -260,6 +260,7 @@ const result = MetadataBulkRegisterRequest.parse(data);
 | **allowOrgOverride** | `boolean` | ✅ | Allow per-org overlay writes via runtime metadata API |
 | **allowRuntimeCreate** | `boolean` | ✅ | Allow runtime creation via API |
 | **supportsVersioning** | `boolean` | ✅ | Whether version history is tracked |
+| **executionPinned** | `boolean` | ✅ | Transaction rows reference a specific version_hash; history GC is disabled and getByHash() MUST resolve old hashes (ADR-0009) |
 | **loadOrder** | `integer` | ✅ | Loading priority (lower = earlier) |
 | **domain** | `Enum<'data' \| 'ui' \| 'automation' \| 'system' \| 'security' \| 'ai'>` | ✅ | Protocol domain |
 

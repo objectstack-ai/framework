@@ -11,7 +11,7 @@
  * to boot a runtime, with zero hand-written host code.
  *
  * Boot mode: **standalone only**. This module intentionally does NOT
- * depend on `@objectstack/service-cloud`. Cloud / multi-project hosts
+ * depend on `@objectstack/service-cloud`. Cloud / multi-environment hosts
  * still write their own `objectstack.config.ts` (see
  * `apps/objectos/objectstack.config.ts`).
  *
