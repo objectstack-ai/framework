@@ -1,5 +1,14 @@
 # @objectstack/plugin-msw
 
+## 6.1.1
+
+### Patch Changes
+
+- @objectstack/spec@6.1.1
+- @objectstack/core@6.1.1
+- @objectstack/types@6.1.1
+- @objectstack/objectql@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

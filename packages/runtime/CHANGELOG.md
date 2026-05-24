@@ -1,5 +1,20 @@
 # @objectstack/runtime
 
+## 6.1.1
+
+### Patch Changes
+
+- @objectstack/spec@6.1.1
+- @objectstack/core@6.1.1
+- @objectstack/types@6.1.1
+- @objectstack/observability@6.1.1
+- @objectstack/formula@6.1.1
+- @objectstack/rest@6.1.1
+- @objectstack/plugin-auth@6.1.1
+- @objectstack/plugin-security@6.1.1
+- @objectstack/service-i18n@6.1.1
+- @objectstack/service-cluster@5.1.4
+
 ## 6.1.0
 
 ### Patch Changes
