@@ -165,7 +165,14 @@ export default class PackagePublish extends Command {
     'icon-url': Flags.string({
       description:
         'Public http(s) icon URL shown in the marketplace catalog. Required for ' +
-        'marketplace listings unless already stored on the package row.',
+        'marketplace listings unless already stored on the package row. ' +
+        'Mutually exclusive with --icon-file.',
+    }),
+    'icon-file': Flags.string({
+      description:
+        'Local image file (PNG/JPEG/WebP/SVG, ≤256 KB) to upload to the cloud icon ' +
+        'CDN. The server returns a stable URL (e.g. /icons/<manifest>.png) and ' +
+        'rewrites sys_package.icon_url for you. Mutually exclusive with --icon-url.',
     }),
     'homepage-url': Flags.string({
       description: 'Public project / docs URL (optional, surfaced in the catalog).',
@@ -265,6 +272,11 @@ export default class PackagePublish extends Command {
       if (flags.description) pkgBody.description = flags.description;
       if (flags.category) pkgBody.category = flags.category;
       if (flags.org) pkgBody.owner_org_id = flags.org;
+      if (flags['icon-url'] && flags['icon-file']) {
+        printError('Pass either --icon-url or --icon-file, not both.');
+        this.exit(1);
+        return;
+      }
       if (flags['icon-url']) pkgBody.icon_url = flags['icon-url'];
       if (flags['homepage-url']) pkgBody.homepage_url = flags['homepage-url'];
       if (flags.license) pkgBody.license = flags.license;
@@ -296,6 +308,45 @@ export default class PackagePublish extends Command {
       }
       const pkg = pkgRes.body?.data ?? pkgRes.body;
       printSuccess(`${pkg?.created ? 'Created' : 'Updated'} sys_package ${pkg?.id} (${manifestId})`);
+
+      // ---- Step 1b: optional icon upload ---------------------------------
+      // When --icon-file is set we upload raw bytes BEFORE version publish.
+      // The icon route updates sys_package.icon_url to a stable served URL
+      // (e.g. /icons/<manifest>.png) — that way the marketplace-policy
+      // validator at version-publish time sees an icon and won't 422.
+      if (flags['icon-file']) {
+        const iconPath = resolvePath(process.cwd(), flags['icon-file']);
+        try {
+          const iconBytes = await readFile(iconPath);
+          const contentType = guessImageContentType(iconPath);
+          if (!contentType) {
+            printError(
+              `Cannot infer image type from '${iconPath}'. Use a .png/.jpg/.jpeg/.webp/.svg file.`,
+            );
+            this.exit(1);
+            return;
+          }
+          printStep(`Uploading icon (${iconBytes.length} bytes, ${contentType})...`);
+          const iconRes = await this.postBinary(
+            `${baseUrl}/api/v1/cloud/packages/${encodeURIComponent(pkg.id)}/icon`,
+            iconBytes,
+            contentType,
+            token,
+            flags.timeout,
+          );
+          if (!iconRes.ok) {
+            printError(`Icon upload failed (${iconRes.status}): ${iconRes.error}`);
+            this.exit(1);
+            return;
+          }
+          const iconUrl = iconRes.body?.data?.icon_url ?? iconRes.body?.icon_url;
+          if (iconUrl) printKV('  Icon URL', String(iconUrl));
+        } catch (err: any) {
+          printError(`Cannot read --icon-file '${iconPath}': ${err.message}`);
+          this.exit(1);
+          return;
+        }
+      }
 
       // ---- Step 2: create sys_package_version -----------------------------
       printStep(`Publishing version ${version}...`);
@@ -440,5 +491,59 @@ export default class PackagePublish extends Command {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /**
+   * POST raw bytes with a binary Content-Type. Used by the icon upload
+   * step — the cloud icon route reads `req.rawBody()`.
+   */
+  private async postBinary(
+    url: string,
+    body: Uint8Array,
+    contentType: string,
+    token: string | undefined,
+    timeoutMs: number,
+  ): Promise<{ ok: boolean; status: number; body: any; error?: string }> {
+    const controller = new AbortController();
+    const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': contentType,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: new Blob([new Uint8Array(body)]),
+        signal: controller.signal,
+      });
+      let parsed: any = null;
+      try { parsed = await response.json(); } catch { /* empty/non-json */ }
+      if (!response.ok) {
+        const errMsg = parsed?.error ?? response.statusText ?? `HTTP ${response.status}`;
+        return { ok: false, status: response.status, body: parsed, error: String(errMsg) };
+      }
+      return { ok: true, status: response.status, body: parsed };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return { ok: false, status: 0, body: null, error: `Request timed out after ${timeoutMs}ms.` };
+      }
+      return { ok: false, status: 0, body: null, error: err?.message ?? String(err) };
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+}
+
+/** Map a local file extension to the cloud icon route's accepted Content-Type. */
+function guessImageContentType(filePath: string): string | null {
+  const m = filePath.toLowerCase().match(/\.([a-z0-9]+)$/);
+  if (!m) return null;
+  switch (m[1]) {
+    case 'png':  return 'image/png';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'webp': return 'image/webp';
+    case 'svg':  return 'image/svg+xml';
+    default:     return null;
   }
 }
