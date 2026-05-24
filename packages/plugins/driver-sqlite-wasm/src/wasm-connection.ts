@@ -182,22 +182,44 @@ export class WasmSqliteConnection {
 
   /** Force a write of the current database state to disk. */
   async flush(): Promise<void> {
-    if (this.isEphemeral || !this.fs || !this.dirty || this.destroyed) return;
-    if (this.pendingFlush) return this.pendingFlush;
+    if (this.isEphemeral || !this.fs || this.destroyed) return;
+    // If a flush is already in flight, wait for it and then re-flush so any
+    // writes that arrived after the in-flight flush's `db.export()` call get
+    // persisted too. Without this, on-write mode loses writes that happen
+    // between a flush's synchronous export and its async file write.
+    if (this.pendingFlush) {
+      await this.pendingFlush;
+      if (!this.dirty || this.destroyed) return;
+    }
+    if (!this.dirty) return;
 
     this.pendingFlush = (async () => {
       try {
+        // Snapshot dirty=false BEFORE export so concurrent writes that occur
+        // during the async writeFile mark us dirty again and trigger another
+        // flush via markDirty.
+        this.dirty = false;
         const exported = this.db.export();
         // sql.js returns a Uint8Array; Buffer.from on it shares memory but
         // works fine for writeFile.
         await this.fs!.writeFile(this.filename, Buffer.from(exported));
-        this.dirty = false;
+      } catch (err) {
+        // Restore dirty state so a subsequent flush retries.
+        this.dirty = true;
+        throw err;
       } finally {
         this.pendingFlush = null;
       }
     })();
 
-    return this.pendingFlush;
+    await this.pendingFlush;
+
+    // A write that arrived after `db.export()` (synchronous) but before the
+    // file write completed will have set dirty=true again. Re-flush to
+    // persist it.
+    if (this.dirty && !this.destroyed) {
+      await this.flush();
+    }
   }
 
   /** Close the database, flushing any pending writes first. */

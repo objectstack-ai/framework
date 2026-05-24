@@ -172,9 +172,12 @@ export function getClient_WasmSqlite(): any {
       // DDL / transactional control statements have no Knex `method`. sql.js's
       // `prepare`+`step` silently no-ops on many of these (e.g. CREATE TABLE),
       // so route them through `run` which is implemented via `exec` and
-      // actually mutates the database.
+      // actually mutates the database. PRAGMA is intentionally excluded — many
+      // PRAGMA forms (e.g. `PRAGMA table_info(...)`, `foreign_key_list(...)`)
+      // return rows used by Knex's schema introspection/columnInfo, and
+      // `db.run` discards those rows.
       const isDdl =
-        /^\s*(CREATE|ALTER|DROP|PRAGMA|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|REINDEX|VACUUM|ATTACH|DETACH|TRUNCATE)\b/i.test(
+        /^\s*(CREATE|ALTER|DROP|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|REINDEX|VACUUM|ATTACH|DETACH|TRUNCATE)\b/i.test(
           obj.sql,
         );
       if (isDdl) {
@@ -184,7 +187,7 @@ export function getClient_WasmSqlite(): any {
         return obj;
       }
 
-      if (isReadMethod(obj.method, obj.returning)) {
+      if (isReadMethod(obj.method, obj.returning) || /^\s*PRAGMA\b/i.test(obj.sql)) {
         const stmt = db.prepare(obj.sql);
         try {
           if (bindings.length) stmt.bind(bindings as any);
