@@ -1,5 +1,11 @@
 # @objectstack/observability
 
+## 7.0.0
+
+### Patch Changes
+
+- @objectstack/spec@7.0.0
+
 ## 6.1.0
 
 ### Patch Changes

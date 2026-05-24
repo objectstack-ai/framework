@@ -1,5 +1,20 @@
 # @objectstack/plugin-dev
 
+## 7.0.0
+
+### Patch Changes
+
+- @objectstack/runtime@7.0.0
+- @objectstack/spec@7.0.0
+- @objectstack/core@7.0.0
+- @objectstack/objectql@7.0.0
+- @objectstack/rest@7.0.0
+- @objectstack/driver-memory@7.0.0
+- @objectstack/plugin-auth@7.0.0
+- @objectstack/plugin-hono-server@7.0.0
+- @objectstack/plugin-security@7.0.0
+- @objectstack/service-i18n@7.0.0
+
 ## 6.1.0
 
 ### Patch Changes

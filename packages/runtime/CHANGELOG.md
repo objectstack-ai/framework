@@ -1,5 +1,20 @@
 # @objectstack/runtime
 
+## 7.0.0
+
+### Patch Changes
+
+- @objectstack/spec@7.0.0
+- @objectstack/core@7.0.0
+- @objectstack/types@7.0.0
+- @objectstack/observability@7.0.0
+- @objectstack/formula@7.0.0
+- @objectstack/rest@7.0.0
+- @objectstack/plugin-auth@7.0.0
+- @objectstack/plugin-security@7.0.0
+- @objectstack/service-i18n@7.0.0
+- @objectstack/service-cluster@5.1.4
+
 ## 6.1.0
 
 ### Patch Changes

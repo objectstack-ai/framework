@@ -1,5 +1,14 @@
 # @objectstack/plugin-sharing
 
+## 7.0.0
+
+### Patch Changes
+
+- @objectstack/spec@7.0.0
+- @objectstack/core@7.0.0
+- @objectstack/objectql@7.0.0
+- @objectstack/platform-objects@7.0.0
+
 ## 6.1.0
 
 ### Patch Changes

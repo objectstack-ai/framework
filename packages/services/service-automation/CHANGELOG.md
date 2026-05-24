@@ -1,5 +1,13 @@
 # @objectstack/service-automation
 
+## 7.0.0
+
+### Patch Changes
+
+- @objectstack/spec@7.0.0
+- @objectstack/core@7.0.0
+- @objectstack/formula@7.0.0
+
 ## 6.1.0
 
 ### Patch Changes
