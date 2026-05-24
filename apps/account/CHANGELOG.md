@@ -1,5 +1,14 @@
 # @objectstack/account
 
+## 6.1.0
+
+### Patch Changes
+
+- Updated dependencies [93c0589]
+  - @objectstack/spec@6.1.0
+  - @objectstack/client@6.1.0
+  - @objectstack/client-react@6.1.0
+
 ## 6.0.0
 
 ### Patch Changes
