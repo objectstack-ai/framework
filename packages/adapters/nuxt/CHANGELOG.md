@@ -1,5 +1,12 @@
 # @objectstack/nuxt
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [944f187]
+  - @objectstack/runtime@6.0.0
+
 ## 5.2.0
 
 ## 5.1.0
