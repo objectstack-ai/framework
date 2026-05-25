@@ -1,5 +1,14 @@
 # @objectstack/service-cache
 
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [b4c74a9]
+  - @objectstack/spec@6.2.0
+  - @objectstack/core@6.2.0
+  - @objectstack/observability@6.2.0
+
 ## 6.1.1
 
 ### Patch Changes
