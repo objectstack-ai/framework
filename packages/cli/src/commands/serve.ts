@@ -193,7 +193,7 @@ export default class Serve extends Command {
    */
   static readonly TIER_PRESETS: Record<string, string[]> = {
     minimal: ['core'],
-    default: ['core', 'i18n', 'ui', 'auth'],
+    default: ['core', 'i18n', 'ui', 'ai', 'auth'],
     full: ['core', 'i18n', 'ui', 'ai', 'auth'],
   };
 
