@@ -7,84 +7,164 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     },
     "./data": {
-      "types": "./dist/data/index.d.ts",
-      "import": "./dist/data/index.mjs",
-      "require": "./dist/data/index.js"
+      "import": {
+        "types": "./dist/data/index.d.mts",
+        "default": "./dist/data/index.mjs"
+      },
+      "require": {
+        "types": "./dist/data/index.d.ts",
+        "default": "./dist/data/index.js"
+      }
     },
     "./system": {
-      "types": "./dist/system/index.d.ts",
-      "import": "./dist/system/index.mjs",
-      "require": "./dist/system/index.js"
+      "import": {
+        "types": "./dist/system/index.d.mts",
+        "default": "./dist/system/index.mjs"
+      },
+      "require": {
+        "types": "./dist/system/index.d.ts",
+        "default": "./dist/system/index.js"
+      }
     },
     "./kernel": {
-      "types": "./dist/kernel/index.d.ts",
-      "import": "./dist/kernel/index.mjs",
-      "require": "./dist/kernel/index.js"
+      "import": {
+        "types": "./dist/kernel/index.d.mts",
+        "default": "./dist/kernel/index.mjs"
+      },
+      "require": {
+        "types": "./dist/kernel/index.d.ts",
+        "default": "./dist/kernel/index.js"
+      }
     },
     "./ai": {
-      "types": "./dist/ai/index.d.ts",
-      "import": "./dist/ai/index.mjs",
-      "require": "./dist/ai/index.js"
+      "import": {
+        "types": "./dist/ai/index.d.mts",
+        "default": "./dist/ai/index.mjs"
+      },
+      "require": {
+        "types": "./dist/ai/index.d.ts",
+        "default": "./dist/ai/index.js"
+      }
     },
     "./automation": {
-      "types": "./dist/automation/index.d.ts",
-      "import": "./dist/automation/index.mjs",
-      "require": "./dist/automation/index.js"
+      "import": {
+        "types": "./dist/automation/index.d.mts",
+        "default": "./dist/automation/index.mjs"
+      },
+      "require": {
+        "types": "./dist/automation/index.d.ts",
+        "default": "./dist/automation/index.js"
+      }
     },
     "./api": {
-      "types": "./dist/api/index.d.ts",
-      "import": "./dist/api/index.mjs",
-      "require": "./dist/api/index.js"
+      "import": {
+        "types": "./dist/api/index.d.mts",
+        "default": "./dist/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/api/index.d.ts",
+        "default": "./dist/api/index.js"
+      }
     },
     "./ui": {
-      "types": "./dist/ui/index.d.ts",
-      "import": "./dist/ui/index.mjs",
-      "require": "./dist/ui/index.js"
+      "import": {
+        "types": "./dist/ui/index.d.mts",
+        "default": "./dist/ui/index.mjs"
+      },
+      "require": {
+        "types": "./dist/ui/index.d.ts",
+        "default": "./dist/ui/index.js"
+      }
     },
     "./contracts": {
-      "types": "./dist/contracts/index.d.ts",
-      "import": "./dist/contracts/index.mjs",
-      "require": "./dist/contracts/index.js"
+      "import": {
+        "types": "./dist/contracts/index.d.mts",
+        "default": "./dist/contracts/index.mjs"
+      },
+      "require": {
+        "types": "./dist/contracts/index.d.ts",
+        "default": "./dist/contracts/index.js"
+      }
     },
     "./integration": {
-      "types": "./dist/integration/index.d.ts",
-      "import": "./dist/integration/index.mjs",
-      "require": "./dist/integration/index.js"
+      "import": {
+        "types": "./dist/integration/index.d.mts",
+        "default": "./dist/integration/index.mjs"
+      },
+      "require": {
+        "types": "./dist/integration/index.d.ts",
+        "default": "./dist/integration/index.js"
+      }
     },
     "./security": {
-      "types": "./dist/security/index.d.ts",
-      "import": "./dist/security/index.mjs",
-      "require": "./dist/security/index.js"
+      "import": {
+        "types": "./dist/security/index.d.mts",
+        "default": "./dist/security/index.mjs"
+      },
+      "require": {
+        "types": "./dist/security/index.d.ts",
+        "default": "./dist/security/index.js"
+      }
     },
     "./studio": {
-      "types": "./dist/studio/index.d.ts",
-      "import": "./dist/studio/index.mjs",
-      "require": "./dist/studio/index.js"
+      "import": {
+        "types": "./dist/studio/index.d.mts",
+        "default": "./dist/studio/index.mjs"
+      },
+      "require": {
+        "types": "./dist/studio/index.d.ts",
+        "default": "./dist/studio/index.js"
+      }
     },
     "./cloud": {
-      "types": "./dist/cloud/index.d.ts",
-      "import": "./dist/cloud/index.mjs",
-      "require": "./dist/cloud/index.js"
+      "import": {
+        "types": "./dist/cloud/index.d.mts",
+        "default": "./dist/cloud/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cloud/index.d.ts",
+        "default": "./dist/cloud/index.js"
+      }
     },
     "./qa": {
-      "types": "./dist/qa/index.d.ts",
-      "import": "./dist/qa/index.mjs",
-      "require": "./dist/qa/index.js"
+      "import": {
+        "types": "./dist/qa/index.d.mts",
+        "default": "./dist/qa/index.mjs"
+      },
+      "require": {
+        "types": "./dist/qa/index.d.ts",
+        "default": "./dist/qa/index.js"
+      }
     },
     "./identity": {
-      "types": "./dist/identity/index.d.ts",
-      "import": "./dist/identity/index.mjs",
-      "require": "./dist/identity/index.js"
+      "import": {
+        "types": "./dist/identity/index.d.mts",
+        "default": "./dist/identity/index.mjs"
+      },
+      "require": {
+        "types": "./dist/identity/index.d.ts",
+        "default": "./dist/identity/index.js"
+      }
     },
     "./shared": {
-      "types": "./dist/shared/index.d.ts",
-      "import": "./dist/shared/index.mjs",
-      "require": "./dist/shared/index.js"
+      "import": {
+        "types": "./dist/shared/index.d.mts",
+        "default": "./dist/shared/index.mjs"
+      },
+      "require": {
+        "types": "./dist/shared/index.d.ts",
+        "default": "./dist/shared/index.js"
+      }
     },
     "./openapi.json": "./json-schema/openapi.json",
     "./package.json": "./package.json"

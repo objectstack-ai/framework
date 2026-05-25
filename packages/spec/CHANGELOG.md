@@ -2,6 +2,10 @@
 
 ## 6.5.0
 
+### Patch Changes
+
+- Fix: update `package.json` `exports` to use nested `import`/`require` conditions with per-condition `types` fields (e.g. `import.types → index.d.mts`, `require.types → index.d.ts`). This ensures TypeScript with `moduleResolution: "bundler"` resolves to the ESM declaration file (`.d.mts`) which uses explicit `.mjs` chunk imports — eliminating the intermittent TS2306 "is not a module" error that occurred when tsup's DTS worker processed the CJS declaration chain.
+
 ## 6.4.0
 
 ### Minor Changes
