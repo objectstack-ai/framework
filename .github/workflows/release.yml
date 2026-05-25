@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify Changesets "fixed" group covers every public package
+        run: node scripts/check-changeset-fixed.mjs
+
       - name: Build
         run: pnpm run build
 

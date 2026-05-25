@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Changesets `fixed` group now covers every public package
+
+Two newly added services — `@objectstack/service-cluster` and
+`@objectstack/service-cluster-redis` — were missing from the `fixed`
+group in `.changeset/config.json`, so they were not bumped in lockstep
+with the rest of `@objectstack/*` during the last release. Both names
+have been added back to the group.
+
+To prevent this class of drift from recurring, a new validator
+(`scripts/check-changeset-fixed.mjs`) compares every public workspace
+package against the `fixed` group and fails CI if any public package is
+missing (or if a stale name lingers in the group). It runs:
+
+- On every PR that touches `**/package.json`, `pnpm-workspace.yaml`,
+  `.changeset/config.json`, or the script itself (`validate-deps.yml`).
+- Before `changeset publish` in the `Release` workflow, so a release
+  cannot ship while the `fixed` group is out of sync.
+- Locally via `pnpm run lint:changeset`.
+
 ### Changed — `@object-ui/*` upgraded to v6.0
 
 Bundled UI assets (`@object-ui/console`, `@object-ui/studio`,
