@@ -33,11 +33,11 @@
     "@objectstack/spec": "workspace:*",
     "knex": "^3.2.10",
     "nanoid": "^5.1.11",
-    "sql.js": "^1.10.3"
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "@types/sql.js": "^1.4.9",
+    "@types/sql.js": "^1.4.11",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },

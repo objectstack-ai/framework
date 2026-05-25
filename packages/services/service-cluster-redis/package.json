@@ -20,7 +20,7 @@
   "dependencies": {
     "@objectstack/service-cluster": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.10.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
