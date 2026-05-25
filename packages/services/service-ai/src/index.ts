@@ -33,6 +33,10 @@ export type { DataToolContext } from './tools/data-tools.js';
 export { registerMetadataTools, METADATA_TOOL_DEFINITIONS } from './tools/metadata-tools.js';
 export type { MetadataToolContext } from './tools/metadata-tools.js';
 
+// Knowledge tools
+export { registerKnowledgeTools, SEARCH_KNOWLEDGE_TOOL } from './tools/knowledge-tools.js';
+export type { KnowledgeToolContext } from './tools/knowledge-tools.js';
+
 // Individual tool metadata (first-class Tool definitions via defineTool)
 export {
   createObjectTool,
