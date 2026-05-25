@@ -44,10 +44,25 @@ function analyzeExports(): SizeEntry[] {
   for (const [subpath, targets] of Object.entries(exports)) {
     if (typeof targets !== 'object' || targets === null) continue;
 
-    const t = targets as Record<string, string>;
-    const esmPath = t.import ? path.join(SPEC_DIR, t.import) : '';
-    const cjsPath = t.require ? path.join(SPEC_DIR, t.require) : '';
-    const dtsPath = t.types ? path.join(SPEC_DIR, t.types) : '';
+    const t = targets as Record<string, unknown>;
+    const pick = (v: unknown, key: string): string => {
+      if (typeof v === 'string') return v;
+      if (v && typeof v === 'object') {
+        const inner = (v as Record<string, unknown>)[key];
+        if (typeof inner === 'string') return inner;
+        const def = (v as Record<string, unknown>).default;
+        if (typeof def === 'string') return def;
+      }
+      return '';
+    };
+    const importEntry = pick(t.import, 'default');
+    const requireEntry = pick(t.require, 'default');
+    const typesEntry =
+      pick(t.import, 'types') || pick(t.require, 'types') || (typeof t.types === 'string' ? t.types : '');
+
+    const esmPath = importEntry ? path.join(SPEC_DIR, importEntry) : '';
+    const cjsPath = requireEntry ? path.join(SPEC_DIR, requireEntry) : '';
+    const dtsPath = typesEntry ? path.join(SPEC_DIR, typesEntry) : '';
 
     const esm = esmPath ? getFileSize(esmPath) : 0;
     const cjs = cjsPath ? getFileSize(cjsPath) : 0;
