@@ -224,7 +224,51 @@ function sendResultBase(
             return;
         }
         if (result.result) {
-            // Special results (redirect, stream) — pass through as JSON for now
+            // Special results from the dispatcher's `result.result` channel.
+            // Currently the only shape we handle here is the SSE/streaming
+            // descriptor returned by AI routes:
+            //   { status, stream: true, events: AsyncIterable<string>,
+            //     headers?: Record<string, string>, contentType?: string }
+            // Anything else falls through to JSON so older callers keep
+            // working.
+            const r = result.result as any;
+            const isStream = r && typeof r === 'object' && (r.type === 'stream' || r.stream === true) && r.events;
+            if (isStream && typeof res.write === 'function' && typeof res.end === 'function') {
+                res.status(typeof r.status === 'number' ? r.status : 200);
+                applySecurityHeaders();
+                if (r.headers && typeof r.headers === 'object') {
+                    for (const [k, v] of Object.entries(r.headers)) {
+                        res.header(k, String(v));
+                    }
+                } else {
+                    res.header('Content-Type', r.contentType || 'text/event-stream');
+                    res.header('Cache-Control', 'no-cache');
+                    res.header('Connection', 'keep-alive');
+                }
+                // Flip the adapter's `isStreaming` flag synchronously so the
+                // outer handler can return before the AsyncIterable is fully
+                // drained. Without this empty write, the Hono adapter would
+                // see no streaming activity by the time the route handler
+                // resolves and would close the body, truncating the SSE.
+                res.write('');
+                // Drain the events in the background; the adapter's
+                // ReadableStream stays open until res.end() fires.
+                (async () => {
+                    try {
+                        for await (const event of r.events as AsyncIterable<unknown>) {
+                            if (event == null) continue;
+                            res.write(typeof event === 'string' ? event : `data: ${JSON.stringify(event)}\n\n`);
+                        }
+                    } catch (streamErr) {
+                        try {
+                            res.write(`event: error\ndata: ${JSON.stringify({ message: streamErr instanceof Error ? streamErr.message : String(streamErr) })}\n\n`);
+                        } catch { /* connection already gone */ }
+                    } finally {
+                        try { res.end(); } catch { /* idem */ }
+                    }
+                })();
+                return;
+            }
             res.status(200);
             applySecurityHeaders();
             res.json(result.result);

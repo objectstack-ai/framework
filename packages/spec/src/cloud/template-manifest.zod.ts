@@ -1,0 +1,35 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+import { z } from 'zod';
+import { lazySchema } from '../shared/lazy-schema';
+import { CreatePackageRequestSchema } from './package.zod';
+
+/**
+ * `objectstack.manifest.json` — on-disk descriptor for a template / package
+ * source tree. Strict projection of `CreatePackageRequestSchema` (server-
+ * managed fields excluded) plus scaffold-time extras (name slug,
+ * specVersion, skills, preview, scaffold, readmePath).
+ */
+export const TemplateManifestSchema = lazySchema(() =>
+  CreatePackageRequestSchema
+    .omit({ ownerOrgId: true, createdBy: true })
+    .extend({
+      name: z.string().regex(/^[a-z][a-z0-9-]*$/)
+        .describe('CLI slug (kebab-case, no namespace prefix)'),
+      specVersion: z.string().describe('Compatible @objectstack/spec semver range'),
+      skills: z.array(z.string()).optional()
+        .describe('Skill ids exercised by this template (for docs / picker)'),
+      preview: z.object({
+        screenshots: z.array(z.string()).optional(),
+        demoUrl: z.string().url().optional(),
+      }).optional(),
+      scaffold: z.object({
+        variables: z.record(z.string(), z.any()).optional(),
+        postInstall: z.array(z.string()).optional(),
+      }).optional(),
+      readmePath: z.string().optional()
+        .describe('Path (relative to manifest) to long-form README'),
+    })
+    .describe('objectstack.manifest.json — template / package source descriptor')
+);
+
+export type TemplateManifest = z.infer<typeof TemplateManifestSchema>;

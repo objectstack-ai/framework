@@ -19,6 +19,7 @@
     "auth-sso",
     "security",
     "ai-capabilities",
+    "plugin-chatbot-integration",
     "skills",
     "---Integration---",
     "api-reference",

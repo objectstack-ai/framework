@@ -1,0 +1,23 @@
+{
+  "name": "objectstack-blank",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "objectstack serve --watch",
+    "start": "objectstack serve",
+    "build": "objectstack build",
+    "validate": "objectstack validate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@objectstack/spec": "^6.0.0",
+    "@objectstack/runtime": "^6.0.0",
+    "@objectstack/driver-memory": "^6.0.0",
+    "@objectstack/plugin-hono-server": "^6.0.0"
+  },
+  "devDependencies": {
+    "@objectstack/cli": "^6.0.0",
+    "typescript": "^5.3.0"
+  }
+}

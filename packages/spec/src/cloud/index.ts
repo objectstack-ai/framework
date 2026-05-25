@@ -22,3 +22,4 @@ export * from './environment-package.zod';
 export * from './package.zod';
 export * from './package-version.zod';
 export * from './environment-artifact.zod';
+export * from './template-manifest.zod';

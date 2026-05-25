@@ -1,0 +1,122 @@
+---
+title: Connecting plugin-chatbot to a framework AI backend
+description: Wire @object-ui/plugin-chatbot in Console (or any frontend) to the framework's /api/v1/ai/* REST surface — agents picker, SSE chat, models, HITL pending-action inbox.
+---
+
+# Connecting plugin-chatbot to a framework AI backend
+
+`@object-ui/plugin-chatbot` (a React component shipped from the `objectui`
+monorepo) is the canonical chat UI for ObjectStack Console. It speaks the
+Vercel AI Data Stream protocol, so it pairs natively with the AI routes
+exposed by `@objectstack/service-ai` once the framework dev server is run
+with the AI tier enabled.
+
+This guide maps every chatbot configuration knob to its framework endpoint
+so you can drop the plugin into an app without reverse-engineering the
+contract.
+
+## 1. Enable the AI tier on the framework side
+
+The default `objectstack dev` preset does **not** include AI services. Pass
+`--preset full` (or any preset that opts into `ai`) and provide an OpenAI-
+compatible LLM gateway via env vars:
+
+```bash
+OPENAI_BASE_URL=https://ai-gateway.vercel.sh/v1 \
+AI_GATEWAY_API_KEY=vck_*** \
+AI_GATEWAY_MODEL=openai/gpt-4.1-mini \
+CORS_ORIGIN=http://localhost:5173 \
+pnpm dev --preset full
+```
+
+You should see `AIService` in the plugin list and three of the endpoints
+below should answer (the streaming one is verified in step 3):
+
+```bash
+curl http://localhost:3002/api/v1/ai/agents
+# → { "agents": [{ "name": "data_chat", ... }, ...] }
+
+curl http://localhost:3002/api/v1/ai/models
+# → { "models": [...] }   ← may be empty until you register some
+```
+
+## 2. Endpoint map
+
+| Chatbot input  | Framework route                                   | Notes |
+|----------------|---------------------------------------------------|-------|
+| `useAgents({ apiBase })` → `${apiBase}/agents`            | `GET  /api/v1/ai/agents`              | Response is `{ agents: [...] }` (also accepts a bare array). |
+| `<ChatbotEnhanced models={...} />` source                | `GET  /api/v1/ai/models`              | Returns `{ models: [{ id, label }] }`. |
+| `useObjectChat({ api })` / `<ChatbotEnhanced api={...}>` | `POST /api/v1/ai/assistant/chat`      | Vercel AI data-stream SSE. Body: `{ messages, agent?, conversationId?, ... }`. |
+| HITL pending inbox (custom UI)                           | `GET  /api/v1/ai/pending-actions`     | Filter by `?status=pending`. |
+| Approve a proposed action                                 | `POST /api/v1/ai/pending-actions/:id/approve` | Body: `{ actor: string }`. |
+| Reject a proposed action                                  | `POST /api/v1/ai/pending-actions/:id/reject`  | Body: `{ actor: string, reason?: string }`. |
+
+All endpoints accept the standard tenancy header `X-Environment-Id`. The
+default Hono adapter reflects CORS origins from the `CORS_ORIGIN` env var
+and already exposes `X-Environment-Id` in the allow-list, so cross-origin
+calls from a Vite dev server (`http://localhost:5173`) work out of the box.
+
+## 3. Streaming contract
+
+`POST /api/v1/ai/assistant/chat` returns:
+
+```
+HTTP/1.1 200 OK
+content-type: text/plain; charset=utf-8
+x-vercel-ai-ui-message-stream: v1
+transfer-encoding: chunked
+
+data: {"type":"start"}
+data: {"type":"text-delta","id":"0","delta":"Hello"}
+data: {"type":"finish","finishReason":"stop"}
+data: [DONE]
+```
+
+This is the wire format `@ai-sdk/react`'s `useChat` consumes natively — no
+client-side parsing is required. Wire it up like:
+
+```ts
+import { useObjectChat } from '@object-ui/plugin-chatbot';
+
+const chat = useObjectChat({
+  api: 'http://localhost:3002/api/v1/ai/assistant/chat',
+  headers: { 'X-Environment-Id': 'env_local' },
+  body: { agent: 'data_chat' },
+});
+```
+
+> **Heads up:** If you ever see the response come back as a JSON envelope
+> like `{"type":"stream","events":{},"vercelDataStream":true,...}` you are
+> running an old `@objectstack/runtime` (< the patch tagged
+> `v5-runtime-ai-sse-stream-fix`). Upgrade and restart the dev server.
+
+## 4. HITL (Human-in-the-Loop) flow
+
+When the agent picks a dangerous action (e.g. `delete_task`) the tool
+handler enqueues an `ai_pending_action` row and the chat returns a
+`pending_approval` tool result. Your Console UI then:
+
+1. Polls `GET /api/v1/ai/pending-actions?status=pending`.
+2. Renders an inbox item per row (`tool_name`, `tool_input`,
+   `conversation_id`, `proposed_at`).
+3. On approve: `POST /api/v1/ai/pending-actions/:id/approve` with
+   `{ actor: '<current user id>' }` → row transitions to `executed` with
+   `result` populated.
+4. On reject: `POST /api/v1/ai/pending-actions/:id/reject` with
+   `{ actor, reason }` → row transitions to `rejected`.
+
+The Studio ships an `ai-pending-action` view with the same actions baked
+in; the same REST endpoints back both surfaces, so a custom Console widget
+needs no additional plumbing.
+
+## Troubleshooting
+
+- **`/api/v1/ai/*` returns 404** → the AI tier is not loaded. Re-run dev
+  with `--preset full`.
+- **CORS blocked** → set `CORS_ORIGIN=http://your-frontend-origin` before
+  launching the dev server.
+- **Chat returns JSON instead of streaming** → upgrade
+  `@objectstack/runtime` to the patch above.
+- **`/api/v1/ai/models` is empty** → register models on the
+  `AIService.modelRegistry` or skip the picker entirely; chat works
+  without an explicit model when `AI_GATEWAY_MODEL` is set.
