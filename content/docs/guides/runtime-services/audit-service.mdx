@@ -1,0 +1,36 @@
+---
+title: services.audit
+description: Audit write bridge currently used by settings/runtime integrations.
+---
+
+# `services.audit`
+
+- **Stability:** `experimental`
+- **Canonical source:** `packages/services/service-settings/src/settings-service.types.ts`
+
+`services.audit` is currently a lightweight sink abstraction used by runtime services (for example `service-settings`) to emit append-only audit entries.
+
+## Method
+
+```ts
+services.audit.record(entry: {
+  namespace: string;
+  key: string;
+  scope: SpecifierScope;
+  userId?: string;
+  actor?: string;
+  action: 'set' | 'reset';
+  valueDigest: string;
+  encrypted: boolean;
+  requestId?: string;
+}): Promise<void> | void
+```
+
+## Notes
+
+- This API is intentionally write-only.
+- For querying audit history, use `services.data` against `sys_audit_log`/`sys_activity` objects.
+
+## Typical Errors
+
+Implementations should avoid throwing into user paths. Callers should treat audit writes as best-effort unless strict compliance mode is enabled by host code.

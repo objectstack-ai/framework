@@ -1,0 +1,31 @@
+---
+title: Runtime Service API Versioning
+description: Stability labels and how to track runtime service API breaking changes.
+---
+
+# Runtime Service API Versioning
+
+## Stability Labels
+
+- `stable`: backward-compatible within the current major version.
+- `experimental`: can change in minor versions; verify release notes before upgrades.
+
+## Breaking-Change Tracking
+
+When a runtime service API changes in a breaking way:
+
+1. Update the relevant page in this chapter.
+2. Add a breaking-change note to root `CHANGELOG.md`.
+3. Include migration guidance and affected methods.
+
+## Current Matrix
+
+| Service | Stability |
+|:--|:--|
+| `services.data` | `stable` |
+| `services.sharing` | `stable` |
+| `services.audit` | `experimental` |
+| `services.queue` | `stable` |
+| `services.email` | `stable` |
+| `services.settings` | `stable` |
+| `services.storage` | `stable` |

@@ -1,0 +1,39 @@
+---
+title: services.storage
+description: File/object storage contract for upload/download and presigned URL workflows.
+---
+
+# `services.storage`
+
+- **Stability:** `stable`
+- **Canonical source:** `packages/spec/src/contracts/storage-service.ts`
+
+## Core Methods
+
+```ts
+services.storage.upload(key: string, data: Buffer | ReadableStream, options?: StorageUploadOptions): Promise<void>
+services.storage.download(key: string): Promise<Buffer>
+services.storage.delete(key: string): Promise<void>
+services.storage.exists(key: string): Promise<boolean>
+services.storage.getInfo(key: string): Promise<StorageFileInfo>
+services.storage.list?(prefix: string): Promise<StorageFileInfo[]>
+services.storage.getSignedUrl?(key: string, expiresIn: number): Promise<string>
+```
+
+## Presigned / Chunked (optional)
+
+```ts
+services.storage.getPresignedUpload?(key: string, expiresIn: number, options?: StorageUploadOptions): Promise<PresignedUploadDescriptor>
+services.storage.getPresignedDownload?(key: string, expiresIn: number): Promise<PresignedDownloadDescriptor>
+services.storage.initiateChunkedUpload?(key: string, options?: StorageUploadOptions): Promise<string>
+services.storage.uploadChunk?(uploadId: string, partNumber: number, data: Buffer): Promise<string>
+services.storage.completeChunkedUpload?(uploadId: string, parts: Array<{ partNumber: number; eTag: string }>): Promise<string>
+services.storage.abortChunkedUpload?(uploadId: string): Promise<void>
+```
+
+## Typical Errors
+
+- `FILE_NOT_FOUND`
+- `PERMISSION_DENIED`
+- `INVALID_CONTENT_TYPE`
+- `UPLOAD_SESSION_NOT_FOUND`

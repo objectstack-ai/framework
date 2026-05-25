@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Runtime `services.*` API reference chapter
+
+Documentation now includes a dedicated `Runtime Services` guides chapter
+(`content/docs/guides/runtime-services/`) covering:
+
+- `services.data`
+- `services.sharing`
+- `services.audit`
+- `services.queue`
+- `services.email`
+- `services.settings`
+- `services.storage`
+
+The chapter includes per-service method signatures, parameter/return
+notes, error semantics, stability labels (`stable` / `experimental`),
+and practical examples for flows, hooks, and plugin event
+subscriptions.
+
 ### Fixed — `objectstack init` produces a working project
 
 `npx @objectstack/cli init my-app` used to scaffold a project that

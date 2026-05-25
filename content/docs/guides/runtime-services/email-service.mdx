@@ -1,0 +1,33 @@
+---
+title: services.email
+description: Outbound email delivery and template rendering APIs.
+---
+
+# `services.email`
+
+- **Stability:** `stable`
+- **Canonical source:** `packages/spec/src/contracts/email-service.ts`
+
+## Methods
+
+```ts
+services.email.send(input: SendEmailInput): Promise<SendEmailResult>
+services.email.sendTemplate(input: SendTemplateInput): Promise<SendEmailResult>
+```
+
+## Returns
+
+`SendEmailResult`:
+
+- `id: string`
+- `status: 'queued' | 'sent' | 'failed'`
+- `messageId?: string`
+- `error?: string`
+
+## Typed Error Codes
+
+`sendTemplate` may return/throw implementation errors including:
+
+- `TEMPLATE_NOT_FOUND`
+- `TEMPLATE_INACTIVE`
+- `MISSING_VARIABLES`

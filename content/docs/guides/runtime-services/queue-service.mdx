@@ -1,0 +1,28 @@
+---
+title: services.queue
+description: Async queue publish/subscribe and DLQ operations.
+---
+
+# `services.queue`
+
+- **Stability:** `stable`
+- **Canonical source:** `packages/spec/src/contracts/queue-service.ts`
+
+## Methods
+
+```ts
+services.queue.publish<T = unknown>(queue: string, data: T, options?: QueuePublishOptions): Promise<string>
+services.queue.subscribe<T = unknown>(queue: string, handler: QueueHandler<T>): Promise<void>
+services.queue.unsubscribe(queue: string): Promise<void>
+services.queue.getQueueSize?(queue: string): Promise<number>
+services.queue.purge?(queue: string): Promise<void>
+services.queue.listFailed?(queue?: string, options?: { limit?: number; offset?: number }): Promise<QueueMessageRecord[]>
+services.queue.replay?(messageId: string): Promise<void>
+services.queue.purgeFailed?(messageId: string): Promise<void>
+```
+
+## Typical Errors
+
+- `QUEUE_NOT_FOUND`
+- `QUEUE_HANDLER_ERROR`
+- `QUEUE_MESSAGE_NOT_DLQ` (for replay/purgeFailed)

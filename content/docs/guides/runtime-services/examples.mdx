@@ -1,0 +1,59 @@
+---
+title: Runtime Service Examples
+description: Practical examples for flow nodes, hooks, and plugin event subscriptions.
+---
+
+# Runtime Service Examples
+
+## 1) Flow custom node: read related records
+
+```ts
+export async function run(ctx: any) {
+  const order = await ctx.services?.data?.get('sales_order', ctx.input.orderId);
+  const lines = await ctx.services?.data?.list('sales_order_line', {
+    filter: { sales_order_id: order.id },
+    sort: [{ field: 'line_no', order: 'asc' }],
+    top: 200,
+  });
+
+  return {
+    order,
+    lines: lines.data ?? lines.items ?? [],
+  };
+}
+```
+
+## 2) Hook: check sharing permission before mutation
+
+```ts
+export async function beforeUpdate(ctx: any) {
+  const ok = await ctx.services?.sharing?.canEdit('contract', ctx.input.id, {
+    userId: ctx.session?.userId,
+    tenantId: ctx.session?.tenantId,
+    roles: ctx.session?.roles,
+  });
+
+  if (!ok) {
+    throw new Error('PERMISSION_DENIED');
+  }
+}
+```
+
+## 3) Plugin: subscribe to kernel lifecycle events
+
+```ts
+import type { Plugin } from '@objectstack/core';
+
+export const ExamplePlugin: Plugin = {
+  name: 'example-plugin',
+  async onEnable(ctx: any) {
+    ctx.events.on('kernel:ready', async () => {
+      ctx.logger.info('Kernel ready, initializing subscriptions');
+    });
+
+    ctx.events.on('service:registered', async (serviceName: string) => {
+      ctx.logger.debug('Service registered', { serviceName });
+    });
+  },
+};
+```

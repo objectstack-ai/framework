@@ -1,0 +1,33 @@
+---
+title: services.settings
+description: Namespace-based configuration service with env/global/tenant/user/default cascade.
+---
+
+# `services.settings`
+
+- **Stability:** `stable`
+- **Canonical source:** `packages/services/service-settings/src/settings-service.ts`
+
+## Key Methods
+
+```ts
+services.settings.get<T = unknown>(namespace: string, key: string, ctx?: SettingsContext): Promise<ResolvedSettingValue<T>>
+services.settings.getNamespace(namespace: string, ctx?: SettingsContext): Promise<SettingsNamespacePayload>
+services.settings.set(namespace: string, key: string, value: unknown, ctx?: SettingsContext): Promise<ResolvedSettingValue>
+services.settings.setMany(namespace: string, patch: Record<string, unknown>, ctx?: SettingsContext): Promise<Record<string, ResolvedSettingValue>>
+services.settings.runAction(namespace: string, actionId: string, payload: unknown, ctx?: SettingsContext): Promise<SettingsActionResult>
+services.settings.registerManifest(manifest: SettingsManifest): void
+services.settings.listManifests(ctx?: SettingsContext): SettingsManifest[]
+services.settings.subscribe(namespace: string | undefined, handler: SettingsChangeHandler): SettingsUnsubscribe
+```
+
+## Error Types
+
+- `SETTINGS_LOCKED` (`SettingsLockedError`)
+- `SETTINGS_UNKNOWN_NAMESPACE` (`UnknownNamespaceError`)
+- `SETTINGS_UNKNOWN_KEY` (`UnknownKeyError`)
+
+## Notes
+
+- Effective resolution order: **Env > Global > Tenant > User > Default**
+- Encrypted keys are supported through crypto adapters/providers.

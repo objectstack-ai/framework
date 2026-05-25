@@ -1,0 +1,35 @@
+---
+title: Runtime Service APIs
+description: Reference entry for runtime `services.*` APIs used by flow nodes, hooks, and plugins.
+---
+
+# Runtime Service APIs
+
+This chapter documents the runtime `services.*` APIs used in hook/action/flow/plugin code:
+
+- `services.data`
+- `services.sharing`
+- `services.audit`
+- `services.queue`
+- `services.email`
+- `services.settings`
+- `services.storage`
+
+## Stability Legend
+
+| Level | Meaning |
+|:--|:--|
+| `stable` | Backward-compatible within a major version |
+| `experimental` | API is available but may change in minor releases |
+
+## Source of Truth
+
+Each page links the canonical TypeScript source used to derive signatures.
+
+- Data: `packages/client/src/index.ts`
+- Sharing: `packages/spec/src/contracts/sharing-service.ts`
+- Queue: `packages/spec/src/contracts/queue-service.ts`
+- Email: `packages/spec/src/contracts/email-service.ts`
+- Storage: `packages/spec/src/contracts/storage-service.ts`
+- Settings: `packages/services/service-settings/src/settings-service.ts`
+- Audit bridge: `packages/services/service-settings/src/settings-service.types.ts`
