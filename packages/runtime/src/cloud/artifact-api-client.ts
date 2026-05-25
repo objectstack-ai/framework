@@ -228,6 +228,35 @@ export class ArtifactApiClient {
         return { commitId: String(found.headCommitId), publishedAt: found.headPublishedAt ?? null };
     }
 
+    /**
+     * Cheap freshness probe — returns the env's `last_published_at`
+     * (and best-effort current commit) without rebuilding the artifact.
+     * Used by `KernelManager` on cache hits to detect when a per-env
+     * kernel has been invalidated by an upstream change (marketplace
+     * install/uninstall, artifact publish) so it can be rebuilt
+     * without waiting for the 15-minute LRU TTL to expire.
+     *
+     * Returns `null` on definitive 404 / unknown env. Errors propagate
+     * (caller decides whether to treat unreachable cloud as fresh or
+     * stale — typically fresh, so a brief outage doesn't churn every
+     * cached kernel).
+     */
+    async getFreshness(environmentId: string): Promise<{
+        environmentId: string;
+        lastPublishedAt: string | null;
+        commitId: string | null;
+    } | null> {
+        const url = `${this.base}/api/v1/cloud/environments/${encodeURIComponent(environmentId)}/freshness`;
+        const res = await this.request(url);
+        if (res === null) return null;
+        const body = res.success === false ? null : (res.data ?? res);
+        if (!body || typeof body !== 'object') return null;
+        const envId = typeof body.environmentId === 'string' ? body.environmentId : environmentId;
+        const lastPublishedAt = typeof body.lastPublishedAt === 'string' ? body.lastPublishedAt : null;
+        const commitId = typeof body.commitId === 'string' ? body.commitId : null;
+        return { environmentId: envId, lastPublishedAt, commitId };
+    }
+
     /** Drop cached entries for a project (and any matching hostname). */
     invalidate(environmentId: string): void {
         // Cache keys are `${environmentId}` for HEAD or `${environmentId}@${commit}`

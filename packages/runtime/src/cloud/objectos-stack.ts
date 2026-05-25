@@ -201,6 +201,23 @@ class ObjectOSEnvironmentPlugin implements Plugin {
             maxSize: this.config.kernelCacheSize,
             ttlMs: this.config.kernelTtlMs,
             logger: ctx.logger,
+            // Only the HTTP client exposes /freshness; file-mode (CLI dev)
+            // has no upstream to probe.
+            freshnessProbe: this.config.controlPlaneUrl === 'file'
+                ? undefined
+                : async (envId, builtAtMs) => {
+                    const fresh = await (client as ArtifactApiClient).getFreshness(envId);
+                    if (!fresh) return false; // unknown / unreachable → treat as fresh
+                    const t = fresh.lastPublishedAt ? Date.parse(fresh.lastPublishedAt) : NaN;
+                    if (!Number.isFinite(t)) return false;
+                    if (t <= builtAtMs) return false;
+                    // Upstream changed since this kernel was built. Drop
+                    // the artifact cache too so the rebuild sees the new
+                    // bundle (otherwise we'd happily rebuild from the
+                    // same 5-minute-cached artifact JSON).
+                    try { (client as ArtifactApiClient).invalidate(envId); } catch { /* best effort */ }
+                    return true;
+                },
         });
         this.kernelManager = kernelManager;
 

@@ -18,6 +18,12 @@ interface CachedEntry {
   kernel: ObjectKernel;
   createdAt: number;
   lastAccess: number;
+  /**
+   * Wall-clock ms of the most recent freshness probe (see
+   * `freshnessProbe`). Throttles upstream probe rate to at most
+   * `staleCheckIntervalMs` per env.
+   */
+  lastStaleCheckAt: number;
 }
 
 export interface KernelManagerConfig {
@@ -33,6 +39,30 @@ export interface KernelManagerConfig {
    * Optional logger (duck-typed). Falls back to `console` when omitted.
    */
   logger?: { info?: (...a: any[]) => void; warn?: (...a: any[]) => void; error?: (...a: any[]) => void };
+  /**
+   * Optional upstream-change detector. When set, every cache hit older
+   * than `staleCheckIntervalMs` triggers this probe before returning the
+   * cached kernel. Returning `true` evicts the kernel and forces a
+   * rebuild, so changes to the control-plane state that don't reach
+   * this process via push (marketplace installs, artifact republish,
+   * etc.) become visible without waiting for the LRU TTL to expire.
+   *
+   * The probe should be cheap (single small GET). Errors thrown here
+   * are caught and treated as "still fresh" so a brief upstream
+   * outage doesn't churn every cached kernel — the worst case is
+   * stale-by-`ttlMs`, which is what we had before adding the probe.
+   *
+   * `builtAtMs` is the kernel's `createdAt` time so the probe can
+   * compare against an upstream "last changed at" timestamp.
+   */
+  freshnessProbe?: (environmentId: string, builtAtMs: number) => Promise<boolean>;
+  /**
+   * Minimum gap between successive freshness probes for the same env.
+   * Defaults to 10 seconds — enough to avoid hammering the control
+   * plane on tight render loops while still keeping the user's
+   * post-install refresh perceived as immediate.
+   */
+  staleCheckIntervalMs?: number;
 }
 
 /**
@@ -51,12 +81,16 @@ export class KernelManager {
   private readonly logger: NonNullable<KernelManagerConfig['logger']>;
   private readonly cache = new Map<string, CachedEntry>();
   private readonly pending = new Map<string, Promise<ObjectKernel>>();
+  private readonly freshnessProbe?: KernelManagerConfig['freshnessProbe'];
+  private readonly staleCheckIntervalMs: number;
 
   constructor(config: KernelManagerConfig) {
     this.factory = config.factory;
     this.maxSize = config.maxSize ?? 32;
     this.ttlMs = config.ttlMs ?? 15 * 60 * 1000;
     this.logger = config.logger ?? console;
+    this.freshnessProbe = config.freshnessProbe;
+    this.staleCheckIntervalMs = config.staleCheckIntervalMs ?? 10_000;
   }
 
   /** Returns the currently cached environmentIds (ordered by insertion). */
@@ -82,8 +116,35 @@ export class KernelManager {
       if (this.ttlMs > 0 && Date.now() - existing.lastAccess > this.ttlMs) {
         await this.evict(environmentId);
       } else {
-        existing.lastAccess = Date.now();
-        return existing.kernel;
+        // Throttled upstream freshness check. Probe errors are swallowed
+        // so a brief control-plane outage doesn't churn the cache; the
+        // worst case is stale-by-ttlMs, our prior behaviour.
+        if (this.freshnessProbe) {
+          const now = Date.now();
+          if (now - existing.lastStaleCheckAt >= this.staleCheckIntervalMs) {
+            existing.lastStaleCheckAt = now;
+            let stale = false;
+            try {
+              stale = await this.freshnessProbe(environmentId, existing.createdAt);
+            } catch (err) {
+              this.logger.warn?.('[KernelManager] freshness probe failed', { environmentId, err });
+            }
+            if (stale) {
+              this.logger.info?.('[KernelManager] kernel evicted by freshness probe', { environmentId });
+              await this.evict(environmentId);
+              // fall through to rebuild
+            } else {
+              existing.lastAccess = Date.now();
+              return existing.kernel;
+            }
+          } else {
+            existing.lastAccess = Date.now();
+            return existing.kernel;
+          }
+        } else {
+          existing.lastAccess = Date.now();
+          return existing.kernel;
+        }
       }
     }
 
@@ -93,7 +154,7 @@ export class KernelManager {
     const promise = (async () => {
       const kernel = await this.factory.create(environmentId);
       const now = Date.now();
-      this.cache.set(environmentId, { kernel, createdAt: now, lastAccess: now });
+      this.cache.set(environmentId, { kernel, createdAt: now, lastAccess: now, lastStaleCheckAt: now });
       await this.enforceMaxSize();
       return kernel;
     })();

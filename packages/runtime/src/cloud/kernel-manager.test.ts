@@ -129,4 +129,64 @@ describe('KernelManager', () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
     expect(mgr.size).toBe(0);
   });
+
+  describe('freshnessProbe', () => {
+    it('skips probe within staleCheckIntervalMs after build', async () => {
+      const { factory } = makeFactory();
+      const probe = vi.fn().mockResolvedValue(false);
+      const mgr = new KernelManager({ factory, freshnessProbe: probe, staleCheckIntervalMs: 60_000 });
+
+      const a = await mgr.getOrCreate('p1');
+      const b = await mgr.getOrCreate('p1');
+
+      expect(a).toBe(b);
+      expect(probe).not.toHaveBeenCalled();
+      expect(factory.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns cached kernel when probe says fresh', async () => {
+      const { factory } = makeFactory();
+      const probe = vi.fn().mockResolvedValue(false);
+      const mgr = new KernelManager({ factory, freshnessProbe: probe, staleCheckIntervalMs: 0 });
+
+      const a = await mgr.getOrCreate('p1');
+      const b = await mgr.getOrCreate('p1');
+
+      expect(a).toBe(b);
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(factory.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('evicts and rebuilds when probe reports stale', async () => {
+      const { factory } = makeFactory();
+      const probe = vi.fn().mockResolvedValue(true);
+      const mgr = new KernelManager({ factory, freshnessProbe: probe, staleCheckIntervalMs: 0 });
+
+      const a = await mgr.getOrCreate('p1');
+      const b = await mgr.getOrCreate('p1');
+
+      expect(a).not.toBe(b);
+      expect(factory.create).toHaveBeenCalledTimes(2);
+      expect((a as any).shutdown).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats probe errors as fresh (logs warning)', async () => {
+      const { factory } = makeFactory();
+      const probe = vi.fn().mockRejectedValue(new Error('upstream down'));
+      const warnSpy = vi.fn();
+      const mgr = new KernelManager({
+        factory,
+        freshnessProbe: probe,
+        staleCheckIntervalMs: 0,
+        logger: { warn: warnSpy },
+      });
+
+      const a = await mgr.getOrCreate('p1');
+      const b = await mgr.getOrCreate('p1');
+
+      expect(a).toBe(b);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(factory.create).toHaveBeenCalledTimes(1);
+    });
+  });
 });
