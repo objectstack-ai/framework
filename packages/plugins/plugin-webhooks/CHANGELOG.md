@@ -1,5 +1,14 @@
 # @objectstack/plugin-webhooks
 
+## 6.1.2
+
+### Patch Changes
+
+- @objectstack/spec@6.1.2
+- @objectstack/core@6.1.2
+- @objectstack/platform-objects@6.1.2
+- @objectstack/service-cluster@5.1.5
+
 ## 6.1.1
 
 ### Patch Changes

@@ -1,5 +1,63 @@
 # @objectstack/service-ai
 
+## 6.1.2
+
+### Patch Changes
+
+- 13a4f38: **Actions-as-tools Phase 2:** the AI tool runtime can now dispatch `type:'api'` and `type:'flow'` actions in addition to `type:'script'`.
+
+  - New exported `ApiActionClient` interface and `createFetchApiClient({ baseUrl, headers, fetch })` factory — default fetch-based dispatch resolves relative `target` paths against `baseUrl`, throws on non-2xx with `${method} ${url} → ${status}: ${body}`, and JSON-parses the response.
+  - New exported `buildApiRequestBody(action, args, record, recordId)` helper — honours `bodyShape.wrap`, `recordIdParam` + `recordIdField` (defaults to `'id'`), and merges `bodyExtra` last so constants win.
+  - `ActionToolsContext` extended (additive): `automation`, `apiClient`, `apiBaseUrl`, `apiHeaders`.
+  - `actionSkipReason()` gains an optional second `ctx` parameter that returns precise wiring-availability reasons (`'no automation service available'`, `'no apiClient or apiBaseUrl configured'`). Studio-only types (`url` / `modal` / `form`) and all dangerous variants (`confirmText`, `mode:'delete'`, `variant:'danger'`) remain skipped.
+  - `AIServicePlugin` options accept `apiActionBaseUrl` (falls back to `OS_AI_ACTION_API_BASE_URL`) and `apiActionHeaders`; the plugin now resolves the `automation` service silently and threads everything into `registerActionsAsTools`.
+
+  Net result: every non-destructive declarative action with a target — `script`, `api`, `flow` — is now LLM-callable end-to-end as soon as the corresponding wiring is in place.
+
+- 449e35d: Real-LLM smoke test for the `data_chat` agent loop, plus two `query_data`
+  robustness fixes shaken out by running it against `openai/gpt-4.1-mini` via
+  the Vercel AI Gateway.
+
+  **`query_data` tool fixes**
+
+  - Removed the LLM-controllable `model` parameter from the public tool
+    schema. Frontier models were hallucinating `text-davinci-003` and other
+    long-dead model ids, breaking every plan generation.
+  - Switched the structured-output filter shape from `z.record(...)` (which
+    emits `propertyNames` in JSON Schema, rejected by OpenAI Structured
+    Outputs) to a `whereJson` string field. The model emits a JSON-encoded
+    ObjectQL filter; the tool parses & validates it before execution. This
+    also fixes a parallel issue with OpenAI's strict mode requiring every
+    property to appear in `required`.
+  - Switched all optional fields to `.nullable()` so the planner Zod schema
+    satisfies OpenAI Structured Outputs' "every property must be required"
+    rule.
+  - Beefed up the planner system prompt with explicit operator hints — most
+    importantly: use `$contains` for partial string matches (`"task named
+Foo"` → `{"subject":{"$contains":"Foo"}}`), not equality. Without this
+    hint the model defaulted to exact-match equality and never found
+    anything.
+
+  **New smoke test**
+
+  `examples/app-todo/test/ai-llm.test.ts` (gated on `AI_GATEWAY_API_KEY`):
+  boots the full ObjectStack, registers `query_data` + the six auto-generated
+  `action_*` tools, sends _"Please mark the 'Build' task as complete."_ to a
+  real LLM, and asserts that
+
+  1. the model picked the right tools in the right order
+     (`query_data` → `action_complete_task`),
+  2. a task row actually flipped to `completed`, and
+  3. an `ai_traces` `chat_with_tools` row landed.
+
+  Run with: `pnpm --filter @example/app-todo test:llm`.
+
+  Verified end-to-end against `openai/gpt-4.1-mini` (~6.6 s, 2 tool calls,
+  1 task completed, trace persisted).
+
+  - @objectstack/spec@6.1.2
+  - @objectstack/core@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

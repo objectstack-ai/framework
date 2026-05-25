@@ -1,5 +1,13 @@
 # @objectstack/account
 
+## 6.1.2
+
+### Patch Changes
+
+- @objectstack/spec@6.1.2
+- @objectstack/client@6.1.2
+- @objectstack/client-react@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

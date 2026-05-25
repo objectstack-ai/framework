@@ -1,5 +1,15 @@
 # @objectstack/objectql
 
+## 6.1.2
+
+### Patch Changes
+
+- @objectstack/spec@6.1.2
+- @objectstack/core@6.1.2
+- @objectstack/types@6.1.2
+- @objectstack/metadata-core@6.1.2
+- @objectstack/formula@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes

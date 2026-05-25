@@ -1,5 +1,13 @@
 # @objectstack/service-cache
 
+## 6.1.2
+
+### Patch Changes
+
+- @objectstack/spec@6.1.2
+- @objectstack/core@6.1.2
+- @objectstack/observability@6.1.2
+
 ## 6.1.1
 
 ### Patch Changes
