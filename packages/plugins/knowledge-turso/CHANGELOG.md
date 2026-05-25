@@ -1,5 +1,13 @@
 # @objectstack/knowledge-turso
 
+## 6.5.0
+
+### Patch Changes
+
+- @objectstack/spec@6.5.0
+- @objectstack/core@6.5.0
+- @objectstack/service-knowledge@6.5.0
+
 ## 6.4.0
 
 ### Minor Changes
