@@ -1,5 +1,15 @@
 # @objectstack/service-automation
 
+## 6.4.0
+
+### Patch Changes
+
+- Updated dependencies [f8651cc]
+- Updated dependencies [f8651cc]
+  - @objectstack/spec@6.4.0
+  - @objectstack/core@6.4.0
+  - @objectstack/formula@6.4.0
+
 ## 6.3.0
 
 ### Patch Changes

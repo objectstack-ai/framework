@@ -1,5 +1,14 @@
 # @objectstack/service-cluster
 
+## 5.1.7
+
+### Patch Changes
+
+- Updated dependencies [f8651cc]
+- Updated dependencies [f8651cc]
+  - @objectstack/spec@6.4.0
+  - @objectstack/core@6.4.0
+
 ## 5.1.6
 
 ### Patch Changes
