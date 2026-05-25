@@ -1,5 +1,13 @@
 # @objectstack/service-queue
 
+## 6.5.0
+
+### Patch Changes
+
+- @objectstack/spec@6.5.0
+- @objectstack/core@6.5.0
+- @objectstack/platform-objects@6.5.0
+
 ## 6.4.0
 
 ### Patch Changes
