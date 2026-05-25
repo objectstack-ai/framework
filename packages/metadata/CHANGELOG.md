@@ -1,5 +1,16 @@
 # @objectstack/metadata
 
+## 6.3.0
+
+### Patch Changes
+
+- @objectstack/spec@6.3.0
+- @objectstack/core@6.3.0
+- @objectstack/types@6.3.0
+- @objectstack/metadata-core@6.3.0
+- @objectstack/metadata-fs@6.3.0
+- @objectstack/platform-objects@6.3.0
+
 ## 6.2.0
 
 ### Patch Changes
