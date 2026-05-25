@@ -529,9 +529,9 @@ ObjectStack ships a Knowledge Protocol that lets agents call `search_knowledge(q
 ```ts
 import { ObjectKernel } from '@objectstack/core';
 import { KnowledgeServicePlugin } from '@objectstack/service-knowledge';
-import { KnowledgeMemoryPlugin } from '@objectstack/plugin-knowledge-memory';
+import { KnowledgeMemoryPlugin } from '@objectstack/knowledge-memory';
 // or, for prod:
-// import { KnowledgeRagflowPlugin } from '@objectstack/plugin-knowledge-ragflow';
+// import { KnowledgeRagflowPlugin } from '@objectstack/knowledge-ragflow';
 
 const kernel = new ObjectKernel();
 kernel.use(new KnowledgeServicePlugin({

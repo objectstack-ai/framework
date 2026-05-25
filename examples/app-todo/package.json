@@ -29,7 +29,7 @@
     "@objectstack/driver-sqlite-wasm": "workspace:^",
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:^",
-    "@objectstack/plugin-knowledge-memory": "workspace:*",
+    "@objectstack/knowledge-memory": "workspace:*",
     "@objectstack/runtime": "workspace:^",
     "@objectstack/service-ai": "workspace:*",
     "@objectstack/service-knowledge": "workspace:*",

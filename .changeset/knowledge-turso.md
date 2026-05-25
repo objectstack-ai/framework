@@ -1,8 +1,8 @@
 ---
-'@objectstack/plugin-knowledge-turso': minor
+'@objectstack/knowledge-turso': minor
 ---
 
-Add `@objectstack/plugin-knowledge-turso` — production-grade knowledge adapter backed by [Turso](https://turso.tech) / libSQL native vector columns.
+Add `@objectstack/knowledge-turso` — production-grade knowledge adapter backed by [Turso](https://turso.tech) / libSQL native vector columns.
 
 **What's included:**
 

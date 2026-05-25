@@ -1,4 +1,4 @@
-# @objectstack/plugin-knowledge-ragflow
+# @objectstack/knowledge-ragflow
 
 [RAGFlow](https://github.com/infiniflow/ragflow) `IKnowledgeAdapter` for ObjectStack.
 
@@ -16,7 +16,7 @@ Bridges the [Knowledge Protocol](../../../content/docs/protocol/knowledge.mdx) t
 ```ts
 import { ObjectKernel } from '@objectstack/core';
 import { KnowledgeServicePlugin } from '@objectstack/service-knowledge';
-import { KnowledgeRagflowPlugin } from '@objectstack/plugin-knowledge-ragflow';
+import { KnowledgeRagflowPlugin } from '@objectstack/knowledge-ragflow';
 
 const kernel = new ObjectKernel();
 kernel.use(new KnowledgeServicePlugin({

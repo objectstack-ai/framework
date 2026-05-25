@@ -1,4 +1,4 @@
-# @objectstack/plugin-knowledge-memory
+# @objectstack/knowledge-memory
 
 In-memory `IKnowledgeAdapter` for ObjectStack — chunks documents, embeds with a deterministic hash-based embedder, and answers `search()` via brute-force cosine similarity.
 
@@ -7,7 +7,7 @@ In-memory `IKnowledgeAdapter` for ObjectStack — chunks documents, embeds with 
 ```ts
 import { ObjectKernel } from '@objectstack/core';
 import { KnowledgeServicePlugin } from '@objectstack/service-knowledge';
-import { KnowledgeMemoryPlugin } from '@objectstack/plugin-knowledge-memory';
+import { KnowledgeMemoryPlugin } from '@objectstack/knowledge-memory';
 
 const kernel = new ObjectKernel();
 kernel.use(new KnowledgeServicePlugin({

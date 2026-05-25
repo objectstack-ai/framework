@@ -1,4 +1,4 @@
-# @objectstack/plugin-knowledge-turso
+# @objectstack/knowledge-turso
 
 [Turso / libSQL](https://turso.tech) `IKnowledgeAdapter` for ObjectStack.
 
@@ -19,7 +19,7 @@ import { KnowledgeServicePlugin } from '@objectstack/service-knowledge';
 import {
   KnowledgeTursoPlugin,
   OpenAIEmbeddingProvider,
-} from '@objectstack/plugin-knowledge-turso';
+} from '@objectstack/knowledge-turso';
 
 const kernel = new ObjectKernel();
 
@@ -101,7 +101,7 @@ The `F32_BLOB(N)` column is sized from `embedding.dimensions` at first use. Chan
 ## Testing
 
 ```bash
-pnpm --filter @objectstack/plugin-knowledge-turso test
+pnpm --filter @objectstack/knowledge-turso test
 ```
 
 10 in-memory libsql tests run by default (no creds needed). To also run the live cloud smoke test:
@@ -109,7 +109,7 @@ pnpm --filter @objectstack/plugin-knowledge-turso test
 ```bash
 export TURSO_URL='libsql://<your-db>.turso.io'
 export TURSO_AUTH_TOKEN='…'
-pnpm --filter @objectstack/plugin-knowledge-turso test
+pnpm --filter @objectstack/knowledge-turso test
 ```
 
 The live test creates a throw-away source table (`knowledge_live_test_<timestamp>`) and `DROP TABLE`s it in `finally`.

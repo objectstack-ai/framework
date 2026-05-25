@@ -1,7 +1,7 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * `@objectstack/plugin-knowledge-turso`
+ * `@objectstack/knowledge-turso`
  *
  * Turso / libSQL native-vector knowledge adapter. Implements the
  * `IKnowledgeAdapter` contract on top of `F32_BLOB` columns +

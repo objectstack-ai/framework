@@ -28,7 +28,7 @@ import {
 import {
   KnowledgeServicePlugin,
 } from '@objectstack/service-knowledge';
-import { KnowledgeMemoryPlugin } from '@objectstack/plugin-knowledge-memory';
+import { KnowledgeMemoryPlugin } from '@objectstack/knowledge-memory';
 import type {
   IAIService,
   IDataEngine,

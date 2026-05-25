@@ -28,6 +28,7 @@ import { ArtifactEnvironmentRegistry } from './artifact-environment-registry.js'
 import { ArtifactKernelFactory } from './artifact-kernel-factory.js';
 import { AuthProxyPlugin } from './auth-proxy-plugin.js';
 import { MarketplaceProxyPlugin } from './marketplace-proxy-plugin.js';
+import { RuntimeConfigPlugin } from './runtime-config-plugin.js';
 import { FileArtifactApiClient, type FileArtifactApiClientConfig } from './file-artifact-api-client.js';
 
 export interface ObjectOSStackConfig {
@@ -234,7 +235,7 @@ export async function createObjectOSStack(config: ObjectOSStackConfig): Promise<
     const enginePlugins = await createHostEnginePlugins();
 
     return {
-        plugins: [...enginePlugins, new ObjectOSEnvironmentPlugin(merged), new AuthProxyPlugin(), new MarketplaceProxyPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl })],
+        plugins: [...enginePlugins, new ObjectOSEnvironmentPlugin(merged), new AuthProxyPlugin(), new MarketplaceProxyPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl }), new RuntimeConfigPlugin({ controlPlaneUrl: merged.controlPlaneUrl === 'file' ? undefined : merged.controlPlaneUrl, installLocal: false })],
         api: {
             enableProjectScoping: true,
             projectResolution: 'auto',
