@@ -930,7 +930,16 @@ export class AuthManager {
    */
   async handleRequest(request: Request): Promise<Response> {
     const auth = await this.getOrCreateAuth();
-    const response = await auth.handler(request);
+    // better-auth's HTTP entrypoint (`createBetterAuth.handler`) wraps execution
+    // in `runWithAdapter` but NOT `runWithRequestState`. Endpoints that read
+    // request-state via `defineRequestState()` (e.g. `should-session-refresh`,
+    // `oauth`) therefore throw "No request state found" when reached via HTTP.
+    // The `customSession` plugin triggers this by invoking the inner
+    // `getSession()` endpoint directly, bypassing `to-auth-endpoints`'
+    // auto-wrap. We establish the ALS store here so all downstream endpoint
+    // calls inherit a valid request-state WeakMap.
+    const { runWithRequestState } = await import('@better-auth/core/context');
+    const response = await runWithRequestState(new WeakMap(), () => auth.handler(request));
 
     if (response.status >= 500) {
       try {
