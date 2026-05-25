@@ -363,6 +363,76 @@ export class AuthPlugin implements Plugin {
     // the wildcard handler below. Enable via
     // `AuthPluginConfig.deviceAuthorization`.
 
+    // Set an INITIAL local password for users who signed in via SSO and
+    // have no `credential` account yet. This is the "Set local password"
+    // affordance on a per-environment kernel — it lets a user that the
+    // platform onboarded via the objectstack-cloud OAuth provider sign in
+    // with email/password against this environment going forward without
+    // needing the SSO round-trip. Requires a valid session (so we know
+    // which user is asking) and refuses if a credential already exists
+    // (the user should use better-auth's /change-password endpoint in
+    // that case so the current password is verified).
+    rawApp.post(`${basePath}/set-initial-password`, async (c: any) => {
+      try {
+        let body: any = {};
+        try { body = await c.req.json(); } catch { body = {}; }
+        const newPassword: unknown = body?.newPassword;
+        if (typeof newPassword !== 'string' || newPassword.length === 0) {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'newPassword is required' } }, 400);
+        }
+
+        const authApi = await this.authManager!.getApi();
+        const session = await authApi.getSession({ headers: c.req.raw.headers });
+        if (!session?.user?.id) {
+          return c.json({ success: false, error: { code: 'unauthorized', message: 'Sign in first' } }, 401);
+        }
+        const userId = session.user.id;
+
+        const authCtx: any = await this.authManager!.getAuthContext();
+        if (!authCtx?.internalAdapter || !authCtx?.password) {
+          return c.json({ success: false, error: { code: 'unavailable', message: 'Auth context unavailable' } }, 503);
+        }
+
+        // Length checks mirror better-auth's emailAndPassword.{min,max}PasswordLength
+        // so the validation surface is consistent across set / change / reset.
+        const minLen = authCtx.password?.config?.minPasswordLength ?? 8;
+        const maxLen = authCtx.password?.config?.maxPasswordLength ?? 128;
+        if (newPassword.length < minLen) {
+          return c.json({ success: false, error: { code: 'password_too_short', message: `Password must be at least ${minLen} characters` } }, 400);
+        }
+        if (newPassword.length > maxLen) {
+          return c.json({ success: false, error: { code: 'password_too_long', message: `Password must be at most ${maxLen} characters` } }, 400);
+        }
+
+        const accounts = await authCtx.internalAdapter.findAccounts(userId);
+        const existingCredential = accounts?.find?.((a: any) => a.providerId === 'credential' && a.password);
+        if (existingCredential) {
+          // Use /change-password (requires currentPassword) instead.
+          return c.json({
+            success: false,
+            error: {
+              code: 'credential_account_exists',
+              message: 'A local password is already set for this account. Use change-password instead.',
+            },
+          }, 409);
+        }
+
+        const passwordHash = await authCtx.password.hash(newPassword);
+        await authCtx.internalAdapter.createAccount({
+          userId,
+          providerId: 'credential',
+          accountId: userId,
+          password: passwordHash,
+        });
+
+        return c.json({ success: true });
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] set-initial-password failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
     // Register wildcard route to forward all auth requests to better-auth.
     // better-auth is configured with basePath matching our route prefix, so we
     // forward the original request directly — no path rewriting needed.

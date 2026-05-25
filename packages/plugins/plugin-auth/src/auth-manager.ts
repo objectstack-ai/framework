@@ -962,6 +962,20 @@ export class AuthManager {
     return auth.api;
   }
 
+  /**
+   * Get the underlying better-auth context for low-level operations such as
+   * `internalAdapter.createAccount` / `password.hash`.
+   *
+   * Used by routes that need to write to better-auth's tables outside the
+   * normal endpoint surface — currently only `set-initial-password`, which
+   * provisions a credential account for SSO-onboarded users so they can
+   * sign in with email/password going forward.
+   */
+  async getAuthContext(): Promise<any> {
+    const auth = await this.getOrCreateAuth();
+    return (auth as any).$context;
+  }
+
   // ---------------------------------------------------------------------------
   // Device Flow (CLI browser-based login)
   //
