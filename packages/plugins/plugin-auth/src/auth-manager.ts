@@ -27,6 +27,113 @@ import {
 } from './auth-schema-config.js';
 
 /**
+ * Detect WebContainer (StackBlitz) environment.
+ *
+ * WebContainer reports itself as Node.js but runs inside a browser. Several
+ * Node APIs are polyfilled with significant behavioural differences — most
+ * notably `node:async_hooks.AsyncLocalStorage`, whose `run()` does NOT
+ * propagate the store across `await` boundaries the way Node's native
+ * implementation does.
+ */
+function isWebContainerRuntime(): boolean {
+  if (typeof globalThis === 'undefined') return false;
+  const proc = (globalThis as any).process;
+  return (
+    Boolean(proc?.versions?.webcontainer) ||
+    Boolean(proc?.env?.SHELL?.includes?.('jsh')) ||
+    Boolean(proc?.env?.STACKBLITZ)
+  );
+}
+
+/**
+ * Synchronous AsyncLocalStorage polyfill compatible with better-auth's
+ * `requestStateAsyncStorage` slot.
+ *
+ * Behaviour:
+ * - `run(store, fn)` sets the current store synchronously before invoking
+ *   `fn` and restores the previous store after `fn` (and any promise it
+ *   returns) settles.
+ * - `getStore()` returns the current store.
+ *
+ * Why a polyfill is needed in WebContainer:
+ * - WebContainer's `node:async_hooks` does not propagate ALS context through
+ *   `await`, so better-auth's `runWithRequestState(map, () => handler(req))`
+ *   wrap loses the store as soon as the call chain awaits anything (e.g.
+ *   the inner `customSession` → `getSession()` call). All endpoints that
+ *   read request-state via `defineRequestState()` then throw
+ *   "No request state found".
+ *
+ * Single-flight caveat:
+ * - This polyfill is process-global, not async-context-local. In a real
+ *   server it could leak state across concurrent requests. That risk is
+ *   acceptable here because:
+ *   1) It is only installed when WebContainer is detected (dev / preview
+ *      sandboxes that handle one request at a time).
+ *   2) Each request still wraps the entire handler in `runWithRequestState`
+ *      with a fresh WeakMap, so the in-flight request always sees its own
+ *      store as long as nothing else mutates the slot mid-flight.
+ */
+class WebContainerRequestStateAsyncLocalStorage<T> {
+  private current: T | undefined = undefined;
+
+  run<R>(store: T, fn: () => R): R {
+    const prev = this.current;
+    this.current = store;
+    try {
+      const result = fn() as unknown;
+      if (result && typeof (result as Promise<unknown>).then === 'function') {
+        return (result as Promise<unknown>).finally(() => {
+          this.current = prev;
+        }) as unknown as R;
+      }
+      this.current = prev;
+      return result as R;
+    } catch (err) {
+      this.current = prev;
+      throw err;
+    }
+  }
+
+  getStore(): T | undefined {
+    return this.current;
+  }
+}
+
+/**
+ * Pre-populate better-auth's global `requestStateAsyncStorage` slot with the
+ * synchronous polyfill when running inside WebContainer.
+ *
+ * Better-auth caches its AsyncLocalStorage instance on
+ * `globalThis[Symbol.for('better-auth:global')].context.requestStateAsyncStorage`
+ * the first time `ensureAsyncStorage()` runs (see
+ * `@better-auth/core/dist/context/request-state.mjs`). By seeding that slot
+ * BEFORE any better-auth code touches it, every call to
+ * `runWithRequestState` / `getCurrentRequestState` — including the
+ * `@better-auth/core` copy that `plugin-auth` imports directly and the copy
+ * bundled with `better-auth` itself — share the same working polyfill.
+ *
+ * Outside WebContainer this is a no-op so production deployments keep
+ * Node's native AsyncLocalStorage.
+ */
+function installWebContainerRequestStatePolyfill(): void {
+  if (!isWebContainerRuntime()) return;
+  const sym = Symbol.for('better-auth:global');
+  const g = globalThis as any;
+  if (!g[sym]) {
+    g[sym] = { version: '0.0.0-polyfill', epoch: 0, context: {} };
+  }
+  if (!g[sym].context) g[sym].context = {};
+  if (!g[sym].context.requestStateAsyncStorage) {
+    g[sym].context.requestStateAsyncStorage = new WebContainerRequestStateAsyncLocalStorage();
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[AuthManager] WebContainer detected: installed synchronous request-state polyfill ' +
+        '(node:async_hooks AsyncLocalStorage does not propagate context across await in WebContainer).',
+    );
+  }
+}
+
+/**
  * Extended options for AuthManager
  */
 export interface AuthManagerOptions extends Partial<AuthConfig> {
@@ -129,6 +236,12 @@ export class AuthManager {
 
   constructor(config: AuthManagerOptions) {
     this.config = config;
+
+    // WebContainer (StackBlitz) compatibility — install a synchronous
+    // AsyncLocalStorage polyfill for better-auth's request-state global
+    // BEFORE better-auth ever instantiates its own. See the helper for the
+    // full rationale.
+    installWebContainerRequestStatePolyfill();
 
     // Use provided auth instance
     if (config.authInstance) {
@@ -384,12 +497,7 @@ export class AuthManager {
   private async resolvePasswordHasher(): Promise<
     { hash: (password: string) => Promise<string>; verify: (args: { hash: string; password: string }) => Promise<boolean> } | undefined
   > {
-    const isWebContainer =
-      typeof globalThis !== 'undefined' &&
-      (Boolean((globalThis as any).process?.versions?.webcontainer) ||
-        Boolean((globalThis as any).process?.env?.SHELL?.includes?.('jsh')) ||
-        Boolean((globalThis as any).process?.env?.STACKBLITZ));
-    if (!isWebContainer) return undefined;
+    if (!isWebContainerRuntime()) return undefined;
     try {
       const { scryptAsync } = await import('@noble/hashes/scrypt.js');
       const PARAMS = { N: 16384, r: 16, p: 1, dkLen: 64, maxmem: 128 * 16384 * 16 * 2 } as const;

@@ -47,6 +47,8 @@
       "@objectstack/service-analytics",
       "@objectstack/service-automation",
       "@objectstack/service-cache",
+      "@objectstack/service-cluster",
+      "@objectstack/service-cluster-redis",
       "@objectstack/service-feed",
       "@objectstack/service-i18n",
       "@objectstack/service-job",

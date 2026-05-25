@@ -5,6 +5,9 @@ on:
     paths:
       - '**/package.json'
       - 'pnpm-lock.yaml'
+      - '.changeset/config.json'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/check-changeset-fixed.mjs'
   schedule:
     # Run weekly on Monday at 03:00 UTC
     - cron: '0 3 * * 1'
@@ -49,6 +52,9 @@ jobs:
       - name: Verify lockfile is up to date
         run: |
           pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Verify Changesets "fixed" group covers every public package
+        run: node scripts/check-changeset-fixed.mjs
           
       - name: Check for dependency issues
         run: |

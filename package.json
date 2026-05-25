@@ -14,6 +14,7 @@
     "setup": "pnpm install && pnpm --filter @objectstack/spec build",
     "version": "changeset version",
     "release": "pnpm run build && changeset publish",
+    "lint:changeset": "node scripts/check-changeset-fixed.mjs",
     "docs:dev": "pnpm --filter @objectstack/docs dev",
     "docs:build": "pnpm --filter @objectstack/docs build",
     "docs:start": "pnpm --filter @objectstack/docs start",

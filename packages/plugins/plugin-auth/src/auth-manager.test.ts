@@ -1032,4 +1032,112 @@ describe('AuthManager', () => {
       });
     });
   });
+
+  describe('WebContainer request-state polyfill', () => {
+    const sym = Symbol.for('better-auth:global');
+
+    beforeEach(() => {
+      // Reset better-auth global between tests so installation logic re-runs.
+      delete (globalThis as any)[sym];
+    });
+
+    afterEach(() => {
+      delete (globalThis as any)[sym];
+      delete (globalThis as any).process?.env?.STACKBLITZ;
+    });
+
+    it('does NOT install a polyfill outside WebContainer', () => {
+      // Default test env (Node + Vitest) is not WebContainer.
+      delete (globalThis as any).process?.env?.STACKBLITZ;
+      const proc = (globalThis as any).process;
+      const prevShell = proc?.env?.SHELL;
+      const prevWc = proc?.versions?.webcontainer;
+      if (proc?.env) delete proc.env.SHELL;
+      if (proc?.versions) delete proc.versions.webcontainer;
+
+      try {
+        new AuthManager({
+          secret: 'test-secret-at-least-32-chars-long',
+          baseUrl: 'http://localhost:3000',
+        });
+        expect((globalThis as any)[sym]?.context?.requestStateAsyncStorage).toBeUndefined();
+      } finally {
+        if (proc?.env && prevShell !== undefined) proc.env.SHELL = prevShell;
+        if (proc?.versions && prevWc !== undefined) proc.versions.webcontainer = prevWc;
+      }
+    });
+
+    it('installs a synchronous polyfill when WebContainer is detected', () => {
+      (globalThis as any).process = (globalThis as any).process || {};
+      (globalThis as any).process.env = (globalThis as any).process.env || {};
+      (globalThis as any).process.env.STACKBLITZ = '1';
+
+      new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      const als = (globalThis as any)[sym]?.context?.requestStateAsyncStorage;
+      expect(als).toBeDefined();
+      expect(typeof als.run).toBe('function');
+      expect(typeof als.getStore).toBe('function');
+    });
+
+    it('polyfill propagates store across awaits within a single run() call', async () => {
+      (globalThis as any).process = (globalThis as any).process || {};
+      (globalThis as any).process.env = (globalThis as any).process.env || {};
+      (globalThis as any).process.env.STACKBLITZ = '1';
+
+      new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      const als = (globalThis as any)[sym].context.requestStateAsyncStorage;
+      const store = new WeakMap();
+
+      const inner = async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        return als.getStore();
+      };
+
+      const result = await als.run(store, () => inner());
+      expect(result).toBe(store);
+    });
+
+    it('polyfill restores previous store after run() settles, even on error', async () => {
+      (globalThis as any).process = (globalThis as any).process || {};
+      (globalThis as any).process.env = (globalThis as any).process.env || {};
+      (globalThis as any).process.env.STACKBLITZ = '1';
+
+      new AuthManager({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+      });
+
+      const als = (globalThis as any)[sym].context.requestStateAsyncStorage;
+      expect(als.getStore()).toBeUndefined();
+
+      const outer = new WeakMap();
+      const inner = new WeakMap();
+      await als.run(outer, async () => {
+        expect(als.getStore()).toBe(outer);
+        await als.run(inner, async () => {
+          await Promise.resolve();
+          expect(als.getStore()).toBe(inner);
+        });
+        expect(als.getStore()).toBe(outer);
+      });
+      expect(als.getStore()).toBeUndefined();
+
+      await expect(
+        als.run(outer, async () => {
+          await Promise.resolve();
+          throw new Error('boom');
+        }),
+      ).rejects.toThrow('boom');
+      expect(als.getStore()).toBeUndefined();
+    });
+  });
 });
