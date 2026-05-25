@@ -12,6 +12,7 @@
     "package-version",
     "plugin-security",
     "provisioning",
+    "template-manifest",
     "tenant"
   ]
 }

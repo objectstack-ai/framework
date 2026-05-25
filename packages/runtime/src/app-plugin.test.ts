@@ -174,7 +174,7 @@ describe('AppPlugin', () => {
             expect(mockI18n.setDefaultLocale).toHaveBeenCalledWith('zh-CN');
         });
 
-        it('should skip translation loading when i18n service is not registered', async () => {
+        it('should auto-register in-memory i18n fallback when service is not registered', async () => {
             vi.mocked(mockContext.getService).mockImplementation((name: string) => {
                 if (name === 'objectql') return mockQL;
                 return undefined; // No i18n service
@@ -187,13 +187,11 @@ describe('AppPlugin', () => {
             const plugin = new AppPlugin(bundle);
             await plugin.start!(mockContext);
 
-            // Should log warning (translations exist but no i18n service) and not throw
-            expect(mockContext.logger.warn).toHaveBeenCalledWith(
-                expect.stringContaining('no i18n service is registered')
-            );
+            // Auto-registers in-memory fallback and loads translations; does not throw or warn.
+            expect(mockContext.registerService).toHaveBeenCalledWith('i18n', expect.any(Object));
         });
 
-        it('should skip translation loading when getService throws for i18n', async () => {
+        it('should auto-register in-memory i18n fallback when getService throws for i18n', async () => {
             vi.mocked(mockContext.getService).mockImplementation((name: string) => {
                 if (name === 'objectql') return mockQL;
                 throw new Error("[Kernel] Service 'i18n' not found");
@@ -206,10 +204,7 @@ describe('AppPlugin', () => {
             const plugin = new AppPlugin(bundle);
             await plugin.start!(mockContext);
 
-            // Should log warning (translations exist but no i18n service) and not throw
-            expect(mockContext.logger.warn).toHaveBeenCalledWith(
-                expect.stringContaining('no i18n service is registered')
-            );
+            expect(mockContext.registerService).toHaveBeenCalledWith('i18n', expect.any(Object));
         });
 
         it('should handle bundle with no translations gracefully', async () => {

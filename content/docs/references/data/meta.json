@@ -5,6 +5,7 @@
     "data-engine",
     "dataset",
     "datasource",
+    "date-macros",
     "document",
     "driver",
     "driver-nosql",

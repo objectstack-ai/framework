@@ -1,0 +1,60 @@
+---
+title: Template Manifest
+description: Template Manifest protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+`objectstack.manifest.json` — on-disk descriptor for a template / package
+
+source tree. Strict projection of `CreatePackageRequestSchema` (server-
+
+managed fields excluded) plus scaffold-time extras (name slug,
+
+specVersion, skills, preview, scaffold, readmePath).
+
+<Callout type="info">
+**Source:** `packages/spec/src/cloud/template-manifest.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { TemplateManifest } from '@objectstack/spec/cloud';
+import type { TemplateManifest } from '@objectstack/spec/cloud';
+
+// Validate data
+const result = TemplateManifest.parse(data);
+```
+
+---
+
+## TemplateManifest
+
+objectstack.manifest.json — template / package source descriptor
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **manifestId** | `string` | ✅ | Globally unique reverse-domain package identifier (e.g. com.acme.crm) |
+| **displayName** | `string` | ✅ | Display name shown in Studio and Marketplace |
+| **description** | `string` | optional | Short package description |
+| **visibility** | `Enum<'private' \| 'org' \| 'marketplace'>` | optional | Package visibility: private = owner org only; org = all envs in owner org; marketplace = public registry |
+| **category** | `string` | optional | Package category for marketplace discovery (e.g. "crm", "hr", "finance", "devtools") |
+| **tags** | `string[]` | optional |  |
+| **iconUrl** | `string` | optional |  |
+| **homepageUrl** | `string` | optional |  |
+| **license** | `string` | optional |  |
+| **publisher** | `Enum<'objectstack' \| 'partner' \| 'community' \| 'private'>` | optional | Package publisher provenance tier |
+| **isStarter** | `boolean` | optional |  |
+| **name** | `string` | ✅ | CLI slug (kebab-case, no namespace prefix) |
+| **specVersion** | `string` | ✅ | Compatible @objectstack/spec semver range |
+| **skills** | `string[]` | optional | Skill ids exercised by this template (for docs / picker) |
+| **preview** | `Object` | optional |  |
+| **scaffold** | `Object` | optional |  |
+| **readmePath** | `string` | optional | Path (relative to manifest) to long-form README |
+
+
+---
+
