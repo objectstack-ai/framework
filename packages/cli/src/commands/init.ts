@@ -4,7 +4,38 @@ import { Args, Command, Flags } from '@oclif/core';
 import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { printHeader, printSuccess, printError, printStep, printKV, printInfo } from '../utils/format.js';
+
+// ─── Version resolution ──────────────────────────────────────────────
+//
+// The CLI is published to npm together with every other `@objectstack/*`
+// package in this monorepo, so they all share the same release version.
+// We pin scaffolded dependencies to whatever version of the CLI is
+// running, which guarantees the generated `package.json` resolves
+// outside the workspace (and pins a tested, compatible matrix).
+
+let cachedCliVersion: string | null = null;
+
+export function getCliVersion(): string {
+  if (cachedCliVersion) return cachedCliVersion;
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    // dist/commands/init.js → ../../package.json   (built layout)
+    // src/commands/init.ts  → ../../package.json   (source layout, used by tests)
+    const pkgPath = path.resolve(here, '..', '..', 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    cachedCliVersion = String(pkg.version || '0.0.0');
+  } catch {
+    cachedCliVersion = '0.0.0';
+  }
+  return cachedCliVersion;
+}
+
+/** Caret-pinned to the CLI's own version (e.g. `^6.5.0`). */
+function pkgVersion(): string {
+  return `^${getCliVersion()}`;
+}
 
 export const TEMPLATES: Record<string, {
   description: string;
@@ -16,15 +47,20 @@ export const TEMPLATES: Record<string, {
 }> = {
   app: {
     description: 'Full application with objects, views, and actions',
-    dependencies: {
-      '@objectstack/spec': 'workspace:*',
-      '@objectstack/runtime': 'workspace:^',
-      '@objectstack/objectql': 'workspace:^',
-      '@objectstack/driver-memory': 'workspace:^',
+    get dependencies() {
+      const v = pkgVersion();
+      return {
+        '@objectstack/spec': v,
+        '@objectstack/runtime': v,
+        '@objectstack/objectql': v,
+        '@objectstack/driver-memory': v,
+      };
     },
-    devDependencies: {
-      '@objectstack/cli': 'workspace:*',
-      'typescript': '^5.3.0',
+    get devDependencies() {
+      return {
+        '@objectstack/cli': pkgVersion(),
+        'typescript': '^5.3.0',
+      };
     },
     scripts: {
       dev: 'objectstack dev',
@@ -88,12 +124,17 @@ export default ${toCamelCase(name)};
 
   plugin: {
     description: 'Reusable plugin with objects and extensions',
-    dependencies: {
-      '@objectstack/spec': 'workspace:*',
+    get dependencies() {
+      return {
+        '@objectstack/spec': pkgVersion(),
+      };
     },
-    devDependencies: {
-      'typescript': '^5.3.0',
-      'vitest': '^4.0.18',
+    get devDependencies() {
+      return {
+        '@objectstack/cli': pkgVersion(),
+        'typescript': '^5.3.0',
+        'vitest': '^4.0.18',
+      };
     },
     scripts: {
       build: 'objectstack compile',
@@ -142,12 +183,16 @@ export default ${toCamelCase(name)};
 
   empty: {
     description: 'Minimal project with just a config file',
-    dependencies: {
-      '@objectstack/spec': 'workspace:*',
+    get dependencies() {
+      return {
+        '@objectstack/spec': pkgVersion(),
+      };
     },
-    devDependencies: {
-      '@objectstack/cli': 'workspace:*',
-      'typescript': '^5.3.0',
+    get devDependencies() {
+      return {
+        '@objectstack/cli': pkgVersion(),
+        'typescript': '^5.3.0',
+      };
     },
     scripts: {
       build: 'objectstack compile',
@@ -183,18 +228,57 @@ function printWarning(msg: string) {
   console.log(chalk.yellow(`  ⚠ ${msg}`));
 }
 
+/**
+ * Detect the package manager that invoked this CLI by inspecting
+ * `npm_config_user_agent` (set by every modern PM). Falls back to `npm`,
+ * which is universally available and the safest default for `npx`-style
+ * invocations.
+ */
+export function detectPackageManager(env: NodeJS.ProcessEnv = process.env): 'npm' | 'pnpm' | 'yarn' | 'bun' {
+  const ua = env.npm_config_user_agent || '';
+  if (ua.startsWith('pnpm')) return 'pnpm';
+  if (ua.startsWith('yarn')) return 'yarn';
+  if (ua.startsWith('bun')) return 'bun';
+  return 'npm';
+}
+
+/**
+ * Validate that `name` is a usable npm package name AND a safe directory
+ * segment. Mirrors the subset of rules used by `npm init`/`create-vite`.
+ */
+function validateProjectName(name: string): string | null {
+  if (!name) return 'Project name is required';
+  if (name.length > 214) return 'Project name must be ≤ 214 characters';
+  if (/[A-Z]/.test(name)) return 'Project name must be lowercase';
+  if (!/^[a-z0-9][a-z0-9._-]*$/.test(name)) {
+    return 'Project name must start with a lowercase letter or digit and contain only [a-z0-9._-]';
+  }
+  if (name.includes('/') || name.includes('\\') || name === '.' || name === '..') {
+    return 'Project name must not contain path separators';
+  }
+  return null;
+}
+
 export default class Init extends Command {
   static override id = 'init';
 
-  static override description = 'Initialize a new ObjectStack project in the current directory';
+  static override description = 'Initialize a new ObjectStack project';
 
   static override args = {
-    name: Args.string({ description: 'Project name (defaults to directory name)', required: false }),
+    name: Args.string({
+      description: 'Project name. When provided, a new directory with this name is created; otherwise the current directory is used.',
+      required: false,
+    }),
   };
 
   static override flags = {
     template: Flags.string({ char: 't', description: 'Template: app, plugin, empty', default: 'app' }),
     install: Flags.boolean({ description: 'Install dependencies', default: true, allowNo: true }),
+    'package-manager': Flags.string({
+      char: 'p',
+      description: 'Package manager to use for install (auto-detected from npm_config_user_agent)',
+      options: ['npm', 'pnpm', 'yarn', 'bun'],
+    }),
   };
 
   async run(): Promise<void> {
@@ -202,8 +286,7 @@ export default class Init extends Command {
 
     printHeader('Init');
 
-    const cwd = process.cwd();
-    const projectName = args.name || path.basename(cwd);
+    const startCwd = process.cwd();
     const template = TEMPLATES[flags.template];
 
     if (!template) {
@@ -212,23 +295,68 @@ export default class Init extends Command {
       this.error(`Unknown template: ${flags.template}`);
     }
 
+    // Resolve target directory + project name.
+    //
+    // If a name is supplied, scaffold into ./<name>/ (created if missing).
+    // This matches `npm create`, `pnpm create`, `vite`, etc. — the user's
+    // confusion in the bug report came from `init my-app` overwriting the
+    // current directory while the printed summary said "Project: my-app".
+    //
+    // If no name is supplied, scaffold into the current directory and use
+    // its basename as the project name.
+    let targetDir: string;
+    let projectName: string;
+    if (args.name) {
+      const nameError = validateProjectName(args.name);
+      if (nameError) {
+        printError(nameError);
+        this.error(nameError);
+      }
+      projectName = args.name;
+      targetDir = path.resolve(startCwd, args.name);
+      if (fs.existsSync(targetDir)) {
+        const entries = fs.readdirSync(targetDir).filter((e) => e !== '.git');
+        if (entries.length > 0) {
+          const msg = `Target directory ${targetDir} is not empty`;
+          printError(msg);
+          console.log(chalk.dim('  Choose a different name or remove the existing directory first.'));
+          this.error(msg);
+        }
+      } else {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+    } else {
+      targetDir = startCwd;
+      projectName = path.basename(startCwd);
+      const nameError = validateProjectName(projectName);
+      if (nameError) {
+        printError(`Current directory name "${projectName}" is not a valid project name. ${nameError}`);
+        console.log(chalk.dim('  Re-run with an explicit name: `objectstack init my-app`'));
+        this.error(nameError);
+      }
+    }
+
     // Check for existing config
-    if (fs.existsSync(path.join(cwd, 'objectstack.config.ts'))) {
-      printError('objectstack.config.ts already exists in this directory');
+    if (fs.existsSync(path.join(targetDir, 'objectstack.config.ts'))) {
+      printError(`objectstack.config.ts already exists in ${targetDir}`);
       console.log(chalk.dim('  Use `objectstack generate` to add metadata to an existing project'));
-      this.error('objectstack.config.ts already exists in this directory');
+      this.error('objectstack.config.ts already exists');
     }
 
     printKV('Project', projectName);
     printKV('Template', `${flags.template} — ${template.description}`);
-    printKV('Directory', cwd);
+    printKV('Directory', targetDir);
     console.log('');
 
     const createdFiles: string[] = [];
 
+    let installSucceeded = false;
+    let installAttempted = false;
+    let chosenPm: 'npm' | 'pnpm' | 'yarn' | 'bun' = 'npm';
+
     try {
       // 1. Create package.json if missing
-      const pkgPath = path.join(cwd, 'package.json');
+      const pkgPath = path.join(targetDir, 'package.json');
       if (!fs.existsSync(pkgPath)) {
         const pkg = {
           name: projectName,
@@ -247,11 +375,11 @@ export default class Init extends Command {
 
       // 2. Create objectstack.config.ts
       const configContent = template.configContent(projectName);
-      fs.writeFileSync(path.join(cwd, 'objectstack.config.ts'), configContent);
+      fs.writeFileSync(path.join(targetDir, 'objectstack.config.ts'), configContent);
       createdFiles.push('objectstack.config.ts');
 
       // 3. Create tsconfig.json if missing
-      const tsconfigPath = path.join(cwd, 'tsconfig.json');
+      const tsconfigPath = path.join(targetDir, 'tsconfig.json');
       if (!fs.existsSync(tsconfigPath)) {
         const tsconfig = {
           compilerOptions: {
@@ -275,7 +403,7 @@ export default class Init extends Command {
       // 4. Create src files
       for (const [filePath, contentFn] of Object.entries(template.srcFiles)) {
         const resolvedPath = filePath.replace('__name__', projectName);
-        const fullPath = path.join(cwd, resolvedPath);
+        const fullPath = path.join(targetDir, resolvedPath);
         const dir = path.dirname(fullPath);
 
         if (!fs.existsSync(dir)) {
@@ -287,7 +415,7 @@ export default class Init extends Command {
       }
 
       // 5. Create .gitignore if missing
-      const gitignorePath = path.join(cwd, '.gitignore');
+      const gitignorePath = path.join(targetDir, '.gitignore');
       if (!fs.existsSync(gitignorePath)) {
         fs.writeFileSync(gitignorePath, `node_modules/\ndist/\n*.tsbuildinfo\n`);
         createdFiles.push('.gitignore');
@@ -302,22 +430,45 @@ export default class Init extends Command {
 
       // Install dependencies
       if (flags.install) {
-        printStep('Installing dependencies...');
+        chosenPm = (flags['package-manager'] as typeof chosenPm | undefined) ?? detectPackageManager();
+        printStep(`Installing dependencies with ${chosenPm}...`);
+        installAttempted = true;
         const { execSync } = await import('child_process');
         try {
-          execSync('pnpm install', { stdio: 'inherit', cwd });
+          execSync(`${chosenPm} install`, { stdio: 'inherit', cwd: targetDir });
+          installSucceeded = true;
         } catch {
-          printWarning('Dependency installation failed. Run `pnpm install` manually.');
+          printWarning(`Dependency installation with ${chosenPm} failed. Run \`${chosenPm} install\` manually in ${targetDir}.`);
         }
       }
 
-      printSuccess('Project initialized!');
-      console.log('');
-      console.log(chalk.bold('  Next steps:'));
-      console.log(chalk.dim('    objectstack validate   # Check configuration'));
-      console.log(chalk.dim('    objectstack dev        # Start development server'));
-      console.log(chalk.dim('    objectstack generate   # Add objects, views, etc.'));
-      console.log('');
+      if (!installAttempted || installSucceeded) {
+        printSuccess('Project initialized!');
+        console.log('');
+        console.log(chalk.bold('  Next steps:'));
+        if (targetDir !== startCwd) {
+          console.log(chalk.dim(`    cd ${path.relative(startCwd, targetDir) || '.'}`));
+        }
+        const runCmd = chosenPm === 'npm' ? 'npx objectstack' : `${chosenPm} exec objectstack`;
+        if (!installAttempted) {
+          console.log(chalk.dim(`    ${chosenPm} install            # Install dependencies`));
+        }
+        console.log(chalk.dim(`    ${runCmd} validate   # Check configuration`));
+        console.log(chalk.dim(`    ${runCmd} dev        # Start development server`));
+        console.log(chalk.dim(`    ${runCmd} generate   # Add objects, views, etc.`));
+        console.log('');
+      } else {
+        // Install failed — surface clear remediation instead of pretending success.
+        printError('Project scaffolded, but dependency installation failed.');
+        console.log('');
+        console.log(chalk.bold('  To finish setup:'));
+        if (targetDir !== startCwd) {
+          console.log(chalk.dim(`    cd ${path.relative(startCwd, targetDir) || '.'}`));
+        }
+        console.log(chalk.dim(`    ${chosenPm} install`));
+        console.log('');
+        this.error('Dependency installation failed');
+      }
 
     } catch (error: any) {
       printError(error.message || String(error));

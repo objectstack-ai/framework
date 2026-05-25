@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — `objectstack init` produces a working project
+
+`npx @objectstack/cli init my-app` used to scaffold a project that
+could not install or run:
+
+- The generated `package.json` pinned every dependency with the
+  `workspace:*` / `workspace:^` protocol, so pnpm/npm/yarn/bun all
+  rejected the install with
+  `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` outside the monorepo.
+- The `plugin` template omitted `@objectstack/cli` from
+  `devDependencies`, so `npm run dev` failed with
+  `sh: objectstack: command not found` even when install succeeded.
+- `objectstack init my-app` scaffolded into the **current** directory
+  while the summary printed `Project: my-app / Directory: <cwd>` —
+  misleading users into clobbering an unrelated folder.
+- When dependency installation failed, the command still printed
+  `✓ Project initialized!` followed by `Next steps: objectstack dev`,
+  none of which worked without `node_modules`.
+- The install step was hard-coded to `pnpm install` regardless of how
+  the CLI was invoked.
+
+The `init` command now:
+
+- Pins every scaffolded `@objectstack/*` dependency to the CLI's own
+  version (e.g. `^6.5.0`), resolved at runtime from the CLI's
+  `package.json`. The version pin tracks every release automatically
+  and matches the package set that was just `npx`'d.
+- Always includes `@objectstack/cli` in `devDependencies` so generated
+  npm scripts can resolve the `objectstack` binary.
+- Creates `./<name>/` when a project name is supplied (matching
+  `npm create`, `pnpm create`, `vite`, etc.), refusing to overwrite a
+  non-empty target directory. Omitting the name keeps the previous
+  current-directory behaviour.
+- Validates the project name (lowercase, npm-safe) before doing any I/O.
+- Auto-detects the invoking package manager from
+  `npm_config_user_agent` (npm / pnpm / yarn / bun), with a new
+  `--package-manager` flag for explicit overrides.
+- Treats install failure as a hard error — prints a clear `cd` +
+  `<pm> install` remediation path and exits non-zero instead of
+  pretending the project is ready.
+- Tailors `Next steps` to include `cd <dir>` and `<pm> exec
+  objectstack …` so the printed commands actually work from where the
+  user is standing.
+
 ### Changed — `@object-ui/*` upgraded to v6.0
 
 Bundled UI assets (`@object-ui/console`, `@object-ui/studio`,
