@@ -1,5 +1,22 @@
 # @objectstack/runtime
 
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [b4c74a9]
+- Updated dependencies [b4c74a9]
+  - @objectstack/plugin-auth@6.2.0
+  - @objectstack/spec@6.2.0
+  - @objectstack/core@6.2.0
+  - @objectstack/formula@6.2.0
+  - @objectstack/observability@6.2.0
+  - @objectstack/plugin-security@6.2.0
+  - @objectstack/rest@6.2.0
+  - @objectstack/service-cluster@5.1.5
+  - @objectstack/service-i18n@6.2.0
+  - @objectstack/types@6.2.0
+
 ## 6.1.1
 
 ### Patch Changes

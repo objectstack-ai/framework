@@ -1,5 +1,49 @@
 # @objectstack/cli
 
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [b4c74a9]
+- Updated dependencies [13a4f38]
+- Updated dependencies [b4c74a9]
+- Updated dependencies [bce47a0]
+- Updated dependencies [bce47a0]
+- Updated dependencies [449e35d]
+  - @objectstack/plugin-auth@6.2.0
+  - @objectstack/service-ai@6.2.0
+  - @objectstack/spec@6.2.0
+  - @objectstack/runtime@6.2.0
+  - @objectstack/client@6.2.0
+  - @objectstack/core@6.2.0
+  - @objectstack/objectql@6.2.0
+  - @objectstack/observability@6.2.0
+  - @objectstack/driver-memory@6.2.0
+  - @objectstack/driver-mongodb@6.2.0
+  - @objectstack/driver-sql@6.2.0
+  - @objectstack/driver-sqlite-wasm@6.2.0
+  - @objectstack/driver-turso@6.2.0
+  - @objectstack/plugin-approvals@6.2.0
+  - @objectstack/plugin-audit@6.2.0
+  - @objectstack/plugin-email@6.2.0
+  - @objectstack/plugin-hono-server@6.2.0
+  - @objectstack/plugin-mcp-server@6.2.0
+  - @objectstack/plugin-reports@6.2.0
+  - @objectstack/plugin-security@6.2.0
+  - @objectstack/plugin-sharing@6.2.0
+  - @objectstack/plugin-webhooks@6.2.0
+  - @objectstack/rest@6.2.0
+  - @objectstack/service-analytics@6.2.0
+  - @objectstack/service-automation@6.2.0
+  - @objectstack/service-cache@6.2.0
+  - @objectstack/service-feed@6.2.0
+  - @objectstack/service-job@6.2.0
+  - @objectstack/service-package@6.2.0
+  - @objectstack/service-queue@6.2.0
+  - @objectstack/service-realtime@6.2.0
+  - @objectstack/service-settings@6.2.0
+  - @objectstack/service-storage@6.2.0
+
 ## 6.1.1
 
 ### Patch Changes

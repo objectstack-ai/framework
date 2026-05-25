@@ -1,5 +1,159 @@
 # @objectstack/service-ai
 
+## 6.2.0
+
+### Minor Changes
+
+- b4c74a9: **Actions-as-tools Phase 3 — Human-In-The-Loop approval queue.**
+
+  Dangerous declarative actions (`confirmText`, `mode:'delete'`, `variant:'danger'`) can now be exposed to the LLM safely. Instead of being skipped outright, they are registered as tools whose handler enqueues a pending request and returns `{ status: 'pending_approval', pendingActionId }` to the model. A human approves (or rejects) from Studio's pending-actions inbox; the service then re-runs the exact same dispatcher.
+
+  ### New surface
+
+  - New system object `ai_pending_actions` (id, conversation_id?, message_id?, object_name, action_name, tool_name, tool_input, status [`pending`|`approved`|`executed`|`failed`|`rejected`], result?, error?, rejection_reason?, proposed_by, decided_by?, proposed_at, decided_at?).
+  - New built-in Studio view `AiPendingActionView` with `pending` / `executed` / `rejected` / `failed` sub-views and per-row **Approve** / **Reject** API actions.
+  - New methods on `IAIService` (all optional, gated on a wired `IDataEngine`):
+    - `proposePendingAction(input) → { id }`
+    - `approvePendingAction(id, actorId) → { status, result?, error? }`
+    - `rejectPendingAction(id, actorId, reason?)`
+    - `listPendingActions(filter?) → PendingActionRow[]`
+  - New exported types: `PendingActionStatus`, `ProposePendingActionInput`, `PendingActionRow`.
+  - New REST routes (auth required):
+    - `GET    /api/v1/ai/pending-actions` (`ai:read`)
+    - `GET    /api/v1/ai/pending-actions/:id` (`ai:read`)
+    - `POST   /api/v1/ai/pending-actions/:id/approve` (`ai:approve`)
+    - `POST   /api/v1/ai/pending-actions/:id/reject` (`ai:approve`)
+  - New exported predicate `actionRequiresApproval(action)` for Studio's exposure surface.
+
+  ### Wiring
+
+  `AIServicePluginOptions` gains `enableActionApproval?: boolean` (default `false`). When `true` and an `IDataEngine` is available, dangerous actions are registered and routed through the queue.
+
+  ```ts
+  kernel.use(
+    new AIServicePlugin({
+      enableActionApproval: true, // opt in
+      apiActionBaseUrl: "http://localhost:3000",
+    })
+  );
+  ```
+
+  ### Internals
+
+  - `actionSkipReason()` accepts `enableActionApproval` + `aiService` in its ctx and stops returning `"requires confirmation"` / `"mode='delete'"` / `"variant='danger'"` when HITL is wired.
+  - `registerActionsAsTools()` pre-registers a _bypass-approval_ dispatcher per dangerous tool via `aiService.registerPendingActionDispatcher(toolName, fn)`; approval calls back into the same code path with `enableActionApproval` flipped off, so a single handler implementation serves both proposal and execution.
+  - `createActionToolHandler()` short-circuits to `proposePendingAction()` when `enableActionApproval && actionRequiresApproval(action) && ctx.aiService?.proposePendingAction`.
+
+  ### Out of scope (deferred)
+
+  Slack/email notifications, approver routing (any signed-in user can approve in v1), auto-expiry of pending requests, resuming the same LLM turn after approval (operators get a fresh assistant message instead).
+
+- bce47a0: Polish Studio HITL pending-action inbox UI
+
+  The `AiPendingActionView` shipped by `service-ai` is now an actual operator
+  console rather than a flat grid:
+
+  - **Drawer detail panel** — clicking any row opens a side drawer
+    (`navigation: { mode: 'drawer', view: 'detail' }`) with four sections:
+    Proposal · Tool input · Conversation context · Decision.
+  - **JSON widget** on `tool_input`, `result`, and `error` so structured tool
+    arguments and responses are readable without copy-pasting into a formatter.
+  - **Relative timestamps** (`type: 'datetime-relative'`) on `proposed_at` /
+    `decided_at` columns and form fields.
+  - **Conversation/message linkbacks** — the existing `Field.lookup` references
+    to `ai_conversations` / `ai_messages` are surfaced in a collapsed
+    "Conversation context" section, giving operators one-click access from a
+    pending action back to the chat that proposed it.
+  - **Status-conditional fields** via `visibleOn` predicates — `rejection_reason`
+    only appears for rejected rows, `error` only for failed rows, etc.
+  - **Per-row approve/reject buttons** on the Pending tab via `rowActions`
+    pointing at the existing `approve_pending_action` / `reject_pending_action`
+    object actions; the same actions also render in the drawer header.
+  - **Status-coloured rows** to make pending vs failed vs executed scannable.
+
+  Snapshot-style tests in `__tests__/ai-pending-action.view.test.ts` lock the
+  shape so future Studio contract changes (widget renames, navigation modes)
+  fail loudly in one place.
+
+  This is a metadata-only change — Studio (`@object-ui/studio`) interprets the
+  new view automatically. No backend, REST, or HITL semantics changed; the
+  end-to-end demos in `examples/app-todo/test/ai-hitl*.test.ts` continue to
+  pass unmodified.
+
+### Patch Changes
+
+- 13a4f38: **Actions-as-tools Phase 2:** the AI tool runtime can now dispatch `type:'api'` and `type:'flow'` actions in addition to `type:'script'`.
+
+  - New exported `ApiActionClient` interface and `createFetchApiClient({ baseUrl, headers, fetch })` factory — default fetch-based dispatch resolves relative `target` paths against `baseUrl`, throws on non-2xx with `${method} ${url} → ${status}: ${body}`, and JSON-parses the response.
+  - New exported `buildApiRequestBody(action, args, record, recordId)` helper — honours `bodyShape.wrap`, `recordIdParam` + `recordIdField` (defaults to `'id'`), and merges `bodyExtra` last so constants win.
+  - `ActionToolsContext` extended (additive): `automation`, `apiClient`, `apiBaseUrl`, `apiHeaders`.
+  - `actionSkipReason()` gains an optional second `ctx` parameter that returns precise wiring-availability reasons (`'no automation service available'`, `'no apiClient or apiBaseUrl configured'`). Studio-only types (`url` / `modal` / `form`) and all dangerous variants (`confirmText`, `mode:'delete'`, `variant:'danger'`) remain skipped.
+  - `AIServicePlugin` options accept `apiActionBaseUrl` (falls back to `OS_AI_ACTION_API_BASE_URL`) and `apiActionHeaders`; the plugin now resolves the `automation` service silently and threads everything into `registerActionsAsTools`.
+
+  Net result: every non-destructive declarative action with a target — `script`, `api`, `flow` — is now LLM-callable end-to-end as soon as the corresponding wiring is in place.
+
+- bce47a0: **HITL Phase 3 — end-to-end demos + bug fix in handler-engine adapter.**
+
+  Two runnable integration demos for the action-approval queue ship under `examples/app-todo/test/`:
+
+  - `ai-hitl.test.ts` — drives the tool registry directly (no LLM). Asserts `variant:'danger'` actions register as tools, invocation returns `pending_approval`, row persists, `approvePendingAction(id, actor)` re-runs the handler, row flips to `executed`. Reject path covered too. Run with `pnpm --filter @example/app-todo test:hitl`.
+  - `ai-hitl-llm.test.ts` — same scenario behind a real model on Vercel AI Gateway. The LLM autonomously picks `action_delete_completed`, the framework gates the call with `pending_approval`, the model summarises the wait without retrying, and the operator-side approve completes the deletion. Gated on `AI_GATEWAY_API_KEY`. Run with `AI_GATEWAY_API_KEY=... pnpm --filter @example/app-todo test:hitl:llm`.
+
+  While wiring the demos, two bugs surfaced in the bypass-approval dispatcher and the handler-engine adapter:
+
+  1. **Bulk delete from declarative handlers was silently failing.** The adapter built by `buildHandlerEngineAdapter()` wrapped multi-id deletes as `engine.delete(obj, { where: { id: { $in: ids } } })`, but `ObjectQLEngine.delete()` prefers the scalar `id` branch whenever `where.id` is set — so the `{ $in: [...] }` object was forwarded to `driver.delete(scalar)` and rejected as `"Wrong API use: tried to bind a value of an unknown type ([object Object])"`. The adapter now loops scalar deletes, which is correct and driver-agnostic.
+
+  2. **Approval pathway swallowed handler errors.** `createActionToolHandler` returns a `{ ok: false, error }` envelope on failure rather than throwing. The pre-registered bypass dispatcher just JSON-parsed and returned that envelope, so `approvePendingAction` thought the run succeeded and flipped the row to `executed`. The dispatcher now treats `ok === false` as a thrown error, so failed approvals are correctly persisted as `status: 'failed'` with the original message.
+
+  Also: added `delete`/`remove`/`purge`/`destroy`/`erase` to `MemoryLLMAdapter.ACTION_VERBS` so the in-memory adapter can route delete-style intents during tests that don't have a real LLM.
+
+  Docs: `content/docs/guides/ai-capabilities.mdx` now points at the two integration demos with copy-pasteable run commands.
+
+- 449e35d: Real-LLM smoke test for the `data_chat` agent loop, plus two `query_data`
+  robustness fixes shaken out by running it against `openai/gpt-4.1-mini` via
+  the Vercel AI Gateway.
+
+  **`query_data` tool fixes**
+
+  - Removed the LLM-controllable `model` parameter from the public tool
+    schema. Frontier models were hallucinating `text-davinci-003` and other
+    long-dead model ids, breaking every plan generation.
+  - Switched the structured-output filter shape from `z.record(...)` (which
+    emits `propertyNames` in JSON Schema, rejected by OpenAI Structured
+    Outputs) to a `whereJson` string field. The model emits a JSON-encoded
+    ObjectQL filter; the tool parses & validates it before execution. This
+    also fixes a parallel issue with OpenAI's strict mode requiring every
+    property to appear in `required`.
+  - Switched all optional fields to `.nullable()` so the planner Zod schema
+    satisfies OpenAI Structured Outputs' "every property must be required"
+    rule.
+  - Beefed up the planner system prompt with explicit operator hints — most
+    importantly: use `$contains` for partial string matches (`"task named
+Foo"` → `{"subject":{"$contains":"Foo"}}`), not equality. Without this
+    hint the model defaulted to exact-match equality and never found
+    anything.
+
+  **New smoke test**
+
+  `examples/app-todo/test/ai-llm.test.ts` (gated on `AI_GATEWAY_API_KEY`):
+  boots the full ObjectStack, registers `query_data` + the six auto-generated
+  `action_*` tools, sends _"Please mark the 'Build' task as complete."_ to a
+  real LLM, and asserts that
+
+  1. the model picked the right tools in the right order
+     (`query_data` → `action_complete_task`),
+  2. a task row actually flipped to `completed`, and
+  3. an `ai_traces` `chat_with_tools` row landed.
+
+  Run with: `pnpm --filter @example/app-todo test:llm`.
+
+  Verified end-to-end against `openai/gpt-4.1-mini` (~6.6 s, 2 tool calls,
+  1 task completed, trace persisted).
+
+- Updated dependencies [b4c74a9]
+  - @objectstack/spec@6.2.0
+  - @objectstack/core@6.2.0
+
 ## 6.1.1
 
 ### Patch Changes
