@@ -515,7 +515,7 @@
     {
       "name": "pipeline_dashboard",
       "label": "Pipeline Dashboard",
-      "description": "Aggregate view of the sales pipeline.",
+      "description": "Aggregate view of the sales pipeline with period-over-period comparisons.",
       "widgets": [
         {
           "id": "total_pipeline",
@@ -538,20 +538,133 @@
             "y": 0,
             "w": 4,
             "h": 2
+          },
+          "options": {
+            "format": "currency",
+            "currency": "USD"
+          }
+        },
+        {
+          "id": "won_this_quarter",
+          "title": "Won This Quarter",
+          "description": "Revenue closed-won in the current quarter, compared to the previous quarter.",
+          "type": "metric",
+          "object": "crm_opportunity",
+          "filter": {
+            "stage": "closed_won",
+            "close_date": {
+              "$gte": "{current_quarter_start}",
+              "$lte": "{current_quarter_end}"
+            }
+          },
+          "compareTo": "previousPeriod",
+          "valueField": "amount",
+          "aggregate": "sum",
+          "layout": {
+            "x": 4,
+            "y": 0,
+            "w": 4,
+            "h": 2
+          },
+          "options": {
+            "format": "currency",
+            "currency": "USD"
+          }
+        },
+        {
+          "id": "avg_deal_size_yoy",
+          "title": "Avg Deal Size (YoY)",
+          "description": "Average won-deal value this year vs the same window last year.",
+          "type": "metric",
+          "object": "crm_opportunity",
+          "filter": {
+            "stage": "closed_won",
+            "close_date": {
+              "$gte": "{current_year_start}",
+              "$lte": "{current_year_end}"
+            }
+          },
+          "compareTo": "previousYear",
+          "valueField": "amount",
+          "aggregate": "avg",
+          "layout": {
+            "x": 8,
+            "y": 0,
+            "w": 4,
+            "h": 2
+          },
+          "options": {
+            "format": "currency",
+            "currency": "USD"
+          }
+        },
+        {
+          "id": "pipeline_trend_90d",
+          "title": "Pipeline Trend (90d)",
+          "description": "Daily count of opportunities created in the last 90 days, with a sliding overlay of the prior 90-day window.",
+          "type": "line",
+          "object": "crm_opportunity",
+          "filter": {
+            "close_date": {
+              "$gte": "{90_days_ago}",
+              "$lte": "{today}"
+            }
+          },
+          "compareTo": {
+            "offset": "90d"
+          },
+          "categoryField": "close_date",
+          "aggregate": "count",
+          "layout": {
+            "x": 0,
+            "y": 2,
+            "w": 8,
+            "h": 4
           }
         },
         {
           "id": "opportunities_by_stage",
           "title": "Opportunities by Stage",
-          "description": "Count of opportunities grouped by their pipeline stage.",
+          "description": "Count grouped by stage with previous-quarter overlay (compareTo).",
           "type": "bar",
           "object": "crm_opportunity",
+          "filter": {
+            "close_date": {
+              "$gte": "{current_quarter_start}",
+              "$lte": "{current_quarter_end}"
+            }
+          },
+          "compareTo": "previousPeriod",
           "categoryField": "stage",
           "aggregate": "count",
           "layout": {
-            "x": 4,
-            "y": 0,
-            "w": 8,
+            "x": 8,
+            "y": 2,
+            "w": 4,
+            "h": 4
+          }
+        },
+        {
+          "id": "pipeline_by_industry",
+          "title": "Open Pipeline by Stage ($)",
+          "description": "Open-pipeline revenue split by pipeline stage. Pie/donut/funnel ignore `compareTo`.",
+          "type": "pie",
+          "object": "crm_opportunity",
+          "filter": {
+            "stage": {
+              "$nin": [
+                "closed_won",
+                "closed_lost"
+              ]
+            }
+          },
+          "categoryField": "stage",
+          "valueField": "amount",
+          "aggregate": "sum",
+          "layout": {
+            "x": 0,
+            "y": 6,
+            "w": 6,
             "h": 4
           }
         }
@@ -741,6 +854,32 @@
           }
         },
         {
+          "name": "Initech — Expansion",
+          "account": {
+            "externalId": "Initech"
+          },
+          "stage": "prospecting",
+          "amount": 80000,
+          "probability": 20,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysFromNow(45)"
+          }
+        },
+        {
+          "name": "Acme — Add-on Module",
+          "account": {
+            "externalId": "Acme Corp"
+          },
+          "stage": "qualification",
+          "amount": 60000,
+          "probability": 35,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysFromNow(20)"
+          }
+        },
+        {
           "name": "Initech — Pilot",
           "account": {
             "externalId": "Initech"
@@ -751,6 +890,97 @@
           "close_date": {
             "dialect": "cel",
             "source": "daysAgo(7)"
+          }
+        },
+        {
+          "name": "Acme — Support Tier Upgrade",
+          "account": {
+            "externalId": "Acme Corp"
+          },
+          "stage": "closed_won",
+          "amount": 90000,
+          "probability": 100,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(14)"
+          }
+        },
+        {
+          "name": "Globex — Analytics Pack",
+          "account": {
+            "externalId": "Globex Ltd"
+          },
+          "stage": "closed_won",
+          "amount": 110000,
+          "probability": 100,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(21)"
+          }
+        },
+        {
+          "name": "Initech — POC",
+          "account": {
+            "externalId": "Initech"
+          },
+          "stage": "closed_won",
+          "amount": 25000,
+          "probability": 100,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(95)"
+          }
+        },
+        {
+          "name": "Globex — Initial Seats",
+          "account": {
+            "externalId": "Globex Ltd"
+          },
+          "stage": "closed_won",
+          "amount": 145000,
+          "probability": 100,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(110)"
+          }
+        },
+        {
+          "name": "Acme — Year-Ago Renewal",
+          "account": {
+            "externalId": "Acme Corp"
+          },
+          "stage": "closed_won",
+          "amount": 75000,
+          "probability": 100,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(380)"
+          }
+        },
+        {
+          "name": "Globex — Year-Ago Implementation",
+          "account": {
+            "externalId": "Globex Ltd"
+          },
+          "stage": "closed_won",
+          "amount": 210000,
+          "probability": 100,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(400)"
+          }
+        },
+        {
+          "name": "Initech — Cancelled Eval",
+          "account": {
+            "externalId": "Initech"
+          },
+          "stage": "closed_lost",
+          "amount": 15000,
+          "probability": 0,
+          "close_date": {
+            "dialect": "cel",
+            "source": "daysAgo(30)"
           }
         }
       ]

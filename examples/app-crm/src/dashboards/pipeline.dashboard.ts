@@ -97,10 +97,17 @@ export const PipelineDashboard: Dashboard = {
       id: 'opportunities_by_stage',
       type: 'bar',
       title: 'Opportunities by Stage',
-      description: 'Count of opportunities grouped by their pipeline stage.',
+      description: 'Count grouped by stage with previous-quarter overlay (compareTo).',
       object: 'crm_opportunity',
       aggregate: 'count',
       categoryField: 'stage',
+      filter: {
+        close_date: {
+          $gte: '{current_quarter_start}',
+          $lte: '{current_quarter_end}',
+        },
+      },
+      compareTo: 'previousPeriod',
       layout: { x: 8, y: 2, w: 4, h: 4 },
     },
 
