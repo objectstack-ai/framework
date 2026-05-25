@@ -21,7 +21,7 @@
     "@objectstack/core": "workspace:*",
     "@objectstack/platform-objects": "workspace:*",
     "@objectstack/spec": "workspace:*",
-    "croner": "^9.1.0"
+    "croner": "^10.0.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
