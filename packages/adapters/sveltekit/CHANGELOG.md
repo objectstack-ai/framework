@@ -1,5 +1,7 @@
 # @objectstack/sveltekit
 
+## 6.6.0
+
 ## 6.5.1
 
 ## 6.5.0
