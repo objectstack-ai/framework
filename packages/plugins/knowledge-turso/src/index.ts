@@ -10,20 +10,18 @@
  */
 
 import type { Plugin, PluginContext } from '@objectstack/core';
-import type { IKnowledgeService } from '@objectstack/spec/contracts';
+import type { IKnowledgeService, IEmbedder } from '@objectstack/spec/contracts';
 import { KNOWLEDGE_SERVICE } from '@objectstack/spec/contracts';
 import { createClient, type Client } from '@libsql/client';
 
 import { TursoKnowledgeAdapter, type TursoAdapterOptions } from './turso-adapter';
-import type { EmbeddingProvider } from './embedding';
 
 export { TursoKnowledgeAdapter } from './turso-adapter';
 export type { TursoAdapterOptions } from './turso-adapter';
 export {
+  HashEmbedder,
   HashEmbeddingProvider,
-  OpenAIEmbeddingProvider,
   type EmbeddingProvider,
-  type OpenAIEmbeddingOptions,
 } from './embedding';
 
 export interface KnowledgeTursoPluginOptions {
@@ -38,8 +36,16 @@ export interface KnowledgeTursoPluginOptions {
   url?: string;
   authToken?: string;
   client?: Client;
-  /** Embedding provider — required. */
-  embedding: EmbeddingProvider;
+  /**
+   * Embedder used for both upsert and search.
+   *
+   * For real models, install a dedicated plugin and pass its instance:
+   *   - `@objectstack/embedder-openai` (OpenAI / 阿里通义 / 智谱 /
+   *     硅基流动 / 火山 Doubao / Ollama / 任何 OpenAI-shape 兼容端点)
+   *
+   * For tests / smoke runs, use the bundled `HashEmbedder`.
+   */
+  embedding: IEmbedder;
   /** Forwarded to the adapter. */
   chunkTarget?: TursoAdapterOptions['chunkTarget'];
   /** Forwarded to the adapter. */

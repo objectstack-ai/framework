@@ -1,112 +1,47 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 /**
- * Pluggable embedding provider for the Turso knowledge adapter.
+ * Embedding helpers for the Turso knowledge adapter.
  *
- * Adapters call `embed()` once with the full batch of chunk texts at
- * upsert time, and once per query at search time. Implementations are
- * responsible for batching / rate-limiting against their upstream API.
+ * The interface itself now lives in `@objectstack/spec/contracts` as
+ * `IEmbedder` — see that file for the protocol-level contract.
+ *
+ * This module ships ONLY the deterministic `HashEmbedder` used for
+ * tests and offline dev. For real models, install a dedicated
+ * embedder plugin:
+ *
+ *   - `@objectstack/embedder-openai`      (OpenAI / 阿里通义 / 智谱 /
+ *                                          硅基流动 / 火山 Doubao /
+ *                                          MiniMax / Ollama / 任何
+ *                                          OpenAI-shape 兼容端点)
+ *
+ * Migrating from `@objectstack/knowledge-turso` ≤ 6.6:
+ *   - `EmbeddingProvider`         → `IEmbedder` (`@objectstack/spec/contracts`)
+ *   - `OpenAIEmbeddingProvider`   → `OpenAIEmbedder` (`@objectstack/embedder-openai`)
+ *   - `HashEmbeddingProvider`     → `HashEmbedder` (this file, unchanged behaviour)
  */
-export interface EmbeddingProvider {
-  /** Stable id (mostly for logs). */
-  readonly id: string;
-  /** Output vector dimensionality — used to size the `F32_BLOB(N)` column. */
-  readonly dimensions: number;
-  /** Embed a batch of strings. Output order matches input order. */
-  embed(texts: string[]): Promise<number[][]>;
-}
 
-export interface OpenAIEmbeddingOptions {
-  apiKey: string;
-  /** @default 'text-embedding-3-small' */
-  model?: string;
-  /** Override dimensions (only some models support this). */
-  dimensions?: number;
-  /** Override base URL (Azure / proxy / Ollama-compatible servers). */
-  baseUrl?: string;
-  /** Inject for tests. Defaults to global fetch. */
-  fetch?: typeof fetch;
-}
+import type { IEmbedder } from '@objectstack/spec/contracts';
 
 /**
- * Known dimensions for OpenAI's first-party embedding models. Used as
- * the default when the caller doesn't pass `dimensions` explicitly.
+ * @deprecated Use `IEmbedder` from `@objectstack/spec/contracts`.
+ * Re-exported here as an alias to ease migration; will be removed in
+ * a future major.
  */
-const OPENAI_DEFAULT_DIMS: Record<string, number> = {
-  'text-embedding-3-small': 1536,
-  'text-embedding-3-large': 3072,
-  'text-embedding-ada-002': 1536,
-};
+export type EmbeddingProvider = IEmbedder;
 
 /**
- * OpenAI-compatible embedding provider. Works against the real OpenAI
- * API, Azure OpenAI deployments, and any drop-in compatible server
- * (LiteLLM, vLLM, Ollama with the openai shim).
- */
-export class OpenAIEmbeddingProvider implements EmbeddingProvider {
-  readonly id = 'openai';
-  readonly dimensions: number;
-  private readonly model: string;
-  private readonly baseUrl: string;
-  private readonly apiKey: string;
-  private readonly fetchImpl: typeof fetch;
-  private readonly requestedDims?: number;
-
-  constructor(opts: OpenAIEmbeddingOptions) {
-    if (!opts.apiKey) throw new Error('OpenAIEmbeddingProvider: apiKey required');
-    this.apiKey = opts.apiKey;
-    this.model = opts.model ?? 'text-embedding-3-small';
-    this.baseUrl = (opts.baseUrl ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
-    this.fetchImpl = opts.fetch ?? (globalThis.fetch as typeof fetch);
-    this.requestedDims = opts.dimensions;
-    this.dimensions =
-      opts.dimensions ?? OPENAI_DEFAULT_DIMS[this.model] ?? 1536;
-    if (!this.fetchImpl) {
-      throw new Error('OpenAIEmbeddingProvider: no fetch available; pass options.fetch');
-    }
-  }
-
-  async embed(texts: string[]): Promise<number[][]> {
-    if (texts.length === 0) return [];
-    const body: Record<string, unknown> = { model: this.model, input: texts };
-    if (this.requestedDims) body.dimensions = this.requestedDims;
-    const res = await this.fetchImpl(`${this.baseUrl}/embeddings`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(
-        `OpenAI embeddings → ${res.status} ${res.statusText}${text ? `: ${text.slice(0, 200)}` : ''}`,
-      );
-    }
-    const json = (await res.json()) as { data?: Array<{ embedding: number[] }> };
-    const data = json.data ?? [];
-    if (data.length !== texts.length) {
-      throw new Error(
-        `OpenAI embeddings: expected ${texts.length} vectors, got ${data.length}`,
-      );
-    }
-    return data.map((d) => d.embedding);
-  }
-}
-
-/**
- * Deterministic, dependency-free embedding provider for unit tests
- * and offline development. Hashes tokens into a fixed-width vector —
- * not semantically meaningful, but cosine-distance preserves token
+ * Deterministic, dependency-free embedder for unit tests and offline
+ * development. Hashes tokens into a fixed-width vector — not
+ * semantically meaningful, but cosine-distance preserves token
  * overlap, which is enough to validate adapter plumbing.
  */
-export class HashEmbeddingProvider implements EmbeddingProvider {
+export class HashEmbedder implements IEmbedder {
   readonly id = 'hash';
   readonly dimensions: number;
 
   constructor(dimensions = 64) {
-    if (dimensions < 4) throw new Error('HashEmbeddingProvider: dimensions must be >= 4');
+    if (dimensions < 4) throw new Error('HashEmbedder: dimensions must be >= 4');
     this.dimensions = dimensions;
   }
 
@@ -135,6 +70,9 @@ export class HashEmbeddingProvider implements EmbeddingProvider {
     return vec.map((v) => v / norm);
   }
 }
+
+/** @deprecated Renamed to {@link HashEmbedder}. */
+export const HashEmbeddingProvider = HashEmbedder;
 
 function fnv1a(s: string): number {
   let h = 0x811c9dc5;

@@ -1093,4 +1093,107 @@ describe('AIServicePlugin', () => {
       process.env = oldEnv;
     }
   });
+
+  // ── settings binding ─────────────────────────────────────────────
+  describe('settings binding', () => {
+    function createCtxWithSettings(settings: any) {
+      const ctx = createMockContext();
+      // expose settings via the same getService mock
+      (ctx as any).getServices().set('settings', settings);
+      return ctx;
+    }
+
+    it('AIService.setAdapter swaps the active adapter', () => {
+      const a: LLMAdapter = { name: 'a', chat: async () => ({ content: 'a' }), complete: async () => ({ content: '' }) };
+      const b: LLMAdapter = { name: 'b', chat: async () => ({ content: 'b' }), complete: async () => ({ content: '' }) };
+      const svc = new AIService({ adapter: a, logger: silentLogger });
+      expect(svc.adapterName).toBe('a');
+      svc.setAdapter(b);
+      expect(svc.adapterName).toBe('b');
+    });
+
+    it('does not bind to settings when bindToSettings=false', async () => {
+      const settings = {
+        getNamespace: vi.fn(),
+        subscribe: vi.fn(),
+        registerAction: vi.fn(),
+      };
+      const plugin = new AIServicePlugin({ bindToSettings: false });
+      const ctx = createCtxWithSettings(settings);
+      await plugin.init(ctx);
+      await plugin.start!(ctx);
+      // No kernel:ready hook registered for settings binding
+      const kernelReadyHooks = (ctx.hook as any).mock.calls.filter(([n]: any[]) => n === 'kernel:ready');
+      expect(kernelReadyHooks.length).toBe(0);
+    });
+
+    it('binds to settings, applies values, subscribes, and registers live test action', async () => {
+      const customAdapter: LLMAdapter = {
+        name: 'preset', chat: async () => ({ content: 'preset' }), complete: async () => ({ content: '' }),
+      };
+      const settings = {
+        getNamespace: vi.fn(async () => ({
+          manifest: { namespace: 'ai' },
+          values: { provider: { value: 'memory' } },
+        })),
+        subscribe: vi.fn(),
+        registerAction: vi.fn(),
+      };
+      const plugin = new AIServicePlugin({ adapter: customAdapter });
+      const ctx = createCtxWithSettings(settings);
+      await plugin.init(ctx);
+      await plugin.start!(ctx);
+
+      // Find and invoke the kernel:ready hook that does settings binding
+      const kernelReady = (ctx.hook as any).mock.calls.find(([n]: any[]) => n === 'kernel:ready');
+      expect(kernelReady).toBeDefined();
+      await kernelReady[1]();
+
+      expect(settings.getNamespace).toHaveBeenCalledWith('ai');
+      expect(settings.subscribe).toHaveBeenCalledWith('ai', expect.any(Function));
+      expect(settings.registerAction).toHaveBeenCalledWith('ai', 'test', expect.any(Function));
+
+      // memory provider is no-op overlay → original adapter retained
+      const svc = ctx.getService<AIService>('ai');
+      expect(svc.adapterName).toBe('preset');
+    });
+
+    it('live test action returns warning for memory provider', async () => {
+      const settings: any = {
+        getNamespace: vi.fn(async () => ({ manifest: { namespace: 'ai' }, values: {} })),
+        subscribe: vi.fn(),
+        registerAction: vi.fn(),
+      };
+      const plugin = new AIServicePlugin();
+      const ctx = createCtxWithSettings(settings);
+      await plugin.init(ctx);
+      await plugin.start!(ctx);
+      const kernelReady = (ctx.hook as any).mock.calls.find(([n]: any[]) => n === 'kernel:ready');
+      await kernelReady[1]();
+
+      const handler = settings.registerAction.mock.calls.find((c: any[]) => c[0] === 'ai' && c[1] === 'test')[2];
+      const result = await handler({ values: {}, payload: { values: { provider: 'memory' } } });
+      expect(result.ok).toBe(true);
+      expect(result.severity).toBe('warning');
+      expect(result.message).toContain('echo stub');
+    });
+
+    it('live test action reports missing api key for openai', async () => {
+      const settings: any = {
+        getNamespace: vi.fn(async () => ({ manifest: { namespace: 'ai' }, values: {} })),
+        subscribe: vi.fn(),
+        registerAction: vi.fn(),
+      };
+      const plugin = new AIServicePlugin();
+      const ctx = createCtxWithSettings(settings);
+      await plugin.init(ctx);
+      await plugin.start!(ctx);
+      const kernelReady = (ctx.hook as any).mock.calls.find(([n]: any[]) => n === 'kernel:ready');
+      await kernelReady[1]();
+      const handler = settings.registerAction.mock.calls.find((c: any[]) => c[0] === 'ai' && c[1] === 'test')[2];
+      const result = await handler({ values: {}, payload: { values: { provider: 'openai' } } });
+      expect(result.ok).toBe(false);
+      expect(result.severity).toBe('error');
+    });
+  });
 });

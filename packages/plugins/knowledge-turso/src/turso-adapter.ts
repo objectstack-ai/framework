@@ -5,13 +5,13 @@ import type {
   IKnowledgeAdapter,
   AdapterContext,
   AdapterSearchOptions,
+  IEmbedder,
 } from '@objectstack/spec/contracts';
 import type {
   KnowledgeDocument,
   KnowledgeHit,
   KnowledgeSource,
 } from '@objectstack/spec/ai';
-import type { EmbeddingProvider } from './embedding';
 
 export interface TursoAdapterOptions {
   /** Stable adapter id used in `KnowledgeSource.adapter`. @default 'turso' */
@@ -19,7 +19,7 @@ export interface TursoAdapterOptions {
   /** libsql client (Turso cloud, embedded replica, file, or `:memory:`). */
   client: Client;
   /** Embedding provider used for both upsert and search. */
-  embedder: EmbeddingProvider;
+  embedder: IEmbedder;
   /** Soft cap on chunk size, in characters. @default 800 */
   chunkTarget?: number;
   /**
@@ -67,7 +67,7 @@ const DEFAULT_OVER_FETCH = 4;
 export class TursoKnowledgeAdapter implements IKnowledgeAdapter {
   readonly id: string;
   private readonly client: Client;
-  private readonly embedder: EmbeddingProvider;
+  private readonly embedder: IEmbedder;
   private readonly chunkTarget: number;
   private readonly overFetch: number;
   private readonly ready = new Map<string, Promise<{ table: string; dimensions: number }>>();
