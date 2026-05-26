@@ -32,7 +32,7 @@ export const appForm = defineForm({
       label: 'Content',
       description: 'Objects and APIs this app uses.',
       fields: [
-        { field: 'objects', widget: 'json', helpText: 'String[] or object[] — object names this app exposes' },
+        { field: 'objects', widget: 'object-selector', type: 'array', multiple: true, helpText: 'Object names this app exposes' },
         { field: 'apis', widget: 'json', helpText: 'API endpoint definitions' },
         { field: 'defaultAgent', type: 'text', helpText: 'AI agent for the ambient assistant button' },
       ],
