@@ -1,5 +1,25 @@
 # @objectstack/runtime
 
+## 6.7.1
+
+### Patch Changes
+
+- @objectstack/spec@6.7.1
+- @objectstack/core@6.7.1
+- @objectstack/types@6.7.1
+- @objectstack/metadata@6.7.1
+- @objectstack/objectql@6.7.1
+- @objectstack/observability@6.7.1
+- @objectstack/formula@6.7.1
+- @objectstack/rest@6.7.1
+- @objectstack/driver-memory@6.7.1
+- @objectstack/driver-sql@6.7.1
+- @objectstack/driver-sqlite-wasm@6.7.1
+- @objectstack/plugin-auth@6.7.1
+- @objectstack/plugin-security@6.7.1
+- @objectstack/service-cluster@6.7.1
+- @objectstack/service-i18n@6.7.1
+
 ## 6.7.0
 
 ### Patch Changes

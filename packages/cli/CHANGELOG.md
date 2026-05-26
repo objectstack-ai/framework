@@ -1,5 +1,56 @@
 # @objectstack/cli
 
+## 6.7.1
+
+### Patch Changes
+
+- 3b2a1da: Add `@objectstack/account` as a direct dependency of `@objectstack/cli`.
+
+  **Bug**: `npx @objectstack/cli start` started the server successfully but visiting `http://localhost:3000/` produced a raw `{"error":"Not found"}` JSON response. Root cause: the Console SPA redirects unauthenticated users to `/_account/login` (hardcoded in the published Console bundle), but the `@objectstack/account` package was never declared as a CLI dependency. The start log even printed `⚠ @objectstack/account not found — skipping Account UI`, yet the Console kept pointing browsers at the missing mount.
+
+  **Fix**: declare `@objectstack/account` in `packages/cli/package.json` so `npm install @objectstack/cli` pulls the account portal automatically. Verified end-to-end in a clean `/tmp/test-670-patched` install:
+
+  - `npm ls @objectstack/account` → installed
+  - `/_account/login` → 200 (was 404)
+  - Navigating to `/` correctly routes through Console → Account `/setup` (the first-run owner-account wizard) instead of dead-ending in the API catch-all.
+
+  No change to `@libsql/client` posture — it remains absent from default installs.
+
+- Updated dependencies [87c4d19]
+  - @objectstack/account@6.7.1
+  - @objectstack/spec@6.7.1
+  - @objectstack/core@6.7.1
+  - @objectstack/client@6.7.1
+  - @objectstack/objectql@6.7.1
+  - @objectstack/observability@6.7.1
+  - @objectstack/runtime@6.7.1
+  - @objectstack/rest@6.7.1
+  - @objectstack/driver-memory@6.7.1
+  - @objectstack/driver-sql@6.7.1
+  - @objectstack/driver-mongodb@6.7.1
+  - @objectstack/driver-sqlite-wasm@6.7.1
+  - @objectstack/plugin-approvals@6.7.1
+  - @objectstack/plugin-audit@6.7.1
+  - @objectstack/plugin-auth@6.7.1
+  - @objectstack/plugin-email@6.7.1
+  - @objectstack/plugin-hono-server@6.7.1
+  - @objectstack/plugin-mcp-server@6.7.1
+  - @objectstack/plugin-reports@6.7.1
+  - @objectstack/plugin-security@6.7.1
+  - @objectstack/plugin-sharing@6.7.1
+  - @objectstack/plugin-webhooks@6.7.1
+  - @objectstack/service-ai@6.7.1
+  - @objectstack/service-analytics@6.7.1
+  - @objectstack/service-automation@6.7.1
+  - @objectstack/service-cache@6.7.1
+  - @objectstack/service-feed@6.7.1
+  - @objectstack/service-job@6.7.1
+  - @objectstack/service-package@6.7.1
+  - @objectstack/service-queue@6.7.1
+  - @objectstack/service-realtime@6.7.1
+  - @objectstack/service-settings@6.7.1
+  - @objectstack/service-storage@6.7.1
+
 ## 6.7.0
 
 ### Patch Changes
