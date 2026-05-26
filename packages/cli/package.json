@@ -48,7 +48,6 @@
     "@objectstack/driver-mongodb": "workspace:^",
     "@objectstack/driver-sql": "workspace:^",
     "@objectstack/driver-sqlite-wasm": "workspace:^",
-    "@objectstack/driver-turso": "workspace:^",
     "@objectstack/objectql": "workspace:^",
     "@objectstack/observability": "workspace:^",
     "@objectstack/plugin-approvals": "workspace:*",
@@ -88,6 +87,9 @@
   },
   "peerDependencies": {
     "@objectstack/core": "workspace:^"
+  },
+  "optionalDependencies": {
+    "@objectstack/driver-turso": "workspace:^"
   },
   "devDependencies": {
     "@oclif/plugin-help": "^6.2.49",

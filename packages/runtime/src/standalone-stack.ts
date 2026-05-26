@@ -127,7 +127,16 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
         const { InMemoryDriver } = await import('@objectstack/driver-memory');
         driverPlugin = new DriverPlugin(new InMemoryDriver());
     } else if (dbDriver === 'turso') {
-        const { TursoDriver } = await import('@objectstack/driver-turso');
+        let TursoDriver: any;
+        try {
+            ({ TursoDriver } = await import('@objectstack/driver-turso'));
+        } catch (err: any) {
+            throw new Error(
+                `[StandaloneStack] libsql/turso URL detected ("${dbUrl}") but @objectstack/driver-turso is not installed. ` +
+                `Install it with: npm install @objectstack/driver-turso  (or use a file: URL to default to better-sqlite3). ` +
+                `(${err?.message ?? err})`
+            );
+        }
         driverPlugin = new DriverPlugin(
             new TursoDriver({ url: dbUrl, authToken: dbAuthToken }) as any,
         );

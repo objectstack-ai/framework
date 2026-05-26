@@ -575,7 +575,16 @@ export default class Serve extends Command {
              resolvedDriverLabel = 'SqlDriver(mysql2)';
              resolvedDatabaseUrl = databaseUrl;
            } else if (driverType === 'turso' || driverType === 'libsql') {
-             const { TursoDriver } = await import('@objectstack/driver-turso');
+             let TursoDriver: any;
+             try {
+               ({ TursoDriver } = await import('@objectstack/driver-turso'));
+             } catch (err: any) {
+               throw new Error(
+                 `libsql/turso driver selected but @objectstack/driver-turso is not installed. ` +
+                 `Install it with: npm install @objectstack/driver-turso  (or use a file: URL to default to better-sqlite3). ` +
+                 `(${err?.message ?? err})`
+               );
+             }
              await kernel.use(new DriverPlugin(new TursoDriver({
                url: databaseUrl ?? 'file:./local.db',
                authToken: process.env.OS_DATABASE_AUTH_TOKEN,

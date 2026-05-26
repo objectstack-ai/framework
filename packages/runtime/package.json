@@ -23,7 +23,6 @@
     "@objectstack/driver-memory": "workspace:*",
     "@objectstack/driver-sql": "workspace:*",
     "@objectstack/driver-sqlite-wasm": "workspace:*",
-    "@objectstack/driver-turso": "workspace:*",
     "@objectstack/formula": "workspace:*",
     "@objectstack/metadata": "workspace:*",
     "@objectstack/objectql": "workspace:*",
@@ -39,7 +38,8 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "@objectstack/driver-mongodb": "workspace:*"
+    "@objectstack/driver-mongodb": "workspace:*",
+    "@objectstack/driver-turso": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

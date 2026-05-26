@@ -242,7 +242,15 @@ async function createDriver(driverType: string, databaseUrl: string, authToken: 
         }
         case 'libsql':
         case 'turso': {
-            const { TursoDriver } = await import('@objectstack/driver-turso');
+            let TursoDriver: any;
+            try {
+                ({ TursoDriver } = await import('@objectstack/driver-turso'));
+            } catch (err: any) {
+                throw new Error(
+                    `[ArtifactEnvironmentRegistry] libsql/turso driver requested but @objectstack/driver-turso is not installed. ` +
+                    `Install it with: npm install @objectstack/driver-turso. (${err?.message ?? err})`
+                );
+            }
             return new TursoDriver({ url: databaseUrl, authToken }) as unknown as IDataDriver;
         }
         case 'postgres':
