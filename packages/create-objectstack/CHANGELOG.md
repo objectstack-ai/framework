@@ -1,5 +1,7 @@
 # create-objectstack
 
+## 6.7.1
+
 ## 6.7.0
 
 ## 6.6.0
