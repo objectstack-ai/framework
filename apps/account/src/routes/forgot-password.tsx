@@ -48,15 +48,7 @@ function ForgotPasswordPage() {
   };
 
   return (
-    <AuthShell
-      headline={t('auth.forgotPassword.brandHeadline', {
-        defaultValue: 'Forgot your password?',
-      })}
-      subline={t('auth.forgotPassword.brandSubline', {
-        defaultValue:
-          'No problem — we will send you a secure link to reset it.',
-      })}
-    >
+    <AuthShell>
       <Card className="border-border/60 shadow-sm shadow-primary/5 backdrop-blur supports-[backdrop-filter]:bg-card/95">
         {sent ? (
           <>

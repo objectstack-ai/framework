@@ -241,7 +241,7 @@
     },
     "login": {
       "title": "Welcome back",
-      "description": "Access your ObjectStack account.",
+      "description": "Sign in to your account.",
       "forgotPassword": "Forgot your password?",
       "submit": "Login",
       "submitting": "Signing in…",
@@ -250,13 +250,13 @@
       "welcomeToast": "Welcome back",
       "failed": "Sign in failed",
       "signingIn": "Signing you in…",
-      "ssoHandoff": "Sign in to ObjectStack to continue to {{target}}",
+      "ssoHandoff": "Continue to {{target}}",
       "brandHeadline": "The AI-native backend for business software.",
       "brandSubline": "One identity, every workspace. Sign in to manage your account, organizations and connected apps."
     },
     "register": {
       "title": "Create an account",
-      "description": "Join ObjectStack.",
+      "description": "Create your account.",
       "submit": "Create account",
       "submitting": "Creating…",
       "haveAccount": "Already have an account?",
@@ -303,7 +303,7 @@
       "backToSignIn": "Back to sign in"
     },
     "setup": {
-      "welcomeTitle": "Set up ObjectStack",
+      "welcomeTitle": "Set up your workspace",
       "successDescription": "Your owner account has been created.",
       "failed": "Setup failed",
       "description": "Create the first owner account.",

@@ -145,15 +145,7 @@ function RegisterPage() {
   };
 
   return (
-    <AuthShell
-      headline={t('auth.register.brandHeadline', {
-        defaultValue: 'Create your ObjectStack account.',
-      })}
-      subline={t('auth.register.brandSubline', {
-        defaultValue:
-          'One identity for every workspace, app and integration in your stack.',
-      })}
-    >
+    <AuthShell>
       {sessionLoading || !!user ? (
         <div className="flex flex-col items-center gap-3 py-10 text-sm text-muted-foreground">
           <div className="size-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
@@ -210,7 +202,7 @@ function RegisterPage() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:opacity-95 hover:shadow-md hover:shadow-primary/30"
+                    className="w-full"
                     disabled={submitting}
                   >
                     {submitting ? t('auth.register.submitting') : t('auth.register.submit')}

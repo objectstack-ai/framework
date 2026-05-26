@@ -4,7 +4,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useClient } from '@objectstack/client-react';
 import { useObjectTranslation } from '@object-ui/i18n';
-import { GalleryVerticalEnd } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -137,12 +136,6 @@ function SetupPage() {
   return (
     <div className="flex min-h-svh w-full items-center justify-center bg-muted p-6">
       <div className="flex w-full max-w-md flex-col gap-6">
-        <a href="#" className="flex items-center gap-2 self-center font-medium">
-          <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <GalleryVerticalEnd className="size-4" />
-          </div>
-          ObjectStack
-        </a>
         <Card>
           <CardHeader className="text-center">
             <CardTitle>{t('auth.setup.welcomeTitle')}</CardTitle>

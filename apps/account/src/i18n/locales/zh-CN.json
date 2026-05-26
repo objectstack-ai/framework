@@ -241,7 +241,7 @@
     },
     "login": {
       "title": "欢迎回来",
-      "description": "登录你的 ObjectStack 账户。",
+      "description": "登录你的账户。",
       "forgotPassword": "忘记密码？",
       "submit": "登录",
       "submitting": "登录中…",
@@ -250,13 +250,13 @@
       "welcomeToast": "欢迎回来",
       "failed": "登录失败",
       "signingIn": "正在登录…",
-      "ssoHandoff": "请登录 ObjectStack 账户以继续访问 {{target}}",
+      "ssoHandoff": "继续访问 {{target}}",
       "brandHeadline": "面向 AI 原生业务软件的元数据后端。",
       "brandSubline": "一个身份，连接所有工作区。登录即可管理账户、组织与已授权应用。"
     },
     "register": {
       "title": "创建账户",
-      "description": "加入 ObjectStack。",
+      "description": "创建你的账户。",
       "submit": "创建账户",
       "submitting": "创建中…",
       "haveAccount": "已经有账户？",
@@ -303,7 +303,7 @@
       "backToSignIn": "返回登录"
     },
     "setup": {
-      "welcomeTitle": "初始化 ObjectStack",
+      "welcomeTitle": "初始化系统",
       "successDescription": "你的所有者账户已创建。",
       "failed": "初始化失败",
       "description": "创建首个所有者账户。",

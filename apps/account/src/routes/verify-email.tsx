@@ -45,15 +45,7 @@ function VerifyEmailPage() {
   }, [token, t, client]);
 
   return (
-    <AuthShell
-      headline={t('auth.verifyEmail.brandHeadline', {
-        defaultValue: 'One more step to get started.',
-      })}
-      subline={t('auth.verifyEmail.brandSubline', {
-        defaultValue:
-          'Verifying your email keeps your ObjectStack account secure.',
-      })}
-    >
+    <AuthShell>
       <Card className="border-border/60 shadow-sm shadow-primary/5 backdrop-blur supports-[backdrop-filter]:bg-card/95">
         {status === 'loading' && (
           <>

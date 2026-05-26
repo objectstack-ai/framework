@@ -206,7 +206,7 @@ function LoginPage() {
             <span>
               {t('auth.login.ssoHandoff', {
                 target: ssoTarget,
-                defaultValue: `Sign in to ObjectStack to continue to ${ssoTarget}`,
+                defaultValue: `Continue to ${ssoTarget}`,
               })}
             </span>
           </div>
@@ -253,7 +253,7 @@ function LoginPage() {
                     </div>
                     <Button
                       type="submit"
-                      className="w-full bg-brand-gradient text-primary-foreground shadow-sm shadow-primary/20 transition-all hover:opacity-95 hover:shadow-md hover:shadow-primary/30"
+                      className="w-full"
                       disabled={submitting}
                     >
                       {submitting ? t('auth.login.submitting') : t('auth.login.submit')}
