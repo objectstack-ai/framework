@@ -2,6 +2,7 @@
 
 import { Command, Flags } from '@oclif/core';
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -117,6 +118,19 @@ export default class Start extends Command {
       ?? process.env.OS_ENVIRONMENT_ID
       ?? 'env_local';
 
+    // ── Auth secret ─────────────────────────────────────────────────
+    // Priority: --auth-secret > $AUTH_SECRET > $OS_AUTH_SECRET > persisted
+    // <home>/auth-secret (auto-generated on first run).
+    //
+    // Without this, `serve` runs in production mode and silently skips
+    // AuthPlugin when no secret is set — which makes /api/v1/auth/*
+    // return 404 and breaks Studio's login flow. Quick-start should
+    // "just work" without the user having to export AUTH_SECRET.
+    const authSecret = flags['auth-secret']
+      ?? process.env.AUTH_SECRET
+      ?? process.env.OS_AUTH_SECRET
+      ?? readOrCreateAuthSecret(homeDir);
+
     // ── Banner ──────────────────────────────────────────────────────
     printKV('Home', homeDir, '🏠');
     if (artifactSource) {
@@ -141,7 +155,7 @@ export default class Start extends Command {
       ...(flags.port ? { PORT: String(flags.port) } : {}),
       ...(flags['database-driver'] ? { OS_DATABASE_DRIVER: flags['database-driver'] } : {}),
       ...(flags['database-auth-token'] ? { OS_DATABASE_AUTH_TOKEN: flags['database-auth-token'] } : {}),
-      ...(flags['auth-secret'] ? { AUTH_SECRET: flags['auth-secret'] } : {}),
+      AUTH_SECRET: authSecret,
       ...(artifactSource ? { OS_ARTIFACT_PATH: artifactSource.path } : { OS_BOOT_EMPTY: '1' }),
     };
     // NODE_ENV is only forced to production when the user has not set it.
@@ -222,4 +236,27 @@ function redactDbUrl(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * Read the persisted AUTH_SECRET from `<home>/auth-secret`, or generate
+ * one on first run and persist it so subsequent restarts keep existing
+ * sessions valid. Mode 0o600 to keep the secret reasonably private.
+ */
+function readOrCreateAuthSecret(homeDir: string): string {
+  const secretPath = path.join(homeDir, 'auth-secret');
+  try {
+    const existing = fs.readFileSync(secretPath, 'utf8').trim();
+    if (existing.length >= 32) return existing;
+  } catch {
+    // file missing or unreadable — fall through to generation
+  }
+  const secret = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.mkdirSync(homeDir, { recursive: true });
+    fs.writeFileSync(secretPath, secret + '\n', { mode: 0o600 });
+  } catch {
+    // best-effort persist; secret is still returned for this process
+  }
+  return secret;
 }
