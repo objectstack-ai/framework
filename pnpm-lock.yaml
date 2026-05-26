@@ -1450,7 +1450,7 @@ importers:
         specifier: workspace:*
         version: link:../plugins/driver-sqlite-wasm
       '@objectstack/driver-turso':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../plugins/driver-turso
       '@objectstack/formula':
         specifier: workspace:*
