@@ -600,20 +600,19 @@
         },
         {
           "id": "pipeline_trend_90d",
-          "title": "Pipeline Trend (90d)",
-          "description": "Daily count of opportunities created in the last 90 days, with a sliding overlay of the prior 90-day window.",
+          "title": "Pipeline Trend (12 months)",
+          "description": "Opportunity count bucketed by close-month for the last year, with a sliding overlay of the prior year for compareTo.",
           "type": "line",
           "object": "crm_opportunity",
           "filter": {
             "close_date": {
-              "$gte": "{90_days_ago}",
+              "$gte": "{1_years_ago}",
               "$lte": "{today}"
             }
           },
-          "compareTo": {
-            "offset": "90d"
-          },
+          "compareTo": "previousYear",
           "categoryField": "close_date",
+          "categoryGranularity": "month",
           "aggregate": "count",
           "layout": {
             "x": 0,

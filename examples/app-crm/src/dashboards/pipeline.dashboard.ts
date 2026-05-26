@@ -82,16 +82,16 @@ export const PipelineDashboard: Dashboard = {
     {
       id: 'pipeline_trend_90d',
       type: 'line',
-      title: 'Pipeline Trend (90d)',
-      description: 'Daily count of opportunities created in the last 90 days, with a sliding overlay of the prior 90-day window.',
+      title: 'Pipeline Trend (12 months)',
+      description: 'Opportunity count bucketed by close-month for the last year, with a sliding overlay of the prior year for compareTo.',
       object: 'crm_opportunity',
       aggregate: 'count',
       categoryField: 'close_date',
-      categoryGranularity: 'day',
+      categoryGranularity: 'month',
       filter: {
-        close_date: { $gte: '{90_days_ago}', $lte: '{today}' },
+        close_date: { $gte: '{1_years_ago}', $lte: '{today}' },
       },
-      compareTo: { offset: '90d' },
+      compareTo: 'previousYear',
       layout: { x: 0, y: 2, w: 8, h: 4 },
     },
     {
