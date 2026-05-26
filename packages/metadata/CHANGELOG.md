@@ -1,5 +1,17 @@
 # @objectstack/metadata
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [430067b]
+  - @objectstack/spec@7.0.0
+  - @objectstack/core@7.0.0
+  - @objectstack/platform-objects@7.0.0
+  - @objectstack/types@7.0.0
+  - @objectstack/metadata-core@7.0.0
+  - @objectstack/metadata-fs@7.0.0
+
 ## 6.6.0
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @objectstack/sveltekit
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [c5efe15]
+- Updated dependencies [4944f3a]
+- Updated dependencies [e0c593f]
+  - @objectstack/runtime@7.0.0
+
 ## 6.6.0
 
 ## 6.5.1

@@ -1,5 +1,15 @@
 # @objectstack/driver-turso
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [4944f3a]
+- Updated dependencies [430067b]
+  - @objectstack/driver-sql@7.0.0
+  - @objectstack/spec@7.0.0
+  - @objectstack/core@7.0.0
+
 ## 6.6.0
 
 ### Patch Changes

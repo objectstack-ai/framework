@@ -1,5 +1,14 @@
 # @objectstack/service-automation
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [430067b]
+  - @objectstack/spec@7.0.0
+  - @objectstack/core@7.0.0
+  - @objectstack/formula@7.0.0
+
 ## 6.6.0
 
 ### Patch Changes

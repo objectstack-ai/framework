@@ -1,5 +1,92 @@
 # @objectstack/cli
 
+## 7.0.0
+
+### Patch Changes
+
+- c5efe15: Remove residual coupling to the (already-extracted) `@objectstack/service-cloud` package.
+
+  The cloud distribution was migrated to a separate repo a while back, but the open-core CLI still carried:
+
+  - A dynamic `import('@objectstack/service-cloud')` in the boot-mode dispatch for `cloud` / `runtime` modes.
+  - A dev-mode auto-mount that tried to load `createSingleEnvironmentPlugin` from the cloud package (now fully covered by the built-in `RuntimeConfigPlugin`).
+  - An ambient `.d.ts` stub for `@objectstack/service-cloud`.
+  - A leftover empty `packages/services/service-cloud/` directory (only stale `dist/` + `node_modules/`).
+  - Several doc-comment references.
+
+  All gone. The open-core CLI now supports `bootMode: 'standalone'` only — non-standalone modes throw a clear error pointing users to the cloud distribution. No runtime behavior change for standalone users.
+
+- 4944f3a: Fix `npx @objectstack/cli start` crashing with `Cannot find package
+'@objectstack/metadata'` (and friends).
+
+  `@objectstack/runtime` dynamically `import()`s `@objectstack/metadata`,
+  `@objectstack/objectql`, and the storage drivers (`driver-memory`,
+  `driver-sql`, `driver-sqlite-wasm`, `driver-turso`) from
+  `createStandaloneStack` / `createDefaultHostConfig`, but they were only
+  listed in `devDependencies` — so when the package was installed from npm
+  (rather than the workspace) these imports failed at boot.
+
+  They are now declared as real `dependencies`. `@objectstack/driver-mongodb`
+  remains an `optionalDependency` because the standalone stack only loads
+  it when the user passes a `mongodb://` URL (the failure path already has
+  a friendly error message).
+
+  Also adds a small quick-start CLI command (`objectstack start`) that
+  auto-creates `~/.objectstack/{data,dist,auth-secret}`, boots an empty
+  kernel with Studio + marketplace mounted, and lets users install apps at
+  runtime — no `objectstack.config.ts` required.
+
+- e0c593f: Make `@objectstack/driver-turso` an **optional peer dependency** so default `npx @objectstack/cli start` no longer installs `@libsql/client` (~5MB + native binaries) nor `libsql` native modules.
+
+  Rationale: `objectstack start` defaults to `file:` URLs which route to `better-sqlite3` via `driver-sql` (10–15× faster than libsql for OLTP, see benchmarks). For RAG / vector workloads, `sqlite-vec` (~600KB) is the recommended local backend. Turso / libsql is only useful when the user explicitly opts in via `libsql://` / `https://` / `--database-driver turso`.
+
+  Changes:
+
+  - `packages/cli/package.json`: moved `@objectstack/driver-turso` from `dependencies` to optional `peerDependencies` (`peerDependenciesMeta.optional = true`). npm 7+ does **not** auto-install optional peers; `optionalDependencies` would have still installed it.
+  - `packages/runtime/package.json`: same.
+  - All three dynamic-import sites for `driver-turso` (`runtime/src/standalone-stack.ts`, `runtime/src/cloud/artifact-environment-registry.ts`, `cli/src/commands/serve.ts`) now wrap the `import()` in try/catch with an actionable error message pointing users to `npm install @objectstack/driver-turso`.
+
+  Verified in `/tmp/os-sim`: fresh `npm install @objectstack/cli` no longer contains `node_modules/@libsql`, `node_modules/libsql`, or `node_modules/@objectstack/driver-turso`. `objectstack start` boots cleanly with better-sqlite3; `--database libsql://…` produces the friendly error.
+
+- Updated dependencies [4944f3a]
+- Updated dependencies [430067b]
+- Updated dependencies [c5efe15]
+- Updated dependencies [4944f3a]
+- Updated dependencies [e0c593f]
+  - @objectstack/driver-sql@7.0.0
+  - @objectstack/spec@7.0.0
+  - @objectstack/runtime@7.0.0
+  - @objectstack/driver-sqlite-wasm@7.0.0
+  - @objectstack/driver-turso@7.0.0
+  - @objectstack/client@7.0.0
+  - @objectstack/core@7.0.0
+  - @objectstack/objectql@7.0.0
+  - @objectstack/observability@7.0.0
+  - @objectstack/driver-memory@7.0.0
+  - @objectstack/driver-mongodb@7.0.0
+  - @objectstack/plugin-approvals@7.0.0
+  - @objectstack/plugin-audit@7.0.0
+  - @objectstack/plugin-auth@7.0.0
+  - @objectstack/plugin-email@7.0.0
+  - @objectstack/plugin-hono-server@7.0.0
+  - @objectstack/plugin-mcp-server@7.0.0
+  - @objectstack/plugin-reports@7.0.0
+  - @objectstack/plugin-security@7.0.0
+  - @objectstack/plugin-sharing@7.0.0
+  - @objectstack/plugin-webhooks@7.0.0
+  - @objectstack/rest@7.0.0
+  - @objectstack/service-ai@7.0.0
+  - @objectstack/service-analytics@7.0.0
+  - @objectstack/service-automation@7.0.0
+  - @objectstack/service-cache@7.0.0
+  - @objectstack/service-feed@7.0.0
+  - @objectstack/service-job@7.0.0
+  - @objectstack/service-package@7.0.0
+  - @objectstack/service-queue@7.0.0
+  - @objectstack/service-realtime@7.0.0
+  - @objectstack/service-settings@7.0.0
+  - @objectstack/service-storage@7.0.0
+
 ## 6.6.0
 
 ### Patch Changes
