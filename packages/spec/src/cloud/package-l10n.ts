@@ -64,7 +64,15 @@ export function resolvePackageL10nField(
   const translations = row.translations ?? undefined;
 
   if (translations) {
-    const candidates = uniqueLocales([opts.locale, languageOf(opts.locale), fallback]);
+    const lang = languageOf(opts.locale);
+    // Regional expansion: if the requested locale is bare ('zh'),
+    // also accept any region-tagged variant present in translations
+    // ('zh-CN', 'zh-Hans', …). Keeps server + client resolvers aligned
+    // with the @object-ui/app-shell client resolver.
+    const variants = Object.keys(translations).filter(
+      (code) => code === lang || code.startsWith(`${lang}-`),
+    );
+    const candidates = uniqueLocales([opts.locale, lang, ...variants, fallback]);
     for (const code of candidates) {
       const entry = translations[code];
       if (!entry) continue;
