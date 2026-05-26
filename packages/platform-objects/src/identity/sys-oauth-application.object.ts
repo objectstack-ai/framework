@@ -30,20 +30,60 @@ export const SysOauthApplication = ObjectSchema.create({
   compactLayout: ['name', 'client_id', 'type', 'disabled'],
 
   // Custom actions — all OAuth-application mutations are routed through
-  // better-auth's `@better-auth/oauth-provider` endpoints rather than the
-  // generic data layer, so server-side validation, secret hashing, and
-  // audit hooks all run. The generic `delete` API method is intentionally
-  // dropped from `apiMethods` below (see `enable.apiMethods`) so the only
-  // delete path is the better-auth wrapper below.
+  // better-auth's `@better-auth/oauth-provider` endpoints (and a thin
+  // ObjectStack-added auth route for the enable/disable toggle) rather
+  // than the generic data layer, so server-side validation, secret
+  // hashing, and audit hooks all run. The generic `delete` API method
+  // is intentionally dropped from `apiMethods` below so the only delete
+  // path is the better-auth wrapper.
   //
-  // Upstream gap (better-auth 1.6.11): the `/admin/oauth2/update-client`
-  // endpoint does NOT accept the `disabled` flag in its `update` body
-  // schema, and no dedicated enable/disable endpoint exists. Until that
-  // ships upstream, sysadmins cannot toggle `sys_oauth_application.disabled`
-  // through the UI — `delete` is the only kill-switch. See
-  // https://github.com/better-auth/better-auth — track the
-  // `@better-auth/oauth-provider` plugin's adminUpdateOAuthClient schema.
+  // Upstream gap (better-auth 1.6.11): the stock `/admin/oauth2/update-client`
+  // endpoint's Zod body schema does NOT accept the `disabled` flag, even
+  // though the column exists and the runtime honours it. We bridge the
+  // gap with `POST /api/v1/auth/admin/oauth2/toggle-disabled`, registered
+  // by plugin-auth, which writes through better-auth's own adapter under
+  // the auth namespace (no generic data-layer bypass). When upstream
+  // ships `disabled` support, retarget the enable/disable actions and
+  // delete the bridge route.
   actions: [
+    {
+      name: 'disable_oauth_application',
+      label: 'Disable OAuth Application',
+      icon: 'pause-circle',
+      variant: 'secondary',
+      mode: 'custom',
+      locations: ['list_item', 'record_header'],
+      type: 'api',
+      method: 'POST',
+      target: '/api/v1/auth/admin/oauth2/toggle-disabled',
+      confirmText: 'Disable this OAuth application? Active access/refresh tokens issued to it will continue to be rejected at the token, authorize, and introspect endpoints. Existing integrations will stop working immediately.',
+      successMessage: 'OAuth application disabled',
+      refreshAfter: true,
+      visible: '!record.disabled',
+      bodyExtra: { disabled: true },
+      params: [
+        { name: 'client_id', field: 'client_id', defaultFromRow: true, required: true },
+      ],
+    },
+    {
+      name: 'enable_oauth_application',
+      label: 'Enable OAuth Application',
+      icon: 'play-circle',
+      variant: 'primary',
+      mode: 'custom',
+      locations: ['list_item', 'record_header'],
+      type: 'api',
+      method: 'POST',
+      target: '/api/v1/auth/admin/oauth2/toggle-disabled',
+      confirmText: 'Re-enable this OAuth application? Token issuance, authorization, and introspection will resume immediately.',
+      successMessage: 'OAuth application enabled',
+      refreshAfter: true,
+      visible: 'record.disabled',
+      bodyExtra: { disabled: false },
+      params: [
+        { name: 'client_id', field: 'client_id', defaultFromRow: true, required: true },
+      ],
+    },
     {
       name: 'rotate_client_secret',
       label: 'Rotate Client Secret',

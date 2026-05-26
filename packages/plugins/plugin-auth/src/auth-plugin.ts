@@ -433,6 +433,93 @@ export class AuthPlugin implements Plugin {
       }
     });
 
+    // ────────────────────────────────────────────────────────────────────
+    // OAuth admin: toggle the `disabled` flag on a registered OAuth client.
+    //
+    // Why this lives here (and not as a plain data-layer UPDATE on
+    // sys_oauth_application): better-auth 1.6.11's stock admin update
+    // endpoint (`/admin/oauth2/update-client`) does NOT accept `disabled`
+    // in its Zod body schema, so the field gets silently stripped before
+    // it reaches `updateClientEndpoint`. The column exists, the runtime
+    // honours it everywhere (introspect, token, authorize, public-client
+    // lookup), but no client-facing API can flip it.
+    //
+    // We close the gap by writing through better-auth's own adapter under
+    // the `/api/v1/auth/*` namespace so all OAuth-application mutations
+    // remain auth-routed (no generic data-layer bypass for the `oauth_client`
+    // model). When upstream adds `disabled` to `adminUpdateOAuthClient`'s
+    // schema, this route can be deleted and the sys_oauth_application
+    // action retargeted to the stock endpoint.
+    //
+    // Upstream tracking: https://github.com/better-auth/better-auth
+    rawApp.post(`${basePath}/admin/oauth2/toggle-disabled`, async (c: any) => {
+      try {
+        let body: any = {};
+        try { body = await c.req.json(); } catch { body = {}; }
+        const clientId: unknown = body?.client_id;
+        const disabled: unknown = body?.disabled;
+        if (typeof clientId !== 'string' || clientId.length === 0) {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'client_id is required' } }, 400);
+        }
+        if (typeof disabled !== 'boolean') {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'disabled must be a boolean' } }, 400);
+        }
+
+        const authApi = await this.authManager!.getApi();
+        const session = await authApi.getSession({ headers: c.req.raw.headers });
+        if (!session?.user?.id) {
+          return c.json({ success: false, error: { code: 'unauthorized', message: 'Sign in first' } }, 401);
+        }
+        // The customSession plugin synthesizes `user.role = 'admin'` for
+        // platform admins (admin_full_access permission set) and active-org
+        // owners/admins; anyone else is denied.
+        if ((session.user as any).role !== 'admin') {
+          return c.json({ success: false, error: { code: 'forbidden', message: 'Admin role required' } }, 403);
+        }
+
+        // Write through the same ObjectQL data engine that better-auth's
+        // adapter uses. We target the snake_case table name (`sys_oauth_application`,
+        // mapped from better-auth's internal `oauthClient` model via
+        // `auth-schema-config.ts`) because `$context.adapter`'s model-lookup
+        // helper does not see plugin-provided model names from outside
+        // better-auth's own endpoint invocation context. This is the same
+        // physical row the better-auth runtime reads at introspect / token
+        // / authorize time, so the toggle is fully honoured.
+        const dataEngine: any = this.authManager!.getDataEngine();
+        if (!dataEngine) {
+          return c.json({ success: false, error: { code: 'unavailable', message: 'Data engine unavailable' } }, 503);
+        }
+
+        const existing = await dataEngine.findOne('sys_oauth_application', {
+          where: { client_id: clientId },
+        });
+        if (!existing) {
+          return c.json({ success: false, error: { code: 'not_found', message: 'OAuth client not found' } }, 404);
+        }
+
+        const updated = await dataEngine.update('sys_oauth_application', {
+          id: existing.id,
+          disabled,
+          updated_at: new Date(Math.floor(Date.now() / 1000) * 1000),
+        });
+        if (!updated) {
+          return c.json({ success: false, error: { code: 'internal', message: 'Unable to update OAuth client' } }, 500);
+        }
+
+        return c.json({
+          success: true,
+          data: {
+            client_id: clientId,
+            disabled,
+          },
+        });
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] toggle-disabled failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
     // Register wildcard route to forward all auth requests to better-auth.
     // better-auth is configured with basePath matching our route prefix, so we
     // forward the original request directly — no path rewriting needed.

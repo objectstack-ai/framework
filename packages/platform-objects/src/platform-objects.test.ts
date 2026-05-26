@@ -159,17 +159,43 @@ describe('@objectstack/platform-objects', () => {
 
     it('SysOauthApplication routes all mutations through better-auth, not the data layer', () => {
       const actions = SysOauthApplication.actions ?? [];
+      const names = actions.map((a) => a.name).sort();
+      expect(names).toEqual([
+        'delete_oauth_application',
+        'disable_oauth_application',
+        'enable_oauth_application',
+        'rotate_client_secret',
+      ]);
+
       const rotate = actions.find((a) => a.name === 'rotate_client_secret');
       const del = actions.find((a) => a.name === 'delete_oauth_application');
+      const disable = actions.find((a) => a.name === 'disable_oauth_application');
+      const enable = actions.find((a) => a.name === 'enable_oauth_application');
+
       expect(rotate?.target).toBe('/api/v1/auth/oauth2/client/rotate-secret');
       expect(rotate?.method).toBe('POST');
       expect((rotate?.params ?? []).map((p) => p.field)).toEqual(['client_id']);
+
       expect(del?.target).toBe('/api/v1/auth/oauth2/delete-client');
       expect(del?.method).toBe('POST');
       expect(del?.mode).toBe('delete');
-      // Generic CRUD must NOT expose delete — that path is reserved for
-      // the better-auth-backed action above so OAuth-specific cleanup
-      // (token revocation, consent invalidation) always runs.
+
+      // Enable/disable both hit the ObjectStack-added bridge route on
+      // /api/v1/auth (since better-auth 1.6.11's stock admin endpoint
+      // does not accept `disabled` in its update schema). They differ
+      // only in the static `disabled` body field and the visibility
+      // predicate, so exactly one is active at any time.
+      expect(disable?.target).toBe('/api/v1/auth/admin/oauth2/toggle-disabled');
+      expect(disable?.bodyExtra).toEqual({ disabled: true });
+      expect((disable?.visible as any)?.source).toBe('!record.disabled');
+      expect(enable?.target).toBe('/api/v1/auth/admin/oauth2/toggle-disabled');
+      expect(enable?.bodyExtra).toEqual({ disabled: false });
+      expect((enable?.visible as any)?.source).toBe('record.disabled');
+
+      // Generic CRUD must NOT expose mutating methods — all writes are
+      // reserved for better-auth wrappers above so OAuth-specific
+      // invariants (token revocation on delete, consent invalidation,
+      // disabled checks at runtime) always run.
       expect(SysOauthApplication.enable?.apiMethods).not.toContain('delete');
       expect(SysOauthApplication.enable?.apiMethods).not.toContain('update');
       expect(SysOauthApplication.enable?.apiMethods).not.toContain('create');
