@@ -19,7 +19,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { resolve as resolvePath, basename } from 'node:path';
+import { resolve as resolvePath, basename, dirname, isAbsolute } from 'node:path';
 import { Args, Command, Flags } from '@oclif/core';
 import { printHeader, printKV, printSuccess, printError, printStep } from '../../utils/format.js';
 import { DEFAULT_CLOUD_URL, tryReadCloudConfig } from '../../utils/cloud-config.js';
@@ -67,6 +67,53 @@ function deriveVersion(artifact: any, fallback: string | undefined): string {
   // without bumping manifest.version every time during early iteration.
   const t = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
   return `0.0.0-dev.${t}`;
+}
+
+/**
+ * Load `objectstack.manifest.json` from `cwd` if it exists. Returns the
+ * parsed JSON plus the directory it was loaded from (used to resolve
+ * relative `readmePath` / per-locale README paths). Returns `null` when
+ * no manifest is present — publishing remains pure-flag-driven for
+ * users without one.
+ */
+async function tryLoadTemplateManifest(
+  cwd: string,
+): Promise<{ data: Record<string, any>; baseDir: string } | null> {
+  const path = resolvePath(cwd, 'objectstack.manifest.json');
+  let raw: string;
+  try {
+    raw = await readFile(path, 'utf-8');
+  } catch {
+    return null;
+  }
+  try {
+    const data = JSON.parse(raw);
+    if (data && typeof data === 'object') {
+      return { data, baseDir: dirname(path) };
+    }
+  } catch {
+    // Malformed — surface as null; flags-only mode still works.
+  }
+  return null;
+}
+
+/**
+ * Read a string that is EITHER inlined markdown OR a path relative to
+ * the template manifest directory. Treats short, single-line `.md` /
+ * `.markdown` strings as paths and reads them; everything else is
+ * returned as-is. Path resolution honours absolute paths.
+ */
+async function resolveLocalizedMarkdown(
+  value: string,
+  baseDir: string,
+): Promise<string> {
+  const looksLikePath =
+    value.length < 256 &&
+    !value.includes('\n') &&
+    /\.(md|markdown)$/i.test(value.trim());
+  if (!looksLikePath) return value;
+  const path = isAbsolute(value) ? value : resolvePath(baseDir, value);
+  return await readFile(path, 'utf-8');
 }
 
 export default class PackagePublish extends Command {
@@ -221,7 +268,21 @@ export default class PackagePublish extends Command {
       }
       printSuccess(`Loaded artifact (${(artifactRaw.length / 1024).toFixed(1)} KB)`);
 
-      const manifestId = (flags['manifest-id'] ?? deriveManifestId(artifact, artifactPath)).trim();
+      // Load `objectstack.manifest.json` (optional). Provides declarative
+      // defaults for manifestId / displayName / category / tagline / readme
+      // / per-locale translations etc. CLI flags always win over manifest.
+      const tplManifest = await tryLoadTemplateManifest(process.cwd());
+      if (tplManifest) {
+        printStep(`Loaded objectstack.manifest.json`);
+      }
+      const m = tplManifest?.data ?? {};
+      const baseDir = tplManifest?.baseDir ?? process.cwd();
+
+      const manifestId = (
+        flags['manifest-id']
+        ?? (typeof m.manifestId === 'string' ? m.manifestId : undefined)
+        ?? deriveManifestId(artifact, artifactPath)
+      ).trim();
       if (!MANIFEST_ID_RE.test(manifestId)) {
         printError(
           `Invalid manifest-id '${manifestId}'. Expected reverse-domain form like 'com.acme.crm' (a-z0-9._-).`,
@@ -229,7 +290,11 @@ export default class PackagePublish extends Command {
         this.exit(1);
         return;
       }
-      const displayName = (flags['display-name'] ?? deriveDisplayName(artifact, manifestId)).trim();
+      const displayName = (
+        flags['display-name']
+        ?? (typeof m.displayName === 'string' ? m.displayName : undefined)
+        ?? deriveDisplayName(artifact, manifestId)
+      ).trim();
       const version = deriveVersion(artifact, flags.version);
 
       // Resolve auth + server URL. Credential precedence:
@@ -263,25 +328,34 @@ export default class PackagePublish extends Command {
       }
 
       // ---- Step 1: ensure sys_package row ---------------------------------
+      // Manifest defaults already loaded above; CLI flags win.
       printStep(`Registering package '${manifestId}'...`);
       const pkgBody: Record<string, any> = {
         manifest_id: manifestId,
         display_name: displayName,
         visibility: flags.visibility,
       };
-      if (flags.description) pkgBody.description = flags.description;
-      if (flags.category) pkgBody.category = flags.category;
+      const desc = flags.description ?? (typeof m.description === 'string' ? m.description : undefined);
+      if (desc) pkgBody.description = desc;
+      const cat = flags.category ?? (typeof m.category === 'string' ? m.category : undefined);
+      if (cat) pkgBody.category = cat;
+      if (typeof m.tagline === 'string' && m.tagline.trim()) pkgBody.tagline = m.tagline.trim();
       if (flags.org) pkgBody.owner_org_id = flags.org;
       if (flags['icon-url'] && flags['icon-file']) {
         printError('Pass either --icon-url or --icon-file, not both.');
         this.exit(1);
         return;
       }
-      if (flags['icon-url']) pkgBody.icon_url = flags['icon-url'];
-      if (flags['homepage-url']) pkgBody.homepage_url = flags['homepage-url'];
-      if (flags.license) pkgBody.license = flags.license;
-      // Resolve readme: --readme wins, then --readme-file. Don't auto-discover
-      // a README.md in cwd — that often leaks dev notes into the catalog.
+      const iconUrl = flags['icon-url'] ?? (typeof m.iconUrl === 'string' ? m.iconUrl : undefined);
+      if (iconUrl) pkgBody.icon_url = iconUrl;
+      const homepage = flags['homepage-url'] ?? (typeof m.homepageUrl === 'string' ? m.homepageUrl : undefined);
+      if (homepage) pkgBody.homepage_url = homepage;
+      const license = flags.license ?? (typeof m.license === 'string' ? m.license : undefined);
+      if (license) pkgBody.license = license;
+
+      // Resolve readme: --readme wins, then --readme-file, then manifest.readmePath.
+      // Don't auto-discover a README.md in cwd — that often leaks dev
+      // notes into the catalog.
       if (flags.readme && flags['readme-file']) {
         printError('Pass either --readme or --readme-file, not both.');
         this.exit(1);
@@ -298,6 +372,45 @@ export default class PackagePublish extends Command {
           this.exit(1);
           return;
         }
+      } else if (typeof m.readmePath === 'string' && m.readmePath.trim()) {
+        const readmePath = isAbsolute(m.readmePath) ? m.readmePath : resolvePath(baseDir, m.readmePath);
+        try {
+          pkgBody.readme = await readFile(readmePath, 'utf-8');
+        } catch (err: any) {
+          printError(`Cannot read manifest.readmePath '${readmePath}': ${err.message}`);
+          this.exit(1);
+          return;
+        }
+      }
+
+      // Marketplace per-locale translations. Schema is
+      // `PackageTranslationsSchema` from @objectstack/spec/cloud. Per-entry
+      // `readme` may be inlined markdown OR a path (e.g. `README.zh-CN.md`)
+      // — we resolve paths against the manifest directory.
+      if (m.translations && typeof m.translations === 'object') {
+        const out: Record<string, Record<string, any>> = {};
+        for (const [locale, entryRaw] of Object.entries(m.translations as Record<string, unknown>)) {
+          if (!entryRaw || typeof entryRaw !== 'object') continue;
+          const entry = entryRaw as Record<string, any>;
+          const resolved: Record<string, any> = {};
+          for (const key of ['displayName', 'description', 'tagline'] as const) {
+            if (typeof entry[key] === 'string' && entry[key].trim()) resolved[key] = entry[key];
+          }
+          if (typeof entry.readme === 'string' && entry.readme.trim()) {
+            try {
+              resolved.readme = await resolveLocalizedMarkdown(entry.readme, baseDir);
+            } catch (err: any) {
+              printError(`Cannot read translations['${locale}'].readme: ${err.message}`);
+              this.exit(1);
+              return;
+            }
+          }
+          if (entry.screenshotCaptions && typeof entry.screenshotCaptions === 'object') {
+            resolved.screenshotCaptions = entry.screenshotCaptions;
+          }
+          if (Object.keys(resolved).length > 0) out[locale] = resolved;
+        }
+        if (Object.keys(out).length > 0) pkgBody.translations = out;
       }
 
       const pkgRes = await this.postJson(`${baseUrl}/api/v1/cloud/packages`, pkgBody, token, flags.timeout);
