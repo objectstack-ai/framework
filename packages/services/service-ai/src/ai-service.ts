@@ -147,6 +147,33 @@ export class AIService implements IAIService {
   }
 
   /**
+   * Best-effort auto-creation of a conversation when the caller did not
+   * supply one but did supply an actor we can attribute the chat to.
+   * Returns the new id on success, or `undefined` if creation failed (in
+   * which case we silently fall back to non-persisted chat).
+   */
+  private async autoCreateConversation(
+    ctx: { actor?: { id?: string }; environmentId?: string } | undefined,
+  ): Promise<string | undefined> {
+    const actorId = ctx?.actor?.id;
+    if (!actorId) return undefined;
+    try {
+      const conv = await this.conversationService.create({
+        userId: actorId,
+        metadata: ctx?.environmentId ? { environmentId: ctx.environmentId } : undefined,
+      });
+      this.logger.debug('[AI] auto-created conversation', { conversationId: conv.id, actorId });
+      return conv.id;
+    } catch (err) {
+      this.logger.warn('[AI] auto-create conversation failed', {
+        actorId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return undefined;
+    }
+  }
+
+  /**
    * Best-effort persistence of a single chat message to the conversation
    * store. Failures are logged at warn level and swallowed — chat requests
    * must never fail because the history write failed. Mirrors the
@@ -319,7 +346,12 @@ export class AIService implements IAIService {
     } = options ?? {};
     const maxIterations = maxIter ?? AIService.DEFAULT_MAX_ITERATIONS;
     const registeredTools = this.toolRegistry.getAll();
-    const conversationId = toolExecutionContext?.conversationId;
+    let conversationId = toolExecutionContext?.conversationId;
+    let autoCreatedConversationId: string | undefined;
+    if (!conversationId) {
+      autoCreatedConversationId = await this.autoCreateConversation(toolExecutionContext);
+      conversationId = autoCreatedConversationId;
+    }
 
     // Merge registered tools with any explicitly provided tools
     const mergedTools = [
@@ -370,7 +402,9 @@ export class AIService implements IAIService {
             content: result.content,
           } as ModelMessage);
         }
-        return result;
+        return autoCreatedConversationId
+          ? { ...result, conversationId: autoCreatedConversationId }
+          : result;
       }
 
       this.logger.debug('[AI] chatWithTools tool calls', {
@@ -456,7 +490,9 @@ export class AIService implements IAIService {
         content: finalResult.content,
       } as ModelMessage);
     }
-    return finalResult;
+    return autoCreatedConversationId
+      ? { ...finalResult, conversationId: autoCreatedConversationId }
+      : finalResult;
   }
 
   /**
@@ -478,7 +514,12 @@ export class AIService implements IAIService {
     } = options ?? {};
     const maxIterations = maxIter ?? AIService.DEFAULT_MAX_ITERATIONS;
     const registeredTools = this.toolRegistry.getAll();
-    const conversationId = toolExecutionContext?.conversationId;
+    let conversationId = toolExecutionContext?.conversationId;
+    let autoCreatedConversationId: string | undefined;
+    if (!conversationId) {
+      autoCreatedConversationId = await this.autoCreateConversation(toolExecutionContext);
+      conversationId = autoCreatedConversationId;
+    }
 
     const mergedTools = [
       ...registeredTools,
@@ -493,6 +534,18 @@ export class AIService implements IAIService {
 
     const conversation = [...messages];
     let abortedByCallback = false;
+
+    // Surface an auto-created conversation id to streaming clients via a
+    // synthetic tool-call frame. Clients that care can listen for the
+    // `__conversation_meta__` tool name and persist the id locally.
+    if (autoCreatedConversationId) {
+      yield {
+        type: 'tool-call',
+        toolCallId: '__conversation_meta__',
+        toolName: '__conversation_meta__',
+        input: { conversationId: autoCreatedConversationId },
+      } as TextStreamPart<ToolSet>;
+    }
 
     if (conversationId && messages.length > 0) {
       const last = messages[messages.length - 1];

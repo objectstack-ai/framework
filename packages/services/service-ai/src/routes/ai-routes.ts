@@ -373,7 +373,19 @@ export function buildAIRoutes(
           return { status: 400, body: { error: 'conversation id is required' } };
         }
         try {
-          const conversation = await conversationService.get(id);
+          const rawQuery = req.query ?? {};
+          const getOptions: { limit?: number; cursor?: string } = {};
+          if (typeof rawQuery.limit === 'string') {
+            const parsedLimit = Number(rawQuery.limit);
+            if (!Number.isFinite(parsedLimit) || parsedLimit <= 0 || !Number.isInteger(parsedLimit)) {
+              return { status: 400, body: { error: 'Invalid limit parameter' } };
+            }
+            getOptions.limit = parsedLimit;
+          }
+          if (typeof rawQuery.cursor === 'string' && rawQuery.cursor.length > 0) {
+            getOptions.cursor = rawQuery.cursor;
+          }
+          const conversation = await conversationService.get(id, getOptions);
           if (!conversation) {
             return { status: 404, body: { error: `Conversation "${id}" not found` } };
           }

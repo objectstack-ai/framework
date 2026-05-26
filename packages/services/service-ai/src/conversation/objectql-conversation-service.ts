@@ -98,19 +98,61 @@ export class ObjectQLConversationService implements IAIConversationService {
     };
   }
 
-  async get(conversationId: string): Promise<AIConversation | null> {
+  async get(
+    conversationId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ): Promise<AIConversation | null> {
     const row: DbConversationRow | null = await this.engine.findOne(CONVERSATIONS_OBJECT, {
       where: { id: conversationId },
     });
 
     if (!row) return null;
 
-    const messages: DbMessageRow[] = await this.engine.find(MESSAGES_OBJECT, {
-      where: { conversation_id: conversationId },
-      orderBy: MESSAGE_ORDER,
+    // Unpaginated path — return full history (back-compat default).
+    if (!options.limit || options.limit <= 0) {
+      const messages: DbMessageRow[] = await this.engine.find(MESSAGES_OBJECT, {
+        where: { conversation_id: conversationId },
+        orderBy: MESSAGE_ORDER,
+      });
+      return this.toConversation(row, messages);
+    }
+
+    // Windowed path: return the most recent `limit` messages ending at
+    // (and including) the cursor's predecessor. Cursor is the id of the
+    // oldest message in the previously returned page; we fetch strictly
+    // *older* messages than that, then reverse so callers always see
+    // chronological order within the page.
+    const where: Record<string, unknown> = { conversation_id: conversationId };
+    if (options.cursor) {
+      const cursorRow = await this.engine.findOne(MESSAGES_OBJECT, {
+        where: { id: options.cursor },
+        fields: ['created_at', 'id'],
+      });
+      if (cursorRow) {
+        where.$or = [
+          { created_at: { $lt: cursorRow.created_at } },
+          { created_at: cursorRow.created_at, id: { $lt: cursorRow.id } },
+        ];
+      }
+    }
+
+    // Fetch one extra row so we can detect whether more history exists.
+    const fetched: DbMessageRow[] = await this.engine.find(MESSAGES_OBJECT, {
+      where,
+      orderBy: [
+        { field: 'created_at', order: 'desc' as const },
+        { field: 'id', order: 'desc' as const },
+      ],
+      limit: options.limit + 1,
     });
 
-    return this.toConversation(row, messages);
+    const hasMore = fetched.length > options.limit;
+    const page = (hasMore ? fetched.slice(0, options.limit) : fetched).reverse();
+    const nextCursor = hasMore ? page[0]?.id : undefined;
+
+    const conv = this.toConversation(row, page);
+    if (nextCursor) conv.nextCursor = nextCursor;
+    return conv;
   }
 
   async list(options: {

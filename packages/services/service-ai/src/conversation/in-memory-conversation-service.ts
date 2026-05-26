@@ -41,8 +41,28 @@ export class InMemoryConversationService implements IAIConversationService {
     return conversation;
   }
 
-  async get(conversationId: string): Promise<AIConversation | null> {
-    return this.store.get(conversationId) ?? null;
+  async get(
+    conversationId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ): Promise<AIConversation | null> {
+    const conv = this.store.get(conversationId);
+    if (!conv) return null;
+
+    if (!options.limit || options.limit <= 0) {
+      return conv;
+    }
+
+    // Cursor encodes the index of the oldest message in the previously
+    // returned page; fetch strictly older messages than that index.
+    const total = conv.messages.length;
+    const end = options.cursor !== undefined ? Math.max(0, Number(options.cursor)) : total;
+    const start = Math.max(0, end - options.limit);
+    const page = conv.messages.slice(start, end);
+    const hasMore = start > 0;
+
+    const windowed: AIConversation = { ...conv, messages: page };
+    if (hasMore) windowed.nextCursor = String(start);
+    return windowed;
   }
 
   async list(options: {
