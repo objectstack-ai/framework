@@ -29,7 +29,7 @@
     "@ai-sdk/gateway": "^3.0.0",
     "@ai-sdk/google": "^3.0.0",
     "@ai-sdk/openai": "^3.0.0",
-    "@objectstack/embedder-openai": "workspace:*"
+    "@objectstack/embedder-openai": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/anthropic": {

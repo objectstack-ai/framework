@@ -41,7 +41,7 @@
     "@objectstack/driver-mongodb": "workspace:*"
   },
   "peerDependencies": {
-    "@objectstack/driver-turso": "workspace:*"
+    "@objectstack/driver-turso": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@objectstack/driver-turso": {
