@@ -42,7 +42,44 @@ import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:
  * unchanged. The swap is best-effort: if the dependency is missing,
  * we fall back to the Node implementation and let it throw, surfacing
  * the configuration problem clearly.
+ *
+ * Dev key persistence: in long-running dev sessions, a per-process
+ * random key means previously-encrypted rows (e.g. an AI provider API
+ * key the operator typed yesterday) become undecryptable on the next
+ * `pnpm dev` — Node throws "Unsupported state or unable to authenticate
+ * data". To make the dev loop ergonomic without changing the production
+ * contract (still KMS-only), the provider honours `OBJECTSTACK_DEV_CRYPTO_KEY`
+ * (base64 or hex, 32 bytes after decode) as a stable data key. When the
+ * env var is unset we generate an ephemeral key AND log the base64 once
+ * so operators can paste it back into their `.env` to survive restarts.
  */
+const DEV_KEY_ENV = 'OBJECTSTACK_DEV_CRYPTO_KEY';
+
+/**
+ * Parse an `OBJECTSTACK_DEV_CRYPTO_KEY` value (hex or base64) into a
+ * 32-byte Buffer. Returns `undefined` (with a console warning) when the
+ * value is present but unusable — the caller falls back to an ephemeral
+ * key so the process still boots.
+ */
+const parseDevKey = (raw: string | undefined): Buffer | undefined => {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  // hex: 64 chars of [0-9a-f]
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) return Buffer.from(trimmed, 'hex');
+  // base64 (standard or url-safe): decode and check length
+  try {
+    const normalised = trimmed.replace(/-/g, '+').replace(/_/g, '/');
+    const buf = Buffer.from(normalised, 'base64');
+    if (buf.length === 32) return buf;
+  } catch {
+    /* fall through */
+  }
+  console.warn(
+    `[InMemoryCryptoProvider] ${DEV_KEY_ENV} is set but is not 32 bytes (hex or base64). Ignoring and generating an ephemeral key.`,
+  );
+  return undefined;
+};
 const isWebContainerRuntime = (): boolean => {
   const g = globalThis as any;
   return (
@@ -81,7 +118,29 @@ export class InMemoryCryptoProvider implements ICryptoProvider {
   private readonly useNoble: boolean;
 
   constructor(opts: { key?: Buffer } = {}) {
-    this.key = opts.key ?? randomBytes(32);
+    if (opts.key) {
+      this.key = opts.key;
+    } else {
+      const fromEnv = parseDevKey(
+        (globalThis as any)?.process?.env?.[DEV_KEY_ENV],
+      );
+      if (fromEnv) {
+        this.key = fromEnv;
+      } else {
+        this.key = randomBytes(32);
+        // Surface the generated key once so dev operators can pin it
+        // across restarts. Suppressed in test runs to keep CI logs clean.
+        const isTest = Boolean(
+          (globalThis as any)?.process?.env?.VITEST ||
+            (globalThis as any)?.process?.env?.NODE_ENV === 'test',
+        );
+        if (!isTest) {
+          console.warn(
+            `[InMemoryCryptoProvider] No ${DEV_KEY_ENV} set — generated an ephemeral AES-256-GCM key. Existing encrypted settings (e.g. AI API keys) will fail to decrypt on next restart. To make the key survive restarts, add this to your .env:\n  ${DEV_KEY_ENV}=${this.key.toString('base64')}`,
+          );
+        }
+      }
+    }
     this.useNoble = isWebContainerRuntime();
   }
 

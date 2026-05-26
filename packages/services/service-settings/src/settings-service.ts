@@ -652,33 +652,50 @@ export class SettingsService {
     if (row.encrypted) {
       if (!row.value_enc) return null;
       let plain: string;
-      // Phase 3: when the value_enc looks like a sys_secret handle and
-      // both the secretStore + cryptoProvider are wired, dereference
-      // through sys_secret. Otherwise (legacy rows or in-memory tests)
-      // fall back to inline crypto-adapter decryption.
-      if (
-        this.cryptoProvider &&
-        this.secretStore &&
-        typeof row.value_enc === 'string' &&
-        row.value_enc.startsWith('sec_')
-      ) {
-        const secret = await this.secretStore.get(row.value_enc);
-        if (!secret) return null;
-        plain = await this.cryptoProvider.decrypt(
-          {
-            id: secret.id,
-            kmsKeyId: secret.kms_key_id,
-            alg: secret.alg,
-            version: secret.version,
-            ciphertext: secret.ciphertext,
-          },
-          { namespace: row.namespace, key: row.key },
+      try {
+        // Phase 3: when the value_enc looks like a sys_secret handle and
+        // both the secretStore + cryptoProvider are wired, dereference
+        // through sys_secret. Otherwise (legacy rows or in-memory tests)
+        // fall back to inline crypto-adapter decryption.
+        if (
+          this.cryptoProvider &&
+          this.secretStore &&
+          typeof row.value_enc === 'string' &&
+          row.value_enc.startsWith('sec_')
+        ) {
+          const secret = await this.secretStore.get(row.value_enc);
+          if (!secret) return null;
+          plain = await this.cryptoProvider.decrypt(
+            {
+              id: secret.id,
+              kmsKeyId: secret.kms_key_id,
+              alg: secret.alg,
+              version: secret.version,
+              ciphertext: secret.ciphertext,
+            },
+            { namespace: row.namespace, key: row.key },
+          );
+        } else {
+          plain = await this.crypto.decrypt(row.value_enc, {
+            namespace: row.namespace,
+            key: row.key,
+          });
+        }
+      } catch (err) {
+        // Decrypt failures are almost always operational: the crypto
+        // provider's data key changed (e.g. InMemoryCryptoProvider
+        // generated a fresh ephemeral key after a restart) and the
+        // stored AES-GCM auth tag no longer verifies. Bubbling the
+        // raw Node error would 500 the entire `getNamespace` request
+        // and lock the operator out of the settings UI — including
+        // the very inputs they'd use to re-enter the secret. Instead,
+        // log once and surface `null` so the field renders as empty
+        // and remains editable.
+        console.warn(
+          `[SettingsService] failed to decrypt ${row.namespace}.${row.key}: ${(err as Error)?.message ?? err}. ` +
+            `Returning null so the namespace remains readable; re-save the field to repair.`,
         );
-      } else {
-        plain = await this.crypto.decrypt(row.value_enc, {
-          namespace: row.namespace,
-          key: row.key,
-        });
+        return null;
       }
       // Try JSON parse so non-string secrets round-trip.
       try {

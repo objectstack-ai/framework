@@ -225,4 +225,43 @@ export const SysMetadataObject = ObjectSchema.create({
     apiMethods: ['get', 'list', 'create', 'update', 'delete'],
     trash: false,
   },
+
+  // Named list views — power the Setup App "Data Model" group so admins
+  // can browse object/field metadata in a typed grid instead of the raw
+  // `All Metadata` debug surface. Each entry pre-filters by `type` and
+  // shows the columns that matter for that type. The dedicated visual
+  // designer (objectui's <ObjectManager> / <FieldDesigner>) deep-links
+  // from the row's `Edit in Designer` action; the grid stays useful for
+  // search, audit (state / updated_at) and triage.
+  listViews: {
+    only_objects: {
+      type: 'grid',
+      name: 'only_objects',
+      label: 'Objects',
+      data: { provider: 'object', object: 'sys_metadata' },
+      columns: ['name', 'namespace', 'scope', 'managed_by', 'state', 'updated_at'],
+      filter: [{ field: 'type', operator: 'equals', value: 'object' }],
+      sort: [{ field: 'name', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+    only_fields: {
+      type: 'grid',
+      name: 'only_fields',
+      label: 'Fields',
+      data: { provider: 'object', object: 'sys_metadata' },
+      columns: ['name', 'namespace', 'scope', 'managed_by', 'state', 'updated_at'],
+      filter: [{ field: 'type', operator: 'equals', value: 'field' }],
+      sort: [{ field: 'name', order: 'asc' }],
+      pagination: { pageSize: 50 },
+    },
+    all_metadata: {
+      type: 'grid',
+      name: 'all_metadata',
+      label: 'All',
+      data: { provider: 'object', object: 'sys_metadata' },
+      columns: ['name', 'type', 'namespace', 'scope', 'state', 'updated_at'],
+      sort: [{ field: 'updated_at', order: 'desc' }],
+      pagination: { pageSize: 50 },
+    },
+  },
 });
