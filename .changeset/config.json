@@ -61,6 +61,7 @@
       "@objectstack/knowledge-memory",
       "@objectstack/knowledge-ragflow",
       "@objectstack/knowledge-turso",
+      "@objectstack/embedder-openai",
       "@objectstack/account",
       "create-objectstack",
       "objectstack-vscode"

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `IEmbedder` protocol + `@objectstack/embedder-openai` plugin
+
+Extracted text-→-vector providers into a dedicated, plugin-shaped layer:
+
+- **`IEmbedder`** contract added to `@objectstack/spec/contracts` —
+  protocol-level interface (`id`, `dimensions`, `embed(texts[])`).
+  One contract covers cloud APIs, local Ollama, and in-process embedders.
+- **`@objectstack/embedder-openai`** — new plugin package. Drop-in for
+  any OpenAI-shape endpoint via `baseUrl`. Ships preset constants for
+  8 mainstream providers (OpenAI, Azure, 阿里通义 DashScope, 智谱
+  BigModel, 硅基流动 SiliconFlow, 火山引擎 Doubao, MiniMax, Ollama)
+  and pre-baked default `dimensions` for 16+ popular models including
+  `text-embedding-v3`, `embedding-3`, `BAAI/bge-m3`, `nomic-embed-text`.
+
+```ts
+import { createOpenAIEmbedder } from '@objectstack/embedder-openai';
+const embedding = createOpenAIEmbedder({
+  preset: 'siliconflow',
+  apiKey: process.env.SILICONFLOW_API_KEY!,
+  model: 'BAAI/bge-m3',
+});
+```
+
+### Changed — `@objectstack/knowledge-turso` consumes `IEmbedder`
+
+`KnowledgeTursoPluginOptions.embedding` is now typed as `IEmbedder`
+(`@objectstack/spec/contracts`). The package no longer ships an
+OpenAI provider of its own — install `@objectstack/embedder-openai`.
+
+**Breaking:**
+- `OpenAIEmbeddingProvider` removed from `@objectstack/knowledge-turso`
+  exports. Replace with `OpenAIEmbedder` from `@objectstack/embedder-openai`.
+- `HashEmbeddingProvider` renamed to `HashEmbedder` (old name kept as a
+  deprecated alias).
+- `EmbeddingProvider` type kept as a deprecated alias for `IEmbedder`.
+
 ### Added — Runtime `services.*` API reference chapter
 
 Documentation now includes a dedicated `Runtime Services` guides chapter
