@@ -95,7 +95,9 @@ Dashboard header action
 | **actionIcon** | `string` | optional | Icon identifier for the widget action button |
 | **object** | `string` | optional | Data source object name |
 | **filter** | `[__schema0](./__schema0)` | optional | Data filter criteria |
+| **compareTo** | `string \| string \| Object` | optional | Period-over-period comparison window |
 | **categoryField** | `string` | optional | Field for grouping (X-Axis) |
+| **categoryGranularity** | `Enum<'day' \| 'week' \| 'month' \| 'quarter' \| 'year'>` | optional | Bucket categoryField date values into day/week/month/quarter/year periods |
 | **valueField** | `string` | optional | Field for values (Y-Axis) |
 | **aggregate** | `Enum<'count' \| 'sum' \| 'avg' \| 'min' \| 'max'>` | ✅ | Aggregate function |
 | **measures** | `Object[]` | optional | Multiple measures for pivot/matrix analysis |
