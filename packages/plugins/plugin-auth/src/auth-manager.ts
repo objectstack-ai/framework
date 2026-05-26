@@ -1221,20 +1221,25 @@ export class AuthManager {
       (globalThis as any)?.process?.env?.OS_MULTI_ORG_ENABLED ?? 'true',
     ).toLowerCase() !== 'false';
 
-    // Legal links shown beneath the login / register cards. ObjectStack is
-    // a developer tool — the framework itself has no Terms of Service or
-    // Privacy Policy to advertise on customer-facing surfaces. Operators
-    // who deploy ObjectStack and want to surface *their own* legal docs
-    // opt in via `OS_TERMS_URL` and `OS_PRIVACY_URL` (or omit them, in
-    // which case the SPA hides the entire fine-print block).
+    // Legal links shown beneath the login / register cards. Defaults to
+    // the public ObjectStack pages so vanilla deployments don't link to
+    // dead `#` anchors; operators who deploy ObjectStack on their own
+    // domain typically override these with their own legal docs via the
+    // `OS_TERMS_URL` / `OS_PRIVACY_URL` env vars. Set the env var to the
+    // empty string to suppress the link entirely.
+    const DEFAULT_TERMS_URL = 'https://objectstack.ai/terms';
+    const DEFAULT_PRIVACY_URL = 'https://objectstack.ai/privacy';
     const rawTermsUrl = (globalThis as any)?.process?.env?.OS_TERMS_URL;
     const rawPrivacyUrl = (globalThis as any)?.process?.env?.OS_PRIVACY_URL;
-    const termsUrl = typeof rawTermsUrl === 'string' && rawTermsUrl.trim() !== ''
-      ? rawTermsUrl.trim()
-      : undefined;
-    const privacyUrl = typeof rawPrivacyUrl === 'string' && rawPrivacyUrl.trim() !== ''
-      ? rawPrivacyUrl.trim()
-      : undefined;
+    const resolveLegalUrl = (raw: unknown, fallback: string): string | undefined => {
+      if (typeof raw !== 'string') return fallback;
+      const trimmed = raw.trim();
+      // Explicit empty string (`OS_TERMS_URL=`) opts out of the link.
+      if (trimmed === '') return undefined;
+      return trimmed;
+    };
+    const termsUrl = resolveLegalUrl(rawTermsUrl, DEFAULT_TERMS_URL);
+    const privacyUrl = resolveLegalUrl(rawPrivacyUrl, DEFAULT_PRIVACY_URL);
 
     const features = {
       twoFactor: pluginConfig.twoFactor ?? false,
