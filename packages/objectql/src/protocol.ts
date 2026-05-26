@@ -15,8 +15,8 @@ import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoute
 import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
-import { ListViewSchema, FormViewSchema, DashboardSchema, AppSchema, PageSchema, ReportSchema, reportForm, type FormView } from '@objectstack/spec/ui';
-import { RoleSchema } from '@objectstack/spec/identity';
+import { ListViewSchema, FormViewSchema, DashboardSchema, AppSchema, PageSchema, ReportSchema, reportForm, viewForm, appForm, dashboardForm, type FormView } from '@objectstack/spec/ui';
+import { RoleSchema, roleForm } from '@objectstack/spec/identity';
 import { PermissionSetSchema } from '@objectstack/spec/security';
 import { EmailTemplateSchema } from '@objectstack/spec/system';
 import { ToolSchema, SkillSchema, AgentSchema } from '@objectstack/spec/ai';
@@ -58,6 +58,10 @@ const TYPE_TO_SCHEMA: Record<string, z.ZodTypeAny> = {
  */
 const TYPE_TO_FORM: Record<string, FormView> = {
     report: reportForm,
+    view: viewForm,
+    app: appForm,
+    dashboard: dashboardForm,
+    role: roleForm,
 };
 
 /**

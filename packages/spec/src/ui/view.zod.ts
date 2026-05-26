@@ -538,8 +538,10 @@ export const FormFieldSchema = lazySchema(() => z.object({
  */
 export const FormSectionSchema = lazySchema(() => z.object({
   label: I18nLabelSchema.optional(),
+  description: z.string().optional().describe('Optional description rendered under the section header.'),
   collapsible: z.boolean().default(false),
   collapsed: z.boolean().default(false),
+  visibleOn: ExpressionInputSchema.optional().describe('Visibility predicate (CEL). Hides the whole section when false.'),
   columns: z.union([
     z.enum(['1', '2', '3', '4']),
     z.literal(1),
