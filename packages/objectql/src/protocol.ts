@@ -213,6 +213,81 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
         required: ['name', 'label', 'type'],
         additionalProperties: true,
     },
+    // Validation rules live inside `object.validations[]`. The canonical
+    // ValidationRuleSchema is a discriminated union of 9 variants; the
+    // generic SchemaForm renderer treats unions as opaque JSON, so we
+    // ship a *flat* form-friendly schema covering the common base
+    // properties plus every variant-specific field as optional. Save-time
+    // validation is unaffected — the union schema is still authoritative
+    // at write time.
+    validation: {
+        type: 'object',
+        properties: {
+            // --- Base fields (all variants) ---
+            name: { type: 'string', description: 'Unique rule name (snake_case)' },
+            label: { type: 'string' },
+            description: { type: 'string' },
+            type: {
+                type: 'string',
+                enum: [
+                    'script',
+                    'unique',
+                    'state_machine',
+                    'format',
+                    'cross_field',
+                    'json',
+                    'async',
+                    'custom',
+                    'conditional',
+                ],
+                default: 'script',
+                description: 'Validation variant',
+            },
+            active: { type: 'boolean', default: true },
+            events: {
+                type: 'array',
+                items: { type: 'string', enum: ['insert', 'update', 'delete'] },
+                default: ['insert', 'update'],
+            },
+            priority: { type: 'number', default: 100, minimum: 0, maximum: 9999 },
+            severity: {
+                type: 'string',
+                enum: ['error', 'warning', 'info'],
+                default: 'error',
+            },
+            message: { type: 'string' },
+            tags: { type: 'array', items: { type: 'string' } },
+            // --- Variant-specific (all optional, gated by `type`) ---
+            condition: {
+                type: 'string',
+                description: 'CEL predicate (type=script). True ⇒ validation fails.',
+            },
+            fields: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Fields (type=unique / cross_field).',
+            },
+            scope: { type: 'string', description: 'CEL scope predicate (type=unique).' },
+            caseSensitive: { type: 'boolean', default: true },
+            field: { type: 'string', description: 'Single field (type=state_machine / format).' },
+            transitions: {
+                type: 'object',
+                additionalProperties: { type: 'array', items: { type: 'string' } },
+                description: 'Map { OldState: [AllowedNewStates] } (type=state_machine).',
+            },
+            regex: { type: 'string', description: 'Regex (type=format).' },
+            format: {
+                type: 'string',
+                enum: ['email', 'url', 'phone', 'json'],
+                description: 'Built-in format (type=format).',
+            },
+            url: { type: 'string', description: 'Endpoint URL (type=async).' },
+            handler: { type: 'string', description: 'Handler reference (type=custom).' },
+            when: { type: 'string', description: 'Outer condition (type=conditional).' },
+        },
+        required: ['name', 'type', 'message'],
+        additionalProperties: true,
+    },
 };
 
 /**
