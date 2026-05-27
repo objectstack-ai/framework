@@ -15,8 +15,8 @@ importers:
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.9.1)
       '@object-ui/console':
-        specifier: ^6.2.2
-        version: 6.2.2
+        specifier: ^6.2.3
+        version: 6.2.3
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
@@ -36,8 +36,8 @@ importers:
   apps/account:
     devDependencies:
       '@object-ui/i18n':
-        specifier: ^6.2.2
-        version: 6.2.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
+        specifier: ^6.2.3
+        version: 6.2.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
       '@objectstack/client':
         specifier: workspace:*
         version: link:../../packages/client
@@ -418,8 +418,8 @@ importers:
         specifier: ^3.0.120
         version: 3.0.120(zod@4.4.3)
       '@object-ui/console':
-        specifier: ^6.2.2
-        version: 6.2.2
+        specifier: ^6.2.3
+        version: 6.2.3
       '@objectstack/account':
         specifier: workspace:*
         version: link:../../apps/account
@@ -3231,11 +3231,11 @@ packages:
     engines: {node: ^14.18.0 || >=16.10.0, npm: '>=5.10.0'}
     hasBin: true
 
-  '@object-ui/console@6.2.2':
-    resolution: {integrity: sha512-MshU/KhNO0CG6TXz7gMna7CQLlNWVSs7Q2kzNxvRPreVzdCHHOOF3ouR2G4ncIaOwQxCHOd67kBkLS66+UE9IA==}
+  '@object-ui/console@6.2.3':
+    resolution: {integrity: sha512-EFfdU0cXUAwL49yyeo+i90BE2lwoAUJdmQOBmM8L2ZhdxRroAiiQgZ6qZwF2KR2C8jLOJNNH+Mw4eQN6rTtoxQ==}
 
-  '@object-ui/i18n@6.2.2':
-    resolution: {integrity: sha512-sTXmlGo9nOB8bsVY10kW2YnYkrJzlMo7W6yDBl/0/E0v33RLH2kKrtVHv5FK6XCdlDjXXJBT05ca89I5z0CGFw==}
+  '@object-ui/i18n@6.2.3':
+    resolution: {integrity: sha512-9K2Zbxhv4gG1Z0o8NX8YlMtSw1OVDGMBG0HwMWxWdMVef/OjJclBZCKGM1Qe/jK63+Ur2oo/u87TPkoosbTiJw==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
 
@@ -10212,9 +10212,9 @@ snapshots:
     dependencies:
       consola: 3.4.2
 
-  '@object-ui/console@6.2.2': {}
+  '@object-ui/console@6.2.3': {}
 
-  '@object-ui/i18n@6.2.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
+  '@object-ui/i18n@6.2.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
     dependencies:
       i18next: 26.3.0(typescript@6.0.3)
       react: 19.2.6
