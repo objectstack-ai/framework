@@ -154,11 +154,23 @@ export class AIServicePlugin implements Plugin {
         String(values.gateway_model ?? '').trim() ||
         String(process.env.AI_GATEWAY_MODEL ?? '').trim();
       if (!gatewayModel) return null;
+      // API key precedence: form value → AI_GATEWAY_API_KEY env. The default
+      // `gateway` export only reads the env var, so when the form supplies a
+      // key we must build a configured instance via `createGateway`.
+      const gatewayApiKey =
+        String(values.gateway_api_key ?? '').trim() ||
+        String(process.env.AI_GATEWAY_API_KEY ?? '').trim();
       try {
         const gatewayPkg = '@ai-sdk/gateway';
-        const { gateway } = await import(/* webpackIgnore: true */ gatewayPkg);
+        const mod = await import(/* webpackIgnore: true */ gatewayPkg);
+        ctx.logger.info(
+          `[AI:test] gateway adapter — apiKey=${gatewayApiKey ? `<set,len=${gatewayApiKey.length}>` : '<empty>'}, model=${gatewayModel}, valuesKeys=${Object.keys(values).join(',')}`,
+        );
+        const gw = gatewayApiKey
+          ? mod.createGateway({ apiKey: gatewayApiKey })
+          : mod.gateway;
         return {
-          adapter: new VercelLLMAdapter({ model: gateway(gatewayModel) }),
+          adapter: new VercelLLMAdapter({ model: gw(gatewayModel) }),
           description: `Vercel AI Gateway (model: ${gatewayModel})`,
         };
       } catch (err) {
@@ -955,10 +967,7 @@ export class AIServicePlugin implements Plugin {
     // the form's (possibly unsaved) values.
     if (typeof settings.registerAction === 'function') {
       settings.registerAction('ai', 'test_embedder', async ({ values, payload }: any) => {
-        const overrides =
-          payload && typeof payload === 'object' && payload !== null && 'values' in payload
-            ? (payload as { values?: Record<string, unknown> }).values ?? {}
-            : {};
+        const overrides = extractOverrides(payload);
         const merged: Record<string, unknown> = { ...(values ?? {}), ...overrides };
         const provider = String(merged.embedder_provider ?? 'none');
         if (provider === 'none') {
@@ -1007,10 +1016,7 @@ export class AIServicePlugin implements Plugin {
     // (possibly unsaved) form values.
     if (typeof settings.registerAction === 'function') {
       settings.registerAction('ai', 'test', async ({ values, payload }: any) => {
-        const overrides =
-          payload && typeof payload === 'object' && payload !== null && 'values' in payload
-            ? (payload as { values?: Record<string, unknown> }).values ?? {}
-            : {};
+        const overrides = extractOverrides(payload);
         const merged: Record<string, unknown> = { ...(values ?? {}), ...overrides };
         const provider = String(merged.provider ?? 'memory');
 
@@ -1090,4 +1096,20 @@ export class AIServicePlugin implements Plugin {
   async destroy(): Promise<void> {
     this.service = undefined;
   }
+}
+
+/**
+ * Settings test handlers receive `payload` as the raw HTTP body. The Studio
+ * form posts overrides in two shapes depending on caller:
+ *   1. `{ values: { ... } }` — explicit nested form (legacy / programmatic)
+ *   2. `{ key: value, ... }` — bare field map (current Studio default)
+ * Accept both so a freshly-edited (unsaved) form can be validated.
+ */
+function extractOverrides(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  if (p.values && typeof p.values === 'object' && p.values !== null) {
+    return p.values as Record<string, unknown>;
+  }
+  return p;
 }

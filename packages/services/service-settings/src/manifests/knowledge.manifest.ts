@@ -123,10 +123,7 @@ export const knowledgeSettingsManifest = manifest as unknown as SettingsManifest
  * usable when no knowledge adapter plugin is mounted.
  */
 export const knowledgeTestActionHandler: SettingsActionHandler = async ({ values, payload }) => {
-  const overrides =
-    payload && typeof payload === 'object' && payload !== null && 'values' in payload
-      ? ((payload as { values?: Record<string, unknown> }).values ?? {})
-      : {};
+  const overrides = extractOverrides(payload);
   const merged: Record<string, unknown> = { ...values, ...overrides };
   const adapter = String(merged.adapter ?? 'memory');
 
@@ -178,3 +175,12 @@ export const knowledgeTestActionHandler: SettingsActionHandler = async ({ values
 
   return { ok: false, severity: 'error', message: `Unknown adapter: ${adapter}` };
 };
+
+function extractOverrides(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  if (p.values && typeof p.values === 'object' && p.values !== null) {
+    return p.values as Record<string, unknown>;
+  }
+  return p;
+}

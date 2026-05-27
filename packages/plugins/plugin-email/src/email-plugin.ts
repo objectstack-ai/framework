@@ -165,10 +165,7 @@ export class EmailServicePlugin implements Plugin {
           if (typeof settings.registerAction === 'function') {
             const svc = this.service;
             settings.registerAction('mail', 'test', async ({ values, payload, ctx: actionCtx }: any) => {
-              const overrides =
-                payload && typeof payload === 'object' && payload !== null && 'values' in payload
-                  ? (payload as { values?: Record<string, unknown> }).values ?? {}
-                  : {};
+              const overrides = extractOverrides(payload);
               const merged: Record<string, unknown> = { ...(values ?? {}), ...overrides };
               const to = (actionCtx?.body?.to as string | undefined)
                 ?? (payload?.to as string | undefined)
@@ -405,4 +402,13 @@ export class EmailServicePlugin implements Plugin {
       });
     }
   }
+}
+
+function extractOverrides(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  if (p.values && typeof p.values === 'object' && p.values !== null) {
+    return p.values as Record<string, unknown>;
+  }
+  return p;
 }

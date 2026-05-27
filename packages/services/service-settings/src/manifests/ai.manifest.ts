@@ -201,12 +201,10 @@ export const aiSettingsManifest = manifest as unknown as SettingsManifest;
  */
 export const aiTestActionHandler: SettingsActionHandler = async ({ values, payload }) => {
   // The Settings UI may POST the current (possibly unsaved) form state
-  // as `{ values: {...} }`. Prefer those over the persisted snapshot so
+  // either as `{ values: {...} }` (nested) or as a bare `{ key: value }`
+  // map (Studio default). Prefer those over the persisted snapshot so
   // operators can validate edits before hitting "Save".
-  const overrides =
-    payload && typeof payload === 'object' && payload !== null && 'values' in payload
-      ? ((payload as { values?: Record<string, unknown> }).values ?? {})
-      : {};
+  const overrides = extractOverrides(payload);
   const merged: Record<string, unknown> = { ...values, ...overrides };
   const provider = String(merged.provider ?? 'memory');
   values = merged;
@@ -249,10 +247,7 @@ export const aiTestActionHandler: SettingsActionHandler = async ({ values, paylo
  * so the button is useful even when no embedder plugin is mounted.
  */
 export const aiTestEmbedderActionHandler: SettingsActionHandler = async ({ values, payload }) => {
-  const overrides =
-    payload && typeof payload === 'object' && payload !== null && 'values' in payload
-      ? ((payload as { values?: Record<string, unknown> }).values ?? {})
-      : {};
+  const overrides = extractOverrides(payload);
   const merged: Record<string, unknown> = { ...values, ...overrides };
   const provider = String(merged.embedder_provider ?? 'none');
 
@@ -290,3 +285,12 @@ export const aiTestEmbedderActionHandler: SettingsActionHandler = async ({ value
       'Mount @objectstack/embedder-openai + a knowledge adapter to exercise live calls.',
   };
 };
+
+function extractOverrides(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  if (p.values && typeof p.values === 'object' && p.values !== null) {
+    return p.values as Record<string, unknown>;
+  }
+  return p;
+}

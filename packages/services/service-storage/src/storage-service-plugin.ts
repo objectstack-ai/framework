@@ -258,10 +258,7 @@ export class StorageServicePlugin implements Plugin {
             // `payload.values` over the persisted snapshot so an operator
             // can validate edits before hitting "Save". Matches the
             // pattern used by ai/test and mail/test.
-            const overrides =
-              payload && typeof payload === 'object' && payload !== null && 'values' in payload
-                ? (payload as { values?: Record<string, unknown> }).values ?? {}
-                : {};
+            const overrides = extractOverrides(payload);
             const merged: Record<string, unknown> = { ...(values ?? {}), ...overrides };
             const probeKey = `__objectstack_probe__/${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
             const probeBytes = Buffer.from(`probe@${new Date().toISOString()}`, 'utf-8');
@@ -322,5 +319,14 @@ function resolveMetrics(
     // Service not registered — silent fall-through.
   }
   return new NoopMetricsRegistry();
+}
+
+function extractOverrides(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object') return {};
+  const p = payload as Record<string, unknown>;
+  if (p.values && typeof p.values === 'object' && p.values !== null) {
+    return p.values as Record<string, unknown>;
+  }
+  return p;
 }
 
