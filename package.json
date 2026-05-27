@@ -30,11 +30,11 @@
   "license": "SEE LICENSE IN LICENSING.md",
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "@object-ui/console": "^6.1.0",
+    "@object-ui/console": "^6.2.0",
     "@types/node": "^25.9.1",
     "tsup": "^8.5.1",
     "tsx": "^4.22.3",
-    "turbo": "^2.9.14",
+    "turbo": "^2.9.15",
     "typescript": "^6.0.3"
   },
   "engines": {
