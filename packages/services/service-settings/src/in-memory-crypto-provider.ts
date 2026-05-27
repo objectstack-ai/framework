@@ -6,6 +6,9 @@ import type {
   ICryptoProvider,
 } from '@objectstack/spec/contracts';
 import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 /**
  * InMemoryCryptoProvider — default ICryptoProvider used by the
@@ -54,6 +57,43 @@ import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:
  * so operators can paste it back into their `.env` to survive restarts.
  */
 const DEV_KEY_ENV = 'OBJECTSTACK_DEV_CRYPTO_KEY';
+
+/**
+ * Per-user persistent fallback location. When `OBJECTSTACK_DEV_CRYPTO_KEY`
+ * is unset, we lazily create + cache a key here so dev sessions survive
+ * process restarts without operator action. Honours `OBJECTSTACK_HOME`
+ * for projects that pin a non-default config dir.
+ */
+const devKeyFallbackPath = (): string => {
+  const proc = (globalThis as any)?.process;
+  const home =
+    proc?.env?.OBJECTSTACK_HOME ||
+    (proc?.env?.HOME ? join(proc.env.HOME, '.objectstack') : undefined) ||
+    join(homedir(), '.objectstack');
+  return join(home, 'dev-crypto-key');
+};
+
+/**
+ * Load (or generate-then-persist) the dev key from the per-user fallback
+ * file. Returns `undefined` on any I/O error so the caller can degrade
+ * to an ephemeral key without breaking boot.
+ */
+const loadOrCreateDevKey = (): { key: Buffer; path: string; generated: boolean } | undefined => {
+  try {
+    const path = devKeyFallbackPath();
+    if (existsSync(path)) {
+      const raw = readFileSync(path, 'utf8').trim();
+      const parsed = parseDevKey(raw);
+      if (parsed) return { key: parsed, path, generated: false };
+    }
+    const key = randomBytes(32);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, key.toString('base64'), { mode: 0o600 });
+    return { key, path, generated: true };
+  } catch {
+    return undefined;
+  }
+};
 
 /**
  * Parse an `OBJECTSTACK_DEV_CRYPTO_KEY` value (hex or base64) into a
@@ -127,17 +167,27 @@ export class InMemoryCryptoProvider implements ICryptoProvider {
       if (fromEnv) {
         this.key = fromEnv;
       } else {
-        this.key = randomBytes(32);
-        // Surface the generated key once so dev operators can pin it
-        // across restarts. Suppressed in test runs to keep CI logs clean.
         const isTest = Boolean(
           (globalThis as any)?.process?.env?.VITEST ||
             (globalThis as any)?.process?.env?.NODE_ENV === 'test',
         );
-        if (!isTest) {
-          console.warn(
-            `[InMemoryCryptoProvider] No ${DEV_KEY_ENV} set — generated an ephemeral AES-256-GCM key. Existing encrypted settings (e.g. AI API keys) will fail to decrypt on next restart. To make the key survive restarts, add this to your .env:\n  ${DEV_KEY_ENV}=${this.key.toString('base64')}`,
-          );
+        const persisted = isTest ? undefined : loadOrCreateDevKey();
+        if (persisted) {
+          this.key = persisted.key;
+          if (persisted.generated) {
+            console.warn(
+              `[InMemoryCryptoProvider] No ${DEV_KEY_ENV} set — generated a new AES-256-GCM key and persisted it to ${persisted.path} (mode 0600). Future restarts will reuse it automatically. For shared/CI environments, set ${DEV_KEY_ENV} explicitly in your environment.`,
+            );
+          }
+        } else {
+          this.key = randomBytes(32);
+          // Last-resort ephemeral key. Surface the base64 once so dev
+          // operators can pin it across restarts via the env var.
+          if (!isTest) {
+            console.warn(
+              `[InMemoryCryptoProvider] No ${DEV_KEY_ENV} set and could not persist a fallback key — generated an ephemeral AES-256-GCM key. Existing encrypted settings (e.g. AI API keys) will fail to decrypt on next restart. To make the key survive restarts, add this to your .env:\n  ${DEV_KEY_ENV}=${this.key.toString('base64')}`,
+            );
+          }
         }
       }
     }

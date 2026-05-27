@@ -163,9 +163,6 @@ export class AIServicePlugin implements Plugin {
       try {
         const gatewayPkg = '@ai-sdk/gateway';
         const mod = await import(/* webpackIgnore: true */ gatewayPkg);
-        ctx.logger.info(
-          `[AI:test] gateway adapter — apiKey=${gatewayApiKey ? `<set,len=${gatewayApiKey.length}>` : '<empty>'}, model=${gatewayModel}, valuesKeys=${Object.keys(values).join(',')}`,
-        );
         const gw = gatewayApiKey
           ? mod.createGateway({ apiKey: gatewayApiKey })
           : mod.gateway;
@@ -1082,6 +1079,25 @@ export class AIServicePlugin implements Plugin {
             message: `${built.description} responded in ${latency}ms${preview ? ` — "${preview}"` : ''}.`,
           };
         } catch (err: any) {
+          // The `ai` package's wrapGatewayError() rewrites *every*
+          // GatewayAuthenticationError to a generic "Set AI_GATEWAY_API_KEY"
+          // message — even when an apiKey WAS forwarded and was simply
+          // rejected as invalid. Detect that case and surface a clearer
+          // message so operators don't chase a phantom env-var problem.
+          const isGwAuth = err?.name === 'GatewayAuthenticationError';
+          const keyWasProvided =
+            provider === 'gateway' &&
+            String(merged.gateway_api_key ?? process.env.AI_GATEWAY_API_KEY ?? '').trim().length > 0;
+          if (isGwAuth && keyWasProvided) {
+            return {
+              ok: false,
+              severity: 'error',
+              message:
+                `${built.description}: API key was rejected by the AI Gateway ` +
+                `(invalid, expired, or lacking access to model "${String(merged.gateway_model)}"). ` +
+                `Create a new key at https://vercel.com/dashboard/ai-gateway/api-keys and re-save the settings.`,
+            };
+          }
           return {
             ok: false,
             severity: 'error',
