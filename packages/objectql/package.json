@@ -1,6 +1,6 @@
 {
   "name": "@objectstack/objectql",
-  "version": "6.7.1",
+  "version": "6.8.0",
   "license": "BUSL-1.1",
   "description": "Isomorphic ObjectQL Engine for ObjectStack",
   "main": "dist/index.js",
