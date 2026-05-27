@@ -23,7 +23,7 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
-  "description": "Next.js adapter for ObjectStack — App Router route handlers for the ObjectStack REST API.",
+  "description": "Next.js adapter for ObjectStack \u2014 App Router route handlers for the ObjectStack REST API.",
   "keywords": [
     "objectstack",
     "nextjs",

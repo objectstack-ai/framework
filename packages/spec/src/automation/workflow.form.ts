@@ -28,8 +28,8 @@ export const workflowForm = defineForm({
       label: 'Actions',
       description: 'What this workflow does when fired.',
       fields: [
-        { field: 'actions', widget: 'master-detail', required: true, helpText: 'Actions to execute immediately (field update, email, API call, etc.)' },
-        { field: 'timeTriggers', widget: 'master-detail', helpText: 'Scheduled actions (e.g., send reminder 1 day before deadline)' },
+        { field: 'actions', type: 'repeater', helpText: 'Actions to execute immediately (field update, email, API call, etc.)' },
+        { field: 'timeTriggers', type: 'repeater', helpText: 'Scheduled actions (e.g., send reminder 1 day before deadline)' },
       ],
     },
     {

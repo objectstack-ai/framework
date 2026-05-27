@@ -1,7 +1,7 @@
 {
   "name": "@objectstack/runtime",
   "version": "6.7.1",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "description": "ObjectStack Core Runtime & Query Engine",
   "type": "module",
   "main": "dist/index.js",

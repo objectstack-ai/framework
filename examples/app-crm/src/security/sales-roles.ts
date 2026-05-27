@@ -29,8 +29,8 @@ export const SalesUserPermissionSet: Security.PermissionSet = {
   description: 'Standard CRUD on CRM objects for sales team members.',
   isProfile: false,
   objects: {
-    crm_account: { read: true, create: true, edit: true, delete: false },
-    crm_contact: { read: true, create: true, edit: true, delete: false },
-    crm_opportunity: { read: true, create: true, edit: true, delete: false },
+    crm_account: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+    crm_contact: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+    crm_opportunity: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
   },
 };

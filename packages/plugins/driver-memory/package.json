@@ -1,7 +1,7 @@
 {
   "name": "@objectstack/driver-memory",
   "version": "6.7.1",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "description": "In-Memory Driver for ObjectStack (Reference Implementation)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

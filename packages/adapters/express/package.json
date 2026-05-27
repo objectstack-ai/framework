@@ -27,7 +27,7 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
-  "description": "Express adapter for ObjectStack — mounts the generated REST API onto an Express app.",
+  "description": "Express adapter for ObjectStack \u2014 mounts the generated REST API onto an Express app.",
   "keywords": [
     "objectstack",
     "express",

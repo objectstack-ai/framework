@@ -29,7 +29,7 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
-  "description": "Hono adapter for ObjectStack — edge-compatible REST API server for Cloudflare Workers, Deno, Bun, and Node.",
+  "description": "Hono adapter for ObjectStack \u2014 edge-compatible REST API server for Cloudflare Workers, Deno, Bun, and Node.",
   "keywords": [
     "objectstack",
     "hono",

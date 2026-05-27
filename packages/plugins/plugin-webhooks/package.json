@@ -1,7 +1,7 @@
 {
   "name": "@objectstack/plugin-webhooks",
   "version": "6.7.1",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "description": "Persistent, cluster-aware webhook dispatcher. Durable outbox + per-partition cluster.lock for exactly-once-ish delivery across nodes. See content/docs/concepts/webhook-delivery.mdx.",
   "type": "module",
   "main": "dist/index.js",

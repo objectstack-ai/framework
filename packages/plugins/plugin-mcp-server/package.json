@@ -1,8 +1,8 @@
 {
   "name": "@objectstack/plugin-mcp-server",
   "version": "6.7.1",
-  "license": "Apache-2.0",
-  "description": "MCP Runtime Server Plugin for ObjectStack — exposes AI tools, data resources, and agent prompts via the Model Context Protocol",
+  "license": "BUSL-1.1",
+  "description": "MCP Runtime Server Plugin for ObjectStack \u2014 exposes AI tools, data resources, and agent prompts via the Model Context Protocol",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,8 +1,8 @@
 {
   "name": "@objectstack/service-cluster",
   "version": "6.7.1",
-  "license": "Apache-2.0",
-  "description": "Cluster Service for ObjectStack — pluggable PubSub/Lock/KV/Counter primitives. Memory driver included; postgres/redis drivers ship separately.",
+  "license": "BUSL-1.1",
+  "description": "Cluster Service for ObjectStack \u2014 pluggable PubSub/Lock/KV/Counter primitives. Memory driver included; postgres/redis drivers ship separately.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

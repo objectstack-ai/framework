@@ -1,7 +1,7 @@
 {
   "name": "@objectstack/metadata",
   "version": "6.7.1",
-  "license": "Apache-2.0",
+  "license": "BUSL-1.1",
   "description": "Metadata loading, saving, and persistence for ObjectStack",
   "type": "module",
   "main": "dist/index.js",

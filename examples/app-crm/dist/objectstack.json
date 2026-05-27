@@ -890,9 +890,9 @@
       "isProfile": false,
       "objects": {
         "crm_account": {
-          "allowCreate": false,
-          "allowRead": false,
-          "allowEdit": false,
+          "allowCreate": true,
+          "allowRead": true,
+          "allowEdit": true,
           "allowDelete": false,
           "allowTransfer": false,
           "allowRestore": false,
@@ -901,9 +901,9 @@
           "modifyAllRecords": false
         },
         "crm_contact": {
-          "allowCreate": false,
-          "allowRead": false,
-          "allowEdit": false,
+          "allowCreate": true,
+          "allowRead": true,
+          "allowEdit": true,
           "allowDelete": false,
           "allowTransfer": false,
           "allowRestore": false,
@@ -912,9 +912,9 @@
           "modifyAllRecords": false
         },
         "crm_opportunity": {
-          "allowCreate": false,
-          "allowRead": false,
-          "allowEdit": false,
+          "allowCreate": true,
+          "allowRead": true,
+          "allowEdit": true,
           "allowDelete": false,
           "allowTransfer": false,
           "allowRestore": false,

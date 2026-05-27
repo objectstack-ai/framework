@@ -1,8 +1,8 @@
 {
   "name": "@objectstack/service-package",
   "version": "6.7.1",
-  "license": "Apache-2.0",
-  "description": "Package management service for ObjectStack — publish, install, and manage packages",
+  "license": "BUSL-1.1",
+  "description": "Package management service for ObjectStack \u2014 publish, install, and manage packages",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
