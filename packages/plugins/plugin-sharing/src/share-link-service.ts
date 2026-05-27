@@ -237,11 +237,11 @@ export class ShareLinkService implements IShareLinkService {
     // Confirm the target record actually exists — silently issuing
     // links against ghost rows is a footgun.
     const exists = await this.engine.find(input.object, {
-      filter: { id: input.recordId },
+      where: { id: input.recordId },
       fields: ['id'],
       limit: 1,
       context: SYSTEM_CTX,
-    });
+    } as any);
     if (!Array.isArray(exists) || exists.length === 0) {
       throw makeError(404, 'RECORD_NOT_FOUND', `${input.object}/${input.recordId} does not exist`);
     }
@@ -281,11 +281,11 @@ export class ShareLinkService implements IShareLinkService {
     if (!idOrToken) throw makeError(400, 'VALIDATION_FAILED', 'id or token is required');
     const filter = idOrToken.startsWith('shl_') ? { id: idOrToken } : { token: idOrToken };
     const rows = await this.engine.find('sys_share_link', {
-      filter,
+      where: filter,
       fields: ['id', 'revoked_at'],
       limit: 1,
       context: SYSTEM_CTX,
-    });
+    } as any);
     const row = Array.isArray(rows) ? (rows[0] as any) : undefined;
     if (!row) return; // No-op when missing
     if (row.revoked_at) return; // Already revoked
@@ -307,11 +307,11 @@ export class ShareLinkService implements IShareLinkService {
     if (!filter.includeRevoked) where.revoked_at = null;
 
     const rows = await this.engine.find('sys_share_link', {
-      filter: where,
+      where,
       limit: 200,
       sort: [{ field: 'created_at', order: 'desc' }],
       context: context.isSystem ? SYSTEM_CTX : context,
-    });
+    } as any);
     return Array.isArray(rows) ? (rows as ShareLink[]) : [];
   }
 
@@ -322,10 +322,10 @@ export class ShareLinkService implements IShareLinkService {
     if (!token || typeof token !== 'string' || token.length < 8) return null;
 
     const rows = await this.engine.find('sys_share_link', {
-      filter: { token },
+      where: { token },
       limit: 1,
       context: SYSTEM_CTX,
-    });
+    } as any);
     const row = Array.isArray(rows) ? (rows[0] as ShareLink | undefined) : undefined;
     if (!row) return null;
 

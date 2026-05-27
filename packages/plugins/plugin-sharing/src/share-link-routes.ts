@@ -127,7 +127,7 @@ export function registerShareLinkRoutes(
     try {
       const ctx = ctxOf(req);
       await service.revokeLink(req.params.idOrToken, ctx);
-      await res.status(204).send('');
+      await res.status(200).json({ ok: true });
     } catch (err: any) {
       sendError(res, err?.status ?? 500, err?.code ?? 'INTERNAL', err?.message ?? 'Failed to revoke link');
     }
@@ -159,6 +159,29 @@ export function registerShareLinkRoutes(
         providedPassword,
       });
       if (!resolved) {
+        // Probe row to give a more useful status code (401 vs 404 vs 410).
+        const probe = await engine.find('sys_share_link', {
+          where: { token: req.params.token },
+          limit: 1,
+          context: SYSTEM_CTX,
+        } as any);
+        const row = Array.isArray(probe) && probe[0] ? (probe[0] as any) : null;
+        if (row && !row.revoked_at && (!row.expires_at || Date.parse(row.expires_at) > Date.now())) {
+          if (row.password_hash) {
+            return sendError(
+              res,
+              401,
+              providedPassword ? 'WRONG_PASSWORD' : 'NEEDS_PASSWORD',
+              providedPassword ? 'Incorrect password' : 'This link requires a password',
+            );
+          }
+          if (row.audience === 'signed_in' && !signedInUserId) {
+            return sendError(res, 401, 'SIGN_IN_REQUIRED', 'Please sign in to view this link');
+          }
+        }
+        if (row && (row.revoked_at || (row.expires_at && Date.parse(row.expires_at) <= Date.now()))) {
+          return sendError(res, 410, 'EXPIRED_OR_REVOKED', 'Share link has expired or been revoked');
+        }
         return sendError(res, 404, 'INVALID_OR_EXPIRED', 'Share link is invalid, expired, or revoked');
       }
 
@@ -178,6 +201,7 @@ export function registerShareLinkRoutes(
         record: applyRedaction(record, resolved.redactFields),
         link: {
           id: resolved.link.id,
+          token: resolved.link.token,
           object_name: resolved.link.object_name,
           record_id: resolved.link.record_id,
           permission: resolved.link.permission,
