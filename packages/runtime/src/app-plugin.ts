@@ -39,6 +39,8 @@ export class AppPlugin implements Plugin {
     
     private bundle: any;
     private projectContext?: AppPluginProjectContext;
+    /** When true, init/start become no-ops — env has no app payload. */
+    private readonly empty: boolean = false;
 
     constructor(bundle: any, projectContext?: AppPluginProjectContext) {
         this.bundle = bundle;
@@ -48,14 +50,41 @@ export class AppPlugin implements Plugin {
         const appId = sys?.id || sys?.name;
 
         if (!appId) {
-            // Fail fast with the bundle keys so callers can see exactly
-            // which input was malformed. The old silent fallback to
-            // `'unnamed-app'` produced opaque
-            // "Plugin plugin.app.unnamed-app failed to start - rollback complete"
-            // errors at kernel boot whenever the wrong slice of an
-            // artifact envelope was handed to AppPlugin (e.g. passing
-            // `artifact.metadata` without surfacing the sibling
-            // `artifact.manifest`).
+            // No app id at all. Two scenarios:
+            //   (a) Empty environment — the artifact only ships the bootstrap
+            //       envelope ({ manifest: { plugins, drivers, engines }, functions: [] })
+            //       with no app categories. We must NOT crash kernel boot
+            //       here, otherwise every brand-new env returns 500.
+            //   (b) Malformed envelope where an app payload exists but the
+            //       caller forgot to pass `manifest`. We throw loudly with
+            //       diagnostics so the bug surfaces immediately.
+            // App-category keys that indicate "this bundle was supposed to
+            // register an app". `manifest`/`functions` are envelope-level
+            // wrappers and don't count.
+            const APP_CATEGORY_KEYS = [
+                'objects', 'views', 'apps', 'pages', 'dashboards', 'reports',
+                'flows', 'workflows', 'triggers', 'agents', 'tools', 'skills',
+                'actions', 'permissions', 'roles', 'profiles', 'translations',
+                'sharingRules', 'ragPipelines', 'data',
+            ];
+            const hasAppPayload = APP_CATEGORY_KEYS.some((k) => {
+                const v = (bundle && bundle[k]) ?? (sys && sys[k]);
+                return Array.isArray(v) && v.length > 0;
+            });
+
+            if (!hasAppPayload) {
+                // Empty env — degrade to a no-op plugin so kernel boot
+                // succeeds. Auth / data routes will still work; there's
+                // simply nothing to register.
+                this.empty = true;
+                const envSlug = projectContext?.environmentId
+                    ? projectContext.environmentId.slice(0, 8)
+                    : 'empty';
+                this.name = `plugin.app.empty-${envSlug}`;
+                return;
+            }
+
+            // Has app payload but no id — genuine malformed envelope.
             const bundleKeys = bundle && typeof bundle === 'object'
                 ? Object.keys(bundle).slice(0, 20).join(',')
                 : typeof bundle;
@@ -70,7 +99,7 @@ export class AppPlugin implements Plugin {
                 })}`
                 : '';
             throw new Error(
-                `[AppPlugin] bundle is missing manifest.id and manifest.name — `
+                `[AppPlugin] bundle has app payload but no manifest.id / manifest.name — `
                 + `cannot register as a plugin. bundleKeys=[${bundleKeys}] `
                 + `sysKeys=[${sysKeys}]${ctxHint}`,
             );
@@ -81,6 +110,12 @@ export class AppPlugin implements Plugin {
     }
 
     init = async (ctx: PluginContext) => {
+        if (this.empty) {
+            ctx.logger.debug('[AppPlugin] empty env — no app payload, skipping init', {
+                pluginName: this.name,
+            });
+            return;
+        }
         const sys = this.bundle.manifest || this.bundle;
         const appId = sys.id || sys.name;
 
@@ -104,6 +139,12 @@ export class AppPlugin implements Plugin {
     }
 
     start = async (ctx: PluginContext) => {
+        if (this.empty) {
+            ctx.logger.debug('[AppPlugin] empty env — no app payload, skipping start', {
+                pluginName: this.name,
+            });
+            return;
+        }
         const sys = this.bundle.manifest || this.bundle;
         const appId = sys.id || sys.name;
         

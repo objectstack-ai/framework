@@ -268,25 +268,45 @@ describe('AppPlugin', () => {
     });
 
     describe('constructor fail-fast', () => {
-        it('throws with bundle key context when manifest id/name is missing', () => {
+        it('throws when bundle has app payload but no manifest id/name', () => {
             // Mirrors the regression where the cloud artifact-kernel-factory
-            // handed `artifact.metadata` (category arrays only) without
+            // handed `artifact.metadata` (category arrays with data) without
             // surfacing the sibling `artifact.manifest`, producing opaque
             // "Plugin plugin.app.unnamed-app failed to start" errors.
-            const bundle = { objects: [], views: [], apps: [] };
+            const bundle = {
+                objects: [{ name: 'lead' }],
+                views: [{ name: 'lead_list' }],
+            };
             expect(() => new AppPlugin(bundle as any, {
                 environmentId: 'env-1',
                 organizationId: 'org-1',
                 packageId: 'pkg.test',
                 source: 'package',
-            } as any)).toThrowError(/missing manifest\.id and manifest\.name/);
+            } as any)).toThrowError(/has app payload but no manifest\.id/);
         });
 
-        it('throws when nested manifest has neither id nor name', () => {
-            const bundle = { manifest: { version: '1.0.0' } };
+        it('throws when nested manifest has app payload but no id/name', () => {
+            const bundle = {
+                manifest: { version: '1.0.0', objects: [{ name: 'lead' }] },
+            };
             expect(() => new AppPlugin(bundle as any)).toThrowError(
-                /missing manifest\.id and manifest\.name/,
+                /has app payload but no manifest\.id/,
             );
+        });
+
+        it('degrades to no-op for empty environments (no app payload, no id)', () => {
+            // Brand-new env artifact carries only the bootstrap envelope —
+            // `{ manifest: { plugins, drivers, engines }, functions: [] }`.
+            // Treating this as a hard error broke kernel boot on every
+            // empty env. AppPlugin must accept it as a no-op instead.
+            const bundle = {
+                manifest: { plugins: [], drivers: [], engines: [] },
+                functions: [],
+            };
+            const plugin = new AppPlugin(bundle as any, {
+                environmentId: 'f08a6690-7ed9-43e4-a575-816a4e0fa0a1',
+            } as any);
+            expect(plugin.name).toBe('plugin.app.empty-f08a6690');
         });
 
         it('accepts bundle with only manifest.name', () => {
