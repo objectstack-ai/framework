@@ -19,6 +19,7 @@ export * from './dataset.zod';
 // Form Layouts
 export { objectForm } from './object.form';
 export { fieldForm } from './field.form';
+export { hookForm } from './hook.form';
 
 // Seed Loader Protocol (Relationship Resolution & Dependency Ordering)
 export * from './seed-loader.zod';

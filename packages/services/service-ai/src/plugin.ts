@@ -544,6 +544,17 @@ export class AIServicePlugin implements Plugin {
       }
     }
 
+    // Resolve protocol shim once — used by data, metadata, and query_data
+    // tools so they can see ObjectQL SchemaRegistry items (sys_user, etc.)
+    // in addition to MetadataManager registry items.
+    let protocolService: { getMetaItems(req: { type: string; packageId?: string; organizationId?: string }): Promise<unknown[]> } | undefined;
+    try {
+      const p = ctx.getService<any>('protocol');
+      if (p && typeof p.getMetaItems === 'function') protocolService = p;
+    } catch {
+      protocolService = undefined;
+    }
+
     // Data tools require only the data engine
     try {
       const dataEngine = ctx.getService<IDataEngine>('data');
@@ -558,6 +569,7 @@ export class AIServicePlugin implements Plugin {
             ai: this.service,
             metadata: metadataService,
             dataEngine,
+            protocol: protocolService,
           });
           ctx.logger.info('[AI] query_data tool registered');
 
@@ -703,7 +715,7 @@ export class AIServicePlugin implements Plugin {
     // Metadata tools require only the metadata service
     if (metadataService) {
       try {
-        registerMetadataTools(this.service.toolRegistry, { metadataService });
+        registerMetadataTools(this.service.toolRegistry, { metadataService, protocol: protocolService });
         ctx.logger.info('[AI] Built-in metadata tools registered');
 
         // Register metadata tools as metadata (for Studio visibility)
@@ -868,7 +880,9 @@ export class AIServicePlugin implements Plugin {
     // subscribe to live changes so admin edits in the Setup app
     // swap the adapter without restart. Mirrors the storage pattern.
     if (this.options.bindToSettings !== false) {
+      console.log('[AI bindSettings] registering kernel:ready hook');
       ctx.hook('kernel:ready', async () => {
+        console.log('[AI bindSettings] kernel:ready fired');
         await this.bindSettings(ctx);
       });
     }
@@ -898,6 +912,7 @@ export class AIServicePlugin implements Plugin {
           values[k] = v?.value;
         }
         const provider = String(values.provider ?? 'memory');
+        console.log('[AI bindSettings] provider=', provider, 'gateway_model=', values.gateway_model, 'has_key=', !!values.gateway_api_key);
         // memory provider is the manifest default; treat it as "no override"
         // so the env-detected adapter chosen at init stays in place.
         if (provider === 'memory') return;
@@ -907,11 +922,14 @@ export class AIServicePlugin implements Plugin {
             `[AI] Settings provider=${provider} could not be applied (missing credentials or package). ` +
               `Adapter unchanged (current="${this.service.adapterName}").`,
           );
+          console.log('[AI bindSettings] buildAdapterFromValues returned null');
           return;
         }
         this.service.setAdapter(built.adapter);
+        console.log('[AI bindSettings] adapter set to:', built.description);
         ctx.logger.info(`[AI] Adapter rebuilt from settings: ${built.description}`);
       } catch (err: any) {
+        console.log('[AI bindSettings] error:', err?.message);
         ctx.logger.warn('[AI] Failed to apply ai settings: ' + (err?.message ?? err));
       }
     };

@@ -93,7 +93,7 @@ export const defaultPermissionSets: PermissionSet[] = [
         modifyAllRecords: true,
       },
     },
-    systemPermissions: ['manage_users', 'manage_metadata', 'setup.access'],
+    systemPermissions: ['manage_users', 'manage_metadata', 'setup.access', 'studio.access'],
   }),
   PermissionSetSchema.parse({
     name: 'member_default',

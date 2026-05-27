@@ -533,7 +533,7 @@ export const ListViewSchema = lazySchema(() => z.object({
  * @example Custom widget override
  * { field: 'filter', widget: 'filter-builder' }
  */
-export const FormFieldSchema = lazySchema(() => z.object({
+export const FormFieldSchema: z.ZodType<any> = lazySchema(() => z.object({
   /** Field name (snake_case) */
   field: z.string().describe('Field name (snake_case)'),
   
@@ -571,7 +571,22 @@ export const FormFieldSchema = lazySchema(() => z.object({
   
   /** Custom widget override — only needed when auto-inference is insufficient */
   widget: z.string().optional().describe('Custom widget/component name (overrides type-based inference)'),
-  
+
+  /** For `code` fields: source language (e.g. 'javascript', 'sql', 'json', 'typescript', 'expression', 'cel'). Drives syntax highlighting. */
+  language: z.string().optional().describe('Code editor language (for type=code)'),
+
+  /**
+   * Sub-fields for `composite` / `repeater` types — declares the inner shape
+   * of an embedded sub-object (composite) or each row of an embedded
+   * sub-object array (repeater). Recursive: composite/repeater can nest.
+   * Ignored for all other field types.
+   *
+   * Use `lookup` / `master_detail` instead when the children are independent
+   * records with their own IDs in a separate object/table.
+   */
+  fields: z.array(z.lazy(() => FormFieldSchema)).optional()
+    .describe('Sub-fields for composite/repeater types'),
+
   dependsOn: z.string().optional().describe('Parent field name for cascading'),
   visibleOn: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),
 }));

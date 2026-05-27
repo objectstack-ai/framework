@@ -19,7 +19,7 @@ export const objectForm = defineForm({
         { field: 'pluralLabel', type: 'text', colSpan: 1, helpText: 'Plural display name (e.g. "Accounts")' },
         { field: 'icon', type: 'text', colSpan: 1, helpText: 'Lucide icon name (e.g. "building", "users")' },
         { field: 'description', type: 'textarea', colSpan: 2, helpText: 'Developer documentation' },
-        { field: 'tags', widget: 'string-tags', colSpan: 2, helpText: 'Categorization tags (e.g. "sales", "system")' },
+        { field: 'tags', type: 'tags', colSpan: 2, helpText: 'Categorization tags (e.g. "sales", "system")' },
         { field: 'active', type: 'boolean', colSpan: 1, helpText: 'Is the object active and usable' },
         { field: 'isSystem', type: 'boolean', colSpan: 1, helpText: 'System object (protected from deletion)' },
         { field: 'abstract', type: 'boolean', colSpan: 1, helpText: 'Abstract base (cannot be instantiated)' },
@@ -31,9 +31,17 @@ export const objectForm = defineForm({
       fields: [
         {
           field: 'fields',
-          widget: 'master-detail',
+          type: 'repeater',
+          widget: 'grid',
           required: true,
           helpText: 'Add the columns this object will store',
+          fields: [
+            { field: 'name', type: 'text', required: true, immutable: true, helpText: 'snake_case identifier' },
+            { field: 'label', type: 'text', helpText: 'Display label' },
+            { field: 'type', type: 'select', required: true, helpText: 'Field type' },
+            { field: 'required', type: 'boolean' },
+            { field: 'reference', type: 'text', helpText: 'Target object (for lookup/master_detail)' },
+          ],
         },
       ],
     },
@@ -43,7 +51,22 @@ export const objectForm = defineForm({
       collapsible: true,
       collapsed: true,
       fields: [
-        { field: 'capabilities', widget: 'object-fields', helpText: 'Enable/disable system features' },
+        {
+          field: 'capabilities',
+          type: 'composite',
+          helpText: 'Enable/disable system features',
+          fields: [
+            { field: 'trackHistory', type: 'boolean' },
+            { field: 'searchable', type: 'boolean' },
+            { field: 'apiEnabled', type: 'boolean' },
+            { field: 'files', type: 'boolean' },
+            { field: 'feeds', type: 'boolean' },
+            { field: 'activities', type: 'boolean' },
+            { field: 'trash', type: 'boolean' },
+            { field: 'mru', type: 'boolean' },
+            { field: 'clone', type: 'boolean' },
+          ],
+        },
       ],
     },
     {

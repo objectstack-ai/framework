@@ -42,6 +42,14 @@ export interface QueryDataToolContext {
   dataEngine: IDataEngine;
   /** Maximum number of records returned per call (default: 100). */
   maxLimit?: number;
+  /**
+   * Optional protocol shim for cross-source object enumeration. Mirrors the
+   * fallback used by `list_objects`/`describe_object` — without it the
+   * SchemaRetriever can't see ObjectQL SchemaRegistry objects such as
+   * `sys_user`, and queries against system tables fall through to
+   * "No matching objects in metadata".
+   */
+  protocol?: { getMetaItems(req: { type: string; packageId?: string; organizationId?: string }): Promise<unknown[]> };
 }
 
 /**
@@ -139,7 +147,7 @@ export const QUERY_DATA_TOOL: AIToolDefinition = {
  * schema lookup so newly registered objects are picked up immediately.
  */
 export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
-  const retriever = new SchemaRetriever(ctx.metadata);
+  const retriever = new SchemaRetriever(ctx.metadata, {}, ctx.protocol);
   const maxLimit = ctx.maxLimit ?? 100;
 
   return async (args, execCtx) => {

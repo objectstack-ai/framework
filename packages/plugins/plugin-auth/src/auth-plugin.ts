@@ -5,6 +5,7 @@ import type { BetterAuthOptions } from 'better-auth';
 import { AuthConfig } from '@objectstack/spec/system';
 import {
   SETUP_APP,
+  STUDIO_APP,
   SystemOverviewDashboard,
   SetupAppTranslations,
 } from '@objectstack/platform-objects/apps';
@@ -140,7 +141,7 @@ export class AuthPlugin implements Plugin {
       // @objectstack/platform-objects/apps). plugin-auth is the natural
       // owner of its registration since it loads first among the trio
       // (auth + security + audit) that supplies the underlying objects.
-      apps: [SETUP_APP],
+      apps: [SETUP_APP, STUDIO_APP],
       // List views for each Setup-nav object are defined on the schema
       // itself via the canonical `listViews` map (e.g.
       // sys_user.listViews.{all_users,unverified,two_factor}). Registering

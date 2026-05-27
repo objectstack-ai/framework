@@ -33,11 +33,14 @@ export const FieldType = z.enum([
   'image', 'file', 'avatar', 'video', 'audio',
   // Calculated / System
   'formula', 'summary', 'autonumber',
+  // Embedded structured values (stored as JSON on the parent row — no separate table / FK)
+  'composite',    // Single embedded sub-object with declared sub-fields  (≈ Strapi component / ACF group)
+  'repeater',     // Repeating embedded sub-object array with declared sub-fields  (≈ Strapi repeatable component / ACF repeater)
   // Enhanced Types
   'location',     // GPS coordinates
   'address',      // Structured address
   'code',         // Code editor (JSON/SQL/JS)
-  'json',         // Structured JSON data
+  'json',         // Structured JSON data (untyped escape hatch)
   'color',        // Color picker
   'rating',       // Star rating
   'slider',       // Numeric slider

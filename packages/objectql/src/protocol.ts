@@ -13,12 +13,12 @@ import type {
 } from '@objectstack/spec/api';
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
 import type { IFeedService } from '@objectstack/spec/contracts';
-import { parseFilterAST, isFilterAST, objectForm, fieldForm, ObjectSchema, FieldSchema } from '@objectstack/spec/data';
+import { parseFilterAST, isFilterAST, objectForm, fieldForm, hookForm, ObjectSchema, FieldSchema, HookSchema } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
 import { ListViewSchema, FormViewSchema, DashboardSchema, AppSchema, PageSchema, ReportSchema, ActionSchema, reportForm, viewForm, appForm, dashboardForm, actionForm, pageForm, type FormView } from '@objectstack/spec/ui';
 import { RoleSchema, roleForm } from '@objectstack/spec/identity';
-import { PermissionSetSchema } from '@objectstack/spec/security';
-import { EmailTemplateSchema } from '@objectstack/spec/system';
+import { PermissionSetSchema, permissionForm } from '@objectstack/spec/security';
+import { EmailTemplateSchema, emailTemplateForm } from '@objectstack/spec/system';
 import { ToolSchema, SkillSchema, AgentSchema, agentForm, toolForm, skillForm } from '@objectstack/spec/ai';
 import { FlowSchema, WorkflowRuleSchema, ApprovalProcessSchema, flowForm, workflowForm, approvalForm } from '@objectstack/spec/automation';
 import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
@@ -50,6 +50,7 @@ const TYPE_TO_SCHEMA: Record<string, z.ZodTypeAny> = {
     flow: FlowSchema,
     workflow: WorkflowRuleSchema,
     approval: ApprovalProcessSchema,
+    hook: HookSchema,
 };
 
 /**
@@ -66,6 +67,7 @@ const TYPE_TO_SCHEMA: Record<string, z.ZodTypeAny> = {
 const TYPE_TO_FORM: Record<string, FormView> = {
     object: objectForm,
     field: fieldForm,
+    hook: hookForm,
     report: reportForm,
     view: viewForm,
     app: appForm,
@@ -79,6 +81,9 @@ const TYPE_TO_FORM: Record<string, FormView> = {
     flow: flowForm,
     workflow: workflowForm,
     approval: approvalForm,
+    permission: permissionForm,
+    profile: permissionForm,
+    email_template: emailTemplateForm,
 };
 
 /**

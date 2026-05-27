@@ -251,6 +251,9 @@ export const WorkflowRuleSchema = lazySchema(() => z.object({
   
   /** When to evaluate the rule */
   triggerType: WorkflowTriggerType.describe('When to evaluate'),
+
+  /** Human-readable description of what this workflow does */
+  description: z.string().optional().describe('Human-readable description of what this workflow does'),
   
   /** 
    * Condition to start the workflow.

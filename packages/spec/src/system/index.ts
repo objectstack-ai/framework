@@ -30,6 +30,7 @@ export * from './migration.zod';
 export * from './auth-config.zod';
 export * from './email-config.zod';
 export * from './email-template.zod';
+export * from './email-template.form';
 export * from './compliance.zod';
 export * from './encryption.zod';
 export * from './masking.zod';

@@ -167,6 +167,23 @@ export interface MetadataToolContext {
     exists(packageId: string): Promise<boolean>;
     get(packageId: string): Promise<{ manifest: { scope?: string; source?: string } } | undefined>;
   };
+
+  /**
+   * Optional: ObjectStack protocol for cross-source metadata enumeration.
+   *
+   * `IMetadataService.listObjects()` only sees items registered through the
+   * MetadataManager (in-memory registry + loaders). It misses objects that
+   * live in ObjectQL's SchemaRegistry — most notably system objects shipped
+   * by plugins (e.g. `sys_user`, `sys_organization` from plugin-auth) and
+   * environment-scoped objects persisted to `sys_metadata`.
+   *
+   * When provided, `list_objects` will use `protocol.getMetaItems({ type: 'object' })`
+   * (the same source that backs `GET /api/v1/meta/object`) so the agent sees the
+   * complete set of available objects.
+   */
+  protocol?: {
+    getMetaItems(request: { type: string; packageId?: string; organizationId?: string }): Promise<unknown[]>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +465,34 @@ function createListObjectsHandler(ctx: MetadataToolContext): ToolHandler {
       includeFields?: boolean;
     };
 
-    const objects = await ctx.metadataService.listObjects();
+    // Prefer the protocol-level enumerator when available — it merges
+    // ObjectQL's SchemaRegistry (system plugins like plugin-auth contribute
+    // `sys_user`, `sys_organization`, …), persisted `sys_metadata` overlays,
+    // and MetadataService runtime registrations into a single list. Falling
+    // back to `metadataService.listObjects()` alone would miss everything
+    // registered through the SchemaRegistry, which is why agents previously
+    // reported "no user object exists" despite `sys_user` being present.
+    let objects: unknown[] = [];
+    if (ctx.protocol?.getMetaItems) {
+      try {
+        const fromProtocol = await ctx.protocol.getMetaItems({ type: 'object' });
+        // Protocol can return either a plain array OR a wrapped envelope
+        // `{ type, items: [] }` (the shape returned by the protocol shim
+        // backing `GET /api/v1/meta/object`). Normalize both.
+        const arr = Array.isArray(fromProtocol)
+          ? fromProtocol
+          : (fromProtocol && typeof fromProtocol === 'object' && Array.isArray((fromProtocol as any).items)
+            ? (fromProtocol as any).items
+            : null);
+        objects = arr ?? await ctx.metadataService.listObjects();
+      } catch {
+        objects = await ctx.metadataService.listObjects();
+      }
+    } else {
+      objects = await ctx.metadataService.listObjects();
+    }
+    if (!Array.isArray(objects)) objects = [];
+    if (!Array.isArray(objects)) objects = [];
     let result = (objects as ObjectDef[]).map(o => {
       const base: Record<string, unknown> = {
         name: o.name,
@@ -494,7 +538,22 @@ function createDescribeObjectHandler(ctx: MetadataToolContext): ToolHandler {
       return JSON.stringify({ error: `Invalid object name "${objectName}". Must be snake_case.` });
     }
 
-    const objectDef = await ctx.metadataService.getObject(objectName);
+    // Same protocol-first lookup rationale as `list_objects` — `getObject`
+    // alone won't find objects living in ObjectQL's SchemaRegistry.
+    let objectDef: unknown | undefined = await ctx.metadataService.getObject(objectName);
+    if (!objectDef && ctx.protocol?.getMetaItems) {
+      try {
+        const all = await ctx.protocol.getMetaItems({ type: 'object' });
+        const arr: ObjectDef[] = Array.isArray(all)
+          ? (all as ObjectDef[])
+          : (all && typeof all === 'object' && Array.isArray((all as any).items)
+            ? ((all as any).items as ObjectDef[])
+            : []);
+        objectDef = arr.find(o => o?.name === objectName);
+      } catch {
+        // fall through — still report not found below
+      }
+    }
     if (!objectDef) {
       return JSON.stringify({ error: `Object "${objectName}" not found` });
     }

@@ -39,10 +39,16 @@ import type { IMetadataService } from '@objectstack/spec/contracts';
  */
 export class SchemaRetriever {
   private readonly metadata: IMetadataService;
+  private readonly protocol?: { getMetaItems(req: { type: string }): Promise<unknown[]> };
   private readonly options: Required<SchemaRetrieverOptions>;
 
-  constructor(metadata: IMetadataService, options: SchemaRetrieverOptions = {}) {
+  constructor(
+    metadata: IMetadataService,
+    options: SchemaRetrieverOptions = {},
+    protocol?: { getMetaItems(req: { type: string }): Promise<unknown[]> },
+  ) {
     this.metadata = metadata;
+    this.protocol = protocol;
     this.options = {
       limit: options.limit ?? 3,
       minScore: options.minScore ?? 1,
@@ -61,7 +67,29 @@ export class SchemaRetriever {
     const terms = tokenise(query);
     if (terms.length === 0) return [];
 
-    const objects = await this.metadata.listObjects();
+    // Prefer the protocol-level enumerator when available so we also see
+    // objects registered in the ObjectQL SchemaRegistry (e.g. sys_user from
+    // plugin-auth) — `IMetadataService.listObjects()` alone misses those.
+    let objects: unknown[] = [];
+    if (this.protocol?.getMetaItems) {
+      try {
+        const fromProtocol = await this.protocol.getMetaItems({ type: 'object' });
+        const arr = Array.isArray(fromProtocol)
+          ? fromProtocol
+          : (fromProtocol && typeof fromProtocol === 'object' && Array.isArray((fromProtocol as any).items)
+            ? (fromProtocol as any).items
+            : null);
+        objects = arr ?? await this.metadata.listObjects();
+        console.log('[SchemaRetriever] via protocol: count=', objects.length, 'terms=', terms);
+      } catch (e: any) {
+        console.log('[SchemaRetriever] protocol failed:', e?.message);
+        objects = await this.metadata.listObjects();
+      }
+    } else {
+      console.log('[SchemaRetriever] no protocol; via metadataService');
+      objects = await this.metadata.listObjects();
+    }
+    if (!Array.isArray(objects)) objects = [];
     const hits: SchemaHit[] = [];
 
     for (const raw of objects) {
