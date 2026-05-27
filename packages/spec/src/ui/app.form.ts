@@ -24,10 +24,10 @@ export const appForm = defineForm({
       label: 'Navigation',
       description: 'Sidebar items and area grouping.',
       fields: [
-        { field: 'navigation', widget: 'object-fields', helpText: 'Nav tree — recursive structure' },
+        { field: 'navigation', type: 'composite', helpText: 'Nav tree — recursive structure' },
         { field: 'areas', widget: 'master-detail', helpText: 'Group items into collapsible areas' },
         { field: 'homePageId', type: 'text', helpText: 'Landing page when app opens' },
-        { field: 'mobileNavigation', widget: 'object-fields', helpText: 'Bottom tab bar config for mobile' },
+        { field: 'mobileNavigation', type: 'composite', helpText: 'Bottom tab bar config for mobile' },
       ],
     },
     {
@@ -35,7 +35,7 @@ export const appForm = defineForm({
       description: 'Objects and APIs this app uses.',
       fields: [
         { field: 'objects', widget: 'object-selector', multiple: true, helpText: 'Object names this app exposes' },
-        { field: 'apis', widget: 'object-fields', helpText: 'API endpoint definitions' },
+        { field: 'apis', type: 'composite', helpText: 'API endpoint definitions' },
         { field: 'defaultAgent', type: 'text', helpText: 'AI agent for the ambient assistant button' },
       ],
     },
@@ -44,7 +44,7 @@ export const appForm = defineForm({
       description: 'Theme colors and logo.',
       collapsible: true,
       collapsed: true,
-      fields: [{ field: 'branding', widget: 'object-fields', helpText: 'Primary/secondary colors, logo, theme' }],
+      fields: [{ field: 'branding', type: 'composite', helpText: 'Primary/secondary colors, logo, theme' }],
     },
     {
       label: 'Access & sharing',
@@ -53,9 +53,9 @@ export const appForm = defineForm({
       collapsed: true,
       fields: [
         { field: 'requiredPermissions', widget: 'string-tags', helpText: 'Permissions needed to access this app' },
-        { field: 'sharing', widget: 'object-fields', helpText: 'Public/internal/restricted access control' },
-        { field: 'embed', widget: 'object-fields', helpText: 'iFrame embed configuration' },
-        { field: 'aria', widget: 'object-fields', helpText: 'Accessibility labels' },
+        { field: 'sharing', type: 'composite', helpText: 'Public/internal/restricted access control' },
+        { field: 'embed', type: 'composite', helpText: 'iFrame embed configuration' },
+        { field: 'aria', type: 'composite', helpText: 'Accessibility labels' },
       ],
     },
   ],

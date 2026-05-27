@@ -24,7 +24,7 @@ export const dashboardForm = defineForm({
         { field: 'columns', type: 'number', colSpan: 1, helpText: 'Grid columns (default 12)' },
         { field: 'gap', type: 'number', colSpan: 1, helpText: 'Grid gap (Tailwind units)' },
         { field: 'refreshInterval', type: 'number', colSpan: 1, helpText: 'Auto-refresh (seconds)' },
-        { field: 'header', widget: 'object-fields', colSpan: 3, helpText: 'Dashboard header config (title, subtitle, actions)' },
+        { field: 'header', type: 'composite', colSpan: 3, helpText: 'Dashboard header config (title, subtitle, actions)' },
       ],
     },
     {
@@ -40,7 +40,7 @@ export const dashboardForm = defineForm({
       collapsible: true,
       collapsed: true,
       fields: [
-        { field: 'dateRange', widget: 'object-fields', helpText: 'Default date range selector' },
+        { field: 'dateRange', type: 'composite', helpText: 'Default date range selector' },
         { field: 'globalFilters', widget: 'master-detail', helpText: 'Filters applied to all widgets' },
       ],
     },
@@ -50,8 +50,8 @@ export const dashboardForm = defineForm({
       collapsible: true,
       collapsed: true,
       fields: [
-        { field: 'aria', widget: 'object-fields', helpText: 'Accessibility labels' },
-        { field: 'performance', widget: 'object-fields', helpText: 'Caching and optimization config' },
+        { field: 'aria', type: 'composite', helpText: 'Accessibility labels' },
+        { field: 'performance', type: 'composite', helpText: 'Caching and optimization config' },
       ],
     },
   ],

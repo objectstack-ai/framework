@@ -880,9 +880,7 @@ export class AIServicePlugin implements Plugin {
     // subscribe to live changes so admin edits in the Setup app
     // swap the adapter without restart. Mirrors the storage pattern.
     if (this.options.bindToSettings !== false) {
-      console.log('[AI bindSettings] registering kernel:ready hook');
       ctx.hook('kernel:ready', async () => {
-        console.log('[AI bindSettings] kernel:ready fired');
         await this.bindSettings(ctx);
       });
     }
@@ -912,7 +910,6 @@ export class AIServicePlugin implements Plugin {
           values[k] = v?.value;
         }
         const provider = String(values.provider ?? 'memory');
-        console.log('[AI bindSettings] provider=', provider, 'gateway_model=', values.gateway_model, 'has_key=', !!values.gateway_api_key);
         // memory provider is the manifest default; treat it as "no override"
         // so the env-detected adapter chosen at init stays in place.
         if (provider === 'memory') return;
@@ -922,14 +919,11 @@ export class AIServicePlugin implements Plugin {
             `[AI] Settings provider=${provider} could not be applied (missing credentials or package). ` +
               `Adapter unchanged (current="${this.service.adapterName}").`,
           );
-          console.log('[AI bindSettings] buildAdapterFromValues returned null');
           return;
         }
         this.service.setAdapter(built.adapter);
-        console.log('[AI bindSettings] adapter set to:', built.description);
         ctx.logger.info(`[AI] Adapter rebuilt from settings: ${built.description}`);
       } catch (err: any) {
-        console.log('[AI bindSettings] error:', err?.message);
         ctx.logger.warn('[AI] Failed to apply ai settings: ' + (err?.message ?? err));
       }
     };

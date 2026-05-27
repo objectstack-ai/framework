@@ -80,13 +80,10 @@ export class SchemaRetriever {
             ? (fromProtocol as any).items
             : null);
         objects = arr ?? await this.metadata.listObjects();
-        console.log('[SchemaRetriever] via protocol: count=', objects.length, 'terms=', terms);
-      } catch (e: any) {
-        console.log('[SchemaRetriever] protocol failed:', e?.message);
+      } catch {
         objects = await this.metadata.listObjects();
       }
     } else {
-      console.log('[SchemaRetriever] no protocol; via metadataService');
       objects = await this.metadata.listObjects();
     }
     if (!Array.isArray(objects)) objects = [];

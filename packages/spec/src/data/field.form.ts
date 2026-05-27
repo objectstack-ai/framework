@@ -54,8 +54,8 @@ export const fieldForm = defineForm({
       collapsed: true,
       fields: [
         { field: 'expression', widget: 'textarea', helpText: 'CEL expression to calculate this field (makes it read-only)' },
-        { field: 'summaryOperations', widget: 'object-fields', helpText: 'Roll-up summary configuration (for parent-child relationships)' },
-        { field: 'cached', widget: 'object-fields', helpText: 'Caching configuration for computed fields' },
+        { field: 'summaryOperations', type: 'composite', helpText: 'Roll-up summary configuration (for parent-child relationships)' },
+        { field: 'cached', type: 'composite', helpText: 'Caching configuration for computed fields' },
       ],
     },
     {
@@ -78,8 +78,8 @@ export const fieldForm = defineForm({
         { field: 'auditTrail', colSpan: 1, helpText: 'Track detailed changes with user and timestamp' },
         { field: 'trackFeedHistory', colSpan: 1, helpText: 'Show changes in activity feed' },
         // Security & Compliance
-        { field: 'encryptionConfig', widget: 'object-fields', colSpan: 2, helpText: 'Field-level encryption (GDPR/HIPAA/PCI-DSS)' },
-        { field: 'maskingRule', widget: 'object-fields', colSpan: 2, helpText: 'Data masking rules for PII protection' },
+        { field: 'encryptionConfig', type: 'composite', colSpan: 2, helpText: 'Field-level encryption (GDPR/HIPAA/PCI-DSS)' },
+        { field: 'maskingRule', type: 'composite', colSpan: 2, helpText: 'Data masking rules for PII protection' },
       ],
     },
   ],

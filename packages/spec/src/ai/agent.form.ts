@@ -28,10 +28,10 @@ export const agentForm = defineForm({
       description: 'Model selection, instructions, planning, and memory.',
       fields: [
         { field: 'instructions', required: true, widget: 'textarea', helpText: 'System prompt — tell the agent how to behave and what it can do' },
-        { field: 'model', widget: 'object-fields', helpText: 'AI model configuration (provider, model name, temperature, etc.)' },
-        { field: 'planning', widget: 'object-fields', helpText: 'Autonomous reasoning configuration (strategy, max iterations, replan)' },
-        { field: 'memory', widget: 'object-fields', helpText: 'Memory management (short-term, long-term, reflection)' },
-        { field: 'lifecycle', widget: 'object-fields', helpText: 'State machine defining conversation flow' },
+        { field: 'model', type: 'composite', helpText: 'AI model configuration (provider, model name, temperature, etc.)' },
+        { field: 'planning', type: 'composite', helpText: 'Autonomous reasoning configuration (strategy, max iterations, replan)' },
+        { field: 'memory', type: 'composite', helpText: 'Memory management (short-term, long-term, reflection)' },
+        { field: 'lifecycle', type: 'composite', helpText: 'State machine defining conversation flow' },
       ],
     },
     {
@@ -40,7 +40,7 @@ export const agentForm = defineForm({
       fields: [
         { field: 'skills', widget: 'string-tags', helpText: 'Skill names (Agent→Skill→Tool architecture)' },
         { field: 'tools', widget: 'master-detail', helpText: 'Direct tool references (legacy mode)' },
-        { field: 'knowledge', widget: 'object-fields', helpText: 'RAG knowledge access configuration' },
+        { field: 'knowledge', type: 'composite', helpText: 'RAG knowledge access configuration' },
       ],
     },
     {
@@ -53,7 +53,7 @@ export const agentForm = defineForm({
         { field: 'access', widget: 'string-tags', helpText: 'User IDs or role names who can chat with this agent' },
         { field: 'permissions', widget: 'string-tags', helpText: 'Required permissions to use this agent' },
         { field: 'tenantId', helpText: 'Restrict to specific organization ID' },
-        { field: 'guardrails', widget: 'object-fields', helpText: 'Safety rules and content policies' },
+        { field: 'guardrails', type: 'composite', helpText: 'Safety rules and content policies' },
       ],
     },
   ],

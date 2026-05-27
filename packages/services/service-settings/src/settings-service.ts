@@ -107,6 +107,21 @@ export class SettingsService {
     if (extras?.secretStore) this.secretStore = extras.secretStore;
     if (extras?.auditWriter) this.auditWriter = extras.auditWriter;
     if (extras?.cryptoProvider) this.cryptoProvider = extras.cryptoProvider;
+
+    // Notify subscribers that the persistent store is now available so
+    // late-binders (e.g. AIServicePlugin's adapter rebuild on saved
+    // provider settings) can re-fetch with real DB-backed values rather
+    // than only the in-memory defaults that were visible at
+    // `kernel:ready` ordering before the engine was wired.
+    for (const ns of this.registry.keys()) {
+      this.emitChange({
+        namespace: ns,
+        key: '*',
+        scope: 'global',
+        action: 'set',
+        at: new Date().toISOString(),
+      });
+    }
   }
 
   /**
