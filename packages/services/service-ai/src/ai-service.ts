@@ -53,6 +53,57 @@ function finishPart(result?: AIResult): TextStreamPart<ToolSet> {
 }
 
 /**
+ * Extract plain text from a ModelMessage's `content`. Handles the three
+ * common shapes: bare string, array of `{type: 'text', text}` parts, and
+ * array of tool-call / tool-result parts (which we ignore for titling
+ * because they encode metadata, not user-facing language).
+ */
+function extractMessageText(message: { content?: unknown }): string {
+  const c = message.content;
+  if (typeof c === 'string') return c;
+  if (!Array.isArray(c)) return '';
+  const parts: string[] = [];
+  for (const part of c) {
+    if (typeof part === 'string') {
+      parts.push(part);
+    } else if (part && typeof part === 'object') {
+      const p = part as { type?: string; text?: unknown };
+      if (p.type === 'text' && typeof p.text === 'string') parts.push(p.text);
+    }
+  }
+  return parts.join(' ').trim();
+}
+
+/**
+ * Defensive title cleanup. Models love to add quotes, trailing periods,
+ * "Title:" prefixes, and Markdown decoration even when told not to.
+ * Strip those, collapse whitespace, then hard-cap to `maxLen` characters.
+ */
+function cleanTitle(raw: string, maxLen: number): string {
+  let s = raw.replace(/\s+/g, ' ').trim();
+  // Strip leading/trailing quotes (straight + curly) and parens/brackets.
+  s = s.replace(/^[\s"'“”‘’`「『（(\[【]+/, '').replace(/[\s"'“”‘’`」』）)\]】]+$/, '');
+  // Drop common preambles like "Title:" / "标题:" (after quote strip so
+  // models that wrap the whole thing in quotes still get unwrapped).
+  s = s.replace(/^(title|标题|主题)\s*[:：]\s*/i, '');
+  // Strip wrapping quotes a second time in case the preamble itself was
+  // quoted (e.g. `Title: "Foo Bar"` → after preamble strip → `"Foo Bar"`).
+  s = s.replace(/^[\s"'“”‘’`「『（(\[【]+/, '').replace(/[\s"'“”‘’`」』）)\]】]+$/, '');
+  // Drop trailing terminal punctuation.
+  s = s.replace(/[.。!！?？,，;；:：]+$/, '').trim();
+  if (!s) return '';
+  if (s.length <= maxLen) return s;
+  // Soft cut at the last word boundary within the budget when ASCII;
+  // otherwise hard slice (CJK has no spaces).
+  if (/^[\x00-\x7F]+$/.test(s)) {
+    const cut = s.slice(0, maxLen);
+    const lastSpace = cut.lastIndexOf(' ');
+    return lastSpace > maxLen / 2 ? cut.slice(0, lastSpace) : cut;
+  }
+  return s.slice(0, maxLen);
+}
+
+/**
  * Configuration for AIService.
  */
 export interface AIServiceConfig {
@@ -112,6 +163,25 @@ export class AIService implements IAIService {
   /** Data engine for `ai_pending_actions` persistence. */
   private readonly dataEngine?: IDataEngine;
 
+  /**
+   * Auto-title configuration. When `enabled`, the first `chatWithTools` /
+   * `streamChatWithTools` call against a still-untitled conversation
+   * triggers a one-shot LLM call (fire-and-forget) that summarises the
+   * exchange into a short title and PATCHes it onto the conversation row.
+   *
+   * Defaults to disabled — `AIServicePlugin` flips this on (with values
+   * read from the `ai` settings namespace) once the kernel is ready.
+   * Keeping the default off means unit tests don't accidentally make
+   * extra adapter calls.
+   */
+  private titleGeneration: { enabled: boolean; maxLength: number } = {
+    enabled: false,
+    maxLength: 16,
+  };
+
+  /** Tracks conversations we've already attempted to title to avoid duplicate LLM calls. */
+  private readonly titledConversations = new Set<string>();
+
   constructor(config: AIServiceConfig = {}) {
     this.adapter = config.adapter ?? new MemoryLLMAdapter();
     this.logger = config.logger ?? createLogger({ level: 'info', format: 'pretty' });
@@ -143,6 +213,104 @@ export class AIService implements IAIService {
     this.adapter = next;
     if (prev !== next.name) {
       this.logger.info(`[AI] LLM adapter swapped: ${prev} → ${next.name}`);
+    }
+  }
+
+  /**
+   * Configure conversation auto-titling. Called by `AIServicePlugin`
+   * when the `ai` settings namespace is bound (so admins can toggle
+   * the feature live from the Setup app without a restart).
+   *
+   * - `enabled=false` is the safe default for unit tests and the
+   *   memory adapter (which would just echo the prompt back as a title).
+   * - `maxLength` is enforced both in the prompt and as a hard server-side
+   *   `slice()` so a misbehaving model can't write a 4 KB "title".
+   */
+  setTitleGenerationConfig(config: { enabled: boolean; maxLength?: number }): void {
+    this.titleGeneration = {
+      enabled: config.enabled,
+      maxLength: Math.max(8, Math.min(80, config.maxLength ?? 16)),
+    };
+    this.logger.debug('[AI] title generation config', this.titleGeneration);
+  }
+
+  /**
+   * Best-effort title generation for a conversation. Idempotent per
+   * `AIService` instance — once attempted, the id is recorded in
+   * `titledConversations` so subsequent chats don't burn extra tokens
+   * re-summarising the same thread.
+   *
+   * Skips when:
+   * - feature disabled
+   * - conversation already has a non-empty title
+   * - conversation has fewer than 2 messages (no exchange to summarise)
+   * - conversation has no user message
+   *
+   * Failures are logged at debug level and swallowed — title generation
+   * is purely cosmetic and must never break chat.
+   */
+  async summarizeConversation(conversationId: string): Promise<void> {
+    if (!this.titleGeneration.enabled) return;
+    if (this.titledConversations.has(conversationId)) return;
+    this.titledConversations.add(conversationId);
+
+    try {
+      const conv = await this.conversationService.get(conversationId);
+      if (!conv) return;
+      if (conv.title && conv.title.trim().length > 0) return;
+      if (!conv.messages || conv.messages.length < 2) return;
+
+      const userMsg = conv.messages.find((m) => (m as { role?: string }).role === 'user');
+      const assistantMsg = conv.messages.find((m) => (m as { role?: string }).role === 'assistant');
+      if (!userMsg) return;
+
+      const userText = extractMessageText(userMsg);
+      const assistantText = assistantMsg ? extractMessageText(assistantMsg) : '';
+      if (!userText) return;
+
+      const maxLen = this.titleGeneration.maxLength;
+      const prompt: ModelMessage[] = [
+        {
+          role: 'system',
+          content:
+            `You are a title generator. Produce a SHORT (<=${maxLen} characters), ` +
+            `noun-phrase title that captures the topic of the conversation below. ` +
+            `Reply with the title ONLY — no quotes, no punctuation, no preamble, ` +
+            `no trailing period. Match the language of the user's message.`,
+        } as ModelMessage,
+        {
+          role: 'user',
+          content:
+            `User said:\n${userText.slice(0, 800)}` +
+            (assistantText ? `\n\nAssistant replied:\n${assistantText.slice(0, 800)}` : ''),
+        } as ModelMessage,
+      ];
+
+      // Call adapter directly — bypass tools, bypass our own persist/title
+      // hooks, and request a minimal token budget. Errors here surface as
+      // warnings and the user just gets the fallback preview in the sidebar.
+      const result = await this.adapter.chat(prompt, {
+        temperature: 0.3,
+        maxTokens: 32,
+      });
+      const raw = (result.content ?? '').trim();
+      if (!raw) return;
+      const cleaned = cleanTitle(raw, maxLen);
+      if (!cleaned) return;
+
+      await this.conversationService.update(conversationId, { title: cleaned });
+      this.logger.debug('[AI] auto-titled conversation', {
+        conversationId,
+        title: cleaned,
+      });
+    } catch (err) {
+      // Failure is non-fatal — drop the id from the tried set so a
+      // later turn can retry once the underlying issue clears.
+      this.titledConversations.delete(conversationId);
+      this.logger.debug('[AI] summarizeConversation failed', {
+        conversationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -401,6 +569,7 @@ export class AIService implements IAIService {
             role: 'assistant',
             content: result.content,
           } as ModelMessage);
+          void this.summarizeConversation(conversationId);
         }
         return autoCreatedConversationId
           ? { ...result, conversationId: autoCreatedConversationId }
@@ -489,6 +658,7 @@ export class AIService implements IAIService {
         role: 'assistant',
         content: finalResult.content,
       } as ModelMessage);
+      void this.summarizeConversation(conversationId);
     }
     return autoCreatedConversationId
       ? { ...finalResult, conversationId: autoCreatedConversationId }
@@ -565,6 +735,7 @@ export class AIService implements IAIService {
             role: 'assistant',
             content: result.content,
           } as ModelMessage);
+          void this.summarizeConversation(conversationId);
         }
         yield textDeltaPart('stream', result.content);
         yield finishPart(result);
@@ -639,6 +810,7 @@ export class AIService implements IAIService {
         role: 'assistant',
         content: result.content,
       } as ModelMessage);
+      void this.summarizeConversation(conversationId);
     }
     yield textDeltaPart('stream', result.content);
     yield finishPart(result);

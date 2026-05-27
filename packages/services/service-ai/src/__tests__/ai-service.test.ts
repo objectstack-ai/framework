@@ -1357,4 +1357,224 @@ describe('AIServicePlugin', () => {
       }
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────
+  // Conversation auto-titling
+  // ─────────────────────────────────────────────────────────────────
+
+  describe('conversation auto-titling', () => {
+    /**
+     * Test adapter that returns a fixed `chat()` response for each call,
+     * cycling through `responses`. Lets us script the "first call =
+     * assistant turn, second call = title" sequence used by these tests.
+     */
+    function makeScriptedAdapter(responses: string[]): LLMAdapter {
+      let i = 0;
+      return {
+        name: 'scripted',
+        async chat() {
+          const content = responses[Math.min(i, responses.length - 1)] ?? '';
+          i++;
+          return {
+            content,
+            toolCalls: undefined,
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+            model: 'scripted',
+          };
+        },
+      } as unknown as LLMAdapter;
+    }
+
+    /** Wait for fire-and-forget summarizeConversation to settle. */
+    async function flushMicrotasks(): Promise<void> {
+      // Two tick rounds is enough: one for the void promise to resolve
+      // the adapter call, one for the update to land.
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+    }
+
+    it('does not generate a title when feature is disabled (default)', async () => {
+      const adapter = makeScriptedAdapter(['Sure, here is a reply.']);
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      const conv = await conversationService.create();
+
+      await service.chatWithTools(
+        [{ role: 'user', content: 'Help me design a database schema' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+
+      const after = await conversationService.get(conv.id);
+      expect(after?.title ?? undefined).toBeUndefined();
+    });
+
+    it('auto-titles the conversation after the first assistant turn when enabled', async () => {
+      const adapter = makeScriptedAdapter([
+        'Here is a brief overview of database normalization...',
+        'Database Schema',
+      ]);
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 24 });
+
+      const conv = await conversationService.create();
+      await service.chatWithTools(
+        [{ role: 'user', content: 'Help me design a database schema' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+
+      const after = await conversationService.get(conv.id);
+      expect(after?.title).toBe('Database Schema');
+    });
+
+    it('does not retitle a conversation that already has a title', async () => {
+      const adapter = makeScriptedAdapter([
+        'Reply.',
+        'This Should Not Land',
+      ]);
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 24 });
+
+      const conv = await conversationService.create({ title: 'Manually Named' });
+      await service.chatWithTools(
+        [{ role: 'user', content: 'Hello' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+
+      const after = await conversationService.get(conv.id);
+      expect(after?.title).toBe('Manually Named');
+    });
+
+    it('skips titling when there is no user message in the conversation', async () => {
+      const adapter = makeScriptedAdapter(['Reply.', 'Should Not Be Used']);
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 24 });
+
+      const conv = await conversationService.create();
+      // No persistence wired — the in-memory conv stays empty even after run.
+      // Call summarize directly to assert the empty-history guard.
+      await service.summarizeConversation(conv.id);
+
+      const after = await conversationService.get(conv.id);
+      expect(after?.title ?? undefined).toBeUndefined();
+    });
+
+    it('cleans up common model artifacts (quotes, prefixes, trailing period)', async () => {
+      const adapter = makeScriptedAdapter([
+        'Sure!',
+        '  "Title: Database Schema Design."  ',
+      ]);
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 32 });
+
+      const conv = await conversationService.create();
+      await service.chatWithTools(
+        [{ role: 'user', content: 'design a schema' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+
+      const after = await conversationService.get(conv.id);
+      expect(after?.title).toBe('Database Schema Design');
+    });
+
+    it('hard-caps title length at the configured maxLength', async () => {
+      const adapter = makeScriptedAdapter([
+        'Reply.',
+        '关于多租户数据库架构设计的深度技术讨论与实施方案细节',
+      ]);
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 12 });
+
+      const conv = await conversationService.create();
+      await service.chatWithTools(
+        [{ role: 'user', content: '帮我设计数据库' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+
+      const after = await conversationService.get(conv.id);
+      expect(after?.title).toBeDefined();
+      expect((after!.title as string).length).toBeLessThanOrEqual(12);
+      expect(after!.title!.startsWith('关于多租户')).toBe(true);
+    });
+
+    it('is idempotent — second turn on the same conversation does not re-summarize', async () => {
+      const chatSpy = vi.fn(async (_messages: any) => ({
+        content: 'Assistant reply.',
+        toolCalls: undefined,
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        model: 'spy',
+      }));
+      // First two reply slots, third+ should not be reached for a title twice.
+      const adapter = { name: 'spy', chat: chatSpy } as unknown as LLMAdapter;
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 24 });
+
+      const conv = await conversationService.create();
+      // Turn 1
+      await service.chatWithTools(
+        [{ role: 'user', content: 'first question' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+      const callsAfterFirst = chatSpy.mock.calls.length;
+
+      // Turn 2 — assistant reply call happens, but no additional title call.
+      await service.chatWithTools(
+        [{ role: 'user', content: 'follow-up question' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+      const callsAfterSecond = chatSpy.mock.calls.length;
+
+      // First turn: 1 reply + 1 title = 2 calls.
+      // Second turn: 1 reply only = 1 extra call (no second title).
+      expect(callsAfterFirst).toBe(2);
+      expect(callsAfterSecond - callsAfterFirst).toBe(1);
+    });
+
+    it('swallows adapter failures during titling without breaking chat', async () => {
+      let i = 0;
+      const adapter = {
+        name: 'flaky',
+        async chat() {
+          i++;
+          if (i === 1) {
+            return {
+              content: 'Primary reply OK',
+              toolCalls: undefined,
+              usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+              model: 'flaky',
+            };
+          }
+          throw new Error('rate limited');
+        },
+      } as unknown as LLMAdapter;
+      const conversationService = new InMemoryConversationService();
+      const service = new AIService({ adapter, conversationService, logger: silentLogger });
+      service.setTitleGenerationConfig({ enabled: true, maxLength: 24 });
+
+      const conv = await conversationService.create();
+      const result = await service.chatWithTools(
+        [{ role: 'user', content: 'will this error' } as ModelMessage],
+        { toolExecutionContext: { conversationId: conv.id } } as any,
+      );
+      await flushMicrotasks();
+
+      // Chat should succeed even though the title call threw.
+      expect(result.content).toBe('Primary reply OK');
+      const after = await conversationService.get(conv.id);
+      expect(after?.title ?? undefined).toBeUndefined();
+    });
+  });
 });

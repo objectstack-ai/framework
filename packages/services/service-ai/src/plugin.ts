@@ -909,7 +909,23 @@ export class AIServicePlugin implements Plugin {
         for (const [k, v] of Object.entries(payload.values as Record<string, any>)) {
           values[k] = v?.value;
         }
-        const provider = String(values.provider ?? 'memory');
+        // ── Conversation auto-titling ─────────────────────────────
+        // Flip on whenever any non-memory provider is wired. Pure
+        // form-driven — no env var fallback because it costs tokens
+        // and operators should opt in explicitly via the toggle.
+        const providerForTitles = String(values.provider ?? 'memory');
+        const titleEnabled =
+          providerForTitles !== 'memory' &&
+          values.title_generation_enabled !== false;
+        const titleMaxLen = typeof values.title_max_length === 'number'
+          ? values.title_max_length
+          : 16;
+        this.service.setTitleGenerationConfig({
+          enabled: titleEnabled,
+          maxLength: titleMaxLen,
+        });
+
+        const provider = providerForTitles;
         // memory provider is the manifest default; treat it as "no override"
         // so the env-detected adapter chosen at init stays in place.
         if (provider === 'memory') return;

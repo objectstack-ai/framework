@@ -110,6 +110,26 @@ const manifest = {
       required: false, default: 60000, min: 1000, max: 600000,
       visible: "${data.provider !== 'memory'}" },
 
+    // ── Conversation titles ──────────────────────────────────────
+    // After the first assistant turn lands, service-ai fires a one-shot
+    // LLM call that asks the model to produce a ≤16-char title and
+    // PATCHes it onto the conversation. Without this every row in the
+    // sidebar shows "New conversation" + a truncated preview.
+    { type: 'group', id: 'titles', label: 'Conversation titles', required: false,
+      description: 'Auto-generate a short summary title for new conversations.',
+      visible: "${data.provider !== 'memory'}" },
+    { type: 'toggle', key: 'title_generation_enabled', label: 'Auto-summarize conversation titles',
+      required: false, default: true,
+      description:
+        'When on, the LLM is asked to produce a short title after the first assistant ' +
+        'reply. Disable to save tokens, or leave the title blank to let users name ' +
+        'conversations manually.',
+      visible: "${data.provider !== 'memory'}" },
+    { type: 'number', key: 'title_max_length', label: 'Title max length (chars)',
+      required: false, default: 16, min: 8, max: 80,
+      description: 'Hard cap on the generated title. Anything longer is truncated server-side.',
+      visible: "${data.provider !== 'memory' && data.title_generation_enabled !== false}" },
+
     // ── Observability ────────────────────────────────────────────
     { type: 'group', id: 'observability', label: 'Observability', required: false },
     { type: 'toggle', key: 'trace_enabled', label: 'Record traces',
