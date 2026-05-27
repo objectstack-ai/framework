@@ -21,7 +21,8 @@ This is the default license for this repository. Anyone - open source projects,
 commercial products, SaaS, plugin authors - can use, modify, and redistribute
 these folders with no strings attached, including for any commercial purpose.
 
-- all files and folders not listed under **BSL 1.1 folders**, including:
+All files and folders not listed under **BSL 1.1 folders** are Apache-2.0,
+including:
 - `packages/core/`
 - `packages/runtime/`
 - `packages/rest/`

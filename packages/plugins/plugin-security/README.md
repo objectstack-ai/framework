@@ -3,7 +3,7 @@
 > Security plugin for ObjectStack — RBAC, Row-Level Security (RLS), and Field-Level Masking enforced transparently through the ObjectQL middleware chain.
 
 [![npm](https://img.shields.io/npm/v/@objectstack/plugin-security.svg)](https://www.npmjs.com/package/@objectstack/plugin-security)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](../../../LICENSING.md)
 
 ## Overview
 
@@ -115,4 +115,5 @@ Compilation output is a filter AST merged into every query's `where` clause, so 
 
 ## License
 
-Apache-2.0 © ObjectStack
+BUSL-1.1 with a four-year conversion to Apache-2.0. See
+[LICENSING.md](../../../LICENSING.md).

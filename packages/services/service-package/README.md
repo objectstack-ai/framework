@@ -3,7 +3,7 @@
 > Runtime package publishing, retrieval, and lifecycle management for ObjectStack — the storage layer behind the dynamic marketplace.
 
 [![npm](https://img.shields.io/npm/v/@objectstack/service-package.svg)](https://www.npmjs.com/package/@objectstack/service-package)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](../../../LICENSING.md)
 
 ## Overview
 
@@ -122,4 +122,5 @@ CREATE INDEX IF NOT EXISTS idx_packages_latest
 
 ## License
 
-Apache-2.0 © ObjectStack
+BUSL-1.1 with a four-year conversion to Apache-2.0. See
+[LICENSING.md](../../../LICENSING.md).
