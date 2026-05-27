@@ -1605,7 +1605,18 @@ export class ObjectStackClient {
             headers: { Origin: this.baseUrl },
             body: JSON.stringify(request)
         });
-        const raw = await res.json();
+        const raw = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            // better-auth signals errors via non-2xx status with `{ code, message }`.
+            // Throw so callers can `try/catch` (e.g. detect EMAIL_NOT_VERIFIED and
+            // redirect to the resend-verification page) instead of silently
+            // receiving a normalized-looking response with no token.
+            const message = raw?.message || raw?.error?.message || `Login failed (HTTP ${res.status})`;
+            const err = new Error(message) as Error & { code?: string; status?: number };
+            if (raw?.code) err.code = raw.code;
+            err.status = res.status;
+            throw err;
+        }
         // Normalize: better-auth returns `{ token, user }` at top level,
         // but our SessionResponse shape wraps them in `data`.
         const data = raw && (raw.data ?? (raw.token || raw.user ? { token: raw.token, user: raw.user } : undefined));

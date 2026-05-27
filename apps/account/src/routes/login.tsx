@@ -168,15 +168,17 @@ function LoginPage() {
       toast({ title: t('auth.login.welcomeToast') });
     } catch (err) {
       const errorMessage = (err as Error).message;
-      
-      // Check if the error is due to unverified email
-      const lowerMessage = errorMessage.toLowerCase();
-      if (
-        lowerMessage.includes('email') &&
-        (lowerMessage.includes('verif') ||
-         lowerMessage.includes('not verified'))
-      ) {
-        // Redirect to verification prompt page
+      const errorCode = (err as Error & { code?: string }).code;
+
+      // better-auth returns `EMAIL_NOT_VERIFIED` (HTTP 403) when sign-in is
+      // blocked by `requireEmailVerification`. Prefer the structured code;
+      // fall back to message inspection for older builds.
+      const lowerMessage = (errorMessage || '').toLowerCase();
+      const isEmailUnverified =
+        errorCode === 'EMAIL_NOT_VERIFIED' ||
+        (lowerMessage.includes('email') &&
+          (lowerMessage.includes('verif') || lowerMessage.includes('not verified')));
+      if (isEmailUnverified) {
         navigate({
           to: '/verify-email-prompt',
           search: { email, redirect },

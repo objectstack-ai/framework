@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = new Set([
   '/forgot-password',
   '/reset-password',
   '/verify-email',
+  '/verify-email-prompt',
   '/auth/device',
   '/setup',
 ]);
