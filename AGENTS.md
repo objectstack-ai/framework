@@ -330,3 +330,4 @@ After completing any task:
 
 1. **Run tests:** `pnpm test` — ensure nothing is broken.
 2. **Update CHANGELOG.md / ROADMAP.md** if the change is user-facing or architectural.
+3. **Clean up temporary artifacts:** Delete any debug/verification files you created during the task — screenshots, traces, scratch logs, `.playwright-mcp/` folders, ad-hoc test scripts, throwaway `tmp*.ts/sh` files, etc. They must NOT be left in the repo (and especially must not be committed). The repo should look the same as before, minus the intended changes.
