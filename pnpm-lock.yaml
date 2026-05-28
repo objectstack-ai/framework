@@ -14,9 +14,6 @@ importers:
       '@changesets/cli':
         specifier: ^2.31.0
         version: 2.31.0(@types/node@25.9.1)
-      '@object-ui/console':
-        specifier: ^6.2.3
-        version: 6.2.3
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
@@ -553,9 +550,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@object-ui/console':
-        specifier: ^6.2.3
-        version: 6.2.3
       '@oclif/plugin-help':
         specifier: ^6.2.49
         version: 6.2.49
@@ -3116,9 +3110,6 @@ packages:
     resolution: {integrity: sha512-GXD3wy50qYbxCJ652bDrDzgMr3NFEkIS374+IgFQKkCvk9yiYcLvX2XDYr7UyQxf4wK0e+yqDYRubZ0DtOxnmQ==}
     engines: {node: ^14.18.0 || >=16.10.0, npm: '>=5.10.0'}
     hasBin: true
-
-  '@object-ui/console@6.2.3':
-    resolution: {integrity: sha512-EFfdU0cXUAwL49yyeo+i90BE2lwoAUJdmQOBmM8L2ZhdxRroAiiQgZ6qZwF2KR2C8jLOJNNH+Mw4eQN6rTtoxQ==}
 
   '@object-ui/i18n@6.2.3':
     resolution: {integrity: sha512-9K2Zbxhv4gG1Z0o8NX8YlMtSw1OVDGMBG0HwMWxWdMVef/OjJclBZCKGM1Qe/jK63+Ur2oo/u87TPkoosbTiJw==}
@@ -10022,8 +10013,6 @@ snapshots:
   '@nuxt/opencollective@0.4.1':
     dependencies:
       consola: 3.4.2
-
-  '@object-ui/console@6.2.3': {}
 
   '@object-ui/i18n@6.2.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
     dependencies:

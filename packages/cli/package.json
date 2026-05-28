@@ -90,7 +90,6 @@
     "@objectstack/core": "workspace:^"
   },
   "devDependencies": {
-    "@object-ui/console": "^6.2.3",
     "@oclif/plugin-help": "^6.2.49",
     "@oclif/plugin-plugins": "^5.4.69",
     "@types/node": "^25.9.1",
