@@ -33,8 +33,8 @@ const manifest = {
     'indexed under the previous adapter become unreachable until ' +
     're-indexed. The embedder is configured separately under AI.',
   scope: 'global',
-  readPermission: 'setup.access',
-  writePermission: 'setup.write',
+  readPermission: 'manage_platform_settings',
+  writePermission: 'manage_platform_settings',
   category: 'Infrastructure',
   order: 35,
   specifiers: [

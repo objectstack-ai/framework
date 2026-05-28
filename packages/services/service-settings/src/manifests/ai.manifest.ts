@@ -28,8 +28,8 @@ const manifest = {
     '@ai-sdk/openai for chat, @objectstack/embedder-openai for embeddings) ' +
     'must be installed on the host for the chosen provider to be loadable at runtime.',
   scope: 'global',
-  readPermission: 'setup.access',
-  writePermission: 'setup.write',
+  readPermission: 'manage_platform_settings',
+  writePermission: 'manage_platform_settings',
   category: 'Infrastructure',
   order: 30,
   specifiers: [

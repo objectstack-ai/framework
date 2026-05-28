@@ -230,6 +230,42 @@ export const BulkDataPermissionSet: PermissionSet = {
 };
 ```
 
+### Built-in Permission Sets
+
+The framework ships four canonical permission sets that are auto-seeded on
+boot by `plugin-security` (see
+`packages/platform-objects/src/security/default-permission-sets.ts`). Use
+these as the baseline for any new tenant — tier custom sets on top rather
+than redefining the basics.
+
+| Name | Scope | What it unlocks | Notes |
+|:--|:--|:--|:--|
+| `admin_full_access` | Platform (no RLS) | All objects, all system permissions, Studio + Setup, cross-tenant reads | Reserved for platform operators. Auto-granted to the bootstrap admin (`bootstrapPlatformAdmin`). |
+| `organization_admin` | Per-org (tenant_isolation RLS) | Wildcard CRUD inside the org, `manage_org_users`, Setup app shell (only org-scoped entries visible), invite members, manage roles assignment | **Read-only** on `sys_role`, `sys_permission_set`, `sys_role_permission_set`, `sys_user_permission_set`, `sys_user_role` to prevent self-elevation. Does **not** see Studio. |
+| `member_default` | Per-org | Standard end-user CRUD on org records | Default profile for invited members. |
+| `viewer_readonly` | Per-org | Read access only | For auditors / read-only stakeholders. |
+
+#### Auto-grant for organization admins
+
+Any user whose `sys_member.role` is `owner`, `admin`, or comma-set
+`"owner,admin"` automatically receives an org-scoped grant of
+`organization_admin` (one `sys_user_permission_set` row per `(user, org)`
+pair). The grant is reconciled by a lifecycle hook in `plugin-security`
+on every `sys_member` insert / update / delete, and a `kernel:ready`
+backfill sweep cleans up orphans on boot. Demoting a member to `member`
+revokes the grant in the same transaction; you do not manage these rows
+by hand.
+
+#### Setup app gating
+
+Setup nav items and the corresponding global settings manifests
+(`ai`, `knowledge`, `mail`, `storage`) require the new
+`manage_platform_settings` system permission, which is granted **only** to
+`admin_full_access`. `organization_admin` sees the Setup shell —
+Apps, People & Organization, Roles (read-only) — but not platform-wide
+configuration. Tenant-scoped settings (`branding`, `feature_flags`)
+remain gated by `setup.access` so org admins can manage them.
+
 ### Assigning Permission Sets
 
 ```typescript

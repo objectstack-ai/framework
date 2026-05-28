@@ -7,6 +7,11 @@ import { RLSCompiler, RLS_DENY_FILTER } from './rls-compiler.js';
 import { FieldMasker } from './field-masker.js';
 import { PermissionDeniedError } from './errors.js';
 import { bootstrapPlatformAdmin } from './bootstrap-platform-admin.js';
+import {
+  backfillOrgAdminGrants,
+  extractMemberPairs,
+  reconcileOrgAdminGrant,
+} from './auto-org-admin-grant.js';
 import { claimOrphanTenantRows } from './claim-orphan-tenant-rows.js';
 import { cloneTenantSeedData } from './clone-tenant-seed-data.js';
 import {
@@ -499,6 +504,65 @@ export class SecurityPlugin implements Plugin {
         }
       }
     });
+
+    // ── Auto-grant `organization_admin` on sys_member lifecycle ─────────
+    //
+    // For every `sys_member` row whose role is `owner` or `admin`, keep
+    // a `sys_user_permission_set` row scoped to that organization in
+    // sync. See `auto-org-admin-grant.ts` for the full rationale and
+    // the anti-escalation argument (org_admin is read-only on the
+    // global RBAC tables, so a freshly-granted admin cannot rebind
+    // themselves to `admin_full_access`).
+    //
+    // We register one middleware that handles insert / update / delete
+    // uniformly by always reconciling every (user, org) pair touched
+    // by the operation. `reconcileOrgAdminGrant` is idempotent so a
+    // double-fire (e.g. better-auth followed by an org plugin
+    // synchronizer) is harmless.
+    ql.registerMiddleware(async (opCtx: any, next: () => Promise<void>) => {
+      await next();
+      if (opCtx?.object !== 'sys_member') return;
+      const op = opCtx?.operation;
+      if (
+        op !== 'insert' &&
+        op !== 'create' &&
+        op !== 'update' &&
+        op !== 'delete' &&
+        op !== 'remove'
+      ) {
+        return;
+      }
+      const pairs = extractMemberPairs(opCtx);
+      for (const { userId, orgId } of pairs) {
+        try {
+          await reconcileOrgAdminGrant(ql, userId, orgId, { logger: ctx.logger });
+        } catch (e) {
+          ctx.logger.warn?.('[security] org_admin reconcile failed', {
+            userId,
+            orgId,
+            error: (e as Error).message,
+          });
+        }
+      }
+    });
+
+    // Backfill organization_admin grants after the platform admin
+    // bootstrap settles on kernel:ready. Idempotent — only inserts
+    // missing rows and revokes orphaned ones, never duplicates.
+    const runOrgAdminBackfill = async () => {
+      try {
+        await backfillOrgAdminGrants(ql, { logger: ctx.logger });
+      } catch (e) {
+        ctx.logger.warn?.('[security] organization_admin backfill failed', {
+          error: (e as Error).message,
+        });
+      }
+    };
+    if (typeof (ctx as any).hook === 'function') {
+      (ctx as any).hook('kernel:ready', runOrgAdminBackfill);
+    } else {
+      void runOrgAdminBackfill();
+    }
 
     // After a sys_organization insert, give the new org its own private
     // copy of the artifact's demo data (Salesforce-sandbox style):

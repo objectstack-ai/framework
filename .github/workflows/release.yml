@@ -51,6 +51,13 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Build vendored @objectstack/console SPA
+        # Clones objectstack-ai/objectui at the SHA pinned in .objectui-sha,
+        # builds @object-ui/console, and copies dist/ into
+        # packages/console/dist/. Must run before publish so the
+        # prepublishOnly guard in @objectstack/console passes.
+        run: bash scripts/build-console.sh
+
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1

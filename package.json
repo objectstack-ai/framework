@@ -13,11 +13,15 @@
     "clean": "turbo run clean && rm -rf dist",
     "setup": "pnpm install && pnpm --filter @objectstack/spec build",
     "version": "changeset version",
-    "release": "pnpm run build && changeset publish",
+    "release": "pnpm run build && bash scripts/build-console.sh && changeset publish",
     "docs:dev": "pnpm --filter @objectstack/docs dev",
     "docs:build": "pnpm --filter @objectstack/docs build",
     "docs:start": "pnpm --filter @objectstack/docs start",
-    "os": "node packages/cli/bin/run.js"
+    "os": "node packages/cli/bin/run.js",
+    "console:build": "bash scripts/build-console.sh",
+    "console:bump": "bash scripts/bump-objectui.sh",
+    "console:refresh": "bash scripts/bump-objectui.sh && bash scripts/build-console.sh",
+    "console:clean": "rm -rf packages/console/dist .cache/objectui-*"
   },
   "keywords": [
     "objectstack",

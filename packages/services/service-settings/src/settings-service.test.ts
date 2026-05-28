@@ -162,7 +162,13 @@ describe('SettingsService — listManifests permission filter', () => {
     svc.registerManifest(brandingSettingsManifest);
     svc.registerManifest(mailSettingsManifest);
     expect(svc.listManifests({ permissions: [] }).length).toBe(2); // empty = passthrough
-    expect(svc.listManifests({ permissions: ['setup.access'] }).length).toBe(2);
+    // branding stays on setup.access (tenant-scoped); mail now requires
+    // manage_platform_settings (global-scoped).
+    expect(svc.listManifests({ permissions: ['setup.access'] }).length).toBe(1);
+    expect(svc.listManifests({ permissions: ['manage_platform_settings'] }).length).toBe(1);
+    expect(
+      svc.listManifests({ permissions: ['setup.access', 'manage_platform_settings'] }).length,
+    ).toBe(2);
     expect(svc.listManifests({ permissions: ['other'] }).length).toBe(0);
   });
 });

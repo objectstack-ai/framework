@@ -15,8 +15,8 @@ const manifest = {
   icon: 'Mail',
   description: 'SMTP and transactional email provider configuration.',
   scope: 'global',
-  readPermission: 'setup.access',
-  writePermission: 'setup.write',
+  readPermission: 'manage_platform_settings',
+  writePermission: 'manage_platform_settings',
   category: 'Communication',
   order: 10,
   specifiers: [

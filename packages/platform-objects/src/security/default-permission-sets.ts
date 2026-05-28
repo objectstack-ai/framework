@@ -93,7 +93,176 @@ export const defaultPermissionSets: PermissionSet[] = [
         modifyAllRecords: true,
       },
     },
-    systemPermissions: ['manage_users', 'manage_metadata', 'setup.access', 'studio.access'],
+    systemPermissions: [
+      'manage_users',
+      'manage_metadata',
+      'manage_platform_settings',
+      'setup.access',
+      'studio.access',
+    ],
+  }),
+  // ── Organization Administrator ──────────────────────────────────────
+  //
+  // Third tier between platform admin (`admin_full_access`) and rank-and-file
+  // member. Lives at the *organization* scope: full CRUD on business
+  // objects within their org (governed by `tenant_isolation` RLS), plus
+  // `setup.access` so the Setup app shell is reachable.
+  //
+  // **Deliberately withheld** vs `admin_full_access`:
+  //   - `studio.access` — schema-design surfaces are platform-level (a
+  //     tenant cannot mutate the shared metadata) and Studio is hidden.
+  //   - `manage_metadata` — same reasoning.
+  //   - `manage_platform_settings` — global settings manifests
+  //     (mail / storage / AI / knowledge) and platform-only Setup pages
+  //     (sharing rules, audit logs, OAuth apps, JWKS, …) require this
+  //     and are hidden / 403'd for org admins. Tenant-scoped manifests
+  //     (`branding`, `feature_flags`) keep using `setup.access` so org
+  //     admins CAN configure their own org's branding.
+  //
+  // **Anti-escalation**: writes to the global RBAC tables
+  // (`sys_role`, `sys_permission_set`, `sys_role_permission_set`,
+  // `sys_user_permission_set`, `sys_user_role`) are denied. Allowing
+  // them would let an org admin bind `admin_full_access` (which has no
+  // RLS) to themselves and break out of tenant isolation. Reads are
+  // permitted so the Roles / Permission Sets nav entries still render.
+  //
+  // Auto-granted to every `sys_member` whose role contains `owner` or
+  // `admin` by `plugin-security/src/auto-org-admin-grant.ts`.
+  PermissionSetSchema.parse({
+    name: 'organization_admin',
+    label: 'Organization Administrator',
+    isProfile: true,
+    objects: {
+      '*': {
+        allowRead: true,
+        allowCreate: true,
+        allowEdit: true,
+        allowDelete: true,
+        viewAllRecords: true,
+        modifyAllRecords: true,
+      },
+      // Identity tables — go through better-auth endpoints (invite,
+      // accept, remove-member, transfer, …) rather than raw CRUD.
+      ...denyWritesOnManagedObjects(),
+      // RBAC tables — read-only to prevent privilege escalation.
+      sys_role: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_role_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_user_permission_set: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+      sys_user_role: { allowRead: true, allowCreate: false, allowEdit: false, allowDelete: false },
+    },
+    systemPermissions: ['manage_org_users', 'setup.access'],
+    rowLevelSecurity: [
+      {
+        name: 'tenant_isolation',
+        object: '*',
+        operation: 'all',
+        using: 'organization_id = current_user.organization_id',
+      },
+      // ── better-auth system tables that lack `organization_id` and would
+      //    otherwise be denied by the wildcard policy. Same self-only
+      //    carve-outs as `member_default` — an org admin does not get to
+      //    inspect cross-tenant identity rows.
+      {
+        name: 'sys_organization_self',
+        object: 'sys_organization',
+        operation: 'all',
+        using: 'id = current_user.organization_id',
+      },
+      {
+        name: 'sys_user_self',
+        object: 'sys_user',
+        operation: 'select',
+        using: 'id = current_user.id',
+      },
+      {
+        name: 'sys_user_org_members',
+        object: 'sys_user',
+        operation: 'select',
+        using: 'id IN (current_user.org_user_ids)',
+      },
+      {
+        name: 'sys_session_self',
+        object: 'sys_session',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_account_self',
+        object: 'sys_account',
+        operation: 'select',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_team_member_self',
+        object: 'sys_team_member',
+        operation: 'select',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_two_factor_self',
+        object: 'sys_two_factor',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_user_preference_self',
+        object: 'sys_user_preference',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_api_key_self',
+        object: 'sys_api_key',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_device_code_self',
+        object: 'sys_device_code',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_oauth_access_token_self',
+        object: 'sys_oauth_access_token',
+        operation: 'select',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_oauth_refresh_token_self',
+        object: 'sys_oauth_refresh_token',
+        operation: 'select',
+        using: 'user_id = current_user.id',
+      },
+      {
+        name: 'sys_oauth_consent_self',
+        object: 'sys_oauth_consent',
+        operation: 'all',
+        using: 'user_id = current_user.id',
+      },
+      // Org-scoped visibility for organization-owned identity-adjacent
+      // tables. Org admins may inspect their own org's invitations and
+      // memberships (read; writes still flow through better-auth).
+      {
+        name: 'sys_member_org',
+        object: 'sys_member',
+        operation: 'select',
+        using: 'organization_id = current_user.organization_id',
+      },
+      {
+        name: 'sys_invitation_org',
+        object: 'sys_invitation',
+        operation: 'select',
+        using: 'organization_id = current_user.organization_id',
+      },
+      {
+        name: 'sys_team_org',
+        object: 'sys_team',
+        operation: 'select',
+        using: 'organization_id = current_user.organization_id',
+      },
+    ],
   }),
   PermissionSetSchema.parse({
     name: 'member_default',

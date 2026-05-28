@@ -73,9 +73,42 @@ describe('@objectstack/platform-objects', () => {
   });
 
   describe('default permission sets', () => {
-    it('exposes the three canonical platform permission sets', () => {
+    it('exposes the four canonical platform permission sets', () => {
       const names = defaultPermissionSets.map((p) => p.name).sort();
-      expect(names).toEqual(['admin_full_access', 'member_default', 'viewer_readonly']);
+      expect(names).toEqual([
+        'admin_full_access',
+        'member_default',
+        'organization_admin',
+        'viewer_readonly',
+      ]);
+    });
+
+    it('organization_admin has setup.access but not studio.access / manage_metadata / manage_platform_settings', () => {
+      const orgAdmin = defaultPermissionSets.find((p) => p.name === 'organization_admin')!;
+      const sys = orgAdmin.systemPermissions ?? [];
+      expect(sys).toContain('setup.access');
+      expect(sys).toContain('manage_org_users');
+      expect(sys).not.toContain('studio.access');
+      expect(sys).not.toContain('manage_metadata');
+      expect(sys).not.toContain('manage_platform_settings');
+    });
+
+    it('organization_admin is read-only on global RBAC tables to prevent privilege escalation', () => {
+      const orgAdmin = defaultPermissionSets.find((p) => p.name === 'organization_admin')!;
+      for (const obj of [
+        'sys_role',
+        'sys_permission_set',
+        'sys_role_permission_set',
+        'sys_user_permission_set',
+        'sys_user_role',
+      ]) {
+        const perms = (orgAdmin.objects as any)[obj];
+        expect(perms, `${obj} explicit perms missing`).toBeDefined();
+        expect(perms.allowRead).toBe(true);
+        expect(perms.allowCreate).toBe(false);
+        expect(perms.allowEdit).toBe(false);
+        expect(perms.allowDelete).toBe(false);
+      }
     });
 
     it('admin_full_access grants wildcard CRUD with viewAll/modifyAll', () => {

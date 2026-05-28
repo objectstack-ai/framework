@@ -40,9 +40,9 @@
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.120",
-    "@object-ui/console": "^6.2.3",
     "@objectstack/account": "workspace:*",
     "@objectstack/client": "workspace:*",
+    "@objectstack/console": "workspace:*",
     "@objectstack/core": "workspace:*",
     "@objectstack/driver-memory": "workspace:^",
     "@objectstack/driver-mongodb": "workspace:^",
@@ -90,6 +90,7 @@
     "@objectstack/core": "workspace:^"
   },
   "devDependencies": {
+    "@object-ui/console": "^6.2.3",
     "@oclif/plugin-help": "^6.2.49",
     "@oclif/plugin-plugins": "^5.4.69",
     "@types/node": "^25.9.1",

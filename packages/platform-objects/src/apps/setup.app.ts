@@ -42,6 +42,11 @@ export const SETUP_APP: App = {
       type: 'group',
       label: 'Overview',
       icon: 'layout-dashboard',
+      // Platform-wide metrics — aggregate counts across ALL tenants
+      // and are mislabeled for an org admin (RLS would filter to a
+      // single org but the dashboard still reads "Total Users" etc.).
+      // Hidden until a tenant-scoped `organization_overview` ships.
+      requiredPermissions: ['manage_platform_settings'],
       children: [
         { id: 'nav_system_overview', type: 'dashboard', label: 'System Overview', dashboardName: 'system_overview', icon: 'activity' },
       ],
@@ -108,9 +113,13 @@ export const SETUP_APP: App = {
         // People & Org cleanup.
         { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
         { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
-        { id: 'nav_sharing_rules', type: 'object', label: 'Sharing Rules', objectName: 'sys_sharing_rule', icon: 'share-2', requiresObject: 'sys_sharing_rule' },
-        { id: 'nav_record_shares', type: 'object', label: 'Record Shares', objectName: 'sys_record_share', icon: 'link', requiresObject: 'sys_record_share' },
-        { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'sys_api_key', icon: 'key' },
+        // Sharing rules / record shares / API keys are platform-managed
+        // (shared across orgs or operate on the global identity surface).
+        // Org admins see Roles + Permission Sets read-only via RLS but
+        // these advanced entries are hidden behind manage_platform_settings.
+        { id: 'nav_sharing_rules', type: 'object', label: 'Sharing Rules', objectName: 'sys_sharing_rule', icon: 'share-2', requiresObject: 'sys_sharing_rule', requiredPermissions: ['manage_platform_settings'] },
+        { id: 'nav_record_shares', type: 'object', label: 'Record Shares', objectName: 'sys_record_share', icon: 'link', requiresObject: 'sys_record_share', requiredPermissions: ['manage_platform_settings'] },
+        { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'sys_api_key', icon: 'key', requiredPermissions: ['manage_platform_settings'] },
       ],
     },
     {
@@ -118,6 +127,9 @@ export const SETUP_APP: App = {
       type: 'group',
       label: 'Approvals',
       icon: 'check-circle',
+      // Approval processes are configured at the platform level and
+      // reused across tenants. Hidden from org admins.
+      requiredPermissions: ['manage_platform_settings'],
       children: [
         { id: 'nav_approval_processes', type: 'object', label: 'Processes', objectName: 'sys_approval_process', icon: 'workflow', requiresObject: 'sys_approval_process' },
         { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
@@ -140,12 +152,18 @@ export const SETUP_APP: App = {
         // the All-Settings index. AI groups chat + embedder under one entry
         // because operators reason about them together; Knowledge is its
         // own entry because the adapter selection is independent.
-        { id: 'nav_settings_hub', type: 'url', label: 'All Settings', url: '/apps/setup/system/settings', icon: 'settings-2' },
+        //
+        // Permission gating: tenant-scoped manifests (branding,
+        // feature_flags) stay on `setup.access` so org admins can
+        // configure their own org. Global manifests (mail, storage,
+        // AI, knowledge) and the "All Settings" index sit behind
+        // `manage_platform_settings` because they affect every tenant.
+        { id: 'nav_settings_hub', type: 'url', label: 'All Settings', url: '/apps/setup/system/settings', icon: 'settings-2', requiredPermissions: ['manage_platform_settings'] },
         { id: 'nav_settings_branding', type: 'url', label: 'Branding', url: '/apps/setup/system/settings/branding', icon: 'palette' },
-        { id: 'nav_settings_mail', type: 'url', label: 'Email', url: '/apps/setup/system/settings/mail', icon: 'mail' },
-        { id: 'nav_settings_storage', type: 'url', label: 'File Storage', url: '/apps/setup/system/settings/storage', icon: 'hard-drive' },
-        { id: 'nav_settings_ai', type: 'url', label: 'AI & Embedder', url: '/apps/setup/system/settings/ai', icon: 'sparkles' },
-        { id: 'nav_settings_knowledge', type: 'url', label: 'Knowledge', url: '/apps/setup/system/settings/knowledge', icon: 'book-open' },
+        { id: 'nav_settings_mail', type: 'url', label: 'Email', url: '/apps/setup/system/settings/mail', icon: 'mail', requiredPermissions: ['manage_platform_settings'] },
+        { id: 'nav_settings_storage', type: 'url', label: 'File Storage', url: '/apps/setup/system/settings/storage', icon: 'hard-drive', requiredPermissions: ['manage_platform_settings'] },
+        { id: 'nav_settings_ai', type: 'url', label: 'AI & Embedder', url: '/apps/setup/system/settings/ai', icon: 'sparkles', requiredPermissions: ['manage_platform_settings'] },
+        { id: 'nav_settings_knowledge', type: 'url', label: 'Knowledge', url: '/apps/setup/system/settings/knowledge', icon: 'book-open', requiredPermissions: ['manage_platform_settings'] },
         { id: 'nav_settings_feature_flags', type: 'url', label: 'Feature Flags', url: '/apps/setup/system/settings/feature_flags', icon: 'flag' },
       ],
     },
@@ -154,6 +172,9 @@ export const SETUP_APP: App = {
       type: 'group',
       label: 'Diagnostics',
       icon: 'stethoscope',
+      // Sessions / audit logs / notifications expose cross-tenant
+      // telemetry and are platform-only.
+      requiredPermissions: ['manage_platform_settings'],
       children: [
         // Day-to-day observability surfaces. M10.30b removed `sys_activity`
         // and `sys_comment` — both are CRM operational data authored from
@@ -168,6 +189,8 @@ export const SETUP_APP: App = {
       type: 'group',
       label: 'Integrations',
       icon: 'plug',
+      // Webhook configuration and delivery telemetry are platform-only.
+      requiredPermissions: ['manage_platform_settings'],
       children: [
         // Outbound HTTP integrations. `sys_webhook` always ships with
         // platform-objects, so the Webhooks entry is always visible.
@@ -191,6 +214,10 @@ export const SETUP_APP: App = {
       label: 'Advanced',
       icon: 'wrench',
       expanded: false,
+      // OAuth apps / JWKS / verifications / two-factor / device codes /
+      // identity links / user preferences are all platform support
+      // surfaces — hidden from org admins.
+      requiredPermissions: ['manage_platform_settings'],
       children: [
         // Better-auth internals — rarely useful for humans, but exposed
         // so support engineers can inspect token state without dropping

@@ -18,8 +18,8 @@ const manifest = {
     'uploaded under the previous adapter become unreachable through ' +
     'the new one.',
   scope: 'global',
-  readPermission: 'setup.access',
-  writePermission: 'setup.write',
+  readPermission: 'manage_platform_settings',
+  writePermission: 'manage_platform_settings',
   category: 'Infrastructure',
   order: 20,
   specifiers: [

@@ -6,6 +6,7 @@
     [
       "@objectstack/spec",
       "@objectstack/cli",
+      "@objectstack/console",
       "@objectstack/core",
       "@objectstack/client",
       "@objectstack/client-react",
@@ -21,7 +22,6 @@
       "@objectstack/rest",
       "@objectstack/driver-memory",
       "@objectstack/driver-sql",
-      "@objectstack/driver-turso",
       "@objectstack/driver-mongodb",
       "@objectstack/driver-sqlite-wasm",
       "@objectstack/plugin-approvals",
@@ -60,7 +60,6 @@
       "@objectstack/service-storage",
       "@objectstack/knowledge-memory",
       "@objectstack/knowledge-ragflow",
-      "@objectstack/knowledge-turso",
       "@objectstack/embedder-openai",
       "@objectstack/account",
       "create-objectstack",

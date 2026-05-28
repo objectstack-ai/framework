@@ -20,3 +20,7 @@ export {
   SECURITY_PLUGIN_VERSION,
 } from './manifest.js';
 export { cloneTenantSeedData } from './clone-tenant-seed-data.js';
+export {
+  reconcileOrgAdminGrant,
+  backfillOrgAdminGrants,
+} from './auto-org-admin-grant.js';

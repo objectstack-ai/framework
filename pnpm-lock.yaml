@@ -417,15 +417,15 @@ importers:
       '@ai-sdk/gateway':
         specifier: ^3.0.120
         version: 3.0.120(zod@4.4.3)
-      '@object-ui/console':
-        specifier: ^6.2.3
-        version: 6.2.3
       '@objectstack/account':
         specifier: workspace:*
         version: link:../../apps/account
       '@objectstack/client':
         specifier: workspace:*
         version: link:../client
+      '@objectstack/console':
+        specifier: workspace:*
+        version: link:../console
       '@objectstack/core':
         specifier: workspace:*
         version: link:../core
@@ -553,6 +553,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@object-ui/console':
+        specifier: ^6.2.3
+        version: 6.2.3
       '@oclif/plugin-help':
         specifier: ^6.2.49
         version: 6.2.49
@@ -633,6 +636,8 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  packages/console: {}
 
   packages/core:
     dependencies:
