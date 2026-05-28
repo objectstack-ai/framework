@@ -642,6 +642,28 @@ export class SchemaRegistry {
     if (collection.has(storageKey)) {
       this.log(`[Registry] Overwriting ${type}: ${storageKey}`);
     }
+
+    // Artifact-vs-DB collision warning. When a code package ships an item
+    // whose name already exists as a DB-only entry (registered earlier
+    // without a packageId — typically rehydrated from sys_metadata by
+    // loadMetaFromDb / getMetaItems), the runtime overlay layer makes
+    // the DB row silently shadow the new artifact value. That is correct
+    // ADR-0005 behavior, but the silent shadowing can surprise package
+    // authors and operators. Log a single warning so the situation is
+    // discoverable in startup logs.
+    if (packageId && collection.has(baseName)) {
+      const dbOnly = collection.get(baseName) as any;
+      if (dbOnly && !dbOnly._packageId) {
+        console.warn(
+          `[Registry] Collision: ${type}/${baseName} ships from package ` +
+          `"${packageId}" but a runtime-authored row with the same name already ` +
+          `exists in sys_metadata. The runtime row will shadow the package value ` +
+          `(ADR-0005 overlay precedence). Rename one, or delete the sys_metadata ` +
+          `row if the package value should win.`,
+        );
+      }
+    }
+
     collection.set(storageKey, item);
     this.log(`[Registry] Registered ${type}: ${storageKey}`);
   }

@@ -2518,7 +2518,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
         const singular = PLURAL_TO_SINGULAR[type] ?? type;
         const item = registry.getItem(singular, name) ?? registry.getItem(type, name);
-        return Boolean(item && item._packageId);
+        if (!item || !item._packageId) return false;
+        // `loadMetaFromDb` (line ~3092) registers DB-only objects with
+        // a synthetic `'sys_metadata'` packageId so the registry can
+        // distinguish them from purely transient entries. That sentinel
+        // is NOT an artifact origin — exclude it here so DB-only objects
+        // continue to behave as runtime-authored items.
+        return item._packageId !== 'sys_metadata';
     }
 
     /**

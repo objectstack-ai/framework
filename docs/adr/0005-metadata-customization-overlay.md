@@ -527,3 +527,70 @@ entries derived from the prior baseline.
   a new artifact, an overlay that referenced the old name should ideally
   be auto-rewritten rather than quarantined. Requires a migration
   contract on the package author side; tracked separately.
+
+---
+
+## Addendum: Two-tier authorization (PR-10d.7, 2026-05)
+
+The original ADR gates writes purely on `allowOrgOverride` (type-level).
+This proved too coarse for one category of types: those that ship
+executable code (`hook`, `trigger`, `validation`) declare
+`allowOrgOverride: false` AND `allowRuntimeCreate: true`. The intent —
+documented in `metadata-plugin.zod.ts` — is "users may author brand-new
+items of this type, but artifact-shipped items remain immutable".
+The original gate forbade both, blocking the documented user flow.
+
+### Two-tier rule
+
+For any `(type, name)` write:
+
+| Item exists at name as… | Required flag |
+|---|---|
+| Artifact (`registry._packageId` set to a real packageId) | `allowOrgOverride: true` |
+| DB-only (no artifact at this name) | `allowOrgOverride OR allowRuntimeCreate` |
+
+The artifact origin is determined server-side from the
+`SchemaRegistry._packageId` tag, which is set only by artifact loaders
+passing a truthy packageId argument. Request payloads cannot influence
+the classification.
+
+### New error code
+
+- `not_overridable` — artifact-backed item, type has `allowOrgOverride: false`.
+- `not_creatable` — brand-new item, type has both flags false.
+  Distinct so the UI can offer different guidance (the former says
+  "edit source", the latter says "this type forbids runtime creation").
+
+### Intent threading
+
+`PutOptions.intent` / `DeleteOptions.intent` carry a
+`MetadataWriteIntent = 'override-artifact' | 'runtime-only'` from the
+protocol layer down to the repository's `assertAllowed`. The repo
+provides defense-in-depth: even when called directly with `runtime-only`,
+it still requires the target type to declare `allowRuntimeCreate: true`.
+
+### Read path
+
+Runtime-create types declare `supportsOverlay: false`, but the read
+path (`getMetaItem`, `getMetaItems`) consults `sys_metadata`
+unconditionally. A DB-only `hook` row authored at runtime is therefore
+visible to subsequent reads even though the type is not "overlay-eligible"
+in the original ADR sense. Tested explicitly in
+`protocol-meta.test.ts > two-tier authorization`.
+
+### Provenance edge case
+
+`loadMetaFromDb` registers DB-rehydrated objects with a synthetic
+`_packageId = 'sys_metadata'` (objectql/protocol.ts ≈ line 3092). The
+`isArtifactBacked` classifier treats this sentinel as "not an artifact"
+so DB-only objects retain runtime-authored semantics.
+
+### Collision warning
+
+When an artifact loader registers an item whose name already exists in
+the registry as a DB-only entry (registered without a packageId), the
+runtime overlay layer silently shadows the artifact value (correct
+ADR-0005 behavior). Since the silent shadowing can surprise operators
+on package upgrade, `Registry.registerItem` now emits a single
+`[Registry] Collision` console.warn naming both sources so the situation
+is discoverable in startup logs.
