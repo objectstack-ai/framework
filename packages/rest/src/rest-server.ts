@@ -708,6 +708,7 @@ export class RestServer {
             const userId = session.user.id;
             const tenantId = session.session?.activeOrganizationId ?? undefined;
             const permissions: string[] = [];
+            const systemPermissions: string[] = [];
             const roles: string[] = [];
             // Look up the link tables to surface roles + permission set names.
             // Skipping this lookup would silently ignore admin/role grants —
@@ -757,6 +758,19 @@ export class RestServer {
                         } as any).catch(() => []);
                         for (const ps of (psRows ?? []) as any[]) {
                             if (ps.name && !permissions.includes(ps.name)) permissions.push(ps.name);
+                            // System permissions may be stored as a JSON string
+                            // (driver-sql round-trips array columns as text).
+                            // Mirrors runtime/src/security/resolve-execution-context.ts.
+                            const rawSys = typeof ps.system_permissions === 'string'
+                                ? (() => { try { return JSON.parse(ps.system_permissions); } catch { return []; } })()
+                                : (ps.system_permissions ?? ps.systemPermissions);
+                            if (Array.isArray(rawSys)) {
+                                for (const sp of rawSys) {
+                                    if (typeof sp === 'string' && !systemPermissions.includes(sp)) {
+                                        systemPermissions.push(sp);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -796,12 +810,57 @@ export class RestServer {
                 tenantId,
                 roles,
                 permissions,
+                systemPermissions,
                 isSystem: false,
                 org_user_ids,
             } as any;
         } catch {
             return undefined;
         }
+    }
+
+    /**
+     * Filter an `App` metadata item by the current user's `systemPermissions`.
+     *
+     * - Drops the app entirely if its top-level `requiredPermissions` are not
+     *   a subset of the user's system permissions.
+     * - Recursively strips child navigation entries (groups, items) whose
+     *   `requiredPermissions` are not satisfied. Empty groups collapse so
+     *   the sidebar doesn't render a label with no children.
+     *
+     * Returns `null` when the app should be hidden from the user. Returns a
+     * shallow copy with a filtered `navigation` tree otherwise — the original
+     * is never mutated so cached metadata stays clean.
+     */
+    private filterAppForUser(item: any, sysPerms: Set<string>): any | null {
+        if (!item || typeof item !== 'object') return item;
+        const reqApp = Array.isArray(item.requiredPermissions) ? item.requiredPermissions : [];
+        if (reqApp.length > 0 && !reqApp.every((p: string) => sysPerms.has(p))) {
+            return null;
+        }
+        const nav = Array.isArray(item.navigation) ? item.navigation : null;
+        if (!nav) return item;
+
+        const filterNav = (entries: any[]): any[] => {
+            const out: any[] = [];
+            for (const e of entries) {
+                if (!e || typeof e !== 'object') continue;
+                const req = Array.isArray(e.requiredPermissions) ? e.requiredPermissions : [];
+                if (req.length > 0 && !req.every((p: string) => sysPerms.has(p))) continue;
+                if (Array.isArray(e.children) && e.children.length > 0) {
+                    const kids = filterNav(e.children);
+                    // Drop empty groups so the sidebar doesn't render a label
+                    // with nothing under it (matches AppSidebar UX).
+                    if (e.type === 'group' && kids.length === 0) continue;
+                    out.push({ ...e, children: kids });
+                } else {
+                    out.push(e);
+                }
+            }
+            return out;
+        };
+
+        return { ...item, navigation: filterNav(nav) };
     }
 
     /**
@@ -1426,7 +1485,43 @@ export class RestServer {
                             packageId,
                             ...(environmentId ? { environmentId } : {}),
                         } as any);
-                        const translated = await this.translateMetaItems(req, req.params.type, environmentId, items);
+
+                        // RBAC-filter app metadata for authenticated users so
+                        // privileged apps (Studio, Setup, etc.) and gated nav
+                        // items are stripped before reaching the client. We
+                        // intentionally leave anonymous responses untouched —
+                        // the existing `requireAuth` gate (when enabled) blocks
+                        // them upstream; when disabled, the demo / public
+                        // surface keeps its prior behaviour.
+                        //
+                        // `getMetaItems` is typed as `{type, items[]}` but the
+                        // objectql implementation actually returns the raw
+                        // array. Handle both shapes defensively.
+                        let visible: any = items;
+                        if (req.params.type === 'app') {
+                            const raw = items as unknown;
+                            const list: any[] | null = Array.isArray(raw)
+                                ? (raw as any[])
+                                : (raw && typeof raw === 'object' && Array.isArray((raw as any).items))
+                                    ? ((raw as any).items as any[])
+                                    : null;
+                            if (list) {
+                                const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+                                if (ctx?.userId) {
+                                    const sysPerms = new Set<string>(
+                                        Array.isArray(ctx.systemPermissions) ? ctx.systemPermissions : [],
+                                    );
+                                    const filtered = list
+                                        .map((it: any) => this.filterAppForUser(it, sysPerms))
+                                        .filter((it: any) => it != null);
+                                    visible = Array.isArray(raw)
+                                        ? filtered
+                                        : { ...(raw as any), items: filtered };
+                                }
+                            }
+                        }
+
+                        const translated = await this.translateMetaItems(req, req.params.type, environmentId, visible);
                         res.header('Vary', 'Accept-Language');
                         res.json(translated);
                     } catch (error: any) {
@@ -1497,8 +1592,13 @@ export class RestServer {
                             return;
                         }
 
-                        // Check if cached version is available
-                        if (metadata.enableCache && p.getMetaItemCached) {
+                        // Check if cached version is available.
+                        // For `app` metadata we skip the cache path so the
+                        // per-user RBAC filter below can apply without
+                        // corrupting shared ETags across admin vs member
+                        // viewers of the same app schema.
+                        const isAppType = req.params.type === 'app';
+                        if (metadata.enableCache && p.getMetaItemCached && !isAppType) {
                             const cacheRequest = {
                                 ifNoneMatch: req.headers['if-none-match'] as string,
                                 ifModifiedSince: req.headers['if-modified-since'] as string,
@@ -1544,8 +1644,31 @@ export class RestServer {
                                 name: req.params.name,
                                 packageId,
                             } as any);
+
+                            // Same per-user RBAC filtering as the list endpoint:
+                            // for `app` items, drop entirely (404) when the user
+                            // lacks the app's `requiredPermissions`, and strip
+                            // forbidden nav entries from the returned schema.
+                            let visible: any = item;
+                            if (isAppType && item) {
+                                const ctx = await this.resolveExecCtx(environmentId, req).catch(() => undefined);
+                                if (ctx?.userId) {
+                                    const sysPerms = new Set<string>(
+                                        Array.isArray(ctx.systemPermissions) ? ctx.systemPermissions : [],
+                                    );
+                                    visible = this.filterAppForUser(item, sysPerms);
+                                    if (visible == null) {
+                                        res.status(404).json({
+                                            error: 'not_found',
+                                            message: 'Metadata item not found or access denied.',
+                                        });
+                                        return;
+                                    }
+                                }
+                            }
+
                             res.header('Vary', 'Accept-Language');
-                            res.json(await this.translateMetaItem(req, req.params.type, environmentId, item));
+                            res.json(await this.translateMetaItem(req, req.params.type, environmentId, visible));
                         }
                     } catch (error: any) {
                         logError("[REST] Unhandled error:", error);

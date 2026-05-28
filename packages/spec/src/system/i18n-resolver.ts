@@ -654,6 +654,39 @@ function lookupMetadataFormField(
 }
 
 /**
+ * Find direct child field names recorded in the bundle for a given parent
+ * path. Used to synthesize a `fields[]` array for composite/repeater nodes
+ * whose form authors did not enumerate sub-fields — so translations still
+ * flow through to the client renderer.
+ *
+ * Walks every locale in the chain and unions the direct-child names so
+ * partial localisations don't drop fields.
+ */
+function listMetadataFormDirectChildren(
+  bundle: TranslationBundle | undefined,
+  type: string,
+  parentPath: string,
+  opts?: ResolveOptions,
+): string[] {
+  if (!bundle || !parentPath) return [];
+  const prefix = parentPath + '.';
+  const seen = new Set<string>();
+  for (const code of localeChain(opts)) {
+    const fields = pickData(bundle, code)?.metadataForms?.[type]?.fields;
+    if (!fields || typeof fields !== 'object') continue;
+    for (const key of Object.keys(fields)) {
+      if (!key.startsWith(prefix)) continue;
+      const tail = key.slice(prefix.length);
+      // Only direct children — skip deeper descendants (they'll be picked
+      // up recursively when we visit the direct child node).
+      if (tail.includes('.')) continue;
+      if (tail.length > 0) seen.add(tail);
+    }
+  }
+  return Array.from(seen);
+}
+
+/**
  * Resolve the display label for a metadata type.
  * Falls back to the literal label (typically the English label from
  * `DEFAULT_METADATA_TYPE_REGISTRY`) when no translation is available.
@@ -726,6 +759,16 @@ function translateFormField(
     next.fields = field.fields.map((child: any) =>
       translateFormField(child, type, bundle, path, opts),
     );
+  } else if (path && (field.type === 'composite' || field.type === 'repeater')) {
+    // No explicit `fields` enumeration — synthesize from bundle entries so
+    // sub-field labels still reach the client renderer (which would
+    // otherwise fall back to derivePropertyNames + humanize-case).
+    const childNames = listMetadataFormDirectChildren(bundle, type, path, opts);
+    if (childNames.length > 0) {
+      next.fields = childNames.map((childName) =>
+        translateFormField({ field: childName }, type, bundle, path, opts),
+      );
+    }
   }
 
   return next;
