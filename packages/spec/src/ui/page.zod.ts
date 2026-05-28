@@ -33,7 +33,7 @@ export const PageComponentType = z.enum([
   // Structure
   'page:header', 'page:footer', 'page:sidebar', 'page:tabs', 'page:accordion', 'page:card', 'page:section',
   // Record Context
-  'record:details', 'record:highlights', 'record:related_list', 'record:activity', 'record:chatter', 'record:path',
+  'record:details', 'record:highlights', 'record:related_list', 'record:activity', 'record:chatter', 'record:path', 'record:alert', 'record:quick_actions', 'record:reference_rail', 'record:history',
   // Navigation
   'app:launcher', 'nav:menu', 'nav:breadcrumb',
   // Utility
@@ -324,10 +324,10 @@ export const PageSchema = lazySchema(() => z.object({
    * Each slot accepts a single PageComponent or an array. Slots not
    * provided fall through to the synthesized default.
    *
-   * Slot menu (v1): header | actions | highlights | details | tabs |
-   * discussion. Each slot is a full replacement at the slot boundary —
-   * no deep merge, no patch operations. To compose default + custom,
-   * call the corresponding `buildDefault*` sub-builder from the
+   * Slot menu (v1): header | actions | alerts | highlights | details |
+   * tabs | discussion. Each slot is a full replacement at the slot
+   * boundary — no deep merge, no patch operations. To compose default +
+   * custom, call the corresponding `buildDefault*` sub-builder from the
    * renderer runtime (e.g. @object-ui/plugin-detail).
    *
    * Only honored when `kind === 'slotted'`.
@@ -335,6 +335,7 @@ export const PageSchema = lazySchema(() => z.object({
   slots: z.object({
     header: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
     actions: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
+    alerts: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
     highlights: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
     details: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),
     tabs: z.union([PageComponentSchema, z.array(PageComponentSchema)]).optional(),

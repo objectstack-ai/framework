@@ -46,6 +46,29 @@ export const SysUserDetailPage: Page = {
   regions: [],
 
   slots: {
+    // ── Alert banners ─────────────────────────────────────────────
+    // Conditional notices rendered between the page header and the
+    // highlight strip. The unverified-email banner only shows for the
+    // current user viewing their own profile (admins looking at other
+    // users see nothing — they can use Setup actions instead).
+    alerts: [
+      {
+        type: 'record:alert',
+        properties: {
+          severity: 'warning',
+          icon: 'mail',
+          title: '邮箱未验证',
+          body: '验证你的邮箱以接收密码重置和重要的系统通知。',
+          visible: 'record.id == ctx.user.id && record.email_verified == false',
+          dismissible: false,
+          action: {
+            actionName: 'resend_verification_email',
+            label: '重新发送验证邮件',
+          },
+        },
+      },
+    ],
+
     // ── Highlight chips above the fold ────────────────────────────
     highlights: {
       type: 'record:highlights',
