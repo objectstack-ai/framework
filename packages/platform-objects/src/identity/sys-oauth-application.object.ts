@@ -85,6 +85,37 @@ export const SysOauthApplication = ObjectSchema.create({
       ],
     },
     {
+      name: 'create_oauth_application',
+      label: 'Register OAuth Application',
+      icon: 'plus-circle',
+      variant: 'primary',
+      mode: 'create',
+      locations: ['list_toolbar'],
+      type: 'api',
+      method: 'POST',
+      target: '/api/v1/auth/oauth2/register',
+      refreshAfter: true,
+      params: [
+        { name: 'name', label: 'Application Name', type: 'text', required: true },
+        { name: 'redirectURLs', label: 'Redirect URLs', type: 'textarea', required: true, helpText: 'One URL per line. Must use https:// in production.' },
+        { name: 'type', label: 'Application Type', type: 'select', required: true, defaultValue: 'web', options: [
+          { label: 'Web', value: 'web' },
+          { label: 'Native', value: 'native' },
+          { label: 'User-agent based', value: 'user-agent-based' },
+          { label: 'Public', value: 'public' },
+        ] },
+      ],
+      resultDialog: {
+        title: 'OAuth application registered',
+        description: 'Save the client_secret now — it is shown only once and cannot be recovered. You can rotate it later if it leaks.',
+        acknowledge: 'I have saved the client secret',
+        fields: [
+          { path: 'client.client_id', label: 'Client ID', format: 'text' },
+          { path: 'client.client_secret', label: 'Client Secret', format: 'secret' },
+        ],
+      },
+    },
+    {
       name: 'rotate_client_secret',
       label: 'Rotate Client Secret',
       icon: 'refresh-cw',
@@ -95,11 +126,18 @@ export const SysOauthApplication = ObjectSchema.create({
       method: 'POST',
       target: '/api/v1/auth/oauth2/client/rotate-secret',
       confirmText: 'Rotate this OAuth client\'s secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once.',
-      successMessage: 'Client secret rotated — copy the new value from the response now.',
       refreshAfter: true,
       params: [
         { name: 'client_id', field: 'client_id', defaultFromRow: true, required: true },
       ],
+      resultDialog: {
+        title: 'Client secret rotated',
+        description: 'Save the new secret now — it is shown only once. Update every integration before the previous secret\'s grace period ends.',
+        acknowledge: 'I have updated my integrations',
+        fields: [
+          { path: 'client_secret', label: 'New Client Secret', format: 'secret' },
+        ],
+      },
     },
     {
       name: 'delete_oauth_application',

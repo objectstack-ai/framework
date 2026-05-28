@@ -43,10 +43,12 @@ export const SysTwoFactor = ObjectSchema.create({
     },
   },
 
-  // Toolbar actions for self-service 2FA enrollment. The actual TOTP secret
-  // and backup codes returned by better-auth must be shown in the response
-  // toast / dialog — the action runner surfaces successMessage; the raw
-  // payload is logged client-side for now (TODO: dedicated 2FA setup wizard).
+  // Toolbar actions for self-service 2FA enrollment. Better-auth's
+  // `/two-factor/enable` returns `{ totpURI, backupCodes }` — the user must
+  // scan the URI into an authenticator app and save the backup codes NOW;
+  // they are never recoverable afterward. The `resultDialog` field tells
+  // the renderer to open a one-shot reveal dialog instead of toasting the
+  // success message. Same shape used by `regenerate_backup_codes`.
   actions: [
     {
       name: 'enable_two_factor',
@@ -56,11 +58,19 @@ export const SysTwoFactor = ObjectSchema.create({
       locations: ['list_toolbar'],
       type: 'api',
       target: '/api/v1/auth/two-factor/enable',
-      successMessage: '2FA enrollment started — check response for TOTP URI and backup codes',
       refreshAfter: true,
       params: [
         { name: 'password', label: 'Current Password', type: 'text', required: true },
       ],
+      resultDialog: {
+        title: 'Two-factor authentication enabled',
+        description: 'Scan the QR code with your authenticator app, then save the backup codes somewhere safe. The backup codes are shown only once.',
+        acknowledge: 'I have saved my backup codes',
+        fields: [
+          { path: 'totpURI', label: 'Authenticator URI', format: 'qrcode' },
+          { path: 'backupCodes', label: 'Backup Codes', format: 'code-list' },
+        ],
+      },
     },
     {
       name: 'disable_two_factor',
@@ -76,6 +86,28 @@ export const SysTwoFactor = ObjectSchema.create({
       params: [
         { name: 'password', label: 'Current Password', type: 'text', required: true },
       ],
+    },
+    {
+      name: 'regenerate_backup_codes',
+      label: 'Regenerate Backup Codes',
+      icon: 'refresh-cw',
+      variant: 'secondary',
+      locations: ['list_toolbar', 'list_item'],
+      type: 'api',
+      target: '/api/v1/auth/two-factor/generate-backup-codes',
+      confirmText: 'Regenerate backup codes? All previous backup codes will stop working immediately.',
+      refreshAfter: true,
+      params: [
+        { name: 'password', label: 'Current Password', type: 'text', required: true },
+      ],
+      resultDialog: {
+        title: 'New backup codes generated',
+        description: 'Previous backup codes are now invalid. Save these new codes somewhere safe — they are shown only once.',
+        acknowledge: 'I have saved the new codes',
+        fields: [
+          { path: 'backupCodes', label: 'Backup Codes', format: 'code-list' },
+        ],
+      },
     },
   ],
 

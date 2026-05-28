@@ -89,6 +89,16 @@ export async function bootstrapPlatformAdmin(
       description: ps.description ?? null,
       object_permissions: JSON.stringify(ps.objects ?? {}),
       field_permissions: JSON.stringify(ps.fields ?? {}),
+      // Persist the remaining permset facets so the runtime resolver
+      // (rest-server.ts / resolve-execution-context.ts) can hydrate
+      // them back into ExecutionContext.systemPermissions etc. Without
+      // these the platform-admin promotion grants the right LINK row
+      // but the permission set itself carries no capabilities, so
+      // `setup.access` / `studio.access` never reach the app filter
+      // and the Setup app is invisible even to admin_full_access.
+      system_permissions: JSON.stringify(ps.systemPermissions ?? []),
+      row_level_security: JSON.stringify(ps.rowLevelSecurity ?? []),
+      tab_permissions: JSON.stringify(ps.tabPermissions ?? {}),
       active: true,
     });
     if (created?.id) seeded[ps.name] = created.id;

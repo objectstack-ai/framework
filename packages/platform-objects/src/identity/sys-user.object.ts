@@ -127,6 +127,81 @@ export const SysUser = ObjectSchema.create({
       refreshAfter: true,
       confirmText: 'Start an impersonation session for this user? Use only for legitimate support cases — actions will be logged.',
     },
+
+    // ── Self-service actions (the row owner only) ─────────────────────
+    //
+    // These four actions are the "account settings" surfaces the standalone
+    // Account SPA used to own (`/account/profile`, `/account/security`).
+    // They are visible only when the current row is the signed-in user —
+    // i.e. opened from the user's own detail page or a "My Account" view —
+    // via the `visible` CEL predicate. Admin equivalents (set_user_password
+    // for any account) are above and stay separate.
+    {
+      name: 'update_my_profile',
+      label: 'Update Profile',
+      icon: 'user-pen',
+      variant: 'primary',
+      mode: 'edit',
+      locations: ['record_header'],
+      type: 'api',
+      target: '/api/v1/auth/update-user',
+      visible: 'record.id == ctx.user.id',
+      successMessage: 'Profile updated',
+      refreshAfter: true,
+      params: [
+        { field: 'name', required: false, defaultFromRow: true },
+        { field: 'image', required: false, defaultFromRow: true },
+      ],
+    },
+    {
+      name: 'change_my_password',
+      label: 'Change Password',
+      icon: 'key',
+      variant: 'secondary',
+      locations: ['record_header', 'record_more'],
+      type: 'api',
+      target: '/api/v1/auth/change-password',
+      visible: 'record.id == ctx.user.id',
+      successMessage: 'Password changed',
+      refreshAfter: false,
+      params: [
+        { name: 'currentPassword', label: 'Current Password', type: 'text', required: true },
+        { name: 'newPassword', label: 'New Password', type: 'text', required: true },
+        { name: 'revokeOtherSessions', label: 'Sign out other devices', type: 'boolean', required: false, defaultValue: true },
+      ],
+    },
+    {
+      name: 'change_my_email',
+      label: 'Change Email',
+      icon: 'mail',
+      variant: 'secondary',
+      locations: ['record_header', 'record_more'],
+      type: 'api',
+      target: '/api/v1/auth/change-email',
+      visible: 'record.id == ctx.user.id',
+      successMessage: 'Verification email sent — check the new address to confirm.',
+      refreshAfter: false,
+      params: [
+        { name: 'newEmail', label: 'New Email', type: 'email', required: true },
+      ],
+    },
+    {
+      name: 'delete_my_account',
+      label: 'Delete My Account',
+      icon: 'user-x',
+      variant: 'danger',
+      mode: 'delete',
+      locations: ['record_more'],
+      type: 'api',
+      target: '/api/v1/auth/delete-user',
+      visible: 'record.id == ctx.user.id',
+      confirmText: 'Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.',
+      successMessage: 'Account deleted',
+      refreshAfter: false,
+      params: [
+        { name: 'password', label: 'Current Password', type: 'text', required: true },
+      ],
+    },
   ],
 
   listViews: {

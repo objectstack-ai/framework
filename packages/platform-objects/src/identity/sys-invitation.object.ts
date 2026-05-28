@@ -70,6 +70,41 @@ export const SysInvitation = ObjectSchema.create({
         { field: 'role', required: true, defaultFromRow: true },
       ],
     },
+
+    // ── Recipient-side actions (the invited user) ────────────────────
+    //
+    // These two are the counterpart to invite/cancel/resend: they are
+    // visible only on invitations addressed to the current user. Used
+    // by an "Inbox / Pending invitations" list opened from the user's
+    // own account page. The recipient-only `visible` predicate keeps
+    // them out of the admin org-management view.
+    {
+      name: 'accept_invitation',
+      label: 'Accept Invitation',
+      icon: 'check',
+      variant: 'primary',
+      locations: ['list_item', 'record_header'],
+      type: 'api',
+      target: '/api/v1/auth/organization/accept-invitation',
+      recordIdParam: 'invitationId',
+      visible: "record.email == ctx.user.email && record.status == 'pending'",
+      successMessage: 'Invitation accepted',
+      refreshAfter: true,
+    },
+    {
+      name: 'reject_invitation',
+      label: 'Decline Invitation',
+      icon: 'x',
+      variant: 'ghost',
+      locations: ['list_item', 'record_header'],
+      type: 'api',
+      target: '/api/v1/auth/organization/reject-invitation',
+      recordIdParam: 'invitationId',
+      visible: "record.email == ctx.user.email && record.status == 'pending'",
+      confirmText: 'Decline this invitation? The inviter will be notified and you will need a new invitation to join.',
+      successMessage: 'Invitation declined',
+      refreshAfter: true,
+    },
   ],
 
   listViews: {

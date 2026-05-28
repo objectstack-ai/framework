@@ -77,6 +77,28 @@ export const SysMember = ObjectSchema.create({
       successMessage: 'Member removed',
       refreshAfter: true,
     },
+    // Transfer ownership is modeled as `update-member-role` with role=owner
+    // (better-auth's organization plugin auto-demotes the previous owner
+    // to admin). Kept as a separate action so the row menu can present a
+    // distinct destructive-style affordance with the right confirm copy —
+    // mixing it into `update_member_role` would hide the ownership-handoff
+    // semantics behind a generic role dropdown.
+    {
+      name: 'transfer_ownership',
+      label: 'Transfer Ownership',
+      icon: 'crown',
+      variant: 'danger',
+      mode: 'custom',
+      locations: ['list_item'],
+      type: 'api',
+      target: '/api/v1/auth/organization/update-member-role',
+      recordIdParam: 'memberId',
+      bodyExtra: { role: 'owner' },
+      visible: "record.role != 'owner'",
+      confirmText: 'Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.',
+      successMessage: 'Ownership transferred',
+      refreshAfter: true,
+    },
   ],
 
   fields: {

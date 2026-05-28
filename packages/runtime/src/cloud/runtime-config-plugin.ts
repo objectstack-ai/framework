@@ -46,6 +46,15 @@ export interface RuntimeConfigPluginConfig {
      * multi-tenant ObjectOS.
      */
     singleEnvironment?: boolean;
+    /**
+     * Product name shown in browser title, splash screen, and other
+     * client chrome. Operators can override per-deployment (white-label,
+     * regional rebrands). Falls back to `OS_PRODUCT_NAME` env var, then
+     * to the default `'ObjectOS'`.
+     */
+    productName?: string;
+    /** Short product name (PWA shortName, compact spots). Defaults to productName. */
+    productShortName?: string;
 }
 
 export class RuntimeConfigPlugin implements Plugin {
@@ -55,6 +64,8 @@ export class RuntimeConfigPlugin implements Plugin {
     private readonly cloudUrl: string;
     private readonly installLocal: boolean;
     private readonly singleEnvironment: boolean;
+    private readonly productName: string;
+    private readonly productShortName: string;
 
     constructor(config: RuntimeConfigPluginConfig = {}) {
         // An explicit empty string means "stay on this origin" — bypass the
@@ -64,6 +75,10 @@ export class RuntimeConfigPlugin implements Plugin {
             : (resolveCloudUrl(config.controlPlaneUrl) ?? '');
         this.installLocal = !!config.installLocal;
         this.singleEnvironment = !!config.singleEnvironment;
+        const envName = (typeof process !== 'undefined' ? process.env?.OS_PRODUCT_NAME : undefined)?.trim();
+        const envShort = (typeof process !== 'undefined' ? process.env?.OS_PRODUCT_SHORT_NAME : undefined)?.trim();
+        this.productName = (config.productName ?? envName ?? 'ObjectOS').trim() || 'ObjectOS';
+        this.productShortName = (config.productShortName ?? envShort ?? this.productName).trim() || this.productName;
     }
 
     init = async (_ctx: PluginContext): Promise<void> => {};
@@ -144,6 +159,10 @@ export class RuntimeConfigPlugin implements Plugin {
                     defaultOrgId,
                     defaultEnvironmentId,
                     features,
+                    branding: {
+                        productName: this.productName,
+                        productShortName: this.productShortName,
+                    },
                 });
             };
             rawApp.get('/api/v1/runtime/config', handler);

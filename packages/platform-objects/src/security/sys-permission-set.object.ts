@@ -154,6 +154,27 @@ export const SysPermissionSet = ObjectSchema.create({
       group: 'Permissions',
     }),
 
+    system_permissions: Field.textarea({
+      label: 'System Permissions',
+      required: false,
+      description: 'JSON-serialized array of system capability names (e.g. ["setup.access","studio.access","manage_users"])',
+      group: 'Permissions',
+    }),
+
+    row_level_security: Field.textarea({
+      label: 'Row-Level Security',
+      required: false,
+      description: 'JSON-serialized array of row-level security policies (USING/CHECK clauses)',
+      group: 'Permissions',
+    }),
+
+    tab_permissions: Field.textarea({
+      label: 'Tab Permissions',
+      required: false,
+      description: 'JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)',
+      group: 'Permissions',
+    }),
+
     // ── Status ───────────────────────────────────────────────────
     active: Field.boolean({
       label: 'Active',

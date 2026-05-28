@@ -194,10 +194,20 @@ describe('@objectstack/platform-objects', () => {
       const actions = SysOauthApplication.actions ?? [];
       const names = actions.map((a) => a.name).sort();
       expect(names).toEqual([
+        'create_oauth_application',
         'delete_oauth_application',
         'disable_oauth_application',
         'enable_oauth_application',
         'rotate_client_secret',
+      ]);
+
+      const create = actions.find((a) => a.name === 'create_oauth_application');
+      expect(create?.target).toBe('/api/v1/auth/oauth2/register');
+      expect(create?.method).toBe('POST');
+      expect(create?.mode).toBe('create');
+      expect(create?.resultDialog?.fields?.map((f) => f.path)).toEqual([
+        'client.client_id',
+        'client.client_secret',
       ]);
 
       const rotate = actions.find((a) => a.name === 'rotate_client_secret');

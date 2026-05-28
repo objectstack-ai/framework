@@ -26,7 +26,41 @@ export const SysAccount = ObjectSchema.create({
   // requests it). Better-auth exposes `/unlink-account { providerId,
   // accountId }` for this. The form is locked to the row's values so
   // it acts as a one-click confirmation rather than a free-form edit.
+  //
+  // `link_social` is the self-service counterpart — a toolbar action
+  // that redirects the browser to better-auth's social sign-in endpoint
+  // with a callbackURL pointing back to the linked-accounts view. The
+  // endpoint sets the link cookie and OAuth-dances through the provider,
+  // which is why it's `type: 'url'` (full page navigation) rather than
+  // `type: 'api'` (XHR — would block on CORS / 302).
   actions: [
+    {
+      name: 'link_social',
+      label: 'Link Social Account',
+      icon: 'link-2',
+      variant: 'primary',
+      mode: 'create',
+      locations: ['list_toolbar'],
+      type: 'url',
+      target: '/api/v1/auth/sign-in/social?provider=${param.provider}&callbackURL=${ctx.origin}/apps/setup/system/sys_account',
+      params: [
+        {
+          name: 'provider',
+          label: 'Provider',
+          type: 'select',
+          required: true,
+          options: [
+            { label: 'Google', value: 'google' },
+            { label: 'GitHub', value: 'github' },
+            { label: 'Microsoft', value: 'microsoft' },
+            { label: 'Apple', value: 'apple' },
+            { label: 'Facebook', value: 'facebook' },
+            { label: 'GitLab', value: 'gitlab' },
+            { label: 'Discord', value: 'discord' },
+          ],
+        },
+      ],
+    },
     {
       name: 'unlink_account',
       label: 'Unlink Account',

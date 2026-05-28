@@ -158,8 +158,19 @@ export const ActionSchema = lazySchema(() => z.object({
    * Required for url, flow, modal, and api types.
    * For `script` type: prefer `body` over `target`. `target` is kept only for
    * legacy bundle.functions[name] references.
+   *
+   * **Interpolation** (renderer responsibility, all action types):
+   * `target` MAY contain `${param.X}` and `${ctx.X}` tokens. Renderers
+   * resolve them just before invocation:
+   * - `${param.X}` — value collected from the action's params dialog.
+   * - `${ctx.X}` — values from the action context: `ctx.origin`
+   *   (window.origin), `ctx.recordId`, `ctx.user.id`, `ctx.org.id`, etc.
+   * Used by redirect-style actions like `link_social`, where the target is
+   * e.g. `/api/v1/auth/sign-in/social?provider=${param.provider}&callbackURL=${ctx.origin}/_account/linked-accounts`.
+   * Renderers MUST `encodeURIComponent` interpolated values before
+   * substituting them into URL query positions.
    */
-  target: z.string().optional().describe('URL, Script Name, Flow ID, or API Endpoint'),
+  target: z.string().optional().describe('URL, Script Name, Flow ID, or API Endpoint. Supports ${param.X} and ${ctx.X} interpolation.'),
 
   /**
    * Action Body (L1 expression or L2 sandboxed JS).
@@ -191,6 +202,54 @@ export const ActionSchema = lazySchema(() => z.object({
   confirmText: I18nLabelSchema.optional().describe('Confirmation message before execution'),
   successMessage: I18nLabelSchema.optional().describe('Success message to show after execution'),
   refreshAfter: z.boolean().default(false).describe('Refresh view after execution'),
+
+  /**
+   * Result Dialog — describe how to render the API response on success.
+   *
+   * When set and the action returns successfully, the renderer SHOULD open a
+   * dialog showing the selected fields from `result.data` instead of the
+   * `successMessage` toast. The dialog has an acknowledge button only — the
+   * user must explicitly close it. Used for **one-shot reveals** of values
+   * the user must copy now because they cannot be retrieved later:
+   *
+   * - TOTP enrollment URI + secret (`enable_two_factor`)
+   * - Backup recovery codes (`regenerate_backup_codes`)
+   * - Freshly minted OAuth `client_secret` (`rotate_client_secret`,
+   *   `create_oauth_application`)
+   *
+   * `fields` selects what to render and how. Each entry's `path` is a dot
+   * path into `result.data` (e.g. `'totpURI'`, `'backupCodes'`,
+   * `'client.client_secret'`). When `fields` is omitted, the renderer falls
+   * back to JSON-printing the whole response under a single block.
+   *
+   * `format` (dialog-level) is a default for fields that don't carry their
+   * own `format`; the per-field `format` always wins.
+   *
+   * Renderer contract (objectui):
+   * - `qrcode` — render the value as a QR code; also render the raw string
+   *   underneath with a copy button (so the user can paste into apps that
+   *   don't scan).
+   * - `code-list` — value must be an array of strings; render each in a
+   *   monospace row with per-row copy and a "Copy all" affordance.
+   * - `secret` — render a single string masked by default with a reveal
+   *   toggle and copy button.
+   * - `text` — plain text with copy.
+   * - `json` — pretty-printed JSON in a monospace block.
+   *
+   * The dialog SHOULD set `refreshAfter` to true on close (separate from
+   * the existing `refreshAfter` flag, which fires immediately on success).
+   */
+  resultDialog: z.object({
+    title: I18nLabelSchema.optional(),
+    description: I18nLabelSchema.optional(),
+    acknowledge: I18nLabelSchema.optional().describe('Acknowledge button label, e.g. "I have saved this"'),
+    format: z.enum(['qrcode', 'code-list', 'secret', 'text', 'json']).optional().describe('Default format for fields without their own format. Defaults to json when omitted.'),
+    fields: z.array(z.object({
+      path: z.string().describe('Dot path into result.data (e.g. "totpURI", "client.client_secret").'),
+      label: I18nLabelSchema.optional(),
+      format: z.enum(['qrcode', 'code-list', 'secret', 'text', 'json']).optional().describe('Per-field format override.'),
+    })).optional().describe('Which fields from result.data to render. Omit to dump full JSON.'),
+  }).optional().describe('Render API response in a one-shot reveal dialog (suppresses successMessage when set).'),
   
   /** Access */
   visible: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),
