@@ -93,7 +93,7 @@ export const SysOauthApplication = ObjectSchema.create({
       locations: ['list_toolbar'],
       type: 'api',
       method: 'POST',
-      target: '/api/v1/auth/oauth2/register',
+      target: '/api/v1/auth/sys-oauth-application/register',
       refreshAfter: true,
       params: [
         { name: 'name', label: 'Application Name', type: 'text', required: true },

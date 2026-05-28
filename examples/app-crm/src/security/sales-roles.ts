@@ -18,6 +18,13 @@ export const SalesManagerRole: Identity.Role = {
   parentRole: 'sales_rep',
 };
 
+/** Referenced by the Discount Approval second step. */
+export const FinanceApproverRole: Identity.Role = {
+  name: 'finance_approver',
+  label: 'Finance Approver',
+  description: 'Finance team member authorised to approve discounts above 30%.',
+};
+
 /**
  * Example permission set — base permissions on CRM objects for sales users.
  *
@@ -29,8 +36,10 @@ export const SalesUserPermissionSet: Security.PermissionSet = {
   description: 'Standard CRUD on CRM objects for sales team members.',
   isProfile: false,
   objects: {
-    crm_account: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
-    crm_contact: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
-    crm_opportunity: { allowRead: true, allowCreate: true, allowEdit: true, allowDelete: false },
+    crm_account:     { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
+    crm_contact:     { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
+    crm_opportunity: { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
+    crm_lead:        { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
+    crm_activity:    { allowRead: true, allowCreate: true,  allowEdit: true,  allowDelete: false },
   },
 };

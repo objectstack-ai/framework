@@ -202,7 +202,7 @@ describe('@objectstack/platform-objects', () => {
       ]);
 
       const create = actions.find((a) => a.name === 'create_oauth_application');
-      expect(create?.target).toBe('/api/v1/auth/oauth2/register');
+      expect(create?.target).toBe('/api/v1/auth/sys-oauth-application/register');
       expect(create?.method).toBe('POST');
       expect(create?.mode).toBe('create');
       expect(create?.resultDialog?.fields?.map((f) => f.path)).toEqual([

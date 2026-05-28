@@ -3,5 +3,6 @@
 export {
   SalesRepRole,
   SalesManagerRole,
+  FinanceApproverRole,
   SalesUserPermissionSet,
 } from './sales-roles.js';

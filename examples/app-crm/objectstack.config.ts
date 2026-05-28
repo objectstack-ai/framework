@@ -12,7 +12,7 @@ import * as actions from './src/actions/index.js';
 import * as emails from './src/emails/index.js';
 import { allHooks } from './src/hooks/index.js';
 import { allFlows } from './src/flows/index.js';
-import { HighValueDealWorkflow } from './src/workflows/index.js';
+import { HighValueDealWorkflow, StaleOpportunityWorkflow } from './src/workflows/index.js';
 import { DiscountApprovalProcess } from './src/approvals/index.js';
 import {
   SalesAssistantAgent,
@@ -22,6 +22,7 @@ import {
 import {
   SalesRepRole,
   SalesManagerRole,
+  FinanceApproverRole,
   SalesUserPermissionSet,
 } from './src/security/index.js';
 import { CrmSeedData } from './src/data/index.js';
@@ -61,7 +62,7 @@ export default defineStack({
   // Logic
   hooks: allHooks,
   flows: allFlows,
-  workflows: [HighValueDealWorkflow],
+  workflows: [HighValueDealWorkflow, StaleOpportunityWorkflow],
   approvals: [DiscountApprovalProcess],
 
   // AI
@@ -69,7 +70,7 @@ export default defineStack({
   skills: [DealManagementSkill],
 
   // Security
-  roles: [SalesRepRole, SalesManagerRole],
+  roles: [SalesRepRole, SalesManagerRole, FinanceApproverRole],
   permissions: [SalesUserPermissionSet],
 
   // Seed data

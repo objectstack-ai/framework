@@ -3,3 +3,5 @@
 export { Account } from './account.object.js';
 export { Contact } from './contact.object.js';
 export { Opportunity } from './opportunity.object.js';
+export { Lead } from './lead.object.js';
+export { Activity } from './activity.object.js';

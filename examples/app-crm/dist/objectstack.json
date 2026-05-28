@@ -110,6 +110,220 @@
       }
     },
     {
+      "name": "crm_activity",
+      "label": "Activity",
+      "pluralLabel": "Activities",
+      "description": "A logged interaction (call, email, meeting, or task) related to a CRM record.",
+      "icon": "calendar-check",
+      "active": true,
+      "isSystem": false,
+      "abstract": false,
+      "datasource": "default",
+      "fields": {
+        "subject": {
+          "label": "Subject",
+          "type": "text",
+          "required": true,
+          "searchable": true,
+          "multiple": false,
+          "unique": false,
+          "maxLength": 255,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "type": {
+          "label": "Type",
+          "type": "select",
+          "required": true,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "options": [
+            {
+              "label": "Call",
+              "value": "call",
+              "color": "#3B82F6",
+              "default": true
+            },
+            {
+              "label": "Email",
+              "value": "email",
+              "color": "#8B5CF6"
+            },
+            {
+              "label": "Meeting",
+              "value": "meeting",
+              "color": "#F59E0B"
+            },
+            {
+              "label": "Task",
+              "value": "task",
+              "color": "#10B981"
+            }
+          ],
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "status": {
+          "label": "Status",
+          "type": "select",
+          "required": true,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "options": [
+            {
+              "label": "Planned",
+              "value": "planned",
+              "color": "#94A3B8",
+              "default": true
+            },
+            {
+              "label": "In Progress",
+              "value": "in_progress",
+              "color": "#F59E0B"
+            },
+            {
+              "label": "Completed",
+              "value": "completed",
+              "color": "#10B981"
+            },
+            {
+              "label": "Cancelled",
+              "value": "cancelled",
+              "color": "#EF4444"
+            }
+          ],
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "due_date": {
+          "label": "Due Date / Time",
+          "type": "datetime",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "contact": {
+          "label": "Contact",
+          "type": "lookup",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "reference": "crm_contact",
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "account": {
+          "label": "Account",
+          "type": "lookup",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "reference": "crm_account",
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "opportunity": {
+          "label": "Opportunity",
+          "type": "lookup",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "reference": "crm_opportunity",
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "description": {
+          "label": "Description",
+          "type": "textarea",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "outcome": {
+          "label": "Outcome / Notes",
+          "type": "textarea",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "duration_minutes": {
+          "label": "Duration (min)",
+          "type": "number",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "min": 0,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        }
+      }
+    },
+    {
       "name": "crm_contact",
       "label": "Contact",
       "pluralLabel": "Contacts",
@@ -213,6 +427,287 @@
           "refreshAfter": false
         }
       ]
+    },
+    {
+      "name": "crm_lead",
+      "label": "Lead",
+      "pluralLabel": "Leads",
+      "description": "An inbound prospect not yet qualified as an opportunity.",
+      "icon": "funnel",
+      "active": true,
+      "isSystem": false,
+      "abstract": false,
+      "datasource": "default",
+      "fields": {
+        "name": {
+          "label": "Lead Name",
+          "type": "text",
+          "required": true,
+          "searchable": true,
+          "multiple": false,
+          "unique": false,
+          "maxLength": 200,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "email": {
+          "label": "Email",
+          "type": "email",
+          "required": false,
+          "searchable": true,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "phone": {
+          "label": "Phone",
+          "type": "phone",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "company": {
+          "label": "Company",
+          "type": "text",
+          "required": false,
+          "searchable": true,
+          "multiple": false,
+          "unique": false,
+          "maxLength": 200,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "title": {
+          "label": "Title",
+          "type": "text",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "maxLength": 120,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "status": {
+          "label": "Status",
+          "type": "select",
+          "required": true,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "options": [
+            {
+              "label": "New",
+              "value": "new",
+              "color": "#94A3B8",
+              "default": true
+            },
+            {
+              "label": "Contacted",
+              "value": "contacted",
+              "color": "#3B82F6"
+            },
+            {
+              "label": "Qualifying",
+              "value": "qualifying",
+              "color": "#F59E0B"
+            },
+            {
+              "label": "Qualified",
+              "value": "qualified",
+              "color": "#10B981"
+            },
+            {
+              "label": "Disqualified",
+              "value": "disqualified",
+              "color": "#EF4444"
+            },
+            {
+              "label": "Converted",
+              "value": "converted",
+              "color": "#8B5CF6"
+            }
+          ],
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "source": {
+          "label": "Lead Source",
+          "type": "select",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "options": [
+            {
+              "label": "Website",
+              "value": "web",
+              "default": true
+            },
+            {
+              "label": "Referral",
+              "value": "referral"
+            },
+            {
+              "label": "Event",
+              "value": "event"
+            },
+            {
+              "label": "Social Media",
+              "value": "social"
+            },
+            {
+              "label": "Cold Outreach",
+              "value": "cold_outreach"
+            },
+            {
+              "label": "Partner",
+              "value": "partner"
+            }
+          ],
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "lead_score": {
+          "label": "Lead Score",
+          "type": "number",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "defaultValue": 0,
+          "min": 0,
+          "max": 100,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "assigned_to": {
+          "label": "Assigned To",
+          "type": "text",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "maxLength": 200,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "account": {
+          "label": "Account",
+          "type": "lookup",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "reference": "crm_account",
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "converted_opportunity": {
+          "label": "Converted Opportunity",
+          "type": "lookup",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "reference": "crm_opportunity",
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "notes": {
+          "label": "Notes",
+          "type": "textarea",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "is_closed": {
+          "label": "Is Closed",
+          "type": "formula",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "deleteBehavior": "set_null",
+          "expression": {
+            "dialect": "cel",
+            "source": "status == \"converted\" || status == \"disqualified\""
+          },
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        }
+      }
     },
     {
       "name": "crm_opportunity",
@@ -368,6 +863,40 @@
           "sortable": true,
           "index": false,
           "externalId": false
+        },
+        "discount_percent": {
+          "label": "Discount %",
+          "type": "percent",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "defaultValue": 0,
+          "min": 0,
+          "max": 100,
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
+        },
+        "renewal_of": {
+          "label": "Renewal Of",
+          "type": "lookup",
+          "required": false,
+          "searchable": false,
+          "multiple": false,
+          "unique": false,
+          "reference": "crm_opportunity",
+          "deleteBehavior": "set_null",
+          "auditTrail": false,
+          "hidden": false,
+          "readonly": false,
+          "sortable": true,
+          "index": false,
+          "externalId": false
         }
       }
     }
@@ -391,6 +920,13 @@
           "expanded": false,
           "children": [
             {
+              "id": "nav_leads",
+              "label": "Leads",
+              "icon": "funnel",
+              "type": "object",
+              "objectName": "crm_lead"
+            },
+            {
               "id": "nav_accounts",
               "label": "Accounts",
               "icon": "building",
@@ -410,6 +946,13 @@
               "icon": "trending-up",
               "type": "object",
               "objectName": "crm_opportunity"
+            },
+            {
+              "id": "nav_activities",
+              "label": "Activities",
+              "icon": "calendar-check",
+              "type": "object",
+              "objectName": "crm_activity"
             }
           ]
         },
@@ -433,6 +976,247 @@
     }
   ],
   "views": [
+    {
+      "listViews": {
+        "all": {
+          "label": "All Activities",
+          "type": "grid",
+          "columns": [
+            {
+              "field": "subject"
+            },
+            {
+              "field": "type"
+            },
+            {
+              "field": "status"
+            },
+            {
+              "field": "due_date"
+            },
+            {
+              "field": "contact"
+            },
+            {
+              "field": "account"
+            },
+            {
+              "field": "opportunity"
+            }
+          ]
+        },
+        "calendar": {
+          "label": "Activity Calendar",
+          "type": "calendar",
+          "columns": [
+            "subject",
+            "type",
+            "status",
+            "due_date"
+          ],
+          "calendar": {
+            "startDateField": "due_date",
+            "titleField": "subject",
+            "colorField": "type"
+          }
+        }
+      },
+      "formViews": {
+        "default": {
+          "type": "simple",
+          "sections": [
+            {
+              "label": "Activity Details",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "subject",
+                  "required": true
+                },
+                {
+                  "field": "type",
+                  "required": true
+                },
+                {
+                  "field": "status",
+                  "required": true
+                },
+                {
+                  "field": "due_date"
+                },
+                {
+                  "field": "duration_minutes"
+                }
+              ]
+            },
+            {
+              "label": "Related Records",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "contact"
+                },
+                {
+                  "field": "account"
+                },
+                {
+                  "field": "opportunity"
+                }
+              ]
+            },
+            {
+              "label": "Notes",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 1,
+              "fields": [
+                {
+                  "field": "description"
+                },
+                {
+                  "field": "outcome"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "listViews": {
+        "all": {
+          "label": "All Leads",
+          "type": "grid",
+          "columns": [
+            {
+              "field": "name"
+            },
+            {
+              "field": "company"
+            },
+            {
+              "field": "status"
+            },
+            {
+              "field": "source"
+            },
+            {
+              "field": "lead_score"
+            },
+            {
+              "field": "assigned_to"
+            },
+            {
+              "field": "email"
+            }
+          ]
+        },
+        "pipeline": {
+          "label": "Lead Pipeline (Kanban)",
+          "type": "kanban",
+          "columns": [
+            "name",
+            "company",
+            "source",
+            "lead_score"
+          ],
+          "kanban": {
+            "groupByField": "status",
+            "summarizeField": "lead_score",
+            "columns": [
+              "name",
+              "company",
+              "source",
+              "lead_score"
+            ]
+          }
+        }
+      },
+      "formViews": {
+        "default": {
+          "type": "simple",
+          "sections": [
+            {
+              "label": "Lead Information",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "name",
+                  "required": true
+                },
+                {
+                  "field": "company"
+                },
+                {
+                  "field": "email"
+                },
+                {
+                  "field": "phone"
+                },
+                {
+                  "field": "title"
+                },
+                {
+                  "field": "source"
+                }
+              ]
+            },
+            {
+              "label": "Qualification",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "status",
+                  "required": true
+                },
+                {
+                  "field": "lead_score"
+                },
+                {
+                  "field": "assigned_to"
+                },
+                {
+                  "field": "account"
+                }
+              ]
+            },
+            {
+              "label": "Conversion",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 2,
+              "fields": [
+                {
+                  "field": "converted_opportunity"
+                },
+                {
+                  "field": "is_closed"
+                }
+              ]
+            },
+            {
+              "label": "Notes",
+              "collapsible": false,
+              "collapsed": false,
+              "columns": 1,
+              "fields": [
+                {
+                  "field": "notes"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
     {
       "listViews": {
         "all": {
@@ -764,6 +1548,40 @@
       "active": true,
       "executionOrder": 100,
       "reevaluateOnChange": false
+    },
+    {
+      "name": "crm_stale_opportunity_alert",
+      "objectName": "crm_opportunity",
+      "triggerType": "schedule",
+      "description": "Flags open opportunities that have not been updated in 30 days and notifies the sales rep.",
+      "criteria": {
+        "dialect": "cel",
+        "source": "\n    stage != \"closed_won\" &&\n    stage != \"closed_lost\" &&\n    now() - updated_at > duration(\"P30D\")\n  "
+      },
+      "actions": [
+        {
+          "name": "notify_stale_owner",
+          "type": "email_alert",
+          "template": "stale_opportunity_alert",
+          "recipients": [
+            "{record.owner_email}"
+          ]
+        },
+        {
+          "name": "create_followup_task",
+          "type": "task_creation",
+          "taskObject": "crm_activity",
+          "subject": "Follow up on stale opportunity: {record.name}",
+          "description": "This opportunity has not been updated in 30+ days. Please review and update.",
+          "dueDate": {
+            "dialect": "cel",
+            "source": "{daysFromNow(3)}"
+          }
+        }
+      ],
+      "active": true,
+      "executionOrder": 200,
+      "reevaluateOnChange": false
     }
   ],
   "approvals": [
@@ -869,6 +1687,814 @@
       ],
       "active": false,
       "runAs": "user"
+    },
+    {
+      "name": "lead_qualification_conversion",
+      "label": "Lead Qualification & Conversion",
+      "description": "Qualifies an inbound lead through scoring and enrichment, then converts it to an Opportunity via parallel processing, a timed wait, and optional manager escalation.",
+      "version": 2,
+      "status": "active",
+      "template": false,
+      "type": "record_change",
+      "variables": [
+        {
+          "name": "lead_score",
+          "type": "number",
+          "isInput": false,
+          "isOutput": false
+        },
+        {
+          "name": "enrichment_data",
+          "type": "object",
+          "isInput": false,
+          "isOutput": false
+        },
+        {
+          "name": "account_data",
+          "type": "object",
+          "isInput": false,
+          "isOutput": false
+        },
+        {
+          "name": "new_opportunity",
+          "type": "object",
+          "isInput": false,
+          "isOutput": false
+        },
+        {
+          "name": "opportunity_id",
+          "type": "text",
+          "isInput": false,
+          "isOutput": true
+        },
+        {
+          "name": "qualified",
+          "type": "boolean",
+          "isInput": false,
+          "isOutput": true
+        }
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "Lead Status → Qualifying",
+          "config": {
+            "objectName": "crm_lead",
+            "triggerType": "record-after-update",
+            "condition": "status == \"qualifying\" && previous.status != \"qualifying\""
+          },
+          "position": {
+            "x": 400,
+            "y": 0
+          }
+        },
+        {
+          "id": "init_vars",
+          "type": "assignment",
+          "label": "Initialise Scoring Variables",
+          "config": {
+            "assignments": [
+              {
+                "variable": "lead_score",
+                "value": 0
+              },
+              {
+                "variable": "qualified",
+                "value": false
+              },
+              {
+                "variable": "enrichment_data",
+                "value": null
+              }
+            ]
+          },
+          "position": {
+            "x": 400,
+            "y": 120
+          }
+        },
+        {
+          "id": "get_account",
+          "type": "get_record",
+          "label": "Fetch Account Details",
+          "config": {
+            "objectName": "crm_account",
+            "filter": {
+              "id": "{record.account}"
+            },
+            "outputVariable": "account_data"
+          },
+          "position": {
+            "x": 400,
+            "y": 240
+          },
+          "outputSchema": {
+            "account_data": {
+              "type": "object",
+              "description": "Account record"
+            }
+          }
+        },
+        {
+          "id": "enrich_lead",
+          "type": "http_request",
+          "label": "Enrich Lead (External API)",
+          "config": {
+            "method": "POST",
+            "url": "https://api.enrichment-service.example/leads/enrich",
+            "headers": {
+              "Content-Type": "application/json",
+              "X-Api-Key": "{env.ENRICHMENT_API_KEY}"
+            },
+            "body": {
+              "email": "{record.email}",
+              "company": "{record.company}"
+            },
+            "outputVariable": "enrichment_data"
+          },
+          "position": {
+            "x": 400,
+            "y": 360
+          },
+          "timeoutMs": 10000,
+          "outputSchema": {
+            "enrichment_data": {
+              "type": "object",
+              "description": "Enrichment API response"
+            }
+          }
+        },
+        {
+          "id": "score_lead",
+          "type": "script",
+          "label": "Calculate Lead Score",
+          "config": {
+            "script": "\n          let score = 0;\n          // Source weighting\n          const sourceBonus = { referral: 30, event: 20, web: 10, partner: 25 };\n          score += sourceBonus[record.source] ?? 5;\n          // Company size from enrichment (may be undefined if enrichment failed)\n          const employees = enrichment_data?.employee_count ?? 0;\n          if (employees > 500) score += 25;\n          else if (employees > 100) score += 15;\n          else if (employees > 20) score += 8;\n          // Existing account relationship bonus\n          if (account_data?.annual_revenue > 5_000_000) score += 20;\n          else if (account_data?.annual_revenue > 1_000_000) score += 10;\n          // Title / seniority\n          const title = (record.title ?? '').toLowerCase();\n          if (title.includes('vp') || title.includes('director') || title.includes('chief')) score += 15;\n          else if (title.includes('manager') || title.includes('head')) score += 10;\n          variables.lead_score = Math.min(score, 100);\n          variables.qualified   = score >= 60;\n        ",
+            "outputVariables": [
+              "lead_score",
+              "qualified"
+            ]
+          },
+          "position": {
+            "x": 400,
+            "y": 480
+          },
+          "outputSchema": {
+            "lead_score": {
+              "type": "number",
+              "description": "Calculated score 0–100"
+            },
+            "qualified": {
+              "type": "boolean",
+              "description": "Whether score meets threshold"
+            }
+          }
+        },
+        {
+          "id": "decide_qualification",
+          "type": "decision",
+          "label": "Lead Score ≥ 60?",
+          "config": {
+            "conditions": [
+              {
+                "label": "Qualified",
+                "expression": "lead_score >= 60"
+              },
+              {
+                "label": "Not Qualified",
+                "expression": "true"
+              }
+            ]
+          },
+          "position": {
+            "x": 400,
+            "y": 600
+          }
+        },
+        {
+          "id": "update_lead_disqualified",
+          "type": "update_record",
+          "label": "Mark Lead Disqualified",
+          "config": {
+            "objectName": "crm_lead",
+            "recordId": "{record.id}",
+            "data": {
+              "status": "disqualified",
+              "notes": "Auto-disqualified: Lead score {lead_score}/100 below threshold. Enrichment source: {enrichment_data.company_size}."
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 720
+          }
+        },
+        {
+          "id": "parallel_split",
+          "type": "parallel_gateway",
+          "label": "Notify & Create Opportunity (Parallel)",
+          "position": {
+            "x": 600,
+            "y": 720
+          }
+        },
+        {
+          "id": "notify_sales_rep",
+          "type": "script",
+          "label": "Send Qualification Alert to Rep",
+          "config": {
+            "actionType": "email",
+            "inputs": {
+              "to": "{record.assigned_to}",
+              "subject": "🎯 Lead Qualified: {record.name} (Score: {lead_score}/100)",
+              "template": "lead_qualified_email",
+              "context": {
+                "lead_name": "{record.name}",
+                "company": "{record.company}",
+                "lead_score": "{lead_score}"
+              }
+            }
+          },
+          "position": {
+            "x": 400,
+            "y": 840
+          }
+        },
+        {
+          "id": "create_opportunity",
+          "type": "create_record",
+          "label": "Create Opportunity from Lead",
+          "config": {
+            "objectName": "crm_opportunity",
+            "data": {
+              "name": "{record.company} — Converted Lead: {record.name}",
+              "account": "{record.account}",
+              "stage": "prospecting",
+              "amount": 0,
+              "probability": 20,
+              "close_date": "{daysFromNow(90)}"
+            },
+            "outputVariable": "new_opportunity"
+          },
+          "position": {
+            "x": 800,
+            "y": 840
+          },
+          "outputSchema": {
+            "new_opportunity": {
+              "type": "object",
+              "description": "Newly created opportunity"
+            }
+          }
+        },
+        {
+          "id": "parallel_join",
+          "type": "join_gateway",
+          "label": "Wait for Both Branches",
+          "position": {
+            "x": 600,
+            "y": 960
+          }
+        },
+        {
+          "id": "update_lead_converted",
+          "type": "update_record",
+          "label": "Mark Lead Converted",
+          "config": {
+            "objectName": "crm_lead",
+            "recordId": "{record.id}",
+            "data": {
+              "status": "converted",
+              "converted_opportunity": "{new_opportunity.id}"
+            }
+          },
+          "position": {
+            "x": 600,
+            "y": 1080
+          }
+        },
+        {
+          "id": "wait_prospect_response",
+          "type": "wait",
+          "label": "Wait 24 h for Prospect Response",
+          "position": {
+            "x": 600,
+            "y": 1200
+          },
+          "waitEventConfig": {
+            "eventType": "timer",
+            "timerDuration": "PT24H",
+            "timeoutMs": 86400000,
+            "onTimeout": "continue"
+          }
+        },
+        {
+          "id": "decide_followup",
+          "type": "decision",
+          "label": "Opportunity Advanced Beyond Prospecting?",
+          "config": {
+            "conditions": [
+              {
+                "label": "Follow-up complete",
+                "expression": "new_opportunity.stage != \"prospecting\""
+              },
+              {
+                "label": "No follow-up",
+                "expression": "true"
+              }
+            ]
+          },
+          "position": {
+            "x": 600,
+            "y": 1320
+          }
+        },
+        {
+          "id": "escalate_to_manager",
+          "type": "subflow",
+          "label": "Escalate to Manager (Subflow)",
+          "config": {
+            "flowName": "notify_manager_subflow",
+            "inputs": {
+              "opportunity_id": "{new_opportunity.id}",
+              "reason": "No rep follow-up within 24 h of lead conversion (score: {lead_score})"
+            }
+          },
+          "position": {
+            "x": 800,
+            "y": 1440
+          }
+        },
+        {
+          "id": "error_handler",
+          "type": "script",
+          "label": "Log Error & Continue Scoring",
+          "config": {
+            "script": "\n          // Enrichment failed — proceed with partial score (no enrichment bonus)\n          console.warn('Enrichment failed for lead', record.id, '; scoring without enrichment data.');\n          variables.enrichment_data = {};\n        ",
+            "outputVariables": [
+              "enrichment_data"
+            ]
+          },
+          "position": {
+            "x": 700,
+            "y": 360
+          }
+        },
+        {
+          "id": "end_disqualified",
+          "type": "end",
+          "label": "Lead Disqualified",
+          "position": {
+            "x": 0,
+            "y": 840
+          }
+        },
+        {
+          "id": "end_converted",
+          "type": "end",
+          "label": "Lead Converted Successfully",
+          "position": {
+            "x": 400,
+            "y": 1440
+          }
+        },
+        {
+          "id": "end_escalated",
+          "type": "end",
+          "label": "Lead Escalated to Manager",
+          "position": {
+            "x": 800,
+            "y": 1560
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e01",
+          "source": "start",
+          "target": "init_vars",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e02",
+          "source": "init_vars",
+          "target": "get_account",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e03",
+          "source": "get_account",
+          "target": "enrich_lead",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e04",
+          "source": "enrich_lead",
+          "target": "score_lead",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e05",
+          "source": "enrich_lead",
+          "target": "error_handler",
+          "type": "fault",
+          "label": "Enrichment Failed",
+          "isDefault": false
+        },
+        {
+          "id": "e06",
+          "source": "error_handler",
+          "target": "score_lead",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e07",
+          "source": "score_lead",
+          "target": "decide_qualification",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e08",
+          "source": "decide_qualification",
+          "target": "parallel_split",
+          "condition": {
+            "dialect": "cel",
+            "source": "lead_score >= 60"
+          },
+          "type": "conditional",
+          "label": "Qualified",
+          "isDefault": false
+        },
+        {
+          "id": "e09",
+          "source": "decide_qualification",
+          "target": "update_lead_disqualified",
+          "type": "conditional",
+          "label": "Not Qualified",
+          "isDefault": true
+        },
+        {
+          "id": "e10",
+          "source": "update_lead_disqualified",
+          "target": "end_disqualified",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e11",
+          "source": "parallel_split",
+          "target": "notify_sales_rep",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e12",
+          "source": "parallel_split",
+          "target": "create_opportunity",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e13",
+          "source": "notify_sales_rep",
+          "target": "parallel_join",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e14",
+          "source": "create_opportunity",
+          "target": "parallel_join",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e15",
+          "source": "parallel_join",
+          "target": "update_lead_converted",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e16",
+          "source": "update_lead_converted",
+          "target": "wait_prospect_response",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e17",
+          "source": "wait_prospect_response",
+          "target": "decide_followup",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e18",
+          "source": "decide_followup",
+          "target": "end_converted",
+          "condition": {
+            "dialect": "cel",
+            "source": "new_opportunity.stage != \"prospecting\""
+          },
+          "type": "conditional",
+          "label": "Follow-up Done",
+          "isDefault": false
+        },
+        {
+          "id": "e19",
+          "source": "decide_followup",
+          "target": "escalate_to_manager",
+          "type": "conditional",
+          "label": "No Follow-up",
+          "isDefault": true
+        },
+        {
+          "id": "e20",
+          "source": "escalate_to_manager",
+          "target": "end_escalated",
+          "type": "default",
+          "isDefault": false
+        }
+      ],
+      "active": false,
+      "runAs": "system",
+      "errorHandling": {
+        "strategy": "retry",
+        "maxRetries": 3,
+        "retryDelayMs": 2000,
+        "backoffMultiplier": 2,
+        "maxRetryDelayMs": 30000,
+        "jitter": true,
+        "fallbackNodeId": "error_handler"
+      }
+    },
+    {
+      "name": "renewal_reminder_flow",
+      "label": "Daily Renewal Opportunity Creator",
+      "description": "Runs daily, finds closed-won opportunities with a close date ~12 months ago that have no renewal, and creates a renewal opportunity for each.",
+      "version": 1,
+      "status": "active",
+      "template": false,
+      "type": "schedule",
+      "variables": [
+        {
+          "name": "expiring_deals",
+          "type": "array",
+          "isInput": false,
+          "isOutput": false
+        },
+        {
+          "name": "renewals_created",
+          "type": "number",
+          "isInput": false,
+          "isOutput": true
+        }
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "Daily 07:00 UTC",
+          "config": {
+            "triggerType": "schedule",
+            "cron": "0 7 * * *"
+          },
+          "position": {
+            "x": 400,
+            "y": 0
+          }
+        },
+        {
+          "id": "init_counter",
+          "type": "assignment",
+          "label": "Reset Renewal Counter",
+          "config": {
+            "assignments": [
+              {
+                "variable": "renewals_created",
+                "value": 0
+              }
+            ]
+          },
+          "position": {
+            "x": 400,
+            "y": 120
+          }
+        },
+        {
+          "id": "fetch_expiring",
+          "type": "get_record",
+          "label": "Fetch Deals Expiring ~12 Months Ago",
+          "config": {
+            "objectName": "crm_opportunity",
+            "filter": {
+              "stage": "closed_won",
+              "close_date": {
+                "$gte": "{daysAgo(395)}",
+                "$lte": "{daysAgo(335)}"
+              },
+              "renewal_of": null
+            },
+            "outputVariable": "expiring_deals",
+            "limit": 200
+          },
+          "position": {
+            "x": 400,
+            "y": 240
+          },
+          "outputSchema": {
+            "expiring_deals": {
+              "type": "array",
+              "description": "Deals eligible for renewal"
+            }
+          }
+        },
+        {
+          "id": "decide_has_results",
+          "type": "decision",
+          "label": "Any Expiring Deals?",
+          "config": {
+            "conditions": [
+              {
+                "label": "Has deals",
+                "expression": "expiring_deals.length > 0"
+              },
+              {
+                "label": "Nothing",
+                "expression": "true"
+              }
+            ]
+          },
+          "position": {
+            "x": 400,
+            "y": 360
+          }
+        },
+        {
+          "id": "create_renewals",
+          "type": "script",
+          "label": "Create Renewal Opportunities",
+          "config": {
+            "script": "\n          let count = 0;\n          for (const deal of expiring_deals) {\n            // Safety: skip if a renewal already exists (defensive; filter above should catch this)\n            const existingRenewal = await objectql.findOne('crm_opportunity', {\n              filter: { renewal_of: deal.id },\n            });\n            if (existingRenewal) continue;\n\n            await objectql.insert('crm_opportunity', {\n              name:       deal.name + ' — Renewal',\n              account:    deal.account,\n              stage:      'prospecting',\n              amount:     deal.amount,\n              probability: 20,\n              close_date:  daysFromNow(90),\n              renewal_of:  deal.id,\n            });\n            count++;\n          }\n          variables.renewals_created = count;\n        ",
+            "outputVariables": [
+              "renewals_created"
+            ]
+          },
+          "position": {
+            "x": 400,
+            "y": 480
+          }
+        },
+        {
+          "id": "log_summary",
+          "type": "script",
+          "label": "Log Renewal Run Summary",
+          "config": {
+            "script": "console.info('Renewal run complete — created', renewals_created, 'renewal opportunities.');"
+          },
+          "position": {
+            "x": 400,
+            "y": 600
+          }
+        },
+        {
+          "id": "log_errors",
+          "type": "script",
+          "label": "Log Flow Errors",
+          "config": {
+            "script": "console.error('renewal_reminder_flow encountered an error:', error);"
+          },
+          "position": {
+            "x": 700,
+            "y": 360
+          }
+        },
+        {
+          "id": "end_nothing",
+          "type": "end",
+          "label": "No Expiring Deals Today",
+          "position": {
+            "x": 700,
+            "y": 480
+          }
+        },
+        {
+          "id": "end_done",
+          "type": "end",
+          "label": "Renewals Created",
+          "position": {
+            "x": 400,
+            "y": 720
+          }
+        },
+        {
+          "id": "end_error",
+          "type": "end",
+          "label": "Error Handled",
+          "position": {
+            "x": 700,
+            "y": 480
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e01",
+          "source": "start",
+          "target": "init_counter",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e02",
+          "source": "init_counter",
+          "target": "fetch_expiring",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e03",
+          "source": "fetch_expiring",
+          "target": "decide_has_results",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e04",
+          "source": "decide_has_results",
+          "target": "create_renewals",
+          "condition": {
+            "dialect": "cel",
+            "source": "expiring_deals.length > 0"
+          },
+          "type": "conditional",
+          "label": "Has Deals",
+          "isDefault": false
+        },
+        {
+          "id": "e05",
+          "source": "decide_has_results",
+          "target": "end_nothing",
+          "type": "conditional",
+          "label": "Nothing to do",
+          "isDefault": true
+        },
+        {
+          "id": "e06",
+          "source": "create_renewals",
+          "target": "log_summary",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e07",
+          "source": "log_summary",
+          "target": "end_done",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e08",
+          "source": "fetch_expiring",
+          "target": "log_errors",
+          "type": "fault",
+          "label": "Query Failed",
+          "isDefault": false
+        },
+        {
+          "id": "e09",
+          "source": "create_renewals",
+          "target": "log_errors",
+          "type": "fault",
+          "label": "Create Failed",
+          "isDefault": false
+        },
+        {
+          "id": "e10",
+          "source": "log_errors",
+          "target": "end_error",
+          "type": "default",
+          "isDefault": false
+        }
+      ],
+      "active": false,
+      "runAs": "system",
+      "errorHandling": {
+        "strategy": "continue",
+        "maxRetries": 0,
+        "retryDelayMs": 1000,
+        "backoffMultiplier": 1,
+        "maxRetryDelayMs": 30000,
+        "jitter": false,
+        "fallbackNodeId": "log_errors"
+      }
     }
   ],
   "roles": [
@@ -881,6 +2507,11 @@
       "name": "sales_manager",
       "label": "Sales Manager",
       "description": "Manages a team of sales reps."
+    },
+    {
+      "name": "finance_approver",
+      "label": "Finance Approver",
+      "description": "Finance team member authorised to approve discounts above 30%."
     }
   ],
   "permissions": [
@@ -912,6 +2543,28 @@
           "modifyAllRecords": false
         },
         "crm_opportunity": {
+          "allowCreate": true,
+          "allowRead": true,
+          "allowEdit": true,
+          "allowDelete": false,
+          "allowTransfer": false,
+          "allowRestore": false,
+          "allowPurge": false,
+          "viewAllRecords": false,
+          "modifyAllRecords": false
+        },
+        "crm_lead": {
+          "allowCreate": true,
+          "allowRead": true,
+          "allowEdit": true,
+          "allowDelete": false,
+          "allowTransfer": false,
+          "allowRestore": false,
+          "allowPurge": false,
+          "viewAllRecords": false,
+          "modifyAllRecords": false
+        },
+        "crm_activity": {
           "allowCreate": true,
           "allowRead": true,
           "allowEdit": true,
@@ -1197,6 +2850,186 @@
             "dialect": "cel",
             "source": "daysAgo(30)"
           }
+        }
+      ]
+    },
+    {
+      "object": "crm_lead",
+      "externalId": "email",
+      "mode": "upsert",
+      "env": [
+        "prod",
+        "dev",
+        "test"
+      ],
+      "records": [
+        {
+          "name": "Marie Curie",
+          "email": "marie@radium.example",
+          "company": "Radium Labs",
+          "title": "Director of Research",
+          "phone": "+1-555-0101",
+          "status": "new",
+          "source": "web",
+          "lead_score": 0,
+          "assigned_to": "ada@acme.example",
+          "account": {
+            "externalId": "Acme Corp"
+          }
+        },
+        {
+          "name": "Alan Turing",
+          "email": "alan@bletchley.example",
+          "company": "Bletchley Systems",
+          "title": "VP Engineering",
+          "phone": "+44-20-555-0202",
+          "status": "qualifying",
+          "source": "referral",
+          "lead_score": 75,
+          "assigned_to": "linus@globex.example"
+        },
+        {
+          "name": "Rosalind Franklin",
+          "email": "ros@helix.example",
+          "company": "Helix Analytics",
+          "title": "CTO",
+          "phone": "+1-555-0303",
+          "status": "qualified",
+          "source": "event",
+          "lead_score": 85,
+          "assigned_to": "grace@initech.example",
+          "account": {
+            "externalId": "Initech"
+          }
+        },
+        {
+          "name": "Thomas Edison",
+          "email": "tom@menlo.example",
+          "company": "Menlo Workshop",
+          "title": "Founder",
+          "phone": "+1-555-0404",
+          "status": "disqualified",
+          "source": "cold_outreach",
+          "lead_score": 25,
+          "notes": "Company too small; no budget this year."
+        },
+        {
+          "name": "Nikola Tesla",
+          "email": "nikola@wardenclyffe.example",
+          "company": "Wardenclyffe Corp",
+          "title": "Chief Inventor",
+          "phone": "+1-555-0505",
+          "status": "converted",
+          "source": "partner",
+          "lead_score": 90,
+          "assigned_to": "ada@acme.example",
+          "converted_opportunity": {
+            "externalId": "Acme — Q3 Platform Renewal"
+          }
+        }
+      ]
+    },
+    {
+      "object": "crm_activity",
+      "externalId": "subject",
+      "mode": "upsert",
+      "env": [
+        "prod",
+        "dev",
+        "test"
+      ],
+      "records": [
+        {
+          "subject": "Discovery Call — Bletchley Systems",
+          "type": "call",
+          "status": "completed",
+          "due_date": {
+            "dialect": "cel",
+            "source": "daysAgo(3)"
+          },
+          "contact": {
+            "externalId": "ada@acme.example"
+          },
+          "account": {
+            "externalId": "Acme Corp"
+          },
+          "opportunity": {
+            "externalId": "Acme — Q3 Platform Renewal"
+          },
+          "duration_minutes": 45,
+          "outcome": "Strong interest confirmed; sending proposal next week."
+        },
+        {
+          "subject": "Product Demo — Globex New CRM",
+          "type": "meeting",
+          "status": "planned",
+          "due_date": {
+            "dialect": "cel",
+            "source": "daysFromNow(5)"
+          },
+          "contact": {
+            "externalId": "linus@globex.example"
+          },
+          "account": {
+            "externalId": "Globex Ltd"
+          },
+          "opportunity": {
+            "externalId": "Globex — New CRM Rollout"
+          },
+          "duration_minutes": 90,
+          "description": "Full platform walkthrough with IT and operations stakeholders."
+        },
+        {
+          "subject": "Follow-up Email — Initech Expansion",
+          "type": "email",
+          "status": "completed",
+          "due_date": {
+            "dialect": "cel",
+            "source": "daysAgo(7)"
+          },
+          "contact": {
+            "externalId": "grace@initech.example"
+          },
+          "account": {
+            "externalId": "Initech"
+          },
+          "opportunity": {
+            "externalId": "Initech — Expansion"
+          },
+          "outcome": "Sent pricing breakdown; awaiting procurement sign-off."
+        },
+        {
+          "subject": "Proposal Review — Helix Analytics",
+          "type": "task",
+          "status": "in_progress",
+          "due_date": {
+            "dialect": "cel",
+            "source": "daysFromNow(2)"
+          },
+          "contact": {
+            "externalId": "grace@initech.example"
+          },
+          "account": {
+            "externalId": "Initech"
+          },
+          "description": "Prepare and review the commercial proposal before sending to Helix."
+        },
+        {
+          "subject": "Quarterly Business Review — Acme Corp",
+          "type": "meeting",
+          "status": "planned",
+          "due_date": {
+            "dialect": "cel",
+            "source": "daysFromNow(14)"
+          },
+          "contact": {
+            "externalId": "ada@acme.example"
+          },
+          "account": {
+            "externalId": "Acme Corp"
+          },
+          "duration_minutes": 60,
+          "description": "QBR covering renewal roadmap and upsell opportunities."
         }
       ]
     }

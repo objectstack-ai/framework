@@ -5,6 +5,8 @@ import { cel } from '@objectstack/spec';
 import { Account } from '../objects/account.object.js';
 import { Contact } from '../objects/contact.object.js';
 import { Opportunity } from '../objects/opportunity.object.js';
+import { Lead } from '../objects/lead.object.js';
+import { Activity } from '../objects/activity.object.js';
 
 const accounts = defineDataset(Account, {
   mode: 'upsert',
@@ -54,4 +56,102 @@ const opportunities = defineDataset(Opportunity, {
   ],
 });
 
-export const CrmSeedData = [accounts, contacts, opportunities];
+const leads = defineDataset(Lead, {
+  mode: 'upsert',
+  externalId: 'email',
+  records: [
+    // New / uncontacted
+    {
+      name: 'Marie Curie', email: 'marie@radium.example', company: 'Radium Labs',
+      title: 'Director of Research', phone: '+1-555-0101',
+      status: 'new', source: 'web', lead_score: 0,
+      assigned_to: 'ada@acme.example',
+      account: { externalId: 'Acme Corp' },
+    },
+    // In qualification — high-value referral lead
+    {
+      name: 'Alan Turing', email: 'alan@bletchley.example', company: 'Bletchley Systems',
+      title: 'VP Engineering', phone: '+44-20-555-0202',
+      status: 'qualifying', source: 'referral', lead_score: 75,
+      assigned_to: 'linus@globex.example',
+    },
+    // Qualified — ready for conversion
+    {
+      name: 'Rosalind Franklin', email: 'ros@helix.example', company: 'Helix Analytics',
+      title: 'CTO', phone: '+1-555-0303',
+      status: 'qualified', source: 'event', lead_score: 85,
+      assigned_to: 'grace@initech.example',
+      account: { externalId: 'Initech' },
+    },
+    // Disqualified — poor fit
+    {
+      name: 'Thomas Edison', email: 'tom@menlo.example', company: 'Menlo Workshop',
+      title: 'Founder', phone: '+1-555-0404',
+      status: 'disqualified', source: 'cold_outreach', lead_score: 25,
+      notes: 'Company too small; no budget this year.',
+    },
+    // Already converted — linked to an Opportunity
+    {
+      name: 'Nikola Tesla', email: 'nikola@wardenclyffe.example', company: 'Wardenclyffe Corp',
+      title: 'Chief Inventor', phone: '+1-555-0505',
+      status: 'converted', source: 'partner', lead_score: 90,
+      assigned_to: 'ada@acme.example',
+      converted_opportunity: { externalId: 'Acme — Q3 Platform Renewal' },
+    },
+  ],
+});
+
+const activities = defineDataset(Activity, {
+  mode: 'upsert',
+  externalId: 'subject',
+  records: [
+    {
+      subject: 'Discovery Call — Bletchley Systems',
+      type: 'call', status: 'completed',
+      due_date: cel`daysAgo(3)`,
+      contact: { externalId: 'ada@acme.example' },
+      account: { externalId: 'Acme Corp' },
+      opportunity: { externalId: 'Acme — Q3 Platform Renewal' },
+      duration_minutes: 45,
+      outcome: 'Strong interest confirmed; sending proposal next week.',
+    },
+    {
+      subject: 'Product Demo — Globex New CRM',
+      type: 'meeting', status: 'planned',
+      due_date: cel`daysFromNow(5)`,
+      contact: { externalId: 'linus@globex.example' },
+      account: { externalId: 'Globex Ltd' },
+      opportunity: { externalId: 'Globex — New CRM Rollout' },
+      duration_minutes: 90,
+      description: 'Full platform walkthrough with IT and operations stakeholders.',
+    },
+    {
+      subject: 'Follow-up Email — Initech Expansion',
+      type: 'email', status: 'completed',
+      due_date: cel`daysAgo(7)`,
+      contact: { externalId: 'grace@initech.example' },
+      account: { externalId: 'Initech' },
+      opportunity: { externalId: 'Initech — Expansion' },
+      outcome: 'Sent pricing breakdown; awaiting procurement sign-off.',
+    },
+    {
+      subject: 'Proposal Review — Helix Analytics',
+      type: 'task', status: 'in_progress',
+      due_date: cel`daysFromNow(2)`,
+      contact: { externalId: 'grace@initech.example' },
+      account: { externalId: 'Initech' },
+      description: 'Prepare and review the commercial proposal before sending to Helix.',
+    },
+    {
+      subject: 'Quarterly Business Review — Acme Corp',
+      type: 'meeting', status: 'planned',
+      due_date: cel`daysFromNow(14)`,
+      contact: { externalId: 'ada@acme.example' },
+      account: { externalId: 'Acme Corp' },
+      duration_minutes: 60,
+      description: 'QBR covering renewal roadmap and upsell opportunities.',
+    },
+  ],
+});
+
+export const CrmSeedData = [accounts, contacts, opportunities, leads, activities];

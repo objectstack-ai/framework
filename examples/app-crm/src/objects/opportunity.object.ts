@@ -50,5 +50,14 @@ export const Opportunity = ObjectSchema.create({
     close_date: Field.date({
       label: 'Close Date',
     }),
+    discount_percent: Field.percent({
+      label: 'Discount %',
+      defaultValue: 0,
+      min: 0,
+      max: 100,
+    }),
+    renewal_of: Field.lookup('crm_opportunity', {
+      label: 'Renewal Of',
+    }),
   },
 });

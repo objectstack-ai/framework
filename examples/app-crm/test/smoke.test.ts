@@ -11,16 +11,16 @@ describe('app-crm minimal metadata bundle', () => {
     expect(stack.manifest.type).toBe('app');
   });
 
-  it('registers the 3 core objects', () => {
+  it('registers the 5 core objects', () => {
     const names = (stack.objects ?? []).map((o) => o.name).sort();
-    expect(names).toEqual(['crm_account', 'crm_contact', 'crm_opportunity']);
+    expect(names).toEqual(['crm_account', 'crm_activity', 'crm_contact', 'crm_lead', 'crm_opportunity']);
   });
 
-  it('registers exactly one app, one dashboard, one hook, one flow', () => {
+  it('registers exactly one app, one dashboard, one hook, and at least 3 flows', () => {
     expect(stack.apps).toHaveLength(1);
     expect(stack.dashboards).toHaveLength(1);
     expect(stack.hooks).toHaveLength(1);
-    expect(stack.flows).toHaveLength(1);
+    expect((stack.flows ?? []).length).toBeGreaterThanOrEqual(3);
   });
 
   it('ships seed data for every object', () => {

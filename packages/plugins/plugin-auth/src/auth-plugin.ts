@@ -496,6 +496,88 @@ export class AuthPlugin implements Plugin {
       }
     });
 
+    // ────────────────────────────────────────────────────────────────────
+    // OAuth self-service: register an OAuth application for the signed-in
+    // user. Thin wrapper over better-auth's `/oauth2/create-client`
+    // endpoint (session-required, auto-stamps `user_id` from the session).
+    //
+    // Why this wrapper exists: the Account-app action surfaces a
+    // user-friendly textarea for "Redirect URLs" (one per line), but
+    // better-auth's Zod body schema requires `redirect_uris: string[]`.
+    // The metadata-driven action runner POSTs param values verbatim, so
+    // without a translation layer the upstream call fails validation with
+    // `Invalid input: expected array, received string`. We split the
+    // textarea on newlines, trim, drop empties, and forward to
+    // `createOAuthClient` so the row gets persisted with the caller's
+    // user_id and shows up in the `mine` listView.
+    //
+    // Upstream alternative would be enabling `allowDynamicClientRegistration`
+    // on `/oauth2/register`, but DCR has additional security implications
+    // (rate limiting, scope restriction) we don't want to enable broadly
+    // just to fix UX. Keeping the wrapper scoped to the self-service flow.
+    rawApp.post(`${basePath}/sys-oauth-application/register`, async (c: any) => {
+      try {
+        let body: any = {};
+        try { body = await c.req.json(); } catch { body = {}; }
+
+        const name: unknown = body?.name;
+        const redirectUrlsInput: unknown = body?.redirectURLs;
+        const type: unknown = body?.type;
+
+        if (typeof name !== 'string' || name.trim().length === 0) {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'name is required' } }, 400);
+        }
+        if (typeof redirectUrlsInput !== 'string' || redirectUrlsInput.trim().length === 0) {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'redirectURLs is required' } }, 400);
+        }
+
+        const redirectUris = redirectUrlsInput
+          .split(/[\r\n]+/)
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        if (redirectUris.length === 0) {
+          return c.json({ success: false, error: { code: 'invalid_request', message: 'redirectURLs must contain at least one URL' } }, 400);
+        }
+
+        const allowedTypes = new Set(['web', 'native', 'user-agent-based']);
+        const safeType = typeof type === 'string' && allowedTypes.has(type) ? type : 'web';
+
+        const authApi: any = await this.authManager!.getApi();
+        if (!authApi?.createOAuthClient) {
+          return c.json({ success: false, error: { code: 'unavailable', message: 'OIDC provider is not enabled on this environment' } }, 503);
+        }
+
+        // Forward request headers so better-auth can resolve the caller's
+        // session (sessionMiddleware on /oauth2/create-client). Without
+        // the session the row would lack `user_id` and never appear in
+        // the My Applications view.
+        let result: any;
+        try {
+          result = await authApi.createOAuthClient({
+            body: {
+              client_name: name.trim(),
+              redirect_uris: redirectUris,
+              type: safeType,
+            },
+            headers: c.req.raw.headers,
+          });
+        } catch (err: any) {
+          const status = typeof err?.status === 'number' ? err.status : 500;
+          const code = err?.body?.error ?? 'oauth_register_failed';
+          const message = err?.body?.error_description ?? err?.message ?? 'Unable to register OAuth client';
+          return c.json({ success: false, error: { code, message } }, status);
+        }
+
+        // Mirror the response shape consumed by the action's resultDialog
+        // (`client.client_id`, `client.client_secret`).
+        return c.json({ success: true, data: { client: result } });
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        ctx.logger.error('[AuthPlugin] sys-oauth-application/register failed', err);
+        return c.json({ success: false, error: { code: 'internal', message: err.message } }, 500);
+      }
+    });
+
     // Register wildcard route to forward all auth requests to better-auth.
     // better-auth is configured with basePath matching our route prefix, so we
     // forward the original request directly — no path rewriting needed.

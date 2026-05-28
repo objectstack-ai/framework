@@ -17,9 +17,11 @@ export const CrmApp = App.create({
       label: 'Sales',
       icon: 'briefcase',
       children: [
-        { id: 'nav_accounts', type: 'object', objectName: 'crm_account', label: 'Accounts', icon: 'building' },
-        { id: 'nav_contacts', type: 'object', objectName: 'crm_contact', label: 'Contacts', icon: 'user' },
-        { id: 'nav_opportunities', type: 'object', objectName: 'crm_opportunity', label: 'Opportunities', icon: 'trending-up' },
+        { id: 'nav_leads',         type: 'object',    objectName: 'crm_lead',        label: 'Leads',         icon: 'funnel' },
+        { id: 'nav_accounts',      type: 'object',    objectName: 'crm_account',     label: 'Accounts',      icon: 'building' },
+        { id: 'nav_contacts',      type: 'object',    objectName: 'crm_contact',     label: 'Contacts',      icon: 'user' },
+        { id: 'nav_opportunities', type: 'object',    objectName: 'crm_opportunity', label: 'Opportunities', icon: 'trending-up' },
+        { id: 'nav_activities',    type: 'object',    objectName: 'crm_activity',    label: 'Activities',    icon: 'calendar-check' },
       ],
     },
     {
