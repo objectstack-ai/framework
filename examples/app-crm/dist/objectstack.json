@@ -1075,6 +1075,62 @@
           "externalId": false
         }
       },
+      "validations": [
+        {
+          "name": "lead_status_transitions",
+          "label": "Lead Status Transitions",
+          "description": "Enforces valid status progression for leads.",
+          "active": true,
+          "events": [
+            "insert",
+            "update"
+          ],
+          "priority": 100,
+          "severity": "error",
+          "message": "Invalid lead status transition.",
+          "type": "state_machine",
+          "field": "status",
+          "transitions": {
+            "new": [
+              "contacted",
+              "qualifying",
+              "disqualified"
+            ],
+            "contacted": [
+              "qualifying",
+              "disqualified"
+            ],
+            "qualifying": [
+              "qualified",
+              "disqualified"
+            ],
+            "qualified": [
+              "converted",
+              "disqualified"
+            ],
+            "disqualified": [],
+            "converted": []
+          }
+        },
+        {
+          "name": "lead_score_range",
+          "label": "Lead Score 0–100",
+          "description": "Lead score must be between 0 and 100.",
+          "active": true,
+          "events": [
+            "insert",
+            "update"
+          ],
+          "priority": 100,
+          "severity": "error",
+          "message": "Lead score must be between 0 and 100.",
+          "type": "script",
+          "condition": {
+            "dialect": "cel",
+            "source": "lead_score != null && (lead_score < 0 || lead_score > 100)"
+          }
+        }
+      ],
       "actions": [
         {
           "name": "crm_convert_lead",
@@ -1282,7 +1338,80 @@
           "index": false,
           "externalId": false
         }
-      }
+      },
+      "validations": [
+        {
+          "name": "discount_cap",
+          "label": "Discount Cap 40%",
+          "description": "Discounts over 40% require special approval.",
+          "active": true,
+          "events": [
+            "insert",
+            "update"
+          ],
+          "priority": 100,
+          "severity": "error",
+          "message": "Discount cannot exceed 40% without an approved exception.",
+          "type": "script",
+          "condition": {
+            "dialect": "cel",
+            "source": "discount_percent != null && discount_percent > 40"
+          }
+        },
+        {
+          "name": "opp_close_date_not_past",
+          "label": "Close Date Must Be Future",
+          "description": "Prevent setting close_date to a date in the past on new records.",
+          "active": true,
+          "events": [
+            "insert"
+          ],
+          "priority": 100,
+          "severity": "error",
+          "message": "Close Date must be today or a future date.",
+          "type": "cross_field",
+          "condition": {
+            "dialect": "cel",
+            "source": "has(close_date) && close_date < now()"
+          },
+          "fields": [
+            "close_date"
+          ]
+        },
+        {
+          "name": "opp_stage_transitions",
+          "label": "Opportunity Stage Flow",
+          "description": "Opportunities should progress through stages in order.",
+          "active": true,
+          "events": [
+            "insert",
+            "update"
+          ],
+          "priority": 100,
+          "severity": "error",
+          "message": "Invalid stage transition.",
+          "type": "state_machine",
+          "field": "stage",
+          "transitions": {
+            "prospecting": [
+              "qualification",
+              "closed_lost"
+            ],
+            "qualification": [
+              "proposal",
+              "closed_lost"
+            ],
+            "proposal": [
+              "closed_won",
+              "closed_lost"
+            ],
+            "closed_won": [],
+            "closed_lost": [
+              "prospecting"
+            ]
+          }
+        }
+      ]
     }
   ],
   "objectExtensions": [

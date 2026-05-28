@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
-import { cel } from '@objectstack/spec';
+import { cel, P } from '@objectstack/spec';
 
 export const Opportunity = ObjectSchema.create({
   name: 'crm_opportunity',
@@ -60,4 +60,41 @@ export const Opportunity = ObjectSchema.create({
       label: 'Renewal Of',
     }),
   },
+
+  validations: [
+    {
+      type: 'script' as const,
+      name: 'discount_cap',
+      label: 'Discount Cap 40%',
+      description: 'Discounts over 40% require special approval.',
+      condition: P`discount_percent != null && discount_percent > 40`,
+      message: 'Discount cannot exceed 40% without an approved exception.',
+      severity: 'error' as const,
+    },
+    {
+      type: 'cross_field' as const,
+      name: 'opp_close_date_not_past',
+      label: 'Close Date Must Be Future',
+      description: 'Prevent setting close_date to a date in the past on new records.',
+      fields: ['close_date'],
+      condition: P`has(close_date) && close_date < now()`,
+      message: 'Close Date must be today or a future date.',
+      events: ['insert'],
+    },
+    {
+      type: 'state_machine' as const,
+      name: 'opp_stage_transitions',
+      label: 'Opportunity Stage Flow',
+      description: 'Opportunities should progress through stages in order.',
+      field: 'stage',
+      message: 'Invalid stage transition.',
+      transitions: {
+        prospecting:  ['qualification', 'closed_lost'],
+        qualification:['proposal', 'closed_lost'],
+        proposal:     ['closed_won', 'closed_lost'],
+        closed_won:   [],
+        closed_lost:  ['prospecting'],
+      },
+    },
+  ],
 });

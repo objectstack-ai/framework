@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { ObjectSchema, Field } from '@objectstack/spec/data';
-import { cel } from '@objectstack/spec';
+import { cel, P } from '@objectstack/spec';
 
 export const Lead = ObjectSchema.create({
   name: 'crm_lead',
@@ -81,4 +81,31 @@ export const Lead = ObjectSchema.create({
       expression: cel`status == "converted" || status == "disqualified"`,
     }),
   },
+
+  validations: [
+    {
+      type: 'state_machine' as const,
+      name: 'lead_status_transitions',
+      label: 'Lead Status Transitions',
+      description: 'Enforces valid status progression for leads.',
+      field: 'status',
+      message: 'Invalid lead status transition.',
+      transitions: {
+        new:          ['contacted', 'qualifying', 'disqualified'],
+        contacted:    ['qualifying', 'disqualified'],
+        qualifying:   ['qualified', 'disqualified'],
+        qualified:    ['converted', 'disqualified'],
+        disqualified: [],
+        converted:    [],
+      },
+    },
+    {
+      type: 'script' as const,
+      name: 'lead_score_range',
+      label: 'Lead Score 0–100',
+      description: 'Lead score must be between 0 and 100.',
+      condition: P`lead_score != null && (lead_score < 0 || lead_score > 100)`,
+      message: 'Lead score must be between 0 and 100.',
+    },
+  ],
 });
