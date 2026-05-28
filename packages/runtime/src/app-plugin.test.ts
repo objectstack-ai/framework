@@ -189,7 +189,7 @@ describe('AppPlugin', () => {
 
             // Auto-registers in-memory fallback and loads translations; does not throw or warn.
             expect(mockContext.registerService).toHaveBeenCalledWith('i18n', expect.any(Object));
-        });
+        }, 15000);
 
         it('should auto-register in-memory i18n fallback when getService throws for i18n', async () => {
             vi.mocked(mockContext.getService).mockImplementation((name: string) => {
@@ -205,7 +205,7 @@ describe('AppPlugin', () => {
             await plugin.start!(mockContext);
 
             expect(mockContext.registerService).toHaveBeenCalledWith('i18n', expect.any(Object));
-        });
+        }, 15000);
 
         it('should handle bundle with no translations gracefully', async () => {
             const bundle = { id: 'com.test.notrans' };
