@@ -473,20 +473,27 @@ export function extractTranslations(config: any, opts: ExtractOptions = {}): Ext
     const data: TranslationData = {};
     let count = 0;
     for (const entry of entries) {
-      // Skip keys that already have a non-empty translation for this locale.
+      let value: string | undefined;
+      // If a translation already exists for this locale, carry it through
+      // verbatim so the generated file remains a complete, self-contained
+      // bundle (not just the missing-key delta). Set --no-merge to skip
+      // baselines entirely.
       if (opts.mergeExisting !== false) {
         const existingValue = lookupDeep(existing[locale], entry.path);
-        if (existingValue !== undefined) continue;
+        if (existingValue !== undefined && existingValue !== '') {
+          value = String(existingValue);
+        }
       }
-      let value: string;
-      if (locale === defaultLocale) {
-        value = entry.sourceValue;
-      } else if (fill === 'default') {
-        value = entry.sourceValue;
-      } else if (fill === 'todo') {
-        value = `[TODO] ${entry.sourceValue}`;
-      } else {
-        value = '';
+      if (value === undefined) {
+        if (locale === defaultLocale) {
+          value = entry.sourceValue;
+        } else if (fill === 'default') {
+          value = entry.sourceValue;
+        } else if (fill === 'todo') {
+          value = `[TODO] ${entry.sourceValue}`;
+        } else {
+          value = '';
+        }
       }
       setDeep(data, entry.path, value);
       count += 1;

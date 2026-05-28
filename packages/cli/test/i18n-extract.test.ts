@@ -123,17 +123,17 @@ describe('extractTranslations', () => {
     expect(todoBundles['zh-CN'].objects?.sys_role?.label).toBe('[TODO] Role');
   });
 
-  it('mergeExisting omits keys already translated in the input bundle', () => {
+  it('mergeExisting carries through values already translated in the input bundle', () => {
     const { bundles } = extractTranslations(config, {
       defaultLocale: 'en',
       locales: ['en'],
       mergeExisting: true,
     });
-    // `objects.sys_role.label` and `objects.sys_role.fields.active.label`
-    // already exist in the input — they must be omitted.
-    expect(bundles.en.objects?.sys_role?.label).toBeUndefined();
-    expect(bundles.en.objects?.sys_role?.fields?.active).toBeUndefined();
-    // But missing keys are emitted.
+    // Existing translations are preserved verbatim so the generated file
+    // is a complete, self-contained bundle (not just a delta).
+    expect(bundles.en.objects?.sys_role?.label).toBe('Role');
+    expect(bundles.en.objects?.sys_role?.fields?.active?.label).toBe('Active');
+    // Missing keys are still filled from schema defaults.
     expect(bundles.en.objects?.sys_role?.pluralLabel).toBe('Roles');
     expect(bundles.en.objects?.sys_role?.fields?.label?.label).toBe('Display Name');
   });
