@@ -133,6 +133,7 @@ describe('@objectstack/platform-objects', () => {
         'sys_api_key_self',
         'sys_device_code_self',
         'sys_oauth_access_token_self',
+        'sys_oauth_application_self',
         'sys_oauth_consent_self',
         'sys_oauth_refresh_token_self',
         'sys_organization_self',
