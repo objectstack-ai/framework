@@ -91,6 +91,7 @@ import { SysSetting, SysSecret, SysSettingAudit } from '../src/system/index.js';
 
 // ── Existing Setup app + dashboards + translations ────────────────────────
 import { SETUP_APP } from '../src/apps/setup.app.js';
+import { STUDIO_APP } from '../src/apps/studio.app.js';
 import {
   SystemOverviewDashboard,
 } from '../src/apps/dashboards/index.js';
@@ -177,7 +178,7 @@ export default defineStack({
     SysSettingAudit,
   ] as any,
 
-  apps: [SETUP_APP] as any,
+  apps: [SETUP_APP, STUDIO_APP] as any,
   dashboards: [SystemOverviewDashboard] as any,
 
   translations: [
