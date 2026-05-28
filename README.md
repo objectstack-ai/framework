@@ -169,8 +169,9 @@ Cloud, package registry, and project management subcommands (`os projects`, `os 
 | :--- | :--- |
 | [`@objectstack/driver-memory`](packages/plugins/driver-memory) | In-memory driver (development and testing) |
 | [`@objectstack/driver-sql`](packages/plugins/driver-sql) | SQL driver — PostgreSQL, MySQL, SQLite (production) |
-| [`@objectstack/driver-turso`](packages/plugins/driver-turso) | Turso / libSQL driver |
 | [`@objectstack/driver-mongodb`](packages/plugins/driver-mongodb) | MongoDB driver (native document database) |
+
+> Turso / libSQL driver (`@objectstack/driver-turso`) and the libSQL-backed vector knowledge plugin (`@objectstack/knowledge-turso`) live in the [ObjectStack Cloud](https://github.com/objectstack-ai/cloud) monorepo as of this release.
 
 ### Client
 
