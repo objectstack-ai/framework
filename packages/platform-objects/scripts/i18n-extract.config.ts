@@ -14,6 +14,14 @@
  *
  * The config is **build-time only** — it is not deployed and not used at
  * runtime. The Setup App still ships its own bundle via plugin-auth.
+ *
+ * NOTE: `translations` lists the *currently committed* generated files
+ * (plus the curated zh-CN overlay) as merge baselines so that re-running
+ * `os i18n extract --merge` preserves every existing translation and only
+ * fills in newly-added schema keys per `--fill`. Do NOT add
+ * `SetupAppTranslations` or `MetadataFormsTranslations` here — those
+ * bundles re-export the same generated files and importing them through
+ * the wrapper risks pulling in unrelated hand-edits.
  */
 
 import { defineStack } from '@objectstack/spec';
@@ -86,7 +94,26 @@ import { SETUP_APP } from '../src/apps/setup.app.js';
 import {
   SystemOverviewDashboard,
 } from '../src/apps/dashboards/index.js';
-import { SetupAppTranslations } from '../src/apps/translations/index.js';
+
+// ── Existing generated translations (merge baseline) ──────────────────────
+// Import the generated files DIRECTLY (not via SetupAppTranslations, which
+// would also pull in `apps.setup.*` hand-edits and is therefore safe — but
+// using the generated files alone keeps the loop self-contained and lets
+// `os i18n extract --merge` preserve every hand-translated string that
+// already exists in `zh-CN.objects.generated.ts`, `zh-CN.metadata-forms.
+// generated.ts`, etc. New schema keys are filled per `--fill`; existing
+// keys are never overwritten.
+import { enObjects } from '../src/apps/translations/en.objects.generated.js';
+import { zhCNObjects } from '../src/apps/translations/zh-CN.objects.generated.js';
+import { jaJPObjects } from '../src/apps/translations/ja-JP.objects.generated.js';
+import { esESObjects } from '../src/apps/translations/es-ES.objects.generated.js';
+import { enMetadataForms } from '../src/apps/translations/en.metadata-forms.generated.js';
+import { zhCNMetadataForms } from '../src/apps/translations/zh-CN.metadata-forms.generated.js';
+import { jaJPMetadataForms } from '../src/apps/translations/ja-JP.metadata-forms.generated.js';
+import { esESMetadataForms } from '../src/apps/translations/es-ES.metadata-forms.generated.js';
+// Also import the hand-curated zh-CN metadata-forms overlay so the extractor
+// treats those strings as already-translated and skips them on regenerate.
+import { zhCN as zhCNMetadataFormsOverlay } from '../src/metadata-translations/zh-CN.js';
 
 export default defineStack({
   name: 'platform-objects-i18n-extract',
@@ -156,5 +183,11 @@ export default defineStack({
   apps: [SETUP_APP] as any,
   dashboards: [SystemOverviewDashboard] as any,
 
-  translations: [SetupAppTranslations],
+  translations: [
+    { en: { objects: enObjects, metadataForms: enMetadataForms } },
+    { 'zh-CN': { objects: zhCNObjects, metadataForms: zhCNMetadataForms } },
+    { 'zh-CN': zhCNMetadataFormsOverlay },
+    { 'ja-JP': { objects: jaJPObjects, metadataForms: jaJPMetadataForms } },
+    { 'es-ES': { objects: esESObjects, metadataForms: esESMetadataForms } },
+  ],
 });
