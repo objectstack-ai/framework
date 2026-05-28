@@ -15,7 +15,7 @@ import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoute
 import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST, ObjectSchema, FieldSchema, HookSchema } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
-import { ListViewSchema, FormViewSchema, DashboardSchema, AppSchema, PageSchema, ReportSchema, ActionSchema, type FormView } from '@objectstack/spec/ui';
+import { ListViewSchema, FormViewSchema, ViewSchema, DashboardSchema, AppSchema, PageSchema, ReportSchema, ActionSchema, type FormView } from '@objectstack/spec/ui';
 import { RoleSchema } from '@objectstack/spec/identity';
 import { PermissionSetSchema } from '@objectstack/spec/security';
 import { EmailTemplateSchema, JobSchema, METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
@@ -297,13 +297,35 @@ function resolveOverlaySchema(type: string, item: unknown): z.ZodTypeAny | null 
     const singular = PLURAL_TO_SINGULAR[type] ?? type;
     switch (singular) {
         case 'view': {
-            // Form views and list views share the `view` overlay type. Pick
-            // the right Zod schema by inspecting the discriminant. Defaults
-            // to ListViewSchema (matches the ListViewSchema `type.default('grid')`).
-            const t = (item && typeof item === 'object' && 'type' in item)
-                ? String((item as any).type)
-                : undefined;
-            return t && FORM_VIEW_TYPES.has(t) ? FormViewSchema : ListViewSchema;
+            // A `view` overlay payload may take either of two shapes, both
+            // sanctioned by `@objectstack/spec`:
+            //
+            //   (a) Container shape (per {@link ViewSchema}) — what
+            //       `defineView()`, Studio's metadata designer, and the
+            //       artifact-shipped views (e.g. `service-ai/ai_traces`)
+            //       all produce:
+            //         { list?, form?, listViews?, formViews? }
+            //
+            //   (b) Bare list/form-view shape (legacy / inline editors and
+            //       direct API callers):
+            //         { type: 'grid', columns: [...], ... }  // ListView
+            //         { type: 'tabbed', sections: [...], ... } // FormView
+            //
+            // Detect (a) first by presence of any container key, then fall
+            // back to discriminating (b) by the `type` field. This preserves
+            // historical behaviour for callers that send bare payloads while
+            // unblocking saves of the now-canonical container shape (which
+            // previously failed with `columns: Invalid input` because the
+            // container has no top-level `columns`).
+            if (item && typeof item === 'object') {
+                const o = item as Record<string, unknown>;
+                if ('list' in o || 'form' in o || 'listViews' in o || 'formViews' in o) {
+                    return ViewSchema;
+                }
+                const t = 'type' in o ? String(o.type) : undefined;
+                return t && FORM_VIEW_TYPES.has(t) ? FormViewSchema : ListViewSchema;
+            }
+            return ListViewSchema;
         }
         case 'dashboard':
             return DashboardSchema;

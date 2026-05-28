@@ -280,6 +280,49 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
                 expect(mockEngine.insert).toHaveBeenCalled();
             });
 
+            it('accepts a container-shape view payload (list + listViews)', async () => {
+                // This is the shape `defineView()`, Studio's metadata designer,
+                // and artifact-shipped views (e.g. service-ai/ai_traces) all
+                // produce. It conforms to `@objectstack/spec` ViewSchema, not
+                // ListViewSchema. Regression guard for the bug where the
+                // overlay validator picked ListViewSchema for every `view`
+                // and rejected the container with `columns: Invalid input`.
+                const containerView = {
+                    name: 'ai_traces',
+                    list: {
+                        type: 'grid',
+                        data: { provider: 'object', object: 'ai_traces' },
+                        columns: [{ field: 'created_at' }],
+                    },
+                    listViews: {
+                        errors: {
+                            label: 'Errors',
+                            type: 'grid',
+                            data: { provider: 'object', object: 'ai_traces' },
+                            columns: [{ field: 'error' }],
+                        },
+                    },
+                    _packageId: 'com.objectstack.service-ai',
+                };
+                await expect(
+                    protocol.saveMetaItem({ type: 'view', name: 'ai_traces', item: containerView })
+                ).resolves.toMatchObject({ success: true });
+            });
+
+            it('accepts a container-shape view payload (form only)', async () => {
+                const formContainer = {
+                    name: 'lead_form_only',
+                    form: {
+                        type: 'tabbed',
+                        data: { provider: 'object', object: 'lead' },
+                        sections: [{ id: 'main', title: 'Main', fields: [{ field: 'first_name' }] }],
+                    },
+                };
+                await expect(
+                    protocol.saveMetaItem({ type: 'view', name: 'lead_form_only', item: formContainer })
+                ).resolves.toMatchObject({ success: true });
+            });
+
             it('accepts a spec-conformant dashboard payload', async () => {
                 await expect(
                     protocol.saveMetaItem({

@@ -793,17 +793,7 @@
           "index": false,
           "externalId": false
         }
-      },
-      "actions": [
-        {
-          "name": "crm_convert_lead",
-          "label": "Convert Lead",
-          "objectName": "crm_contact",
-          "type": "flow",
-          "target": "opportunity_won_notification",
-          "refreshAfter": false
-        }
-      ]
+      }
     },
     {
       "name": "crm_lead",
@@ -1084,7 +1074,24 @@
           "index": false,
           "externalId": false
         }
-      }
+      },
+      "actions": [
+        {
+          "name": "crm_convert_lead",
+          "label": "Convert Lead",
+          "objectName": "crm_lead",
+          "icon": "ArrowRightCircle",
+          "locations": [
+            "list_item",
+            "record_header",
+            "record_more"
+          ],
+          "type": "flow",
+          "target": "crm_convert_lead_wizard",
+          "refreshAfter": false,
+          "recordIdParam": "recordId"
+        }
+      ]
     },
     {
       "name": "crm_opportunity",
@@ -2173,10 +2180,17 @@
     {
       "name": "crm_convert_lead",
       "label": "Convert Lead",
-      "objectName": "crm_contact",
+      "objectName": "crm_lead",
+      "icon": "ArrowRightCircle",
+      "locations": [
+        "list_item",
+        "record_header",
+        "record_more"
+      ],
       "type": "flow",
-      "target": "opportunity_won_notification",
-      "refreshAfter": false
+      "target": "crm_convert_lead_wizard",
+      "refreshAfter": false,
+      "recordIdParam": "recordId"
     }
   ],
   "themes": [
@@ -3214,6 +3228,332 @@
         "maxRetryDelayMs": 30000,
         "jitter": false,
         "fallbackNodeId": "log_errors"
+      }
+    },
+    {
+      "name": "crm_convert_lead_wizard",
+      "label": "Convert Lead to Opportunity",
+      "description": "Screen flow wizard that converts a qualified CRM lead into an Opportunity, marks the lead as converted, and links the two records.",
+      "version": 1,
+      "status": "active",
+      "template": false,
+      "type": "screen",
+      "variables": [
+        {
+          "name": "recordId",
+          "type": "text",
+          "isInput": true,
+          "isOutput": false
+        },
+        {
+          "name": "opp_name",
+          "type": "text",
+          "isInput": true,
+          "isOutput": false
+        },
+        {
+          "name": "opp_account",
+          "type": "text",
+          "isInput": true,
+          "isOutput": false
+        },
+        {
+          "name": "opp_amount",
+          "type": "number",
+          "isInput": true,
+          "isOutput": false
+        },
+        {
+          "name": "opp_close_date",
+          "type": "date",
+          "isInput": true,
+          "isOutput": false
+        },
+        {
+          "name": "opp_stage",
+          "type": "text",
+          "isInput": true,
+          "isOutput": false
+        },
+        {
+          "name": "lead_record",
+          "type": "object",
+          "isInput": false,
+          "isOutput": false
+        },
+        {
+          "name": "opportunity_id",
+          "type": "text",
+          "isInput": false,
+          "isOutput": true
+        }
+      ],
+      "nodes": [
+        {
+          "id": "start",
+          "type": "start",
+          "label": "Start"
+        },
+        {
+          "id": "get_lead",
+          "type": "get_record",
+          "label": "Load Lead",
+          "config": {
+            "objectName": "crm_lead",
+            "recordId": "{recordId}",
+            "outputVariable": "lead_record"
+          }
+        },
+        {
+          "id": "check_converted",
+          "type": "decision",
+          "label": "Already Converted?",
+          "config": {
+            "conditions": [
+              {
+                "label": "Yes — already converted",
+                "expression": "{lead_record.status} == 'converted'"
+              },
+              {
+                "label": "No — proceed",
+                "expression": "true"
+              }
+            ]
+          }
+        },
+        {
+          "id": "screen_already_converted",
+          "type": "screen",
+          "label": "Already Converted",
+          "config": {
+            "message": "This lead has already been converted to an opportunity.",
+            "buttons": [
+              {
+                "label": "Close",
+                "action": "finish"
+              }
+            ]
+          }
+        },
+        {
+          "id": "screen_qualify",
+          "type": "screen",
+          "label": "Opportunity Details",
+          "config": {
+            "fields": [
+              {
+                "name": "opp_name",
+                "label": "Opportunity Name",
+                "type": "text",
+                "required": true,
+                "defaultValue": "{lead_record.name}",
+                "helpText": "Descriptive name for the new opportunity"
+              },
+              {
+                "name": "opp_account",
+                "label": "Account",
+                "type": "lookup",
+                "object": "crm_account",
+                "required": false,
+                "defaultValue": "{lead_record.account}",
+                "helpText": "The account this opportunity belongs to"
+              },
+              {
+                "name": "opp_amount",
+                "label": "Estimated Value ($)",
+                "type": "number",
+                "required": false,
+                "min": 0
+              },
+              {
+                "name": "opp_close_date",
+                "label": "Expected Close Date",
+                "type": "date",
+                "required": false
+              },
+              {
+                "name": "opp_stage",
+                "label": "Stage",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "prospecting",
+                  "qualification",
+                  "proposal",
+                  "closed_won",
+                  "closed_lost"
+                ],
+                "defaultValue": "qualification"
+              }
+            ]
+          }
+        },
+        {
+          "id": "screen_confirm",
+          "type": "screen",
+          "label": "Confirm Conversion",
+          "config": {
+            "message": "Create opportunity \"{opp_name}\" for lead \"{lead_record.name}\"?\n\nStage: {opp_stage} · Amount: ${opp_amount} · Close: {opp_close_date}",
+            "buttons": [
+              {
+                "label": "Convert",
+                "action": "next"
+              },
+              {
+                "label": "Back",
+                "action": "back"
+              },
+              {
+                "label": "Cancel",
+                "action": "finish"
+              }
+            ]
+          }
+        },
+        {
+          "id": "create_opp",
+          "type": "create_record",
+          "label": "Create Opportunity",
+          "config": {
+            "objectName": "crm_opportunity",
+            "fields": {
+              "name": "{opp_name}",
+              "account": "{opp_account}",
+              "amount": "{opp_amount}",
+              "close_date": "{opp_close_date}",
+              "stage": "{opp_stage}"
+            },
+            "outputVariable": "opportunity_id"
+          }
+        },
+        {
+          "id": "update_lead",
+          "type": "update_record",
+          "label": "Mark Lead Converted",
+          "config": {
+            "objectName": "crm_lead",
+            "filter": {
+              "id": "{recordId}"
+            },
+            "fields": {
+              "status": "converted",
+              "converted_opportunity": "{opportunity_id}",
+              "is_closed": true
+            }
+          }
+        },
+        {
+          "id": "screen_success",
+          "type": "screen",
+          "label": "Conversion Complete",
+          "config": {
+            "message": "✅ Lead converted! Opportunity \"{opp_name}\" has been created.",
+            "buttons": [
+              {
+                "label": "View Opportunity",
+                "action": "navigate",
+                "target": "/crm_opportunity/{opportunity_id}"
+              },
+              {
+                "label": "Done",
+                "action": "finish"
+              }
+            ]
+          }
+        },
+        {
+          "id": "end",
+          "type": "end",
+          "label": "End"
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "start",
+          "target": "get_lead",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e2",
+          "source": "get_lead",
+          "target": "check_converted",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e3a",
+          "source": "check_converted",
+          "target": "screen_already_converted",
+          "condition": {
+            "dialect": "cel",
+            "source": "{lead_record.status} == 'converted'"
+          },
+          "type": "default",
+          "label": "Yes",
+          "isDefault": false
+        },
+        {
+          "id": "e3b",
+          "source": "check_converted",
+          "target": "screen_qualify",
+          "type": "default",
+          "label": "No",
+          "isDefault": false
+        },
+        {
+          "id": "e3c",
+          "source": "screen_already_converted",
+          "target": "end",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e4",
+          "source": "screen_qualify",
+          "target": "screen_confirm",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e5",
+          "source": "screen_confirm",
+          "target": "create_opp",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e7",
+          "source": "create_opp",
+          "target": "update_lead",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e8",
+          "source": "update_lead",
+          "target": "screen_success",
+          "type": "default",
+          "isDefault": false
+        },
+        {
+          "id": "e9",
+          "source": "screen_success",
+          "target": "end",
+          "type": "default",
+          "isDefault": false
+        }
+      ],
+      "active": false,
+      "runAs": "user",
+      "errorHandling": {
+        "strategy": "fail",
+        "maxRetries": 0,
+        "retryDelayMs": 0,
+        "backoffMultiplier": 1,
+        "maxRetryDelayMs": 0,
+        "jitter": false
       }
     }
   ],
@@ -4434,6 +4774,7 @@
     }
   ],
   "requires": [
-    "ui"
+    "ui",
+    "automation"
   ]
 }

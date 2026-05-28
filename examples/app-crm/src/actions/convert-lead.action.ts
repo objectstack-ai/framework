@@ -3,14 +3,17 @@
 import type { UI } from '@objectstack/spec';
 
 /**
- * Example global action — runs an existing flow to convert a lead-style
- * contact into a fully-fledged opportunity record.
+ * Row-level action on crm_lead — launches the Convert Lead screen flow wizard.
+ * Shown as a button in the lead list row menu and in the lead record header.
  */
 export const ConvertLeadAction: UI.Action = {
   name: 'crm_convert_lead',
   label: 'Convert Lead',
-  description: 'Convert a contact into an opportunity using a flow.',
-  objectName: 'crm_contact',
+  description: 'Open the Convert Lead wizard to create an Opportunity from this Lead.',
+  icon: 'ArrowRightCircle',
+  objectName: 'crm_lead',
   type: 'flow',
-  target: 'opportunity_won_notification',
+  target: 'crm_convert_lead_wizard',
+  locations: ['list_item', 'record_header', 'record_more'],
+  recordIdParam: 'recordId',
 };

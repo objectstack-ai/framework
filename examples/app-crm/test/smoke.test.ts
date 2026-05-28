@@ -16,11 +16,32 @@ describe('app-crm minimal metadata bundle', () => {
     expect(names).toEqual(['crm_account', 'crm_activity', 'crm_contact', 'crm_lead', 'crm_opportunity']);
   });
 
-  it('registers exactly one app, one dashboard, one hook, and at least 3 flows', () => {
+  it('registers exactly one app, one dashboard, one hook, and at least 4 flows', () => {
     expect(stack.apps).toHaveLength(1);
     expect(stack.dashboards).toHaveLength(1);
     expect(stack.hooks).toHaveLength(1);
-    expect((stack.flows ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((stack.flows ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('includes a screen flow with input/output variables, screen nodes, and guard decision', () => {
+    const screenFlow = (stack.flows ?? []).find((f: any) => f.type === 'screen');
+    expect(screenFlow).toBeDefined();
+    expect(screenFlow!.name).toBe('crm_convert_lead_wizard');
+    // Has variables with isInput and isOutput
+    const vars = (screenFlow as any).variables ?? [];
+    expect(vars.some((v: any) => v.isInput)).toBe(true);
+    expect(vars.some((v: any) => v.isOutput)).toBe(true);
+    // Has screen nodes
+    const nodes = (screenFlow as any).nodes ?? [];
+    const screenNodes = nodes.filter((n: any) => n.type === 'screen');
+    expect(screenNodes.length).toBeGreaterThanOrEqual(3);
+    // Has a decision guard node
+    const decisionNodes = nodes.filter((n: any) => n.type === 'decision');
+    expect(decisionNodes.length).toBeGreaterThanOrEqual(1);
+    // Action points to this flow
+    const action = (stack.actions ?? []).find((a: any) => a.target === 'crm_convert_lead_wizard');
+    expect(action).toBeDefined();
+    expect((action as any).objectName).toBe('crm_lead');
   });
 
   it('registers 3 views with data-object bindings for Studio display', () => {

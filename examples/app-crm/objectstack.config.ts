@@ -65,8 +65,9 @@ export default defineStack({
     description: 'Minimal CRM workspace used by the framework to validate the metadata loading pipeline end-to-end.',
   },
 
-  // Auto-resolved by the CLI; `ui` enables the Studio shell.
-  requires: ['ui'],
+  // Auto-resolved by the CLI; `ui` enables the Studio shell, `automation` loads
+  // AutomationServicePlugin + node packs so screen flows can execute.
+  requires: ['ui', 'automation'],
 
   // Infrastructure
   datasources: [CrmDatasource, CrmAnalyticsDatasource],
