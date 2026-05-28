@@ -214,8 +214,30 @@ function extractRuntimeFromMetadata(metadata: any): EnvironmentRuntimeConfig | u
     };
 }
 
-async function createDriver(driverType: string, databaseUrl: string, _authToken: string): Promise<IDataDriver> {
+async function createDriver(driverType: string, databaseUrl: string, authToken: string): Promise<IDataDriver> {
     switch (driverType) {
+        case 'libsql':
+        case 'turso': {
+            // The libsql/turso driver was extracted out of the framework
+            // monorepo into `cloud/packages/driver-turso` (May 2026).
+            // Package name is unchanged, so `await import(...)` resolves
+            // it from the host app's node_modules (apps/objectos pins
+            // `@objectstack/driver-turso: workspace:*` from the cloud
+            // workspace, which surfaces in the Docker image's
+            // node_modules layout). Self-host installs that need Turso
+            // must `npm install @objectstack/driver-turso` from the cloud
+            // package (or use the published version) before booting.
+            let TursoDriver: any;
+            try {
+                ({ TursoDriver } = await import('@objectstack/driver-turso' as any));
+            } catch (err: any) {
+                throw new Error(
+                    `[ArtifactEnvironmentRegistry] libsql/turso driver requested but @objectstack/driver-turso is not installed. ` +
+                    `Install it from the cloud monorepo (cloud/packages/driver-turso) or via npm. (${err?.message ?? err})`,
+                );
+            }
+            return new TursoDriver({ url: databaseUrl, authToken }) as unknown as IDataDriver;
+        }
         case 'memory': {
             const { InMemoryDriver } = await import('@objectstack/driver-memory');
             const dbName = databaseUrl.replace(/^memory:\/\//, '').trim();
