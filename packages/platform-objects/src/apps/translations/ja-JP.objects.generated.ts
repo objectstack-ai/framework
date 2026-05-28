@@ -95,6 +95,23 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "代理ログイン",
         confirmText: "このユーザーとして代理ログインを開始しますか？正当なサポート対応時のみ使用してください。操作は監査ログに記録されます。",
         successMessage: "代理ログイン中"
+      },
+      update_my_profile: {
+        label: "Update Profile",
+        successMessage: "Profile updated"
+      },
+      change_my_password: {
+        label: "Change Password",
+        successMessage: "Password changed"
+      },
+      change_my_email: {
+        label: "Change Email",
+        successMessage: "Verification email sent — check the new address to confirm."
+      },
+      delete_my_account: {
+        label: "Delete My Account",
+        confirmText: "Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.",
+        successMessage: "Account deleted"
       }
     }
   },
@@ -218,6 +235,16 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       all_links: {
         label: "すべて"
+      }
+    },
+    _actions: {
+      link_social: {
+        label: "Link Social Account"
+      },
+      unlink_account: {
+        label: "Unlink Account",
+        confirmText: "Unlink this identity link? The user will no longer be able to sign in with this provider until they re-link it from their account settings.",
+        successMessage: "Identity link removed"
       }
     }
   },
@@ -347,6 +374,11 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "メンバーを削除",
         confirmText: "このメンバーを組織から削除しますか？組織のすべてのリソースへのアクセスを失います。",
         successMessage: "メンバーを削除しました"
+      },
+      transfer_ownership: {
+        label: "Transfer Ownership",
+        confirmText: "Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.",
+        successMessage: "Ownership transferred"
       }
     }
   },
@@ -426,6 +458,15 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       resend_invitation: {
         label: "招待を再送",
         successMessage: "招待を再送しました"
+      },
+      accept_invitation: {
+        label: "Accept Invitation",
+        successMessage: "Invitation accepted"
+      },
+      reject_invitation: {
+        label: "Decline Invitation",
+        confirmText: "Decline this invitation? The inviter will be notified and you will need a new invitation to join.",
+        successMessage: "Invitation declined"
       }
     }
   },
@@ -731,13 +772,16 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     },
     _actions: {
       enable_two_factor: {
-        label: "2FA を有効化",
-        successMessage: "2FA 登録を開始しました — レスポンスで TOTP URI とバックアップコードを確認してください"
+        label: "2FA を有効化"
       },
       disable_two_factor: {
         label: "2FA を無効化",
         confirmText: "アカウントの二要素認証を無効化しますか？",
         successMessage: "2FA を無効化しました"
+      },
+      regenerate_backup_codes: {
+        label: "Regenerate Backup Codes",
+        confirmText: "Regenerate backup codes? All previous backup codes will stop working immediately."
       }
     }
   },
@@ -963,6 +1007,30 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       all_apps: {
         label: "すべて"
       }
+    },
+    _actions: {
+      disable_oauth_application: {
+        label: "Disable OAuth Application",
+        confirmText: "Disable this OAuth application? Active access/refresh tokens issued to it will continue to be rejected at the token, authorize, and introspect endpoints. Existing integrations will stop working immediately.",
+        successMessage: "OAuth application disabled"
+      },
+      enable_oauth_application: {
+        label: "Enable OAuth Application",
+        confirmText: "Re-enable this OAuth application? Token issuance, authorization, and introspection will resume immediately.",
+        successMessage: "OAuth application enabled"
+      },
+      create_oauth_application: {
+        label: "Register OAuth Application"
+      },
+      rotate_client_secret: {
+        label: "Rotate Client Secret",
+        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once."
+      },
+      delete_oauth_application: {
+        label: "Delete OAuth Application",
+        confirmText: "Permanently delete this OAuth application? All issued tokens and consents will be invalidated and integrations using this client_id will stop working immediately. This cannot be undone.",
+        successMessage: "OAuth application deleted"
+      }
     }
   },
   sys_oauth_access_token: {
@@ -1164,6 +1232,26 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       all_roles: {
         label: "すべて"
       }
+    },
+    _actions: {
+      activate_role: {
+        label: "Activate Role",
+        successMessage: "Role activated"
+      },
+      deactivate_role: {
+        label: "Deactivate Role",
+        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
+        successMessage: "Role deactivated"
+      },
+      set_default_role: {
+        label: "Set as Default",
+        confirmText: "Make this the default role for new users? Existing users are unaffected.",
+        successMessage: "Default role updated"
+      },
+      clone_role: {
+        label: "Clone Role",
+        successMessage: "Role cloned"
+      }
     }
   },
   sys_permission_set: {
@@ -1189,6 +1277,18 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "フィールド権限",
         help: "JSON シリアライズされたフィールドレベルの読み取り/書き込み権限"
       },
+      system_permissions: {
+        label: "System Permissions",
+        help: "JSON-serialized array of system capability names (e.g. [\"setup.access\",\"studio.access\",\"manage_users\"])"
+      },
+      row_level_security: {
+        label: "Row-Level Security",
+        help: "JSON-serialized array of row-level security policies (USING/CHECK clauses)"
+      },
+      tab_permissions: {
+        label: "Tab Permissions",
+        help: "JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)"
+      },
       active: {
         label: "有効"
       },
@@ -1211,6 +1311,21 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       all_permsets: {
         label: "すべて"
+      }
+    },
+    _actions: {
+      activate_permission_set: {
+        label: "Activate",
+        successMessage: "Permission set activated"
+      },
+      deactivate_permission_set: {
+        label: "Deactivate",
+        confirmText: "Deactivate this permission set? Existing assignments stay in place but stop granting access until re-activated.",
+        successMessage: "Permission set deactivated"
+      },
+      clone_permission_set: {
+        label: "Clone",
+        successMessage: "Permission set cloned"
       }
     }
   },
@@ -1836,6 +1951,16 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       all_notifications: {
         label: "すべて"
       }
+    },
+    _actions: {
+      mark_read: {
+        label: "Mark as Read",
+        successMessage: "Notification marked as read"
+      },
+      mark_unread: {
+        label: "Mark as Unread",
+        successMessage: "Notification marked as unread"
+      }
     }
   },
   sys_email: {
@@ -2216,6 +2341,10 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       payload_json: {
         label: "スナップショット",
         help: "送信時のレコードスナップショット"
+      },
+      process_hash: {
+        label: "Process Hash",
+        help: "sha256 of the approval process body at submit time (ADR-0009 execution pinning). Resolved through sys_metadata_history so process upgrades do not affect in-flight requests."
       },
       completed_at: {
         label: "完了日時"
@@ -2659,6 +2788,17 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       updated_at: {
         label: "更新日時"
       }
+    },
+    _views: {
+      only_objects: {
+        label: "Objects"
+      },
+      only_fields: {
+        label: "Fields"
+      },
+      all_metadata: {
+        label: "All"
+      }
     }
   },
   sys_metadata_history: {
@@ -2668,6 +2808,10 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     fields: {
       id: {
         label: "ID"
+      },
+      event_seq: {
+        label: "Event Seq",
+        help: "Per-organization monotonic event log cursor."
       },
       name: {
         label: "名前"
@@ -2702,13 +2846,12 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "変更メモ",
         help: "このバージョンで変更された内容の説明"
       },
+      source: {
+        label: "Source"
+      },
       organization_id: {
         label: "組織",
         help: "マルチテナント分離のための組織。"
-      },
-      environment_id: {
-        label: "環境 ID",
-        help: "この履歴エントリを特定の環境にスコープします。"
       },
       recorded_by: {
         label: "記録者"

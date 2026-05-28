@@ -95,6 +95,23 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "模拟用户",
         confirmText: "要为该用户启动模拟会话吗？仅限合法支持场景使用——所有操作都会被记录。",
         successMessage: "已开始模拟该用户"
+      },
+      update_my_profile: {
+        label: "Update Profile",
+        successMessage: "Profile updated"
+      },
+      change_my_password: {
+        label: "Change Password",
+        successMessage: "Password changed"
+      },
+      change_my_email: {
+        label: "Change Email",
+        successMessage: "Verification email sent — check the new address to confirm."
+      },
+      delete_my_account: {
+        label: "Delete My Account",
+        confirmText: "Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.",
+        successMessage: "Account deleted"
       }
     }
   },
@@ -218,6 +235,16 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       all_links: {
         label: "全部"
+      }
+    },
+    _actions: {
+      link_social: {
+        label: "Link Social Account"
+      },
+      unlink_account: {
+        label: "Unlink Account",
+        confirmText: "Unlink this identity link? The user will no longer be able to sign in with this provider until they re-link it from their account settings.",
+        successMessage: "Identity link removed"
       }
     }
   },
@@ -347,6 +374,11 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "移除成员",
         confirmText: "要将该成员移出组织吗？移除后其将失去对该组织所有资源的访问权限。",
         successMessage: "成员已移除"
+      },
+      transfer_ownership: {
+        label: "Transfer Ownership",
+        confirmText: "Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.",
+        successMessage: "Ownership transferred"
       }
     }
   },
@@ -426,6 +458,15 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       resend_invitation: {
         label: "重新发送邀请",
         successMessage: "邀请已重新发送"
+      },
+      accept_invitation: {
+        label: "Accept Invitation",
+        successMessage: "Invitation accepted"
+      },
+      reject_invitation: {
+        label: "Decline Invitation",
+        confirmText: "Decline this invitation? The inviter will be notified and you will need a new invitation to join.",
+        successMessage: "Invitation declined"
       }
     }
   },
@@ -731,13 +772,16 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     },
     _actions: {
       enable_two_factor: {
-        label: "启用 2FA",
-        successMessage: "2FA 启用流程已开始——请查看响应中的 TOTP URI 和备用恢复码"
+        label: "启用 2FA"
       },
       disable_two_factor: {
         label: "停用 2FA",
         confirmText: "要停用你账号上的双因素认证吗？",
         successMessage: "2FA 已停用"
+      },
+      regenerate_backup_codes: {
+        label: "Regenerate Backup Codes",
+        confirmText: "Regenerate backup codes? All previous backup codes will stop working immediately."
       }
     }
   },
@@ -963,6 +1007,30 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       all_apps: {
         label: "全部"
       }
+    },
+    _actions: {
+      disable_oauth_application: {
+        label: "Disable OAuth Application",
+        confirmText: "Disable this OAuth application? Active access/refresh tokens issued to it will continue to be rejected at the token, authorize, and introspect endpoints. Existing integrations will stop working immediately.",
+        successMessage: "OAuth application disabled"
+      },
+      enable_oauth_application: {
+        label: "Enable OAuth Application",
+        confirmText: "Re-enable this OAuth application? Token issuance, authorization, and introspection will resume immediately.",
+        successMessage: "OAuth application enabled"
+      },
+      create_oauth_application: {
+        label: "Register OAuth Application"
+      },
+      rotate_client_secret: {
+        label: "Rotate Client Secret",
+        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once."
+      },
+      delete_oauth_application: {
+        label: "Delete OAuth Application",
+        confirmText: "Permanently delete this OAuth application? All issued tokens and consents will be invalidated and integrations using this client_id will stop working immediately. This cannot be undone.",
+        successMessage: "OAuth application deleted"
+      }
     }
   },
   sys_oauth_access_token: {
@@ -1164,6 +1232,26 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       all_roles: {
         label: "全部"
       }
+    },
+    _actions: {
+      activate_role: {
+        label: "Activate Role",
+        successMessage: "Role activated"
+      },
+      deactivate_role: {
+        label: "Deactivate Role",
+        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
+        successMessage: "Role deactivated"
+      },
+      set_default_role: {
+        label: "Set as Default",
+        confirmText: "Make this the default role for new users? Existing users are unaffected.",
+        successMessage: "Default role updated"
+      },
+      clone_role: {
+        label: "Clone Role",
+        successMessage: "Role cloned"
+      }
     }
   },
   sys_permission_set: {
@@ -1189,6 +1277,18 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "字段权限",
         help: "字段级读写权限的 JSON 序列化内容"
       },
+      system_permissions: {
+        label: "System Permissions",
+        help: "JSON-serialized array of system capability names (e.g. [\"setup.access\",\"studio.access\",\"manage_users\"])"
+      },
+      row_level_security: {
+        label: "Row-Level Security",
+        help: "JSON-serialized array of row-level security policies (USING/CHECK clauses)"
+      },
+      tab_permissions: {
+        label: "Tab Permissions",
+        help: "JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)"
+      },
       active: {
         label: "启用"
       },
@@ -1211,6 +1311,21 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       all_permsets: {
         label: "全部"
+      }
+    },
+    _actions: {
+      activate_permission_set: {
+        label: "Activate",
+        successMessage: "Permission set activated"
+      },
+      deactivate_permission_set: {
+        label: "Deactivate",
+        confirmText: "Deactivate this permission set? Existing assignments stay in place but stop granting access until re-activated.",
+        successMessage: "Permission set deactivated"
+      },
+      clone_permission_set: {
+        label: "Clone",
+        successMessage: "Permission set cloned"
       }
     }
   },
@@ -1836,6 +1951,16 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       all_notifications: {
         label: "全部"
       }
+    },
+    _actions: {
+      mark_read: {
+        label: "Mark as Read",
+        successMessage: "Notification marked as read"
+      },
+      mark_unread: {
+        label: "Mark as Unread",
+        successMessage: "Notification marked as unread"
+      }
     }
   },
   sys_email: {
@@ -2217,6 +2342,10 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "快照",
         help: "提交时的记录快照"
       },
+      process_hash: {
+        label: "Process Hash",
+        help: "sha256 of the approval process body at submit time (ADR-0009 execution pinning). Resolved through sys_metadata_history so process upgrades do not affect in-flight requests."
+      },
       completed_at: {
         label: "完成时间"
       },
@@ -2229,11 +2358,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     },
     _views: {
       my_pending: {
-        label: "我的待办",
-        emptyState: {
-          title: "暂无待审批",
-          message: "您已处理完所有待办。"
-        }
+        label: "我的待办"
       },
       submitted_by_me: {
         label: "我提交的"
@@ -2663,6 +2788,17 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       updated_at: {
         label: "更新时间"
       }
+    },
+    _views: {
+      only_objects: {
+        label: "Objects"
+      },
+      only_fields: {
+        label: "Fields"
+      },
+      all_metadata: {
+        label: "All"
+      }
     }
   },
   sys_metadata_history: {
@@ -2672,6 +2808,10 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     fields: {
       id: {
         label: "ID"
+      },
+      event_seq: {
+        label: "Event Seq",
+        help: "Per-organization monotonic event log cursor."
       },
       name: {
         label: "名称"
@@ -2706,13 +2846,12 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "变更说明",
         help: "对该版本变更内容的说明"
       },
+      source: {
+        label: "Source"
+      },
       organization_id: {
         label: "组织",
         help: "用于多租户隔离的组织。"
-      },
-      environment_id: {
-        label: "环境 ID",
-        help: "将该历史记录限定到特定环境。"
       },
       recorded_by: {
         label: "记录人"

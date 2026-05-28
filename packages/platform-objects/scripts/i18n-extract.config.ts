@@ -111,9 +111,6 @@ import { enMetadataForms } from '../src/apps/translations/en.metadata-forms.gene
 import { zhCNMetadataForms } from '../src/apps/translations/zh-CN.metadata-forms.generated.js';
 import { jaJPMetadataForms } from '../src/apps/translations/ja-JP.metadata-forms.generated.js';
 import { esESMetadataForms } from '../src/apps/translations/es-ES.metadata-forms.generated.js';
-// Also import the hand-curated zh-CN metadata-forms overlay so the extractor
-// treats those strings as already-translated and skips them on regenerate.
-import { zhCN as zhCNMetadataFormsOverlay } from '../src/metadata-translations/zh-CN.js';
 
 export default defineStack({
   name: 'platform-objects-i18n-extract',
@@ -186,7 +183,6 @@ export default defineStack({
   translations: [
     { en: { objects: enObjects, metadataForms: enMetadataForms } },
     { 'zh-CN': { objects: zhCNObjects, metadataForms: zhCNMetadataForms } },
-    { 'zh-CN': zhCNMetadataFormsOverlay },
     { 'ja-JP': { objects: jaJPObjects, metadataForms: jaJPMetadataForms } },
     { 'es-ES': { objects: esESObjects, metadataForms: esESMetadataForms } },
   ],

@@ -10,195 +10,195 @@ import type { TranslationData } from '@objectstack/spec/system';
 
 export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = {
   object: {
-    label: "Object",
+    label: "对象",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Identity, labels, and taxonomy."
+        label: "基础信息",
+        description: "标识、显示名与分类标签"
       },
       fields: {
-        label: "Fields",
-        description: "Define the data model — each row becomes a column in the database table."
+        label: "字段",
+        description: "定义数据模型——每行对应数据库表中的一列"
       },
       capabilities: {
-        label: "Capabilities",
-        description: "System features and API exposure."
+        label: "功能开关",
+        description: "系统功能与 API 暴露"
       },
       advanced: {
-        label: "Advanced",
-        description: "State machines, actions, and storage."
+        label: "高级设置",
+        description: "状态机、动作与存储"
       }
     },
     fields: {
       name: {
-        helpText: "snake_case unique identifier (immutable after creation)"
+        helpText: "snake_case 唯一标识符（创建后不可修改）"
       },
       label: {
-        helpText: "Singular display name (e.g. \"Account\")"
+        helpText: "单数显示名（如：\"客户\"）"
       },
       pluralLabel: {
-        helpText: "Plural display name (e.g. \"Accounts\")"
+        helpText: "复数显示名（如：\"客户列表\"）"
       },
       icon: {
-        helpText: "Lucide icon name (e.g. \"building\", \"users\")"
+        helpText: "Lucide 图标名称（如：\"building\"、\"users\"）"
       },
       description: {
-        helpText: "Developer documentation"
+        helpText: "开发文档说明"
       },
       tags: {
-        helpText: "Categorization tags (e.g. \"sales\", \"system\")"
+        helpText: "分类标签（如：\"sales\"、\"system\"）"
       },
       active: {
-        helpText: "Is the object active and usable"
+        helpText: "对象是否启用并可用"
       },
       isSystem: {
-        helpText: "System object (protected from deletion)"
+        helpText: "系统对象（受保护，不可删除）"
       },
       abstract: {
-        helpText: "Abstract base (cannot be instantiated)"
+        helpText: "抽象基类（不能直接实例化）"
       },
       fields: {
-        helpText: "Add the columns this object will store"
+        helpText: "添加该对象将存储的列"
       },
       "fields.name": {
-        helpText: "snake_case identifier"
+        helpText: "snake_case 标识符"
       },
       "fields.label": {
-        helpText: "Display label"
+        helpText: "展示用标签"
       },
       "fields.type": {
-        helpText: "Field type"
+        helpText: "字段类型"
       },
       "fields.reference": {
-        helpText: "Target object (for lookup/master_detail)"
+        helpText: "目标对象（用于 lookup / master_detail）"
       },
       capabilities: {
-        helpText: "Enable/disable system features"
+        helpText: "启用或禁用系统功能"
       },
       datasource: {
-        helpText: "Target datasource ID (default: \"default\")"
+        helpText: "目标数据源 ID（默认：\"default\"）"
       }
     }
   },
   field: {
-    label: "Field",
+    label: "字段",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Core field identity and constraints."
+        label: "基础信息",
+        description: "核心标识与约束"
       },
       configuration: {
-        label: "Configuration",
-        description: "Field-type specific settings (visible blocks depend on the chosen type)."
+        label: "配置",
+        description: "类型相关设置（不同字段类型显示不同选项）"
       },
       formula: {
-        label: "Formula & Computed",
-        description: "Calculated values and roll-up summaries."
+        label: "公式与计算",
+        description: "计算值与汇总"
       },
       advanced: {
-        label: "Advanced",
-        description: "Database, UI, audit, and security settings."
+        label: "高级设置",
+        description: "数据库、界面、审计与安全"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case, immutable after creation)"
+        helpText: "唯一标识符（snake_case，创建后不可修改）"
       },
       label: {
-        helpText: "Display name for users"
+        helpText: "用户看到的显示名称"
       },
       type: {
-        helpText: "Data type of this field"
+        helpText: "该字段的数据类型"
       },
       group: {
-        helpText: "Group name for form layout"
+        helpText: "表单布局中的分组名称"
       },
       description: {
-        helpText: "Help text shown to users"
+        helpText: "展示给用户的帮助文本"
       },
       required: {
-        helpText: "User must provide a value"
+        helpText: "用户必须填写"
       },
       unique: {
-        helpText: "No two records can have the same value"
+        helpText: "任意两条记录的值不能相同"
       },
       multiple: {
-        helpText: "Allow multiple values (for select/lookup)"
+        helpText: "允许多个值（用于 select / lookup）"
       },
       defaultValue: {
-        helpText: "Default value for new records"
+        helpText: "新建记录时的默认值"
       },
       minLength: {
-        helpText: "Minimum character length"
+        helpText: "最少字符数"
       },
       maxLength: {
-        helpText: "Maximum character length"
+        helpText: "最多字符数"
       },
       min: {
-        helpText: "Minimum value"
+        helpText: "允许的最小数值"
       },
       max: {
-        helpText: "Maximum value"
+        helpText: "允许的最大数值"
       },
       precision: {
-        helpText: "Decimal places (e.g., 2 for $10.50)"
+        helpText: "小数位数（如：货币用 2 表示保留两位）"
       },
       scale: {
-        helpText: "Number of decimal digits"
+        helpText: "小数部分位数"
       },
       options: {
-        helpText: "Available options (label/value pairs)"
+        helpText: "可选项（label/value 对）"
       },
       reference: {
-        helpText: "Referenced object name"
+        helpText: "被引用的对象名称"
       },
       referenceFilters: {
-        helpText: "Filter expressions (e.g., \"active = true\")"
+        helpText: "筛选表达式（如：active = true）"
       },
       deleteBehavior: {
-        helpText: "What happens when referenced record is deleted"
+        helpText: "被引用记录删除时的处理方式"
       },
       expression: {
-        helpText: "CEL expression to calculate this field (makes it read-only)"
+        helpText: "用 CEL 表达式计算此字段的值（自动设为只读）"
       },
       summaryOperations: {
-        helpText: "Roll-up summary configuration (for parent-child relationships)"
+        helpText: "父子关系下的汇总聚合配置"
       },
       cached: {
-        helpText: "Caching configuration for computed fields"
+        helpText: "计算字段的缓存配置"
       },
       columnName: {
-        helpText: "Physical column name in database (defaults to field name)"
+        helpText: "数据库中的物理列名（默认与字段名相同）"
       },
       index: {
-        helpText: "Create database index for faster queries"
+        helpText: "建立数据库索引以加速查询"
       },
       externalId: {
-        helpText: "Mark as external ID for upsert operations"
+        helpText: "标记为外部 ID 用于 upsert 操作"
       },
       readonly: {
-        helpText: "Field is read-only in forms"
+        helpText: "在表单中只读"
       },
       hidden: {
-        helpText: "Hide field from default UI views"
+        helpText: "在默认界面视图中隐藏"
       },
       searchable: {
-        helpText: "Include in global search results"
+        helpText: "纳入全局搜索结果"
       },
       sortable: {
-        helpText: "Allow sorting lists by this field"
+        helpText: "允许按此字段排序"
       },
       auditTrail: {
-        helpText: "Track detailed changes with user and timestamp"
+        helpText: "记录详细变更与操作人、时间戳"
       },
       trackFeedHistory: {
-        helpText: "Show changes in activity feed"
+        helpText: "在活动动态中展示变更"
       },
       encryptionConfig: {
-        helpText: "Field-level encryption (GDPR/HIPAA/PCI-DSS)"
+        helpText: "字段级加密（GDPR / HIPAA / PCI-DSS）"
       },
       maskingRule: {
-        helpText: "Data masking rules for PII protection"
+        helpText: "PII 数据脱敏规则"
       }
     }
   },
@@ -209,218 +209,218 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     label: "Validation Rule"
   },
   hook: {
-    label: "Hook",
+    label: "钩子",
     sections: {
       identity: {
-        label: "Identity",
-        description: "What this hook is and when it fires."
+        label: "基础信息",
+        description: "名称、对象与触发事件"
       },
       body: {
-        label: "Body",
-        description: "Inline expression or sandboxed JavaScript executed when the hook fires."
+        label: "处理体",
+        description: "触发时执行的内联表达式或沙箱 JavaScript"
       },
       legacy_handler: {
-        label: "Legacy handler",
-        description: "Function name reference — deprecated in favour of body."
+        label: "旧版处理器",
+        description: "函数名引用——已废弃，请改用 body"
       },
       execution: {
-        label: "Execution"
+        label: "执行"
       }
     },
     fields: {
       name: {
-        helpText: "snake_case identifier (immutable after creation)"
+        helpText: "snake_case 标识符（创建后不可修改）"
       },
       object: {
-        helpText: "Target object name (or \"*\" for global)"
+        helpText: "目标对象名（或 \"*\" 表示全局）"
       },
       events: {
-        helpText: "Lifecycle events (e.g. beforeInsert, afterUpdate)"
+        helpText: "生命周期事件（如 beforeInsert、afterUpdate）"
       },
       priority: {
-        helpText: "Lower numbers run first"
+        helpText: "数字越小越先执行"
       },
       body: {
-        helpText: "Either an L1 expression or an L2 sandboxed JS body"
+        helpText: "L1 表达式或 L2 沙箱 JS 体"
       },
       "body.language": {
-        helpText: "expression = pure formula; js = sandboxed JavaScript"
+        helpText: "expression = 纯公式；js = 沙箱 JavaScript"
       },
       "body.source": {
-        helpText: "Function body source — no top-level imports"
+        helpText: "函数体源码——禁止顶层 import"
       },
       "body.capabilities": {
-        helpText: "Allowed ctx APIs (api.read, api.write, crypto.uuid, log, …)"
+        helpText: "可用的 ctx API（api.read、api.write、crypto.uuid、log 等）"
       },
       "body.timeoutMs": {
-        helpText: "Per-invocation timeout (ms)"
+        helpText: "单次调用超时时间（毫秒）"
       },
       handler: {
-        helpText: "Handler function name (deprecated — prefer `body`)"
+        helpText: "处理器函数名（已废弃——建议使用 body）"
       },
       async: {
-        helpText: "Run in background, do not block the transaction"
+        helpText: "后台运行，不阻塞当前事务"
       },
       condition: {
-        helpText: "Optional formula — skip the hook when this evaluates to false"
+        helpText: "可选公式——求值为 false 时跳过该钩子"
       }
     }
   },
   view: {
-    label: "View",
+    label: "视图",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Identity and primary surface."
+        label: "基础信息",
+        description: "标识与主显示形态"
       },
       columns_filters: {
-        label: "Columns & filters",
-        description: "What rows show and how users filter them."
+        label: "列与筛选",
+        description: "展示哪些行以及用户如何筛选"
       },
       table_options: {
-        label: "Table options",
-        description: "Grid-only display options."
+        label: "表格选项",
+        description: "仅 Grid 表格的显示选项"
       },
       kanban: {
-        label: "Kanban",
-        description: "Kanban-specific board configuration."
+        label: "看板配置",
+        description: "看板专属配置"
       },
       calendar: {
-        label: "Calendar",
-        description: "Calendar-specific configuration."
+        label: "日历配置",
+        description: "日历专属配置"
       },
       gantt: {
-        label: "Gantt",
-        description: "Gantt-specific configuration."
+        label: "甘特图配置",
+        description: "甘特图专属配置"
       },
       gallery: {
-        label: "Gallery",
-        description: "Gallery-specific configuration."
+        label: "画廊配置",
+        description: "画廊专属配置"
       },
       timeline: {
-        label: "Timeline",
-        description: "Timeline-specific configuration."
+        label: "时间线配置",
+        description: "时间线专属配置"
       },
       chart: {
-        label: "Chart",
-        description: "Chart-specific configuration."
+        label: "图表配置",
+        description: "图表专属配置"
       },
       navigation_sharing: {
-        label: "Navigation & sharing",
-        description: "Where this view appears and who can see it."
+        label: "导航与共享",
+        description: "视图出现在哪里以及谁可以查看"
       }
     },
     fields: {
       name: {
-        helpText: "snake_case, unique per environment"
+        helpText: "snake_case，环境内唯一"
       },
       type: {
-        helpText: "Primary view surface"
+        helpText: "主要的视图形态"
       },
       data: {
-        helpText: "Data source — e.g. {\"provider\":\"object\",\"object\":\"task\"}"
+        helpText: "数据源——如：{\"provider\":\"object\",\"object\":\"task\"}"
       },
       columns: {
-        helpText: "Columns to display (field names from selected object)"
+        helpText: "要展示的列（来自所选对象的字段名）"
       },
       filter: {
-        helpText: "Filter conditions"
+        helpText: "筛选规则"
       },
       sort: {
-        helpText: "Default sort order"
+        helpText: "默认排序方式"
       },
       searchableFields: {
-        helpText: "Field names available for quick search"
+        helpText: "可用于快速搜索的字段名"
       },
       filterableFields: {
-        helpText: "Field names available for filtering"
+        helpText: "可用于筛选的字段名"
       }
     }
   },
   page: {
-    label: "Page",
+    label: "页面",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Page identity and template."
+        label: "基础信息",
+        description: "名称、标题与图标"
       },
       data_context: {
-        label: "Data Context",
-        description: "Record binding and page-local state."
+        label: "数据上下文",
+        description: "关联对象与变量"
       },
       layout: {
-        label: "Layout",
-        description: "Page regions and components placed within them."
+        label: "布局",
+        description: "页面区块与组件"
       },
       advanced: {
-        label: "Advanced",
-        description: "Activation, audience, and accessibility."
+        label: "高级设置",
+        description: "默认页、类型与分配"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "snake_case 唯一标识符"
       },
       label: {
-        helpText: "Page title shown to users"
+        helpText: "展示给用户的页面标题"
       },
       icon: {
-        helpText: "Icon for navigation menu"
+        helpText: "导航菜单中显示的图标"
       },
       type: {
-        helpText: "Page type (record, home, app, dashboard, etc.)"
+        helpText: "页面类型（record、home、app、dashboard 等）"
       },
       template: {
-        helpText: "Layout template (e.g., \"header-sidebar-main\")"
+        helpText: "布局模板（如 \"header-sidebar-main\"）"
       },
       description: {
-        helpText: "Page description for navigation"
+        helpText: "用于导航的页面描述"
       },
       object: {
-        helpText: "Bound object (for Record pages)"
+        helpText: "绑定的对象（用于记录页）"
       },
       variables: {
-        helpText: "Local page state variables"
+        helpText: "页面本地状态变量"
       },
       regions: {
-        helpText: "Layout regions (header, main, sidebar, footer) with components"
+        helpText: "布局区域（header、main、sidebar、footer）及其组件"
       },
       isDefault: {
-        helpText: "Set as default page for this page type"
+        helpText: "设为该页面类型的默认页"
       },
       kind: {
-        helpText: "Page override mode: full or slotted (for record pages)"
+        helpText: "页面种类分组（如 record / list / detail）"
       },
       assignedProfiles: {
-        helpText: "Profiles that can access this page"
+        helpText: "此页面对哪些 Profile 可用"
       },
       aria: {
-        helpText: "Accessibility attributes (ARIA labels, roles)"
+        helpText: "无障碍标签与角色"
       }
     }
   },
   dashboard: {
-    label: "Dashboard",
+    label: "仪表板",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Dashboard identity and description."
+        label: "基础信息",
+        description: "名称与图标"
       },
       layout: {
-        label: "Layout",
-        description: "Grid sizing and refresh cadence."
+        label: "布局",
+        description: "栅格与响应式"
       },
       widgets: {
-        label: "Widgets",
-        description: "Cards and charts placed on the grid."
+        label: "组件",
+        description: "图表、指标、列表等"
       },
       filters: {
-        label: "Filters",
-        description: "Default and global filters applied across widgets."
+        label: "筛选",
+        description: "全局筛选与日期范围"
       },
       advanced: {
-        label: "Advanced",
-        description: "Accessibility and performance tuning."
+        label: "高级设置",
+        description: "性能与无障碍"
       }
     },
     fields: {
@@ -428,422 +428,422 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         helpText: "snake_case unique identifier"
       },
       label: {
-        helpText: "Display name"
+        helpText: "显示名"
       },
       columns: {
-        helpText: "Grid columns (default 12)"
+        helpText: "栅格列数（默认 12）"
       },
       gap: {
-        helpText: "Grid gap (Tailwind units)"
+        helpText: "栅格间距（Tailwind 单位）"
       },
       refreshInterval: {
-        helpText: "Auto-refresh (seconds)"
+        helpText: "自动刷新间隔（秒）"
       },
       header: {
-        helpText: "Dashboard header config (title, subtitle, actions)"
+        helpText: "标题、操作按钮与筛选"
       },
       widgets: {
-        helpText: "Dashboard widgets with position and sizing"
+        helpText: "包含位置和尺寸的仪表板组件"
       },
       dateRange: {
-        helpText: "Default date range selector"
+        helpText: "默认日期范围选择器"
       },
       globalFilters: {
-        helpText: "Filters applied to all widgets"
+        helpText: "应用到所有组件的筛选条件"
       },
       aria: {
-        helpText: "Accessibility labels"
+        helpText: "无障碍标签"
       },
       performance: {
-        helpText: "Caching and optimization config"
+        helpText: "懒加载、虚拟滚动、缓存等"
       }
     }
   },
   app: {
-    label: "Application",
+    label: "应用",
     sections: {
       basics: {
-        label: "Basics",
-        description: "App identity and activation."
+        label: "基础信息",
+        description: "标识、版本与图标"
       },
       navigation: {
-        label: "Navigation",
-        description: "Sidebar items and area grouping."
+        label: "导航",
+        description: "菜单结构与首页"
       },
       content: {
-        label: "Content",
-        description: "Objects and APIs this app uses."
+        label: "内容",
+        description: "对象、API 与默认智能体"
       },
       branding: {
-        label: "Branding",
-        description: "Theme colors and logo."
+        label: "品牌",
+        description: "主题色与 Logo"
       },
       access_and_sharing: {
-        label: "Access & sharing",
-        description: "Who can access this app and how it can be embedded."
+        label: "访问与共享",
+        description: "权限、共享与嵌入"
       }
     },
     fields: {
       name: {
-        helpText: "snake_case, unique"
+        helpText: "snake_case 唯一标识符"
       },
       icon: {
-        helpText: "Lucide icon name (e.g. \"users\", \"briefcase\")"
+        helpText: "Lucide 图标名（如 users、briefcase）"
       },
       isDefault: {
-        helpText: "Make this the default app for new users"
+        helpText: "设为新用户的默认应用"
       },
       navigation: {
-        helpText: "Nav tree — recursive structure"
+        helpText: "递归的导航结构"
       },
       areas: {
-        helpText: "Group items into collapsible areas"
+        helpText: "将菜单项组织为可折叠分组"
       },
       homePageId: {
-        helpText: "Landing page when app opens"
+        helpText: "应用打开时跳转的页面"
       },
       mobileNavigation: {
-        helpText: "Bottom tab bar config for mobile"
+        helpText: "移动端底部 Tab 栏配置"
       },
       objects: {
-        helpText: "Object names this app exposes"
+        helpText: "此应用暴露的对象名"
       },
       apis: {
-        helpText: "API endpoint definitions"
+        helpText: "API 端点定义"
       },
       defaultAgent: {
-        helpText: "AI agent for the ambient assistant button"
+        helpText: "右下角浮动助手按钮调用的 AI 智能体"
       },
       branding: {
-        helpText: "Primary/secondary colors, logo, theme"
+        helpText: "主色、辅色、Logo 与主题"
       },
       requiredPermissions: {
-        helpText: "Permissions needed to access this app"
+        helpText: "访问该应用需要的权限"
       },
       sharing: {
-        helpText: "Public/internal/restricted access control"
+        helpText: "公开 / 内部 / 受限的访问控制"
       },
       embed: {
-        helpText: "iFrame embed configuration"
+        helpText: "iFrame 嵌入配置"
       },
       aria: {
-        helpText: "Accessibility labels"
+        helpText: "无障碍标签与角色"
       }
     }
   },
   action: {
-    label: "Action",
+    label: "操作",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Action identity and presentation."
+        label: "基础信息",
+        description: "标识、对象与图标"
       },
       behavior: {
-        label: "Behavior",
-        description: "Configure what happens when the action is triggered."
+        label: "行为",
+        description: "点击后执行的操作"
       },
       placement: {
-        label: "Placement",
-        description: "Where and when the action button appears."
+        label: "位置",
+        description: "在界面上的呈现与可见性"
       },
       advanced: {
-        label: "Advanced",
-        description: "Bulk operations, AI exposure, and API request shape."
+        label: "高级设置",
+        description: "批量与 AI 暴露"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Button text shown to users"
+        helpText: "展示给用户的按钮文字"
       },
       objectName: {
-        helpText: "Object this action belongs to (optional)"
+        helpText: "所属对象（可选）"
       },
       icon: {
-        helpText: "Lucide icon name (e.g., \"check\", \"x-circle\")"
+        helpText: "Lucide 图标名（如 \"check\"、\"x-circle\"）"
       },
       type: {
-        helpText: "What happens when clicked"
+        helpText: "点击后发生什么"
       },
       variant: {
-        helpText: "Button style (primary=blue, danger=red, ghost=transparent)"
+        helpText: "按钮样式（primary=蓝色，danger=红色，ghost=透明）"
       },
       target: {
-        helpText: "URL, flow name, or API endpoint to call"
+        helpText: "调用的 URL、流程名或 API 端点"
       },
       method: {
-        helpText: "HTTP method (GET, POST, PUT, DELETE)"
+        helpText: "GET / POST / PUT / DELETE"
       },
       body: {
-        helpText: "JavaScript code to execute"
+        helpText: "要执行的 JavaScript 代码"
       },
       params: {
-        helpText: "User input parameters (show form before executing)"
+        helpText: "执行前向用户收集的输入参数"
       },
       confirmText: {
-        helpText: "Confirmation message (e.g., \"Are you sure?\")"
+        helpText: "执行前的确认提示（如 \"确定要执行吗？\"）"
       },
       successMessage: {
-        helpText: "Success message after completion"
+        helpText: "执行成功后的提示信息"
       },
       refreshAfter: {
-        helpText: "Refresh the list/page after action completes"
+        helpText: "执行完成后刷新当前列表/页面"
       },
       locations: {
-        helpText: "Where to show this action (toolbar, row menu, etc.)"
+        helpText: "出现在工具栏、行菜单等位置"
       },
       component: {
-        helpText: "How to render (button, icon, menu item)"
+        helpText: "以按钮、图标或菜单项的形式呈现"
       },
       visible: {
-        helpText: "CEL expression: show only when condition is true"
+        helpText: "CEL 表达式：满足条件时显示"
       },
       disabled: {
-        helpText: "CEL expression: disable when condition is true"
+        helpText: "CEL 表达式：满足条件时禁用"
       },
       shortcut: {
-        helpText: "Keyboard shortcut (e.g., \"Ctrl+S\", \"Cmd+Enter\")"
+        helpText: "键盘快捷键（如 \"Ctrl+S\"、\"Cmd+Enter\"）"
       },
       bulkEnabled: {
-        helpText: "Allow applying to multiple selected records"
+        helpText: "允许对多条选中记录执行"
       },
       aiExposed: {
-        helpText: "Allow AI agents to call this action"
+        helpText: "允许 AI 智能体调用此操作"
       },
       recordIdParam: {
-        helpText: "Body parameter name for record ID"
+        helpText: "API 请求体中记录 ID 的参数名"
       },
       recordIdField: {
-        helpText: "Field to use as record ID (default: \"id\")"
+        helpText: "作为记录 ID 的字段（默认 \"id\"）"
       },
       bodyShape: {
-        helpText: "Request body structure (flat or nested)"
+        helpText: "请求体的组织形式（扁平或嵌套）"
       }
     }
   },
   report: {
-    label: "Report",
+    label: "报表",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Identity and data source."
+        label: "基础信息",
+        description: "名称与数据源"
       },
       columns: {
-        label: "Columns",
-        description: "Columns shown in the report output."
+        label: "列",
+        description: "选择要展示的列"
       },
       groupings: {
-        label: "Groupings",
-        description: "How rows (and columns, for matrix reports) are grouped."
+        label: "分组与汇总",
+        description: "行列分组维度"
       },
       joined_blocks: {
-        label: "Joined blocks",
-        description: "Additional blocks joined into a single report (joined reports only)."
+        label: "关联对象",
+        description: "跨对象联合查询"
       },
       filter_and_chart: {
-        label: "Filter & chart",
-        description: "Report-level filters and chart presentation."
+        label: "筛选与图表",
+        description: "条件与图表展示"
       },
       advanced: {
-        label: "Advanced",
-        description: "Accessibility and performance tuning."
+        label: "高级设置",
+        description: "性能与无障碍"
       }
     },
     fields: {
       name: {
-        helpText: "snake_case unique identifier"
+        helpText: "snake_case 唯一标识符"
       },
       objectName: {
-        helpText: "Data source object"
+        helpText: "报表数据源对象"
       },
       type: {
-        helpText: "Report type: tabular/summary/matrix/joined"
+        helpText: "报表类型：tabular / summary / matrix / joined"
       },
       columns: {
-        helpText: "Columns to display in the report"
+        helpText: "报表中显示的列"
       },
       groupingsDown: {
-        helpText: "Row grouping levels"
+        helpText: "行方向分组层级"
       },
       groupingsAcross: {
-        helpText: "Column grouping levels (matrix only)"
+        helpText: "列方向分组层级（matrix 报表）"
       },
       blocks: {
-        helpText: "Join multiple objects (joined report only)"
+        helpText: "joined 报表的联合查询块"
       },
       filter: {
-        helpText: "Report-level filters"
+        helpText: "报表级别的筛选规则"
       },
       chart: {
-        helpText: "Chart config (type, legend, colors)"
+        helpText: "图表类型与配置"
       },
       aria: {
-        helpText: "Accessibility labels"
+        helpText: "无障碍标签与角色"
       },
       performance: {
-        helpText: "Caching and optimization"
+        helpText: "性能与缓存策略"
       }
     }
   },
   flow: {
-    label: "Flow",
+    label: "流程",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Flow identity and how it starts."
+        label: "基础信息",
+        description: "流程标识与启动方式"
       },
       canvas: {
-        label: "Canvas",
-        description: "Nodes, edges, and flow variables — consider the visual designer for complex flows."
+        label: "画布",
+        description: "节点、连线与流程变量——复杂流程建议用可视化设计器"
       },
       execution: {
-        label: "Execution",
-        description: "Deployment status, identity, and error handling."
+        label: "执行配置",
+        description: "部署状态、身份与异常处理"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Display name for users"
+        helpText: "用户看到的显示名称"
       },
       type: {
-        helpText: "How the flow starts (autolaunched, record_change, schedule, screen, api)"
+        helpText: "流程如何启动（autolaunched / record_change / schedule / screen / api）"
       },
       template: {
-        helpText: "Is this a reusable subflow (can be called from other flows)"
+        helpText: "是否为可复用子流程（可被其他流程调用）"
       },
       description: {
-        helpText: "What this flow does"
+        helpText: "此流程做什么"
       },
       nodes: {
-        helpText: "⚠️ Consider using Flow Designer visual editor instead of JSON"
+        helpText: "⚠️ 建议使用流程设计器，而非手写 JSON"
       },
       edges: {
-        helpText: "Connections between nodes — use Flow Designer for easier editing"
+        helpText: "节点间的连接——建议用流程设计器编辑"
       },
       variables: {
-        helpText: "Flow variables (inputs/outputs)"
+        helpText: "流程变量（输入/输出）"
       },
       status: {
-        helpText: "Deployment status: draft → active → obsolete"
+        helpText: "部署状态：draft → active → obsolete"
       },
       version: {
-        helpText: "Version number (auto-incremented)"
+        helpText: "版本号（自动递增）"
       },
       runAs: {
-        helpText: "Execute as system (admin) or user (current user permissions)"
+        helpText: "以系统（管理员）或当前用户权限执行"
       },
       errorHandling: {
-        helpText: "What to do when a node fails (fail, retry, continue)"
+        helpText: "节点失败时的处理方式（fail / retry / continue）"
       }
     }
   },
   workflow: {
-    label: "Workflow",
+    label: "工作流",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Identity and the object/event that triggers it."
+        label: "基础信息",
+        description: "名称与触发条件"
       },
       actions: {
-        label: "Actions",
-        description: "What this workflow does when fired."
+        label: "执行动作",
+        description: "满足条件后做什么"
       },
       advanced: {
-        label: "Advanced",
-        description: "Ordering and execution behaviour."
+        label: "高级设置",
+        description: "执行顺序与错误处理"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       objectName: {
-        helpText: "Which object triggers this workflow"
+        helpText: "触发此工作流的对象"
       },
       triggerType: {
-        helpText: "When to run: on_create, on_update, on_delete, schedule"
+        helpText: "何时触发：on_create、on_update、on_delete、schedule"
       },
       active: {
-        helpText: "Enable/disable this workflow"
+        helpText: "启用或禁用此工作流"
       },
       description: {
-        helpText: "What this workflow does"
+        helpText: "此工作流的用途说明"
       },
       criteria: {
-        helpText: "CEL expression: only run when this condition is true"
+        helpText: "CEL 表达式：仅当条件为真时执行"
       },
       actions: {
-        helpText: "Actions to execute immediately (field update, email, API call, etc.)"
+        helpText: "立即执行的动作（字段更新、邮件、API 调用等）"
       },
       timeTriggers: {
-        helpText: "Scheduled actions (e.g., send reminder 1 day before deadline)"
+        helpText: "定时动作（如截止前 1 天发提醒）"
       },
       executionOrder: {
-        helpText: "Run order when multiple workflows match (lower = earlier)"
+        helpText: "同时匹配多个工作流时的执行顺序（数字越小越先执行）"
       }
     }
   },
   approval: {
-    label: "Approval Process",
+    label: "审批流",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Approval process identity and the object it gates."
+        label: "基础信息",
+        description: "名称与目标对象"
       },
       entry_rules: {
-        label: "Entry rules",
-        description: "Who can submit, and what happens to the record while pending."
+        label: "进入规则",
+        description: "何时进入审批"
       },
       steps: {
-        label: "Steps",
-        description: "Ordered approval chain — each step picks the approver and decides routing."
+        label: "审批步骤",
+        description: "逐级审批配置"
       },
       escalation_and_outcomes: {
-        label: "Escalation & outcomes",
-        description: "SLA, escalation, and post-decision actions."
+        label: "升级与结果",
+        description: "超时升级与最终处理"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Display name (e.g., \"Contract Approval\")"
+        helpText: "显示名（如：\"合同审批\"）"
       },
       object: {
-        helpText: "Which object needs approval"
+        helpText: "需要审批的对象"
       },
       active: {
-        helpText: "Enable/disable this approval process"
+        helpText: "启用或禁用此审批流"
       },
       description: {
-        helpText: "What gets approved and why"
+        helpText: "审批的对象与原因"
       },
       entryCriteria: {
-        helpText: "CEL expression: users can submit only when this is true"
+        helpText: "CEL 表达式：满足时用户可提交"
       },
       lockRecord: {
-        helpText: "Lock record from editing while approval is pending"
+        helpText: "审批待处理期间锁定记录，禁止编辑"
       },
       approvalStatusField: {
-        helpText: "Field name to mirror approval status (e.g., \"approval_status\")"
+        helpText: "用于镜像审批状态的字段名（如 \"approval_status\"）"
       },
       steps: {
-        helpText: "Approval steps in order — each step defines who approves and what happens"
+        helpText: "按顺序排列的审批步骤——每一步定义由谁审批以及结果"
       },
       escalation: {
-        helpText: "Auto-escalate or auto-approve after timeout"
+        helpText: "超时后自动升级或自动通过"
       },
       onFinalApprove: {
-        helpText: "Actions when all steps approved (e.g., update status)"
+        helpText: "所有步骤通过后的动作（如更新状态）"
       },
       onFinalReject: {
-        helpText: "Actions when rejected (e.g., notify submitter)"
+        helpText: "被拒绝后的动作（如通知提交人）"
       }
     }
   },
@@ -866,87 +866,87 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     label: "Service"
   },
   email_template: {
-    label: "Email Template",
+    label: "邮件模板",
     sections: {
       identity: {
-        label: "Identity",
-        description: "Identifier and content type. The id is referenced by sendTemplate({ template: id, ... })."
+        label: "基础信息",
+        description: "模板 ID 与正文类型"
       },
       subject: {
-        label: "Subject",
-        description: "Subject line. Supports {{var.path}} interpolation."
+        label: "主题",
+        description: "邮件主题模板"
       },
       body: {
-        label: "Body",
-        description: "Email body. Use {{var}} for variables. Editor highlights based on body type."
+        label: "正文",
+        description: "邮件正文内容"
       },
       variables_and_attachments: {
-        label: "Variables & Attachments",
-        description: "Declared template variables and optional file attachments."
+        label: "变量与附件",
+        description: "可注入的变量与附件列表"
       }
     },
     fields: {
       id: {
-        helpText: "Template id (e.g. auth.password_reset)"
+        helpText: "唯一标识符（snake_case）"
       },
       body: {
-        helpText: "Body content. Will be rendered as HTML, plain text, or Markdown based on Body Type."
+        helpText: "支持变量插值的邮件正文"
       },
       variables: {
-        helpText: "List of variable names referenced in subject/body"
+        helpText: "模板内可引用的变量与默认值"
       },
       attachments: {
-        helpText: "[{ \"name\": \"...\", \"url\": \"...\" }]"
+        helpText: "附件列表（文件引用或 URL）"
       }
     }
   },
   permission: {
-    label: "Permission Set",
+    label: "权限集 / 配置文件",
     sections: {
       identity: {
-        label: "Identity",
-        description: "Permission Sets stack on top of a Profile to grant additional access. Profiles are the base set assigned 1:1 to each user."
+        label: "身份",
+        description: "权限集或配置文件标识"
       },
       system_permissions: {
-        label: "System Permissions",
-        description: "High-level capabilities not tied to a specific object — e.g. manage_users, view_audit_logs."
+        label: "系统权限",
+        description: "应用、API、管理与设置访问"
       },
       object_and_field_permissions: {
-        label: "Object & Field Permissions",
-        description: "Per-object CRUD + per-field FLS. Edit via the matrix editor or paste JSON here."
+        label: "对象与字段权限",
+        description: "增删改查与字段可见性"
       },
       tab_and_row_level_security: {
-        label: "Tab & Row-Level Security",
-        description: "Tab visibility, RLS policies, and custom context variables for predicate evaluation."
+        label: "标签页与行级安全",
+        description: "导航可见性与共享规则"
       }
     },
     fields: {
       name: {
-        helpText: "Machine name (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Display label for admins"
+        helpText: "面向管理员的显示标签"
       },
       isProfile: {
-        helpText: "Profile = base set assigned to users. Permission Set = additive grant."
+        helpText: "勾选后作为完整配置文件（而非附加权限集）"
       },
       systemPermissions: {
-        helpText: "List of system capability keys"
+        helpText: "应用访问、API、管理操作"
       },
       objects: {
-        helpText: "{ \"account\": { allowRead: true, allowEdit: true, ... } }"
+        helpText: "按对象配置增删改查"
       },
       fields: {
-        helpText: "{ \"account.amount\": { readable: true, editable: false } }"
+        helpText: "按字段配置可读 / 可写"
       },
       tabPermissions: {
-        helpText: "{ \"app_crm\": \"visible\", \"app_admin\": \"hidden\" }"
+        helpText: "导航中标签页的可见性"
       },
       rowLevelSecurity: {
-        helpText: "Array of RLS policies (see rls.zod.ts)"
+        helpText: "基于记录条件的访问规则"
       },
       contextVariables: {
-        helpText: "Custom variables referenced in RLS predicates"
+        helpText: "可在规则中引用的变量"
       }
     }
   },
@@ -1001,198 +1001,198 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     }
   },
   role: {
-    label: "Role",
+    label: "角色",
     sections: {
       role: {
-        label: "Role",
-        description: "Roles compose a hierarchy used for record sharing (sales VP → sales mgr → sales rep). Permissions themselves live on Permission Sets and Profiles."
+        label: "角色定义",
+        description: "角色名称与继承关系"
       }
     },
     fields: {
       name: {
-        helpText: "snake_case"
+        helpText: "snake_case 唯一标识符"
       },
       parent: {
-        helpText: "Parent role machine name (Reports To)"
+        helpText: "继承父角色的权限"
       }
     }
   },
   agent: {
-    label: "AI Agent",
+    label: "AI 代理",
     sections: {
       identity: {
-        label: "Identity",
-        description: "How users see and reference this agent."
+        label: "身份信息",
+        description: "用户如何识别与调用该代理"
       },
       ai_configuration: {
-        label: "AI Configuration",
-        description: "Model selection, instructions, planning, and memory."
+        label: "AI 配置",
+        description: "模型选择、指令、规划与记忆"
       },
       capabilities: {
-        label: "Capabilities",
-        description: "Skills, tools, and knowledge sources the agent can use."
+        label: "能力配置",
+        description: "代理可使用的技能、工具与知识来源"
       },
       access: {
-        label: "Access & Security",
-        description: "Who can use this agent and what safeguards apply."
+        label: "访问与安全",
+        description: "谁能使用此代理以及防护措施"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Display name (e.g., \"Sales Assistant\")"
+        helpText: "显示名称（如：\"销售助手\"）"
       },
       role: {
-        helpText: "Agent persona (e.g., \"Customer Support Specialist\")"
+        helpText: "代理人设（如：\"客户支持专家\"）"
       },
       avatar: {
-        helpText: "Avatar image URL"
+        helpText: "头像图片 URL"
       },
       active: {
-        helpText: "Enable/disable this agent"
+        helpText: "启用或禁用此代理"
       },
       instructions: {
-        helpText: "System prompt — tell the agent how to behave and what it can do"
+        helpText: "系统提示词——告诉代理如何行动与可以做什么"
       },
       model: {
-        helpText: "AI model configuration (provider, model name, temperature, etc.)"
+        helpText: "AI 模型配置（提供方、模型名、温度等）"
       },
       planning: {
-        helpText: "Autonomous reasoning configuration (strategy, max iterations, replan)"
+        helpText: "自主推理配置（策略、最大迭代、是否重规划）"
       },
       memory: {
-        helpText: "Memory management (short-term, long-term, reflection)"
+        helpText: "记忆管理（短期、长期、反思）"
       },
       lifecycle: {
-        helpText: "State machine defining conversation flow"
+        helpText: "定义会话流程的状态机"
       },
       skills: {
-        helpText: "Skill names (Agent→Skill→Tool architecture)"
+        helpText: "技能名称（Agent→Skill→Tool 架构）"
       },
       tools: {
-        helpText: "Direct tool references (legacy mode)"
+        helpText: "直接引用的工具（旧版模式）"
       },
       knowledge: {
-        helpText: "RAG knowledge access configuration"
+        helpText: "RAG 知识访问配置"
       },
       visibility: {
-        helpText: "Scope: global, organization, or private"
+        helpText: "范围：全局、组织或私有"
       },
       access: {
-        helpText: "User IDs or role names who can chat with this agent"
+        helpText: "可以与此代理对话的用户 ID 或角色名"
       },
       permissions: {
-        helpText: "Required permissions to use this agent"
+        helpText: "使用此代理所需的权限"
       },
       tenantId: {
-        helpText: "Restrict to specific organization ID"
+        helpText: "限定到特定组织"
       },
       guardrails: {
-        helpText: "Safety rules and content policies"
+        helpText: "安全规则与内容策略"
       }
     }
   },
   tool: {
-    label: "AI Tool",
+    label: "工具",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Tool identity and AI-facing description."
+        label: "基础信息",
+        description: "工具身份与面向 AI 的说明"
       },
       schemas: {
-        label: "Schemas",
-        description: "Inputs the tool accepts and the shape of its output."
+        label: "参数 / 返回结构",
+        description: "工具接收的输入与输出形态"
       },
       access_and_safety: {
-        label: "Access & safety",
-        description: "Permissions and confirmation requirements."
+        label: "访问与安全",
+        description: "权限与确认要求"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Display name for Studio UI"
+        helpText: "Studio 中展示的名称"
       },
       description: {
-        helpText: "Tell AI when to use this tool — be specific!"
+        helpText: "告诉 AI 何时使用此工具——请尽量具体！"
       },
       category: {
-        helpText: "Tool category (data, action, flow, integration, etc.)"
+        helpText: "工具类别（data、action、flow、integration 等）"
       },
       objectName: {
-        helpText: "Related object (if this tool operates on a specific object)"
+        helpText: "相关对象（若工具针对特定对象）"
       },
       active: {
-        helpText: "Enable/disable this tool"
+        helpText: "启用或禁用此工具"
       },
       builtIn: {
-        helpText: "Platform built-in tool (vs user-defined)"
+        helpText: "平台内置工具（区别于用户自定义）"
       },
       parameters: {
-        helpText: "Input parameters — define properties like: {name: {type: \"string\", description: \"...\"}}"
+        helpText: "输入参数——定义形如：{name: {type: \"string\", description: \"...\"}}"
       },
       outputSchema: {
-        helpText: "Output schema for validation (optional)"
+        helpText: "用于校验的输出结构（可选）"
       },
       requiresConfirmation: {
-        helpText: "Ask user to approve before executing (for destructive actions)"
+        helpText: "在执行前请求用户确认（用于破坏性操作）"
       },
       permissions: {
-        helpText: "Required permissions to use this tool"
+        helpText: "使用此工具所需的权限"
       }
     }
   },
   skill: {
-    label: "AI Skill",
+    label: "技能",
     sections: {
       basics: {
-        label: "Basics",
-        description: "Skill identity and human-readable description."
+        label: "基础信息",
+        description: "名称与描述"
       },
       ai_instructions: {
-        label: "AI Instructions",
-        description: "How the agent should reason with this skill."
+        label: "AI 指令",
+        description: "AI 何时与如何使用该技能"
       },
       triggers: {
-        label: "Triggers",
-        description: "When this skill should activate."
+        label: "触发条件",
+        description: "触发关键词与上下文"
       },
       access: {
-        label: "Access",
-        description: "Required permissions to use this skill."
+        label: "访问",
+        description: "哪些智能体可使用"
       }
     },
     fields: {
       name: {
-        helpText: "Unique identifier (snake_case)"
+        helpText: "唯一标识符（snake_case）"
       },
       label: {
-        helpText: "Display name (e.g., \"Case Management\")"
+        helpText: "显示名（如：\"案件管理\"）"
       },
       description: {
-        helpText: "What this skill does"
+        helpText: "AI 用来判断是否调用的简短说明"
       },
       active: {
-        helpText: "Enable/disable this skill"
+        helpText: "启用或禁用此技能"
       },
       instructions: {
-        helpText: "Instructions for AI — tell it how to use these tools together"
+        helpText: "AI 调用此技能时遵循的详细指令"
       },
       tools: {
-        helpText: "Tool names (supports wildcard: action_*)"
+        helpText: "工具名（支持通配符：action_*）"
       },
       triggerPhrases: {
-        helpText: "Natural language phrases that activate this skill"
+        helpText: "激活此技能的自然语言短语"
       },
       triggerConditions: {
-        helpText: "Programmatic conditions (e.g., objectName == \"case\")"
+        helpText: "程序化条件（如 objectName == \"case\"）"
       },
       permissions: {
-        helpText: "Required permissions to use this skill"
+        helpText: "使用此技能所需的权限"
       }
     }
   }
