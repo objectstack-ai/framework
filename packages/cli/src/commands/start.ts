@@ -57,7 +57,7 @@ export default class Start extends Command {
     // Server
     port: Flags.integer({ char: 'p', description: 'Port to listen on (overrides $PORT, default 3000)' }),
     ui: Flags.boolean({
-      description: 'Mount Account / Console portals at /_account/ and /_console/ (default: true so you can install marketplace apps)',
+      description: 'Mount the Console portal at /_console/ (default: true so you can install marketplace apps)',
       default: true,
       allowNo: true,
     }),
@@ -187,7 +187,7 @@ export default class Start extends Command {
     //
     // Without this, `serve` runs in production mode and silently skips
     // AuthPlugin when no secret is set — which makes /api/v1/auth/*
-    // return 404 and breaks the Account portal's login flow.
+    // return 404 and breaks the Console's login flow.
     // Quick-start should "just work" without the user having to
     // export AUTH_SECRET.
     const authSecret = flags['auth-secret']

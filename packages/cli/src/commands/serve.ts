@@ -18,12 +18,6 @@ import {
   printServerReady,
 } from '../utils/format.js';
 import {
-  ACCOUNT_PATH,
-  resolveAccountPath,
-  hasAccountDist,
-  createAccountStaticPlugin,
-} from '../utils/account.js';
-import {
   CONSOLE_PATH,
   resolveConsolePath,
   hasConsoleDist,
@@ -149,7 +143,7 @@ export default class Serve extends Command {
   static override flags = {
     port: Flags.string({ char: 'p', description: 'Server port', default: process.env.PORT ?? '3000' }),
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
-    ui: Flags.boolean({ description: 'Enable bundled UI portals (Account, Console) when the corresponding packages are installed (default: true)', default: true, allowNo: true }),
+    ui: Flags.boolean({ description: 'Enable the bundled Console portal at /_console/ when @object-ui/console is installed (default: true)', default: true, allowNo: true }),
     console: Flags.boolean({
       description: 'Mount the Console UI at /_console/ when the package is installed (default: true).',
       default: true,
@@ -967,9 +961,9 @@ export default class Serve extends Command {
 
       // 5d. Auto-register AuthPlugin (and paired Security/Audit) when the
       // 'auth' tier is enabled and no auth plugin is already configured.
-      // The Account portal expects /api/v1/auth/* to be served by
-      // better-auth via @objectstack/plugin-auth. Without this block,
-      // running `objectstack dev` on a vanilla user stack would 404 on
+      // The Console expects /api/v1/auth/* to be served by better-auth via
+      // @objectstack/plugin-auth. Without this block, running
+      // `objectstack dev` on a vanilla user stack would 404 on
       // login/register flows.
       const hasAuthPlugin = plugins.some(
         (p: any) => p?.name === 'com.objectstack.auth' || p?.constructor?.name === 'AuthPlugin'
@@ -1527,9 +1521,9 @@ export default class Serve extends Command {
       }
 
       // ── UI portals ────────────────────────────────────────────────
-      // In dev mode, the bundled UI portals (Account, Console) are
-      // enabled by default (use --no-ui to disable). Always serve the
-      // pre-built `dist/` — no Vite dev server, no extra port.
+      // In dev mode, the bundled Console portal is enabled by default
+      // (use --no-ui to disable). Always serve the pre-built `dist/` — no
+      // Vite dev server, no extra port.
       const enableUI = flags.ui && tierEnabled('ui');
 
       if (enableUI) {
@@ -1540,21 +1534,6 @@ export default class Serve extends Command {
         const consoleEnabled = flags.console && process.env.OS_DISABLE_CONSOLE !== '1';
         const consolePath = consoleEnabled ? resolveConsolePath() : null;
         const consoleWillMount = !!(consolePath && hasConsoleDist(consolePath));
-
-        // ── Account portal ─────────────────────────────────────────
-        // The account portal mounts under `/_account/` and is a
-        // self-service surface for end-users (login, organizations,
-        // profile, sessions).
-        const accountPath = resolveAccountPath();
-        if (!accountPath) {
-          console.warn(chalk.yellow(`  ⚠ @objectstack/account not found — skipping Account UI`));
-        } else if (hasAccountDist(accountPath)) {
-          const accountDistPath = path.join(accountPath, 'dist');
-          await kernel.use(createAccountStaticPlugin(accountDistPath, { isDev }));
-          trackPlugin('AccountUI');
-        } else {
-          console.warn(chalk.yellow(`  ⚠ Account dist not found — run "pnpm --filter @objectstack/account build" first`));
-        }
 
         // ── Console portal ──────────────────────────────────────────
         // The opinionated, fork-ready runtime console (`@object-ui/console`,
@@ -1624,7 +1603,6 @@ export default class Serve extends Command {
         pluginCount: loadedPlugins.length,
         pluginNames: loadedPlugins,
         uiEnabled: enableUI,
-        accountPath: ACCOUNT_PATH,
         consolePath: loadedPlugins.includes('ConsoleUI') ? CONSOLE_PATH : undefined,
         driverLabel: resolvedDriverLabel,
         databaseUrl: redactDbUrl(resolvedDatabaseUrl),

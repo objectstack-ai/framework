@@ -18,7 +18,7 @@ export default class Dev extends Command {
 
   static override flags = {
     watch: Flags.boolean({ char: 'w', description: 'Enable watch mode (default)', default: true }),
-    ui: Flags.boolean({ description: 'Enable bundled UI portals (Account, Console) at /_account/ and /_console/' }),
+    ui: Flags.boolean({ description: 'Enable the bundled Console portal at /_console/' }),
     verbose: Flags.boolean({ char: 'v', description: 'Verbose output' }),
     port: Flags.string({ char: 'p', description: 'Server port (overrides $PORT)' }),
     preset: Flags.string({

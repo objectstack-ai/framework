@@ -162,8 +162,7 @@ export function hasConsoleDist(consolePath: string): boolean {
  * Create a lightweight kernel plugin that serves the pre-built Console
  * portal static files at `/_console/*`.
  *
- * Identical SPA-fallback semantics to `createAccountStaticPlugin` and
- * `createAccountStaticPlugin`:
+ * SPA-fallback semantics:
  *   - `index.html` is read fresh on every fallback hit (so a rebuild
  *     producing new hashed asset names doesn't leave the browser
  *     pointing at stale URLs).

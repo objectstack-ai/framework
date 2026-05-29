@@ -184,7 +184,6 @@ export interface ServerReadyOptions {
   pluginCount: number;
   pluginNames?: string[];
   uiEnabled?: boolean;
-  accountPath?: string;
   consolePath?: string;
   /** Resolved storage driver display name (e.g. "MongoDBDriver", "SqlDriver(pg)"). */
   driverLabel?: string;
@@ -200,9 +199,6 @@ export function printServerReady(opts: ServerReadyOptions) {
   console.log(chalk.bold.green('  ✓ Server is ready'));
   console.log('');
   console.log(chalk.cyan('  ➜') + chalk.bold('  API:       ') + chalk.cyan(base + '/'));
-  if (opts.uiEnabled && opts.accountPath) {
-    console.log(chalk.cyan('  ➜') + chalk.bold('  Account:   ') + chalk.cyan(base + opts.accountPath + '/'));
-  }
   if (opts.uiEnabled && opts.consolePath) {
     console.log(chalk.cyan('  ➜') + chalk.bold('  Console:   ') + chalk.cyan(base + opts.consolePath + '/'));
   }
