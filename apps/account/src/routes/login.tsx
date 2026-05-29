@@ -126,6 +126,10 @@ function LoginPage() {
           .finally(() => setAutoSelectingOrg(false));
         return;
       }
+      // Decisions below depend on `features.multiOrgEnabled`. Wait until
+      // `/auth/config` has resolved so we don't race to `/organizations/new`
+      // in single-tenant mode (where `features` is briefly `null`).
+      if (!features) return;
       if (organizations.length === 0) {
         // - Single-tenant: the platform auto-binds users on register or the
         //   deployment is misconfigured. Either way, sending the user to
@@ -133,7 +137,7 @@ function LoginPage() {
         //   (empty list) is wrong — hand off to home / the original redirect
         //   and let the platform decide what to show.
         // - Multi-tenant: surface the create-org wizard.
-        if (features?.multiOrgEnabled === false) {
+        if (features.multiOrgEnabled === false) {
           if (isSafeRedirect(redirect)) {
             window.location.assign(resolveRedirect(redirect));
           } else {
@@ -148,7 +152,7 @@ function LoginPage() {
       // - Single-tenant: shouldn't happen (one org per user) but if it does,
       //   auto-select the first to avoid bouncing into the gated picker.
       // - Multi-tenant: let the user choose.
-      if (features?.multiOrgEnabled === false) {
+      if (features.multiOrgEnabled === false) {
         setAutoSelectingOrg(true);
         setActiveOrganization(organizations[0].id)
           .catch(() => undefined)
@@ -178,7 +182,7 @@ function LoginPage() {
     organizationsFetched,
     autoSelectingOrg,
     setActiveOrganization,
-    features?.multiOrgEnabled,
+    features,
   ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
