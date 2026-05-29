@@ -1747,7 +1747,7 @@ export class HttpDispatcher {
                 && parts[1] === 'platform-sso'
                 && parts[2] === 'backfill'
                 && m === 'POST') {
-                const baseSecret = (readEnvWithDeprecation('OS_AUTH_SECRET', 'AUTH_SECRET') ?? '').trim();
+                const baseSecret = (readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET']) ?? '').trim();
                 if (!baseSecret) {
                     return { handled: true, response: this.error('OS_AUTH_SECRET not configured on this worker', 503) };
                 }
@@ -2018,7 +2018,7 @@ export class HttpDispatcher {
                 // email/password sign-in as the legacy fallback).
                 try {
                     const { seedPlatformSsoClient } = await import('./cloud/platform-sso.js');
-                    const baseSecret = (readEnvWithDeprecation('OS_AUTH_SECRET', 'AUTH_SECRET') ?? '').trim();
+                    const baseSecret = (readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET']) ?? '').trim();
                     if (baseSecret) {
                         await seedPlatformSsoClient({
                             ql,

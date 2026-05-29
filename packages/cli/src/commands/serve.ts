@@ -142,7 +142,7 @@ export default class Serve extends Command {
   };
 
   static override flags = {
-    port: Flags.string({ char: 'p', description: 'Server port', default: process.env.PORT ?? '3000' }),
+    port: Flags.string({ char: 'p', description: 'Server port', default: readEnvWithDeprecation('OS_PORT', 'PORT') ?? '3000' }),
     dev: Flags.boolean({ description: 'Run in development mode (load devPlugins)' }),
     ui: Flags.boolean({ description: 'Enable the bundled Console portal at /_console/ when @object-ui/console is installed (default: true)', default: true, allowNo: true }),
     console: Flags.boolean({
@@ -976,7 +976,7 @@ export default class Serve extends Command {
 
           // In dev, fall back to a stable local secret so users don't have
           // to set OS_AUTH_SECRET just to try the login/register flow.
-          const secret = readEnvWithDeprecation('OS_AUTH_SECRET', 'AUTH_SECRET')
+          const secret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'])
             ?? (isDev ? 'dev-only-insecure-secret-change-me-in-production' : undefined);
 
           // Guard: in cloud-connected runtime mode (e.g. objectos worker)
@@ -1005,7 +1005,7 @@ export default class Serve extends Command {
           } else if (!secret) {
             console.warn(chalk.yellow('  ⚠ AuthPlugin skipped — set OS_AUTH_SECRET to enable authentication in production'));
           } else {
-            const baseUrl = readEnvWithDeprecation('OS_AUTH_BASE_URL', 'AUTH_BASE_URL')
+            const baseUrl = readEnvWithDeprecation('OS_AUTH_URL', ['OS_AUTH_BASE_URL', 'AUTH_BASE_URL', 'BETTER_AUTH_URL'])
               ?? process.env.OS_BASE_URL
               ?? `http://localhost:${port}`;
 

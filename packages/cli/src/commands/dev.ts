@@ -8,6 +8,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { printHeader, printKV, printStep, printError } from '../utils/format.js';
+import { readEnvWithDeprecation } from '@objectstack/types';
 
 export default class Dev extends Command {
   static override description = 'Start development mode with hot-reload';
@@ -179,13 +180,13 @@ export default class Dev extends Command {
         ...(effectiveDb ? { OS_DATABASE_URL: effectiveDb } : {}),
         ...(flags['database-driver'] ? { OS_DATABASE_DRIVER: flags['database-driver'] } : {}),
         ...(flags['database-auth-token'] ? { OS_DATABASE_AUTH_TOKEN: flags['database-auth-token'] } : {}),
-        ...(flags['auth-secret'] ? { AUTH_SECRET: flags['auth-secret'] } : {}),
+        ...(flags['auth-secret'] ? { OS_AUTH_SECRET: flags['auth-secret'] } : {}),
       };
       printKV('Environment ID', environmentId, '🎯');
       printKV('Artifact', isUrl ? artifactPath : path.relative(process.cwd(), artifactPath), '📦');
       if (effectiveDb) printKV('Database', redactDbUrl(effectiveDb), '🗄️');
 
-      const port = flags.port ?? process.env.PORT;
+      const port = flags.port ?? readEnvWithDeprecation('OS_PORT', 'PORT');
       const binPath = process.argv[1];
       const serveChild = spawn(
         process.execPath,

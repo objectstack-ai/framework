@@ -89,7 +89,7 @@ export class ArtifactKernelFactory implements EnvironmentKernelFactory {
         this.kernelConfig = config.kernelConfig;
         this.authBaseSecret = (
             config.authBaseSecret
-            ?? readEnvWithDeprecation('OS_AUTH_SECRET', 'AUTH_SECRET')
+            ?? readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET'])
             ?? ''
         ).trim();
     }

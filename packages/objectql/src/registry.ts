@@ -436,6 +436,12 @@ export class SchemaRegistry {
       }
     }
 
+    // ADR-0010 §3.7 — translate the author-facing `protection` block
+    // into the private `_lock` envelope and stamp package provenance
+    // on the schema before it lands in the contributor list. Mirrors
+    // registerItem() so object schemas surface lock fields on GET.
+    applyProtection(schema as any, { packageId });
+
     // Add new contributor
     const contributor: ObjectContributor = {
       packageId,

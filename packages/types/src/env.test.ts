@@ -51,4 +51,40 @@ describe('readEnvWithDeprecation', () => {
     expect(readEnvWithDeprecation('OS_TEST_FOO', 'TEST_FOO')).toBe('');
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it('checks legacy aliases in order and warns for the matched one', () => {
+    const originalAlt = process.env.ALT_TEST_FOO;
+    try {
+      delete process.env.OS_TEST_FOO;
+      delete process.env.TEST_FOO;
+      process.env.ALT_TEST_FOO = 'alt-value';
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(
+        readEnvWithDeprecation('OS_TEST_FOO', ['TEST_FOO', 'ALT_TEST_FOO']),
+      ).toBe('alt-value');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain('ALT_TEST_FOO');
+    } finally {
+      if (originalAlt === undefined) delete process.env.ALT_TEST_FOO;
+      else process.env.ALT_TEST_FOO = originalAlt;
+    }
+  });
+
+  it('first legacy alias wins when multiple are set', () => {
+    const originalAlt = process.env.ALT_TEST_FOO;
+    try {
+      delete process.env.OS_TEST_FOO;
+      process.env.TEST_FOO = 'first-legacy';
+      process.env.ALT_TEST_FOO = 'second-legacy';
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(
+        readEnvWithDeprecation('OS_TEST_FOO', ['TEST_FOO', 'ALT_TEST_FOO']),
+      ).toBe('first-legacy');
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain('TEST_FOO');
+    } finally {
+      if (originalAlt === undefined) delete process.env.ALT_TEST_FOO;
+      else process.env.ALT_TEST_FOO = originalAlt;
+    }
+  });
 });

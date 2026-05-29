@@ -23,8 +23,10 @@ the new `readEnvWithDeprecation()` helper in `@objectstack/types`.
 
 | New | Legacy (deprecated) |
 |:---|:---|
-| `OS_AUTH_SECRET` | `AUTH_SECRET` |
-| `OS_AUTH_BASE_URL` | `AUTH_BASE_URL` |
+| `OS_AUTH_SECRET` | `AUTH_SECRET`, `BETTER_AUTH_SECRET` |
+| `OS_AUTH_URL` | `AUTH_BASE_URL`, `BETTER_AUTH_URL`, `OS_AUTH_BASE_URL` |
+| `OS_PORT` | `PORT` |
+| `OS_DATABASE_URL` | `DATABASE_URL` |
 | `OS_ROOT_DOMAIN` | `ROOT_DOMAIN` |
 | `OS_MULTI_ORG_ENABLED` | `OS_MULTI_TENANT` |
 | `OS_CORS_ENABLED` | `CORS_ENABLED` |
@@ -42,6 +44,6 @@ the new `readEnvWithDeprecation()` helper in `@objectstack/types`.
 
 **Migration:** rename in your `.env`. Legacy names continue to work this
 release and will be removed in a future major. Industry-standard names
-(`PORT`, `DATABASE_URL`, `NODE_ENV`, `OPENAI_API_KEY`, `TURSO_*`,
-`BETTER_AUTH_URL`, OAuth `*_CLIENT_ID/SECRET`, `RESEND_API_KEY`,
-`POSTMARK_TOKEN`, `AI_GATEWAY_*`) are NOT renamed.
+(`NODE_ENV`, `HOME`, `OPENAI_API_KEY`, `TURSO_*`, OAuth
+`*_CLIENT_ID/SECRET`, `RESEND_API_KEY`, `POSTMARK_TOKEN`,
+`AI_GATEWAY_*`, `SMTP_*`) are NOT renamed.

@@ -1041,7 +1041,7 @@ export class AuthManager {
    * Generate a secure secret if not provided
    */
   private generateSecret(): string {
-    const envSecret = readEnvWithDeprecation('OS_AUTH_SECRET', 'AUTH_SECRET');
+    const envSecret = readEnvWithDeprecation('OS_AUTH_SECRET', ['AUTH_SECRET', 'BETTER_AUTH_SECRET']);
 
     if (!envSecret) {
       // In production, a secret MUST be provided

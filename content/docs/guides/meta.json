@@ -36,6 +36,7 @@
     "production-readiness",
     "publish-and-preview",
     "single-project-mode",
+    "environment-variables",
     "objectql-migration",
     "error-handling-client",
     "error-handling-server",

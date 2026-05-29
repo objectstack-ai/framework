@@ -21,23 +21,26 @@ const _warnedKeys = new Set<string>();
 
 /**
  * Read an env var, preferring the canonical `OS_*` name and falling
- * back to a legacy alias.
+ * back to one or more legacy aliases.
  *
- * When only the legacy alias is set, emits a one-shot deprecation warning.
+ * When only a legacy alias is set, emits a one-shot deprecation warning.
  * The warning is process-wide deduplicated: identical (preferred, legacy)
  * pairs will only warn once even if read from multiple call sites.
+ *
+ * Legacy aliases are checked in order; the first one with a defined
+ * value wins (and triggers the warning for that specific alias).
  *
  * Safe to call from environments where `process` is unavailable (returns
  * `undefined`); the warning is suppressed when running outside Node-like
  * runtimes that lack `console.warn`.
  *
  * @param preferred  Canonical OS_*-prefixed env var name.
- * @param legacy     Older name to fall back on.
+ * @param legacy     Older name (or array of older names) to fall back on.
  * @returns The resolved value, or `undefined` if neither is set.
  */
 export function readEnvWithDeprecation(
   preferred: string,
-  legacy: string,
+  legacy: string | readonly string[],
 ): string | undefined {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
     .process?.env;
@@ -46,22 +49,25 @@ export function readEnvWithDeprecation(
   const preferredValue = env[preferred];
   if (preferredValue !== undefined) return preferredValue;
 
-  const legacyValue = env[legacy];
-  if (legacyValue !== undefined) {
-    const dedupeKey = `${preferred}|${legacy}`;
-    if (!_warnedKeys.has(dedupeKey)) {
-      _warnedKeys.add(dedupeKey);
-      const consoleRef = (globalThis as { console?: { warn?: (msg: string) => void } }).console;
-      try {
-        consoleRef?.warn?.(
-          `[ObjectStack] Env var \`${legacy}\` is deprecated; rename it to \`${preferred}\`. ` +
-          `The legacy name still works for now but will be removed in a future major release.`,
-        );
-      } catch {
-        /* `console.warn` unavailable (exotic runtime) — ignore */
+  const legacyList = typeof legacy === 'string' ? [legacy] : legacy;
+  for (const legacyName of legacyList) {
+    const legacyValue = env[legacyName];
+    if (legacyValue !== undefined) {
+      const dedupeKey = `${preferred}|${legacyName}`;
+      if (!_warnedKeys.has(dedupeKey)) {
+        _warnedKeys.add(dedupeKey);
+        const consoleRef = (globalThis as { console?: { warn?: (msg: string) => void } }).console;
+        try {
+          consoleRef?.warn?.(
+            `[ObjectStack] Env var \`${legacyName}\` is deprecated; rename it to \`${preferred}\`. ` +
+            `The legacy name still works for now but will be removed in a future major release.`,
+          );
+        } catch {
+          /* `console.warn` unavailable (exotic runtime) — ignore */
+        }
       }
+      return legacyValue;
     }
-    return legacyValue;
   }
 
   return undefined;

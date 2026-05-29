@@ -28,6 +28,7 @@ import { resolve as resolvePath } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { z } from 'zod';
+import { readEnvWithDeprecation } from '@objectstack/types';
 import { loadArtifactBundle, isHttpUrl } from './load-artifact-bundle.js';
 
 /**
@@ -127,7 +128,7 @@ export async function createStandaloneStack(config?: StandaloneStackConfig): Pro
             : resolvePath(cwd, artifactPathInput));
 
     const dbUrl = cfg.databaseUrl
-        ?? process.env.OS_DATABASE_URL?.trim()
+        ?? readEnvWithDeprecation('OS_DATABASE_URL', 'DATABASE_URL')?.trim()
         ?? process.env.TURSO_DATABASE_URL?.trim()
         ?? (process.env.OS_HOME?.trim()
             ? `file:${resolvePath(resolveObjectStackHome(), 'data/standalone.db')}`
