@@ -552,19 +552,32 @@ export type MetadataPluginManifest = z.input<typeof MetadataPluginManifestSchema
  */
 export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   // Data Protocol (load first)
-  { type: 'object', label: 'Object', filePatterns: ['**/*.object.ts', '**/*.object.yml', '**/*.object.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 10, domain: 'data' },
-  { type: 'field', label: 'Field', filePatterns: ['**/*.field.ts', '**/*.field.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 20, domain: 'data' },
+  //
+  // `object` and `field`: packaged items are LOCKED (`allowOrgOverride: false`).
+  // Runtime API rejects overlay writes against artifact-backed objects/fields
+  // with `403 not_overridable`. Tenants CAN create brand-new objects/fields
+  // (`allowRuntimeCreate: true`). Rationale: object schema = physical table
+  // DDL; per-org overlay of packaged objects creates upgrade conflicts and
+  // multi-tenant schema drift. New tenant-owned objects live in their own
+  // namespace and are free to evolve. (Mirrors Salesforce: standard objects
+  // are not modifiable per-org beyond layout/label; custom objects are full).
+  { type: 'object', label: 'Object', filePatterns: ['**/*.object.ts', '**/*.object.yml', '**/*.object.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 10, domain: 'data' },
+  { type: 'field', label: 'Field', filePatterns: ['**/*.field.ts', '**/*.field.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 20, domain: 'data' },
   { type: 'trigger', label: 'Trigger', filePatterns: ['**/*.trigger.ts', '**/*.trigger.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 30, domain: 'data' },
   { type: 'validation', label: 'Validation Rule', filePatterns: ['**/*.validation.ts', '**/*.validation.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 30, domain: 'data' },
   { type: 'hook', label: 'Hook', filePatterns: ['**/*.hook.ts', '**/*.hook.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 30, domain: 'data' },
 
   // UI Protocol
-  { type: 'view', label: 'View', filePatterns: ['**/*.view.ts', '**/*.view.yml', '**/*.view.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 50, domain: 'ui' },
-  { type: 'page', label: 'Page', filePatterns: ['**/*.page.ts', '**/*.page.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 50, domain: 'ui' },
-  { type: 'dashboard', label: 'Dashboard', filePatterns: ['**/*.dashboard.ts', '**/*.dashboard.yml', '**/*.dashboard.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 60, domain: 'ui' },
-  { type: 'app', label: 'Application', filePatterns: ['**/*.app.ts', '**/*.app.yml', '**/*.app.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: false, supportsVersioning: true, executionPinned: false, loadOrder: 70, domain: 'ui' },
-  { type: 'action', label: 'Action', filePatterns: ['**/*.action.ts', '**/*.action.yml'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 50, domain: 'ui' },
-  { type: 'report', label: 'Report', filePatterns: ['**/*.report.ts', '**/*.report.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 60, domain: 'ui' },
+  // `view/page/dashboard/action/report`: UI artifacts benefit from version
+  // history (label says it all — admins iterate frequently, want to roll back).
+  // `app`: tenants may author custom navigation apps (Salesforce Lightning App
+  // parity), so `allowRuntimeCreate: true`.
+  { type: 'view', label: 'View', filePatterns: ['**/*.view.ts', '**/*.view.yml', '**/*.view.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 50, domain: 'ui' },
+  { type: 'page', label: 'Page', filePatterns: ['**/*.page.ts', '**/*.page.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 50, domain: 'ui' },
+  { type: 'dashboard', label: 'Dashboard', filePatterns: ['**/*.dashboard.ts', '**/*.dashboard.yml', '**/*.dashboard.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 60, domain: 'ui' },
+  { type: 'app', label: 'Application', filePatterns: ['**/*.app.ts', '**/*.app.yml', '**/*.app.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 70, domain: 'ui' },
+  { type: 'action', label: 'Action', filePatterns: ['**/*.action.ts', '**/*.action.yml'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 50, domain: 'ui' },
+  { type: 'report', label: 'Report', filePatterns: ['**/*.report.ts', '**/*.report.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 60, domain: 'ui' },
 
   // Automation Protocol — flow/workflow/approval are executionPinned (ADR-0009)
   { type: 'flow', label: 'Flow', filePatterns: ['**/*.flow.ts', '**/*.flow.yml', '**/*.flow.json'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: true, loadOrder: 80, domain: 'automation' },
@@ -586,7 +599,10 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   { type: 'role', label: 'Role', filePatterns: ['**/*.role.ts', '**/*.role.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 15, domain: 'security' },
 
   // AI Protocol
-  { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: false, loadOrder: 90, domain: 'ai' },
+  // `agent`: executionPinned — long-running conversations must stick to the
+  // agent version (prompt template + tool set) they started under.
+  // (Mirrors OpenAI Assistants v2 / Anthropic Messages assistant pinning.)
+  { type: 'agent', label: 'AI Agent', filePatterns: ['**/*.agent.ts', '**/*.agent.yml'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: true, executionPinned: true, loadOrder: 90, domain: 'ai' },
   { type: 'tool', label: 'AI Tool', filePatterns: ['**/*.tool.ts', '**/*.tool.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 85, domain: 'ai' },
   { type: 'skill', label: 'AI Skill', filePatterns: ['**/*.skill.ts', '**/*.skill.yml'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 88, domain: 'ai' },
 ];

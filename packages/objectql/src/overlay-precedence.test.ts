@@ -234,6 +234,20 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             },
             { type: 'hook', item: { name: 'before_save', object: 'case', events: ['beforeInsert'] } },
             { type: 'hooks', item: { name: 'before_save', object: 'case', events: ['beforeInsert'] } }, // plural
+            // object/field reverted to allowOrgOverride:false on 2026-05-29 —
+            // packaged items locked, brand-new tenant-authored items succeed.
+            {
+                type: 'object',
+                item: {
+                    name: 'tenant_widget',
+                    label: 'Widget',
+                    fields: { title: { name: 'title', type: 'text', label: 'Title' } },
+                },
+            },
+            {
+                type: 'field',
+                item: { name: 'tenant_widget_color', type: 'text', label: 'Color' },
+            },
         ];
 
         for (const { type, item } of runtimeCreatable) {
@@ -283,9 +297,10 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             expect(allowedFromRegistry.has('dashboard')).toBe(true);
             expect(allowedFromRegistry.has('report')).toBe(true);
             expect(allowedFromRegistry.has('email_template')).toBe(true);
-            // These types flipped to allowOrgOverride:true in ba252da0b.
-            expect(allowedFromRegistry.has('object')).toBe(true);
-            expect(allowedFromRegistry.has('field')).toBe(true);
+            // object/field reverted to allowOrgOverride:false on 2026-05-29
+            // (packaged-object lock; tenants create new ones via runtime-create).
+            expect(allowedFromRegistry.has('object')).toBe(false);
+            expect(allowedFromRegistry.has('field')).toBe(false);
             expect(allowedFromRegistry.has('flow')).toBe(true);
             expect(allowedFromRegistry.has('workflow')).toBe(true);
             expect(allowedFromRegistry.has('agent')).toBe(true);

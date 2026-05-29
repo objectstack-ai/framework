@@ -620,7 +620,7 @@ describe('MetadataManager — IMetadataService Contract', () => {
       expect(info!.type).toBe('object');
       expect(info!.label).toBe('Object');
       expect(info!.domain).toBe('data');
-      expect(info!.supportsOverlay).toBe(true);
+      expect(info!.supportsOverlay).toBe(false);
       expect(info!.filePatterns).toBeDefined();
     });
 

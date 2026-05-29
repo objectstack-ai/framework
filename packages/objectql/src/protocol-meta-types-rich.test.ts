@@ -77,10 +77,12 @@ describe('ObjectStackProtocolImplementation - getMetaTypes rich response', () =>
         expect(objectEntry).toBeDefined();
         expect(objectEntry.label).toBe('Object');
         expect(objectEntry.domain).toBe('data');
-        // object flipped to allowOrgOverride:true in ba252da0b
-        expect(objectEntry.allowOrgOverride).toBe(true);
+        // object reverted to allowOrgOverride:false on 2026-05-29 — packaged
+        // objects are LOCKED at runtime; tenants must create new objects.
+        expect(objectEntry.allowOrgOverride).toBe(false);
+        expect(objectEntry.allowRuntimeCreate).toBe(true);
         expect(objectEntry.overrideSource).toBe('registry');
-        expect(objectEntry.supportsOverlay).toBe(true);
+        expect(objectEntry.supportsOverlay).toBe(false);
 
         const viewEntry = result.entries.find((e: any) => e.type === 'view');
         expect(viewEntry).toBeDefined();
