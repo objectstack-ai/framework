@@ -60,7 +60,8 @@ const validDashboard = {
 const validReport = {
     name: 'monthly_revenue',
     label: 'Monthly Revenue',
-    object: 'invoice',
+    objectName: 'invoice',
+    columns: [{ field: 'amount', label: 'Amount' }],
 };
 
 function makeProtocol(opts: { environmentId?: string } = {}) {
@@ -137,7 +138,7 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             const result = await protocol.saveMetaItem({
                 type: 'email_template',
                 name: 'welcome',
-                item: { name: 'welcome', subject: 'Hi', body: 'Hello' },
+                item: { name: 'welcome', label: 'Welcome', subject: 'Hi', bodyHtml: '<p>Hello</p>' },
                 organizationId: 'org_alpha',
             });
             expect(result.success).toBe(true);
@@ -222,9 +223,17 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
     describe('runtime-creatable (allowOrgOverride:false, allowRuntimeCreate:true) — brand-new items succeed', () => {
         const runtimeCreatable: Array<{ type: string; item: any }> = [
             { type: 'trigger', item: { name: 'on_insert', object: 'case', event: 'beforeInsert' } },
-            { type: 'validation', item: { name: 'require_name', object: 'case' } },
-            { type: 'hook', item: { name: 'before_save', object: 'case' } },
-            { type: 'hooks', item: { name: 'before_save', object: 'case' } }, // plural
+            {
+                type: 'validation',
+                item: {
+                    name: 'require_name',
+                    type: 'script',
+                    message: 'Name required',
+                    condition: 'record.name == null',
+                },
+            },
+            { type: 'hook', item: { name: 'before_save', object: 'case', events: ['beforeInsert'] } },
+            { type: 'hooks', item: { name: 'before_save', object: 'case', events: ['beforeInsert'] } }, // plural
         ];
 
         for (const { type, item } of runtimeCreatable) {

@@ -11,6 +11,7 @@ export * from './manifest.zod';
 export * from './metadata-customization.zod';
 export * from './metadata-loader.zod';
 export * from './metadata-plugin.zod';
+export * from './metadata-type-schemas';
 export * from './package-artifact.zod';
 export * from './package-registry.zod';
 export * from './package-upgrade.zod';

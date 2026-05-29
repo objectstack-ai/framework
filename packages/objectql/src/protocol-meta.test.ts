@@ -361,7 +361,15 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             });
 
             it('rejects a view missing the required `columns` field with 422', async () => {
-                const invalid = { name: 'bad_view', type: 'grid' }; // no columns
+                // Container shape (the only shape Studio + defineView() emit
+                // now) with an inner ListView that is missing `columns`.
+                const invalid = {
+                    list: {
+                        type: 'grid',
+                        data: { provider: 'object', object: 'lead' },
+                        // columns: missing
+                    },
+                };
                 let caught: any;
                 try {
                     await protocol.saveMetaItem({
@@ -399,16 +407,22 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
                 expect(mockEngine.insert).not.toHaveBeenCalled();
             });
 
-            it('skips validation for types without a registered schema (e.g. app)', async () => {
-                // `app` is intentionally not in OVERLAY_VALIDATION_SCHEMAS;
-                // legacy save paths must continue to work unvalidated.
-                await expect(
-                    protocol.saveMetaItem({
+            it('validates types via the central spec registry (e.g. app)', async () => {
+                // Every overlay-allowed built-in type now has a canonical Zod
+                // schema registered in `getMetadataTypeSchema()`. An app
+                // payload with a non-snake_case `name` must be rejected.
+                let caught: any;
+                try {
+                    await protocol.saveMetaItem({
                         type: 'app',
-                        name: 'test_app',
-                        item: { name: 'test_app', label: 'X' }, // would fail AppSchema, but should not be checked
-                    })
-                ).resolves.toMatchObject({ success: true });
+                        name: 'BadApp',
+                        item: { name: 'BadApp', label: 'X' }, // name violates snake_case
+                    });
+                } catch (e) { caught = e; }
+
+                expect(caught?.code).toBe('invalid_metadata');
+                expect(caught?.status).toBe(422);
+                expect(mockEngine.insert).not.toHaveBeenCalled();
             });
 
             it('accepts plural type strings (e.g. `views`, `dashboards`)', async () => {
@@ -931,7 +945,12 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
             const validationResult = await scoped.saveMetaItem({
                 type: 'validation',
                 name: 'my_validation',
-                item: { name: 'my_validation', object: 'case' },
+                item: {
+                    name: 'my_validation',
+                    type: 'script',
+                    message: 'Amount must be positive',
+                    condition: 'record.amount < 0',
+                },
                 organizationId: 'org_alpha',
             });
 

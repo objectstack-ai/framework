@@ -13,46 +13,23 @@ import type {
 } from '@objectstack/spec/api';
 import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoutes, WellKnownCapabilities } from '@objectstack/spec/api';
 import type { IFeedService } from '@objectstack/spec/contracts';
-import { parseFilterAST, isFilterAST, ObjectSchema, FieldSchema, HookSchema } from '@objectstack/spec/data';
+import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
-import { ListViewSchema, FormViewSchema, ViewSchema, DashboardSchema, AppSchema, PageSchema, ReportSchema, ActionSchema, type FormView } from '@objectstack/spec/ui';
-import { RoleSchema } from '@objectstack/spec/identity';
-import { PermissionSetSchema } from '@objectstack/spec/security';
-import { EmailTemplateDefinitionSchema, JobSchema, METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
-import { ToolSchema, SkillSchema, AgentSchema } from '@objectstack/spec/ai';
-import { FlowSchema, WorkflowRuleSchema, ApprovalProcessSchema } from '@objectstack/spec/automation';
-import { DEFAULT_METADATA_TYPE_REGISTRY } from '@objectstack/spec/kernel';
+import { type FormView } from '@objectstack/spec/ui';
+import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
+import { DEFAULT_METADATA_TYPE_REGISTRY, getMetadataTypeSchema } from '@objectstack/spec/kernel';
 import { z } from 'zod';
 
 /**
- * Canonical Zod schema per metadata type, used both for save-time validation
- * (via {@link resolveOverlaySchema}) and to emit JSON Schemas in
- * `getMetaTypes()` so generic UI editors can render real forms.
- *
- * Note: `view` is handled separately because it discriminates on the `type`
- * property between {@link ListViewSchema} and {@link FormViewSchema}.
+ * Canonical Zod schema per metadata type lives in
+ * `@objectstack/spec/kernel/metadata-type-schemas` and is exposed through
+ * {@link getMetadataTypeSchema}. Both save-time validation
+ * ({@link resolveOverlaySchema}) and the `/meta/types/:type` JSON Schema
+ * emitter consult that single source of truth, so adding a new
+ * metadata-type schema requires editing exactly one file (or calling
+ * `registerMetadataTypeSchema()` from a plugin).
  */
-const TYPE_TO_SCHEMA: Record<string, z.ZodTypeAny> = {
-    object: ObjectSchema,
-    field: FieldSchema,
-    dashboard: DashboardSchema,
-    app: AppSchema,
-    page: PageSchema,
-    report: ReportSchema,
-    action: ActionSchema,
-    role: RoleSchema,
-    permission: PermissionSetSchema,
-    profile: PermissionSetSchema,
-    email_template: EmailTemplateDefinitionSchema,
-    tool: ToolSchema,
-    skill: SkillSchema,
-    agent: AgentSchema,
-    flow: FlowSchema,
-    workflow: WorkflowRuleSchema,
-    approval: ApprovalProcessSchema,
-    job: JobSchema,
-    hook: HookSchema,
-};
+// (TYPE_TO_SCHEMA removed — use `getMetadataTypeSchema(type)` directly.)
 
 /**
  * Canonical {@link FormView} layout per metadata type. Sourced from the
@@ -281,65 +258,24 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
  * Zod schemas used to validate overlay items before they are persisted into
  * `sys_metadata` by {@link ObjectStackProtocolImplementation.saveMetaItem}.
  *
- * Some types (notably `view`) are *not* a single schema but a discriminated
- * family — a grid/kanban/calendar list view vs. a simple/tabbed/wizard form
- * view. We dispatch to the right schema based on the `type` discriminant
- * rather than using `z.union([...])`, which would collapse all branch errors
- * into an opaque "Invalid input" union error.
+ * Single source of truth: the spec-side {@link getMetadataTypeSchema}
+ * registry (`@objectstack/spec/kernel/metadata-type-schemas`). Every
+ * metadata type whose payload should round-trip through Studio's
+ * generic editor maps to its canonical Zod schema there; this function
+ * is a plural→singular adapter on top of it.
  *
  * Validation policy:
  *   - `safeParse` is used so we can craft a 422 with structured `issues`.
  *   - We do NOT replace the persisted document with `parsed.data`; the
  *     original payload is stored verbatim so Studio-only auxiliary fields
  *     (e.g. `isPinned`, `isDefault`, `sortOrder`) survive the round-trip.
- *   - Schemas are referenced lazily through the Spec's `lazySchema` Proxy,
- *     so importing this module does not trigger eager Zod construction.
- *   - Types without a registered schema (e.g. `app`, `package`) fall through
- *     unvalidated for backwards compatibility — they were never enforced
- *     historically and existing control-plane writes rely on the lenient
- *     behaviour.
+ *   - Types without a registered schema (the wiring-layer types
+ *     `function`/`service`/`router`, and any plugin types that have not
+ *     yet called `registerMetadataTypeSchema()`) fall through unvalidated.
  */
-const FORM_VIEW_TYPES = new Set(['simple', 'tabbed', 'wizard', 'split', 'drawer', 'modal']);
-
-function resolveOverlaySchema(type: string, item: unknown): z.ZodTypeAny | null {
+function resolveOverlaySchema(type: string, _item: unknown): z.ZodTypeAny | null {
     const singular = PLURAL_TO_SINGULAR[type] ?? type;
-    switch (singular) {
-        case 'view': {
-            // A `view` overlay payload may take either of two shapes, both
-            // sanctioned by `@objectstack/spec`:
-            //
-            //   (a) Container shape (per {@link ViewSchema}) — what
-            //       `defineView()`, Studio's metadata designer, and the
-            //       artifact-shipped views (e.g. `service-ai/ai_traces`)
-            //       all produce:
-            //         { list?, form?, listViews?, formViews? }
-            //
-            //   (b) Bare list/form-view shape (legacy / inline editors and
-            //       direct API callers):
-            //         { type: 'grid', columns: [...], ... }  // ListView
-            //         { type: 'tabbed', sections: [...], ... } // FormView
-            //
-            // Detect (a) first by presence of any container key, then fall
-            // back to discriminating (b) by the `type` field. This preserves
-            // historical behaviour for callers that send bare payloads while
-            // unblocking saves of the now-canonical container shape (which
-            // previously failed with `columns: Invalid input` because the
-            // container has no top-level `columns`).
-            if (item && typeof item === 'object') {
-                const o = item as Record<string, unknown>;
-                if ('list' in o || 'form' in o || 'listViews' in o || 'formViews' in o) {
-                    return ViewSchema;
-                }
-                const t = 'type' in o ? String(o.type) : undefined;
-                return t && FORM_VIEW_TYPES.has(t) ? FormViewSchema : ListViewSchema;
-            }
-            return ListViewSchema;
-        }
-        case 'dashboard':
-            return DashboardSchema;
-        default:
-            return null;
-    }
+    return getMetadataTypeSchema(singular) ?? null;
 }
 
 /**
@@ -897,13 +833,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             const singular = (PLURAL_TO_SINGULAR[type] ?? type) as string;
             // Phase 3a-schema: emit a JSON Schema per type so the generic
             // metadata admin UI can render real forms (no more raw-JSON
-            // textareas for new resources). The `view` type discriminates
-            // between list / form variants — we ship the ListView schema as
-            // the default since most views are list views; FormView is
-            // resolved at save time by resolveOverlaySchema().
-            const zodSchema = singular === 'view'
-                ? ListViewSchema
-                : TYPE_TO_SCHEMA[singular];
+            // textareas for new resources). The canonical schema for every
+            // built-in (and plugin-registered) metadata type lives in the
+            // central `getMetadataTypeSchema()` registry; we delegate so
+            // Studio's editor and the runtime overlay validator stay in
+            // lock-step (one source of truth).
+            const zodSchema = getMetadataTypeSchema(singular);
             const schema = (zodSchema ? toJsonSchemaSafe(zodSchema) : undefined)
                 ?? HAND_CRAFTED_SCHEMAS[singular];
             const form = TYPE_TO_FORM[singular];
