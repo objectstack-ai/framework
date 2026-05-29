@@ -36,6 +36,7 @@ export const FieldType = z.enum([
   // Embedded structured values (stored as JSON on the parent row — no separate table / FK)
   'composite',    // Single embedded sub-object with declared sub-fields  (≈ Strapi component / ACF group)
   'repeater',     // Repeating embedded sub-object array with declared sub-fields  (≈ Strapi repeatable component / ACF repeater)
+  'record',       // Name-keyed map of embedded sub-objects (Record<string, SubObject>). Insertion order = display order. Used for collections where each item has a stable machine name (e.g. object.fields). See ADR-0007.
   // Enhanced Types
   'location',     // GPS coordinates
   'address',      // Structured address

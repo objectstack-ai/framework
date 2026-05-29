@@ -148,8 +148,25 @@ function RegisterPage() {
     if (!client?.auth) return;
     setSubmitting(true);
     try {
-      await client.auth.register({ name, email, password });
-      
+      const result: any = await client.auth.register({ name, email, password });
+
+      // When email verification is required, better-auth returns
+      // `{ token: null, user }` on a successful sign-up — the account
+      // exists but no session is issued until the user clicks the link
+      // in the verification email. Redirect to the verify-email-prompt
+      // page so the user sees a clear "check your inbox" UI with a
+      // resend button. Without this, the page would silently sit on the
+      // form (refresh() succeeds with a null session, the auth-redirect
+      // effect has no user to route on, and the user is stuck).
+      const data = result?.data ?? result;
+      if (data && data.token === null && data.user) {
+        navigate({
+          to: '/verify-email-prompt',
+          search: { email, redirect },
+        });
+        return;
+      }
+
       // If email verification is enabled, registration succeeds but the user
       // can't sign in until they verify. Check if we got a "needs verification"
       // signal and redirect to the verification prompt page.

@@ -759,7 +759,7 @@ function translateFormField(
     next.fields = field.fields.map((child: any) =>
       translateFormField(child, type, bundle, path, opts),
     );
-  } else if (path && (field.type === 'composite' || field.type === 'repeater')) {
+  } else if (path && (field.type === 'composite' || field.type === 'repeater' || field.type === 'record')) {
     // No explicit `fields` enumeration — synthesize from bundle entries so
     // sub-field labels still reach the client renderer (which would
     // otherwise fall back to derivePropertyNames + humanize-case).

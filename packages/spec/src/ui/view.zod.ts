@@ -576,16 +576,37 @@ export const FormFieldSchema: z.ZodType<any> = lazySchema(() => z.object({
   language: z.string().optional().describe('Code editor language (for type=code)'),
 
   /**
-   * Sub-fields for `composite` / `repeater` types — declares the inner shape
-   * of an embedded sub-object (composite) or each row of an embedded
-   * sub-object array (repeater). Recursive: composite/repeater can nest.
-   * Ignored for all other field types.
+   * Sub-fields for `composite` / `repeater` / `record` types — declares
+   * the inner shape of an embedded sub-object (composite), each row of
+   * an embedded sub-object array (repeater), or each entry of a name-keyed
+   * map (record). Recursive: any of the three can nest.
    *
    * Use `lookup` / `master_detail` instead when the children are independent
    * records with their own IDs in a separate object/table.
    */
   fields: z.array(z.lazy(() => FormFieldSchema)).optional()
-    .describe('Sub-fields for composite/repeater types'),
+    .describe('Sub-fields for composite/repeater/record types'),
+
+  /**
+   * For `record`-typed fields only. Declares how the map key is sourced,
+   * displayed, and validated when an admin creates a new entry.
+   *
+   * The same identifier is also stored as `name` on the inner value (so
+   * `record.fields[k].name === k`). Most callers can omit this and accept
+   * the defaults: `{ field: 'name', label: 'Name', regex: /^[a-z_][a-z0-9_]*$/, immutable: true }`.
+   *
+   * See ADR-0007 (record form field type).
+   */
+  keyField: z.object({
+    field: z.string().default('name').describe('Property name that holds the key inside each item (defaults to "name")'),
+    label: I18nLabelSchema.optional().describe('Display label for the key column'),
+    placeholder: I18nLabelSchema.optional().describe('Placeholder when entering a new key'),
+    helpText: I18nLabelSchema.optional().describe('Help text under the key input'),
+    /** Validation pattern serialised as a regex source string (no flags). */
+    regex: z.string().optional().describe('JS regex source string the key must match (no flags)'),
+    /** Renamable after creation? Defaults to false — keys are usually identifiers. */
+    immutable: z.boolean().default(true).describe('If true, the key is read-only after creation'),
+  }).optional().describe('Key column config for record-typed fields'),
 
   dependsOn: z.string().optional().describe('Parent field name for cascading'),
   visibleOn: ExpressionInputSchema.optional().describe('Visibility predicate (CEL).'),

@@ -29,16 +29,23 @@ export const objectForm = defineForm({
     {
       name: 'fields',
       label: 'Fields',
-      description: 'Define the data model — each row becomes a column in the database table.',
+      description: 'Define the data model — each entry becomes a column in the database table.',
       fields: [
         {
           field: 'fields',
-          type: 'repeater',
-          widget: 'grid',
+          type: 'record',
+          widget: 'airtable',
           required: true,
           helpText: 'Add the columns this object will store',
+          keyField: {
+            field: 'name',
+            label: 'Name',
+            placeholder: 'snake_case_identifier',
+            helpText: 'snake_case machine name (used as column name and API key)',
+            regex: '^[a-z_][a-z0-9_]*$',
+            immutable: true,
+          },
           fields: [
-            { field: 'name', type: 'text', required: true, immutable: true, helpText: 'snake_case identifier' },
             { field: 'label', type: 'text', helpText: 'Display label' },
             { field: 'type', type: 'select', required: true, helpText: 'Field type' },
             { field: 'required', type: 'boolean' },

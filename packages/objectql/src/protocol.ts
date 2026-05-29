@@ -110,9 +110,17 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
             abstract: { type: 'boolean', default: false },
             datasource: { type: 'string' },
             fields: {
-                type: 'array',
-                default: [],
-                items: {
+                // Canonical Object.fields is a name-keyed map
+                // (Record<string, FieldDefinition>) — insertion order is
+                // display order. The SchemaForm engine recognises
+                // `additionalProperties` as a Record and dispatches to
+                // the `record` form-field renderer (ADR-0007). The form
+                // layout in `object.form.ts` declares `type: 'record'`
+                // so the inner `additionalProperties` schema is used to
+                // shape each value.
+                type: 'object',
+                default: {},
+                additionalProperties: {
                     type: 'object',
                     properties: {
                         name: { type: 'string' },
@@ -123,7 +131,7 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
                         defaultValue: {},
                         description: { type: 'string' },
                     },
-                    required: ['name', 'type'],
+                    required: ['type'],
                 },
             },
             capabilities: { type: 'object', additionalProperties: true },
