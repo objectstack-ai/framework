@@ -1,5 +1,13 @@
 # @objectstack/service-feed
 
+## 7.1.0
+
+### Patch Changes
+
+- Updated dependencies [47a92f4]
+  - @objectstack/spec@7.1.0
+  - @objectstack/core@7.1.0
+
 ## 7.0.0
 
 ### Patch Changes
