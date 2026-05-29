@@ -1,5 +1,7 @@
 # @objectstack/fastify
 
+## 7.1.0
+
 ## 7.0.0
 
 ### Patch Changes

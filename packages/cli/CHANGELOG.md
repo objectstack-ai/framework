@@ -1,5 +1,49 @@
 # @objectstack/cli
 
+## 7.1.0
+
+### Patch Changes
+
+- Updated dependencies [6228609]
+- Updated dependencies [89771d4]
+- Updated dependencies [47a92f4]
+  - @objectstack/platform-objects@7.1.0
+  - @objectstack/account@7.1.0
+  - @objectstack/spec@7.1.0
+  - @objectstack/objectql@7.1.0
+  - @objectstack/runtime@7.1.0
+  - @objectstack/plugin-approvals@7.1.0
+  - @objectstack/plugin-audit@7.1.0
+  - @objectstack/plugin-auth@7.1.0
+  - @objectstack/plugin-email@7.1.0
+  - @objectstack/plugin-org-scoping@7.1.0
+  - @objectstack/plugin-reports@7.1.0
+  - @objectstack/plugin-security@7.1.0
+  - @objectstack/plugin-sharing@7.1.0
+  - @objectstack/plugin-webhooks@7.1.0
+  - @objectstack/service-ai@7.1.0
+  - @objectstack/service-job@7.1.0
+  - @objectstack/service-queue@7.1.0
+  - @objectstack/service-realtime@7.1.0
+  - @objectstack/service-settings@7.1.0
+  - @objectstack/client@7.1.0
+  - @objectstack/core@7.1.0
+  - @objectstack/observability@7.1.0
+  - @objectstack/driver-memory@7.1.0
+  - @objectstack/driver-mongodb@7.1.0
+  - @objectstack/driver-sql@7.1.0
+  - @objectstack/driver-sqlite-wasm@7.1.0
+  - @objectstack/plugin-hono-server@7.1.0
+  - @objectstack/plugin-mcp-server@7.1.0
+  - @objectstack/rest@7.1.0
+  - @objectstack/service-analytics@7.1.0
+  - @objectstack/service-automation@7.1.0
+  - @objectstack/service-cache@7.1.0
+  - @objectstack/service-feed@7.1.0
+  - @objectstack/service-package@7.1.0
+  - @objectstack/service-storage@7.1.0
+  - @objectstack/console@7.1.0
+
 ## 7.0.0
 
 ### Major Changes
