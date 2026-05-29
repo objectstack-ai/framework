@@ -623,7 +623,7 @@ export class SchemaRegistry {
     }
     const collection = this.metadata.get(type)!;
     const baseName = String(item[keyField]);
-    
+
     // Tag item with owning package for scoped queries
     if (packageId) {
       (item as any)._packageId = packageId;
@@ -727,7 +727,9 @@ export class SchemaRegistry {
     if (direct) return direct as T;
     // Scan for composite keys
     for (const [key, item] of collection) {
-      if (key.endsWith(`:${name}`)) return item as T;
+      if (key.endsWith(`:${name}`)) {
+        return item as T;
+      }
     }
     return undefined;
   }

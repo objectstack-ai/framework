@@ -18,6 +18,14 @@ import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared
 import { type FormView } from '@objectstack/spec/ui';
 import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
 import { DEFAULT_METADATA_TYPE_REGISTRY, getMetadataTypeSchema } from '@objectstack/spec/kernel';
+import {
+    extractProtection,
+    evaluateLockForWrite,
+    evaluateLockForDelete,
+    resolveLockState,
+    type MetadataLock,
+    type MetadataProvenance,
+} from '@objectstack/spec/kernel';
 import { z } from 'zod';
 import {
     computeMetadataDiagnostics,
@@ -282,6 +290,31 @@ const HAND_CRAFTED_SCHEMAS: Record<string, Record<string, unknown>> = {
 function resolveOverlaySchema(type: string, _item: unknown): z.ZodTypeAny | null {
     const singular = PLURAL_TO_SINGULAR[type] ?? type;
     return getMetadataTypeSchema(singular) ?? null;
+}
+
+/**
+ * ADR-0010 §3.3 — Overlay the artifact's metadata-protection envelope
+ * onto a returned item so artifact-level lock/packageId/provenance
+ * always wins over whatever was persisted in the `sys_metadata` overlay
+ * row. Returns `item` unchanged when no artifact baseline is available.
+ *
+ * The artifact's `_lock`, `_lockReason`, `_packageId`, `_packageVersion`,
+ * and `_provenance` are the source of truth — an overlay copy may
+ * pre-date the artifact's protection declaration and would otherwise
+ * mask it.
+ */
+function mergeArtifactProtection(item: unknown, artifactItem: unknown): unknown {
+    if (item === undefined || item === null) return item;
+    if (artifactItem === undefined || artifactItem === null) return item;
+    const a = artifactItem as Record<string, unknown>;
+    if (typeof a !== 'object') return item;
+    const out: Record<string, unknown> = { ...(item as Record<string, unknown>) };
+    if (a._lock !== undefined) out._lock = a._lock;
+    if (a._lockReason !== undefined) out._lockReason = a._lockReason;
+    if (a._packageId !== undefined) out._packageId = a._packageId;
+    if (a._packageVersion !== undefined) out._packageVersion = a._packageVersion;
+    if (a._provenance !== undefined) out._provenance = a._provenance;
+    return out;
 }
 
 /**
@@ -986,6 +1019,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         total: number;
         scannedTypes: number;
         scannedItems: number;
+        /**
+         * Per-type aggregate stats — count of items and the list of
+         * packages contributing to each type. Computed in the same
+         * sweep so the Studio directory page can render tile counts
+         * and a package filter in one round-trip.
+         */
+        stats: Record<string, { count: number; packages: string[] }>;
     }> {
         const includeWarnings = request.severity === 'warning';
         const targetTypes = request.type
@@ -995,6 +1035,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 .map((e) => e.type);
 
         const entries: Array<{ type: string; name: string; diagnostics: MetadataDiagnostics }> = [];
+        const stats: Record<string, { count: number; packages: string[] }> = {};
         let scannedItems = 0;
 
         for (const t of targetTypes) {
@@ -1014,8 +1055,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 : Array.isArray(listed)
                     ? listed
                     : [];
+            const pkgSet = new Set<string>();
             for (const item of items) {
                 scannedItems += 1;
+                const pkg = (item?._packageId ?? null) as string | null;
+                if (pkg) pkgSet.add(pkg);
                 const diag: MetadataDiagnostics | undefined =
                     item?._diagnostics ?? computeMetadataDiagnostics(t, item);
                 if (!diag) continue;
@@ -1027,6 +1071,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     diagnostics: diag,
                 });
             }
+            stats[t] = { count: items.length, packages: [...pkgSet].sort() };
         }
 
         return {
@@ -1034,6 +1079,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             total: entries.length,
             scannedTypes: targetTypes.length,
             scannedItems,
+            stats,
         };
     }
 
@@ -1179,7 +1225,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         return {
             type: request.type,
-            items: decorateMetadataItems(request.type, items as any[]),
+            items: decorateMetadataItems(
+                request.type,
+                (items as any[]).map((it) => {
+                    const a = this.lookupArtifactItem(
+                        request.type,
+                        (it as any)?.name,
+                    );
+                    return mergeArtifactProtection(it, a) as any;
+                }),
+            ),
         };
     }
 
@@ -1298,10 +1353,33 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             }
         }
 
+        // ADR-0010 §3.3 — artifact-level protection (lock/packageId) always
+        // wins over any overlay row. The metadata service may return a
+        // persisted overlay copy that pre-dates the artifact's `_lock`
+        // declaration; we must consult the in-memory artifact registry
+        // directly and let its protection envelope override.
+        const artifactItem = this.lookupArtifactItem(request.type, request.name);
+        const decorated = decorateMetadataItem(
+            request.type,
+            mergeArtifactProtection(item, artifactItem),
+        );
+        // ADR-0010 — surface lock/provenance flags so Studio can render
+        // the correct affordances without a second round trip.
+        const artifactBacked = this.isArtifactBacked(request.type, request.name);
+        const lockState = resolveLockState(decorated, artifactBacked);
         return {
             type: request.type,
             name: request.name,
-            item: decorateMetadataItem(request.type, item),
+            item: decorated,
+            lock: lockState.lock,
+            ...(lockState.lockReason !== undefined ? { lockReason: lockState.lockReason } : {}),
+            ...(lockState.lockSource !== undefined ? { lockSource: lockState.lockSource } : {}),
+            ...(lockState.provenance !== undefined ? { provenance: lockState.provenance } : {}),
+            ...(lockState.packageId !== undefined ? { packageId: lockState.packageId } : {}),
+            ...(lockState.packageVersion !== undefined ? { packageVersion: lockState.packageVersion } : {}),
+            editable: lockState.editable,
+            deletable: lockState.deletable,
+            resettable: lockState.resettable,
         };
     }
 
@@ -1340,6 +1418,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
          * without a second round-trip.
          */
         _diagnostics?: MetadataDiagnostics;
+        // ── ADR-0010 protection envelope ──
+        lock: MetadataLock;
+        lockReason?: string;
+        lockSource?: 'artifact' | 'package' | 'env-forced' | 'overlay';
+        provenance?: MetadataProvenance;
+        packageId?: string;
+        packageVersion?: string;
+        editable: boolean;
+        deletable: boolean;
+        resettable: boolean;
     }> {
         const orgId = request.organizationId;
 
@@ -1415,6 +1503,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 ? computeMetadataDiagnostics(request.type, effective)
                 : undefined;
 
+        // ADR-0010 — surface lock/provenance flags so the Studio editor
+        // can render the correct affordances without a second round trip.
+        const artifactBacked = this.isArtifactBacked(request.type, request.name);
+        // Lock resolution: artifact wins over overlay, matching getEffectiveLock.
+        const lockSource: any = code ?? overlay ?? {};
+        const lockState = resolveLockState(lockSource, artifactBacked);
+
         return {
             type: request.type,
             name: request.name,
@@ -1423,6 +1518,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             overlayScope,
             effective,
             ...(_diagnostics ? { _diagnostics } : {}),
+            lock: lockState.lock,
+            ...(lockState.lockReason !== undefined ? { lockReason: lockState.lockReason } : {}),
+            ...(lockState.lockSource !== undefined ? { lockSource: lockState.lockSource } : {}),
+            ...(lockState.provenance !== undefined ? { provenance: lockState.provenance } : {}),
+            ...(lockState.packageId !== undefined ? { packageId: lockState.packageId } : {}),
+            ...(lockState.packageVersion !== undefined ? { packageVersion: lockState.packageVersion } : {}),
+            editable: lockState.editable,
+            deletable: lockState.deletable,
+            resettable: lockState.resettable,
         };
     }
 
@@ -2686,6 +2790,207 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         return item._packageId !== 'sys_metadata';
     }
 
+    // ───────────────────────────────────────────────────────────────────
+    // ADR-0010 — metadata protection (Phase 1: L3 item-level lock)
+    // ───────────────────────────────────────────────────────────────────
+
+    /**
+     * Look up an item from the artifact registry across both the requested
+     * type and its singular/plural twin. Returns `undefined` when the
+     * registry is unavailable or the item is not artifact-backed.
+     */
+    private lookupArtifactItem(type: string, name: string): unknown {
+        const registry = (this.engine as any)?.registry;
+        if (!registry || typeof registry.getItem !== 'function') return undefined;
+        const singular = PLURAL_TO_SINGULAR[type] ?? type;
+        return registry.getItem(singular, name) ?? registry.getItem(type, name);
+    }
+
+    /**
+     * Resolve the effective `_lock` for an item by consulting the
+     * artifact registry first, then the persisted overlay row. Artifact
+     * always wins — by design, an overlay cannot loosen a packaged
+     * lock (ADR-0010 §3.3).
+     *
+     * Returns `'none'` when nothing is locked, which is the common
+     * case. Safe to call when `environmentId` is undefined (control-
+     * plane bootstrap) — the lock check is only meaningful in tenant
+     * scope and the caller is expected to also gate on `environmentId`.
+     */
+    private async getEffectiveLock(
+        type: string,
+        name: string,
+        organizationId: string | null | undefined,
+    ): Promise<{
+        lock: MetadataLock;
+        lockReason: string | undefined;
+        lockSource: 'artifact' | 'overlay' | undefined;
+    }> {
+        // 1. Artifact wins.
+        const registry = (this.engine as any)?.registry;
+        const singular = PLURAL_TO_SINGULAR[type] ?? type;
+        let artifactItem: any;
+        if (registry && typeof registry.getItem === 'function') {
+            artifactItem = registry.getItem(singular, name) ?? registry.getItem(type, name);
+        }
+        if (artifactItem && artifactItem._packageId && artifactItem._packageId !== 'sys_metadata') {
+            const p = extractProtection(artifactItem);
+            if (p.lock !== 'none') {
+                return { lock: p.lock, lockReason: p.lockReason, lockSource: 'artifact' };
+            }
+        }
+        // 2. Overlay row.
+        try {
+            const where: Record<string, unknown> = {
+                type,
+                name,
+                state: 'active',
+                organization_id: organizationId ?? null,
+            };
+            const row = await this.engine.findOne('sys_metadata', { where });
+            if (row) {
+                const body = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+                const p = extractProtection(body);
+                if (p.lock !== 'none') {
+                    return { lock: p.lock, lockReason: p.lockReason, lockSource: 'overlay' };
+                }
+            }
+        } catch {
+            // DB unavailable — fall through to 'none'.
+        }
+        return { lock: 'none', lockReason: undefined, lockSource: undefined };
+    }
+
+    /**
+     * Best-effort audit-row writer (ADR-0010 §3.6). Failures here are
+     * logged but never block the underlying decision: an environment
+     * without the audit table provisioned (legacy installs before this
+     * ADR landed) still answers normal API calls, just without the
+     * compliance trail. Phase 2 will make the audit table a hard
+     * dependency.
+     */
+    private async recordMetadataAudit(entry: {
+        type: string;
+        name: string;
+        organizationId?: string | null;
+        operation: 'save' | 'publish' | 'rollback' | 'delete' | 'reset';
+        outcome: 'allowed' | 'denied' | 'forced';
+        code: string;
+        lockState?: MetadataLock;
+        lockOverridden?: boolean;
+        actor?: string;
+        source?: string;
+        requestId?: string;
+        note?: string;
+    }): Promise<void> {
+        try {
+            await this.engine.insert('sys_metadata_audit', {
+                occurred_at: new Date().toISOString(),
+                actor: entry.actor ?? 'system',
+                source: entry.source ?? 'protocol',
+                type: PLURAL_TO_SINGULAR[entry.type] ?? entry.type,
+                name: entry.name,
+                organization_id: entry.organizationId ?? null,
+                operation: entry.operation,
+                outcome: entry.outcome,
+                code: entry.code,
+                lock_state: entry.lockState ?? 'none',
+                lock_overridden: entry.lockOverridden ?? false,
+                request_id: entry.requestId ?? null,
+                note: entry.note ?? null,
+            } as any);
+        } catch (err: any) {
+            // Don't promote audit-table failures to API errors. Log so
+            // operators can spot a misconfigured deployment.
+            console.warn(
+                `[Protocol] sys_metadata_audit write failed for ${entry.type}/${entry.name}: ${err?.message ?? err}`,
+            );
+        }
+    }
+
+    /**
+     * Phase 1 L3 enforcement for write operations (save / publish /
+     * rollback). Returns null on allow. Returns the structured `Error`
+     * the caller should `throw` on deny — also records the denial in
+     * the audit log so refused attempts are visible in compliance
+     * reports (refused writes never reach sys_metadata_history).
+     */
+    private async assertLockAllowsWrite(args: {
+        type: string;
+        name: string;
+        organizationId?: string;
+        operation: 'save' | 'publish' | 'rollback';
+        actor?: string;
+        source?: string;
+        requestId?: string;
+    }): Promise<Error | null> {
+        if (this.environmentId === undefined) return null;
+        const state = await this.getEffectiveLock(args.type, args.name, args.organizationId ?? null);
+        const refusal = evaluateLockForWrite(state.lock);
+        if (!refusal) return null;
+        const reason = state.lockReason ?? refusal.reason;
+        const err = new Error(
+            `[item_locked] ${args.type}/${args.name} is locked (_lock=${state.lock}${state.lockSource ? `, source=${state.lockSource}` : ''}). `
+            + `${reason} — See ADR-0010 §3.3.`,
+        );
+        (err as any).code = 'item_locked';
+        (err as any).status = 403;
+        (err as any).lock = state.lock;
+        (err as any).lockReason = reason;
+        await this.recordMetadataAudit({
+            type: args.type,
+            name: args.name,
+            organizationId: args.organizationId ?? null,
+            operation: args.operation,
+            outcome: 'denied',
+            code: 'item_locked',
+            lockState: state.lock,
+            actor: args.actor,
+            source: args.source ?? `protocol.${args.operation}MetaItem`,
+            requestId: args.requestId,
+            note: reason,
+        });
+        return err;
+    }
+
+    /** Counterpart of {@link assertLockAllowsWrite} for delete. */
+    private async assertLockAllowsDelete(args: {
+        type: string;
+        name: string;
+        organizationId?: string;
+        actor?: string;
+        source?: string;
+        requestId?: string;
+    }): Promise<Error | null> {
+        if (this.environmentId === undefined) return null;
+        const state = await this.getEffectiveLock(args.type, args.name, args.organizationId ?? null);
+        const refusal = evaluateLockForDelete(state.lock);
+        if (!refusal) return null;
+        const reason = state.lockReason ?? refusal.reason;
+        const err = new Error(
+            `[item_locked] ${args.type}/${args.name} is locked (_lock=${state.lock}${state.lockSource ? `, source=${state.lockSource}` : ''}). `
+            + `${reason} — See ADR-0010 §3.3.`,
+        );
+        (err as any).code = 'item_locked';
+        (err as any).status = 403;
+        (err as any).lock = state.lock;
+        (err as any).lockReason = reason;
+        await this.recordMetadataAudit({
+            type: args.type,
+            name: args.name,
+            organizationId: args.organizationId ?? null,
+            operation: 'delete',
+            outcome: 'denied',
+            code: 'item_locked',
+            lockState: state.lock,
+            actor: args.actor,
+            source: args.source ?? 'protocol.deleteMetaItem',
+            requestId: args.requestId,
+            note: reason,
+        });
+        return err;
+    }
+
     /**
      * Mirror an object-type overlay write into the in-memory engine
      * registry so subsequent CRUD finds the new schema. Idempotent and
@@ -2754,6 +3059,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 (err as any).status = 403;
                 throw err;
             }
+
+            // ADR-0010 L3 — per-item lock. Artifact `_lock` (or persisted
+            // overlay `_lock`) blocks save independent of the L1 type-level
+            // flag. Records the denial in `sys_metadata_audit` before
+            // throwing so refused attempts are visible in compliance reports.
+            const lockErr = await this.assertLockAllowsWrite({
+                type: request.type,
+                name: request.name,
+                ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                operation: 'save',
+                ...(request.actor ? { actor: request.actor } : {}),
+                source: 'protocol.saveMetaItem',
+            });
+            if (lockErr) throw lockErr;
         }
 
         // Phase 3a-destructive: for object/field writes, diff against the
@@ -2910,6 +3229,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 if (mode === 'publish') {
                     this.applyObjectRegistryMutation(request);
                 }
+                // ADR-0010 — success audit (best-effort).
+                await this.recordMetadataAudit({
+                    type: request.type,
+                    name: request.name,
+                    organizationId: orgId,
+                    operation: 'save',
+                    outcome: 'allowed',
+                    code: 'ok',
+                    ...(request.actor ? { actor: request.actor } : {}),
+                    source: 'protocol.saveMetaItem',
+                    note: mode === 'draft' ? 'draft' : 'active',
+                });
                 return {
                     success: true,
                     version: result.version,
@@ -3081,6 +3412,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             err.status = 403;
             throw err;
         }
+        // ADR-0010 L3 — lock blocks publish too (publishing is a write).
+        const _publishLockErr = await this.assertLockAllowsWrite({
+            type: request.type,
+            name: request.name,
+            ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+            operation: 'publish',
+            ...(request.actor ? { actor: request.actor } : {}),
+            source: 'protocol.publishMetaItem',
+        });
+        if (_publishLockErr) throw _publishLockErr;
         await this.ensureOverlayIndex();
         const orgId = request.organizationId ?? null;
         const repo = this.getOverlayRepo(orgId);
@@ -3169,6 +3510,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             err.status = 403;
             throw err;
         }
+        // ADR-0010 L3 — lock blocks rollback (writes a new active row).
+        const _rollbackLockErr = await this.assertLockAllowsWrite({
+            type: request.type,
+            name: request.name,
+            ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+            operation: 'rollback',
+            ...(request.actor ? { actor: request.actor } : {}),
+            source: 'protocol.rollbackMetaItem',
+        });
+        if (_rollbackLockErr) throw _rollbackLockErr;
         await this.ensureOverlayIndex();
         const orgId = request.organizationId ?? null;
         const repo = this.getOverlayRepo(orgId);
@@ -3362,6 +3713,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 (err as any).status = 403;
                 throw err;
             }
+
+            // ADR-0010 L3 — lock blocks delete.
+            const lockErr = await this.assertLockAllowsDelete({
+                type: request.type,
+                name: request.name,
+                ...(request.organizationId ? { organizationId: request.organizationId } : {}),
+                ...(request.actor ? { actor: request.actor } : {}),
+                source: 'protocol.deleteMetaItem',
+            });
+            if (lockErr) throw lockErr;
         }
 
         const singularTypeForRepo = PLURAL_TO_SINGULAR[request.type] ?? request.type;
@@ -3434,6 +3795,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         // Best-effort registry refresh; next read fixes it anyway
                     }
                 }
+
+                // ADR-0010 — success audit (best-effort).
+                await this.recordMetadataAudit({
+                    type: request.type,
+                    name: request.name,
+                    organizationId: orgId,
+                    operation: 'delete',
+                    outcome: 'allowed',
+                    code: 'ok',
+                    ...(request.actor ? { actor: request.actor } : {}),
+                    source: 'protocol.deleteMetaItem',
+                    note: targetState,
+                });
 
                 return {
                     success: true,

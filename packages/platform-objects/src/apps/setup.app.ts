@@ -32,6 +32,9 @@ export const SETUP_APP: App = {
   icon: 'settings',
   active: true,
   isDefault: false,
+  // ADR-0010 — core admin UI must not be overlay-edited or deleted.
+  _lock: 'full',
+  _lockReason: 'Core admin UI shipped by @objectstack/platform-objects — see ADR-0010.',
   branding: {
     primaryColor: '#475569', // Slate-600 — neutral admin palette
   },

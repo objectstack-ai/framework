@@ -20,6 +20,9 @@ export const SysUser = ObjectSchema.create({
   icon: 'user',
   isSystem: true,
   managedBy: 'better-auth',
+  // ADR-0010 — identity table is managed by better-auth, schema must not drift.
+  _lock: 'full',
+  _lockReason: 'Identity table managed by better-auth — see ADR-0010.',
   description: 'User accounts for authentication',
   displayNameField: 'name',
   titleFormat: '{name}',

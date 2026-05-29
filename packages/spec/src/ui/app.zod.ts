@@ -23,6 +23,7 @@ import { SharingConfigSchema, EmbedConfigSchema } from './sharing.zod';
  * - 'Page Dashboard' (spaces)
  */
 import { lazySchema } from '../shared/lazy-schema';
+import { MetadataProtectionFields } from '../kernel/metadata-protection.zod';
 const BaseNavItemSchema = z.object({
   /** Unique identifier for the item */
   id: SnakeCaseIdentifierSchema.describe('Unique identifier for this navigation item (lowercase snake_case)'),
@@ -463,6 +464,9 @@ export const AppSchema = lazySchema(() => z.object({
 
   /** ARIA accessibility attributes */
   aria: AriaPropsSchema.optional().describe('ARIA accessibility attributes for the application'),
+
+  // ADR-0010 — metadata protection envelope (optional).
+  ...MetadataProtectionFields,
 }));
 
 /**

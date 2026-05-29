@@ -893,10 +893,13 @@ export class AuthManager {
 
       const { oauthProvider } = await import('@better-auth/oauth-provider');
       const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+      const uiBase = (this.config.uiBasePath ?? '/_console').replace(/\/$/, '');
       plugins.push(oauthProvider({
-        // Account SPA renders both pages — see apps/account.
-        loginPage: `${baseUrl}/_account/login`,
-        consentPage: `${baseUrl}/_account/oauth/consent`,
+        // Console SPA renders both pages (replaces the legacy Account SPA at
+        // /_account). Override `uiBasePath` in AuthConfig if Console is
+        // mounted elsewhere.
+        loginPage: `${baseUrl}${uiBase}/login`,
+        consentPage: `${baseUrl}${uiBase}/oauth/consent`,
         schema: buildOauthProviderPluginSchema(),
       }));
     }
@@ -912,8 +915,9 @@ export class AuthManager {
     if (enabled.deviceAuthorization) {
       const { deviceAuthorization } = await import('better-auth/plugins/device-authorization');
       const baseUrl = (this.config.baseUrl ?? '').replace(/\/$/, '');
+      const uiBase = (this.config.uiBasePath ?? '/_console').replace(/\/$/, '');
       plugins.push(deviceAuthorization({
-        verificationUri: `${baseUrl}/_account/auth/device`,
+        verificationUri: `${baseUrl}${uiBase}/auth/device`,
         schema: buildDeviceAuthorizationPluginSchema(),
       }));
     }

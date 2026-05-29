@@ -14,3 +14,4 @@
 
 export { SysMetadataObject, SysMetadataObject as SysMetadata } from './sys-metadata.object.js';
 export { SysMetadataHistoryObject } from './sys-metadata-history.object.js';
+export { SysMetadataAuditObject } from './sys-metadata-audit.object.js';

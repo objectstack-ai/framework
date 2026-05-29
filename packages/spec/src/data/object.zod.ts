@@ -12,6 +12,7 @@ import { ListViewSchema } from '../ui/view.zod';
  */
 import { ExpressionInputSchema , TemplateExpressionInputSchema } from '../shared/expression.zod';
 import { lazySchema } from '../shared/lazy-schema';
+import { MetadataProtectionFields } from '../kernel/metadata-protection.zod';
 export const ApiMethod = z.enum([
   'get', 'list',          // Read
   'create', 'update', 'delete', // Write
@@ -650,6 +651,9 @@ const ObjectSchemaBase = z.object({
    * include the action list without requiring downstream merge.
    */
   actions: z.array(ActionSchema).optional().describe('Actions associated with this object (auto-populated from top-level actions via objectName)'),
+
+  // ADR-0010 — metadata protection envelope (optional).
+  ...MetadataProtectionFields,
 });
 
 /**

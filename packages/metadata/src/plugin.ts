@@ -10,6 +10,7 @@ import type { MetadataPluginConfig } from '@objectstack/spec/kernel';
 import {
     SysMetadataObject,
     SysMetadataHistoryObject,
+    SysMetadataAuditObject,
 } from '@objectstack/platform-objects/metadata';
 
 // `SysMetadataObject` + `SysMetadataHistoryObject` are the customer overlay
@@ -20,9 +21,15 @@ import {
 // previously shipped `SysObject` / `SysView` / `SysFlow` / `SysAgent` /
 // `SysTool` projection objects were removed in 2026-05 (see ADR 0005
 // addendum); the projection pipeline was removed at the same time.
+//
+// `SysMetadataAuditObject` (ADR-0010) is the append-only audit trail for
+// metadata write decisions — provisioned alongside the storage tables so
+// `_lock` enforcement always has a place to record decisions, even when
+// the deployment skipped @objectstack/plugin-audit.
 const queryableMetadataObjects = [
     SysMetadataObject,
     SysMetadataHistoryObject,
+    SysMetadataAuditObject,
 ];
 
 // Subdirectory under `rootDir` reserved for the ADR-0008 repository's

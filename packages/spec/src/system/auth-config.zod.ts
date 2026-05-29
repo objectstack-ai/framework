@@ -250,6 +250,18 @@ export const AdvancedAuthConfigSchema = lazySchema(() => z.object({
 export const AuthConfigSchema = lazySchema(() => z.object({
   secret: z.string().optional().describe('Encryption secret'),
   baseUrl: z.string().optional().describe('Base URL for auth routes'),
+  /**
+   * Basename under which the auth UI SPA (Console) is mounted, used to
+   * construct absolute redirect URLs for OAuth/OIDC, device-authorization
+   * verification, and password-reset emails.
+   *
+   * Defaults to `/_console` (the standard Console mount point shipped by
+   * `@objectstack/console`). Override only if you host Console on a custom
+   * path. Trailing slashes are stripped.
+   */
+  uiBasePath: z.string().default('/_console').describe(
+    'Basename where the auth UI (Console) is mounted (default `/_console`)',
+  ),
   databaseUrl: z.string().optional().describe('Database connection string'),
   providers: z.array(AuthProviderConfigSchema).optional(),
   plugins: AuthPluginConfigSchema.optional(),

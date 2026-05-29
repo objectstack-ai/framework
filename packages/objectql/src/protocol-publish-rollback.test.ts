@@ -102,6 +102,7 @@ function makeStubEngine() {
             });
         },
         async insert(table: string, data: Record<string, unknown>) {
+            if (table === 'sys_metadata_audit') return { id: 'audit_skip' };
             if (table === 'sys_metadata_history') {
                 nextId += 1;
                 const h: HistoryRow = { id: `h_${nextId}`, ...(data as any) };

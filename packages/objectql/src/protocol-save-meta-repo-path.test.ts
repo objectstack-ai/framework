@@ -57,6 +57,7 @@ function makeStubEngine() {
             });
         },
         async insert(_t: string, data: Record<string, unknown>) {
+            if (_t === 'sys_metadata_audit') return { id: 'audit_skip' };
             nextId += 1;
             const row = { id: `r_${nextId}`, ...(data as any) } as Row;
             rows.set(keyOf(data), row);
