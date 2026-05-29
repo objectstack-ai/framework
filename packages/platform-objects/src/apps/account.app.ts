@@ -45,21 +45,20 @@ export const ACCOUNT_APP: App = {
   // manage their own 2FA / linked accounts / personal OAuth apps. RLS on
   // each object scopes rows to the caller.
   navigation: [
-    // Profile is the canonical landing — name, email, avatar, verification
-    // status. Uses `type: 'object' + recordId: '{current_user_id}'` so it
-    // resolves to the sys_user record page; the slotted SysUserDetailPage
-    // (kind: 'slotted', isDefault: true) tailors that page into a proper
-    // self-service profile (highlight chips, grouped detail sections, no
-    // Discussion thread) without losing the record-context features
-    // (related lists, header actions, RLS-aware edit).
+    // Profile is the canonical landing — a hand-written React settings card
+    // (Vercel/Linear style) registered in the Console SPA as
+    // `account:profile_card`. The renderer reads the current user via
+    // `useAuth()` and writes via `client.auth.updateUser`, so there is no
+    // sys_user record context here — this is intentional. The admin-facing
+    // sys_user record page (see `pages/sys-user.page.ts`) stays focused on
+    // record browsing (Identity/Audit fields, related lists, admin actions)
+    // and is reached through Setup, never from the Account App.
     {
       id: 'nav_account_profile',
-      type: 'object',
+      type: 'component',
       label: 'Profile',
-      objectName: 'sys_user',
-      recordId: '{current_user_id}',
+      componentRef: 'account:profile_card',
       icon: 'user-circle',
-      requiresObject: 'sys_user',
     },
 
     // --- Inbox & work assigned to me -----------------------------------

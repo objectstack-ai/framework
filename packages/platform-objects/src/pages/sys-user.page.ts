@@ -5,9 +5,14 @@ import type { Page } from '@objectstack/spec/ui';
 /**
  * sys_user — Record Detail Page (slotted, default for ALL sys_user records)
  *
- * Tailors the synthesized admin form into a layout that works for both:
- *   • the end user landing on their own profile from the Account App, and
- *   • an admin opening someone else's user record from Setup.
+ * **Audience**: admins browsing user records from Setup.
+ *
+ * The Account App's "Profile" entry no longer routes here — it points at
+ * the `account:profile_card` Console component for a settings-form-style
+ * personal profile. This page therefore optimizes for the admin
+ * use case: scanning a user's signals (email/verification/2FA/role),
+ * reviewing related sessions/orgs/oauth/api-keys, and triggering
+ * admin actions (ban / impersonate / set_role).
  *
  * Strategy
  * --------
