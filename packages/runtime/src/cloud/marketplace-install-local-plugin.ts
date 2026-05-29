@@ -45,6 +45,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFile
 import { join, resolve } from 'node:path';
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { resolveCloudUrl } from './cloud-url.js';
+import { resolveMarketplacePublicBaseUrl } from './marketplace-public-url.js';
 
 const ROUTE_BASE = '/api/v1/marketplace/install-local';
 const DEFAULT_DIR = '.objectstack/installed-packages';
@@ -192,24 +193,61 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
             return c.json({ success: false, error: { code: 'bad_request', message: 'packageId is required.' } }, 400);
         }
 
-        // 1. Fetch manifest snapshot from cloud
+        // 1. Fetch manifest snapshot — prefer public R2 fast-path so
+        //    install works even when cloud is asleep or down. Fall back
+        //    to cloud on miss/error.
         let payload: any;
-        try {
-            const url = `${this.cloudUrl}/api/v1/marketplace/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest`;
-            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
-            if (!resp.ok) {
-                const text = await resp.text().catch(() => '');
+        const publicBase = resolveMarketplacePublicBaseUrl();
+        const fetchAttempts: { label: string; url: string }[] = [];
+        if (publicBase) {
+            fetchAttempts.push({
+                label: 'public-r2',
+                url: `${publicBase}/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest.json`,
+            });
+        }
+        fetchAttempts.push({
+            label: 'cloud',
+            url: `${this.cloudUrl}/api/v1/marketplace/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest`,
+        });
+
+        let lastErrStatus = 0;
+        let lastErrText = '';
+        for (const attempt of fetchAttempts) {
+            try {
+                const resp = await fetch(attempt.url, { headers: { 'Accept': 'application/json' } });
+                if (!resp.ok) {
+                    lastErrStatus = resp.status;
+                    lastErrText = (await resp.text().catch(() => '')).slice(0, 200);
+                    // 404 from public R2 is not fatal — fall through to cloud.
+                    if (attempt.label === 'public-r2' && resp.status === 404) {
+                        ctx.logger?.info?.(`[MarketplaceInstallLocal] public-r2 miss for ${packageId}@${versionId}, falling back to cloud`);
+                        continue;
+                    }
+                    if (attempt.label === 'public-r2' && resp.status >= 500) {
+                        ctx.logger?.warn?.(`[MarketplaceInstallLocal] public-r2 ${resp.status}, falling back to cloud`);
+                        continue;
+                    }
+                    break; // cloud non-ok → surface error
+                }
+                payload = await resp.json();
+                lastErrStatus = 0;
+                break;
+            } catch (err: any) {
+                if (attempt.label === 'public-r2') {
+                    ctx.logger?.warn?.(`[MarketplaceInstallLocal] public-r2 fetch error: ${err?.message ?? err}, falling back to cloud`);
+                    continue;
+                }
                 return c.json({
                     success: false,
-                    error: { code: 'cloud_fetch_failed', message: `Cloud returned ${resp.status}: ${text.slice(0, 200)}` },
-                }, resp.status === 404 ? 404 : 502);
+                    error: { code: 'cloud_fetch_failed', message: err?.message ?? String(err) },
+                }, 502);
             }
-            payload = await resp.json();
-        } catch (err: any) {
+        }
+        if (!payload) {
             return c.json({
                 success: false,
-                error: { code: 'cloud_fetch_failed', message: err?.message ?? String(err) },
-            }, 502);
+                error: { code: 'cloud_fetch_failed', message: `Cloud returned ${lastErrStatus}: ${lastErrText}` },
+            }, lastErrStatus === 404 ? 404 : 502);
         }
 
         const data = payload?.data ?? payload;

@@ -27,6 +27,10 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import { resolveCloudUrl } from './cloud-url.js';
+import {
+    resolveMarketplacePublicBaseUrl,
+    publicMarketplaceKeyForApiPath,
+} from './marketplace-public-url.js';
 
 const MARKETPLACE_PREFIX = '/api/v1/marketplace';
 
@@ -130,17 +134,28 @@ export interface MarketplaceProxyPluginConfig {
      * Override the LRU upper bound. Defaults to 200 entries.
      */
     cacheMaxEntries?: number;
+    /**
+     * Public R2 base URL for marketplace snapshots. When set, GETs for
+     * snapshot-backed paths (`/packages`, `/packages/:id`,
+     * `/packages/:id/versions/:vid/manifest`) are fetched directly from
+     * R2 (CF edge) — bypassing the cloud control plane entirely.
+     * Defaults to the value of OS_MARKETPLACE_PUBLIC_BASE_URL. Empty
+     * string disables the public fast-path (legacy cloud-proxy only).
+     */
+    publicMarketplaceBaseUrl?: string;
 }
 
 export class MarketplaceProxyPlugin implements Plugin {
     readonly name = 'com.objectstack.runtime.marketplace-proxy';
-    readonly version = '1.0.0';
+    readonly version = '1.1.0';
 
     private readonly cloudUrl: string;
+    private readonly publicBaseUrl: string;
     private readonly cache: LruTtlCache | null;
 
     constructor(config: MarketplaceProxyPluginConfig = {}) {
         this.cloudUrl = resolveCloudUrl(config.controlPlaneUrl);
+        this.publicBaseUrl = resolveMarketplacePublicBaseUrl(config.publicMarketplaceBaseUrl);
 
         const envFlag = (process.env.OS_MARKETPLACE_CACHE ?? '').trim().toLowerCase();
         const envDisabled = ['off', 'false', '0', 'no', 'disable', 'disabled'].includes(envFlag);
@@ -170,7 +185,12 @@ export class MarketplaceProxyPlugin implements Plugin {
 
             const rawApp = httpServer.getRawApp();
             const cloudUrl = this.cloudUrl;
+            const publicBaseUrl = this.publicBaseUrl;
             const cache = this.cache;
+
+            if (publicBaseUrl) {
+                ctx.logger?.info?.(`[MarketplaceProxyPlugin] public R2 fast-path enabled → ${publicBaseUrl}`);
+            }
 
             const handler = async (c: any, next: any) => {
                 if (!cloudUrl) {
@@ -191,6 +211,24 @@ export class MarketplaceProxyPlugin implements Plugin {
                     if (incomingUrl.pathname.startsWith(`${MARKETPLACE_PREFIX}/install-local`)) {
                         return next();
                     }
+
+                    const method = String(c.req.method ?? 'GET').toUpperCase();
+
+                    // ── Public R2 fast-path ─────────────────────────
+                    // When OS_MARKETPLACE_PUBLIC_BASE_URL is configured,
+                    // GETs for snapshot-backed paths fetch directly from
+                    // R2 → CF edge cache. This skips the cloud control
+                    // plane entirely so marketplace browse + install
+                    // work even when cloud is asleep or completely down.
+                    if (publicBaseUrl && (method === 'GET' || method === 'HEAD')) {
+                        const r2Resp = await tryPublicMarketplaceFetch(
+                            publicBaseUrl, incomingUrl, method, c.req.header('accept'),
+                            ctx.logger,
+                        );
+                        if (r2Resp) return r2Resp;
+                        // Fall through on miss / error to the cloud path.
+                    }
+
                     // Preserve the full /api/v1/marketplace/... path on cloud.
                     const target = `${cloudUrl}${incomingUrl.pathname}${incomingUrl.search}`;
 
@@ -198,7 +236,6 @@ export class MarketplaceProxyPlugin implements Plugin {
                     // do NOT proxy POST / PUT / DELETE here — those would
                     // need credentialled cloud auth which the tenant runtime
                     // does not carry.
-                    const method = String(c.req.method ?? 'GET').toUpperCase();
                     if (method !== 'GET' && method !== 'HEAD') {
                         return c.json({
                             success: false,
@@ -294,6 +331,116 @@ export class MarketplaceProxyPlugin implements Plugin {
             ctx.logger?.info?.(`[MarketplaceProxyPlugin] mounted at ${MARKETPLACE_PREFIX}/* → ${cloudUrl || '(unconfigured)'} (cache=${this.cache ? 'on' : 'off'})`);
         });
     };
+}
+
+// ---------------------------------------------------------------------------
+// Public R2 fast-path (module-private)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a marketplace API path from the public R2 base URL and return
+ * the response shaped exactly like the cloud API endpoint would. The
+ * snapshots are already in `{ success: true, data: ... }` shape so for
+ * direct lookups we stream bytes verbatim. The list endpoint applies
+ * query-string filters (q / category / limit / offset) client-side
+ * from the full snapshot.
+ *
+ * Returns `null` for any of:
+ *   - path is not snapshot-backed (e.g. featured / categories / etc.)
+ *   - R2 returned 404 (snapshot not yet generated for this id)
+ *   - network error fetching from R2
+ *
+ * On `null`, the caller falls back to the cloud proxy path.
+ */
+async function tryPublicMarketplaceFetch(
+    publicBaseUrl: string,
+    incomingUrl: URL,
+    method: string,
+    acceptHeader: string | undefined,
+    logger: any,
+): Promise<Response | null> {
+    const key = publicMarketplaceKeyForApiPath(incomingUrl.pathname);
+    if (!key) return null;
+
+    const target = `${publicBaseUrl}/${key}`;
+    let resp: Response;
+    try {
+        resp = await fetch(target, {
+            method: 'GET',
+            headers: {
+                'Accept': acceptHeader || 'application/json',
+                'User-Agent': `objectos-marketplace-proxy/public-r2`,
+            },
+        });
+    } catch (err: any) {
+        logger?.warn?.(`[MarketplaceProxyPlugin] public R2 fetch failed (${target}): ${err?.message ?? err}`);
+        return null;
+    }
+    if (resp.status === 404) return null;
+    if (!resp.ok) {
+        logger?.warn?.(`[MarketplaceProxyPlugin] public R2 ${target} returned ${resp.status} — falling back to cloud`);
+        return null;
+    }
+
+    // List endpoint: apply optional q/category/limit/offset filters on
+    // the full snapshot. Detail + manifest snapshots stream verbatim.
+    const isList = key === 'packages.json';
+    const hasFilters = isList && (
+        incomingUrl.searchParams.has('q') ||
+        incomingUrl.searchParams.has('category') ||
+        incomingUrl.searchParams.has('limit') ||
+        incomingUrl.searchParams.has('offset')
+    );
+
+    if (!hasFilters) {
+        // Verbatim passthrough — preserve cache headers from R2 / CF.
+        const headers = new Headers();
+        const ct = resp.headers.get('content-type') ?? 'application/json; charset=utf-8';
+        headers.set('content-type', ct);
+        const cc = resp.headers.get('cache-control');
+        if (cc) headers.set('cache-control', cc);
+        const etag = resp.headers.get('etag');
+        if (etag) headers.set('etag', etag);
+        headers.set('x-cache', 'PUBLIC-R2');
+        const body = method === 'HEAD' ? null : resp.body;
+        return new Response(body, { status: 200, headers });
+    }
+
+    // Filtered list — parse, filter, re-serialize.
+    let snapshot: any;
+    try { snapshot = await resp.json(); }
+    catch (err: any) {
+        logger?.warn?.(`[MarketplaceProxyPlugin] public R2 list snapshot parse failed: ${err?.message ?? err}`);
+        return null;
+    }
+    const items: any[] = Array.isArray(snapshot?.data?.items) ? snapshot.data.items : [];
+
+    const q = (incomingUrl.searchParams.get('q') ?? '').trim().toLowerCase();
+    const category = (incomingUrl.searchParams.get('category') ?? '').trim();
+    const limit = Math.min(Math.max(Number(incomingUrl.searchParams.get('limit') ?? 50), 1), 100);
+    const offset = Math.max(Number(incomingUrl.searchParams.get('offset') ?? 0), 0);
+
+    let filtered = items;
+    if (q) {
+        filtered = filtered.filter((r) => {
+            const dn = String(r?.display_name ?? '').toLowerCase();
+            const mid = String(r?.manifest_id ?? '').toLowerCase();
+            return dn.includes(q) || mid.includes(q);
+        });
+    }
+    if (category) {
+        filtered = filtered.filter((r) => String(r?.category ?? '') === category);
+    }
+    const total = filtered.length;
+    const page = filtered.slice(offset, offset + limit);
+    const body = JSON.stringify({ success: true, data: { items: page, total, limit, offset } });
+
+    const headers = new Headers({
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'public, max-age=30',
+        'x-cache': 'PUBLIC-R2-FILTERED',
+    });
+    return new Response(method === 'HEAD' ? null : body, { status: 200, headers });
 }
 
 // ---------------------------------------------------------------------------
