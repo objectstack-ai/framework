@@ -1902,6 +1902,45 @@ export class RestServer {
             },
         });
 
+        // GET /meta/:type/:name/audit — ADR-0010 §3.6 / Phase 4.1.
+        // Compliance trail for the metadata-protection layer: returns
+        // recent sys_metadata_audit rows (save/publish/rollback/delete/
+        // reset attempts, both allowed and denied) so Studio's "审计
+        // 日志 / Audit log" tab can show who tried what and whether
+        // a lock blocked it. Empty array on environments where the
+        // table is not yet provisioned.
+        this.routeManager.register({
+            method: 'GET',
+            path: `${metaPath}/:type/:name/audit`,
+            handler: async (req: any, res: any) => {
+                try {
+                    const environmentId = isScoped ? req.params?.environmentId : undefined;
+                    const p = await this.resolveProtocol(environmentId, req);
+                    if (typeof (p as any).auditMetaItem !== 'function') {
+                        res.json({ events: [] });
+                        return;
+                    }
+                    const limit = req.query?.limit !== undefined
+                        ? Number(req.query.limit)
+                        : undefined;
+                    const result = await (p as any).auditMetaItem({
+                        type: req.params.type,
+                        name: req.params.name,
+                        ...(environmentId ? { environmentId } : {}),
+                        ...(limit !== undefined && Number.isFinite(limit) ? { limit } : {}),
+                    });
+                    res.json(result);
+                } catch (error: any) {
+                    logError("[REST] Unhandled error:", error);
+                    sendError(res, error);
+                }
+            },
+            metadata: {
+                summary: 'List protection-audit events for a metadata item',
+                tags: ['metadata'],
+            },
+        });
+
         // POST /meta/:type/:name/publish — promote the pending draft
         // overlay to live. 404 [no_draft] when nothing to publish.
         this.routeManager.register({

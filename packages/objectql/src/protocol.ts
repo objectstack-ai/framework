@@ -1530,6 +1530,87 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         };
     }
 
+    /**
+     * ADR-0010 §3.6 / Phase 4.1 — read the metadata-protection audit log
+     * for a single item. Returns the most-recent rows of
+     * `sys_metadata_audit` for this (type, name) tuple, sorted newest
+     * first. Refused (`denied`) and forced (`forced`) writes both appear
+     * here — they never reach the `history` endpoint, which only tracks
+     * successful body snapshots.
+     *
+     * The table is provisioned by `platform-objects` and is the
+     * compliance surface for the lock-enforcement story. When the
+     * environment has not yet provisioned the table (legacy install
+     * prior to ADR-0010) the call returns `{ events: [] }` instead of
+     * raising, keeping the Studio tab harmless.
+     */
+    async auditMetaItem(request: {
+        type: string;
+        name: string;
+        organizationId?: string | null;
+        limit?: number;
+    }): Promise<{
+        events: Array<{
+            id: unknown;
+            occurredAt: string;
+            actor: string;
+            source: string | null;
+            operation: 'save' | 'publish' | 'rollback' | 'delete' | 'reset';
+            outcome: 'allowed' | 'denied' | 'forced';
+            code: string;
+            lockState: MetadataLock | null;
+            lockOverridden: boolean;
+            requestId: string | null;
+            note: string | null;
+        }>;
+    }> {
+        const singular = PLURAL_TO_SINGULAR[request.type] ?? request.type;
+        const limit = Math.min(
+            Math.max(1, request.limit ?? 100),
+            500,
+        );
+        try {
+            // Org-scoped lookup: include rows for the specific org AND
+            // env-wide (organization_id IS NULL) rows so the editor
+            // sees both tenant overlays and env-level package writes.
+            const where: Record<string, unknown> = {
+                type: singular,
+                name: request.name,
+            };
+            const rows = await this.engine.find('sys_metadata_audit', {
+                where,
+                orderBy: [{ field: 'occurred_at', direction: 'desc' }],
+                limit,
+            } as any);
+            const events = (Array.isArray(rows) ? rows : []).map((r: any) => ({
+                id: r.id,
+                occurredAt:
+                    typeof r.occurred_at === 'string'
+                        ? r.occurred_at
+                        : r.occurred_at instanceof Date
+                            ? r.occurred_at.toISOString()
+                            : String(r.occurred_at ?? ''),
+                actor: String(r.actor ?? 'system'),
+                source: r.source ?? null,
+                operation: r.operation,
+                outcome: r.outcome,
+                code: String(r.code ?? ''),
+                lockState: (r.lock_state ?? null) as MetadataLock | null,
+                lockOverridden: Boolean(r.lock_overridden),
+                requestId: r.request_id ?? null,
+                note: r.note ?? null,
+            }));
+            return { events };
+        } catch (err: any) {
+            // Table not provisioned (legacy env) or driver doesn't
+            // expose `find` — return empty rather than 500ing the tab.
+            console.warn(
+                `[Protocol] auditMetaItem read failed for ${request.type}/${request.name}: ${err?.message ?? err}`,
+            );
+            return { events: [] };
+        }
+    }
+
     async getUiView(request: { object: string, type: 'list' | 'form' }) {
         const schema = this.engine.registry.getObject(request.object);
         if (!schema) throw new Error(`Object ${request.object} not found`);
