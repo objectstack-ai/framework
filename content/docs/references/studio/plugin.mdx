@@ -100,8 +100,8 @@ modes: ['preview', 'design', 'data'],
 ## TypeScript Usage
 
 ```typescript
-import { ActionContribution, ActionLocation, ActivationEvent, CommandContribution, MetadataIconContribution, MetadataViewerContribution, PanelContribution, PanelLocation, SidebarGroupContribution, StudioPluginContributions, StudioPluginManifest, ViewMode } from '@objectstack/spec/studio';
-import type { ActionContribution, ActionLocation, ActivationEvent, CommandContribution, MetadataIconContribution, MetadataViewerContribution, PanelContribution, PanelLocation, SidebarGroupContribution, StudioPluginContributions, StudioPluginManifest, ViewMode } from '@objectstack/spec/studio';
+import { ActionContribution, ActivationEvent, CommandContribution, MetadataIconContribution, MetadataViewerContribution, PanelContribution, PanelLocation, SidebarGroupContribution, StudioPluginContributions, StudioPluginManifest, ViewMode } from '@objectstack/spec/studio';
+import type { ActionContribution, ActivationEvent, CommandContribution, MetadataIconContribution, MetadataViewerContribution, PanelContribution, PanelLocation, SidebarGroupContribution, StudioPluginContributions, StudioPluginManifest, ViewMode } from '@objectstack/spec/studio';
 
 // Validate data
 const result = ActionContribution.parse(data);
@@ -120,17 +120,6 @@ const result = ActionContribution.parse(data);
 | **icon** | `string` | optional | Lucide icon name |
 | **location** | `Enum<'toolbar' \| 'contextMenu' \| 'commandPalette'>` | ✅ | UI location |
 | **metadataTypes** | `string[]` | ✅ | Applicable metadata types |
-
-
----
-
-## ActionLocation
-
-### Allowed Values
-
-* `toolbar`
-* `contextMenu`
-* `commandPalette`
 
 
 ---

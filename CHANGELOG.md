@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `record` form field type (ADR-0014)
+
+`Object.fields` (and other `Record<string, X>` properties) can now be
+edited as first-class form fields instead of leaking through as raw
+JSON. New `'record'` entry in the `FieldType` enum, complementary
+`keyField` config on `FormFieldSchema`, native `RecordField` engine in
+the Studio `SchemaForm`, and a registered `'airtable'` widget powering
+the Airtable-style fields editor.
+
+The hand-crafted JSON Schema for `object.properties.fields` in
+`packages/objectql/src/protocol.ts` no longer lies about the shape
+(`type: 'object', additionalProperties: …` instead of `type: 'array'`).
+Existing array-shaped drafts are tolerated on read; the first save
+migrates them to the canonical Record.
+
+See [`docs/adr/0014-record-form-field-type.md`](docs/adr/0014-record-form-field-type.md).
+
 ### Breaking — `@objectstack/plugin-security` org-scoping split into `@objectstack/plugin-org-scoping`
 
 **Removed from `plugin-security`**: the `multiTenant` constructor option,
