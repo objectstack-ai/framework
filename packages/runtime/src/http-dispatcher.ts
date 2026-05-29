@@ -3,7 +3,7 @@
 import { ObjectKernel, getEnv, resolveLocale } from '@objectstack/core';
 import { readEnvWithDeprecation } from '@objectstack/types';
 import { CoreServiceName } from '@objectstack/spec/system';
-import { pluralToSingular } from '@objectstack/spec/shared';
+import { pluralToSingular, PLURAL_TO_SINGULAR } from '@objectstack/spec/shared';
 import type { ExecutionContext } from '@objectstack/spec/kernel';
 import type { KernelManager } from './cloud/kernel-manager.js';
 
@@ -850,7 +850,7 @@ export class HttpDispatcher {
                 if (protocol && typeof protocol.saveMetaItem === 'function') {
                     try {
                         const organizationId = await this.resolveActiveOrganizationId(_context);
-                        const result = await protocol.saveMetaItem({ type, name, item: body, organizationId });
+                        const result = await protocol.saveMetaItem({ type, name, item: body, organizationId, ...(packageId ? { packageId } : {}) });
                         return { handled: true, response: this.success(result) };
                     } catch (e: any) {
                         return { handled: true, response: this.error(e.message, 400) };
@@ -1359,6 +1359,17 @@ export class HttpDispatcher {
                 return { handled: true, response: this.error('Metadata service not available', 503) };
             }
 
+            // GET /packages/:id/export → assemble a portable manifest from
+            // sys_metadata overlay rows bound to this package (offline export).
+            if (parts.length === 2 && parts[1] === 'export' && m === 'GET') {
+                const id = decodeURIComponent(parts[0]);
+                const manifest = await this.assemblePackageManifest(id, registry, _context);
+                if (!manifest) {
+                    return { handled: true, response: this.error(`Package '${id}' not found`, 404) };
+                }
+                return { handled: true, response: this.success(manifest) };
+            }
+
             // GET /packages/:id → get package
             if (parts.length === 1 && m === 'GET') {
                 const id = decodeURIComponent(parts[0]);
@@ -1379,6 +1390,92 @@ export class HttpDispatcher {
         }
 
         return { handled: false };
+    }
+
+    /**
+     * Assemble a portable, offline-installable package manifest from the
+     * `sys_metadata` overlay rows bound to `packageId`.
+     *
+     * The resulting shape mirrors what `marketplace-install-local` →
+     * `manifestService.register()` → `engine.registerApp()` consumes:
+     *   `{ id, name, version, objects:[…], views:[…], flows:[…], … }`
+     * where each category key is the PLURAL manifest name and its value is
+     * an array of clean metadata bodies (provenance decorations stripped).
+     *
+     * Only the metadata categories that `registerApp` can actually consume
+     * are exported. `datasources` and `emailTemplates` are intentionally
+     * excluded (not registered by the import path). `tools` / `skills` are
+     * not yet round-tripped by the local install path.
+     *
+     * @returns the manifest object, or `null` if the package id is unknown
+     *          AND has no overlay-authored metadata.
+     */
+    private async assemblePackageManifest(
+        packageId: string,
+        registry: any,
+        context: HttpProtocolContext,
+    ): Promise<Record<string, any> | null> {
+        const protocol = await this.resolveService('protocol');
+        if (!protocol || typeof protocol.getMetaItems !== 'function') return null;
+
+        const organizationId = await this.resolveActiveOrganizationId(context);
+
+        // Provenance / overlay-bookkeeping keys that must never leak into a
+        // portable manifest. Stripped at top level only — nested field bodies
+        // are left untouched.
+        const PROVENANCE_KEYS = new Set([
+            '_packageId', '_packageVersionId', '_provenance', '_state',
+            '_version', '_organizationId', '_source', '_id', '_rowId',
+        ]);
+        const clean = (item: any) => {
+            if (!item || typeof item !== 'object') return item;
+            const out: Record<string, any> = {};
+            for (const [k, v] of Object.entries(item)) {
+                if (k.startsWith('_') || PROVENANCE_KEYS.has(k)) continue;
+                out[k] = v;
+            }
+            return out;
+        };
+
+        // Categories the local-install register path understands. Excludes
+        // datasources / emailTemplates (not consumed by registerApp).
+        const exportPluralKeys = Object.keys(PLURAL_TO_SINGULAR).filter(
+            (k) => k !== 'datasources' && k !== 'emailTemplates',
+        );
+
+        const manifest: Record<string, any> = {};
+        let total = 0;
+        for (const plural of exportPluralKeys) {
+            const singular = PLURAL_TO_SINGULAR[plural];
+            let items: any[] = [];
+            try {
+                // getMetaItems applies the packageId filter at the
+                // registry/overlay query level, so the returned items are
+                // already scoped to this package — no client-side re-filter.
+                const res = await protocol.getMetaItems({ type: singular, packageId, organizationId });
+                items = Array.isArray(res?.items) ? res.items : [];
+            } catch {
+                // Unknown/unsupported type for this runtime — skip.
+                continue;
+            }
+            if (items.length === 0) continue;
+            manifest[plural] = items.map(clean);
+            total += items.length;
+        }
+
+        const pkg = (() => {
+            try { return registry?.getPackage?.(packageId); } catch { return undefined; }
+        })();
+
+        if (total === 0 && !pkg) return null;
+
+        manifest.id = packageId;
+        manifest.name = pkg?.manifest?.name ?? pkg?.name ?? packageId;
+        manifest.version = pkg?.manifest?.version ?? pkg?.version ?? '1.0.0';
+        if (pkg?.manifest?.label ?? pkg?.label) {
+            manifest.label = pkg?.manifest?.label ?? pkg?.label;
+        }
+        return manifest;
     }
 
     /**

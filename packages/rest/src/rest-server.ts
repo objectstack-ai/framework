@@ -1780,6 +1780,14 @@ export class RestServer {
                         ? ['true', '1', 'yes', 'on'].includes(forceRaw.toLowerCase())
                         : !!forceRaw;
 
+                    // Software-package binding (Studio package authoring).
+                    // `?package=<id>` binds the saved row to that package
+                    // (sys_metadata.package_id). 'all'/empty = env-local overlay.
+                    const packageRaw = req.query?.package;
+                    const packageId = typeof packageRaw === 'string' && packageRaw && packageRaw !== 'all'
+                        ? packageRaw
+                        : undefined;
+
                     const result = await p.saveMetaItem({
                         type: req.params.type,
                         name: req.params.name,
@@ -1788,6 +1796,7 @@ export class RestServer {
                         ...(parentVersion !== undefined ? { parentVersion } : {}),
                         ...(actor ? { actor } : {}),
                         ...(force ? { force: true } : {}),
+                        ...(packageId ? { packageId } : {}),
                         ...((typeof req.query?.mode === 'string'
                             && req.query.mode.toLowerCase() === 'draft')
                             ? { mode: 'draft' } : {}),
@@ -2125,6 +2134,11 @@ export class RestServer {
                         ?? req.user?.id ?? req.userId;
                     const actor = typeof actorHeader === 'string' ? actorHeader : undefined;
 
+                    const packageRaw = req.query?.package;
+                    const packageId = typeof packageRaw === 'string' && packageRaw && packageRaw !== 'all'
+                        ? packageRaw
+                        : undefined;
+
                     const result = await p.saveMetaItem({
                         type: req.params.type,
                         name: compoundName,
@@ -2132,6 +2146,7 @@ export class RestServer {
                         ...(environmentId ? { environmentId } : {}),
                         ...(parentVersion !== undefined ? { parentVersion } : {}),
                         ...(actor ? { actor } : {}),
+                        ...(packageId ? { packageId } : {}),
                     } as any);
                     res.json(result);
                 } catch (error: any) {

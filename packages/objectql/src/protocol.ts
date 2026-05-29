@@ -1138,13 +1138,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     state: 'active',
                     organization_id: oid,
                 };
-                if (packageId) whereClause._packageId = packageId;
+                if (packageId) whereClause.package_id = packageId;
                 let rs = await this.engine.find('sys_metadata', { where: whereClause });
                 if ((!rs || rs.length === 0)) {
                     const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                     if (alt) {
                         const altWhere: Record<string, unknown> = { type: alt, state: 'active', organization_id: oid };
-                        if (packageId) altWhere._packageId = packageId;
+                        if (packageId) altWhere.package_id = packageId;
                         rs = await this.engine.find('sys_metadata', { where: altWhere });
                     }
                 }
@@ -1170,6 +1170,13 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                         ? JSON.parse(record.metadata)
                         : record.metadata;
                     if (data && typeof data === 'object' && 'name' in data) {
+                        // Surface the persisted software-package binding so the
+                        // sidebar package filter and provenance classification
+                        // see overlay rows the same way they see registry items.
+                        const recPkg = (record as { package_id?: string | null }).package_id ?? undefined;
+                        if (recPkg && (data as any)._packageId === undefined) {
+                            (data as any)._packageId = recPkg;
+                        }
                         byName.set(data.name, data);
                     }
                     // Only hydrate the global registry for unscoped calls —
@@ -1283,6 +1290,12 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 item = typeof record.metadata === 'string'
                     ? JSON.parse(record.metadata)
                     : record.metadata;
+                // Surface the persisted software-package binding (parity with
+                // the list path in getMetaItems) so provenance/UI can read it.
+                const recPkg = (record as { package_id?: string | null }).package_id ?? undefined;
+                if (recPkg && item && typeof item === 'object' && (item as any)._packageId === undefined) {
+                    (item as any)._packageId = recPkg;
+                }
             }
         } catch {
             // DB not available — fall through to registry / MetadataService
@@ -3103,7 +3116,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         }
     }
 
-    async saveMetaItem(request: { type: string, name: string, item?: any, organizationId?: string, parentVersion?: string | null, actor?: string, force?: boolean, mode?: 'draft' | 'publish' }) {
+    async saveMetaItem(request: { type: string, name: string, item?: any, organizationId?: string, parentVersion?: string | null, actor?: string, force?: boolean, mode?: 'draft' | 'publish', packageId?: string | null }) {
         if (!request.item) {
             throw new Error('Item data is required');
         }
@@ -3342,6 +3355,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     source: 'protocol.saveMetaItem',
                     intent,
                     state: mode === 'draft' ? 'draft' : 'active',
+                    ...(request.packageId !== undefined ? { packageId: request.packageId } : {}),
                 });
                 // Persistence succeeded — NOW it's safe to mutate the
                 // in-memory object registry. If put() had thrown, the
@@ -3415,12 +3429,18 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             });
 
             if (existing) {
-                await this.engine.update('sys_metadata', {
+                const updateRow: Record<string, unknown> = {
                     metadata: JSON.stringify(request.item),
                     updated_at: now,
                     version: (existing.version || 0) + 1,
                     state: 'active',
-                }, {
+                };
+                // Preserve an existing non-null package binding; only fill when
+                // unset (mirror of SysMetadataRepository.put semantics).
+                const existingPkg = (existing as { package_id?: string | null }).package_id ?? null;
+                const nextPkg = existingPkg ?? request.packageId ?? null;
+                if (nextPkg !== null) updateRow.package_id = nextPkg;
+                await this.engine.update('sys_metadata', updateRow, {
                     where: { id: existing.id }
                 });
             } else {
@@ -3444,6 +3464,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                     updated_at: now,
                     organization_id: orgId,
                 };
+                if (request.packageId) row.package_id = request.packageId;
                 await this.engine.insert('sys_metadata', row);
             }
 

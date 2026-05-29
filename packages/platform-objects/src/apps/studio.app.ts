@@ -77,6 +77,13 @@ export const STUDIO_APP: App = {
           componentRef: 'metadata:directory',
           icon: 'layers',
         },
+        {
+          id: 'nav_packages',
+          type: 'component',
+          label: 'Packages',
+          componentRef: 'developer:packages',
+          icon: 'package',
+        },
       ],
     },
     {

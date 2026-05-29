@@ -179,6 +179,13 @@ export interface PutOptions {
   source?: string;
   /** Two-tier authorization intent; defaults to `override-artifact`. */
   intent?: MetadataWriteIntent;
+  /**
+   * Software-package id to bind this metadata row to (`sys_metadata.package_id`).
+   * Set when authoring inside a Studio package workspace. On create the row is
+   * stamped with this id; on update an existing non-null binding is preserved
+   * (never silently re-bound). Omit/undefined for env-local overlays.
+   */
+  packageId?: string | null;
 }
 
 export interface PutResult {

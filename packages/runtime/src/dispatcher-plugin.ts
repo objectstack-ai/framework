@@ -560,6 +560,15 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                 }
             });
 
+            server.get(`${prefix}/packages/:id/export`, async (req: any, res: any) => {
+                try {
+                    const result = await dispatcher.handlePackages(`/${req.params.id}/export`, 'GET', {}, req.query, { request: req });
+                    sendResult(result, res);
+                } catch (err: any) {
+                    errorResponse(err, res);
+                }
+            });
+
             server.get(`${prefix}/packages/:id`, async (req: any, res: any) => {
                 try {
                     const result = await dispatcher.handlePackages(`/${req.params.id}`, 'GET', {}, req.query, { request: req });

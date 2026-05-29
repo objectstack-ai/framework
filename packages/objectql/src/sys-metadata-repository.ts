@@ -352,6 +352,16 @@ export class SysMetadataRepository implements MetadataRepository {
         version,
         updated_at: now,
       };
+      // Software-package binding (Studio package authoring workspace).
+      // Create: stamp with the requested package (or null). Update: preserve
+      // an existing non-null binding so an edit made with a different package
+      // selected never silently re-binds the row; only fill a null binding.
+      if (existing) {
+        const existingPkg = (existing as { package_id?: string | null }).package_id ?? null;
+        parentRowData.package_id = existingPkg ?? opts.packageId ?? null;
+      } else {
+        parentRowData.package_id = opts.packageId ?? null;
+      }
       if (existing) {
         const existingId = (existing as { id?: string }).id;
         if (existingId === undefined) {

@@ -178,9 +178,6 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
     };
 
     private handleInstall = async (c: any, ctx: PluginContext): Promise<Response> => {
-        if (!this.cloudUrl) {
-            return c.json({ success: false, error: { code: 'marketplace_unavailable', message: 'OS_CLOUD_URL not configured.' } }, 503);
-        }
         const userId = await this.requireAuthenticatedUser(c, ctx);
         if (!userId) {
             return c.json({ success: false, error: { code: 'unauthorized', message: 'Authentication required to install packages.' } }, 401);
@@ -188,76 +185,100 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
 
         let body: any = {};
         try { body = await c.req.json(); } catch { /* empty body */ }
-        const packageId = String(body?.packageId ?? '').trim();
-        const versionId = String(body?.versionId ?? 'latest').trim() || 'latest';
-        if (!packageId) {
-            return c.json({ success: false, error: { code: 'bad_request', message: 'packageId is required.' } }, 400);
-        }
 
-        // 1. Fetch manifest snapshot — prefer public R2 fast-path so
-        //    install works even when cloud is asleep or down. Fall back
-        //    to cloud on miss/error.
-        let payload: any;
-        const publicBase = resolveMarketplacePublicBaseUrl();
-        const fetchAttempts: { label: string; url: string }[] = [];
-        if (publicBase) {
+        // ── Offline path: an inline manifest was supplied (file import). ──
+        // Bypass the cloud-fetch entirely; no OS_CLOUD_URL required.
+        const inlineManifest = body?.manifest && typeof body.manifest === 'object' ? body.manifest : null;
+
+        let manifest: any;
+        let resolvedVersionId: string;
+        let version: string;
+        let packageId: string;
+
+        if (inlineManifest) {
+            manifest = inlineManifest;
+            packageId = String(manifest.id ?? manifest.name ?? '').trim();
+            version = String(manifest.version ?? 'unknown');
+            resolvedVersionId = String(body?.versionId ?? version);
+            if (!packageId) {
+                return c.json({ success: false, error: { code: 'invalid_manifest', message: 'Inline manifest must have an "id" or "name".' } }, 400);
+            }
+        } else {
+            if (!this.cloudUrl) {
+                return c.json({ success: false, error: { code: 'marketplace_unavailable', message: 'OS_CLOUD_URL not configured.' } }, 503);
+            }
+            packageId = String(body?.packageId ?? '').trim();
+            const versionId = String(body?.versionId ?? 'latest').trim() || 'latest';
+            if (!packageId) {
+                return c.json({ success: false, error: { code: 'bad_request', message: 'packageId is required.' } }, 400);
+            }
+
+            // 1. Fetch manifest snapshot — prefer public R2 fast-path so
+            //    install works even when cloud is asleep or down. Fall back
+            //    to cloud on miss/error.
+            let payload: any;
+            const publicBase = resolveMarketplacePublicBaseUrl();
+            const fetchAttempts: { label: string; url: string }[] = [];
+            if (publicBase) {
+                fetchAttempts.push({
+                    label: 'public-r2',
+                    url: `${publicBase}/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest.json`,
+                });
+            }
             fetchAttempts.push({
-                label: 'public-r2',
-                url: `${publicBase}/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest.json`,
+                label: 'cloud',
+                url: `${this.cloudUrl}/api/v1/marketplace/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest`,
             });
-        }
-        fetchAttempts.push({
-            label: 'cloud',
-            url: `${this.cloudUrl}/api/v1/marketplace/packages/${encodeURIComponent(packageId)}/versions/${encodeURIComponent(versionId)}/manifest`,
-        });
 
-        let lastErrStatus = 0;
-        let lastErrText = '';
-        for (const attempt of fetchAttempts) {
-            try {
-                const resp = await fetch(attempt.url, { headers: { 'Accept': 'application/json' } });
-                if (!resp.ok) {
-                    lastErrStatus = resp.status;
-                    lastErrText = (await resp.text().catch(() => '')).slice(0, 200);
-                    // 404 from public R2 is not fatal — fall through to cloud.
-                    if (attempt.label === 'public-r2' && resp.status === 404) {
-                        ctx.logger?.info?.(`[MarketplaceInstallLocal] public-r2 miss for ${packageId}@${versionId}, falling back to cloud`);
+            let lastErrStatus = 0;
+            let lastErrText = '';
+            for (const attempt of fetchAttempts) {
+                try {
+                    const resp = await fetch(attempt.url, { headers: { 'Accept': 'application/json' } });
+                    if (!resp.ok) {
+                        lastErrStatus = resp.status;
+                        lastErrText = (await resp.text().catch(() => '')).slice(0, 200);
+                        // 404 from public R2 is not fatal — fall through to cloud.
+                        if (attempt.label === 'public-r2' && resp.status === 404) {
+                            ctx.logger?.info?.(`[MarketplaceInstallLocal] public-r2 miss for ${packageId}@${versionId}, falling back to cloud`);
+                            continue;
+                        }
+                        if (attempt.label === 'public-r2' && resp.status >= 500) {
+                            ctx.logger?.warn?.(`[MarketplaceInstallLocal] public-r2 ${resp.status}, falling back to cloud`);
+                            continue;
+                        }
+                        break; // cloud non-ok → surface error
+                    }
+                    payload = await resp.json();
+                    lastErrStatus = 0;
+                    break;
+                } catch (err: any) {
+                    if (attempt.label === 'public-r2') {
+                        ctx.logger?.warn?.(`[MarketplaceInstallLocal] public-r2 fetch error: ${err?.message ?? err}, falling back to cloud`);
                         continue;
                     }
-                    if (attempt.label === 'public-r2' && resp.status >= 500) {
-                        ctx.logger?.warn?.(`[MarketplaceInstallLocal] public-r2 ${resp.status}, falling back to cloud`);
-                        continue;
-                    }
-                    break; // cloud non-ok → surface error
+                    return c.json({
+                        success: false,
+                        error: { code: 'cloud_fetch_failed', message: err?.message ?? String(err) },
+                    }, 502);
                 }
-                payload = await resp.json();
-                lastErrStatus = 0;
-                break;
-            } catch (err: any) {
-                if (attempt.label === 'public-r2') {
-                    ctx.logger?.warn?.(`[MarketplaceInstallLocal] public-r2 fetch error: ${err?.message ?? err}, falling back to cloud`);
-                    continue;
-                }
+            }
+            if (!payload) {
                 return c.json({
                     success: false,
-                    error: { code: 'cloud_fetch_failed', message: err?.message ?? String(err) },
-                }, 502);
+                    error: { code: 'cloud_fetch_failed', message: `Cloud returned ${lastErrStatus}: ${lastErrText}` },
+                }, lastErrStatus === 404 ? 404 : 502);
             }
-        }
-        if (!payload) {
-            return c.json({
-                success: false,
-                error: { code: 'cloud_fetch_failed', message: `Cloud returned ${lastErrStatus}: ${lastErrText}` },
-            }, lastErrStatus === 404 ? 404 : 502);
+
+            const data = payload?.data ?? payload;
+            manifest = data?.manifest;
+            resolvedVersionId = String(data?.version_id ?? versionId);
+            version = String(data?.version ?? 'unknown');
         }
 
-        const data = payload?.data ?? payload;
-        const manifest = data?.manifest;
-        const resolvedVersionId = String(data?.version_id ?? versionId);
-        const version = String(data?.version ?? 'unknown');
         const manifestId = String(manifest?.id ?? manifest?.name ?? '');
         if (!manifest || !manifestId) {
-            return c.json({ success: false, error: { code: 'invalid_manifest', message: 'Cloud returned an invalid manifest payload.' } }, 502);
+            return c.json({ success: false, error: { code: 'invalid_manifest', message: 'Invalid manifest payload.' } }, inlineManifest ? 400 : 502);
         }
 
         // 2. Conflict check — refuse to overwrite user-authored apps
@@ -272,7 +293,27 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
             }, 409);
         }
 
-        // 3. Persist on disk
+        // 3. Hot-register FIRST so a malformed inline manifest fails the
+        //    install loudly rather than persisting a broken record that
+        //    would also fail on every subsequent rehydrate.
+        try {
+            const manifestService = ctx.getService('manifest') as any;
+            manifestService.register(manifest);
+        } catch (err: any) {
+            // For offline file imports we treat a register failure as a hard
+            // failure (don't persist). Cloud installs historically tolerated
+            // this (the on-disk record survives a restart), so keep that path
+            // lenient for backwards compatibility.
+            if (inlineManifest) {
+                return c.json({
+                    success: false,
+                    error: { code: 'register_failed', message: `Failed to register imported manifest: ${err?.message ?? err}` },
+                }, 422);
+            }
+            ctx.logger?.warn?.(`[MarketplaceInstallLocal] hot-register failed for ${manifestId} (will load on next restart): ${err?.message ?? err}`);
+        }
+
+        // 4. Persist on disk
         const entry: InstalledEntry = {
             packageId,
             versionId: resolvedVersionId,
@@ -291,16 +332,6 @@ export class MarketplaceInstallLocalPlugin implements Plugin {
                 success: false,
                 error: { code: 'storage_failed', message: `Failed to persist manifest: ${err?.message ?? err}` },
             }, 500);
-        }
-
-        // 4. Hot-register via manifest service (works post-bootstrap)
-        try {
-            const manifestService = ctx.getService('manifest') as any;
-            manifestService.register(manifest);
-        } catch (err: any) {
-            // Persisted on disk so a restart would still pick it up;
-            // surface the error but keep the install record.
-            ctx.logger?.warn?.(`[MarketplaceInstallLocal] hot-register failed for ${manifestId} (will load on next restart): ${err?.message ?? err}`);
         }
 
         // 4b. Sync schemas to physical tables — registerApp only adds the
