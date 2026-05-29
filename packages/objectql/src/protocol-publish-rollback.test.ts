@@ -204,6 +204,60 @@ describe('publishMetaItem / rollbackMetaItem / diffMetaItem', () => {
         ).rejects.toMatchObject({ code: 'no_draft', status: 404 });
     });
 
+    it('getMetaItem(state=draft) returns 404 no_draft when no overlay row exists', async () => {
+        // Contract guard for the REST GET `/meta/:type/:name?state=draft`
+        // endpoint: with no pending draft we must throw `no_draft` (HTTP 404),
+        // identical to publishMetaItem. This prevents the historical ambiguity
+        // where the response was a 200 envelope without `item`, which clients
+        // had to disambiguate by sniffing keys.
+        const { engine } = makeStubEngine();
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await protocol.saveMetaItem({
+            type: 'view', name: 'case_grid', organizationId: 'org_alpha',
+            item: sampleBody('v1'),
+            // `mode` defaults to publish, so this writes the active row;
+            // no draft row exists after this save.
+        });
+        await expect(
+            protocol.getMetaItem({
+                type: 'view', name: 'case_grid', organizationId: 'org_alpha',
+                state: 'draft',
+            }),
+        ).rejects.toMatchObject({ code: 'no_draft', status: 404 });
+
+        // Also covers the "never saved" path — no overlay row at all.
+        await expect(
+            protocol.getMetaItem({
+                type: 'view', name: 'never_existed', organizationId: 'org_alpha',
+                state: 'draft',
+            }),
+        ).rejects.toMatchObject({ code: 'no_draft', status: 404 });
+    });
+
+    it('getMetaItem(state=draft) returns the draft body when one is pending', async () => {
+        const { engine } = makeStubEngine();
+        const protocol = new ObjectStackProtocolImplementation(engine);
+        await protocol.saveMetaItem({
+            type: 'view', name: 'case_grid', organizationId: 'org_alpha',
+            item: sampleBody('v1'),
+        });
+        // Write a draft row in addition to the active row.
+        await protocol.saveMetaItem({
+            type: 'view', name: 'case_grid', organizationId: 'org_alpha',
+            item: sampleBody('v2-draft'),
+            mode: 'draft',
+        } as any);
+        const got = await protocol.getMetaItem({
+            type: 'view', name: 'case_grid', organizationId: 'org_alpha',
+            state: 'draft',
+        });
+        expect(got).toMatchObject({
+            type: 'view',
+            name: 'case_grid',
+            item: expect.objectContaining({ label: 'v2-draft' }),
+        });
+    });
+
     it('rollbackMetaItem restores a previous version with op=revert', async () => {
         const { engine, historyRows } = makeStubEngine();
         const protocol = new ObjectStackProtocolImplementation(engine);

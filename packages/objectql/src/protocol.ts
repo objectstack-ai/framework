@@ -1142,9 +1142,20 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         // Draft reads stop here — they intentionally do NOT fall through
         // to the runtime registry / MetadataService (which only know
-        // about published values). Returning `undefined` is the
-        // expected signal that "no draft pending".
+        // about published values). When the draft row is missing we
+        // throw `no_draft` (HTTP 404) so the REST contract is identical
+        // to `POST /publish` on an empty slot: clients use a single
+        // status code to decide "no pending edit" without sniffing
+        // envelope shape. See ADR-0005 §draft-lifecycle.
         if (readState === 'draft') {
+            if (item === undefined) {
+                const err: any = new Error(
+                    `[no_draft] No pending draft exists for ${request.type}/${request.name}.`,
+                );
+                err.code = 'no_draft';
+                err.status = 404;
+                throw err;
+            }
             return { type: request.type, name: request.name, item };
         }
 
