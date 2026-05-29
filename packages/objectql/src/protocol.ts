@@ -1331,6 +1331,15 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
         overlay: unknown | null;
         overlayScope: 'org' | 'env' | null;
         effective: unknown | null;
+        /**
+         * Load-time validation result for the effective payload — same
+         * shape attached to getMetaItems/getMetaItem by
+         * decorateMetadataItem. Undefined for types without a registered
+         * Zod schema (function/service/router). Lets the Studio edit
+         * page surface invalid-metadata banners + inline field errors
+         * without a second round-trip.
+         */
+        _diagnostics?: MetadataDiagnostics;
     }> {
         const orgId = request.organizationId;
 
@@ -1401,6 +1410,11 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
 
         const effective: unknown | null = overlay ?? code;
 
+        const _diagnostics =
+            effective !== null && effective !== undefined
+                ? computeMetadataDiagnostics(request.type, effective)
+                : undefined;
+
         return {
             type: request.type,
             name: request.name,
@@ -1408,6 +1422,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             overlay,
             overlayScope,
             effective,
+            ...(_diagnostics ? { _diagnostics } : {}),
         };
     }
 
