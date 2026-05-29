@@ -1,5 +1,50 @@
 # @objectstack/service-settings
 
+## 7.2.1
+
+### Patch Changes
+
+- 9096dfe: **`OS_` env-var prefix migration** (issue #1382).
+
+  All ObjectStack-owned environment variables now use the `OS_` prefix. Legacy
+  names still work for one release and emit a one-shot deprecation warning via
+  the new `readEnvWithDeprecation()` helper in `@objectstack/types`.
+
+  **Renamed (with legacy fallback):**
+
+  | New                       | Legacy (deprecated)                                    |
+  | :------------------------ | :----------------------------------------------------- |
+  | `OS_AUTH_SECRET`          | `AUTH_SECRET`, `BETTER_AUTH_SECRET`                    |
+  | `OS_AUTH_URL`             | `AUTH_BASE_URL`, `BETTER_AUTH_URL`, `OS_AUTH_BASE_URL` |
+  | `OS_PORT`                 | `PORT`                                                 |
+  | `OS_DATABASE_URL`         | `DATABASE_URL`                                         |
+  | `OS_ROOT_DOMAIN`          | `ROOT_DOMAIN`                                          |
+  | `OS_MULTI_ORG_ENABLED`    | `OS_MULTI_TENANT`                                      |
+  | `OS_CORS_ENABLED`         | `CORS_ENABLED`                                         |
+  | `OS_CORS_ORIGIN`          | `CORS_ORIGIN`                                          |
+  | `OS_CORS_CREDENTIALS`     | `CORS_CREDENTIALS`                                     |
+  | `OS_CORS_MAX_AGE`         | `CORS_MAX_AGE`                                         |
+  | `OS_AI_MODEL`             | `AI_MODEL`                                             |
+  | `OS_MCP_SERVER_ENABLED`   | `MCP_SERVER_ENABLED`                                   |
+  | `OS_MCP_SERVER_NAME`      | `MCP_SERVER_NAME`                                      |
+  | `OS_MCP_SERVER_TRANSPORT` | `MCP_SERVER_TRANSPORT`                                 |
+  | `OS_NODE_ID`              | `OBJECTSTACK_NODE_ID`                                  |
+  | `OS_METADATA_WRITABLE`    | `OBJECTSTACK_METADATA_WRITABLE`                        |
+  | `OS_DEV_CRYPTO_KEY`       | `OBJECTSTACK_DEV_CRYPTO_KEY`                           |
+  | `OS_HOME`                 | `OBJECTSTACK_HOME`                                     |
+
+  **Migration:** rename in your `.env`. Legacy names continue to work this
+  release and will be removed in a future major. Industry-standard names
+  (`NODE_ENV`, `HOME`, `OPENAI_API_KEY`, `TURSO_*`, OAuth
+  `*_CLIENT_ID/SECRET`, `RESEND_API_KEY`, `POSTMARK_TOKEN`,
+  `AI_GATEWAY_*`, `SMTP_*`) are NOT renamed.
+
+- Updated dependencies [9096dfe]
+  - @objectstack/types@7.2.1
+  - @objectstack/spec@7.2.1
+  - @objectstack/core@7.2.1
+  - @objectstack/platform-objects@7.2.1
+
 ## 7.2.0
 
 ### Patch Changes
