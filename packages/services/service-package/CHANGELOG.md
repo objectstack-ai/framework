@@ -1,5 +1,12 @@
 # @objectstack/service-package
 
+## 7.2.0
+
+### Patch Changes
+
+- @objectstack/spec@7.2.0
+- @objectstack/core@7.2.0
+
 ## 7.1.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @objectstack/console
 
+## 7.2.0
+
+### Minor Changes
+
+- d662c01: fix
+
 ## 7.1.0
 
 ## 7.0.0
