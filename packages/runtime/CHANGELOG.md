@@ -1,5 +1,26 @@
 # @objectstack/runtime
 
+## 7.2.0
+
+### Patch Changes
+
+- @objectstack/spec@7.2.0
+- @objectstack/core@7.2.0
+- @objectstack/types@7.2.0
+- @objectstack/metadata@7.2.0
+- @objectstack/objectql@7.2.0
+- @objectstack/observability@7.2.0
+- @objectstack/formula@7.2.0
+- @objectstack/rest@7.2.0
+- @objectstack/driver-memory@7.2.0
+- @objectstack/driver-sql@7.2.0
+- @objectstack/driver-sqlite-wasm@7.2.0
+- @objectstack/plugin-auth@7.2.0
+- @objectstack/plugin-org-scoping@7.2.0
+- @objectstack/plugin-security@7.2.0
+- @objectstack/service-cluster@7.2.0
+- @objectstack/service-i18n@7.2.0
+
 ## 7.1.0
 
 ### Patch Changes
