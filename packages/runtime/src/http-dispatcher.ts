@@ -1701,7 +1701,13 @@ export class HttpDispatcher {
             // a deeper layer (e.g. a single unified `sql` driver that covers
             // better-sqlite3 + libsql + pg + mysql) and collapse the user's
             // meaningful choices into one row, so they make a poor UI source.
-            const registry: any = services['project-provisioning-adapters'];
+            // The canonical service key is `environment-provisioning-adapters`
+            // (post project→environment rename — registered by the cloud tenant
+            // plugin and the objectos host). The legacy `project-provisioning-
+            // adapters` key is kept as a fallback for older hosts not yet rebuilt.
+            const registry: any =
+                services['environment-provisioning-adapters'] ??
+                services['project-provisioning-adapters'];
             if (registry && typeof registry.list === 'function') {
                 try {
                     const adapters = registry.list() as Array<{ driver: string }>;
@@ -1783,7 +1789,10 @@ export class HttpDispatcher {
             }): Promise<void>;
         } | undefined> => {
             try {
-                const registry: any = await this.resolveService('project-provisioning-adapters');
+                // Canonical key first, legacy `project-*` key as a fallback.
+                const registry: any =
+                    (await this.resolveService('environment-provisioning-adapters')) ??
+                    (await this.resolveService('project-provisioning-adapters'));
                 // Alias the generic 'sql' short name onto the SQLite
                 // provisioning adapter. `sql` is SqlDriver's default short
                 // name when registered via DriverPlugin; provisioning
