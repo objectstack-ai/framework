@@ -9,6 +9,21 @@ export type {
   Logger,
 } from './external-datasource-service.js';
 
+// Datasource lifecycle service (ADR-0015 Addendum)
+export { DatasourceAdminService } from './datasource-admin-service.js';
+export type {
+  DatasourceAdminServiceConfig,
+  StoredDatasource,
+  ProbeInput,
+} from './datasource-admin-service.js';
+
+// Datasource lifecycle kernel plugin
+export { DatasourceAdminServicePlugin } from './datasource-admin-plugin.js';
+export type {
+  DatasourceAdminServicePluginOptions,
+  SecretBinder,
+} from './datasource-admin-plugin.js';
+
 // Kernel plugin
 export { ExternalDatasourceServicePlugin } from './plugin.js';
 export type { ExternalDatasourceServicePluginOptions } from './plugin.js';

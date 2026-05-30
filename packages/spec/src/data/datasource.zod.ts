@@ -224,6 +224,21 @@ export const DatasourceSchema = lazySchema(() => z.object({
    * Required when `schemaMode !== 'managed'`; forbidden otherwise.
    */
   external: ExternalDatasourceSettingsSchema.optional(),
+
+  /**
+   * Provenance (ADR-0015 Addendum)
+   *
+   * Server-managed, read-only. Distinguishes code-defined datasources
+   * (`code` — authored as `*.datasource.ts`, GitOps-owned, read-only in the
+   * UI) from runtime datasources (`runtime` — created via the Studio wizard,
+   * persisted in the runtime metadata store, environment-scoped, editable).
+   *
+   * Never accepted from client input: the runtime stamps `code` on artefact
+   * load and `runtime` on UI create. Defaults to `code` for artefact-defined
+   * datasources that predate this field.
+   */
+  origin: z.enum(['code', 'runtime']).default('code')
+    .describe('Datasource provenance (server-managed, read-only)'),
 }).superRefine((ds, ctx) => {
   if (ds.schemaMode !== 'managed' && !ds.external) {
     ctx.addIssue({

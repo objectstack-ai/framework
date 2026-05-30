@@ -21,6 +21,18 @@ export { AppPlugin, collectBundleHooks, collectBundleFunctions, collectBundleAct
 export { SeedLoaderService } from './seed-loader.js';
 // External Datasource Federation — boot-validation gate (ADR-0015, Gate 2)
 export { ExternalValidationPlugin, createExternalValidationPlugin } from './external-validation-plugin.js';
+// Runtime-UI datasource lifecycle host glue (ADR-0015 Addendum)
+export { createDefaultDatasourceDriverFactory } from './default-datasource-driver-factory.js';
+export {
+  createDatasourceSecretBinder,
+  toCredentialsRef,
+  parseCredentialsRef,
+} from './datasource-secret-binder.js';
+export type {
+  DatasourceSecretBinder,
+  DatasourceSecretBinderDeps,
+  SecretStoreEngineLike,
+} from './datasource-secret-binder.js';
 export { createDispatcherPlugin } from './dispatcher-plugin.js';
 export type { DispatcherPluginConfig } from './dispatcher-plugin.js';
 export { createSystemEnvironmentPlugin, SYSTEM_ENVIRONMENT_ID } from './system-environment-plugin.js';

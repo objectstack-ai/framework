@@ -587,7 +587,12 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   { type: 'job', label: 'Background Job', filePatterns: ['**/*.job.ts', '**/*.job.yml', '**/*.job.json'], supportsOverlay: false, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 80, domain: 'automation' },
 
   // System Protocol
-  { type: 'datasource', label: 'Datasource', filePatterns: ['**/*.datasource.ts', '**/*.datasource.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 5, domain: 'system' },
+  // `datasource`: runtime-creatable (ADR-0015 Addendum) — the Studio wizard
+  // persists `origin: 'runtime'` datasources into the runtime metadata store.
+  // Code-defined (`origin: 'code'`) datasources remain read-only and win on
+  // name collision; record-level read-only gating is enforced by origin, not
+  // by this flag. No per-org overlay (a datasource = one physical connection).
+  { type: 'datasource', label: 'Datasource', filePatterns: ['**/*.datasource.ts', '**/*.datasource.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 5, domain: 'system' },
   { type: 'external_catalog', label: 'External Catalog', filePatterns: ['**/*.external-catalog.ts', '**/*.external-catalog.yml', '**/*.external-catalog.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 6, domain: 'system' },
   { type: 'translation', label: 'Translation', filePatterns: ['**/*.translation.ts', '**/*.translation.yml', '**/*.translation.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 90, domain: 'system' },
   { type: 'router', label: 'Router', filePatterns: ['**/*.router.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },

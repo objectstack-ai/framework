@@ -1537,6 +1537,64 @@ export default class Serve extends Command {
         }
       }
 
+      // ── Runtime-UI datasource lifecycle (ADR-0015 Addendum) ────────
+      // Always available so the Studio "Add Datasource" wizard has a
+      // working backend: list (code + runtime origins), test a connection,
+      // and create / update / remove runtime datasources. Code-origin
+      // datasources stay read-only. The connection probe + hot pool use a
+      // default driver factory (postgres / sqlite / mongodb / memory) and
+      // the secret is wrapped into `sys_secret` via a fail-closed binder —
+      // only a `credentialsRef` is ever persisted, never cleartext.
+      try {
+        const dsMod: any = await import('@objectstack/service-external-datasource');
+        const { ExternalDatasourceServicePlugin, DatasourceAdminServicePlugin } = dsMod;
+
+        if (
+          ExternalDatasourceServicePlugin &&
+          !hasPluginMatching(['service-external-datasource', 'ExternalDatasourceServicePlugin'])
+        ) {
+          await kernel.use(new ExternalDatasourceServicePlugin());
+          trackPlugin('ExternalDatasourceServicePlugin');
+        }
+
+        if (
+          DatasourceAdminServicePlugin &&
+          !hasPluginMatching(['service-datasource-admin', 'DatasourceAdminServicePlugin'])
+        ) {
+          const rtMod: any = await import('@objectstack/runtime');
+          const { createDefaultDatasourceDriverFactory, createDatasourceSecretBinder } = rtMod;
+
+          // Fail-closed secret binder: when no crypto provider is available
+          // the admin service still loads, but secret-bearing create/update
+          // throws rather than persist cleartext.
+          let secrets: any;
+          try {
+            const { InMemoryCryptoProvider } = await import('@objectstack/service-settings');
+            const cryptoProvider = new InMemoryCryptoProvider();
+            const lazyEngine = {
+              insert: (o: string, d: any, opt?: any) => (kernel.getService('data') as any).insert(o, d, opt),
+              delete: (o: string, opt: any) => (kernel.getService('data') as any).delete(o, opt),
+            };
+            secrets = createDatasourceSecretBinder({ engine: lazyEngine, cryptoProvider });
+          } catch {
+            /* no crypto provider — admin service loads, secrets fail closed */
+          }
+
+          await kernel.use(
+            new DatasourceAdminServicePlugin({
+              driverFactory: createDefaultDatasourceDriverFactory(),
+              ...(secrets ? { secrets } : {}),
+            }),
+          );
+          trackPlugin('DatasourceAdminServicePlugin');
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {
+          console.error(`[Datasource] runtime-UI lifecycle wiring failed: ${msg}`);
+        }
+      }
+
       // ── UI portals ────────────────────────────────────────────────
       // In dev mode, the bundled Console portal is enabled by default
       // (use --no-ui to disable). Always serve the pre-built `dist/` — no

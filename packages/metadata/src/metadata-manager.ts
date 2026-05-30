@@ -328,6 +328,23 @@ export class MetadataManager implements IMetadataService {
   }
 
   /**
+   * Register a metadata item into the in-memory registry ONLY, never persisting
+   * to a writable loader. Used for GitOps-managed artefacts that must be
+   * *listable* (so `list(type)` returns them) but must never leak into the
+   * runtime DB store — e.g. code-defined datasources (`origin:'code'`, ADR-0015
+   * Addendum) declared in `*.datasource.ts` and owned by source control. Writing
+   * them through `register()` would persist them to `sys_metadata` and create
+   * drift between the artefact and the DB; this method avoids that.
+   */
+  registerInMemory(type: string, name: string, data: unknown): void {
+    if (!this.registry.has(type)) {
+      this.registry.set(type, new Map());
+    }
+    this.registry.get(type)!.set(name, data);
+    this.invalidateListCache(type);
+  }
+
+  /**
    * Get a metadata item by type and name.
    * Checks in-memory registry first, then falls back to loaders.
    */

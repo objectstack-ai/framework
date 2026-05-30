@@ -501,6 +501,9 @@ importers:
       '@objectstack/service-cache':
         specifier: workspace:*
         version: link:../services/service-cache
+      '@objectstack/service-external-datasource':
+        specifier: workspace:*
+        version: link:../services/service-external-datasource
       '@objectstack/service-feed':
         specifier: workspace:*
         version: link:../services/service-feed

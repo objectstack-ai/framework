@@ -4,7 +4,7 @@ import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
 import { RestServer, RestKernelManager } from './rest-server.js';
 import { ObjectStackProtocol, RestServerConfig } from '@objectstack/spec/api';
 import { registerPackageRoutes } from './package-routes.js';
-import { registerExternalDatasourceRoutes } from './external-datasource-routes.js';
+import { registerExternalDatasourceRoutes, registerDatasourceAdminRoutes } from './external-datasource-routes.js';
 import type { PackageService } from '@objectstack/service-package';
 
 export interface RestApiPluginConfig {
@@ -176,16 +176,16 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 throw err;
             }
 
-            // Register package management routes if service is available
+            const basePath = config.api?.api?.basePath || '/api';
+            const version = config.api?.api?.version || 'v1';
+            const versionedBase = `${basePath}/${version}`;
+            const enableProjectScoping = config.api?.api?.enableProjectScoping ?? false;
+            const projectResolution = config.api?.api?.projectResolution ?? 'auto';
+
+            // Register package management routes if the service is available.
             try {
                 const packageService = ctx.getService<PackageService>('package');
                 if (packageService) {
-                    const basePath = config.api?.api?.basePath || '/api';
-                    const version = config.api?.api?.version || 'v1';
-                    const versionedBase = `${basePath}/${version}`;
-                    const enableProjectScoping = config.api?.api?.enableProjectScoping ?? false;
-                    const projectResolution = config.api?.api?.projectResolution ?? 'auto';
-
                     if (enableProjectScoping && projectResolution === 'required') {
                         // Only register the scoped variant
                         registerPackageRoutes(server, packageService, `${versionedBase}/environments/:environmentId`, {
@@ -193,9 +193,6 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                         });
                     } else {
                         registerPackageRoutes(server, packageService, versionedBase, { protocol });
-                        // External Datasource Federation routes (ADR-0015) —
-                        // degrade gracefully when the service is not registered.
-                        registerExternalDatasourceRoutes(server, ctx, versionedBase);
                         if (enableProjectScoping) {
                             registerPackageRoutes(server, packageService, `${versionedBase}/environments/:environmentId`, {
                                 protocol,
@@ -207,6 +204,19 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
             } catch (e) {
                 // Package service not available, skip
                 ctx.logger.debug('Package service not available, package routes skipped');
+            }
+
+            // Datasource routes do NOT depend on the package service — register
+            // them unconditionally. Each degrades gracefully (503) when its
+            // backing service is absent.
+            //   • External Datasource Federation (ADR-0015): catalog / draft / validate.
+            //   • Datasource lifecycle (ADR-0015 Addendum): list / test / create / update / remove.
+            try {
+                registerExternalDatasourceRoutes(server, ctx, versionedBase);
+                registerDatasourceAdminRoutes(server, ctx, versionedBase);
+                ctx.logger.info('Datasource routes registered');
+            } catch (e: any) {
+                ctx.logger.warn('Datasource routes registration failed', { error: e?.message });
             }
         }
     };

@@ -10,6 +10,10 @@ export {
   type CryptoAdapter,
   NoopCryptoAdapter,
 } from './crypto-adapter.js';
+// Default ICryptoProvider for dev / self-host kernels (no KMS). Hosts swap in
+// a KMS-backed provider for production; exported so other subsystems (e.g. the
+// runtime-UI datasource secret binder) can reuse the same dev wrapping.
+export { InMemoryCryptoProvider } from './in-memory-crypto-provider.js';
 export {
   type SettingsActionHandler,
   type SettingsAuditSink,

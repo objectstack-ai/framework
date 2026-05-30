@@ -205,6 +205,41 @@ export class AppPlugin implements Plugin {
             ql.setDatasourceMapping(this.bundle.datasourceMapping);
         }
 
+        // Surface code-defined datasources (ADR-0015 Addendum) in the metadata
+        // registry so the datasource-admin list returns them alongside any
+        // UI-created (`origin:'runtime'`) ones. These are GitOps-managed
+        // (declared in `*.datasource.ts`), so they are registered IN MEMORY
+        // ONLY — never persisted to the runtime DB store — and stamped
+        // `origin:'code'` so the admin service enforces them as read-only.
+        // The engine already indexed them for the write gate via registerApp().
+        try {
+            const dsDefs = this.bundle.datasources;
+            const dsList = Array.isArray(dsDefs)
+                ? dsDefs
+                : dsDefs && typeof dsDefs === 'object'
+                    ? Object.entries(dsDefs).map(([name, def]) => ({ name, ...(def as any) }))
+                    : [];
+            if (dsList.length > 0) {
+                const metadata = ctx.getService('metadata') as
+                    | { registerInMemory?: (t: string, n: string, d: unknown) => void }
+                    | undefined;
+                if (typeof metadata?.registerInMemory === 'function') {
+                    for (const ds of dsList) {
+                        if (!ds?.name) continue;
+                        metadata.registerInMemory('datasource', ds.name, { ...ds, origin: 'code' });
+                    }
+                    ctx.logger.info('Registered code-defined datasources in metadata registry', {
+                        appId,
+                        count: dsList.length,
+                    });
+                }
+            }
+        } catch (err) {
+            ctx.logger.warn('[AppPlugin] failed to register code-defined datasources', {
+                error: (err as Error)?.message ?? String(err),
+            });
+        }
+
         // Resolve the runtime hook owner. Modules that declare both a
         // `default` (defineStack(...)) export and a named `onEnable` export
         // hide the named export from `bundle.default`, so we fall back to the

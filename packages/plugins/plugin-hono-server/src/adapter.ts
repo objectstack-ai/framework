@@ -108,6 +108,18 @@ export class HonoHttpServer implements IHttpServer {
             let streamEncoder: TextEncoder | null = null;
             let streamHeaders: Record<string, string> = {};
             let isStreaming = false;
+            let streamClosed = false;
+
+            // The unused stream is always created (see below) and may be closed
+            // from two places — `res.end()` and the post-handler cleanup — so
+            // guard against the double-close that crashes the event loop with
+            // `ERR_INVALID_STATE: Controller is already closed`.
+            const closeStream = () => {
+                if (streamController && !streamClosed) {
+                    streamClosed = true;
+                    try { streamController.close(); } catch { /* already closed */ }
+                }
+            };
 
             const res = {
                 json: (data: any) => { capturedResponse = c.json(data); },
@@ -133,9 +145,14 @@ export class HonoHttpServer implements IHttpServer {
                     }
                 },
                 end: () => {
-                    if (streamController) {
-                        streamController.close();
+                    // Body-less response (e.g. 204 No Content) honoring any
+                    // status already set via `res.status()`. A null body avoids
+                    // the undici "Invalid response status code 204" thrown when
+                    // an empty *string* body is paired with a null-body status.
+                    if (!isStreaming && capturedResponse === undefined) {
+                        capturedResponse = c.body(null);
                     }
+                    closeStream();
                 },
             };
 
@@ -160,11 +177,11 @@ export class HonoHttpServer implements IHttpServer {
                         }));
                     } else {
                         // Not streaming — close the unused stream and return null
-                        streamController?.close();
+                        closeStream();
                         resolve(null);
                     }
                 }).catch((err) => {
-                    streamController?.close();
+                    closeStream();
                     resolve(null);
                 });
             });
