@@ -109,21 +109,22 @@ async function buildServeObservability(): Promise<{ metrics: any; errorReporter:
   }
 }
 
-// Helper to find available port
-const getAvailablePort = async (startPort: number): Promise<number> => {
-  const isPortAvailable = (port: number): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const server = net.createServer();
-      server.once('error', (err: any) => {
-        resolve(false);
-      });
-      server.once('listening', () => {
-        server.close(() => resolve(true));
-      });
-      server.listen(port);
+// Probe whether a TCP port can be bound right now.
+const isPortAvailable = (port: number): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => {
+      resolve(false);
     });
-  };
+    server.once('listening', () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port);
+  });
+};
 
+// Helper to find available port (dev convenience — see the gated caller).
+const getAvailablePort = async (startPort: number): Promise<number> => {
   let port = startPort;
   while (!(await isPortAvailable(port))) {
     port++;
@@ -197,14 +198,32 @@ export default class Serve extends Command {
       process.env.NODE_ENV = 'development';
     }
 
-    let port = parseInt(flags.port);
-    try {
-      const availablePort = await getAvailablePort(port);
-      if (availablePort !== port) {
-        port = availablePort;
+    const requestedPort = parseInt(flags.port);
+    let port = requestedPort;
+    // Port-conflict policy differs by mode:
+    //
+    //  • Dev (`os dev`, or NODE_ENV=development): hop to the next free port
+    //    so several example apps can run side-by-side without manual config.
+    //
+    //  • Production (`os start`): NEVER silently drift off the configured
+    //    port. A drifted port breaks reverse-proxy upstreams, better-auth
+    //    callback URLs, and CORS trusted-origins in ways that surface as
+    //    opaque 403/502s with no obvious cause. Fail loudly so the operator
+    //    frees the port (or sets PORT / --port) before anything boots.
+    const portAutoShiftAllowed = flags.dev || process.env.NODE_ENV === 'development';
+    if (portAutoShiftAllowed) {
+      try {
+        port = await getAvailablePort(requestedPort);
+      } catch {
+        // Ignore — fall through and try the requested port.
       }
-    } catch (e) {
-      // Ignore error and try with original port
+    } else if (!(await isPortAvailable(requestedPort))) {
+      console.log('');
+      printError(`Port ${requestedPort} is already in use.`);
+      console.log(chalk.dim('  ObjectStack does not auto-select a different port in production mode:'));
+      console.log(chalk.dim('  a drifted port silently breaks reverse-proxy, OAuth callback, and CORS config.'));
+      console.log(chalk.dim('  Free the port, or pick another via PORT=<port> (or --port <port>).'));
+      this.exit(1);
     }
 
     // Load .env files following Vite/Next.js convention
@@ -298,8 +317,6 @@ export default class Serve extends Command {
       console.log = originalConsoleLog;
       console.debug = originalConsoleDebug;
     };
-
-    const portShifted = parseInt(flags.port) !== port;
 
     try {
       // ── Suppress ALL runtime noise during boot ────────────────────

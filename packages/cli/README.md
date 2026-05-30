@@ -153,7 +153,7 @@ Common variables: `OS_DATABASE_URL`, `OS_DATABASE_DRIVER`,
 
 ### `os serve`
 
-- `-p, --port <port>` — Server port (default: `3000`)
+- `-p, --port <port>` — Server port. Resolution: `--port` › `$OS_PORT` › `$PORT` › `3000`. With `--dev` a busy port auto-hops to the next free one; in production mode it's a hard error (never silently drifts).
 - `--dev` — Run in development mode (load devPlugins, pretty logging)
 - `--ui` — Enable Studio UI
 - `--no-server` — Skip starting HTTP server plugin
