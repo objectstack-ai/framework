@@ -16,6 +16,8 @@ import type {
   RemoteTable,
   GenerateDraftOpts,
   ObjectDraft,
+  ImportObjectOpts,
+  ImportObjectResult,
   SchemaValidationResult,
   SchemaValidationReport,
   IntrospectedSchema,
@@ -79,6 +81,12 @@ export interface ExternalDatasourceServiceConfig {
    * but does not cache it (e.g. dev runs without a writable metadata store).
    */
   persistCatalog?: (catalog: ExternalCatalog) => Promise<void>;
+  /**
+   * Persist an imported object definition as a live (runtime-origin) `object`
+   * metadata record. Optional: when absent, {@link ExternalDatasourceService.importObject}
+   * throws (the deployment is GitOps-only / has no writable metadata store).
+   */
+  persistObject?: (name: string, definition: Record<string, unknown>) => Promise<void>;
   logger?: Logger;
 }
 
@@ -217,6 +225,44 @@ export class ExternalDatasourceService implements IExternalDatasourceService {
       source: renderObjectSource(definition, fields, review),
       review,
     };
+  }
+
+  async importObject(
+    datasource: string,
+    remoteName: string,
+    opts: ImportObjectOpts = {},
+  ): Promise<ImportObjectResult> {
+    if (!this.config.persistObject) {
+      throw new Error(
+        `importObject requires a writable metadata store, but none is wired ` +
+          `(datasource '${datasource}'). This deployment may be GitOps-only — ` +
+          `use 'os datasource introspect' and commit the generated *.object.ts instead.`,
+      );
+    }
+
+    // Reuse the draft pipeline (type mapping, review notes, external binding).
+    const draft = await this.generateObjectDraft(datasource, remoteName, opts);
+
+    // Apply the runtime-persona overrides on top of the draft definition.
+    const name = opts.name ?? draft.name;
+    const external = {
+      ...(draft.definition.external as Record<string, unknown>),
+      ...(opts.writable ? { writable: true } : {}),
+    };
+    const definition: Record<string, unknown> = {
+      ...draft.definition,
+      name,
+      label: toLabel(name),
+      external,
+    };
+
+    await this.config.persistObject(name, definition);
+    this.logger?.info?.(`importObject: persisted '${name}' from ${datasource}.${remoteName}`, {
+      writable: opts.writable === true,
+      review: draft.review.length,
+    });
+
+    return { name, definition, review: draft.review };
   }
 
   async refreshCatalog(datasource: string): Promise<ExternalCatalog> {

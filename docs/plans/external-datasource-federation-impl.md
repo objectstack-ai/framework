@@ -178,6 +178,38 @@ Gate 2 (boot validation) + remote-schema caching.
    the validateAll-rejects no-op, selective scheduling, the firing interval,
    re-arm idempotence, and the no-metadata no-op.
 
+## P-C — delivered (runtime "Import as Object", ADR-0015 Addendum)
+
+The runtime persona's create-in-UI bridge: turn a browsed remote table into a
+live, immediately-queryable federated object — no git commit (that stays the
+GitOps `os datasource introspect` path).
+
+1. **`IExternalDatasourceService.importObject(datasource, remoteName, opts?)`**
+   (`packages/spec/src/contracts/external-datasource-service.ts`) → `ImportObjectResult`
+   (`{ name, definition, review }`). `ImportObjectOpts` extends `GenerateDraftOpts`
+   with `name` (override) + `writable` (object.external.writable opt-in; still
+   gated by datasource `external.allowWrites`, ADR Gate 3).
+
+2. **Service impl** (`external-datasource-service.ts`) reuses the `generateObjectDraft`
+   pipeline (type mapping + review notes + external binding), applies the
+   name/writable overrides, and persists via an injected `persistObject`. Throws
+   a descriptive error when no writable metadata store is wired (GitOps-only
+   deployment) and when the remote table is missing (before any write).
+
+3. **Plugin wiring** (`plugin.ts`) supplies `persistObject` →
+   `metadata.register('object', name, definition)` (runtime origin), alongside
+   the existing `persistCatalog`.
+
+4. **REST** — `POST /api/v1/datasources/:name/external/tables/:remote/import`
+   (`packages/rest/src/external-datasource-routes.ts`): `201 { object }` on
+   success, `503` when the service is absent, `400 external_import_error` when
+   import is refused (read-only store / missing table). Body carries
+   `ImportObjectOpts`.
+
+5. **Tests** — service: persists read-only by default, name+writable overrides,
+   draft-option forwarding (include/rename), throws without a store, throws on
+   missing table without persisting (47 green).
+
 ### Follow-up notes / open items for later phases
 
 - **DDL gate plumbing (P3)**: ✅ done — `createDefaultDatasourceDriverFactory`

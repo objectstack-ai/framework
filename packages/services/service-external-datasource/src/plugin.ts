@@ -87,6 +87,11 @@ export class ExternalDatasourceServicePlugin implements Plugin {
             persistCatalog: async (catalog) => {
               await metadata.register!('external_catalog', catalog.name, catalog);
             },
+            // Runtime "Import as Object": persist a federated object so it's
+            // immediately queryable, no git commit required (ADR-0015 Addendum).
+            persistObject: async (name, definition) => {
+              await metadata.register!('object', name, definition);
+            },
           }
         : {}),
       logger: this.options.logger,

@@ -13,6 +13,7 @@ import type { IHttpServer } from '@objectstack/spec/contracts';
  *
  *   GET  /datasources/:name/external/tables             → listRemoteTables
  *   POST /datasources/:name/external/tables/:remote/draft → generateObjectDraft
+ *   POST /datasources/:name/external/tables/:remote/import → importObject
  *   POST /datasources/:name/external/refresh-catalog    → refreshCatalog
  *   POST /datasources/:name/external/validate           → validateAll (this ds)
  */
@@ -53,6 +54,28 @@ export function registerExternalDatasourceRoutes(
       (req.body as Record<string, unknown>) ?? {},
     );
     res.json({ draft });
+  });
+
+  // Import a remote table as a live (runtime-origin) federated object so it's
+  // immediately queryable — the "Import as Object" action (ADR-0015 Addendum).
+  // 503 when the service is absent; 400 when import is refused (e.g. read-only
+  // metadata store) or the remote table is missing.
+  server.post(`${ext}/tables/:remote/import`, async (req: any, res: any) => {
+    const svc = externalService();
+    if (!svc?.importObject) return unavailable(res);
+    try {
+      const result = await svc.importObject(
+        req.params.name,
+        req.params.remote,
+        (req.body as Record<string, unknown>) ?? {},
+      );
+      res.status(201).json({ object: result });
+    } catch (err) {
+      res.status(400).json({
+        error: 'external_import_error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // Refresh and return the cached catalog snapshot.

@@ -121,6 +121,80 @@ describe('generateObjectDraft', () => {
   });
 });
 
+describe('importObject', () => {
+  /** Build a service with a recording persistObject (runtime metadata store). */
+  function makeImporter(persistObject?: (name: string, def: Record<string, unknown>) => Promise<void>) {
+    const persisted: Array<{ name: string; def: Record<string, unknown> }> = [];
+    const svc = new ExternalDatasourceService({
+      introspect: async () => warehouseSchema(),
+      getDatasource: async () => ({ name: 'warehouse', schemaMode: 'external' }),
+      getObject: async () => undefined,
+      listObjects: async () => [],
+      persistObject:
+        persistObject ?? (async (name, def) => { persisted.push({ name, def }); }),
+    });
+    return { svc, persisted };
+  }
+
+  it('persists a runtime federated object and returns name/definition/review', async () => {
+    const { svc, persisted } = makeImporter();
+    const result = await svc.importObject('warehouse', 'fact_orders');
+
+    expect(result.name).toBe('fact_orders');
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0].name).toBe('fact_orders');
+    const def = persisted[0].def as { datasource: string; external: { remoteName: string; writable?: boolean } };
+    expect(def.datasource).toBe('warehouse');
+    expect(def.external.remoteName).toBe('fact_orders');
+    // Read-only by default — no writable flag leaks in.
+    expect(def.external.writable).toBeUndefined();
+    // The geography column surfaced a review note (carried over from the draft).
+    expect(result.review.some((r) => r.column === 'geo')).toBe(true);
+  });
+
+  it('applies the name override and writable opt-in', async () => {
+    const { svc, persisted } = makeImporter();
+    const result = await svc.importObject('warehouse', 'fact_orders', {
+      name: 'wh_orders',
+      writable: true,
+    });
+    expect(result.name).toBe('wh_orders');
+    const def = persisted[0].def as { name: string; label: string; external: { writable?: boolean } };
+    expect(def.name).toBe('wh_orders');
+    expect(def.label).toBe('Wh Orders');
+    expect(def.external.writable).toBe(true);
+  });
+
+  it('forwards draft options (include/rename) through to the persisted fields', async () => {
+    const { svc, persisted } = makeImporter();
+    await svc.importObject('warehouse', 'fact_orders', {
+      includeColumns: ['order_id', 'amount'],
+      rename: { amount: 'total' },
+    });
+    const def = persisted[0].def as { fields: Record<string, unknown> };
+    expect(Object.keys(def.fields)).toEqual(['order_id', 'total']);
+  });
+
+  it('throws when no writable metadata store is wired', async () => {
+    const svc = new ExternalDatasourceService({
+      introspect: async () => warehouseSchema(),
+      getDatasource: async () => ({ name: 'warehouse', schemaMode: 'external' }),
+      getObject: async () => undefined,
+      listObjects: async () => [],
+      // no persistObject
+    });
+    await expect(svc.importObject('warehouse', 'fact_orders')).rejects.toThrow(
+      /writable metadata store/,
+    );
+  });
+
+  it('throws when the remote table is missing (no persistence)', async () => {
+    const { svc, persisted } = makeImporter();
+    await expect(svc.importObject('warehouse', 'ghost')).rejects.toThrow(/not found/);
+    expect(persisted).toHaveLength(0);
+  });
+});
+
 describe('validateObject', () => {
   const baseObject: ObjectLike = {
     name: 'wh_order',
