@@ -7,9 +7,10 @@
  * Supports PostgreSQL, MySQL, SQLite, and other SQL databases.
  */
 
-import type { QueryAST, DriverOptions } from '@objectstack/spec/data';
+import type { QueryAST, DriverOptions, SchemaMode } from '@objectstack/spec/data';
 import type { IDataDriver } from '@objectstack/spec/contracts';
 import { StorageNameMapping } from '@objectstack/spec/system';
+import { ExternalSchemaModeViolationError } from '@objectstack/spec/shared';
 import knex, { Knex } from 'knex';
 import { nanoid } from 'nanoid';
 
@@ -67,8 +68,13 @@ export interface IntrospectedSchema {
 /**
  * SqlDriver configuration — passed directly to Knex.
  * See https://knexjs.org/guide/#configuration-options
+ *
+ * `schemaMode` (ADR-0015) is an ObjectStack-level concern, not a Knex
+ * option: it is stripped before constructing the Knex instance and gates
+ * all schema-mutating DDL. Defaults to `'managed'` when omitted, preserving
+ * legacy behaviour.
  */
-export type SqlDriverConfig = Knex.Config;
+export type SqlDriverConfig = Knex.Config & { schemaMode?: SchemaMode };
 
 // ── SQL Driver ───────────────────────────────────────────────────────────────
 
@@ -289,9 +295,36 @@ export class SqlDriver implements IDataDriver {
     return null;
   }
 
+  /**
+   * Schema ownership mode (ADR-0015). When not `'managed'`, all
+   * schema-mutating DDL is rejected by {@link assertSchemaMutable}. The
+   * runtime injects this from `Datasource.schemaMode`; defaults to
+   * `'managed'` so existing callers are unaffected.
+   */
+  protected readonly schemaMode: SchemaMode;
+
   constructor(config: SqlDriverConfig) {
-    this.config = config;
-    this.knex = knex(config);
+    // `schemaMode` is an ObjectStack concern, not a Knex option — strip it
+    // before handing the config to Knex.
+    const { schemaMode, ...knexConfig } = config;
+    this.schemaMode = schemaMode ?? 'managed';
+    this.config = knexConfig;
+    this.knex = knex(knexConfig);
+  }
+
+  /**
+   * DDL gate (ADR-0015 §5.1). Single choke-point asserting that
+   * schema-mutating DDL is only performed on a `managed` datasource.
+   * Federated datasources (`external` / `validate-only`) are guests in a
+   * database ObjectStack does not own and must never run DDL against.
+   */
+  protected assertSchemaMutable(operation: string): void {
+    if (this.schemaMode !== 'managed') {
+      throw new ExternalSchemaModeViolationError(
+        `DDL operation '${operation}' is forbidden: datasource schemaMode='${this.schemaMode}'. ` +
+          `ObjectStack never mutates the schema of an external database.`,
+      );
+    }
   }
 
   // ===================================
@@ -978,6 +1011,7 @@ export class SqlDriver implements IDataDriver {
   }
 
   async dropTable(object: string, _options?: DriverOptions): Promise<void> {
+    this.assertSchemaMutable('dropTable');
     await this.knex.schema.dropTableIfExists(object);
   }
 
@@ -985,6 +1019,9 @@ export class SqlDriver implements IDataDriver {
    * Batch-initialise tables from an array of object definitions.
    */
   async initObjects(objects: Array<{ name: string; fields?: Record<string, any> }>): Promise<void> {
+    // DDL gate (ADR-0015 §5.1): createTable/alterTable below mutate schema.
+    // Also covers `syncSchema`, which delegates here.
+    this.assertSchemaMutable('initObjects');
     await this.ensureDatabaseExists();
 
     for (const obj of objects) {

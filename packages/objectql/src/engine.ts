@@ -13,7 +13,7 @@ import { ExecutionContext, ExecutionContextSchema } from '@objectstack/spec/kern
 import { DriverInterface, IDataEngine, Logger, createLogger } from '@objectstack/core';
 import { CoreServiceName, StorageNameMapping } from '@objectstack/spec/system';
 import { IRealtimeService, RealtimeEventPayload } from '@objectstack/spec/contracts';
-import { pluralToSingular } from '@objectstack/spec/shared';
+import { pluralToSingular, ExternalWriteForbiddenError } from '@objectstack/spec/shared';
 import { SchemaRegistry, computeFQN } from './registry.js';
 import { ExpressionEngine } from '@objectstack/formula';
 import type { Expression } from '@objectstack/spec';
@@ -199,6 +199,12 @@ export class ObjectQL implements IDataEngine {
 
   // Package manifests registry (for defaultDatasource lookup)
   private manifests = new Map<string, any>();
+
+  // Datasource definitions by name (ADR-0015): carries schemaMode +
+  // external.allowWrites so the write gate (Gate 3) can enforce federation
+  // ownership. Populated from manifests in registerApp and via
+  // registerDatasourceDef. Absent entry ⇒ treated as managed (default DB).
+  private datasourceDefs = new Map<string, { schemaMode?: string; external?: { allowWrites?: boolean } }>();
 
   // Per-object hooks with priority support
   private hooks: Map<string, HookEntry[]> = new Map([
@@ -702,6 +708,18 @@ export class ObjectQL implements IDataEngine {
         this.manifests.set(id, manifest);
       }
 
+      // Index datasource definitions (ADR-0015) so the write gate can read
+      // schemaMode + external.allowWrites. Manifests may carry `datasources`
+      // as an array or a name-keyed map.
+      if (manifest.datasources) {
+        const dsList = Array.isArray(manifest.datasources)
+          ? manifest.datasources
+          : Object.entries(manifest.datasources).map(([name, def]) => ({ name, ...(def as any) }));
+        for (const ds of dsList) {
+          if (ds?.name) this.registerDatasourceDef(ds);
+        }
+      }
+
       // 1. Register the Package (manifest + lifecycle state)
       this._registry.installPackage(manifest);
       this.logger.debug('Installed Package', { id: manifest.id, name: manifest.name, namespace });
@@ -965,6 +983,48 @@ export class ObjectQL implements IDataEngine {
     if (isDefault || this.drivers.size === 1) {
       this.defaultDriver = driver.name;
       this.logger.info('Set default driver', { driverName: driver.name });
+    }
+  }
+
+  /**
+   * Register a Datasource *definition* (ADR-0015).
+   *
+   * Distinct from {@link registerDriver}, which registers a live connection.
+   * This captures the declarative `schemaMode` + `external.allowWrites` so the
+   * write gate ({@link assertWriteAllowed}) can enforce external-datasource
+   * ownership. Safe to call repeatedly; last write wins.
+   */
+  registerDatasourceDef(def: { name: string; schemaMode?: string; external?: { allowWrites?: boolean } }): void {
+    if (!def?.name) return;
+    this.datasourceDefs.set(def.name, { schemaMode: def.schemaMode, external: def.external });
+  }
+
+  /**
+   * Write gate — Gate 3 of ADR-0015 §5.3.
+   *
+   * Blocks insert/update/delete against a federated datasource
+   * (`schemaMode !== 'managed'`) unless BOTH the datasource opts in
+   * (`external.allowWrites`) AND the object opts in (`external.writable`).
+   * Managed datasources (the common case, including the absence of any
+   * definition) are unaffected.
+   */
+  private assertWriteAllowed(objectName: string, operation: 'insert' | 'update' | 'delete'): void {
+    const object = this._registry.getObject(objectName) as any;
+    const dsName = object?.datasource;
+    if (!dsName || dsName === 'default') return;
+
+    const ds = this.datasourceDefs.get(dsName);
+    // No recorded definition, or an explicitly managed one ⇒ allow.
+    if (!ds || !ds.schemaMode || ds.schemaMode === 'managed') return;
+
+    const dsAllows = ds.external?.allowWrites ?? false;
+    const objAllows = object?.external?.writable ?? false;
+    if (!(dsAllows && objAllows)) {
+      throw new ExternalWriteForbiddenError(
+        `Write '${operation}' blocked on object '${objectName}': datasource '${dsName}' is external ` +
+          `(schemaMode=${ds.schemaMode}). Requires datasource.external.allowWrites=true (got ${dsAllows}) ` +
+          `AND object.external.writable=true (got ${objAllows}).`,
+      );
     }
   }
 
@@ -1463,6 +1523,7 @@ export class ObjectQL implements IDataEngine {
   async insert(object: string, data: any | any[], options?: DataEngineInsertOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Insert operation starting', { object, isBatch: Array.isArray(data) });
+    this.assertWriteAllowed(object, 'insert');
     const driver = this.getDriver(object);
 
     const opCtx: OperationContext = {
@@ -1571,6 +1632,7 @@ export class ObjectQL implements IDataEngine {
   async update(object: string, data: any, options?: EngineUpdateOptions): Promise<any> {
      object = this.resolveObjectName(object);
      this.logger.debug('Update operation starting', { object });
+     this.assertWriteAllowed(object, 'update');
      const driver = this.getDriver(object);
      
      // 1. Extract ID from data or where if it's a single update by ID
@@ -1652,6 +1714,7 @@ export class ObjectQL implements IDataEngine {
   async delete(object: string, options?: EngineDeleteOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Delete operation starting', { object });
+    this.assertWriteAllowed(object, 'delete');
     const driver = this.getDriver(object);
 
     // Extract ID logic similar to update
@@ -1979,6 +2042,27 @@ export class ObjectQL implements IDataEngine {
    */
   getDriverByName(name: string): DriverInterface | undefined {
     return this.drivers.get(name);
+  }
+
+  /**
+   * Introspect a datasource's live remote schema (ADR-0015).
+   *
+   * Resolves the driver registered under `datasource` and delegates to its
+   * `introspectSchema()` capability. Used by the external-datasource service
+   * (and CLI/REST) to list remote tables and validate federated objects.
+   *
+   * @throws if the datasource has no registered driver, or the driver does
+   *   not support introspection.
+   */
+  async introspectDatasource(datasource: string): Promise<unknown> {
+    const driver = this.drivers.get(datasource) as any;
+    if (!driver) {
+      throw new Error(`[ObjectQL] Datasource '${datasource}' has no registered driver to introspect.`);
+    }
+    if (typeof driver.introspectSchema !== 'function') {
+      throw new Error(`[ObjectQL] Driver for datasource '${datasource}' does not support introspectSchema().`);
+    }
+    return driver.introspectSchema();
   }
 
   /**

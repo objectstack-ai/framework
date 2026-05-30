@@ -48,6 +48,7 @@ export * from './embedder.js';
 // Provisioning & Deployment
 export * from './provisioning-service.js';
 export * from './schema-diff-service.js';
+export * from './external-datasource-service.js';
 export * from './deploy-pipeline-service.js';
 export * from './tenant-router.js';
 export * from './app-lifecycle-service.js';

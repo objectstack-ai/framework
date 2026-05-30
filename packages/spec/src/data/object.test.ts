@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, type ServiceObject } from './object.zod';
+import { ObjectSchema, ObjectCapabilities, IndexSchema, ObjectFieldGroupSchema, ObjectExternalBindingSchema, type ServiceObject } from './object.zod';
 
 describe('ObjectCapabilities', () => {
   it('should apply default values correctly', () => {
@@ -895,5 +895,44 @@ describe('ObjectSchema.fieldGroups', () => {
     expect(obj.fieldGroups).toEqual([
       { key: 'workflow', label: 'Workflow', icon: 'workflow', defaultExpanded: true },
     ]);
+  });
+
+  describe('External Binding (ADR-0015)', () => {
+    it('should leave external undefined by default', () => {
+      const obj = ObjectSchema.parse({ name: 'account', fields: {} });
+      expect(obj.external).toBeUndefined();
+    });
+
+    it('should accept a minimal external binding and default writable to false', () => {
+      const obj = ObjectSchema.parse({
+        name: 'wh_order',
+        datasource: 'warehouse',
+        external: { remoteSchema: 'mart', remoteName: 'fact_orders' },
+        fields: { order_id: { type: 'text' } },
+      });
+      expect(obj.external?.remoteSchema).toBe('mart');
+      expect(obj.external?.remoteName).toBe('fact_orders');
+      expect(obj.external?.writable).toBe(false);
+    });
+
+    it('should accept a full external binding with column map and opt-in write', () => {
+      const binding = ObjectExternalBindingSchema.parse({
+        remoteName: 'fact_orders',
+        remoteSchema: 'mart',
+        writable: true,
+        columnMap: { ORDER_ID: 'order_id', CUST_ID: 'customer_id' },
+        introspectedAt: '2026-05-30T00:00:00.000Z',
+        ignoreColumns: ['_etl_loaded_at'],
+      });
+      expect(binding.writable).toBe(true);
+      expect(binding.columnMap?.ORDER_ID).toBe('order_id');
+      expect(binding.ignoreColumns).toEqual(['_etl_loaded_at']);
+    });
+
+    it('should reject a non-datetime introspectedAt', () => {
+      expect(() =>
+        ObjectExternalBindingSchema.parse({ introspectedAt: 'yesterday' }),
+      ).toThrow();
+    });
   });
 });
