@@ -965,3 +965,49 @@ describe('ScopedProjectClient', () => {
         expect(scoped.getProjectId()).toBe('00000000-0000-0000-0000-000000000001');
     });
 });
+
+// ==========================================
+// Locale propagation (issue #1319)
+// ==========================================
+
+describe('ObjectStackClient locale → Accept-Language', () => {
+    /** Pull the headers object from the most recent fetch call. */
+    function lastHeaders(fetchMock: ReturnType<typeof vi.fn>): Record<string, string> {
+        const call = fetchMock.mock.calls.at(-1);
+        return (call?.[1]?.headers ?? {}) as Record<string, string>;
+    }
+
+    it('sends no Accept-Language when no locale is configured', async () => {
+        const { client, fetchMock } = createMockClient({ success: true, data: {} });
+        await client.meta.getItem('object', 'customer');
+        expect(lastHeaders(fetchMock)['Accept-Language']).toBeUndefined();
+    });
+
+    it('sends the configured locale as Accept-Language', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true, status: 200, statusText: 'OK', json: async () => ({ success: true, data: {} }), headers: new Headers(),
+        });
+        const client = new ObjectStackClient({
+            baseUrl: 'http://localhost:3000',
+            fetch: fetchMock,
+            locale: 'zh-CN',
+        });
+        await client.meta.getItem('object', 'customer');
+        expect(lastHeaders(fetchMock)['Accept-Language']).toBe('zh-CN');
+    });
+
+    it('setLocale() updates the header on subsequent requests', async () => {
+        const { client, fetchMock } = createMockClient({ success: true, data: {} });
+        await client.meta.getItem('object', 'customer');
+        expect(lastHeaders(fetchMock)['Accept-Language']).toBeUndefined();
+
+        client.setLocale('zh-CN');
+        await client.meta.getItem('object', 'customer');
+        expect(lastHeaders(fetchMock)['Accept-Language']).toBe('zh-CN');
+        expect(client.getLocale()).toBe('zh-CN');
+
+        client.setLocale(undefined);
+        await client.meta.getItem('object', 'customer');
+        expect(lastHeaders(fetchMock)['Accept-Language']).toBeUndefined();
+    });
+});

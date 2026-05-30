@@ -609,6 +609,62 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // getMetaItemCached — locale-aware ETag (#1319)
+    // ═══════════════════════════════════════════════════════════════
+    //
+    // The REST layer translates the response body AFTER this validator runs,
+    // so the ETag must vary by locale — otherwise a language switch matches
+    // the prior `If-None-Match` and returns a stale-locale 304.
+
+    describe('getMetaItemCached locale-aware ETag', () => {
+        const sampleObject = { name: 'customer', label: 'Customer' };
+
+        beforeEach(() => {
+            // Serve the item from a sys_metadata overlay row so the read
+            // succeeds without tripping SchemaRegistry validation on a
+            // deliberately-minimal object def.
+            mockEngine.findOne.mockResolvedValue({
+                type: 'object',
+                name: 'customer',
+                state: 'active',
+                metadata: JSON.stringify(sampleObject),
+            });
+        });
+
+        it('produces distinct ETags for distinct locales', async () => {
+            const en = await protocol.getMetaItemCached({ type: 'object', name: 'customer', locale: 'en' });
+            const zh = await protocol.getMetaItemCached({ type: 'object', name: 'customer', locale: 'zh-CN' });
+            expect(en.etag?.value).toBeTruthy();
+            expect(zh.etag?.value).toBeTruthy();
+            expect(en.etag?.value).not.toBe(zh.etag?.value);
+        });
+
+        it('returns a fresh 200 (not 304) when the cached ETag is from another locale', async () => {
+            const en = await protocol.getMetaItemCached({ type: 'object', name: 'customer', locale: 'en' });
+            // Client re-requests after switching to zh-CN, replaying the en ETag.
+            const zh = await protocol.getMetaItemCached({
+                type: 'object',
+                name: 'customer',
+                locale: 'zh-CN',
+                cacheRequest: { ifNoneMatch: `"${en.etag?.value}"` },
+            });
+            expect(zh.notModified).toBe(false);
+            expect(zh.data).toBeDefined();
+        });
+
+        it('still returns 304 when the same locale revalidates with a matching ETag', async () => {
+            const first = await protocol.getMetaItemCached({ type: 'object', name: 'customer', locale: 'zh-CN' });
+            const second = await protocol.getMetaItemCached({
+                type: 'object',
+                name: 'customer',
+                locale: 'zh-CN',
+                cacheRequest: { ifNoneMatch: `"${first.etag?.value}"` },
+            });
+            expect(second.notModified).toBe(true);
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // getMetaItems — registry-first, DB fallback
     // ═══════════════════════════════════════════════════════════════
 

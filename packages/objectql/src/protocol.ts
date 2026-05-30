@@ -16,7 +16,7 @@ import type { MetadataCacheRequest, MetadataCacheResponse, ServiceInfo, ApiRoute
 import type { IFeedService } from '@objectstack/spec/contracts';
 import { parseFilterAST, isFilterAST } from '@objectstack/spec/data';
 import { PLURAL_TO_SINGULAR, SINGULAR_TO_PLURAL } from '@objectstack/spec/shared';
-import { type FormView } from '@objectstack/spec/ui';
+import { type FormView, isAggregatedViewContainer } from '@objectstack/spec/ui';
 import { METADATA_FORM_REGISTRY } from '@objectstack/spec/system';
 import { DEFAULT_METADATA_TYPE_REGISTRY, getMetadataTypeSchema } from '@objectstack/spec/kernel';
 import {
@@ -1254,6 +1254,19 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             );
         }
 
+        // Canonical-shape exposure (ADR-0017, "Object has-many View"): a
+        // `defineView` document is kept in the registry under the bare
+        // `<object>` key for defensive single-item reads, but it is NOT a
+        // first-class, independently addressable view — the registrar expands
+        // it into independent ViewItems (each carrying `viewKind` + `config`).
+        // Never surface the aggregated `{ list, form, listViews }` container
+        // through enumeration so every list consumer (Studio metadata list,
+        // REST `GET /meta/view`, AI schema retriever) sees exactly one
+        // canonical entry per named view and never the legacy wrapper shape.
+        if (request.type === 'view' || request.type === 'views') {
+            items = (items as any[]).filter((it) => !isAggregatedViewContainer(it));
+        }
+
         return {
             type: request.type,
             items: decorateMetadataItems(
@@ -2405,7 +2418,7 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
     // Metadata Caching
     // ==========================================
 
-    async getMetaItemCached(request: { type: string, name: string, cacheRequest?: MetadataCacheRequest }): Promise<MetadataCacheResponse> {
+    async getMetaItemCached(request: { type: string, name: string, cacheRequest?: MetadataCacheRequest, locale?: string }): Promise<MetadataCacheResponse> {
         try {
             // Delegate to getMetaItem so the customization-overlay read order
             // (sys_metadata → registry → MetadataService) is honoured here too
@@ -2417,9 +2430,17 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 throw new Error(`Metadata item ${request.type}/${request.name} not found`);
             }
 
-            // Calculate ETag (simple hash of the stringified metadata)
+            // Calculate ETag (simple hash of the stringified metadata).
+            //
+            // The ETag MUST vary by locale. The REST layer translates the
+            // response body *after* this validator check, so an ETag computed
+            // only from the (untranslated) content would let a language switch
+            // match the prior `If-None-Match` and return `304 Not Modified`
+            // carrying a stale-locale body — labels/headers stuck in the old
+            // language until a hard refresh (issue #1319). Folding the resolved
+            // locale into the hash gives each locale a distinct validator.
             const content = JSON.stringify(item);
-            const hash = simpleHash(content);
+            const hash = simpleHash(request.locale ? `${request.locale} ${content}` : content);
             const etag = { value: hash, weak: false };
 
             // Check If-None-Match header

@@ -120,6 +120,17 @@ export interface ClientConfig {
    * @see docs/adr/0002-project-database-isolation.md
    */
   environmentId?: string;
+  /**
+   * Active UI locale (BCP-47, e.g. `'zh-CN'`). When set, the client sends
+   * it as an `Accept-Language` header on every request so the server
+   * resolves metadata translations (object/field labels, view headers,
+   * action text) for the *in-app* language rather than the browser default.
+   *
+   * Apps should keep this in sync with their language switcher via
+   * {@link ObjectStackClient.setLocale} so switching language re-fetches
+   * localized metadata without a page refresh (issue #1319).
+   */
+  locale?: string;
 }
 
 /**
@@ -235,6 +246,7 @@ export class ObjectStackClient {
   private baseUrl: string;
   private token?: string;
   private environmentId?: string;
+  private locale?: string;
   private fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   private discoveryInfo?: DiscoveryResult;
   private logger: Logger;
@@ -244,6 +256,7 @@ export class ObjectStackClient {
     this.baseUrl = config.baseUrl.replace(/\/$/, ''); // Remove trailing slash
     this.token = config.token;
     this.environmentId = config.environmentId;
+    this.locale = config.locale;
     this.fetchImpl = config.fetch || globalThis.fetch.bind(globalThis);
 
     // Initialize logger
@@ -1578,6 +1591,25 @@ export class ObjectStackClient {
    */
   getProjectId(): string | undefined {
     return this.environmentId;
+  }
+
+  /**
+   * Update the active UI locale used for subsequent requests. Apps should
+   * call this from their language switcher so server-translated metadata
+   * (object/field labels, view headers, action text) follows the in-app
+   * language without a page refresh. Pass `undefined` to clear and fall
+   * back to the browser's `Accept-Language` (issue #1319).
+   */
+  setLocale(locale: string | undefined): void {
+    this.locale = locale;
+    this.logger.debug('Active locale changed', { locale });
+  }
+
+  /**
+   * Current active UI locale (if set).
+   */
+  getLocale(): string | undefined {
+    return this.locale;
   }
 
   /**
@@ -3162,6 +3194,13 @@ export class ObjectStackClient {
 
     if (this.environmentId) {
         headers['X-Environment-Id'] = this.environmentId;
+    }
+
+    // Carry the in-app locale so the server resolves metadata translations
+    // for the chosen UI language. Don't clobber a caller-supplied header
+    // (case-insensitive check — `headers` is spread from options above).
+    if (this.locale && !Object.keys(headers).some((h) => h.toLowerCase() === 'accept-language')) {
+        headers['Accept-Language'] = this.locale;
     }
 
     const res = await this.fetchImpl(url, { ...options, headers });

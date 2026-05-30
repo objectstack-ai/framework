@@ -15,7 +15,9 @@
 export {
   ObjectStackProvider,
   ObjectStackContext,
+  ObjectStackLocaleContext,
   useClient,
+  useObjectStackLocale,
   type ObjectStackProviderProps
 } from './context';
 

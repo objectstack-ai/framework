@@ -2,6 +2,7 @@
 
 import { createRootRoute, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
+import { useObjectTranslation } from '@object-ui/i18n';
 import { ObjectStackProvider } from '@objectstack/client-react';
 import { ObjectStackClient } from '@objectstack/client';
 import { Toaster } from '@/components/ui/toaster';
@@ -139,9 +140,14 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const baseUrl = getApiBaseUrl();
   const client = useMemo(() => new ObjectStackClient({ baseUrl }), [baseUrl]);
+  // Bridge the active UI language into the data/metadata client so server-
+  // resolved labels follow the in-app language switch without a refresh
+  // (issue #1319). `useObjectTranslation` re-renders on `languageChanged`,
+  // so `language` is always current here.
+  const { language } = useObjectTranslation();
 
   return (
-    <ObjectStackProvider client={client}>
+    <ObjectStackProvider client={client} locale={language}>
       <SessionProvider>
         <RequireAuth>
           <Outlet />

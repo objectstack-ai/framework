@@ -252,6 +252,11 @@ export const GetMetaItemCachedRequestSchema = lazySchema(() => z.object({
   type: z.string().describe('Metadata type name'),
   name: z.string().describe('Item name'),
   cacheRequest: MetadataCacheRequestSchema.optional().describe('Cache validation parameters'),
+  locale: z.string().optional().describe(
+    'Resolved response locale. Folded into the ETag so a language switch '
+    + 'never returns a stale-locale 304 — metadata is translated *after* the '
+    + 'cache validator check (issue #1319).',
+  ),
 }));
 
 /**

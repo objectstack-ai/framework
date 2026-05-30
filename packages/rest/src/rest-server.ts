@@ -915,10 +915,13 @@ export class RestServer {
      * locale yields a match. Falls through unchanged for unsupported types
      * or missing translations.
      */
-    private async translateMetaItem(req: any, type: string, environmentId: string | undefined, item: any): Promise<any> {
+    private async translateMetaItem(req: any, type: string, environmentId: string | undefined, item: any, i18nService?: any): Promise<any> {
         if (!item || typeof item !== 'object') return item;
         if (type !== 'view' && type !== 'action' && type !== 'object') return item;
-        const i18n = await this.resolveI18nService(environmentId, req);
+        // The cached read path resolves the i18n service up-front (to build a
+        // locale-aware ETag) and passes it here so we don't repeat the
+        // potentially registry-hitting lookup on every request.
+        const i18n = i18nService !== undefined ? i18nService : await this.resolveI18nService(environmentId, req);
         const bundle = this.buildTranslationBundle(i18n);
         if (!bundle) return item;
         const locale = this.extractLocale(req, i18n);
@@ -1678,10 +1681,19 @@ export class RestServer {
                                 ifModifiedSince: req.headers['if-modified-since'] as string,
                             };
 
+                            // Resolve the response locale up-front and fold it
+                            // into the cache key. The body is translated below
+                            // (`translateMetaItem`) *after* this validator runs,
+                            // so without a locale-aware ETag a language switch
+                            // would return a stale-locale 304 (issue #1319).
+                            const cacheI18n = await this.resolveI18nService(environmentId, req);
+                            const cacheLocale = this.extractLocale(req, cacheI18n);
+
                             const result = await p.getMetaItemCached({
                                 type: req.params.type,
                                 name: req.params.name,
                                 cacheRequest,
+                                ...(cacheLocale ? { locale: cacheLocale } : {}),
                                 ...(environmentId ? { environmentId } : {}),
                             } as any);
 
@@ -1709,7 +1721,7 @@ export class RestServer {
                             }
 
                             res.header('Vary', 'Accept-Language');
-                            res.json(await this.translateMetaItem(req, req.params.type, environmentId, result.data));
+                            res.json(await this.translateMetaItem(req, req.params.type, environmentId, result.data, cacheI18n));
                         } else {
                             // Non-cached version
                             const packageId = req.query?.package || undefined;

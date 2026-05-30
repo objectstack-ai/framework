@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useClient } from './context';
+import { useClient, useObjectStackLocale } from './context';
 
 /**
  * Metadata query options
@@ -70,6 +70,10 @@ export function useObject(
   options: UseMetadataOptions = {}
 ): UseMetadataResult {
   const client = useClient();
+  // Active UI locale: object/field labels are translated server-side, so a
+  // language switch must re-fetch (it is *not* reactive via i18next). Folding
+  // `locale` into the fetch deps below triggers that re-fetch (issue #1319).
+  const locale = useObjectStackLocale();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -123,7 +127,7 @@ export function useObject(
     } finally {
       setIsLoading(false);
     }
-  }, [client, objectName, enabled, useCache, ifNoneMatch, ifModifiedSince, etag, data, onSuccess, onError]);
+  }, [client, objectName, locale, enabled, useCache, ifNoneMatch, ifModifiedSince, etag, data, onSuccess, onError]);
 
   useEffect(() => {
     fetchMetadata();
@@ -168,6 +172,8 @@ export function useView(
   options: UseMetadataOptions = {}
 ): UseMetadataResult {
   const client = useClient();
+  // View headers/labels are translated server-side — re-fetch on locale change.
+  const locale = useObjectStackLocale();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -191,7 +197,7 @@ export function useView(
     } finally {
       setIsLoading(false);
     }
-  }, [client, objectName, viewType, enabled, onSuccess, onError]);
+  }, [client, objectName, viewType, locale, enabled, onSuccess, onError]);
 
   useEffect(() => {
     fetchView();
@@ -271,6 +277,9 @@ export function useMetadata<T = any>(
   options: Omit<UseMetadataOptions, 'useCache' | 'ifNoneMatch' | 'ifModifiedSince'> = {}
 ): UseMetadataResult<T> {
   const client = useClient();
+  // Custom fetchers commonly read server-translated metadata too — refetch on
+  // locale change so their labels follow the active language.
+  const locale = useObjectStackLocale();
   const [data, setData] = useState<T | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -294,7 +303,7 @@ export function useMetadata<T = any>(
     } finally {
       setIsLoading(false);
     }
-  }, [client, fetcher, enabled, onSuccess, onError]);
+  }, [client, fetcher, locale, enabled, onSuccess, onError]);
 
   useEffect(() => {
     fetchMetadata();
