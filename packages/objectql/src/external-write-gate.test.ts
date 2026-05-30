@@ -24,7 +24,7 @@ function makeDriver(name: string): IDataDriver {
     async find() { return []; },
     async findOne() { return null; },
     async count() { return 0; },
-    async insert(object: string, data: any) {
+    async create(object: string, data: any) {
       const id = data.id ?? String(store.size + 1);
       const row = { ...data, id };
       store.set(`${object}:${id}`, row);
