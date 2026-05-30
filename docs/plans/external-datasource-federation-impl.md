@@ -166,6 +166,18 @@ Gate 2 (boot validation) + remote-schema caching.
    snapshot. Tests cover persistence, the read-only/throwing store, and the
    canonicalised shape.
 
+5. **Background drift detection** — `ExternalValidationPlugin` now arms a
+   per-datasource `setInterval` for every federated datasource that declares
+   `external.validation.checkIntervalMs` (ADR §5.2). Each tick re-runs
+   `validateAll()` and emits one `external.schema.drift` event
+   (`{ datasource, object, diffs }`, type `ExternalSchemaDriftEvent`) on the
+   kernel bus per drifted object — observational, so it never throws or aborts
+   the process (unlike boot validation). Timers `unref()` and are cleared on
+   `stop()`; re-arming clears prior timers so intervals can't accumulate.
+   Consumed by `audit` / `notification` services. Tests cover event emission,
+   the validateAll-rejects no-op, selective scheduling, the firing interval,
+   re-arm idempotence, and the no-metadata no-op.
+
 ### Follow-up notes / open items for later phases
 
 - **DDL gate plumbing (P3)**: ✅ done — `createDefaultDatasourceDriverFactory`

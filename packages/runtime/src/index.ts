@@ -21,6 +21,7 @@ export { AppPlugin, collectBundleHooks, collectBundleFunctions, collectBundleAct
 export { SeedLoaderService } from './seed-loader.js';
 // External Datasource Federation — boot-validation gate (ADR-0015, Gate 2)
 export { ExternalValidationPlugin, createExternalValidationPlugin } from './external-validation-plugin.js';
+export type { ExternalSchemaDriftEvent } from './external-validation-plugin.js';
 // Runtime-UI datasource lifecycle host glue (ADR-0015 Addendum)
 export { createDefaultDatasourceDriverFactory } from './default-datasource-driver-factory.js';
 export {

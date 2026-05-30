@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ExternalValidationPlugin } from './external-validation-plugin';
 import { ExternalSchemaMismatchError, type SchemaDiffEntry } from '@objectstack/spec/shared';
 
@@ -79,5 +79,105 @@ describe('ExternalValidationPlugin (ADR-0015 Gate 2)', () => {
       'external-datasource': { validateAll: async () => ({ ok: false, results: [{ ok: false, datasource: 'warehouse', object: 'wh_order', diffs: sampleDiffs }] }) },
     });
     await expect(new ExternalValidationPlugin().runValidation(ctx)).rejects.toBeInstanceOf(ExternalSchemaMismatchError);
+  });
+});
+
+describe('ExternalValidationPlugin — background drift detection (ADR-0015 §5.2)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('runDriftCheck emits one external.schema.drift event per drifted object', async () => {
+    const { ctx } = makeCtx({
+      'external-datasource': {
+        validateAll: async () => ({
+          ok: false,
+          results: [
+            { ok: false, datasource: 'warehouse', object: 'wh_order', diffs: sampleDiffs },
+            { ok: true, datasource: 'warehouse', object: 'wh_ok', diffs: [] },
+            // A failure on a *different* datasource must not bleed into warehouse's check.
+            { ok: false, datasource: 'other', object: 'x', diffs: sampleDiffs },
+          ],
+        }),
+      },
+    });
+    const emitted = await new ExternalValidationPlugin().runDriftCheck(ctx, 'warehouse');
+    expect(emitted).toBe(1);
+    expect(ctx.trigger).toHaveBeenCalledTimes(1);
+    expect(ctx.trigger).toHaveBeenCalledWith('external.schema.drift', {
+      datasource: 'warehouse',
+      object: 'wh_order',
+      diffs: sampleDiffs,
+    });
+  });
+
+  it('runDriftCheck is a no-op (no throw) when validateAll rejects', async () => {
+    const { ctx, warnings } = makeCtx({
+      'external-datasource': { validateAll: async () => { throw new Error('remote unreachable'); } },
+    });
+    const emitted = await new ExternalValidationPlugin().runDriftCheck(ctx, 'warehouse');
+    expect(emitted).toBe(0);
+    expect(ctx.trigger).not.toHaveBeenCalled();
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('schedules a timer only for datasources declaring checkIntervalMs', async () => {
+    const { ctx } = makeCtx({
+      'external-datasource': { validateAll: async () => ({ ok: true, results: [] }) },
+      metadata: {
+        list: async () => [
+          { name: 'warehouse', external: { validation: { checkIntervalMs: 60_000 } } },
+          { name: 'replica', external: { validation: {} } }, // no interval → skipped
+          { name: 'local' }, // not federated → skipped
+        ],
+      },
+    });
+    const plugin = new ExternalValidationPlugin();
+    await plugin.scheduleDriftChecks(ctx);
+    expect(vi.getTimerCount()).toBe(1);
+    plugin.stop();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('the armed timer fires runDriftCheck on its interval and emits drift', async () => {
+    const { ctx } = makeCtx({
+      'external-datasource': {
+        validateAll: async () => ({ ok: false, results: [{ ok: false, datasource: 'warehouse', object: 'wh_order', diffs: sampleDiffs }] }),
+      },
+      metadata: {
+        list: async () => [{ name: 'warehouse', external: { validation: { checkIntervalMs: 1000 } } }],
+      },
+    });
+    const plugin = new ExternalValidationPlugin();
+    await plugin.scheduleDriftChecks(ctx);
+    expect(ctx.trigger).not.toHaveBeenCalled();
+    // Advance past one interval and flush the fire-and-forget async work.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(ctx.trigger).toHaveBeenCalledWith('external.schema.drift', expect.objectContaining({
+      datasource: 'warehouse',
+      object: 'wh_order',
+    }));
+    plugin.stop();
+  });
+
+  it('re-arming clears prior timers so intervals do not accumulate', async () => {
+    const { ctx } = makeCtx({
+      'external-datasource': { validateAll: async () => ({ ok: true, results: [] }) },
+      metadata: {
+        list: async () => [{ name: 'warehouse', external: { validation: { checkIntervalMs: 1000 } } }],
+      },
+    });
+    const plugin = new ExternalValidationPlugin();
+    await plugin.scheduleDriftChecks(ctx);
+    await plugin.scheduleDriftChecks(ctx);
+    expect(vi.getTimerCount()).toBe(1);
+    plugin.stop();
+  });
+
+  it('is a no-op when metadata cannot enumerate datasources', async () => {
+    const { ctx } = makeCtx({
+      'external-datasource': { validateAll: async () => ({ ok: true, results: [] }) },
+    });
+    await expect(new ExternalValidationPlugin().scheduleDriftChecks(ctx)).resolves.toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
