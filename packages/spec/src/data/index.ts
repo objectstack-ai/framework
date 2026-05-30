@@ -31,6 +31,9 @@ export * from './document.zod';
 export * from './external-lookup.zod';
 export * from './datasource.zod';
 
+// External Datasource Federation — SQL↔field type compatibility (ADR-0015)
+export * from './type-compat';
+
 // Analytics Protocol (Semantic Layer)
 export * from './analytics.zod';
 

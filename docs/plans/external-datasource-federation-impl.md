@@ -49,7 +49,7 @@ already exists and is reused:
 | Phase | Scope | Status |
 |:-----:|:--|:--|
 | **P1** | Spec changes (`schemaMode`, `object.external`, error classes) + DDL gate in `driver-sql` + tests | ✅ **Done** (this branch) |
-| **P2** | `IExternalDatasourceService` impl + type-compat matrix + CLI `introspect`/`validate` | ⬜ Todo |
+| **P2** | `IExternalDatasourceService` impl + type-compat matrix + CLI `introspect`/`validate` | 🟡 **Service core done** (matrix + contract + service); REST routes + CLI pending |
 | **P3** | Boot-validation plugin in `@objectstack/runtime` + `external_catalog` metadata type + caching | ⬜ Todo |
 | **P4** | `SchemaRetriever` annotation + agent prompt + AI safety nets (LIMIT injection, timeout) | ⬜ Todo |
 | **P5** | Studio UI in `../objectui` (wizard, schema browser, mapping editor, validation panel) | ⬜ Todo |
@@ -95,6 +95,43 @@ behaviour).
    object binding), error classes + diff rendering, and the DDL gate
    (managed allows DDL; external/validate-only block create/alter/drop;
    `schemaMode` not leaked to Knex).
+
+## P2 — delivered in this change (service core)
+
+1. **`packages/spec/src/data/type-compat.ts`** — pure, dialect-aware matrix
+   (`canonicalizeSqlType` → `suggestFieldType` / `isCompatible`) covering
+   postgres/mysql/sqlite/snowflake/bigquery/mongo. Returns `true` / `'lossy'`
+   / `false`. Independently unit-tested.
+
+2. **`packages/spec/src/contracts/external-datasource-service.ts`** —
+   `IExternalDatasourceService` + `RemoteTable`, `GenerateDraftOpts`,
+   `ObjectDraft`, `SchemaValidationResult`/`Report`. Reuses the existing
+   `IntrospectedSchema` from `schema-diff-service.ts` and `SchemaDiffEntry`
+   from `external-errors.ts`.
+
+3. **`packages/services/service-external-datasource`** (new package) —
+   `ExternalDatasourceService` implements the contract:
+   - `listRemoteTables` (schema-qualified, `allowedSchemas`-filtered),
+   - `generateObjectDraft` (type-compat mapping → reviewable `*.object.ts`
+     source with `// REVIEW:` markers on lossy/unknown columns),
+   - `validateObject` / `validateAll` (structured diffs: `missing_table`,
+     `missing_column`, `type_mismatch`; lossy = warning, hard mismatch =
+     error; honours `columnMap` + `ignoreColumns`),
+   - `refreshCatalog` (snapshot shape; persistence lands with P3's
+     `external_catalog` type).
+   The service takes injected I/O (`introspect` / `getDatasource` /
+   `getObject` / `listObjects`) so it is decoupled and fully unit-tested; the
+   `ExternalDatasourceServicePlugin` wires the live `IDataEngine` +
+   `IMetadataService` and registers it as the `external-datasource` service.
+
+### Remaining P2 slice (next)
+
+- **REST routes** under `/api/v1/datasources/:name/external/*` (ADR §6.2).
+- **CLI** `os datasource list-tables | introspect | validate` (ADR §6.3) —
+  thin oclif commands over the REST routes.
+- Driver introspection plumbing: expose
+  `getDatasourceDriver(name)` / `introspectDatasource(name)` on the data
+  engine so the plugin's default `introspect` works end-to-end.
 
 ### Follow-up notes / open items for later phases
 
