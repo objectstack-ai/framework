@@ -122,7 +122,13 @@ export class SchemaRetriever {
       if (obj.label) parts.push(obj.label);
       if (obj.pluralLabel && obj.pluralLabel !== obj.label) parts.push(`(${obj.pluralLabel})`);
       const header = parts.length > 0 ? ` — ${parts.join(' ')}` : '';
-      lines.push(`### ${obj.name}${header}`);
+      // ADR-0015: warn the model that federated objects come from a customer's
+      // production database — it must not propose schema changes or unsafe
+      // writes, and should bound queries with sensible limits/filters.
+      const badge = obj.external !== undefined
+        ? ` [external, ${obj.external?.writable ? 'writable' : 'read-only'}, datasource=${obj.datasource ?? 'default'}]`
+        : '';
+      lines.push(`### ${obj.name}${header}${badge}`);
       const fields = Object.entries(obj.fields ?? {}).slice(0, maxFieldsPerObject);
       for (const [name, field] of fields) {
         lines.push(`  - ${name}: ${describeField(field)}`);
