@@ -4,7 +4,7 @@ import { Plugin, PluginContext, IHttpServer } from '@objectstack/core';
 import { RestServer, RestKernelManager } from './rest-server.js';
 import { ObjectStackProtocol, RestServerConfig } from '@objectstack/spec/api';
 import { registerPackageRoutes } from './package-routes.js';
-import { registerExternalDatasourceRoutes, registerDatasourceAdminRoutes } from './external-datasource-routes.js';
+import { registerExternalDatasourceRoutes } from './external-datasource-routes.js';
 import type { PackageService } from '@objectstack/service-package';
 
 export interface RestApiPluginConfig {
@@ -206,17 +206,17 @@ export function createRestApiPlugin(config: RestApiPluginConfig = {}): Plugin {
                 ctx.logger.debug('Package service not available, package routes skipped');
             }
 
-            // Datasource routes do NOT depend on the package service — register
-            // them unconditionally. Each degrades gracefully (503) when its
-            // backing service is absent.
-            //   • External Datasource Federation (ADR-0015): catalog / draft / validate.
-            //   • Datasource lifecycle (ADR-0015 Addendum): list / test / create / update / remove.
+            // External Datasource Federation routes (ADR-0015): catalog / draft /
+            // import / validate. Registered unconditionally — they degrade
+            // gracefully (503) when the `external-datasource` service is absent.
+            // NOTE: the datasource *lifecycle* routes (ADR-0015 Addendum:
+            // list / test / create / update / remove) moved to the private
+            // `@objectstack/datasource-admin` package, which registers its own.
             try {
                 registerExternalDatasourceRoutes(server, ctx, versionedBase);
-                registerDatasourceAdminRoutes(server, ctx, versionedBase);
-                ctx.logger.info('Datasource routes registered');
+                ctx.logger.info('Datasource federation routes registered');
             } catch (e: any) {
-                ctx.logger.warn('Datasource routes registration failed', { error: e?.message });
+                ctx.logger.warn('Datasource federation routes registration failed', { error: e?.message });
             }
         }
     };

@@ -1537,17 +1537,17 @@ export default class Serve extends Command {
         }
       }
 
-      // ── Runtime-UI datasource lifecycle (ADR-0015 Addendum) ────────
-      // Always available so the Studio "Add Datasource" wizard has a
-      // working backend: list (code + runtime origins), test a connection,
-      // and create / update / remove runtime datasources. Code-origin
-      // datasources stay read-only. The connection probe + hot pool use a
-      // default driver factory (postgres / sqlite / mongodb / memory) and
-      // the secret is wrapped into `sys_secret` via a fail-closed binder —
-      // only a `credentialsRef` is ever persisted, never cleartext.
+      // ── External Datasource Federation (ADR-0015) ─────────────────
+      // Federation (introspect / draft / import / validate of external
+      // tables) ships in the open framework. The runtime-UI datasource
+      // *lifecycle* (ADR-0015 Addendum — the "Add Datasource" wizard backend:
+      // create / update / remove runtime datasources) was extracted into the
+      // private `@objectstack/datasource-admin` package; a private host wires
+      // its `DatasourceAdminServicePlugin` + routes after the data/metadata
+      // services exist (see that package's README).
       try {
         const dsMod: any = await import('@objectstack/service-external-datasource');
-        const { ExternalDatasourceServicePlugin, DatasourceAdminServicePlugin } = dsMod;
+        const { ExternalDatasourceServicePlugin } = dsMod;
 
         if (
           ExternalDatasourceServicePlugin &&
@@ -1555,41 +1555,6 @@ export default class Serve extends Command {
         ) {
           await kernel.use(new ExternalDatasourceServicePlugin());
           trackPlugin('ExternalDatasourceServicePlugin');
-        }
-
-        if (
-          DatasourceAdminServicePlugin &&
-          !hasPluginMatching(['service-datasource-admin', 'DatasourceAdminServicePlugin'])
-        ) {
-          const rtMod: any = await import('@objectstack/runtime');
-          const { createDefaultDatasourceDriverFactory, createDatasourceSecretBinder } = rtMod;
-
-          // Fail-closed secret binder: when no crypto provider is available
-          // the admin service still loads, but secret-bearing create/update
-          // throws rather than persist cleartext.
-          let secrets: any;
-          try {
-            const { InMemoryCryptoProvider } = await import('@objectstack/service-settings');
-            const cryptoProvider = new InMemoryCryptoProvider();
-            const lazyEngine = {
-              insert: (o: string, d: any, opt?: any) => (kernel.getService('data') as any).insert(o, d, opt),
-              delete: (o: string, opt: any) => (kernel.getService('data') as any).delete(o, opt),
-              // Read path for boot rehydration: the secret binder dereferences
-              // each runtime datasource's `credentialsRef` from `sys_secret`.
-              find: (o: string, q: any) => (kernel.getService('data') as any).find(o, q),
-            };
-            secrets = createDatasourceSecretBinder({ engine: lazyEngine, cryptoProvider });
-          } catch {
-            /* no crypto provider — admin service loads, secrets fail closed */
-          }
-
-          await kernel.use(
-            new DatasourceAdminServicePlugin({
-              driverFactory: createDefaultDatasourceDriverFactory(),
-              ...(secrets ? { secrets } : {}),
-            }),
-          );
-          trackPlugin('DatasourceAdminServicePlugin');
         }
 
         // Gate 2 (ADR-0015 §5.2): on kernel:ready, validate every federated

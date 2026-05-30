@@ -9,20 +9,10 @@ export type {
   Logger,
 } from './external-datasource-service.js';
 
-// Datasource lifecycle service (ADR-0015 Addendum)
-export { DatasourceAdminService } from './datasource-admin-service.js';
-export type {
-  DatasourceAdminServiceConfig,
-  StoredDatasource,
-  ProbeInput,
-} from './datasource-admin-service.js';
-
-// Datasource lifecycle kernel plugin
-export { DatasourceAdminServicePlugin } from './datasource-admin-plugin.js';
-export type {
-  DatasourceAdminServicePluginOptions,
-  SecretBinder,
-} from './datasource-admin-plugin.js';
+// NOTE: the runtime datasource *lifecycle* (DatasourceAdminService /
+// DatasourceAdminServicePlugin, ADR-0015 Addendum) was extracted into the
+// private `@objectstack/datasource-admin` package. This package keeps only
+// *federation* (introspect / draft / import / validate) — ADR-0015 main body.
 
 // Kernel plugin
 export { ExternalDatasourceServicePlugin } from './plugin.js';
