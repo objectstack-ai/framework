@@ -16,8 +16,8 @@ Migrated to shared/http.zod.ts. Re-exported here for backward compatibility.
 ## TypeScript Usage
 
 ```typescript
-import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
-import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
+import type { AddRecordConfig, AppearanceConfig, CalendarConfig, ColumnSummary, GalleryConfig, GanttConfig, GroupingConfig, GroupingField, KanbanConfig, ListChartConfig, ListColumn, NavigationConfig, NavigationMode, PaginationConfig, RowColorConfig, RowHeight, SelectionConfig, TimelineConfig, UserActionsConfig, ViewData, ViewFilterRule, ViewItemName, ViewKind, ViewScope, ViewSharing, ViewTab, VisualizationType } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AddRecordConfig.parse(data);
@@ -385,6 +385,34 @@ View filter rule
 | **field** | `string` | ✅ | Field name to filter on |
 | **operator** | `string` | ✅ | Filter operator (e.g. equals, not_equals, contains, this_quarter) |
 | **value** | `string \| number \| boolean \| null \| string \| number[]` | optional | Filter value |
+
+
+---
+
+
+---
+
+## ViewKind
+
+Whether `config` is a ListView (list family) or a FormView.
+
+### Allowed Values
+
+* `list`
+* `form`
+
+
+---
+
+## ViewScope
+
+View identity layer: package | shared | personal.
+
+### Allowed Values
+
+* `package`
+* `shared`
+* `personal`
 
 
 ---

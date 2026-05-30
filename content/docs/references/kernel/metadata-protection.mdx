@@ -1,0 +1,99 @@
+---
+title: Metadata Protection
+description: Metadata Protection protocol schemas
+---
+
+{/* ⚠️  AUTO-GENERATED — DO NOT EDIT. Run build-docs.ts to regenerate. Hand-written docs go in content/docs/guides/. */}
+
+# Metadata Protection Model — Phase 1 (ADR-0010)
+
+Phase 1 introduces the **item-level lock** (`_lock`) and the
+
+provenance / package tags that drive it. Later phases extend this
+
+file with the path-level (`_frozenPaths`) and package-level
+
+(`metadataDefaults`) layers; the wire shapes here are forward-
+
+compatible with those additions.
+
+Wire / runtime contract:
+
+- `_lock`        — 4-state enum, controls overlay / delete actions.
+
+- `_lockReason`  — short, user-visible explanation surfaced in
+
+`403 item_locked` errors and on Studio tooltips.
+
+- `_lockSource`  — which layer set the lock (Phase 1 only emits
+
+`'artifact'`; `'package'` and `'env-forced'`
+
+are reserved for Phase 3/2 respectively).
+
+- `_provenance`  — `'package'` for loader-introduced items,
+
+`'org'` for tenant-authored, `'env-forced'`
+
+reserved for emergency overrides.
+
+- `_packageId` / `_packageVersion` — denormalised from the
+
+registry tag so consumers don't need a second
+
+round-trip to inspect provenance.
+
+See `docs/adr/0010-metadata-protection-model.md` for the full
+
+design (industry references, 4-layer model, audit trail).
+
+<Callout type="info">
+**Source:** `packages/spec/src/kernel/metadata-protection.zod.ts`
+</Callout>
+
+## TypeScript Usage
+
+```typescript
+import { MetadataLock, MetadataLockSource, MetadataProvenance } from '@objectstack/spec/kernel';
+import type { MetadataLock, MetadataLockSource, MetadataProvenance } from '@objectstack/spec/kernel';
+
+// Validate data
+const result = MetadataLock.parse(data);
+```
+
+---
+
+## MetadataLock
+
+### Allowed Values
+
+* `none`
+* `no-overlay`
+* `no-delete`
+* `full`
+
+
+---
+
+## MetadataLockSource
+
+### Allowed Values
+
+* `artifact`
+* `package`
+* `env-forced`
+
+
+---
+
+## MetadataProvenance
+
+### Allowed Values
+
+* `package`
+* `org`
+* `env-forced`
+
+
+---
+

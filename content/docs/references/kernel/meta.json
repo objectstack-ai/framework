@@ -13,6 +13,7 @@
     "metadata-loader",
     "metadata-persistence",
     "metadata-plugin",
+    "metadata-protection",
     "misc",
     "package-artifact",
     "package-registry",

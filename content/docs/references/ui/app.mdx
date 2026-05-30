@@ -34,8 +34,8 @@ Navigation item IDs are used in URLs and configuration and must be lowercase sna
 ## TypeScript Usage
 
 ```typescript
-import { AppBranding } from '@objectstack/spec/ui';
-import type { AppBranding } from '@objectstack/spec/ui';
+import { AppBranding, AppContextSelector } from '@objectstack/spec/ui';
+import type { AppBranding, AppContextSelector } from '@objectstack/spec/ui';
 
 // Validate data
 const result = AppBranding.parse(data);
@@ -52,6 +52,24 @@ const result = AppBranding.parse(data);
 | **primaryColor** | `string` | optional | Primary theme color hex code |
 | **logo** | `string` | optional | Custom logo URL for this app |
 | **favicon** | `string` | optional | Custom favicon URL for this app |
+
+
+---
+
+## AppContextSelector
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **id** | `string` | ✅ | Selector id; selected value is exposed as the nav template var `{`<id>`}` |
+| **label** | `string` | ✅ | Dropdown label |
+| **icon** | `string` | optional | Icon name |
+| **optionsSource** | `Object` | ✅ | Option data source |
+| **includeAll** | `boolean` | ✅ | Prepend an "All" option that clears the scope |
+| **allValue** | `string` | ✅ | Template value when "All" is selected (empty = no filter) |
+| **persist** | `Enum<'query' \| 'session' \| 'none'>` | ✅ | Persist selection via URL query, sessionStorage, or not at all |
+| **placement** | `Enum<'sidebar_header' \| 'topbar'>` | ✅ | Render location in the app chrome |
 
 
 ---

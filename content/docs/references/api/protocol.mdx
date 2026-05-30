@@ -520,6 +520,7 @@ const result = AiInsightsRequest.parse(data);
 | **type** | `string` | ✅ | Metadata type name |
 | **name** | `string` | ✅ | Item name |
 | **cacheRequest** | `Object` | optional | Cache validation parameters |
+| **locale** | `string` | optional | Resolved response locale. Folded into the ETag so a language switch never returns a stale-locale 304 — metadata is translated *after* the cache validator check (issue #1319). |
 
 
 ---

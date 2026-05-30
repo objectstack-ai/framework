@@ -5,6 +5,7 @@ import { readEnvWithDeprecation } from '@objectstack/types';
 import { SeedLoaderService } from './seed-loader.js';
 import { loadDisabledPackageIds } from './package-state-store.js';
 import type { IMetadataService, II18nService } from '@objectstack/spec/contracts';
+import { SystemUserId } from '@objectstack/spec/system';
 import { QuickJSScriptRunner } from './sandbox/quickjs-runner.js';
 import { hookBodyRunnerFactory, actionBodyRunnerFactory } from './sandbox/body-runner.js';
 
