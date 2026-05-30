@@ -46,7 +46,7 @@ async function boot(opts: DatasourceAdminServicePluginOptions & {
   const { services: _omit, ...pluginOpts } = opts;
   const plugin = new DatasourceAdminServicePlugin(pluginOpts);
   await plugin.init(ctx);
-  return { service: registered!, registry, metadata };
+  return { service: registered!, registry, metadata, plugin, ctx };
 }
 
 /** A driver factory whose handle records connect/ping/disconnect calls. */
@@ -124,6 +124,91 @@ describe('DatasourceAdminServicePlugin: secret fail-closed', () => {
     expect(rec.external?.credentialsRef).toBe('sys_secret://datasource/reporting#1');
     expect(JSON.stringify(rec)).not.toContain('pw');
     expect(bound).toEqual(['pw']);
+  });
+});
+
+describe('DatasourceAdminServicePlugin: boot rehydration', () => {
+  /** Fake engine ('data') that records hot-registered drivers. */
+  function fakeEngine() {
+    const drivers: any[] = [];
+    return {
+      drivers,
+      registerDriver: (d: any) => drivers.push(d),
+      registerDatasourceDef: () => {},
+      getDriverByName: (n: string) => drivers.find((d) => d.name === n),
+    };
+  }
+
+  /** Factory that records the spec (incl. resolved secret) of each create(). */
+  function recordingFactory() {
+    const specs: any[] = [];
+    const factory: IDatasourceDriverFactory = {
+      supports: (id: string) => id === 'postgres',
+      create: async (spec) => {
+        specs.push(spec);
+        return { connect: async () => {}, disconnect: async () => {} };
+      },
+    };
+    return { factory, specs };
+  }
+
+  it('rebuilds runtime pools at start(), decrypting the credentialsRef', async () => {
+    const engine = fakeEngine();
+    const { factory, specs } = recordingFactory();
+    const resolved: string[] = [];
+
+    const { plugin, ctx, registry } = await boot({
+      driverFactory: factory,
+      services: { data: engine },
+      secrets: {
+        bind: async () => 'sys_secret:abc',
+        resolve: async (ref) => {
+          resolved.push(ref);
+          return ref === 'sys_secret:abc' ? 'super-secret-pw' : undefined;
+        },
+      },
+    });
+
+    // Simulate a persisted (DB-backed) runtime datasource that survived a restart.
+    registry.set(
+      'datasource',
+      new Map<string, unknown>([
+        ['crm_primary', { name: 'crm_primary', driver: 'sqlite', origin: 'code' }],
+        [
+          'reporting',
+          {
+            name: 'reporting',
+            driver: 'postgres',
+            origin: 'runtime',
+            active: true,
+            config: { host: 'db' },
+            external: { credentialsRef: 'sys_secret:abc' },
+          },
+        ],
+        [
+          'archived',
+          { name: 'archived', driver: 'postgres', origin: 'runtime', active: false },
+        ],
+      ]),
+    );
+
+    await plugin.start(ctx);
+
+    // Only the active runtime datasource is rehydrated — not the code one, not the inactive one.
+    expect(engine.drivers.map((d) => d.name)).toEqual(['reporting']);
+    // The credentialsRef was dereferenced and the cleartext handed to the factory.
+    expect(resolved).toEqual(['sys_secret:abc']);
+    expect(specs).toHaveLength(1);
+    expect(specs[0].secret).toBe('super-secret-pw');
+    expect(specs[0].name).toBe('reporting');
+  });
+
+  it('does not block boot when nothing is persisted (dev: in-memory store)', async () => {
+    const engine = fakeEngine();
+    const { factory } = recordingFactory();
+    const { plugin, ctx } = await boot({ driverFactory: factory, services: { data: engine } });
+    await expect(plugin.start(ctx)).resolves.toBeUndefined();
+    expect(engine.drivers).toHaveLength(0);
   });
 });
 

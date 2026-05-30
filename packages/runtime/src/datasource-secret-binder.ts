@@ -20,10 +20,27 @@ import type { CryptoHandle, ICryptoProvider } from '@objectstack/spec/contracts'
 /** Prefix used to recognise a datasource credential handle. */
 const REF_PREFIX = 'sys_secret:';
 
+/** A persisted `sys_secret` row (subset used to reconstruct a {@link CryptoHandle}). */
+interface SecretRow {
+  id: string;
+  namespace: string;
+  key: string;
+  kms_key_id: string;
+  alg: string;
+  version: number;
+  ciphertext: string;
+}
+
 /** Minimal data-engine surface used to read/write the `sys_secret` store. */
 export interface SecretStoreEngineLike {
   insert(object: string, data: Record<string, unknown>, options?: unknown): Promise<unknown>;
   delete(object: string, options: { where: Record<string, unknown> }): Promise<unknown>;
+  /**
+   * Read `sys_secret` rows for the `resolve()` path. Optional so existing
+   * callers that only bind/unbind keep working; `resolve()` no-ops when absent.
+   * Mirrors `IDataEngine.find` — returns an array (or `{ data: [...] }`).
+   */
+  find?(object: string, query: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface DatasourceSecretBinderDeps {
@@ -38,6 +55,16 @@ export interface DatasourceSecretBinderDeps {
 export interface DatasourceSecretBinder {
   bind(input: { value: string; namespace?: string; key?: string }, hint: { name: string }): Promise<string>;
   unbind(credentialsRef: string): Promise<void>;
+  /**
+   * Dereference a `credentialsRef` back to its cleartext credential by reading
+   * the `sys_secret` row and decrypting it. Used at boot to rebuild a runtime
+   * datasource's live connection pool (the cleartext is never persisted, so it
+   * must be recovered from the cipher store). Returns `undefined` when the ref
+   * isn't ours, the row is gone, the engine can't read, or decryption fails
+   * (e.g. an ephemeral dev key changed across restarts) — callers degrade to
+   * skipping that pool rather than crashing boot.
+   */
+  resolve(credentialsRef: string): Promise<string | undefined>;
 }
 
 /** Build a `credentialsRef` from a crypto handle id. */
@@ -79,6 +106,39 @@ export function createDatasourceSecretBinder(deps: DatasourceSecretBinderDeps): 
       const id = parseCredentialsRef(credentialsRef);
       if (!id) return; // not ours (or already cleared) — nothing to do
       await engine.delete('sys_secret', { where: { id } });
+    },
+
+    async resolve(credentialsRef) {
+      const id = parseCredentialsRef(credentialsRef);
+      if (!id || typeof engine.find !== 'function') return undefined;
+      try {
+        const result = await engine.find('sys_secret', {
+          where: { id },
+          limit: 1,
+          // Secrets are scoped through their owning datasource artefact, so
+          // skip the tenant-audit warning (mirrors SettingsService's store).
+          bypassTenantAudit: true,
+        });
+        const rows = (Array.isArray(result) ? result : (result as { data?: unknown[] })?.data) ?? [];
+        const row = rows[0] as SecretRow | undefined;
+        if (!row?.ciphertext) return undefined;
+        // Reconstruct the handle and decrypt under the same (namespace,key)
+        // AAD the row was sealed with — a mismatch fails authentication.
+        return await cryptoProvider.decrypt(
+          {
+            id: row.id,
+            kmsKeyId: row.kms_key_id,
+            alg: row.alg,
+            version: row.version,
+            ciphertext: row.ciphertext,
+          },
+          { namespace: row.namespace, key: row.key },
+        );
+      } catch {
+        // Missing row / unreadable engine / decrypt failure (e.g. rotated dev
+        // key) — never block boot; the pool is simply not rehydrated.
+        return undefined;
+      }
     },
   };
 }

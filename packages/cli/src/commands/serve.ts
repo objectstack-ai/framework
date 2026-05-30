@@ -1574,6 +1574,9 @@ export default class Serve extends Command {
             const lazyEngine = {
               insert: (o: string, d: any, opt?: any) => (kernel.getService('data') as any).insert(o, d, opt),
               delete: (o: string, opt: any) => (kernel.getService('data') as any).delete(o, opt),
+              // Read path for boot rehydration: the secret binder dereferences
+              // each runtime datasource's `credentialsRef` from `sys_secret`.
+              find: (o: string, q: any) => (kernel.getService('data') as any).find(o, q),
             };
             secrets = createDatasourceSecretBinder({ engine: lazyEngine, cryptoProvider });
           } catch {

@@ -44,6 +44,13 @@ interface DataEngineLike {
 export interface SecretBinder {
   bind: (input: { value: string; namespace?: string; key?: string }, hint: { name: string }) => Promise<string>;
   unbind?: (credentialsRef: string) => Promise<void>;
+  /**
+   * Dereference a `credentialsRef` back to cleartext for opening a live
+   * connection (boot rehydration + hot pool registration). Optional: when
+   * absent, pools for secret-bearing datasources are built without the
+   * credential (fine for credential-less drivers like sqlite/memory).
+   */
+  resolve?: (credentialsRef: string) => Promise<string | undefined>;
 }
 
 export interface DatasourceAdminServicePluginOptions {
@@ -77,6 +84,7 @@ export class DatasourceAdminServicePlugin implements Plugin {
   dependencies: string[] = [];
 
   private service?: DatasourceAdminService;
+  private config?: DatasourceAdminServiceConfig;
   private readonly options: DatasourceAdminServicePluginOptions;
 
   constructor(options: DatasourceAdminServicePluginOptions = {}) {
@@ -155,7 +163,14 @@ export class DatasourceAdminServicePlugin implements Plugin {
         const f = factory();
         const engine = engineOf();
         if (!f || !engine?.registerDriver || !f.supports(record.driver)) return;
-        const handle = await f.create(this.toSpec(record));
+        // Recover the cleartext credential from `sys_secret` so the pool opens
+        // with the real password. The cleartext is never persisted on the
+        // record (only `credentialsRef`), so it must be dereferenced here —
+        // both on create/update and on boot rehydration. Credential-less
+        // drivers (sqlite/memory) simply have no ref and skip this.
+        const credentialsRef = record.external?.credentialsRef;
+        const secret = credentialsRef ? await this.options.secrets?.resolve?.(credentialsRef) : undefined;
+        const handle = await f.create({ ...this.toSpec(record), ...(secret ? { secret } : {}) });
         if (typeof handle?.connect === 'function') await handle.connect();
         // The engine routes a datasource to a driver by `driver.name === <datasource name>`
         // (see ObjectQL engine.getDriver). Prefer the factory's underlying engine
@@ -183,12 +198,55 @@ export class DatasourceAdminServicePlugin implements Plugin {
       logger,
     };
 
+    this.config = config;
     this.service = new DatasourceAdminService(config);
     ctx.registerService('datasource-admin', this.service);
   }
 
   async start(ctx: PluginContext): Promise<void> {
+    // Rebuild live connection pools for persisted runtime datasources before
+    // announcing readiness — a node restart otherwise leaves UI-created
+    // datasources with a record but no open pool until the next write.
+    await this.rehydratePools();
     if (this.service) await ctx.trigger('datasource-admin:ready', this.service);
+  }
+
+  /**
+   * Boot-time rehydration: list persisted runtime datasources and re-register
+   * each one's connection pool (driver build → connect → registerDriver),
+   * decrypting its `sys_secret` credential on the way via the configured
+   * `registerPool` (which resolves `credentialsRef`). Code-defined datasources
+   * are owned by the host stack's own boot path and skipped here. Entirely
+   * best-effort: a missing factory/engine, an unpersisted dev store (nothing
+   * to rehydrate), or a single failing pool never blocks boot.
+   */
+  private async rehydratePools(): Promise<void> {
+    const cfg = this.config;
+    if (!cfg?.registerPool || !cfg.listDatasourceRecords) return;
+
+    let records: StoredDatasource[];
+    try {
+      records = await cfg.listDatasourceRecords();
+    } catch (err) {
+      this.options.logger?.warn?.('datasource rehydrate: listing records failed', err);
+      return;
+    }
+
+    const runtime = records.filter((r) => r.origin === 'runtime' && (r.active ?? true));
+    if (runtime.length === 0) return;
+
+    let registered = 0;
+    for (const record of runtime) {
+      try {
+        await cfg.registerPool(record);
+        registered++;
+      } catch (err) {
+        this.options.logger?.warn?.(`datasource rehydrate: pool '${record.name}' failed`, err);
+      }
+    }
+    this.options.logger?.info?.(
+      `Rehydrated ${registered}/${runtime.length} runtime datasource pool(s) on boot`,
+    );
   }
 
   async destroy(): Promise<void> {
