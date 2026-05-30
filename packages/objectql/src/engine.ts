@@ -1523,6 +1523,7 @@ export class ObjectQL implements IDataEngine {
   async insert(object: string, data: any | any[], options?: DataEngineInsertOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Insert operation starting', { object, isBatch: Array.isArray(data) });
+    this.assertWriteAllowed(object, 'insert');
     const driver = this.getDriver(object);
 
     const opCtx: OperationContext = {
@@ -1631,6 +1632,7 @@ export class ObjectQL implements IDataEngine {
   async update(object: string, data: any, options?: EngineUpdateOptions): Promise<any> {
      object = this.resolveObjectName(object);
      this.logger.debug('Update operation starting', { object });
+     this.assertWriteAllowed(object, 'update');
      const driver = this.getDriver(object);
      
      // 1. Extract ID from data or where if it's a single update by ID
