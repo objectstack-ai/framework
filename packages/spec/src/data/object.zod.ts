@@ -301,6 +301,37 @@ export type ObjectFieldGroupInput = z.input<typeof ObjectFieldGroupSchema>;
  *   files: true
  * ```
  */
+
+/**
+ * External Binding (ADR-0015)
+ *
+ * Optional per-object descriptor that binds this object to a remote table
+ * on a federated datasource (one whose `schemaMode !== 'managed'`). When
+ * present, the object is "external": DDL is forbidden, the table is
+ * validated against the remote schema at boot, and writes require a double
+ * opt-in (`datasource.external.allowWrites` **and** this `writable`).
+ *
+ * The cross-field invariant ("`external` only when the object's datasource
+ * has `schemaMode !== 'managed'`") is enforced at metadata-load time, not
+ * in this schema, because the datasource may live in another artefact.
+ */
+export const ObjectExternalBindingSchema = z.object({
+  remoteName: z.string().optional()
+    .describe('Remote table/view name. Defaults to object.name.'),
+  remoteSchema: z.string().optional()
+    .describe('Remote schema/database qualifier.'),
+  writable: z.boolean().default(false)
+    .describe('Per-object write opt-in (also requires datasource.external.allowWrites).'),
+  columnMap: z.record(z.string(), z.string()).optional()
+    .describe('Remote column name → local field name.'),
+  introspectedAt: z.string().datetime().optional()
+    .describe('Set by `os datasource introspect`; informational.'),
+  ignoreColumns: z.array(z.string()).optional()
+    .describe('Remote columns to skip during validation (dev convenience).'),
+}).describe('External datasource binding (ADR-0015)');
+
+export type ObjectExternalBinding = z.infer<typeof ObjectExternalBindingSchema>;
+
 const ObjectSchemaBase = z.object({
   /** 
    * Identity & Metadata 
@@ -433,9 +464,18 @@ const ObjectSchemaBase = z.object({
    */
   datasource: z.string().optional().default('default').describe('Target Datasource ID. "default" is the primary DB.'),
 
+  /**
+   * External Binding (ADR-0015)
+   * Present only for federated objects routed to a datasource whose
+   * `schemaMode !== 'managed'`. Describes the remote table binding and
+   * per-object writability. See {@link ObjectExternalBindingSchema}.
+   */
+  external: ObjectExternalBindingSchema.optional()
+    .describe('Remote table binding for federated (external) objects.'),
 
-  /** 
-   * Data Model 
+
+  /**
+   * Data Model
    */
   fields: z.record(z.string().regex(/^[a-z_][a-z0-9_]*$/, {
     message: 'Field names must be lowercase snake_case (e.g., "first_name", "company", "annual_revenue")',

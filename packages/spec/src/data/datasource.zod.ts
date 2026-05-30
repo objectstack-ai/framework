@@ -89,6 +89,55 @@ export const DatasourceCapabilities = z.object({
 });
 
 /**
+ * Schema Ownership Mode (ADR-0015)
+ *
+ * Distinguishes "ObjectStack owns this schema" from "this is somebody
+ * else's production database — never touch DDL". Gates migrations,
+ * boot-time validation, and writes.
+ *
+ * - `managed`       — ObjectStack owns the schema: DDL + migrations allowed.
+ * - `external`      — Mature external DB: DDL forbidden; mismatch fails boot.
+ * - `validate-only` — Like `external`, but mismatches warn instead of fail.
+ */
+export const SchemaModeSchema = z
+  .enum(['managed', 'external', 'validate-only'])
+  .describe('Schema ownership mode');
+
+export type SchemaMode = z.infer<typeof SchemaModeSchema>;
+
+/**
+ * External Datasource Settings (ADR-0015)
+ *
+ * Present only when `schemaMode !== 'managed'`. Carries the federation
+ * policy for a mature external database: write gating, schema whitelist,
+ * boot/drift validation behaviour, credentials reference, and query caps.
+ */
+export const ExternalDatasourceSettingsSchema = z.object({
+  label: z.string().optional()
+    .describe('Display label, e.g. "Snowflake — ANALYTICS / PROD"'),
+  allowedSchemas: z.array(z.string()).optional()
+    .describe('Whitelist of remote schemas/databases that may be exposed.'),
+  allowWrites: z.boolean().default(false)
+    .describe('Global write gate. Individual objects must also opt in via object.external.writable.'),
+  validation: z.object({
+    onMismatch: z.enum(['fail', 'warn', 'ignore']).default('fail')
+      .describe('What to do when a federated object diverges from the remote table.'),
+    checkOnBoot: z.boolean().default(true)
+      .describe('Validate federated objects against the remote schema at boot.'),
+    checkIntervalMs: z.number().optional()
+      .describe('Optional background drift-check interval in milliseconds.'),
+  }).default({ onMismatch: 'fail', checkOnBoot: true }).describe('Boot/drift validation policy'),
+  credentialsRef: z.string().optional()
+    .describe('Reference into the secrets store; never inline credentials.'),
+  queryTimeoutMs: z.number().default(30_000)
+    .describe('Hard cap on per-query execution time.'),
+  requirePermission: z.string().optional()
+    .describe('Optional convenience: gate the entire datasource behind a single role.'),
+}).describe('External datasource federation settings (schemaMode != "managed")');
+
+export type ExternalDatasourceSettings = z.infer<typeof ExternalDatasourceSettingsSchema>;
+
+/**
  * Datasource Schema
  * Represents a connection to an external data store.
  */
@@ -162,6 +211,34 @@ export const DatasourceSchema = lazySchema(() => z.object({
   
   /** Is enabled? */
   active: z.boolean().default(true).describe('Is datasource enabled'),
+
+  /**
+   * Schema Ownership Mode (ADR-0015)
+   * Declares whether ObjectStack owns this schema (`managed`, default) or
+   * is a guest in a mature external database (`external` / `validate-only`).
+   */
+  schemaMode: SchemaModeSchema.default('managed'),
+
+  /**
+   * External Federation Settings (ADR-0015)
+   * Required when `schemaMode !== 'managed'`; forbidden otherwise.
+   */
+  external: ExternalDatasourceSettingsSchema.optional(),
+}).superRefine((ds, ctx) => {
+  if (ds.schemaMode !== 'managed' && !ds.external) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['external'],
+      message: `schemaMode='${ds.schemaMode}' requires 'external' settings.`,
+    });
+  }
+  if (ds.schemaMode === 'managed' && ds.external) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['external'],
+      message: `'external' settings only apply when schemaMode != 'managed'.`,
+    });
+  }
 }));
 
 export type Datasource = z.infer<typeof DatasourceSchema>;

@@ -4,6 +4,8 @@ import {
   DatasourceCapabilities,
   DriverDefinitionSchema,
   DriverType,
+  SchemaModeSchema,
+  ExternalDatasourceSettingsSchema,
   type Datasource,
   type DatasourceCapabilitiesType,
 } from './datasource.zod';
@@ -472,5 +474,95 @@ describe('DatasourceSchema - ssl', () => {
       config: { path: './data.db' },
     });
     expect(result.ssl).toBeUndefined();
+  });
+});
+
+describe('SchemaMode & External Federation (ADR-0015)', () => {
+  it('should default schemaMode to "managed" with no external block', () => {
+    const ds = DatasourceSchema.parse({
+      name: 'default',
+      driver: 'postgres',
+      config: {},
+    });
+    expect(ds.schemaMode).toBe('managed');
+    expect(ds.external).toBeUndefined();
+  });
+
+  it('should accept the three valid schema modes', () => {
+    expect(() => SchemaModeSchema.parse('managed')).not.toThrow();
+    expect(() => SchemaModeSchema.parse('external')).not.toThrow();
+    expect(() => SchemaModeSchema.parse('validate-only')).not.toThrow();
+  });
+
+  it('should reject an unknown schema mode', () => {
+    expect(() => SchemaModeSchema.parse('replica')).toThrow();
+  });
+
+  it('should accept schemaMode="external" with an external block and apply defaults', () => {
+    const ds = DatasourceSchema.parse({
+      name: 'warehouse',
+      driver: 'postgres',
+      config: { connectionString: 'postgres://...' },
+      schemaMode: 'external',
+      external: { label: 'Analytics Warehouse' },
+    });
+    expect(ds.schemaMode).toBe('external');
+    // ExternalDatasourceSettingsSchema defaults
+    expect(ds.external?.allowWrites).toBe(false);
+    expect(ds.external?.queryTimeoutMs).toBe(30_000);
+    expect(ds.external?.validation.onMismatch).toBe('fail');
+    expect(ds.external?.validation.checkOnBoot).toBe(true);
+  });
+
+  it('should require external settings when schemaMode != "managed"', () => {
+    const result = DatasourceSchema.safeParse({
+      name: 'warehouse',
+      driver: 'postgres',
+      config: {},
+      schemaMode: 'external',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.includes('external'))).toBe(true);
+    }
+  });
+
+  it('should forbid external settings when schemaMode === "managed"', () => {
+    const result = DatasourceSchema.safeParse({
+      name: 'default',
+      driver: 'postgres',
+      config: {},
+      schemaMode: 'managed',
+      external: { allowWrites: true },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.includes('external'))).toBe(true);
+    }
+  });
+
+  it('should require external settings for validate-only mode too', () => {
+    const result = DatasourceSchema.safeParse({
+      name: 'warehouse',
+      driver: 'postgres',
+      config: {},
+      schemaMode: 'validate-only',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should parse a fully-specified external settings block', () => {
+    const settings = ExternalDatasourceSettingsSchema.parse({
+      label: 'Snowflake — ANALYTICS / PROD',
+      allowedSchemas: ['public', 'mart'],
+      allowWrites: true,
+      validation: { onMismatch: 'warn', checkOnBoot: false, checkIntervalMs: 60_000 },
+      credentialsRef: 'secret:warehouse/readonly',
+      queryTimeoutMs: 15_000,
+      requirePermission: 'analytics_admin',
+    });
+    expect(settings.allowedSchemas).toEqual(['public', 'mart']);
+    expect(settings.validation.onMismatch).toBe('warn');
+    expect(settings.validation.checkIntervalMs).toBe(60_000);
   });
 });
