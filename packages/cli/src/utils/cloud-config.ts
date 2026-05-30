@@ -13,7 +13,7 @@
  *      `credentials.json`, written by `os login`.
  *
  *   2. **Cloud identity** — who you are on the official ObjectStack Cloud
- *      package registry (`https://cloud.objectos.app`). Stored in
+ *      package registry (`https://cloud.objectos.ai`). Stored in
  *      `cloud.json`, written by `os cloud login`. Used to publish &
  *      install packages, browse the marketplace, etc.
  *
@@ -27,10 +27,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /** Canonical hosted control plane. */
-export const DEFAULT_CLOUD_URL = 'https://cloud.objectos.app';
+export const DEFAULT_CLOUD_URL = 'https://cloud.objectos.ai';
 
 export interface CloudConfig {
-  /** Base URL of the cloud control plane (defaults to `https://cloud.objectos.app`). */
+  /** Base URL of the cloud control plane (defaults to `https://cloud.objectos.ai`). */
   url: string;
   /** Bearer token returned by the device or password flow. */
   token: string;

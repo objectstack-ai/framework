@@ -678,16 +678,16 @@ export default class Serve extends Command {
 
       // Unknown-environment hostname guard.
       //
-      // In multi-tenant cloud deployments (e.g. *.objectos.app), every
+      // In multi-tenant cloud deployments (e.g. *.objectos.ai), every
       // public hostname is expected to map to a `sys_environment` row
       // whose `hostname` column matches the request `Host`. Without this
-      // guard, an unknown subdomain like `demo-xxx.objectos.app` happily
+      // guard, an unknown subdomain like `demo-xxx.objectos.ai` happily
       // renders the control-plane Console SPA (served statically by
       // createConsoleStaticPlugin), making the deployment look like an
       // empty env rather than a missing one. We respond with a clear
       // 404 instead.
       //
-      // Activation: only when OS_ROOT_DOMAIN is set (e.g. "objectos.app").
+      // Activation: only when OS_ROOT_DOMAIN is set (e.g. "objectos.ai").
       // Reserved subdomains (cloud/www/api/docs/admin/app and the apex)
       // bypass the check so platform surfaces keep working. Non-root
       // hostnames (custom domains, localhost, *.workers.dev) pass through
@@ -829,7 +829,7 @@ export default class Serve extends Command {
     <div class="host">${safeHost}</div>
     <p class="muted" style="margin-top:24px">
       If you own this domain, bind it to an environment in the
-      <a href="https://cloud.objectos.app/">ObjectStack Cloud console</a>.
+      <a href="https://cloud.objectos.ai/">ObjectStack Cloud console</a>.
     </p>
   </main>
 </body>
@@ -887,7 +887,7 @@ export default class Serve extends Command {
           const { MarketplaceProxyPlugin, MarketplaceInstallLocalPlugin, resolveCloudUrl } = await import(/* webpackIgnore: true */ runtimePkg);
           const effectiveCloudUrl = (typeof resolveCloudUrl === 'function'
             ? resolveCloudUrl()
-            : (process.env.OS_CLOUD_URL?.trim() || 'https://cloud.objectos.app')) as string;
+            : (process.env.OS_CLOUD_URL?.trim() || 'https://cloud.objectos.ai')) as string;
           if (effectiveCloudUrl) {
             await kernel.use(new MarketplaceProxyPlugin({ controlPlaneUrl: effectiveCloudUrl }));
             trackPlugin('MarketplaceProxy');

@@ -359,9 +359,9 @@ export class AuthProxyPlugin implements Plugin {
                     const resp = await fn(c.req.raw);
 
                     // ── Cookie-leak cleanup ─────────────────────────────────
-                    // Cloud previously set OS_COOKIE_DOMAIN=.objectos.app,
+                    // Cloud previously set OS_COOKIE_DOMAIN=.objectos.ai,
                     // which made cloud's better-auth session cookies leak
-                    // into every *.objectos.app project subdomain and
+                    // into every *.objectos.ai project subdomain and
                     // collide with each project's own session_token.
                     // The setting has been removed from cloud, but existing
                     // browsers still carry the wide-scoped cookies. Append

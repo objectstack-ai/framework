@@ -109,7 +109,7 @@ export class RuntimeConfigPlugin implements Plugin {
             // kernel router uses (env-registry). Falls back to the static
             // payload when the host doesn't map to any env (e.g. a
             // marketing root, a CLI-served single-env runtime, or
-            // cloud.objectos.app which mounts its own static handler).
+            // cloud.objectos.ai which mounts its own static handler).
             const features = {
                 installLocal: this.installLocal,
                 marketplace: true,

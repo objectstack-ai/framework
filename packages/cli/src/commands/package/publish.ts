@@ -305,7 +305,7 @@ export default class PackagePublish extends Command {
       // Server URL precedence:
       //   1. explicit --server flag (or $OS_CLOUD_URL env)
       //   2. cloud.json's recorded url
-      //   3. https://cloud.objectos.app (DEFAULT_CLOUD_URL)
+      //   3. https://cloud.objectos.ai (DEFAULT_CLOUD_URL)
       //
       // Note: we deliberately do NOT fall back to ~/.objectstack/credentials.json
       // (the *runtime* identity, written by `os login`). Publishing a package

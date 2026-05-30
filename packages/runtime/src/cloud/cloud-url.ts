@@ -9,7 +9,7 @@
  * ObjectStack-operated control plane so a vanilla `objectstack dev` can
  * browse the marketplace out of the box.
  */
-export const DEFAULT_CLOUD_URL = 'https://cloud.objectos.app';
+export const DEFAULT_CLOUD_URL = 'https://cloud.objectos.ai';
 
 /**
  * Resolve the effective control-plane URL from an explicit constructor

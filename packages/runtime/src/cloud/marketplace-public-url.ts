@@ -14,7 +14,7 @@
  * Default: when OS_MARKETPLACE_PUBLIC_BASE_URL is unset we skip the
  * public fast-path and fall back to the legacy cloud proxy. Once the
  * R2 bucket public domain is wired up in operations, set
- * `OS_MARKETPLACE_PUBLIC_BASE_URL=https://marketplace.objectos.app`
+ * `OS_MARKETPLACE_PUBLIC_BASE_URL=https://marketplace.objectos.ai`
  * (or your own custom domain) to enable. Set to "off" / "none" to
  * explicitly disable even if a default is configured.
  *

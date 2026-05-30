@@ -132,7 +132,7 @@ export interface SeedPlatformSsoClientOptions {
     /** Project id (also used to derive client_id + client_secret). */
     environmentId: string;
     /**
-     * Project hostname (e.g. `acme-crm.objectos.app`). Optional — projects
+     * Project hostname (e.g. `acme-crm.objectos.ai`). Optional — projects
      * may be created before a hostname is assigned, in which case no
      * redirect_uri is registered yet and the row is upserted with an
      * empty `redirect_uris` array. Calling this function again once the

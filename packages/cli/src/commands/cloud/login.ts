@@ -2,7 +2,7 @@
 
 /**
  * `objectstack cloud login` — authenticate against the ObjectStack Cloud
- * package registry (`https://cloud.objectos.app` by default).
+ * package registry (`https://cloud.objectos.ai` by default).
  *
  * This is distinct from `os login`, which authenticates against your
  * *runtime* ObjectOS instance. Cloud credentials are persisted to
@@ -72,7 +72,7 @@ export default class CloudLogin extends Command {
     '$ os cloud login',
     '$ os cloud login --email me@acme.com --password secret',
     '$ os cloud login --no-browser',
-    '$ os cloud login --url https://cloud.objectos.app   # default',
+    '$ os cloud login --url https://cloud.objectos.ai   # default',
   ];
 
   static override flags = {

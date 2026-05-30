@@ -13,7 +13,7 @@
  *   - The Console SPA stays on the tenant origin, so no CORS configuration
  *     is required on the cloud side.
  *   - Local-dev `os serve` works regardless of whether the developer's
- *     browser has cookies for cloud.objectos.app.
+ *     browser has cookies for cloud.objectos.ai.
  *   - Adds a single, easily auditable network seam between tenant and
  *     control plane.
  *
@@ -113,7 +113,7 @@ class LruTtlCache {
 
 export interface MarketplaceProxyPluginConfig {
     /**
-     * Control-plane base URL (e.g. https://cloud.objectos.app). When the
+     * Control-plane base URL (e.g. https://cloud.objectos.ai). When the
      * caller passes nothing AND the runtime has no OS_CLOUD_URL set, the
      * plugin falls back to the public ObjectStack-operated cloud so that
      * `objectstack dev` can browse the marketplace out of the box. Set
