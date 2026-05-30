@@ -426,8 +426,13 @@ CLI: `os serve` / `os dev`
      ├── AIServicePlugin (if available)
      └── StudioPlugin (if --ui flag)
   5. Runtime.start() → init + start all plugins
-  6. Server listens on configured port
+  6. Server listens on the resolved port (see "Ports & networking" in Part 3)
 ```
+
+**Port resolution** (both `os dev` and `os start` → `os serve`):
+`--port` flag › `$OS_PORT` › `$PORT` › `3000`. On a conflict the behaviour is
+mode-dependent — dev hops to the next free port, production fails loudly. See
+[Ports & networking](#ports--networking).
 
 ### Plugin Loading Order Matters
 
@@ -551,10 +556,10 @@ sheet for the bootstrap loop:
 ```bash
 npx create-objectstack my-app --template full-stack
 cd my-app && pnpm install
-os dev --ui          # dev server + Studio
+os dev --ui          # dev server + Studio (auto-hops port if taken)
 os validate          # metadata cross-reference checks
 os compile           # produce dist/ artifact
-os serve --port 3000 # production
+PORT=8080 os start   # production — pin the port explicitly (see Ports & networking)
 ```
 
 ---
@@ -1072,6 +1077,34 @@ be re-run when commands are added.
 | `os start` | Production-grade boot (validates env, applies migrations, starts adapter) |
 | `os generate <kind>` | Scaffold an object / view / flow / agent from a template |
 
+## Ports & networking
+
+Port resolution is the same for `os dev` and `os start` (both spawn `os serve`):
+
+```
+--port <n>  ›  $OS_PORT  ›  $PORT  ›  3000   (default)
+```
+
+**Conflict behaviour is mode-dependent — this is deliberate:**
+
+| Mode | If the resolved port is busy |
+|:-----|:-----------------------------|
+| **Dev** (`os dev`, or `NODE_ENV=development`) | Auto-hops to the next free port (up to +100) so several example apps run side-by-side. The startup banner shows the *actual* bound port. |
+| **Production** (`os start`) | **Fails loudly and exits 1.** It never silently drifts — a shifted port breaks reverse-proxy upstreams, better-auth callback URLs, and CORS trusted-origins as opaque 403/502s. |
+
+**Production guidance:**
+
+- **Pin the port explicitly** — `PORT=8080 os start` (or `--port 8080`). Don't
+  rely on the `3000` default; it collides easily on shared hosts.
+- **Keep these in sync when you change the port** (mismatch ⇒ better-auth
+  `Invalid origin` 403 / CORS failures):
+  - reverse-proxy upstream (`nginx`/`caddy`)
+  - `OS_AUTH_URL` / better-auth `baseURL` + `callbackURL`
+  - `OS_TRUSTED_ORIGINS` (CORS allow-list)
+  - the app's `hostname`
+- **Recommended topology:** terminate TLS on a reverse proxy (`:443`) and let
+  the app listen on an internal high port (e.g. `8080`) fixed via `PORT`.
+
 ## Data & migrations
 
 | Command | What it does |
@@ -1127,7 +1160,7 @@ describe('account hooks', () => {
 | Edge (Cloudflare Workers, Vercel Edge) | `driver-turso` / `driver-d1` | `adapter-hono` | Cold-start friendly; LiteKernel only |
 | Serverless (Lambda, Vercel functions) | `driver-postgres` (with pooler) | `adapter-nextjs` / `adapter-express` | Mind cold-start: prefer LiteKernel |
 | Browser / WebContainer | `driver-sqlite-wasm` | none (in-process) | Studio playground, demos |
-| Docker / Kubernetes | any | any | Use `os start` as the entrypoint |
+| Docker / Kubernetes | any | any | Use `os start` as the entrypoint; pin `PORT` and `EXPOSE` it (see [Ports & networking](#ports--networking)) |
 
 ## Health & observability
 
@@ -1144,6 +1177,8 @@ describe('account hooks', () => {
 | Symptom | Likely cause |
 |:--------|:-------------|
 | `os dev` hangs at "Loading metadata…" | Circular import in `objectstack.config.ts` — run `os validate` |
+| `os start` exits with "Port N is already in use" | Intended: production never auto-shifts ports. Free the port or set `PORT=<n>` — see [Ports & networking](#ports--networking) |
+| better-auth `Invalid origin` 403 after a port/host change | Port or hostname out of sync with `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS` — see [Ports & networking](#ports--networking) |
 | Migrations apply locally but not in cloud | `env` scoping on the dataset excludes the target environment |
 | Adapter 404s on auto-generated routes | `enable.apiEnabled: false` on the object, or missing `os build` |
 | LiteKernel test passes, ObjectKernel boot fails | Test missed a plugin dependency — list with `os info` |

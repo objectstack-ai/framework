@@ -23,11 +23,20 @@ read at startup unless noted otherwise. Boolean variables accept `true` / `false
 
 | Variable | Type | Default | Description |
 |:---|:---|:---|:---|
-| `OS_PORT` | number | `3000` | HTTP listener port for `os serve` / `os dev` / `os start`. |
+| `OS_PORT` | number | `3000` | HTTP listener port for `os serve` / `os dev` / `os start`. Resolution: `--port` › `OS_PORT` › `PORT` › `3000`. |
 | `OS_HOME` | path | `$HOME/.objectstack` | ObjectStack config / state directory. |
 | `OS_MODE` | enum | `standalone` | Runtime mode. `standalone` \| `cloud`. |
 | `OS_BOOT_EMPTY` | flag | `0` | When `1`, boot the kernel with no metadata artifact (CLI internal). |
 | `OS_MIGRATE_AND_EXIT` | flag | `0` | When `1`, run pending migrations and exit (suitable for one-shot jobs). |
+
+> **Port conflicts behave differently by mode.** In **dev** (`os dev`, or
+> `NODE_ENV=development`) a busy port auto-hops to the next free one (up to
+> +100) and the banner prints the actual bound port. In **production**
+> (`os start`) a busy port is a hard error (exit 1) — it never silently
+> drifts, because a shifted port breaks reverse-proxy upstreams, `OS_AUTH_URL`
+> callbacks, and `OS_TRUSTED_ORIGINS` (CORS). Pin the port explicitly in
+> production (`PORT=8080 os start`) and keep `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS`
+> in sync with it.
 | `OS_DISABLE_CONSOLE` | flag | `0` | When `1`, do not mount the Studio Console UI under `/_console`. |
 | `OS_EAGER_SCHEMAS` | flag | `0` | When `1`, eagerly materialise all object schemas at boot (slower start, faster first request). |
 | `OS_SKIP_SCHEMA_SYNC` | flag | `0` | When `1`, skip the implicit `db:sync` on boot. Use after running migrations manually. |

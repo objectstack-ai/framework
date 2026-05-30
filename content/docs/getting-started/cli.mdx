@@ -127,7 +127,7 @@ os dev --database file:./data/test.db --auth-secret $(openssl rand -hex 32)
 | `--database-auth-token <t>` | `OS_DATABASE_AUTH_TOKEN` | libsql/Turso token |
 | `--auth-secret <s>` | `AUTH_SECRET` | Override the dev-fallback secret |
 | `--project-id <id>` | `OS_PROJECT_ID` | Project identifier (default `proj_local`) |
-| `-p, --port <n>` | `PORT` | Listen port |
+| `-p, --port <n>` | `PORT` / `OS_PORT` | Listen port (default `3000`). In dev a busy port auto-hops to the next free one; the banner shows the actual port. |
 | `--ui` | — | Force Studio UI on (already on by default in dev) |
 | `--no-compile` | — | Skip the auto-compile step (errors if no artifact present) |
 | `-v, --verbose` | — | Verbose output |
@@ -269,8 +269,15 @@ os start
 | `--database-auth-token <token>` | `OS_DATABASE_AUTH_TOKEN` | Auth token for libsql/Turso |
 | `--auth-secret <secret>` | `AUTH_SECRET` | Secret for `@objectstack/plugin-auth`; without it `/api/v1/auth/*` is skipped (server still runs) |
 | `--project-id <id>` | `OS_PROJECT_ID` | Project identifier (default `proj_local`) |
-| `-p, --port <port>` | `PORT` | Listen port (default `3000`) |
+| `-p, --port <port>` | `PORT` / `OS_PORT` | Listen port (default `3000`). **Production fails loudly if the port is busy** — see note below. |
 | `--ui` | — | **Opt-in.** Mount Studio / Account / Console portals at `/_studio/`, `/_account/`, `/_console/`. Off by default in `os start` (Studio is a dev/admin surface). `os dev` mounts them by default. |
+
+> **Port conflicts: production never auto-shifts.** Unlike `os dev` (which
+> hops to the next free port for local convenience), `os start` exits with an
+> error if its resolved port is in use. A silently drifted port would break
+> your reverse-proxy upstream, `OS_AUTH_URL` callbacks, and `OS_TRUSTED_ORIGINS`
+> (CORS). **Pin the port explicitly** (`PORT=8080 os start`) and keep
+> `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS` in sync when you change it.
 | `-v, --verbose` | — | Verbose output |
 
 **Resolution priority (artifact):** `--artifact` > `OS_ARTIFACT_PATH` > `<cwd>/dist/objectstack.json`.

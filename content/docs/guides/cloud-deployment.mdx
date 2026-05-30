@@ -212,7 +212,7 @@ point a wildcard DNS (`*.example.com`) at it. The container does the rest.
 | `OS_ENV_CACHE_TTL_MS`    | cloud                     | TTL for the envRegistry's hostname/id cache (default 300000).                    |
 | `OS_COOKIE_DOMAIN`       | cloud                     | Shared cookie domain for cross-subdomain sessions (e.g. `.objectstack.app`).     |
 | `AUTH_SECRET`                     | all                       | Better-Auth session secret (≥ 32 chars).                                         |
-| `PORT` / `HOST`                   | all (node-entry)          | HTTP bind. Defaults to `3000` / `0.0.0.0`.                                       |
+| `PORT` / `HOST`                   | all (node-entry)          | HTTP bind. Defaults to `3000` / `0.0.0.0`. In production a busy port is a hard error (no auto-shift) — pin it and match `OS_AUTH_URL` / `OS_TRUSTED_ORIGINS`. |
 
 ---
 
