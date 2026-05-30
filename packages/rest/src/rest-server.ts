@@ -1565,6 +1565,32 @@ export class RestServer {
                             }
                         }
 
+                        // View switcher query: GET /meta/view?object=<object>
+                        // returns ONLY the independent ViewItems bound to that
+                        // object (the `package` layer of "Object has-many
+                        // View"), sorted for the switcher / left rail. The
+                        // aggregated container and other objects' views are
+                        // excluded. Runtime `shared` / `personal` views
+                        // (sys_view_definition) are merged client-side via the
+                        // generic data API.
+                        if (req.params.type === 'view' && req.query?.object) {
+                            const obj = String(req.query.object);
+                            const raw = visible as unknown;
+                            const list: any[] | null = Array.isArray(raw)
+                                ? (raw as any[])
+                                : (raw && typeof raw === 'object' && Array.isArray((raw as any).items))
+                                    ? ((raw as any).items as any[])
+                                    : null;
+                            if (list) {
+                                const filtered = list
+                                    .filter((v: any) => v && typeof v === 'object' && v.viewKind && v.object === obj)
+                                    .sort((a: any, b: any) =>
+                                        ((a.order ?? 0) as number) - ((b.order ?? 0) as number) ||
+                                        String(a.name).localeCompare(String(b.name)));
+                                visible = Array.isArray(raw) ? filtered : { ...(raw as any), items: filtered };
+                            }
+                        }
+
                         const translated = await this.translateMetaItems(req, req.params.type, environmentId, visible);
                         res.header('Vary', 'Accept-Language');
                         res.json(translated);

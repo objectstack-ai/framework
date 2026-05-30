@@ -12,6 +12,7 @@ import {
     SysMetadataObject,
     SysMetadataHistoryObject,
     SysMetadataAuditObject,
+    SysViewDefinitionObject,
 } from '@objectstack/platform-objects/metadata';
 
 // `SysMetadataObject` + `SysMetadataHistoryObject` are the customer overlay
@@ -31,6 +32,10 @@ const queryableMetadataObjects = [
     SysMetadataObject,
     SysMetadataHistoryObject,
     SysMetadataAuditObject,
+    // Runtime view storage (shared / personal). Must always be provisioned so
+    // end-user view creation via the generic data API has a place to write —
+    // mirroring why sys_metadata is always provisioned for PUT /meta.
+    SysViewDefinitionObject,
 ];
 
 // Subdirectory under `rootDir` reserved for the ADR-0008 repository's
