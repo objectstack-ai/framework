@@ -44,8 +44,8 @@ relationship resolution, dependency ordering, and multi-pass insertion.
 ## TypeScript Usage
 
 ```typescript
-import { DatasetLoadResult, ObjectDependencyGraph, ObjectDependencyNode, ReferenceResolution, ReferenceResolutionError, SeedLoaderConfig, SeedLoaderRequest, SeedLoaderResult } from '@objectstack/spec/data';
-import type { DatasetLoadResult, ObjectDependencyGraph, ObjectDependencyNode, ReferenceResolution, ReferenceResolutionError, SeedLoaderConfig, SeedLoaderRequest, SeedLoaderResult } from '@objectstack/spec/data';
+import { DatasetLoadResult, ObjectDependencyGraph, ObjectDependencyNode, ReferenceResolution, ReferenceResolutionError, SeedIdentity, SeedLoaderConfig, SeedLoaderRequest, SeedLoaderResult } from '@objectstack/spec/data';
+import type { DatasetLoadResult, ObjectDependencyGraph, ObjectDependencyNode, ReferenceResolution, ReferenceResolutionError, SeedIdentity, SeedLoaderConfig, SeedLoaderRequest, SeedLoaderResult } from '@objectstack/spec/data';
 
 // Validate data
 const result = DatasetLoadResult.parse(data);
@@ -140,6 +140,20 @@ Actionable error for a failed reference resolution
 
 ---
 
+## SeedIdentity
+
+Identity context for resolving os.user / os.org in seed CEL values
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **user** | `Object` | optional | Subject bound to os.user in seed CEL expressions |
+| **org** | `Object` | optional | Organization bound to os.org in seed CEL expressions |
+
+
+---
+
 ## SeedLoaderConfig
 
 Seed data loader configuration
@@ -156,6 +170,7 @@ Seed data loader configuration
 | **transaction** | `boolean` | ✅ | Wrap entire load in a transaction (all-or-nothing) |
 | **env** | `Enum<'prod' \| 'dev' \| 'test'>` | optional | Only load datasets matching this environment |
 | **organizationId** | `string` | optional | Target organization id for per-tenant seed replay |
+| **identity** | `Object` | optional | Identity bound to os.user / os.org when resolving CEL seed values |
 
 
 ---
