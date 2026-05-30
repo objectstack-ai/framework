@@ -520,6 +520,32 @@ export class MetadataManager implements IMetadataService {
   }
 
   /**
+   * List the independent ViewItems bound to an object, sorted for the runtime
+   * view switcher / Studio left rail ("Object has-many View").
+   *
+   * Returns only expanded ViewItems (those carrying a `viewKind`) — never the
+   * legacy aggregated container kept under the bare `<object>` key — so callers
+   * get exactly one entry per named view. Sorted by `order`, then `name`.
+   *
+   * Runtime-authored `shared` / `personal` views (`sys_view_definition`) are
+   * merged in by the REST layer; this method returns the `package` layer that
+   * was registered from source.
+   */
+  async getViewsByObject(object: string): Promise<unknown[]> {
+    const views = await this.list('view');
+    return views
+      .filter(
+        (v: any) =>
+          v && typeof v === 'object' && v.viewKind && v.object === object,
+      )
+      .sort(
+        (a: any, b: any) =>
+          (a.order ?? 0) - (b.order ?? 0) ||
+          String(a.name).localeCompare(String(b.name)),
+      );
+  }
+
+  /**
    * Convenience: get a dashboard definition by name
    */
   async getDashboard(name: string): Promise<unknown | undefined> {

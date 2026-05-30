@@ -159,7 +159,12 @@ function resolveMetadataItemName(key: string, item: any): string | undefined {
   if (item.name) return item.name;
   if (item.id) return item.id;
   if (key === 'views') {
+    // Independent ViewItems ("Object has-many View") carry a top-level `name`
+    // (handled above) and bind to their object via `object`. The aggregated
+    // container has no top-level name/object, so fall back to its inner data
+    // source — matching the loader's expansion key.
     return (
+      item?.object ||
       item?.list?.data?.object ||
       item?.form?.data?.object ||
       undefined
