@@ -14,8 +14,8 @@ API Operations Enum
 ## TypeScript Usage
 
 ```typescript
-import { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
-import type { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
+import type { ApiMethod, CDCConfig, Index, ObjectCapabilities, ObjectExternalBinding, ObjectOwnershipEnum, PartitioningConfig, SoftDeleteConfig, TenancyConfig, VersioningConfig } from '@objectstack/spec/data';
 
 // Validate data
 const result = ApiMethod.parse(data);
@@ -89,6 +89,24 @@ const result = ApiMethod.parse(data);
 | **trash** | `boolean` | ✅ | Enable soft-delete with restore capability |
 | **mru** | `boolean` | ✅ | Track Most Recently Used (MRU) list for users |
 | **clone** | `boolean` | ✅ | Allow record deep cloning |
+
+
+---
+
+## ObjectExternalBinding
+
+External datasource binding (ADR-0015)
+
+### Properties
+
+| Property | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| **remoteName** | `string` | optional | Remote table/view name. Defaults to object.name. |
+| **remoteSchema** | `string` | optional | Remote schema/database qualifier. |
+| **writable** | `boolean` | ✅ | Per-object write opt-in (also requires datasource.external.allowWrites). |
+| **columnMap** | `Record<string, string>` | optional | Remote column name → local field name. |
+| **introspectedAt** | `string` | optional | Set by `os datasource introspect`; informational. |
+| **ignoreColumns** | `string[]` | optional | Remote columns to skip during validation (dev convenience). |
 
 
 ---
