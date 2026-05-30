@@ -2,10 +2,21 @@ import { describe, expect, it } from 'vitest';
 import Serve from '../src/commands/serve.js';
 
 describe('serve: ALWAYS_ON_CAPABILITIES default slate', () => {
-  it('exposes the six foundational capabilities in stable order', () => {
-    expect(Serve.ALWAYS_ON_CAPABILITIES).toEqual([
+  // ALWAYS_ON_CAPABILITIES is the fail-closed allowlist of platform services
+  // that are injected into every app's `requires` at runtime. The six
+  // foundational capabilities must always lead the slate in this precedence
+  // order; the list may grow beyond them (e.g. `sharing`) without churning
+  // this assertion, so we pin the prefix rather than the whole array.
+  it('leads with the six foundational capabilities in stable order', () => {
+    expect(Serve.ALWAYS_ON_CAPABILITIES.slice(0, 6)).toEqual([
       'queue', 'job', 'cache', 'settings', 'email', 'storage',
     ]);
+  });
+
+  it('contains no duplicates', () => {
+    expect(Serve.ALWAYS_ON_CAPABILITIES).toHaveLength(
+      new Set(Serve.ALWAYS_ON_CAPABILITIES).size,
+    );
   });
 
   it('is frozen so accidental mutation throws', () => {

@@ -10,6 +10,7 @@
     "driver",
     "driver-nosql",
     "driver-sql",
+    "external-catalog",
     "external-lookup",
     "feed",
     "field",

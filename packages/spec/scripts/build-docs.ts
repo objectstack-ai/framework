@@ -158,14 +158,38 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
   // Add schema heading
   md += `## ${schemaName}\n\n`;
   
-  // Escape MDX-unsafe characters in description text. MDX parses `<` as JSX,
-  // so any raw `<title>` / `<meta>` / etc. inside a Zod `.describe()` string
-  // breaks the docs build. Wrap inline tag-like fragments in backticks so they
-  // render as code rather than being parsed as JSX.
-  const escapeMdxDescription = (raw: string): string =>
-    raw
-      .replace(/\{[^}]*\}/g, (m: string) => `\`${m}\``)
-      .replace(/<[^`>][^>]*>/g, (m: string) => `\`${m}\``);
+  // Escape MDX-unsafe characters in description text. MDX parses `{` as a JS
+  // expression and `<` as JSX, so any raw `{token}` / `<title>` inside a Zod
+  // `.describe()` string breaks the docs build. Wrap such fragments in inline
+  // code so they render literally.
+  //
+  // Single pass with backtick tracking: fragments already inside an inline-code
+  // span are left untouched. A naive two-pass replace double-wraps nested cases
+  // like `{<id>}` into `` `{`<id>`}` `` — the inner backticks close the span
+  // early and leak `<id>` as raw JSX (MDX: "Expected a closing tag for `<id>`").
+  const escapeMdxDescription = (raw: string): string => {
+    let out = '';
+    let inCode = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (ch === '`') {
+        inCode = !inCode;
+        out += ch;
+        continue;
+      }
+      if (!inCode && (ch === '{' || ch === '<')) {
+        const close = ch === '{' ? '}' : '>';
+        const end = raw.indexOf(close, i + 1);
+        if (end !== -1) {
+          out += '`' + raw.slice(i, end + 1) + '`';
+          i = end;
+          continue;
+        }
+      }
+      out += ch;
+    }
+    return out;
+  };
 
   // Add description with better formatting
   if (mainDef.description) {

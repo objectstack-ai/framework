@@ -878,7 +878,12 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
 
             expect(result.loaded).toBe(2);
             expect(registry.getItem('app', 'test_app')).toEqual(sampleApp);
-            expect(registry.getItem('object', 'task')).toEqual(objDef);
+            // Object schemas pass through registerObject -> applyProtection (ADR-0010 §3.7),
+            // which stamps the internal `_packageId`/`_provenance` envelope markers used by
+            // listItems() filtering, the HTTP dispatcher and the runtime. Those are an
+            // intentional, system-wide concern — assert the author-supplied shape is preserved
+            // rather than demanding strict equality against them.
+            expect(registry.getItem('object', 'task')).toMatchObject(objDef);
         });
     });
 
