@@ -25,6 +25,8 @@ import type { SchemaDiffEntry } from '@objectstack/spec/shared';
 import {
   suggestFieldType,
   isCompatible,
+  ExternalCatalogSchema,
+  type ExternalCatalog,
   type SqlDialect,
   type FieldType,
 } from '@objectstack/spec/data';
@@ -71,6 +73,12 @@ export interface ExternalDatasourceServiceConfig {
   getObject: (name: string) => Promise<ObjectLike | undefined>;
   /** List all object definitions (for `validateAll`). */
   listObjects: () => Promise<ObjectLike[]>;
+  /**
+   * Persist a refreshed catalog snapshot as an `external_catalog` metadata
+   * record. Optional: when absent, `refreshCatalog` still returns the snapshot
+   * but does not cache it (e.g. dev runs without a writable metadata store).
+   */
+  persistCatalog?: (catalog: ExternalCatalog) => Promise<void>;
   logger?: Logger;
 }
 
@@ -211,9 +219,12 @@ export class ExternalDatasourceService implements IExternalDatasourceService {
     };
   }
 
-  async refreshCatalog(datasource: string): Promise<unknown> {
+  async refreshCatalog(datasource: string): Promise<ExternalCatalog> {
     const schema = await this.config.introspect(datasource);
-    return {
+    // Parse through the Zod schema so the persisted record is canonical
+    // (defaults applied, shape validated) and matches the `external_catalog`
+    // metadata type the boot gate + Studio read back.
+    const catalog = ExternalCatalogSchema.parse({
       name: `${datasource}_catalog`,
       datasource,
       snapshotAt: new Date().toISOString(),
@@ -232,7 +243,19 @@ export class ExternalDatasourceService implements IExternalDatasourceService {
           })),
         };
       }),
-    };
+    }) as ExternalCatalog;
+
+    // Best-effort cache: a failure to persist must not fail the refresh — the
+    // caller still gets the live snapshot back.
+    if (this.config.persistCatalog) {
+      try {
+        await this.config.persistCatalog(catalog);
+      } catch (err) {
+        this.logger?.warn?.(`refreshCatalog: failed to persist '${catalog.name}'`, err);
+      }
+    }
+
+    return catalog;
   }
 
   async validateObject(objectName: string): Promise<SchemaValidationResult> {

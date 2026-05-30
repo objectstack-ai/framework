@@ -1591,6 +1591,19 @@ export default class Serve extends Command {
           );
           trackPlugin('DatasourceAdminServicePlugin');
         }
+
+        // Gate 2 (ADR-0015 §5.2): on kernel:ready, validate every federated
+        // object against its remote table and apply the datasource's
+        // `external.validation.onMismatch` policy. No-op when the
+        // `external-datasource` service isn't registered (federation unused).
+        const { createExternalValidationPlugin } = await import('@objectstack/runtime');
+        if (
+          createExternalValidationPlugin &&
+          !hasPluginMatching(['external-validation', 'ExternalValidationPlugin'])
+        ) {
+          await kernel.use(createExternalValidationPlugin());
+          trackPlugin('ExternalValidationPlugin');
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         if (!msg.includes('Cannot find module') && !msg.includes('ERR_MODULE_NOT_FOUND')) {

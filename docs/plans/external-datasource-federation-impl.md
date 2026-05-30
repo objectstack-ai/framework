@@ -50,7 +50,7 @@ already exists and is reused:
 |:-----:|:--|:--|
 | **P1** | Spec changes (`schemaMode`, `object.external`, error classes) + DDL gate in `driver-sql` + tests | ✅ **Done** (this branch) |
 | **P2** | `IExternalDatasourceService` impl + type-compat matrix + CLI `introspect`/`validate` | 🟡 **Service core done** (matrix + contract + service); REST routes + CLI pending |
-| **P3** | Boot-validation plugin in `@objectstack/runtime` + `external_catalog` metadata type + caching | ⬜ Todo |
+| **P3** | Boot-validation plugin in `@objectstack/runtime` + `external_catalog` metadata type + caching | ✅ **Done** |
 | **P4** | `SchemaRetriever` annotation + agent prompt + AI safety nets (LIMIT injection, timeout) | ⬜ Todo |
 | **P5** | Studio UI in `../objectui` (wizard, schema browser, mapping editor, validation panel) | ⬜ Todo |
 | **P6** | Write gate + `allowWrites`/`writable` double opt-in + tests | ⬜ Todo |
@@ -133,12 +133,43 @@ behaviour).
   `getDatasourceDriver(name)` / `introspectDatasource(name)` on the data
   engine so the plugin's default `introspect` works end-to-end.
 
+## P3 — delivered
+
+Gate 2 (boot validation) + remote-schema caching.
+
+1. **`external_catalog` metadata type** — registered in
+   `packages/spec/src/kernel/metadata-plugin.zod.ts`
+   (`allowRuntimeCreate`, `loadOrder: 6`, system domain) with its Zod schema
+   `packages/spec/src/data/external-catalog.zod.ts`
+   (`ExternalCatalogSchema` → `ExternalCatalog`: name / datasource /
+   `snapshotAt` / dialect / tables[columns]).
+
+2. **Boot-validation plugin** — `ExternalValidationPlugin`
+   (`packages/runtime/src/external-validation-plugin.ts`) subscribes to
+   `kernel:ready`, calls `external-datasource`'s `validateAll()`, and applies
+   each datasource's `external.validation.onMismatch` policy
+   (`fail` aborts boot via `ExternalSchemaMismatchError`, `warn` logs,
+   `ignore` no-ops). No-op when the service is absent. **Now registered into
+   the serve boot sequence** alongside the datasource plugins
+   (`packages/cli/src/commands/serve.ts`).
+
+3. **`schemaMode` → driver injection** — `createDefaultDatasourceDriverFactory`
+   (`packages/runtime/src/default-datasource-driver-factory.ts`) threads a
+   datasource's `schemaMode` into `SqlDriverConfig`, so the P1 DDL gate fires
+   for runtime-created external datasources too.
+
+4. **Catalog persistence** — `refreshCatalog` now parses the snapshot through
+   `ExternalCatalogSchema` and persists it as an `external_catalog` metadata
+   record via an injected `persistCatalog` dep (wired in `plugin.ts` to
+   `metadata.register`). Best-effort: a persist failure still returns the live
+   snapshot. Tests cover persistence, the read-only/throwing store, and the
+   canonicalised shape.
+
 ### Follow-up notes / open items for later phases
 
-- **DDL gate plumbing (P3)**: the runtime must inject `Datasource.schemaMode`
-  into `SqlDriverConfig` when constructing drivers. P1 wires the driver
-  side and defaults to `'managed'`; the runtime wiring lands with the
-  boot-validation plugin.
+- **DDL gate plumbing (P3)**: ✅ done — `createDefaultDatasourceDriverFactory`
+  injects `Datasource.schemaMode` into `SqlDriverConfig`. P1 wired the driver
+  side and defaulted to `'managed'`.
 - **`applyMigrations` gate**: `ISchemaDiffService.applyMigrations` also
   needs the gate (per ADR §5.1) when the migration runner ships.
 - **Lint rule** preventing plugins from bypassing the gate via raw `knex`

@@ -14,6 +14,7 @@
  */
 
 import type { SchemaDiffEntry } from '../shared/external-errors';
+import type { ExternalCatalog } from '../data/external-catalog.zod';
 
 /**
  * A remote table discovered via introspection, filtered by the datasource's
@@ -103,11 +104,12 @@ export interface IExternalDatasourceService {
   ): Promise<ObjectDraft>;
 
   /**
-   * Refresh and persist the cached remote schema snapshot
-   * (`external_catalog`). Returns the snapshot. (Persistence lands with the
-   * `external_catalog` metadata type.)
+   * Refresh and persist the cached remote schema snapshot as an
+   * `external_catalog` metadata record (conventionally `<datasource>_catalog`).
+   * Returns the snapshot. Persistence is best-effort: when no catalog store is
+   * wired the snapshot is still returned, just not cached.
    */
-  refreshCatalog(datasource: string): Promise<unknown>;
+  refreshCatalog(datasource: string): Promise<ExternalCatalog>;
 
   /** Validate one federated object against the live remote table. */
   validateObject(objectName: string): Promise<SchemaValidationResult>;

@@ -25,6 +25,7 @@ interface MetadataServiceLike {
   getObject?: (name: string) => Promise<unknown>;
   listObjects?: () => Promise<unknown[]>;
   list?: (type: string) => Promise<unknown[]>;
+  register?: (type: string, name: string, data: unknown) => Promise<void> | void;
 }
 
 export interface ExternalDatasourceServicePluginOptions {
@@ -78,6 +79,16 @@ export class ExternalDatasourceServicePlugin implements Plugin {
         ((metadata?.listObjects
           ? await metadata.listObjects()
           : await metadata?.list?.('object')) ?? []) as ObjectLike[],
+      // Persist the refreshed snapshot as an `external_catalog` metadata record
+      // so the boot gate + Studio's schema browser can read it without
+      // re-introspecting. No-op when the metadata service can't write.
+      ...(metadata?.register
+        ? {
+            persistCatalog: async (catalog) => {
+              await metadata.register!('external_catalog', catalog.name, catalog);
+            },
+          }
+        : {}),
       logger: this.options.logger,
     };
 

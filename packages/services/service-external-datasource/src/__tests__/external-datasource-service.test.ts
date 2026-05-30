@@ -242,12 +242,45 @@ describe('validateAll', () => {
 describe('refreshCatalog', () => {
   it('produces a snapshot with suggested field types', async () => {
     const svc = makeService();
-    const catalog = (await svc.refreshCatalog('warehouse')) as {
-      datasource: string;
-      tables: Array<{ remoteName: string; columns: Array<{ name: string; suggestedFieldType?: string }> }>;
-    };
+    const catalog = await svc.refreshCatalog('warehouse');
     expect(catalog.datasource).toBe('warehouse');
+    expect(catalog.name).toBe('warehouse_catalog');
     const orders = catalog.tables.find((t) => t.remoteName === 'fact_orders')!;
     expect(orders.columns.find((c) => c.name === 'amount')?.suggestedFieldType).toBe('number');
+    // Canonicalised through the Zod schema: primaryKey default applied.
+    expect(orders.columns.find((c) => c.name === 'order_id')?.primaryKey).toBe(true);
+    expect(orders.columns.find((c) => c.name === 'amount')?.primaryKey).toBe(false);
+  });
+
+  it('persists the snapshot as an external_catalog record when a store is wired', async () => {
+    const persisted: unknown[] = [];
+    const svc = new ExternalDatasourceService({
+      introspect: async () => warehouseSchema(),
+      getDatasource: async () => ({ name: 'warehouse', schemaMode: 'external' }),
+      getObject: async () => undefined,
+      listObjects: async () => [],
+      persistCatalog: async (c) => {
+        persisted.push(c);
+      },
+    });
+    const catalog = await svc.refreshCatalog('warehouse');
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toBe(catalog);
+    expect((persisted[0] as { name: string }).name).toBe('warehouse_catalog');
+  });
+
+  it('still returns the snapshot when persistence throws (best-effort cache)', async () => {
+    const svc = new ExternalDatasourceService({
+      introspect: async () => warehouseSchema(),
+      getDatasource: async () => ({ name: 'warehouse', schemaMode: 'external' }),
+      getObject: async () => undefined,
+      listObjects: async () => [],
+      persistCatalog: async () => {
+        throw new Error('metadata store is read-only');
+      },
+      logger: { warn: () => {} },
+    });
+    const catalog = await svc.refreshCatalog('warehouse');
+    expect(catalog.name).toBe('warehouse_catalog');
   });
 });
