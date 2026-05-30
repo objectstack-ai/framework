@@ -164,19 +164,19 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
     //     blocked only when overlaying an artifact-backed item. Brand-new
     //     (artifact-free) names succeed. Tested separately below.
     //
-    //  2. Types with `allowRuntimeCreate: false` (datasource/router/
-    //     function/service) — blocked for ANY write in project-kernel mode.
+    //  2. Types with `allowRuntimeCreate: false` (router/function/service) —
+    //     blocked for ANY write in project-kernel mode.
+    //
+    //     NOTE: `datasource` moved to cohort #1 with the ADR-0015 Addendum
+    //     (runtime-UI-creatable datasources). Brand-new runtime datasources
+    //     are now allowed; collision with a code-defined (artifact-backed)
+    //     datasource is still refused via the artifact provenance check.
     //     The error code surfaces as `not_creatable` when the item has no
     //     artifact (which the empty test-mock registry guarantees) and
     //     `not_overridable` when an artifact exists. Both carry status 403
     //     and the same underlying security guarantee.
     describe('denied — must throw 403 (not_overridable or not_creatable)', () => {
         const deniedTypeWide: Array<{ type: string; reason: string; item: any }> = [
-            {
-                type: 'datasource',
-                reason: 'wiring level; must be code, not per-org metadata',
-                item: { name: 'analytics', driver: 'sql' },
-            },
             {
                 type: 'router',
                 reason: 'API routing must be deterministic; per-org divergence creates invisible conflicts',
@@ -191,11 +191,6 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
                 type: 'service',
                 reason: 'service definitions must be deployment-only, not per-org',
                 item: { name: 'notification_service' },
-            },
-            {
-                type: 'datasources', // plural — `datasources` maps to `datasource` in PLURAL_TO_SINGULAR
-                reason: 'plural form of denied type must also be denied',
-                item: { name: 'analytics' },
             },
         ];
 
@@ -247,6 +242,18 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             {
                 type: 'field',
                 item: { name: 'tenant_widget_color', type: 'text', label: 'Color' },
+            },
+            // datasource/datasources became runtime-creatable with the
+            // ADR-0015 Addendum (UI "Add Datasource"). Brand-new runtime
+            // datasources succeed; code-defined collisions are refused via
+            // artifact provenance (exercised in protocol-meta.test.ts).
+            {
+                type: 'datasource',
+                item: { name: 'analytics', driver: 'sql', config: {} },
+            },
+            {
+                type: 'datasources', // plural — maps to `datasource` via PLURAL_TO_SINGULAR
+                item: { name: 'analytics2', driver: 'sql', config: {} },
             },
         ];
 
