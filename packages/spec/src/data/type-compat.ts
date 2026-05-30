@@ -164,16 +164,19 @@ export function canonicalizeSqlType(rawType: string, dialect?: SqlDialect): Cano
   const isArray = t.endsWith('[]') || t.startsWith('_');
   if (isArray) return 'array';
 
-  // Drop precision/length: `numeric(10,2)` → `numeric`, `varchar(255)` → `varchar`.
-  t = t.replace(/\s*\([^)]*\)/g, '').trim();
+  // Drop precision/length: `numeric(10,2)` → `numeric`, `varchar(255)` →
+  // `varchar`. Linear substring slice (no regex backtracking).
+  const paren = t.indexOf('(');
+  if (paren !== -1) t = t.slice(0, paren).trim();
 
-  // Normalise common qualifiers.
-  t = t
-    .replace(/\s+without time zone$/, '')
-    .replace(/\s+with time zone$/, '')
-    .replace(/\s+unsigned$/, '')
-    .replace(/\s+signed$/, '')
-    .trim();
+  // Normalise common trailing qualifiers using literal, anchored suffix
+  // checks — avoids polynomial-backtracking regexes on uncontrolled input.
+  for (const suffix of [' without time zone', ' with time zone', ' unsigned', ' signed']) {
+    if (t.endsWith(suffix)) {
+      t = t.slice(0, t.length - suffix.length).trim();
+      break;
+    }
+  }
 
   // `timestamp with time zone` collapsed to `timestamp` above; `timestamptz`
   // handled via alias.
