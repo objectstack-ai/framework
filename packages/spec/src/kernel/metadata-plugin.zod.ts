@@ -86,7 +86,7 @@ export const MetadataTypeSchema = lazySchema(() => z.enum([
 
   // Automation Protocol
   'flow',        // Visual logic flows (FlowSchema)
-  'workflow',    // State machines (WorkflowSchema)
+  'workflow',    // State machines (StateMachineSchema)
   'approval',    // Approval processes (ApprovalSchema)
   'job',         // Background / scheduled jobs (JobSchema)
 

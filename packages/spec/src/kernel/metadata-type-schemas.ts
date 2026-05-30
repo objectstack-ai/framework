@@ -41,7 +41,7 @@ import { ActionSchema } from '../ui/action.zod';
 import { ReportSchema } from '../ui/report.zod';
 
 import { FlowSchema } from '../automation/flow.zod';
-import { WorkflowRuleSchema } from '../automation/workflow.zod';
+import { StateMachineSchema } from '../automation/state-machine.zod';
 import { ApprovalProcessSchema } from '../automation/approval.zod';
 
 import { JobSchema } from '../system/job.zod';
@@ -81,7 +81,7 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
 
   // Automation Protocol
   flow: FlowSchema,
-  workflow: WorkflowRuleSchema,
+  workflow: StateMachineSchema,
   approval: ApprovalProcessSchema,
   job: JobSchema,
 

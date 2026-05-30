@@ -14,7 +14,7 @@ import {
 } from './analytics.zod';
 import { RealtimePresenceSchema, TransportProtocol } from './realtime.zod';
 import { ObjectPermissionSchema, FieldPermissionSchema } from '../security/permission.zod';
-import { WorkflowRuleSchema } from '../automation/workflow.zod';
+import { StateMachineSchema } from '../automation/state-machine.zod';
 import { TranslationDataSchema } from '../system/translation.zod';
 import type {
   GetFeedRequest,
@@ -666,7 +666,7 @@ export const GetWorkflowConfigRequestSchema = lazySchema(() => z.object({
 
 export const GetWorkflowConfigResponseSchema = lazySchema(() => z.object({
   object: z.string().describe('Object name'),
-  workflows: z.array(WorkflowRuleSchema).describe('Active workflow rules for this object'),
+  workflows: z.array(StateMachineSchema).describe('Active state-machine workflows for this object'),
 }));
 
 export const WorkflowStateSchema = lazySchema(() => z.object({

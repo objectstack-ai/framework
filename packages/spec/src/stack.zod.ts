@@ -25,7 +25,7 @@ import { ThemeSchema } from './ui/theme.zod';
 
 // Automation Protocol
 import { ApprovalProcessSchema } from './automation/approval.zod';
-import { WorkflowRuleSchema } from './automation/workflow.zod';
+import { StateMachineSchema } from './automation/state-machine.zod';
 import { FlowSchema } from './automation/flow.zod';
 import { JobSchema } from './system/job.zod';
 
@@ -216,7 +216,7 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
    * ObjectFlow: Automation Layer 
    * Business logic, approvals, and workflows.
    */
-  workflows: z.array(WorkflowRuleSchema).optional().describe('Event-driven workflows'),
+  workflows: z.array(StateMachineSchema).optional().describe('State-machine workflow definitions (record lifecycle state management)'),
   approvals: z.array(ApprovalProcessSchema).optional().describe('Approval processes'),
   flows: z.array(FlowSchema).optional().describe('Screen Flows'),
   jobs: z.array(JobSchema).optional().describe('Background / Scheduled Jobs (run by IJobService on cron/interval/once schedules)'),
@@ -501,17 +501,6 @@ function validateCrossReferences(config: ObjectStackDefinition): string[] {
   const objectNames = collectObjectNames(config);
 
   if (objectNames.size === 0) return errors;
-
-  // Validate workflow → object references (uses `objectName`)
-  if (config.workflows) {
-    for (const workflow of config.workflows) {
-      if (workflow.objectName && !objectNames.has(workflow.objectName)) {
-        errors.push(
-          `Workflow '${workflow.name}' references object '${workflow.objectName}' which is not defined in objects.`,
-        );
-      }
-    }
-  }
 
   // Validate approval → object references
   if (config.approvals) {

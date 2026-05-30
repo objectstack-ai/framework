@@ -459,20 +459,6 @@ describe('defineStack', () => {
     expect(() => defineStack(config as any, { strict: true })).toThrow('defineStack validation failed');
   });
 
-  it('should detect workflow referencing undefined object in strict mode', () => {
-    const config = {
-      manifest: baseManifest,
-      objects: [
-        { name: 'task', fields: { title: { type: 'text' } } },
-      ],
-      workflows: [
-        { name: 'update_status', objectName: 'nonexistent', triggerType: 'on_create' },
-      ],
-    };
-    expect(() => defineStack(config, { strict: true })).toThrow('nonexistent');
-    expect(() => defineStack(config, { strict: true })).toThrow('cross-reference validation failed');
-  });
-
   it('should detect approval referencing undefined object in strict mode', () => {
     const config = {
       manifest: baseManifest,
@@ -510,9 +496,6 @@ describe('defineStack', () => {
       objects: [
         { name: 'lead', fields: { status: { type: 'text' } } },
       ],
-      workflows: [
-        { name: 'qualify_lead', objectName: 'lead', triggerType: 'on_create' },
-      ],
       hooks: [
         { name: 'enrich_lead', object: 'lead', events: ['beforeInsert'] },
       ],
@@ -523,8 +506,8 @@ describe('defineStack', () => {
   it('should skip cross-reference validation when no objects are defined', () => {
     const config = {
       manifest: baseManifest,
-      workflows: [
-        { name: 'some_workflow', objectName: 'external_object', triggerType: 'on_create' },
+      hooks: [
+        { name: 'some_hook', object: 'external_object', events: ['beforeInsert'] },
       ],
     };
     // No objects defined, so cross-ref validation is skipped
@@ -695,8 +678,8 @@ describe('defineStack - Map Format Support', () => {
       objects: {
         task: { fields: { title: { type: 'text' } } },
       },
-      workflows: {
-        update_status: { objectName: 'task', triggerType: 'on_create' },
+      hooks: {
+        update_status: { object: 'task', events: ['beforeInsert'] },
       },
     };
 
@@ -710,8 +693,8 @@ describe('defineStack - Map Format Support', () => {
       objects: {
         task: { fields: { title: { type: 'text' } } },
       },
-      workflows: {
-        bad_workflow: { objectName: 'nonexistent', triggerType: 'on_create' },
+      hooks: {
+        bad_hook: { object: 'nonexistent', events: ['beforeInsert'] },
       },
     };
 
