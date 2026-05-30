@@ -1,8 +1,15 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Command, Args, Flags } from '@oclif/core';
+import { Args, Command, Flags } from '@oclif/core';
 import { writeFile } from 'node:fs/promises';
-import { createApiClient } from '../../lib/api-client.js';
+import { resolve, isAbsolute } from 'node:path';
+
+/** Resolve server URL + token from flags then env (mirrors createApiClient). */
+function resolveTarget(flags: { url?: string; token?: string }): { url: string; token?: string } {
+  const url = flags.url || process.env.OS_CLOUD_URL || 'http://localhost:3000';
+  const token = flags.token || process.env.OS_TOKEN;
+  return { url, token };
+}
 
 /**
  * `os datasource introspect <name> --table <remote>` — generate an Object
@@ -13,8 +20,8 @@ export default class DatasourceIntrospect extends Command {
   static override description = 'Generate an Object draft from a remote table on an external datasource';
 
   static override examples = [
-    '<%= config.bin %> <%= command.id %> warehouse --table fact_orders',
-    '<%= config.bin %> <%= command.id %> warehouse --table fact_orders --out objects/wh_order.object.ts',
+    '$ os datasource introspect warehouse --table fact_orders',
+    '$ os datasource introspect warehouse --table fact_orders --out objects/wh_order.object.ts',
   ];
 
   static override args = {
@@ -22,15 +29,15 @@ export default class DatasourceIntrospect extends Command {
   };
 
   static override flags = {
-    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OS_SERVER_URL' }),
-    token: Flags.string({ char: 't', description: 'Auth token', env: 'OS_TOKEN' }),
+    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OS_CLOUD_URL' }),
+    token: Flags.string({ char: 't', description: 'Authentication token', env: 'OS_TOKEN' }),
     table: Flags.string({ char: 'T', description: 'Remote table name', required: true }),
-    out: Flags.string({ char: 'o', description: 'Write the generated source to this file' }),
+    out: Flags.string({ char: 'o', description: 'Write the generated source to this file (under the current working directory)' }),
   };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(DatasourceIntrospect);
-    const { url, token } = createApiClient({ url: flags.url, token: flags.token });
+    const { url, token } = resolveTarget(flags);
 
     const res = await fetch(
       `${url}/api/v1/datasources/${args.name}/external/tables/${encodeURIComponent(flags.table)}/draft`,
@@ -56,7 +63,16 @@ export default class DatasourceIntrospect extends Command {
     }
 
     if (flags.out) {
-      await writeFile(flags.out, draft.source, 'utf8');
+      // Constrain the output path to the current working directory: the body
+      // is server-generated TypeScript, so refuse to write outside the project
+      // tree (defends against a malicious/compromised server supplying an
+      // absolute or traversing `--out` via shell expansion).
+      const target = resolve(process.cwd(), flags.out);
+      if (isAbsolute(flags.out) || !target.startsWith(process.cwd() + '/')) {
+        this.error(`--out must be a relative path within the current directory: ${flags.out}`);
+        return;
+      }
+      await writeFile(target, draft.source, 'utf8');
       this.log(`Wrote ${flags.out}`);
     } else {
       this.log(draft.source);

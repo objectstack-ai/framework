@@ -1,7 +1,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Command, Args, Flags } from '@oclif/core';
-import { createApiClient } from '../../lib/api-client.js';
+import { Args, Command, Flags } from '@oclif/core';
+
+/** Resolve server URL + token from flags then env (mirrors createApiClient). */
+function resolveTarget(flags: { url?: string; token?: string }): { url: string; token?: string } {
+  const url = flags.url || process.env.OS_CLOUD_URL || 'http://localhost:3000';
+  const token = flags.token || process.env.OS_TOKEN;
+  return { url, token };
+}
 
 /**
  * `os datasource list-tables <name>` — list remote tables on a federated
@@ -11,8 +17,8 @@ export default class DatasourceListTables extends Command {
   static override description = 'List remote tables on an external (federated) datasource';
 
   static override examples = [
-    '<%= config.bin %> <%= command.id %> warehouse',
-    '<%= config.bin %> <%= command.id %> warehouse --schema mart',
+    '$ os datasource list-tables warehouse',
+    '$ os datasource list-tables warehouse --schema mart',
   ];
 
   static override args = {
@@ -20,14 +26,14 @@ export default class DatasourceListTables extends Command {
   };
 
   static override flags = {
-    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OS_SERVER_URL' }),
-    token: Flags.string({ char: 't', description: 'Auth token', env: 'OS_TOKEN' }),
+    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OS_CLOUD_URL' }),
+    token: Flags.string({ char: 't', description: 'Authentication token', env: 'OS_TOKEN' }),
     schema: Flags.string({ char: 's', description: 'Filter by remote schema' }),
   };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(DatasourceListTables);
-    const { url, token } = createApiClient({ url: flags.url, token: flags.token });
+    const { url, token } = resolveTarget(flags);
 
     const qs = flags.schema ? `?schema=${encodeURIComponent(flags.schema)}` : '';
     const res = await fetch(`${url}/api/v1/datasources/${args.name}/external/tables${qs}`, {

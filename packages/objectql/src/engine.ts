@@ -1714,6 +1714,7 @@ export class ObjectQL implements IDataEngine {
   async delete(object: string, options?: EngineDeleteOptions): Promise<any> {
     object = this.resolveObjectName(object);
     this.logger.debug('Delete operation starting', { object });
+    this.assertWriteAllowed(object, 'delete');
     const driver = this.getDriver(object);
 
     // Extract ID logic similar to update

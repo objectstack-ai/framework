@@ -1,7 +1,13 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { Command, Args, Flags } from '@oclif/core';
-import { createApiClient } from '../../lib/api-client.js';
+import { Args, Command, Flags } from '@oclif/core';
+
+/** Resolve server URL + token from flags then env (mirrors createApiClient). */
+function resolveTarget(flags: { url?: string; token?: string }): { url: string; token?: string } {
+  const url = flags.url || process.env.OS_CLOUD_URL || 'http://localhost:3000';
+  const token = flags.token || process.env.OS_TOKEN;
+  return { url, token };
+}
 
 /**
  * `os datasource validate <name>` — validate federated objects on a datasource
@@ -11,20 +17,20 @@ import { createApiClient } from '../../lib/api-client.js';
 export default class DatasourceValidate extends Command {
   static override description = 'Validate federated objects against the remote schema of an external datasource';
 
-  static override examples = ['<%= config.bin %> <%= command.id %> warehouse'];
+  static override examples = ['$ os datasource validate warehouse'];
 
   static override args = {
     name: Args.string({ description: 'Datasource name', required: true }),
   };
 
   static override flags = {
-    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OS_SERVER_URL' }),
-    token: Flags.string({ char: 't', description: 'Auth token', env: 'OS_TOKEN' }),
+    url: Flags.string({ char: 'u', description: 'Server URL', env: 'OS_CLOUD_URL' }),
+    token: Flags.string({ char: 't', description: 'Authentication token', env: 'OS_TOKEN' }),
   };
 
   async run(): Promise<void> {
     const { args, flags } = await this.parse(DatasourceValidate);
-    const { url, token } = createApiClient({ url: flags.url, token: flags.token });
+    const { url, token } = resolveTarget(flags);
 
     const res = await fetch(`${url}/api/v1/datasources/${args.name}/external/validate`, {
       method: 'POST',

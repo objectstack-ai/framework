@@ -44,6 +44,10 @@ export class ExternalValidationPlugin implements Plugin {
   type = 'standard';
   version = '1.0.0';
 
+  init = (_ctx: PluginContext): void => {
+    // Nothing to register; validation runs on kernel:ready (see start()).
+  };
+
   start = (ctx: PluginContext): void => {
     // Subscribe to kernel-ready so validation runs after every plugin (drivers,
     // services, manifests) has been registered.

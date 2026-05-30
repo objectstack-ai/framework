@@ -19,6 +19,8 @@ export type { DefaultHostConfigOptions, DefaultHostConfigResult } from './defaul
 export { DriverPlugin } from './driver-plugin.js';
 export { AppPlugin, collectBundleHooks, collectBundleFunctions, collectBundleActions } from './app-plugin.js';
 export { SeedLoaderService } from './seed-loader.js';
+// External Datasource Federation — boot-validation gate (ADR-0015, Gate 2)
+export { ExternalValidationPlugin, createExternalValidationPlugin } from './external-validation-plugin.js';
 export { createDispatcherPlugin } from './dispatcher-plugin.js';
 export type { DispatcherPluginConfig } from './dispatcher-plugin.js';
 export { createSystemEnvironmentPlugin, SYSTEM_ENVIRONMENT_ID } from './system-environment-plugin.js';
