@@ -43,6 +43,15 @@ export interface QueryDataToolContext {
   /** Maximum number of records returned per call (default: 100). */
   maxLimit?: number;
   /**
+   * Fallback hard cap (ms) on a single query against a *federated* (external)
+   * object, used when the datasource doesn't declare its own
+   * `external.queryTimeoutMs`. A slow remote warehouse must never hang the AI
+   * tool loop indefinitely (ADR-0015 §5.4 AI safety net). Default: 30_000.
+   * Managed (local) objects are never timed out here — they're already bounded
+   * by the injected `LIMIT`.
+   */
+  externalQueryTimeoutMs?: number;
+  /**
    * Optional protocol shim for cross-source object enumeration. Mirrors the
    * fallback used by `list_objects`/`describe_object` — without it the
    * SchemaRetriever can't see ObjectQL SchemaRegistry objects such as
@@ -150,6 +159,20 @@ export const QUERY_DATA_TOOL: AIToolDefinition = {
 export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
   const retriever = new SchemaRetriever(ctx.metadata, {}, ctx.protocol);
   const maxLimit = ctx.maxLimit ?? 100;
+  const externalTimeoutFallback = ctx.externalQueryTimeoutMs ?? 30_000;
+
+  /** Resolve a federated object's per-query timeout (datasource-declared,
+   *  else the tool fallback). Never throws — degrades to the fallback. */
+  const resolveExternalTimeout = async (datasource: string): Promise<number> => {
+    try {
+      const ds = (await ctx.metadata.get?.('datasource', datasource)) as
+        | { external?: { queryTimeoutMs?: number } }
+        | undefined;
+      return ds?.external?.queryTimeoutMs ?? externalTimeoutFallback;
+    } catch {
+      return externalTimeoutFallback;
+    }
+  };
 
   return async (args, execCtx) => {
     const { request } = args as { request: string };
@@ -244,14 +267,24 @@ export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
         });
       }
     }
+    // Federated objects hit a remote production DB — bound the wait so a slow
+    // warehouse can't hang the tool loop. Managed objects skip this entirely.
+    const isExternal = matchedObject.external !== undefined;
     try {
-      const records = await ctx.dataEngine.find(plan.objectName, {
+      const findPromise = ctx.dataEngine.find(plan.objectName, {
         where,
         fields: plan.fields ?? undefined,
         orderBy: plan.orderBy ?? undefined,
         limit,
         context: buildAiEngineContext(execCtx),
       });
+      const records = isExternal
+        ? await withTimeout(
+            findPromise,
+            await resolveExternalTimeout(matchedObject.datasource ?? 'default'),
+            plan.objectName,
+          )
+        : await findPromise;
       return JSON.stringify({
         plan: { ...plan, where },
         count: records.length,
@@ -264,6 +297,37 @@ export function createQueryDataHandler(ctx: QueryDataToolContext): ToolHandler {
       });
     }
   };
+}
+
+/**
+ * Bound a promise with a timeout. On expiry, rejects with a descriptive error
+ * (surfaced to the model as a query failure). The underlying `find` is not
+ * cancellable, so it may complete in the background — that's acceptable for a
+ * safety net whose job is to return control to the tool loop promptly.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, object: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(
+        new Error(
+          `query on external object '${object}' exceeded the ${ms}ms timeout. ` +
+            'Narrow the filter or lower the limit.',
+        ),
+      );
+    }, ms);
+    // Don't let the timer hold the event loop open on its own.
+    (timer as { unref?: () => void }).unref?.();
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
 }
 
 /**

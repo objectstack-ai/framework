@@ -49,15 +49,16 @@ already exists and is reused:
 | Phase | Scope | Status |
 |:-----:|:--|:--|
 | **P1** | Spec changes (`schemaMode`, `object.external`, error classes) + DDL gate in `driver-sql` + tests | ✅ **Done** (this branch) |
-| **P2** | `IExternalDatasourceService` impl + type-compat matrix + CLI `introspect`/`validate` | 🟡 **Service core done** (matrix + contract + service); REST routes + CLI pending |
+| **P2** | `IExternalDatasourceService` impl + type-compat matrix + CLI `introspect`/`validate` | ✅ **Done** (service + matrix; REST `/external/*` mounted in `rest-api-plugin`; CLI `datasource list-tables`/`introspect`/`validate`; `engine.introspectDatasource`) |
 | **P3** | Boot-validation plugin in `@objectstack/runtime` + `external_catalog` metadata type + caching | ✅ **Done** |
-| **P4** | `SchemaRetriever` annotation + agent prompt + AI safety nets (LIMIT injection, timeout) | ⬜ Todo |
+| **P4** | `SchemaRetriever` annotation + agent prompt + AI safety nets (LIMIT injection, timeout) | ✅ **Done** (external badge in `SchemaRetriever.renderSnippet`; `query_data` injects LIMIT + per-query timeout for federated objects via `external.queryTimeoutMs`) |
 | **P5** | Studio UI in `../objectui` (wizard, schema browser, mapping editor, validation panel) | ⬜ Todo |
-| **P6** | Write gate + `allowWrites`/`writable` double opt-in + tests | ⬜ Todo |
+| **P6** | Write gate + `allowWrites`/`writable` double opt-in + tests | ✅ **Done** (`engine.assertWriteAllowed`, called from insert/update/delete; `external-write-gate.test.ts`) |
 | **P7** | Additional drivers (Snowflake / BigQuery / MySQL) | ⬜ Todo |
 
 **MVP = P1–P4**: connect a read-only Postgres replica, register a few
-tables, let AI Data Chat query them safely.
+tables, let AI Data Chat query them safely. ✅ **MVP complete** — P1–P4 + P6
+all landed; remaining work is P5 (Studio UI) and P7 (more drivers).
 
 ## P1 — delivered in this change
 
