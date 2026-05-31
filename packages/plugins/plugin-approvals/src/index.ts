@@ -27,7 +27,6 @@ export {
 } from './approvals-plugin.js';
 export {
   registerApprovalNode,
-  decideApprovalNode,
   type ApprovalAutomationSurface,
 } from './approval-node.js';
 export type {

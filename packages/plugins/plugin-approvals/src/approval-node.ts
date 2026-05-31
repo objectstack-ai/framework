@@ -9,8 +9,8 @@
  *   1. On entry the node opens a `sys_approval_request` (reusing the mature
  *      approver-resolution / audit / lock / status-mirror machinery) and returns
  *      `{ suspend: true }` — the engine persists the run and stops traversal.
- *   2. A decision (`decideApprovalNode`) finalizes the request and resumes the
- *      run down the matching `approve` / `reject` out-edge.
+ *   2. A decision (`ApprovalService.decide`) finalizes the request and resumes
+ *      the run down the matching `approve` / `reject` out-edge.
  *
  * The approval *state* (request/action rows) stays first-class and owned by this
  * plugin — a flow-run log can't drive an inbox / recall / audit. Only the
@@ -21,7 +21,6 @@ import {
   defineActionDescriptor,
   ApprovalNodeConfigSchema,
   APPROVAL_NODE_TYPE,
-  APPROVAL_BRANCH_LABELS,
   type ApprovalNodeConfig,
 } from '@objectstack/spec/automation';
 import type { SharingExecutionContext } from '@objectstack/spec/contracts';
@@ -124,40 +123,4 @@ export function registerApprovalNode(
   });
 
   logger?.info?.('[approvals] approval node executor registered');
-}
-
-/**
- * Record a decision on a node-driven approval request and, when it finalizes,
- * resume the suspended flow run down the matching branch. Returns the service
- * decision result so callers (API routes) can surface request state.
- */
-export async function decideApprovalNode(
-  automation: ApprovalAutomationSurface,
-  service: ApprovalService,
-  requestId: string,
-  input: { decision: 'approve' | 'reject'; actorId: string; comment?: string },
-  context: SharingExecutionContext,
-  logger?: MinimalLogger,
-): Promise<{ requestId: string; finalized: boolean; decision: 'approve' | 'reject'; resumed: boolean }> {
-  const result = await service.decideNode(requestId, input, context);
-
-  let resumed = false;
-  if (result.finalized && result.runId && typeof automation.resume === 'function') {
-    const branchLabel = result.decision === 'approve'
-      ? APPROVAL_BRANCH_LABELS.approve
-      : APPROVAL_BRANCH_LABELS.reject;
-    try {
-      await automation.resume(result.runId, {
-        branchLabel,
-        output: { decision: result.decision, requestId },
-      });
-      resumed = true;
-    } catch (err: any) {
-      logger?.warn?.('[approvals] resume after decision failed', {
-        request: requestId, run: result.runId, error: err?.message ?? String(err),
-      });
-    }
-  }
-
-  return { requestId, finalized: result.finalized, decision: result.decision, resumed };
 }

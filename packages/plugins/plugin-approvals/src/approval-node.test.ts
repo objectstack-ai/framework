@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AutomationEngine } from '@objectstack/service-automation';
 import { ApprovalService } from './approval-service.js';
-import { registerApprovalNode, decideApprovalNode } from './approval-node.js';
+import { registerApprovalNode } from './approval-node.js';
 
 const SYSTEM_CTX = { isSystem: true, roles: [], permissions: [] } as any;
 
@@ -83,6 +83,8 @@ describe('Approval node bridge (ADR-0019)', () => {
     automation = new AutomationEngine(noopLogger as any);
     fake = makeFakeEngine();
     service = new ApprovalService({ engine: fake as any, logger: noopLogger });
+    // The contract `decide()` resumes via the attached automation surface.
+    service.attachAutomation(automation);
     registerApprovalNode(automation, service, noopLogger);
     // A terminal "mark" node records which branch ran.
     automation.registerNodeExecutor({
@@ -127,8 +129,7 @@ describe('Approval node bridge (ADR-0019)', () => {
     });
     const request = (await fake.find('sys_approval_request', { where: { status: 'pending' } }))[0];
 
-    const out = await decideApprovalNode(automation, service, request.id,
-      { decision: 'approve', actorId: 'u1' }, SYSTEM_CTX, noopLogger);
+    const out = await service.decide(request.id, { decision: 'approve', actorId: 'u1' }, SYSTEM_CTX);
 
     expect(out).toMatchObject({ finalized: true, decision: 'approve', resumed: true });
     expect(marks).toEqual(['on_approved']);
@@ -144,8 +145,7 @@ describe('Approval node bridge (ADR-0019)', () => {
     await automation.execute('deal_approval', { object: 'crm_deal', record: { id: 'd1' } });
     const request = (await fake.find('sys_approval_request', { where: { status: 'pending' } }))[0];
 
-    const out = await decideApprovalNode(automation, service, request.id,
-      { decision: 'reject', actorId: 'u1' }, SYSTEM_CTX, noopLogger);
+    const out = await service.decide(request.id, { decision: 'reject', actorId: 'u1' }, SYSTEM_CTX);
 
     expect(out).toMatchObject({ finalized: true, decision: 'reject', resumed: true });
     expect(marks).toEqual(['on_rejected']);
@@ -159,14 +159,12 @@ describe('Approval node bridge (ADR-0019)', () => {
     await automation.execute('deal_approval', { object: 'crm_deal', record: { id: 'd1' } });
     const request = (await fake.find('sys_approval_request', { where: { status: 'pending' } }))[0];
 
-    const first = await decideApprovalNode(automation, service, request.id,
-      { decision: 'approve', actorId: 'u1' }, SYSTEM_CTX, noopLogger);
+    const first = await service.decide(request.id, { decision: 'approve', actorId: 'u1' }, SYSTEM_CTX);
     expect(first.finalized).toBe(false);
     expect(first.resumed).toBe(false);
     expect(marks).toHaveLength(0);
 
-    const second = await decideApprovalNode(automation, service, request.id,
-      { decision: 'approve', actorId: 'u2' }, SYSTEM_CTX, noopLogger);
+    const second = await service.decide(request.id, { decision: 'approve', actorId: 'u2' }, SYSTEM_CTX);
     expect(second.finalized).toBe(true);
     expect(second.resumed).toBe(true);
     expect(marks).toEqual(['on_approved']);

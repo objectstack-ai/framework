@@ -56,6 +56,19 @@ export const Opportunity = ObjectSchema.create({
       min: 0,
       max: 100,
     }),
+    // Mirror target for the Discount Approval flow's approval nodes
+    // (ADR-0019). The approval runtime writes the request status here; it is
+    // readonly to users so only the flow drives it.
+    approval_status: Field.select({
+      label: 'Approval Status',
+      readonly: true,
+      options: [
+        { label: 'Pending', value: 'pending', color: '#F59E0B' },
+        { label: 'Approved', value: 'approved', color: '#10B981' },
+        { label: 'Rejected', value: 'rejected', color: '#EF4444' },
+        { label: 'Recalled', value: 'recalled', color: '#94A3B8' },
+      ],
+    }),
     renewal_of: Field.lookup('crm_opportunity', {
       label: 'Renewal Of',
     }),
