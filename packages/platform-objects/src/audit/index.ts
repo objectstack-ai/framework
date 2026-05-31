@@ -14,7 +14,6 @@ export { SysEmail } from './sys-email.object.js';
 export { SysEmailTemplate } from './sys-email-template.object.js';
 export { SysSavedReport } from './sys-saved-report.object.js';
 export { SysReportSchedule } from './sys-report-schedule.object.js';
-export { SysApprovalProcess } from './sys-approval-process.object.js';
 export { SysApprovalRequest } from './sys-approval-request.object.js';
 export { SysApprovalAction } from './sys-approval-action.object.js';
 export { SysJob } from './sys-job.object.js';

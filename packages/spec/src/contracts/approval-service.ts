@@ -3,14 +3,17 @@
 /**
  * @objectstack/spec/contracts/approval-service
  *
- * Cross-package contract for the multi-step approval engine. The
- * default implementation lives in `@objectstack/plugin-approvals` and
- * is registered as the `approvals` service.
+ * Cross-package contract for the approval runtime. The default
+ * implementation lives in `@objectstack/plugin-approvals` and is registered
+ * as the `approvals` service.
  *
- * Sits on top of (but does not depend on) `IWorkflowService`: a
- * workflow is a single state machine on a record; an approval process
- * is a *cycle* — submit → review → approve/reject → effects — driven
- * by humans rather than transition rules.
+ * ADR-0019: approval is no longer a standalone engine. An approval is a
+ * **flow node** (`type: 'approval'`) — the flow opens a request on the node
+ * and suspends; a human decision finalises it and resumes the flow down the
+ * matching `approve` / `reject` edge. This service owns the runtime state
+ * (`sys_approval_request` / `sys_approval_action`, approver resolution, record
+ * lock, status mirror) and the decision API. There is no standalone process
+ * authoring type, submit, or step machinery anymore.
  */
 
 import type { SharingExecutionContext } from './sharing-service.js';
@@ -18,38 +21,24 @@ import type { SharingExecutionContext } from './sharing-service.js';
 /** Lifecycle state of an approval request. */
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'recalled';
 
-/** Stored process definition row. */
-export interface ApprovalProcessRow {
-  id: string;
-  name: string;
-  label: string;
-  object_name: string;
-  description?: string;
-  active: boolean;
-  definition: any;
-  created_at?: string;
-  updated_at?: string;
-}
-
 /** Live request row. */
 export interface ApprovalRequestRow {
   id: string;
+  /** Origin of the request — `flow:<flowName|nodeId>` for node-driven approvals. */
   process_name: string;
-  /**
-   * sha256 of the approval process body at submit time (ADR-0009 execution pinning).
-   * When set, the engine resolves the process via `MetadataRepository.getByHash`
-   * so process upgrades do not affect this in-flight request.
-   */
-  process_hash?: string;
   object_name: string;
   record_id: string;
   submitter_id?: string;
   submitter_comment?: string;
   status: ApprovalStatus;
+  /** The flow node id that opened the request (mirrors `flow_node_id`). */
   current_step?: string;
   current_step_index?: number;
   pending_approvers?: string[];
   payload?: unknown;
+  /** ADR-0019 correlation: the suspended flow run this request belongs to. */
+  flow_run_id?: string;
+  flow_node_id?: string;
   completed_at?: string;
   created_at?: string;
   updated_at?: string;
@@ -67,56 +56,29 @@ export interface ApprovalActionRow {
   created_at?: string;
 }
 
-/** Input for `IApprovalService.defineProcess`. */
-export interface DefineApprovalProcessInput {
-  id?: string;
-  name: string;
-  label: string;
-  object: string;
-  description?: string;
-  active?: boolean;
-  /** The full ApprovalProcess JSON envelope. */
-  definition: any;
-}
-
-/** Input for `IApprovalService.submit`. */
-export interface SubmitApprovalInput {
-  object: string;
-  recordId: string;
-  /** Optional — when omitted the engine picks the active process for the object. */
-  processName?: string;
-  submitterId?: string;
-  comment?: string;
-  /** Snapshot of the record at submission time. Optional but useful for emails. */
-  payload?: unknown;
-}
-
-/** Input for approve / reject / recall. */
+/** Input for a decision on an approval request. */
 export interface ApprovalDecisionInput {
+  decision: 'approve' | 'reject';
   actorId: string;
   comment?: string;
 }
 
-/** Result of a single decision call. */
+/** Result of a decision that resumes the owning flow when finalised. */
 export interface ApprovalDecisionResult {
   request: ApprovalRequestRow;
   /** True when this call moved the request to a terminal state. */
   finalized: boolean;
+  decision: 'approve' | 'reject';
+  /** The suspended flow run that was (or will be) resumed, if any. */
+  runId?: string | null;
+  /** True when the owning flow run was resumed as a result of this decision. */
+  resumed?: boolean;
 }
 
 /**
- * Public contract.
+ * Public contract — the node-era approval runtime.
  */
 export interface IApprovalService {
-  // ── Process definitions ──────────────────────────────────────
-  defineProcess(input: DefineApprovalProcessInput, context: SharingExecutionContext): Promise<ApprovalProcessRow>;
-  listProcesses(filter: { object?: string; activeOnly?: boolean } | undefined, context: SharingExecutionContext): Promise<ApprovalProcessRow[]>;
-  getProcess(idOrName: string, context: SharingExecutionContext): Promise<ApprovalProcessRow | null>;
-  deleteProcess(idOrName: string, context: SharingExecutionContext): Promise<void>;
-
-  // ── Requests ─────────────────────────────────────────────────
-  submit(input: SubmitApprovalInput, context: SharingExecutionContext): Promise<ApprovalRequestRow>;
-
   /**
    * "My approvals" inbox. Supports filtering by status, target object,
    * record id, or by the user expected to act next.
@@ -134,14 +96,12 @@ export interface IApprovalService {
 
   getRequest(requestId: string, context: SharingExecutionContext): Promise<ApprovalRequestRow | null>;
 
-  /** Approve the current step. Advances to the next, or finalises. */
-  approve(requestId: string, input: ApprovalDecisionInput, context: SharingExecutionContext): Promise<ApprovalDecisionResult>;
-
-  /** Reject the current step. Finalises (or rolls back, per step config). */
-  reject(requestId: string, input: ApprovalDecisionInput, context: SharingExecutionContext): Promise<ApprovalDecisionResult>;
-
-  /** Submitter or admin cancels a pending request. */
-  recall(requestId: string, input: ApprovalDecisionInput, context: SharingExecutionContext): Promise<ApprovalDecisionResult>;
+  /**
+   * Record a decision on a node-driven request. Honours the node's
+   * `unanimous` behaviour, finalises the request when satisfied, and resumes
+   * the owning flow run down the matching `approve` / `reject` edge.
+   */
+  decide(requestId: string, input: ApprovalDecisionInput, context: SharingExecutionContext): Promise<ApprovalDecisionResult>;
 
   /** Audit trail for a request. */
   listActions(requestId: string, context: SharingExecutionContext): Promise<ApprovalActionRow[]>;

@@ -10,7 +10,6 @@ import { allReports } from './src/reports/index.js';
 import { allActions } from './src/actions/index.js';
 import { ComponentGalleryPage } from './src/pages/index.js';
 import { allFlows } from './src/flows/index.js';
-import { allApprovals } from './src/approvals/index.js';
 import { allWebhooks } from './src/webhooks/index.js';
 import { allJobs } from './src/jobs/index.js';
 import { allEmails } from './src/emails/index.js';
@@ -85,7 +84,6 @@ export default defineStack({
 
   // Logic
   flows: allFlows,
-  approvals: allApprovals,
   jobs: allJobs,
   emailTemplates: allEmails,
   webhooks: allWebhooks,

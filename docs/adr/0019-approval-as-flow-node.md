@@ -1,6 +1,6 @@
 # ADR-0019: Collapse Approval into Flow — one engine, approval as a durable-pause node
 
-**Status**: Proposed (2026-05-31)
+**Status**: Accepted (2026-05-31) — fully implemented (A1–A5)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0018](./0018-unified-node-action-registry.md) (open action registry — approval becomes a consumer), [ADR-0009](./0009-execution-pinned-metadata.md) (execution pinning — reconcile to one mechanism), [ADR-0012](./0012-notification-platform.md) (outbox / `notify`), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring — the design center)
 **Revises**: ADR-0018's premise that Approval stays a separate paradigm with its own closed `ApprovalActionType` enum, and the "Workflow-Rule → Flow compiler" (M5) — both dropped here (greenfield, no legacy).
@@ -133,27 +133,33 @@ removal (A4/A5) can be reviewed and sequenced on its own once consumers move ove
    `approve` / `reject` edge. New correlation fields on `sys_approval_request`
    (`flow_run_id` / `flow_node_id` / `node_config_json`). The standalone process engine is left
    intact for the migration window.
-4. **A4 — delete parallel pieces.** ⏳ **Follow-up PR (destructive).** Remove
-   `action-executor.ts`, `ApprovalActionType`, `ApprovalProcessSchema` (top-level) +
-   `approval.form.ts`; route all actions through the ADR-0018 registry; retire `process_hash`
-   pinning in favor of Flow pinning. Gated on consumers (CRM examples, API routes, app seeders,
-   `metadata-type-schemas.ts` / `metadata-form-registry.ts`) migrating off the process model.
-5. **A5 — cleanup.** ⏳ **Follow-up PR.** Remove the `workflow_rule` paradigm remnants (the M5
-   compiler itself was already removed in #1398) and `connector_action` remnants in
-   `flow.zod.ts`; migrate `approval-service.test.ts` / `phase-b.test.ts` to drive the
-   Approval node.
+4. **A4 — delete parallel pieces.** ✅ **Done (this PR, destructive).** Removed
+   `action-executor.ts`, `ApprovalActionType`, `ApprovalProcessSchema` / `ApprovalStepSchema` /
+   `ApprovalActionSchema` (top-level) + `approval.form.ts`, the `sys_approval_process` object,
+   the `approvals` stack collection, the lifecycle auto-trigger, the REST `/approvals/processes`
+   + submit/recall routes, and the app-plugin process seeder; retired `process_hash` pinning in
+   favor of Flow pinning. All actions now route through the ADR-0018 registry. Consumers (CRM /
+   showcase examples, API routes, app seeders, `metadata-type-schemas.ts` /
+   `metadata-form-registry.ts`, CLI / metadata stats) migrated off the process model.
+5. **A5 — cleanup.** ✅ **Done (this PR).** The M5 compiler was already removed in #1398; the
+   `workflow_rule` paradigm remnants are gone with the process engine. `connector_action` is
+   **retained** — it is a deliberate open extension point on the ADR-0018 registry, not a process
+   remnant. `approval-service.test.ts` rewritten to drive the Approval node; `phase-b.test.ts`
+   deleted.
 
-> **Landed in this PR:** A1–A3. The engine gained real durable suspend/resume (P1), spec gained
-> the Approval node contract (P2), and `plugin-approvals` gained the working node bridge (P3) —
-> all additive and green (spec 6605, service-automation 79, plugin-approvals 41). A4/A5 are the
-> destructive removal of the now-superseded standalone engine and are deliberately a separate PR.
+> **Landed across two PRs:** A1–A3 (additive foundation) shipped first — the engine gained real
+> durable suspend/resume (P1), spec gained the Approval node contract (P2), and `plugin-approvals`
+> gained the working node bridge (P3). **This PR lands A4–A5**: the destructive removal of the
+> now-superseded standalone process engine. Approval exists *only* as a flow node. Green across
+> spec / platform-objects / plugin-approvals / runtime / rest / cli / metadata and both example apps.
 
 ## Migration map
 
 | Asset | Disposition |
 |:---|:---|
 | `plugin-approvals` execution loop + `action-executor.ts` | **Delete** (engine + actions now Flow's) |
-| `ApprovalActionType`, `connector_action` remnants, M5 compiler | **Delete** |
+| `ApprovalActionType`, M5 compiler (`workflow_rule`) | **Delete** |
+| `connector_action` | **Keep** — deliberate open extension point (ADR-0018), not a process remnant |
 | `ApprovalProcessSchema`, `approval.form.ts` (top-level authoring type) | **Deprecate / remove** — concepts → Approval node config + Flow graph |
 | `ApproverType`, `behavior`, `escalation`, `lockRecord`, `approvalStatusField` | **Re-home** → Approval node config schema |
 | Approver resolution (team/dept BFS/manager/role/queue) | **Keep** (move under node, ~verbatim) |

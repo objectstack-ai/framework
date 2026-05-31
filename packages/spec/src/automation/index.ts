@@ -6,7 +6,6 @@ export { flowForm } from './flow.form';
 export * from './execution.zod';
 export * from './webhook.zod';
 export * from './approval.zod';
-export { approvalForm } from './approval.form';
 export * from './etl.zod';
 export * from './trigger-registry.zod';
 export * from './sync.zod';

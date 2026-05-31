@@ -43,7 +43,6 @@ import { ReportSchema } from '../ui/report.zod';
 
 import { FlowSchema } from '../automation/flow.zod';
 import { StateMachineSchema } from '../automation/state-machine.zod';
-import { ApprovalProcessSchema } from '../automation/approval.zod';
 
 import { JobSchema } from '../system/job.zod';
 import { EmailTemplateDefinitionSchema } from '../system/email-template.zod';
@@ -84,7 +83,8 @@ const BUILTIN_METADATA_TYPE_SCHEMAS: Partial<Record<MetadataType, z.ZodType>> = 
   // Automation Protocol
   flow: FlowSchema,
   workflow: StateMachineSchema,
-  approval: ApprovalProcessSchema,
+  // ADR-0019: `approval` is no longer a standalone metadata type — approvals
+  // are authored as Approval nodes inside a `flow`.
   job: JobSchema,
 
   // System Protocol

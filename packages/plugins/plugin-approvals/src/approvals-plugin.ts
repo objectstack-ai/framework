@@ -2,30 +2,32 @@
 
 import type { Plugin, PluginContext } from '@objectstack/core';
 import {
-  SysApprovalProcess,
   SysApprovalRequest,
   SysApprovalAction,
 } from '@objectstack/platform-objects/audit';
 import { ApprovalService, type ApprovalEngine } from './approval-service.js';
-import { bindProcessHooks, unbindAllHooks } from './lifecycle-hooks.js';
+import { bindApprovalLockHook, unbindAllHooks } from './lifecycle-hooks.js';
 import { registerApprovalNode, type ApprovalAutomationSurface } from './approval-node.js';
 
 export interface ApprovalsPluginOptions {
   /** Disable runtime registration (schemas still register). */
   disableService?: boolean;
   /**
-   * Disable Phase B auto-trigger / lock hooks. Schema definition stays
-   * intact; only the engine-level wiring is suppressed. Useful when a
-   * caller wants the manual API only (e.g. tests).
+   * Disable the record-lock hook. Schema + service stay intact; only the
+   * engine-level lock wiring is suppressed. Useful when a caller wants the
+   * manual API only (e.g. tests).
    */
   disableAutoHooks?: boolean;
 }
 
 /**
- * ApprovalsServicePlugin — registers sys_approval_{process,request,action},
- * the `approvals` service, and Phase B lifecycle hooks (auto-trigger,
- * record lock, status mirror). SLA escalation dispatcher is a later
- * milestone.
+ * ApprovalsServicePlugin — registers sys_approval_{request,action}, the
+ * `approvals` service, the `approval` flow node executor (ADR-0019), and the
+ * record-lock hook.
+ *
+ * ADR-0019: approval is no longer a standalone process engine. A flow's
+ * Approval node opens a request and suspends the run; a decision via the
+ * service resumes it down the matching branch.
  */
 export class ApprovalsServicePlugin implements Plugin {
   name = 'com.objectstack.service.approvals';
@@ -36,7 +38,6 @@ export class ApprovalsServicePlugin implements Plugin {
   private readonly options: ApprovalsPluginOptions;
   private service?: ApprovalService;
   private engine?: any;
-  private logger?: any;
 
   constructor(options: ApprovalsPluginOptions = {}) {
     this.options = options;
@@ -51,7 +52,7 @@ export class ApprovalsServicePlugin implements Plugin {
       scope: 'system',
       defaultDatasource: 'cloud',
       namespace: 'sys',
-      objects: [SysApprovalProcess, SysApprovalRequest, SysApprovalAction],
+      objects: [SysApprovalRequest, SysApprovalAction],
     });
     ctx.logger.info('ApprovalsServicePlugin: schemas registered');
   }
@@ -66,42 +67,19 @@ export class ApprovalsServicePlugin implements Plugin {
       return;
     }
     this.engine = engine;
-    this.logger = ctx.logger;
-
-    // ADR-0009: try to wire the metadata repository for execution pinning.
-    // The approvals service degrades to the projection-table path if no
-    // metadata service is registered (e.g. in tests or minimal setups).
-    let metadataRepo: any;
-    try {
-      const meta = ctx.getService<any>('metadata');
-      metadataRepo = meta?.getRepository?.();
-    } catch { /* metadata plugin not loaded — fall back */ }
 
     this.service = new ApprovalService({
       engine: engine as ApprovalEngine,
       logger: ctx.logger,
-      metadataRepo,
     });
 
-    if (metadataRepo) {
-      ctx.logger.info('ApprovalsServicePlugin: execution pinning enabled (ADR-0009)');
-    }
-
+    // Record lock: block edits to a record while it has a pending request.
     if (!this.options.disableAutoHooks) {
-      // Re-bind hooks on every registry mutation.
-      this.service.setRegistryChangeHandler(() => this.rebindHooks());
-      // Initial bind happens once the kernel is ready so the AppPlugin's
-      // declarative process seeder has already populated sys_approval_process.
-      const hookOn = (ctx as any).hook ?? (ctx as any).on;
-      if (typeof hookOn === 'function') {
-        try {
-          hookOn.call(ctx, 'kernel:ready', async () => { await this.rebindHooks(); });
-        } catch {
-          // Fall through to immediate bind (no kernel:ready event).
-          await this.rebindHooks();
-        }
-      } else {
-        await this.rebindHooks();
+      try {
+        unbindAllHooks(engine);
+        bindApprovalLockHook(engine, ctx.logger);
+      } catch (err: any) {
+        ctx.logger.warn?.('[approvals] failed to bind record-lock hook', { error: err?.message });
       }
     }
 
@@ -109,26 +87,17 @@ export class ApprovalsServicePlugin implements Plugin {
     ctx.logger.info('ApprovalsServicePlugin: service registered');
 
     // ADR-0019: contribute the `approval` node to the flow engine when one is
-    // present. Optional — the manual approval API works without it; this is the
-    // bridge that lets a flow suspend on an Approval node and resume on decision.
+    // present. The node lets a flow suspend on an approval and resume on
+    // decision; the service is wired to the same engine so `decide()` can
+    // resume the suspended run.
     try {
       const automation = ctx.getService<ApprovalAutomationSurface>('automation');
       if (automation && typeof automation.registerNodeExecutor === 'function') {
+        this.service.attachAutomation(automation);
         registerApprovalNode(automation, this.service, ctx.logger);
       }
     } catch {
       ctx.logger.info('ApprovalsServicePlugin: no automation engine — approval node not registered');
-    }
-  }
-
-  private async rebindHooks(): Promise<void> {
-    if (!this.engine || !this.service) return;
-    try {
-      unbindAllHooks(this.engine);
-      const processes = await this.service.listProcesses({ activeOnly: true }, { isSystem: true, roles: [], permissions: [] } as any);
-      bindProcessHooks(this.engine, this.service, processes, this.logger);
-    } catch (err: any) {
-      this.logger?.warn?.('[approvals] rebindHooks failed', { error: err?.message });
     }
   }
 
@@ -138,4 +107,3 @@ export class ApprovalsServicePlugin implements Plugin {
     }
   }
 }
-

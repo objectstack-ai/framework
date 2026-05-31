@@ -2331,58 +2331,6 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_process: {
-    label: "审批流程",
-    pluralLabel: "审批流程",
-    description: "持久化的审批流程定义。通过代码中的 defineApprovalProcess() 编写；可视化设计器在规划中。",
-    fields: {
-      id: {
-        label: "流程 ID"
-      },
-      name: {
-        label: "名称",
-        help: "唯一的 snake_case 名称——由提交方和审计记录引用"
-      },
-      label: {
-        label: "显示标签"
-      },
-      object_name: {
-        label: "对象",
-        help: "该流程所管理的短对象名"
-      },
-      description: {
-        label: "描述"
-      },
-      active: {
-        label: "启用",
-        help: "仅启用的流程会在提交时分派"
-      },
-      definition_json: {
-        label: "定义",
-        help: "序列化的 ApprovalProcess JSON（参见 @objectstack/spec/automation/approval）"
-      },
-      created_at: {
-        label: "创建时间"
-      },
-      updated_at: {
-        label: "更新时间"
-      }
-    },
-    _views: {
-      active: {
-        label: "启用"
-      },
-      inactive: {
-        label: "停用"
-      },
-      by_object: {
-        label: "按对象"
-      },
-      all_processes: {
-        label: "全部"
-      }
-    }
-  },
   sys_approval_request: {
     label: "审批请求",
     pluralLabel: "审批请求",
@@ -2396,8 +2344,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         help: "拥有该审批请求的租户（从提交方上下文传播）"
       },
       process_name: {
-        label: "流程",
-        help: "该请求对应的 sys_approval_process.name"
+        label: "来源",
+        help: "请求来源 —— 节点驱动的审批为 `flow:<flowName|nodeId>`"
       },
       object_name: {
         label: "对象"

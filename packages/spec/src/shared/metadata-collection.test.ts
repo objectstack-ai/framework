@@ -249,7 +249,6 @@ describe('MAP_SUPPORTED_FIELDS', () => {
     expect(MAP_SUPPORTED_FIELDS).toContain('actions');
     expect(MAP_SUPPORTED_FIELDS).toContain('themes');
     expect(MAP_SUPPORTED_FIELDS).toContain('workflows');
-    expect(MAP_SUPPORTED_FIELDS).toContain('approvals');
     expect(MAP_SUPPORTED_FIELDS).toContain('flows');
     expect(MAP_SUPPORTED_FIELDS).toContain('roles');
     expect(MAP_SUPPORTED_FIELDS).toContain('permissions');

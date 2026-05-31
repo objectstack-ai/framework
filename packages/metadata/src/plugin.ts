@@ -55,7 +55,6 @@ const ARTIFACT_FIELD_TO_TYPE: Record<string, string> = {
     actions: 'action',
     themes: 'theme',
     workflows: 'workflow',
-    approvals: 'approval',
     flows: 'flow',
     roles: 'role',
     permissions: 'permission',

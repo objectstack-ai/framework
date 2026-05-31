@@ -13,7 +13,6 @@ import * as emails from './src/emails/index.js';
 import { allHooks } from './src/hooks/index.js';
 import { allFlows } from './src/flows/index.js';
 import { HighValueDealWorkflow, StaleOpportunityWorkflow } from './src/workflows/index.js';
-import { DiscountApprovalProcess } from './src/approvals/index.js';
 import {
   SalesAssistantAgent,
   LookupContactTool,
@@ -105,7 +104,6 @@ export default defineStack({
   hooks: allHooks,
   flows: allFlows,
   workflows: [HighValueDealWorkflow, StaleOpportunityWorkflow],
-  approvals: [DiscountApprovalProcess],
   jobs: [LeadScoringJob, PipelineReportJob, RenewalSweepJob],
   emailTemplates: Object.values(emails),
 

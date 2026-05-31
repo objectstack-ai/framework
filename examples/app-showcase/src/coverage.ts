@@ -67,7 +67,7 @@ export const COVERAGE = {
   },
   capabilityChains: {
     security: 'security/index.ts — roles + permission set (CRUD + FLS + RLS) + sharing + policy',
-    automation: 'flows/index.ts + approvals/index.ts + webhooks/index.ts + jobs/index.ts + emails/index.ts',
+    automation: 'flows/index.ts (incl. approval nodes) + webhooks/index.ts + jobs/index.ts + emails/index.ts',
     ai: 'agents/index.ts — agent + tool + skill',
   },
   i18nThemingPortals: {

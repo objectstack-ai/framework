@@ -2331,58 +2331,6 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_process: {
-    label: "承認プロセス",
-    pluralLabel: "承認プロセス",
-    description: "永続化された承認プロセス定義。コードの defineApprovalProcess() で作成。ビジュアルデザイナーはロードマップに予定。",
-    fields: {
-      id: {
-        label: "プロセス ID"
-      },
-      name: {
-        label: "名前",
-        help: "一意の snake_case 名 — 送信者と監査行から参照"
-      },
-      label: {
-        label: "表示名"
-      },
-      object_name: {
-        label: "オブジェクト",
-        help: "このプロセスが管理する短いオブジェクト名"
-      },
-      description: {
-        label: "説明"
-      },
-      active: {
-        label: "有効",
-        help: "有効なプロセスのみが送信時にディスパッチされます"
-      },
-      definition_json: {
-        label: "定義",
-        help: "シリアライズされた ApprovalProcess JSON（@objectstack/spec/automation/approval 参照）"
-      },
-      created_at: {
-        label: "作成日時"
-      },
-      updated_at: {
-        label: "更新日時"
-      }
-    },
-    _views: {
-      active: {
-        label: "有効"
-      },
-      inactive: {
-        label: "無効"
-      },
-      by_object: {
-        label: "オブジェクト別"
-      },
-      all_processes: {
-        label: "すべて"
-      }
-    }
-  },
   sys_approval_request: {
     label: "承認リクエスト",
     pluralLabel: "承認リクエスト",
@@ -2396,8 +2344,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         help: "この承認リクエストを所有するテナント（送信者コンテキストから伝播）"
       },
       process_name: {
-        label: "プロセス",
-        help: "このリクエストが開かれた sys_approval_process.name"
+        label: "ソース",
+        help: "リクエストの発生元 — ノード駆動の承認では `flow:<flowName|nodeId>`"
       },
       object_name: {
         label: "オブジェクト"

@@ -3,13 +3,14 @@
 /**
  * @objectstack/plugin-approvals
  *
- * Multi-step approval engine for ObjectStack.
- * Persists sys_approval_process / sys_approval_request / sys_approval_action
- * and drives the cycle: submit → review → approve/reject → effects.
+ * Approval-as-flow-node runtime (ADR-0019). Persists sys_approval_request /
+ * sys_approval_action, resolves approvers, enforces the record lock, and
+ * records decisions that resume the owning flow run. Approval orchestration
+ * (when to pause, which branch to take) lives on the one automation engine via
+ * the `approval` node.
  */
 
 export {
-  SysApprovalProcess,
   SysApprovalRequest,
   SysApprovalAction,
 } from '@objectstack/platform-objects/audit';
@@ -18,6 +19,7 @@ export {
   type ApprovalEngine,
   type ApprovalClock,
   type ApprovalServiceOptions,
+  type ApprovalResumeSurface,
 } from './approval-service.js';
 export {
   ApprovalsServicePlugin,
@@ -30,12 +32,9 @@ export {
 } from './approval-node.js';
 export type {
   IApprovalService,
-  ApprovalProcessRow,
   ApprovalRequestRow,
   ApprovalActionRow,
   ApprovalDecisionInput,
   ApprovalDecisionResult,
   ApprovalStatus,
-  DefineApprovalProcessInput,
-  SubmitApprovalInput,
 } from '@objectstack/spec/contracts';

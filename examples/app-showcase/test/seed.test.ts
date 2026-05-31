@@ -22,7 +22,6 @@ describe('showcase stack', () => {
     expect((stack.dashboards ?? []).length).toBeGreaterThan(0);
     expect((stack.reports ?? []).length).toBe(4);
     expect((stack.flows ?? []).length).toBeGreaterThan(0);
-    expect((stack.approvals ?? []).length).toBeGreaterThan(0);
     expect((stack.roles ?? []).length).toBe(3);
     expect((stack.agents ?? []).length).toBe(1);
   });

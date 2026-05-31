@@ -121,7 +121,6 @@ export interface MetadataStats {
   actions: number;
   flows: number;
   workflows: number;
-  approvals: number;
   agents: number;
   apis: number;
   roles: number;
@@ -162,7 +161,6 @@ export function collectMetadataStats(config: any): MetadataStats {
     actions: count(config.actions),
     flows: count(config.flows),
     workflows: count(config.workflows),
-    approvals: count(config.approvals),
     agents: count(config.agents),
     apis: count(config.apis),
     roles: count(config.roles),
@@ -249,7 +247,6 @@ export function printMetadataStats(stats: MetadataStats) {
       items: [
         ['Flows', stats.flows],
         ['Workflows', stats.workflows],
-        ['Approvals', stats.approvals],
         ['Agents', stats.agents],
         ['APIs', stats.apis],
       ],

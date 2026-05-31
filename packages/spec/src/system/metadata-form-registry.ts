@@ -44,7 +44,7 @@ import {
 import { roleForm } from '../identity';
 import { permissionForm } from '../security';
 import { agentForm, toolForm, skillForm } from '../ai';
-import { flowForm, approvalForm } from '../automation';
+import { flowForm } from '../automation';
 import { emailTemplateForm } from './email-template.form';
 
 /**
@@ -77,7 +77,6 @@ export const METADATA_FORM_REGISTRY: Readonly<Record<string, FormView>> = Object
     tool: toolForm,
     skill: skillForm,
     flow: flowForm,
-    approval: approvalForm,
     permission: permissionForm,
     profile: permissionForm,
     email_template: emailTemplateForm,

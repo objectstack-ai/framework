@@ -89,4 +89,69 @@ export const ReassignWizardFlow = defineFlow({
   ],
 });
 
-export const allFlows = [TaskCompletedFlow, ReassignWizardFlow];
+/**
+ * Project Budget Approval — ADR-0019 approval-as-flow-node.
+ *
+ * What used to be a standalone two-step approval *process* is now an ordinary
+ * autolaunched flow with two `approval` nodes. The flow suspends on each
+ * approval and resumes down the matching `approve` / `reject` edge. The
+ * executive step only runs for budgets above $500k — that gate is a decision
+ * node on the manager step's approve edge.
+ */
+export const BudgetApprovalFlow = defineFlow({
+  name: 'showcase_budget_approval',
+  label: 'Project Budget Approval',
+  description: 'Two-step approval for projects above budget thresholds.',
+  type: 'autolaunched',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Large Budget',
+      config: {
+        objectName: 'showcase_project',
+        triggerType: 'record-after-update',
+        condition: 'budget > 100000',
+      },
+    },
+    {
+      id: 'manager_review',
+      type: 'approval',
+      label: 'Manager Review',
+      config: {
+        approvers: [{ type: 'role', value: 'manager' }],
+        behavior: 'first_response',
+        lockRecord: true,
+      },
+    },
+    {
+      id: 'needs_exec',
+      type: 'decision',
+      label: 'Budget Above $500k?',
+      config: { condition: 'budget > 500000' },
+    },
+    {
+      id: 'exec_review',
+      type: 'approval',
+      label: 'Executive Review',
+      config: {
+        approvers: [{ type: 'role', value: 'exec' }],
+        behavior: 'unanimous',
+        lockRecord: true,
+      },
+    },
+    { id: 'approved', type: 'end', label: 'Approved' },
+    { id: 'rejected', type: 'end', label: 'Rejected' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'manager_review' },
+    { id: 'e2', source: 'manager_review', target: 'needs_exec', label: 'approve' },
+    { id: 'e3', source: 'manager_review', target: 'rejected', label: 'reject' },
+    { id: 'e4', source: 'needs_exec', target: 'exec_review', label: 'true' },
+    { id: 'e5', source: 'needs_exec', target: 'approved', label: 'false' },
+    { id: 'e6', source: 'exec_review', target: 'approved', label: 'approve' },
+    { id: 'e7', source: 'exec_review', target: 'rejected', label: 'reject' },
+  ],
+});
+
+export const allFlows = [TaskCompletedFlow, ReassignWizardFlow, BudgetApprovalFlow];

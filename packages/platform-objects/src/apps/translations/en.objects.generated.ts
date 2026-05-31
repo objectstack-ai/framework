@@ -2331,58 +2331,6 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_process: {
-    label: "Approval Process",
-    pluralLabel: "Approval Processes",
-    description: "Persisted approval process definition. Authored via defineApprovalProcess() in code; visual designer is on the roadmap.",
-    fields: {
-      id: {
-        label: "Process ID"
-      },
-      name: {
-        label: "Name",
-        help: "Unique snake_case name — referenced by submitters and audit rows"
-      },
-      label: {
-        label: "Display Label"
-      },
-      object_name: {
-        label: "Object",
-        help: "Short object name this process governs"
-      },
-      description: {
-        label: "Description"
-      },
-      active: {
-        label: "Active",
-        help: "Only active processes are dispatched on submission"
-      },
-      definition_json: {
-        label: "Definition",
-        help: "Serialised ApprovalProcess JSON (see @objectstack/spec/automation/approval)"
-      },
-      created_at: {
-        label: "Created At"
-      },
-      updated_at: {
-        label: "Updated At"
-      }
-    },
-    _views: {
-      active: {
-        label: "Active"
-      },
-      inactive: {
-        label: "Inactive"
-      },
-      by_object: {
-        label: "By Object"
-      },
-      all_processes: {
-        label: "All"
-      }
-    }
-  },
   sys_approval_request: {
     label: "Approval Request",
     pluralLabel: "Approval Requests",
@@ -2396,8 +2344,8 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
         help: "Tenant that owns this approval request (propagated from submitter context)"
       },
       process_name: {
-        label: "Process",
-        help: "sys_approval_process.name this request was opened against"
+        label: "Source",
+        help: "Origin of the request — `flow:<flowName|nodeId>` for node-driven approvals"
       },
       object_name: {
         label: "Object"

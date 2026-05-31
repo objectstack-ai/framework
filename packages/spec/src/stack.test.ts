@@ -459,24 +459,6 @@ describe('defineStack', () => {
     expect(() => defineStack(config as any, { strict: true })).toThrow('defineStack validation failed');
   });
 
-  it('should detect approval referencing undefined object in strict mode', () => {
-    const config = {
-      manifest: baseManifest,
-      objects: [
-        { name: 'deal', fields: { amount: { type: 'number' } } },
-      ],
-      approvals: [
-        {
-          name: 'deal_approval',
-          label: 'Deal Approval',
-          object: 'missing_object',
-          steps: [{ name: 'step1', label: 'Step 1', approvers: [{ type: 'manager', value: 'mgr' }] }],
-        },
-      ],
-    };
-    expect(() => defineStack(config, { strict: true })).toThrow('missing_object');
-  });
-
   it('should detect hook referencing undefined object in strict mode', () => {
     const config = {
       manifest: baseManifest,

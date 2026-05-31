@@ -1,13 +1,24 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+/**
+ * Node-era approval service tests (ADR-0019).
+ *
+ * Approval is a flow node — there is no standalone process engine. These tests
+ * exercise the service directly: opening a node-driven request, recording
+ * decisions (first_response / unanimous), the public `decide()` resume bridge,
+ * the read API, and the global record-lock hook.
+ */
+
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ApprovalService } from './approval-service.js';
+import { bindApprovalLockHook, unbindAllHooks } from './lifecycle-hooks.js';
 
 interface FakeRow { [k: string]: any }
 
 function makeFakeEngine() {
   const tables: Record<string, FakeRow[]> = {};
   const ensure = (n: string) => (tables[n] ??= []);
+  const hooks: Record<string, Array<{ handler: (ctx: any) => any | Promise<any>; object?: string | string[]; packageId?: string }>> = {};
 
   function matches(row: FakeRow, filter: any): boolean {
     if (!filter || typeof filter !== 'object') return true;
@@ -28,6 +39,7 @@ function makeFakeEngine() {
 
   return {
     _tables: tables,
+    _hooks: hooks,
     async find(object: string, options?: any) {
       const rows = ensure(object).filter(r => matches(r, options?.filter ?? options?.where));
       if (options?.orderBy?.[0]) {
@@ -60,41 +72,57 @@ function makeFakeEngine() {
       if (i >= 0) table.splice(i, 1);
       return { id };
     },
+    // ── hook surface (for the record-lock hook) ──
+    registerHook(event: string, handler: (ctx: any) => any, options?: any) {
+      (hooks[event] ??= []).push({ handler, object: options?.object, packageId: options?.packageId });
+    },
+    unregisterHooksByPackage(packageId: string): number {
+      let n = 0;
+      for (const ev of Object.keys(hooks)) {
+        const before = hooks[ev].length;
+        hooks[ev] = hooks[ev].filter(h => h.packageId !== packageId);
+        n += before - hooks[ev].length;
+      }
+      return n;
+    },
+    async fire(event: string, ctx: any) {
+      for (const h of hooks[event] ?? []) {
+        if (h.object) {
+          const objs = Array.isArray(h.object) ? h.object : [h.object];
+          if (!objs.includes(ctx.object)) continue;
+        }
+        await h.handler(ctx);
+      }
+    },
   };
 }
 
-const CTX = { userId: 'u1', tenantId: 't1', roles: [], permissions: [] };
-const SYS = { isSystem: true, roles: [], permissions: [] };
+const CTX = { userId: 'u1', tenantId: 't1', roles: [], permissions: [] } as any;
+const SYS = { isSystem: true, roles: [], permissions: [] } as any;
 
-function singleStep(approvers: string[], behavior: 'first_response' | 'unanimous' = 'first_response') {
+function nodeConfig(approvers: string[], extra: Record<string, any> = {}) {
   return {
-    name: 'proc',
-    label: 'Proc',
-    object: 'opportunity',
-    active: true,
-    steps: [{
-      name: 'sales_manager',
-      label: 'Sales Manager',
-      approvers: approvers.map(v => ({ type: 'user' as const, value: v })),
-      behavior,
-    }],
+    approvers: approvers.map(v => ({ type: 'user' as const, value: v })),
+    behavior: 'first_response' as const,
+    lockRecord: true,
+    ...extra,
   };
 }
 
-function multiStep() {
+function openInput(approvers: string[], extra: Record<string, any> = {}, configExtra: Record<string, any> = {}) {
   return {
-    name: 'proc',
-    label: 'Proc',
     object: 'opportunity',
-    active: true,
-    steps: [
-      { name: 'step1', label: 'Step 1', approvers: [{ type: 'user' as const, value: 'u1' }], behavior: 'first_response' },
-      { name: 'step2', label: 'Step 2', approvers: [{ type: 'user' as const, value: 'u2' }], behavior: 'first_response', rejectionBehavior: 'back_to_previous' as const },
-    ],
+    recordId: 'opp1',
+    runId: 'run_1',
+    nodeId: 'approve_step',
+    flowName: 'deal_approval',
+    config: nodeConfig(approvers, configExtra),
+    record: { id: 'opp1', amount: 100 },
+    ...extra,
   };
 }
 
-describe('ApprovalService', () => {
+describe('ApprovalService (node era)', () => {
   let engine: ReturnType<typeof makeFakeEngine>;
   let svc: ApprovalService;
   let n = 0;
@@ -105,342 +133,215 @@ describe('ApprovalService', () => {
     n = 0;
     svc = new ApprovalService({
       engine: engine as any,
-      // Ensure strictly increasing timestamps so created_at sort is deterministic.
       clock: { now: () => new Date(baseTime + (n++) * 1000) },
     });
   });
 
-  // ── Process CRUD ───────────────────────────────────────────────
+  // ── openNodeRequest ─────────────────────────────────────────────
 
-  it('defineProcess: creates with generated id and validates JSON', async () => {
-    const r = await svc.defineProcess({
-      name: 'proc', label: 'P', object: 'opportunity',
-      definition: singleStep(['u9']),
-    }, CTX);
-    expect(r.id).toMatch(/^apv_/);
-    expect(r.active).toBe(true);
-    expect(engine._tables['sys_approval_process'].length).toBe(1);
-    expect(engine._tables['sys_approval_process'][0].definition_json).toContain('sales_manager');
-  });
-
-  it('defineProcess: upserts when name matches', async () => {
-    const a = await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const b = await svc.defineProcess({ name: 'proc', label: 'P2', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    expect(b.id).toBe(a.id);
-    expect(b.label).toBe('P2');
-    expect(engine._tables['sys_approval_process'].length).toBe(1);
-  });
-
-  it('defineProcess: rejects invalid definition', async () => {
-    await expect(svc.defineProcess({
-      name: 'proc', label: 'P', object: 'opportunity',
-      definition: { name: 'proc', label: 'P', object: 'opportunity', steps: [] },
-    }, CTX)).rejects.toThrow(/VALIDATION_FAILED/);
-  });
-
-  it('listProcesses({activeOnly:true}) filters', async () => {
-    await svc.defineProcess({ name: 'proc_a', label: 'A', object: 'opportunity', active: true, definition: { ...singleStep(['u1']), name: 'proc_a' } }, CTX);
-    await svc.defineProcess({ name: 'proc_b', label: 'B', object: 'opportunity', active: false, definition: { ...singleStep(['u1']), name: 'proc_b', active: false } }, CTX);
-    const active = await svc.listProcesses({ activeOnly: true }, CTX);
-    expect(active.length).toBe(1);
-    expect(active[0].name).toBe('proc_a');
-  });
-
-  it('getProcess by name then id; deleteProcess removes row', async () => {
-    const r = await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    expect((await svc.getProcess('proc', CTX))?.id).toBe(r.id);
-    expect((await svc.getProcess(r.id, CTX))?.name).toBe('proc');
-    await svc.deleteProcess('proc', CTX);
-    expect(engine._tables['sys_approval_process'].length).toBe(0);
-  });
-
-  // ── Submit ─────────────────────────────────────────────────────
-
-  it('submit: happy path → creates request + submit action + pending_approvers', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1', submitterId: 'u1' }, CTX);
+  it('openNodeRequest: creates a pending request + submit action with flow correlation', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
     expect(req.status).toBe('pending');
+    expect(req.process_name).toBe('flow:deal_approval');
+    expect(req.flow_run_id).toBe('run_1');
+    expect(req.flow_node_id).toBe('approve_step');
     expect(req.pending_approvers).toEqual(['u9']);
-    expect(req.current_step).toBe('sales_manager');
-    expect(engine._tables['sys_approval_action'].length).toBe(1);
+    expect(engine._tables['sys_approval_request']).toHaveLength(1);
     expect(engine._tables['sys_approval_action'][0].action).toBe('submit');
   });
 
-  it('submit: deduplicates pending requests', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    await expect(svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX))
+  it('openNodeRequest: snapshots the node config on the row', async () => {
+    await svc.openNodeRequest(openInput(['u9']), CTX);
+    const raw = engine._tables['sys_approval_request'][0];
+    expect(JSON.parse(raw.node_config_json)).toMatchObject({ behavior: 'first_response', lockRecord: true });
+  });
+
+  it('openNodeRequest: deduplicates a pending request per (object, record)', async () => {
+    await svc.openNodeRequest(openInput(['u9']), CTX);
+    await expect(svc.openNodeRequest(openInput(['u9'], { runId: 'run_2' }), CTX))
       .rejects.toThrow(/DUPLICATE_REQUEST/);
   });
 
-  it('submit: throws when no active process', async () => {
-    await expect(svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX))
-      .rejects.toThrow(/NO_ACTIVE_PROCESS/);
+  it('openNodeRequest: requires object, recordId, runId', async () => {
+    await expect(svc.openNodeRequest(openInput(['u9'], { object: '' }), CTX)).rejects.toThrow(/VALIDATION_FAILED/);
+    await expect(svc.openNodeRequest(openInput(['u9'], { recordId: '' }), CTX)).rejects.toThrow(/VALIDATION_FAILED/);
+    await expect(svc.openNodeRequest(openInput(['u9'], { runId: '' }), CTX)).rejects.toThrow(/VALIDATION_FAILED/);
   });
 
-  // ── Approve ────────────────────────────────────────────────────
+  it('openNodeRequest: mirrors status onto the business record when configured', async () => {
+    engine._tables['opportunity'] = [{ id: 'opp1', amount: 100 }];
+    await svc.openNodeRequest(openInput(['u9'], {}, { approvalStatusField: 'approval_status' }), CTX);
+    expect(engine._tables['opportunity'][0].approval_status).toBe('pending');
+  });
 
-  it('approve single step → finalized=true and status approved', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    const out = await svc.approve(req.id, { actorId: 'u9' }, CTX);
+  // ── decideNode ──────────────────────────────────────────────────
+
+  it('decideNode: first_response approve finalizes immediately', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    const out = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9' }, SYS);
     expect(out.finalized).toBe(true);
+    expect(out.decision).toBe('approve');
+    expect(out.runId).toBe('run_1');
+    expect(out.nodeId).toBe('approve_step');
     expect(out.request.status).toBe('approved');
-    expect(out.request.completed_at).toBeTruthy();
   });
 
-  it('approve multi step → advances to next step', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: multiStep() }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    const out1 = await svc.approve(req.id, { actorId: 'u1' }, CTX);
-    expect(out1.finalized).toBe(false);
-    expect(out1.request.current_step).toBe('step2');
-    expect(out1.request.current_step_index).toBe(1);
-    expect(out1.request.pending_approvers).toEqual(['u2']);
-    const out2 = await svc.approve(req.id, { actorId: 'u2' }, CTX);
-    expect(out2.finalized).toBe(true);
-    expect(out2.request.status).toBe('approved');
-  });
-
-  it('approve unanimous: first vote not final, second vote finalizes', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u1', 'u2'], 'unanimous') }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    const a = await svc.approve(req.id, { actorId: 'u1' }, CTX);
-    expect(a.finalized).toBe(false);
-    expect(a.request.pending_approvers).toEqual(['u2']);
-    const b = await svc.approve(req.id, { actorId: 'u2' }, CTX);
-    expect(b.finalized).toBe(true);
-    expect(b.request.status).toBe('approved');
-  });
-
-  it('approve by non-pending approver → FORBIDDEN', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    await expect(svc.approve(req.id, { actorId: 'mallory' }, CTX)).rejects.toThrow(/FORBIDDEN/);
-  });
-
-  it('approve when not pending → INVALID_STATE', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    await svc.approve(req.id, { actorId: 'u9' }, CTX);
-    await expect(svc.approve(req.id, { actorId: 'u9' }, SYS)).rejects.toThrow(/INVALID_STATE/);
-  });
-
-  // ── Reject ─────────────────────────────────────────────────────
-
-  it('reject default → finalized rejected', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    const out = await svc.reject(req.id, { actorId: 'u9', comment: 'no' }, CTX);
+  it('decideNode: reject finalizes as rejected', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    const out = await svc.decideNode(req.id, { decision: 'reject', actorId: 'u9', comment: 'no' }, SYS);
     expect(out.finalized).toBe(true);
     expect(out.request.status).toBe('rejected');
   });
 
-  it('reject back_to_previous: advances back', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: multiStep() }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    await svc.approve(req.id, { actorId: 'u1' }, CTX); // advance to step2
-    const out = await svc.reject(req.id, { actorId: 'u2' }, CTX);
-    expect(out.finalized).toBe(false);
-    expect(out.request.current_step_index).toBe(0);
-    expect(out.request.current_step).toBe('step1');
-    expect(out.request.pending_approvers).toEqual(['u1']);
+  it('decideNode: unanimous holds until every approver acts', async () => {
+    const req = await svc.openNodeRequest(openInput(['u1', 'u2'], {}, { behavior: 'unanimous' }), CTX);
+    const first = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
+    expect(first.finalized).toBe(false);
+    expect(first.request.pending_approvers).toEqual(['u2']);
+    const second = await svc.decideNode(req.id, { decision: 'approve', actorId: 'u2' }, SYS);
+    expect(second.finalized).toBe(true);
+    expect(second.request.status).toBe('approved');
   });
 
-  // ── Recall ─────────────────────────────────────────────────────
+  it('decideNode: blocks a non-approver in a non-system context', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await expect(
+      svc.decideNode(req.id, { decision: 'approve', actorId: 'mallory' }, { isSystem: false, roles: [], permissions: [] } as any),
+    ).rejects.toThrow(/FORBIDDEN/);
+  });
 
-  it('recall by submitter → status recalled', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1', submitterId: 'u1' }, CTX);
-    const out = await svc.recall(req.id, { actorId: 'u1' }, CTX);
+  it('decideNode: rejects a decision on a non-pending request', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9' }, SYS);
+    await expect(svc.decideNode(req.id, { decision: 'approve', actorId: 'u9' }, SYS)).rejects.toThrow(/INVALID_STATE/);
+  });
+
+  it('decideNode: mirrors the terminal status onto the business record', async () => {
+    engine._tables['opportunity'] = [{ id: 'opp1', amount: 100 }];
+    const req = await svc.openNodeRequest(openInput(['u9'], {}, { approvalStatusField: 'approval_status' }), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9' }, SYS);
+    expect(engine._tables['opportunity'][0].approval_status).toBe('approved');
+  });
+
+  // ── decide(): public contract + resume bridge ───────────────────
+
+  it('decide: resumes the owning run down the matching branch on finalize', async () => {
+    const resumed: any[] = [];
+    svc.attachAutomation({ async resume(runId, signal) { resumed.push({ runId, signal }); } });
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    const out = await svc.decide(req.id, { decision: 'approve', actorId: 'u9' }, SYS);
     expect(out.finalized).toBe(true);
-    expect(out.request.status).toBe('recalled');
+    expect(out.resumed).toBe(true);
+    expect(out.runId).toBe('run_1');
+    expect(resumed).toHaveLength(1);
+    expect(resumed[0]).toMatchObject({ runId: 'run_1', signal: { branchLabel: 'approve' } });
   });
 
-  it('recall by non-submitter → FORBIDDEN', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1', submitterId: 'u1' }, CTX);
-    await expect(svc.recall(req.id, { actorId: 'mallory' }, CTX)).rejects.toThrow(/FORBIDDEN/);
+  it('decide: does not resume while a unanimous request is still pending', async () => {
+    const resumed: any[] = [];
+    svc.attachAutomation({ async resume(runId) { resumed.push(runId); } });
+    const req = await svc.openNodeRequest(openInput(['u1', 'u2'], {}, { behavior: 'unanimous' }), CTX);
+    const out = await svc.decide(req.id, { decision: 'approve', actorId: 'u1' }, SYS);
+    expect(out.finalized).toBe(false);
+    expect(out.resumed).toBe(false);
+    expect(resumed).toHaveLength(0);
   });
 
-  // ── Listing ────────────────────────────────────────────────────
-
-  it('listRequests: filters by approverId via post-filter', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    await svc.submit({ object: 'opportunity', recordId: 'opp2' }, CTX);
-    const mine = await svc.listRequests({ approverId: 'u9' }, CTX);
-    expect(mine.length).toBe(2);
-    const empty = await svc.listRequests({ approverId: 'noone' }, CTX);
-    expect(empty.length).toBe(0);
+  it('decide: finalizes even when no automation is attached (resumed=false)', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    const out = await svc.decide(req.id, { decision: 'reject', actorId: 'u9' }, SYS);
+    expect(out.finalized).toBe(true);
+    expect(out.resumed).toBe(false);
   });
 
-  it('listActions: returns rows ordered by created_at ASC', async () => {
-    await svc.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: singleStep(['u9']) }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    await svc.approve(req.id, { actorId: 'u9' }, CTX);
-    const actions = await svc.listActions(req.id, CTX);
+  // ── read API ────────────────────────────────────────────────────
+
+  it('listRequests: filters by approver and status', async () => {
+    await svc.openNodeRequest(openInput(['u9']), CTX);
+    const pending = await svc.listRequests({ status: 'pending', approverId: 'u9' }, SYS);
+    expect(pending).toHaveLength(1);
+    const none = await svc.listRequests({ approverId: 'nobody' }, SYS);
+    expect(none).toHaveLength(0);
+  });
+
+  it('listActions: returns the audit trail for a request', async () => {
+    const req = await svc.openNodeRequest(openInput(['u9']), CTX);
+    await svc.decideNode(req.id, { decision: 'approve', actorId: 'u9' }, SYS);
+    const actions = await svc.listActions(req.id, SYS);
     expect(actions.map(a => a.action)).toEqual(['submit', 'approve']);
   });
 
-  // ── Graph expansion (M10.17.1) ───────────────────────────────────
+  it('getRequest: returns null for an unknown id', async () => {
+    expect(await svc.getRequest('nope', SYS)).toBeNull();
+  });
+});
 
-  it('approver type=team expands flat sys_team_member', async () => {
-    engine._tables.sys_team = [{ id: 'sales', name: 'sales', organization_id: 't1' }];
-    engine._tables.sys_team_member = [
-      { id: 'tm1', team_id: 'sales', user_id: 'alice' },
-      { id: 'tm2', team_id: 'sales', user_id: 'bob' },
-    ];
-    await svc.defineProcess({
-      name: 'team_proc', label: 'TeamProc', object: 'opportunity',
-      definition: {
-        name: 'team_proc', label: 'TeamProc', object: 'opportunity', active: true,
-        steps: [{ name: 's1', label: 'S1', approvers: [{ type: 'team', value: 'sales' }] }],
-      },
-    }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    expect(req.pending_approvers?.sort()).toEqual(['alice', 'bob']);
+describe('record-lock hook (node era)', () => {
+  let engine: ReturnType<typeof makeFakeEngine>;
+  let svc: ApprovalService;
+  let n = 0;
+  const baseTime = new Date('2026-01-15T10:00:00Z').getTime();
+
+  beforeEach(async () => {
+    engine = makeFakeEngine();
+    n = 0;
+    svc = new ApprovalService({ engine: engine as any, clock: { now: () => new Date(baseTime + (n++) * 1000) } });
+    bindApprovalLockHook(engine as any);
+    await svc.openNodeRequest(openInput(['u9'], {}, { approvalStatusField: 'approval_status' }), CTX);
   });
 
-  it('approver type=department walks parent_department_id (BFS)', async () => {
-    engine._tables.sys_department = [
-      { id: 'emea',        name: 'EMEA',        parent_department_id: null,    organization_id: 't1', active: true },
-      { id: 'emea_sales',  name: 'EMEA Sales',  parent_department_id: 'emea',  organization_id: 't1', active: true },
-      { id: 'emea_sales_uk', name: 'EMEA Sales UK', parent_department_id: 'emea_sales', organization_id: 't1', active: true },
-    ];
-    engine._tables.sys_department_member = [
-      { id: 'dm1', department_id: 'emea',           user_id: 'eva' },
-      { id: 'dm2', department_id: 'emea_sales_uk',  user_id: 'alice' },
-    ];
-    await svc.defineProcess({
-      name: 'dept_proc', label: 'DeptProc', object: 'opportunity',
-      definition: {
-        name: 'dept_proc', label: 'DeptProc', object: 'opportunity', active: true,
-        steps: [{ name: 's1', label: 'S1', approvers: [{ type: 'department', value: 'emea' }] }],
-      },
-    }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    expect(req.pending_approvers?.sort()).toEqual(['alice', 'eva']);
+  it('blocks a user edit to a record with a pending approval', async () => {
+    await expect(
+      engine.fire('beforeUpdate', {
+        object: 'opportunity',
+        input: { id: 'opp1', data: { amount: 200 } },
+        session: { isSystem: false, roles: [], userId: 'u1' },
+      }),
+    ).rejects.toThrow(/RECORD_LOCKED/);
   });
 
-  it('approver type=department with no rows falls back to prefixed literal', async () => {
-    await svc.defineProcess({
-      name: 'dept_proc2', label: 'DeptProc', object: 'opportunity',
-      definition: {
-        name: 'dept_proc2', label: 'DeptProc', object: 'opportunity', active: true,
-        steps: [{ name: 's1', label: 'S1', approvers: [{ type: 'department', value: 'unknown' }] }],
-      },
-    }, CTX);
-    const req = await svc.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-    expect(req.pending_approvers).toEqual(['department:unknown']);
+  it('allows a status-mirror write (only the approvalStatusField changes)', async () => {
+    await expect(
+      engine.fire('beforeUpdate', {
+        object: 'opportunity',
+        input: { id: 'opp1', data: { approval_status: 'approved' } },
+        session: { isSystem: false, roles: [] },
+      }),
+    ).resolves.toBeUndefined();
   });
 
-  // ── ADR-0009 execution pinning ─────────────────────────────────
+  it('allows engine self-writes (system session)', async () => {
+    await expect(
+      engine.fire('beforeUpdate', {
+        object: 'opportunity',
+        input: { id: 'opp1', data: { amount: 200 } },
+        session: { isSystem: true, roles: [] },
+      }),
+    ).resolves.toBeUndefined();
+  });
 
-  describe('execution pinning (ADR-0009)', () => {
-    // Minimal fake metadata repo: keeps a map of (name → versions[]) where
-    // each version has a hash. Mirrors MetadataRepository.get/getByHash.
-    function makeFakeMetadataRepo() {
-      const versions = new Map<string, { hash: string; body: any }[]>();
-      return {
-        store(name: string, body: any) {
-          const hash = `sha256:${name}_${(versions.get(name)?.length ?? 0) + 1}`;
-          const list = versions.get(name) ?? [];
-          list.push({ hash, body });
-          versions.set(name, list);
-        },
-        async get(ref: any) {
-          const list = versions.get(ref.name);
-          if (!list?.length) return null;
-          const head = list[list.length - 1];
-          return { ref, hash: head.hash, body: head.body, seq: list.length, version: list.length, parentHash: null };
-        },
-        async getByHash(ref: any, hash: string) {
-          const list = versions.get(ref.name);
-          const found = list?.find(v => v.hash === hash);
-          return found ? { ref, hash: found.hash, body: found.body, seq: 1, version: 1, parentHash: null } : null;
-        },
-        async put() { throw new Error('not implemented'); },
-        async delete() { throw new Error('not implemented'); },
-        list() { return (async function* () {})(); },
-        async *history() {},
-        watch() { return () => {}; },
-        async start() {},
-        async stop() {},
-      } as any;
-    }
+  it('allows an admin override', async () => {
+    await expect(
+      engine.fire('beforeUpdate', {
+        object: 'opportunity',
+        input: { id: 'opp1', data: { amount: 200 } },
+        session: { isSystem: false, roles: ['admin'] },
+      }),
+    ).resolves.toBeUndefined();
+  });
 
-    it('submit records process_hash when metadataRepo is wired', async () => {
-      const repo = makeFakeMetadataRepo();
-      const v1 = multiStep();
-      repo.store('proc', v1);
+  it('does not lock records without a pending request', async () => {
+    await expect(
+      engine.fire('beforeUpdate', {
+        object: 'opportunity',
+        input: { id: 'other_record', data: { amount: 200 } },
+        session: { isSystem: false, roles: [] },
+      }),
+    ).resolves.toBeUndefined();
+  });
 
-      const pinned = new ApprovalService({
-        engine: engine as any,
-        clock: { now: () => new Date(baseTime + (n++) * 1000) },
-        metadataRepo: repo,
-      });
-      await pinned.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: v1 }, CTX);
-
-      const req = await pinned.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-      expect(req.process_hash).toMatch(/^sha256:proc_1$/);
-    });
-
-    it('process upgrade after submit does NOT affect an in-flight request', async () => {
-      const repo = makeFakeMetadataRepo();
-      const v1 = multiStep(); // 2 steps: u1 → u2
-      repo.store('proc', v1);
-
-      const pinned = new ApprovalService({
-        engine: engine as any,
-        clock: { now: () => new Date(baseTime + (n++) * 1000) },
-        metadataRepo: repo,
-      });
-      await pinned.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: v1 }, CTX);
-
-      // Submit the request — pinned to v1 (2 steps).
-      const req = await pinned.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-      expect(req.pending_approvers).toEqual(['u1']);
-
-      // After submit, the process gets a brand new third step appended.
-      const v2 = {
-        name: 'proc', label: 'P', object: 'opportunity', active: true,
-        steps: [
-          ...v1.steps,
-          { name: 'step3', label: 'Step 3', approvers: [{ type: 'user' as const, value: 'u3' }], behavior: 'first_response' as const },
-        ],
-      };
-      repo.store('proc', v2);
-      // Also refresh the projection — simulates redeploy.
-      await pinned.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: v2 }, CTX);
-
-      // Step 1 approver acts → request advances to step 2 (pinned v1, NOT v2).
-      const r1 = await pinned.approve(req.id, { actorId: 'u1' }, CTX);
-      expect(r1.request.current_step).toBe('step2');
-      expect(r1.request.pending_approvers).toEqual(['u2']);
-      expect(r1.finalized).toBe(false);
-
-      // Step 2 approver finalises → pinned process has only 2 steps, so
-      // the request becomes `approved` instead of advancing to v2's step3.
-      const r2 = await pinned.approve(req.id, { actorId: 'u2' }, CTX);
-      expect(r2.finalized).toBe(true);
-      expect(r2.request.status).toBe('approved');
-    });
-
-    it('falls back to projection when metadataRepo has no head (e.g. defineProcess-only path)', async () => {
-      const repo = makeFakeMetadataRepo();
-      // Note: repo has NO body for 'proc' — only the projection table does.
-      const pinned = new ApprovalService({
-        engine: engine as any,
-        clock: { now: () => new Date(baseTime + (n++) * 1000) },
-        metadataRepo: repo,
-      });
-      await pinned.defineProcess({ name: 'proc', label: 'P', object: 'opportunity', definition: multiStep() }, CTX);
-      const req = await pinned.submit({ object: 'opportunity', recordId: 'opp1' }, CTX);
-      expect(req.process_hash).toBeUndefined();
-      // approve still works through the fallback path.
-      const r = await pinned.approve(req.id, { actorId: 'u1' }, CTX);
-      expect(r.request.current_step).toBe('step2');
-    });
+  it('unbindAllHooks removes the lock hook', () => {
+    expect(unbindAllHooks(engine as any)).toBe(1);
+    expect(engine._hooks['beforeUpdate']).toHaveLength(0);
   });
 });

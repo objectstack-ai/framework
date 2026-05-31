@@ -200,8 +200,9 @@ export type ActionParadigm = z.infer<typeof ActionParadigmSchema>;
  *
  * This is the single source of truth for "what a node/action is" — the
  * shape a plugin publishes when it registers an executor. It supersedes the
- * three closed enums (`FlowNodeAction`, `WorkflowAction`, `ApprovalActionType`),
- * which become *seed* descriptor sets registered at boot.
+ * closed enums (`FlowNodeAction`, `WorkflowAction`), which become *seed*
+ * descriptor sets registered at boot. (ADR-0019 removed the third such enum,
+ * `ApprovalActionType`, along with the standalone approval process type.)
  *
  * The runtime registry (`AutomationEngine.getActionDescriptors()`) aggregates
  * these and backs both:

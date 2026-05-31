@@ -2331,58 +2331,6 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
-  sys_approval_process: {
-    label: "Proceso de aprobación",
-    pluralLabel: "Procesos de aprobación",
-    description: "Definición persistida del proceso de aprobación. Se crea mediante defineApprovalProcess() en código; el diseñador visual está en la hoja de ruta.",
-    fields: {
-      id: {
-        label: "ID de proceso"
-      },
-      name: {
-        label: "Nombre",
-        help: "Nombre snake_case único; lo utilizan los remitentes y las filas de auditoría."
-      },
-      label: {
-        label: "Nombre visible"
-      },
-      object_name: {
-        label: "Objeto",
-        help: "Nombre corto del objeto que rige este proceso."
-      },
-      description: {
-        label: "Descripción"
-      },
-      active: {
-        label: "Activo",
-        help: "Solo los procesos activos se despachan al enviarse."
-      },
-      definition_json: {
-        label: "Definición",
-        help: "JSON serializado de ApprovalProcess (consulte @objectstack/spec/automation/approval)."
-      },
-      created_at: {
-        label: "Creado el"
-      },
-      updated_at: {
-        label: "Actualizado el"
-      }
-    },
-    _views: {
-      active: {
-        label: "Activo"
-      },
-      inactive: {
-        label: "Inactivo"
-      },
-      by_object: {
-        label: "Por objeto"
-      },
-      all_processes: {
-        label: "Todos"
-      }
-    }
-  },
   sys_approval_request: {
     label: "Solicitud de aprobación",
     pluralLabel: "Solicitudes de aprobación",
@@ -2396,8 +2344,8 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Tenant que posee esta solicitud de aprobación (propagado desde el contexto del solicitante)."
       },
       process_name: {
-        label: "Proceso",
-        help: "sys_approval_process.name contra el que se abrió esta solicitud."
+        label: "Origen",
+        help: "Origen de la solicitud — `flow:<flowName|nodeId>` para aprobaciones por nodo"
       },
       object_name: {
         label: "Objeto"

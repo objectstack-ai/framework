@@ -5,19 +5,20 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
 /**
  * sys_approval_request — Live approval instance.
  *
- * Created when a user invokes `IApprovalService.submit(...)` and
- * advanced as approvers act on each step. The row's lifecycle:
+ * ADR-0019: opened by a flow's **Approval node** when the run reaches it; the
+ * run suspends until a decision is recorded. The row's lifecycle:
  *
- *   `pending` → (per-step approvals) → `approved` | `rejected`
+ *   `pending` → (per-approver decisions) → `approved` | `rejected`
  *   `pending` → recalled by submitter → `recalled`
  *
- * `current_step` / `current_step_index` mirror the index into the
- * process's `steps[]` array so the engine can resume after a restart
- * without re-deriving state from the audit log.
+ * `flow_run_id` / `flow_node_id` tie the request back to the suspended run so a
+ * decision can resume it; `current_step` mirrors the node id. `node_config_json`
+ * snapshots the Approval node config (approvers / behaviour) the request was
+ * opened with.
  *
  * `payload_json` captures a snapshot of the target record at submission
- * time — used by the email/feed actions so they can render before the
- * record is locked or changed.
+ * time — used by notifications so they can render before the record is
+ * locked or changed.
  *
  * @namespace sys
  */
@@ -92,10 +93,10 @@ export const SysApprovalRequest = ObjectSchema.create({
     }),
 
     process_name: Field.text({
-      label: 'Process',
+      label: 'Source',
       required: true,
       maxLength: 100,
-      description: 'sys_approval_process.name this request was opened against',
+      description: 'Origin of the request — `flow:<flowName|nodeId>` for node-driven approvals',
       group: 'Target',
     }),
 
@@ -162,16 +163,6 @@ export const SysApprovalRequest = ObjectSchema.create({
       label: 'Snapshot',
       required: false,
       description: 'Record snapshot at submission time',
-      group: 'State',
-    }),
-
-    process_hash: Field.text({
-      label: 'Process Hash',
-      required: false,
-      maxLength: 80,
-      readonly: true,
-      description: 'sha256 of the approval process body at submit time (ADR-0009 execution pinning). '
-        + 'Resolved through sys_metadata_history so process upgrades do not affect in-flight requests.',
       group: 'State',
     }),
 

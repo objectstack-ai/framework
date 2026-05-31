@@ -366,8 +366,8 @@ const ObjectSchemaBase = z.object({
    *   CSV Import is suppressed (config rows have nested JSON envelopes
    *   that don't round-trip through a flat sheet; clients should offer a
    *   purpose-built "Import definition (JSON)" action instead). Example:
-   *   `sys_approval_process`, `sys_sharing_rule`, `sys_role`,
-   *   `sys_permission_set`, `sys_view`, `sys_app`.
+   *   `sys_sharing_rule`, `sys_role`, `sys_permission_set`, `sys_view`,
+   *   `sys_app`.
    * - `system`       — Runtime rows whose lifecycle is owned by a
    *   platform service (the approval engine, the sharing engine, the
    *   invitation service, …). Generic CRUD is hidden — users interact
