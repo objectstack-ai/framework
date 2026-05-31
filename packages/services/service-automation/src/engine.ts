@@ -67,11 +67,47 @@ export interface NodeExecutionResult {
 // ─── Trigger Interface (Plugin Extension Point) ─────────────────────
 
 /**
+ * A normalized description of *what* fires a flow, derived by the engine from
+ * the flow's `start` node and handed to the matching {@link FlowTrigger} when a
+ * flow is activated. Concrete triggers (record-change, schedule, …) read the
+ * fields they care about and ignore the rest.
+ *
+ * The engine — not the trigger — owns parsing the start node, so trigger
+ * plugins stay decoupled from flow-definition internals (mirrors how
+ * `connector_action` keeps connectors decoupled from node config).
+ */
+export interface FlowTriggerBinding {
+    /** Flow this binding activates. */
+    readonly flowName: string;
+    /** record-change: the object whose mutations fire the flow. */
+    readonly object?: string;
+    /** record-change: the start node's `triggerType` (e.g. 'record-after-update'). */
+    readonly event?: string;
+    /**
+     * Optional trigger predicate copied from the start node's `condition`. The
+     * engine evaluates it before running the flow; triggers may ignore it.
+     */
+    readonly condition?: string | { dialect?: string; source?: string; ast?: unknown };
+    /** schedule: cron/interval descriptor (parsed but not yet acted on here). */
+    readonly schedule?: unknown;
+    /** The raw start-node `config`, for trigger-specific fields not modeled above. */
+    readonly config?: Record<string, unknown>;
+}
+
+/**
  * Trigger interface. Schedule/Event/API triggers are registered via plugins.
+ *
+ * The engine completes the wiring: when a flow whose start node maps to this
+ * trigger's {@link type} is registered (or when this trigger is registered
+ * after such flows already exist), the engine calls {@link start} with the
+ * parsed {@link FlowTriggerBinding} and a `callback` that runs the flow. The
+ * trigger subscribes to its event source (e.g. an ObjectQL lifecycle hook) and
+ * invokes `callback(ctx)` when it fires. {@link stop} tears that subscription
+ * down when the flow is unregistered/disabled or the trigger is removed.
  */
 export interface FlowTrigger {
     readonly type: string;
-    start(flowName: string, callback: (ctx: AutomationContext) => Promise<void>): void;
+    start(binding: FlowTriggerBinding, callback: (ctx: AutomationContext) => Promise<void>): void;
     stop(flowName: string): void;
 }
 
@@ -219,6 +255,12 @@ export class AutomationEngine implements IAutomationService {
     private nodeExecutors = new Map<string, NodeExecutor>();
     private actionDescriptors = new Map<string, ActionDescriptor>();
     private triggers = new Map<string, FlowTrigger>();
+    /**
+     * Flows currently wired to a trigger, keyed by flow name → the trigger
+     * `type` that owns the binding. Used to avoid double-binding and to know
+     * which trigger to `stop()` when a flow is unregistered/disabled.
+     */
+    private boundFlowTriggers = new Map<string, string>();
     /** Connectors registered by integration plugins, keyed by connector name (ADR-0018 §Addendum). */
     private connectors = new Map<string, RegisteredConnector>();
     private executionLogs: ExecutionLogEntry[] = [];
@@ -276,12 +318,108 @@ export class AutomationEngine implements IAutomationService {
     registerTrigger(trigger: FlowTrigger): void {
         this.triggers.set(trigger.type, trigger);
         this.logger.info(`Trigger registered: ${trigger.type}`);
+        // A trigger may be registered *after* its flows (e.g. AutomationServicePlugin
+        // pulls flows at start(); a trigger plugin wires up on kernel:ready, which
+        // fires later). Activate any already-registered flow that maps to this type.
+        for (const name of this.flows.keys()) {
+            if (this.boundFlowTriggers.has(name)) continue;
+            const resolved = this.resolveTriggerBinding(name);
+            if (resolved?.triggerType === trigger.type) {
+                this.activateFlowTrigger(name);
+            }
+        }
     }
 
     /** Unregister a trigger (hot-unplug) */
     unregisterTrigger(type: string): void {
+        // Tear down every flow bound to this trigger before dropping it.
+        for (const [name, boundType] of [...this.boundFlowTriggers]) {
+            if (boundType !== type) continue;
+            try {
+                this.triggers.get(type)?.stop(name);
+            } catch (err) {
+                this.logger.warn(`Trigger '${type}' stop('${name}') failed: ${(err as Error).message}`);
+            }
+            this.boundFlowTriggers.delete(name);
+        }
         this.triggers.delete(type);
         this.logger.info(`Trigger unregistered: ${type}`);
+    }
+
+    /**
+     * Derive a flow's trigger binding from its `start` node, or `undefined` if
+     * the flow has no auto-trigger (manual / screen / api). The convention —
+     * established by the showcase flows — is that the start node carries the
+     * trigger details in its `config`: `{ objectName, triggerType, condition }`
+     * for record-change, or a `schedule` descriptor for time-based flows.
+     */
+    private resolveTriggerBinding(
+        flowName: string,
+    ): { triggerType: string; binding: FlowTriggerBinding } | undefined {
+        const flow = this.flows.get(flowName);
+        if (!flow) return undefined;
+        const startNode = flow.nodes.find(n => n.type === 'start');
+        const config = (startNode?.config ?? {}) as Record<string, unknown>;
+        const triggerType = typeof config.triggerType === 'string' ? config.triggerType : undefined;
+
+        if (triggerType && triggerType.startsWith('record-')) {
+            return {
+                triggerType: 'record_change',
+                binding: {
+                    flowName,
+                    object: typeof config.objectName === 'string' ? config.objectName : undefined,
+                    event: triggerType,
+                    condition: (config.condition as FlowTriggerBinding['condition']) ?? undefined,
+                    config,
+                },
+            };
+        }
+
+        if (config.schedule != null || flow.type === 'schedule') {
+            return {
+                triggerType: 'schedule',
+                binding: { flowName, schedule: config.schedule, condition: (config.condition as FlowTriggerBinding['condition']) ?? undefined, config },
+            };
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Bind a flow to its matching registered trigger (idempotent). No-op when
+     * the flow has no trigger binding or no trigger is registered for its type
+     * yet — {@link registerTrigger} re-attempts activation when one arrives.
+     */
+    private activateFlowTrigger(flowName: string): void {
+        if (this.boundFlowTriggers.has(flowName)) return;
+        const resolved = this.resolveTriggerBinding(flowName);
+        if (!resolved) return;
+        const trigger = this.triggers.get(resolved.triggerType);
+        if (!trigger) return;
+        try {
+            trigger.start(resolved.binding, (ctx: AutomationContext) => this.execute(flowName, ctx).then(() => undefined));
+            this.boundFlowTriggers.set(flowName, resolved.triggerType);
+            this.logger.info(`Flow '${flowName}' bound to trigger '${resolved.triggerType}'`);
+        } catch (err) {
+            this.logger.warn(`Failed to bind flow '${flowName}' to trigger '${resolved.triggerType}': ${(err as Error).message}`);
+        }
+    }
+
+    /** Unbind a flow from its trigger, if bound. */
+    private deactivateFlowTrigger(flowName: string): void {
+        const boundType = this.boundFlowTriggers.get(flowName);
+        if (!boundType) return;
+        try {
+            this.triggers.get(boundType)?.stop(flowName);
+        } catch (err) {
+            this.logger.warn(`Trigger '${boundType}' stop('${flowName}') failed: ${(err as Error).message}`);
+        }
+        this.boundFlowTriggers.delete(flowName);
+    }
+
+    /** Active flow→trigger bindings (observability / tests). */
+    getActiveTriggerBindings(): Array<{ flowName: string; triggerType: string }> {
+        return [...this.boundFlowTriggers].map(([flowName, triggerType]) => ({ flowName, triggerType }));
     }
 
     /**
@@ -406,9 +544,16 @@ export class AutomationEngine implements IAutomationService {
             this.flowEnabled.set(name, true);
         }
         this.logger.info(`Flow registered: ${name} (version ${parsed.version})`);
+
+        // Re-bind in case the definition changed its trigger, then (re)activate.
+        this.deactivateFlowTrigger(name);
+        if (this.flowEnabled.get(name) !== false) {
+            this.activateFlowTrigger(name);
+        }
     }
 
     unregisterFlow(name: string): void {
+        this.deactivateFlowTrigger(name);
         this.flows.delete(name);
         this.flowEnabled.delete(name);
         this.flowVersionHistory.delete(name);
@@ -429,6 +574,14 @@ export class AutomationEngine implements IAutomationService {
         }
         this.flowEnabled.set(name, enabled);
         this.logger.info(`Flow '${name}' ${enabled ? 'enabled' : 'disabled'}`);
+        // A disabled flow should stop receiving trigger events; a re-enabled one
+        // should resume. execute() also guards disabled flows, but unbinding
+        // avoids firing the trigger (and its event-source subscription) at all.
+        if (enabled) {
+            this.activateFlowTrigger(name);
+        } else {
+            this.deactivateFlowTrigger(name);
+        }
     }
 
     /** Get flow version history */
@@ -482,9 +635,21 @@ export class AutomationEngine implements IAutomationService {
                 }
             }
         }
-        // Inject trigger record
+        // Inject trigger record. `$record` is the canonical handle; `record` is a
+        // friendlier alias so templates/conditions can write `{record.title}` and
+        // `record.status`. We also flatten the record's own fields to top-level
+        // variables (so bare references like `status`/`budget` resolve in start
+        // conditions and edge predicates) WITHOUT clobbering flow inputs already
+        // seeded above. `previous` exposes the pre-update row for transition gates.
         if (context?.record) {
             variables.set('$record', context.record);
+            variables.set('record', context.record);
+            for (const [k, v] of Object.entries(context.record)) {
+                if (!variables.has(k)) variables.set(k, v);
+            }
+        }
+        if (context?.previous) {
+            variables.set('previous', context.previous);
         }
 
         const runId = `run_${++this.runCounter}`;
@@ -499,6 +664,25 @@ export class AutomationEngine implements IAutomationService {
             const startNode = flow.nodes.find(n => n.type === 'start');
             if (!startNode) {
                 return { success: false, error: 'Flow has no start node' };
+            }
+
+            // Trigger-condition gate. The start node's `condition` is the predicate
+            // that decides whether the trigger event should launch this flow (e.g.
+            // `status == "done" && previous.status != "done"`). The engine — not the
+            // trigger — owns evaluating it, so every trigger type (record-change,
+            // schedule, …) and a manual `execute()` share one gate. Plain-string
+            // conditions are routed through CEL so bare field references resolve.
+            const startCondition = (startNode.config as Record<string, unknown> | undefined)?.condition as
+                | string
+                | { dialect?: string; source?: string; ast?: unknown }
+                | undefined;
+            if (startCondition !== undefined && startCondition !== null && startCondition !== '') {
+                const condExpr =
+                    typeof startCondition === 'string' ? { dialect: 'cel', source: startCondition } : startCondition;
+                if (!this.evaluateCondition(condExpr, variables)) {
+                    this.logger.debug(`Flow '${flowName}' skipped: start condition not met`);
+                    return { success: true, output: { skipped: true, reason: 'condition_not_met' } };
+                }
             }
 
             // Validate node input schemas before execution
@@ -1118,9 +1302,13 @@ export class AutomationEngine implements IAutomationService {
                     }
                     cursor[segs[segs.length - 1]] = value;
                 }
+                // Expose variables two ways under `extra`: as a `vars` namespace
+                // (so `vars.step.result` keeps working) AND spread to top level (so
+                // bare identifiers like `status` / `previous.status` resolve — the
+                // natural authoring style for record-change start conditions).
                 const result = ExpressionEngine.evaluate(
                     { dialect: 'cel', source: exprStr },
-                    { extra: { vars }, record: vars },
+                    { extra: { ...vars, vars }, record: vars },
                 );
                 if (!result.ok) return false;
                 return Boolean(result.value);

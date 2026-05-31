@@ -23,6 +23,13 @@ import type { ActionDescriptor } from '../automation/node-executor.zod';
 export interface AutomationContext {
     /** Record that triggered the automation (if applicable) */
     record?: Record<string, unknown>;
+    /**
+     * Prior state of the record for update triggers (the "old" row). Lets
+     * record-change-triggered flows gate on transitions (e.g.
+     * `status == "done" && previous.status != "done"`). Absent for
+     * create/delete events.
+     */
+    previous?: Record<string, unknown>;
     /** Object name the record belongs to */
     object?: string;
     /** Trigger event type (e.g. 'on_create', 'on_update') */

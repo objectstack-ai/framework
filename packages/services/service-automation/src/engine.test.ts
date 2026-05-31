@@ -1734,3 +1734,227 @@ describe('Action Descriptor Registry (ADR-0018)', () => {
         expect(byType.get('http_request')?.source).toBe('builtin');
     });
 });
+
+// ─── Flow Trigger Wiring (record-change baseline mechanism) ──────────
+
+import type { FlowTrigger, FlowTriggerBinding } from './engine.js';
+import type { AutomationContext } from '@objectstack/spec/contracts';
+
+/**
+ * A recording fake trigger: captures bindings/callbacks handed to it by the
+ * engine, and lets a test fire the callback to simulate an event source.
+ */
+function recordingTrigger(type: string) {
+    const started: FlowTriggerBinding[] = [];
+    const stopped: string[] = [];
+    const callbacks = new Map<string, (ctx: AutomationContext) => Promise<void>>();
+    const trigger: FlowTrigger = {
+        type,
+        start(binding, callback) {
+            started.push(binding);
+            callbacks.set(binding.flowName, callback);
+        },
+        stop(flowName) {
+            stopped.push(flowName);
+            callbacks.delete(flowName);
+        },
+    };
+    return { trigger, started, stopped, fire: (flow: string, ctx: AutomationContext) => callbacks.get(flow)!(ctx) };
+}
+
+function recordChangeFlow(name: string, overrides?: Record<string, unknown>) {
+    return {
+        name,
+        label: name,
+        type: 'autolaunched' as const,
+        nodes: [
+            {
+                id: 'start',
+                type: 'start' as const,
+                label: 'On Update',
+                config: {
+                    objectName: 'task',
+                    triggerType: 'record-after-update',
+                    ...overrides,
+                },
+            },
+            { id: 'end', type: 'end' as const, label: 'End' },
+        ],
+        edges: [{ id: 'e1', source: 'start', target: 'end' }],
+    };
+}
+
+describe('AutomationEngine - Flow Trigger Wiring', () => {
+    let engine: AutomationEngine;
+
+    beforeEach(() => {
+        engine = new AutomationEngine(createTestLogger());
+    });
+
+    it('binds a record-change flow to a matching trigger with a parsed binding', () => {
+        const rec = recordingTrigger('record_change');
+        engine.registerTrigger(rec.trigger);
+        engine.registerFlow('rc_flow', recordChangeFlow('rc_flow', { condition: 'status == "done"' }));
+
+        expect(engine.getActiveTriggerBindings()).toEqual([
+            { flowName: 'rc_flow', triggerType: 'record_change' },
+        ]);
+        expect(rec.started).toHaveLength(1);
+        expect(rec.started[0]).toMatchObject({
+            flowName: 'rc_flow',
+            object: 'task',
+            event: 'record-after-update',
+            condition: 'status == "done"',
+        });
+    });
+
+    it('binds flows registered BEFORE the trigger (ordering-independent)', () => {
+        // AutomationServicePlugin pulls flows at start(); a trigger plugin wires
+        // up later on kernel:ready. Registering the trigger must retro-bind.
+        engine.registerFlow('rc_flow', recordChangeFlow('rc_flow'));
+        expect(engine.getActiveTriggerBindings()).toHaveLength(0);
+
+        const rec = recordingTrigger('record_change');
+        engine.registerTrigger(rec.trigger);
+        expect(engine.getActiveTriggerBindings()).toEqual([
+            { flowName: 'rc_flow', triggerType: 'record_change' },
+        ]);
+        expect(rec.started[0]?.flowName).toBe('rc_flow');
+    });
+
+    it('does not bind flows without an auto-trigger start config', () => {
+        const rec = recordingTrigger('record_change');
+        engine.registerTrigger(rec.trigger);
+        engine.registerFlow('manual_flow', {
+            name: 'manual_flow',
+            label: 'Manual',
+            type: 'autolaunched' as const,
+            nodes: [
+                { id: 'start', type: 'start' as const, label: 'Start' },
+                { id: 'end', type: 'end' as const, label: 'End' },
+            ],
+            edges: [{ id: 'e1', source: 'start', target: 'end' }],
+        });
+        expect(engine.getActiveTriggerBindings()).toHaveLength(0);
+        expect(rec.started).toHaveLength(0);
+    });
+
+    it('stops the binding when the flow is unregistered', () => {
+        const rec = recordingTrigger('record_change');
+        engine.registerTrigger(rec.trigger);
+        engine.registerFlow('rc_flow', recordChangeFlow('rc_flow'));
+        engine.unregisterFlow('rc_flow');
+
+        expect(rec.stopped).toEqual(['rc_flow']);
+        expect(engine.getActiveTriggerBindings()).toHaveLength(0);
+    });
+
+    it('stops/restarts the binding when the flow is disabled/re-enabled', async () => {
+        const rec = recordingTrigger('record_change');
+        engine.registerTrigger(rec.trigger);
+        engine.registerFlow('rc_flow', recordChangeFlow('rc_flow'));
+
+        await engine.toggleFlow('rc_flow', false);
+        expect(rec.stopped).toEqual(['rc_flow']);
+        expect(engine.getActiveTriggerBindings()).toHaveLength(0);
+
+        await engine.toggleFlow('rc_flow', true);
+        expect(engine.getActiveTriggerBindings()).toHaveLength(1);
+        expect(rec.started).toHaveLength(2);
+    });
+
+    it('unregistering the trigger stops all its bound flows', () => {
+        const rec = recordingTrigger('record_change');
+        engine.registerTrigger(rec.trigger);
+        engine.registerFlow('rc_flow', recordChangeFlow('rc_flow'));
+        engine.unregisterTrigger('record_change');
+
+        expect(rec.stopped).toEqual(['rc_flow']);
+        expect(engine.getActiveTriggerBindings()).toHaveLength(0);
+    });
+
+    it('firing the trigger callback runs the flow with the record context', async () => {
+        const rec = recordingTrigger('record_change');
+        const seen: Array<{ status?: unknown; prevStatus?: unknown }> = [];
+        engine.registerNodeExecutor({
+            type: 'probe',
+            async execute(_node, variables) {
+                seen.push({ status: variables.get('status'), prevStatus: (variables.get('previous') as any)?.status });
+                return { success: true };
+            },
+        });
+        engine.registerTrigger(rec.trigger);
+        engine.registerFlow('rc_flow', {
+            ...recordChangeFlow('rc_flow'),
+            nodes: [
+                { id: 'start', type: 'start' as const, label: 'Start', config: { objectName: 'task', triggerType: 'record-after-update' } },
+                { id: 'probe', type: 'probe' as const, label: 'Probe' },
+                { id: 'end', type: 'end' as const, label: 'End' },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'probe' },
+                { id: 'e2', source: 'probe', target: 'end' },
+            ],
+        });
+
+        await rec.fire('rc_flow', { record: { status: 'done' }, previous: { status: 'open' }, object: 'task', event: 'record-after-update' });
+        expect(seen).toEqual([{ status: 'done', prevStatus: 'open' }]);
+    });
+});
+
+describe('AutomationEngine - Start Condition Gate', () => {
+    let engine: AutomationEngine;
+
+    beforeEach(() => {
+        engine = new AutomationEngine(createTestLogger());
+    });
+
+    function gatedFlow() {
+        return {
+            name: 'gated',
+            label: 'Gated',
+            type: 'autolaunched' as const,
+            nodes: [
+                {
+                    id: 'start',
+                    type: 'start' as const,
+                    label: 'Start',
+                    config: { objectName: 'task', triggerType: 'record-after-update', condition: 'status == "done" && previous.status != "done"' },
+                },
+                { id: 'probe', type: 'probe' as const, label: 'Probe' },
+                { id: 'end', type: 'end' as const, label: 'End' },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'probe' },
+                { id: 'e2', source: 'probe', target: 'end' },
+            ],
+        };
+    }
+
+    let ran: number;
+    beforeEach(() => {
+        ran = 0;
+        engine.registerNodeExecutor({
+            type: 'probe',
+            async execute() {
+                ran++;
+                return { success: true };
+            },
+        });
+        engine.registerFlow('gated', gatedFlow());
+    });
+
+    it('runs the flow when the start condition is met (transition into done)', async () => {
+        const result = await engine.execute('gated', { record: { status: 'done' }, previous: { status: 'open' } });
+        expect(result.success).toBe(true);
+        expect((result.output as any)?.skipped).toBeUndefined();
+        expect(ran).toBe(1);
+    });
+
+    it('skips the flow when the start condition is not met (already done)', async () => {
+        const result = await engine.execute('gated', { record: { status: 'done' }, previous: { status: 'done' } });
+        expect(result.success).toBe(true);
+        expect((result.output as any)?.skipped).toBe(true);
+        expect(ran).toBe(0);
+    });
+});

@@ -6,6 +6,7 @@ export type {
     NodeExecutor,
     NodeExecutionResult,
     FlowTrigger,
+    FlowTriggerBinding,
     ConnectorActionHandler,
     ConnectorActionContext,
     RegisteredConnector,
