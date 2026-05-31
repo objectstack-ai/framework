@@ -480,13 +480,14 @@ function validateNamespacePrefix(config: ObjectStackDefinition): string[] {
 }
 
 /**
- * Validate the "one App per package" rule — ADR-0019 (D1/D3).
+ * Validate the "at most one App per package" rule — ADR-0019 (D1/D3).
  *
- * A consumer package (`manifest.type === 'app'`) must define **exactly one**
- * app. Zero is wrong (an App package with no App surface); more than one is the
- * banned "suite contains apps" shape — fold them into one App with multiple
- * tabs, or split into separate packages. Non-`app` package types are internal
- * contributions and are not constrained here.
+ * A consumer package (`manifest.type === 'app'`) must not define **more than
+ * one** app — that is the banned "suite contains apps" shape. Fold the apps
+ * into a single app with multiple tabs, or split into separate packages. Zero
+ * apps is allowed (a package may still be under authoring, or define its app
+ * elsewhere); non-`app` package types are internal contributions and are not
+ * constrained here.
  *
  * Mirrors {@link validateNamespacePrefix}: returns one error per violation;
  * `defineStack` aggregates and throws.
@@ -494,16 +495,10 @@ function validateNamespacePrefix(config: ObjectStackDefinition): string[] {
 function validateSingleApp(config: ObjectStackDefinition): string[] {
   if (config.manifest?.type !== 'app') return [];
   const apps = config.apps ?? [];
-  if (apps.length === 1) return [];
-  if (apps.length === 0) {
-    return [
-      `An 'app' package must define exactly one app, but none was found. ` +
-        `Add a single app (ADR-0019 D1).`,
-    ];
-  }
+  if (apps.length <= 1) return [];
   const names = apps.map((a) => a.name).join(', ');
   return [
-    `An 'app' package must define exactly one app, but found ${apps.length} (${names}). ` +
+    `An 'app' package must define at most one app, but found ${apps.length} (${names}). ` +
       `Fold them into one app with multiple tabs, or split into separate packages (ADR-0019 D3).`,
   ];
 }
