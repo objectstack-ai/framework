@@ -2,6 +2,9 @@
 
 > **Author:** ObjectStack Core Team  
 > **Created:** 2026-02-17  
+> **Updated:** 2026-05-31 — §1–2 and §6 aligned to ADR-0019 (App as the
+> consumer-facing unit; no "suite contains apps"; consumer Marketplace lists
+> only `type: app`).  
 > **Status:** Design Specification  
 > **Target Version:** v3.2 – v4.0
 
@@ -35,10 +38,14 @@ The marketplace protocol consists of three primary schema files:
 
 ### Reference Implementation
 
-**HotCRM** (`objectstack-ai/hotcrm`) demonstrates a real-world metadata-only application with:
-- Root `objectstack.config.ts` with `type: 'app'` aggregating 13 plugins
-- 13 sub-plugins (crm, finance, marketing, products, support, hr, analytics, integration, community, healthcare, real-estate, education, financial-services)
-- 30+ metadata types per plugin
+**HotCRM** (`objectstack-ai/hotcrm`) demonstrates a real-world application. Per
+ADR-0019, it is being refolded into a **single consumer App** (download = open =
+uninstall) whose internal plugins are invisible "frameworks inside the bundle":
+- Root `objectstack.config.ts` with `type: 'app'` — one consumer-facing App
+- The former sub-plugins (crm, finance, marketing, …) are internal
+  contributions bundled inside the App, not separately listed or installed
+- The App owns the set of namespaces those contributions use; uninstall is
+  atomic over that set
 
 ---
 
