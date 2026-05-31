@@ -141,8 +141,8 @@ A spec that declares OAuth2 is still importable open-source — we generate the 
 
 ## Status & follow-ups
 
-- **This ADR changes no shipped code.** It records the decision to add a generator package on top of the existing connector baseline.
-- Follow-up: scaffold `packages/connectors/connector-openapi` mirroring `connector-rest`, with `createOpenApiConnector` + `ConnectorOpenApiPlugin`.
-- Follow-up: a small `openapi-to-connector` CLI that emits a reviewable `*.connector.json`.
+- ✅ **Implemented:** `packages/connectors/connector-openapi` mirrors `connector-rest` / `connector-mcp`, exporting `createOpenApiConnector` (one operation → one action) + `registerOpenApiConnector`. The generator reuses `@objectstack/connector-rest`'s `request` handler for the HTTP/auth transport (one shared implementation, per ADR-0022) and returns the same `{ definition, handlers }` shape consumed by `engine.registerConnector`. Input schemas are assembled as `{ path, query, header, body }` from `parameters` + `requestBody`; output schemas from the `200`/`2xx`/`default` JSON response; auth is inferred from `components.securitySchemes` when no credentials are supplied. Includes an `include` allowlist for trimming large specs.
+- Follow-up: a small `openapi-to-connector` CLI that emits a reviewable `*.connector.json` (deferred — needs a multi-entry build, whereas every connector package currently uses the shared single-entry `tsup` config).
 - Follow-up: a worked example (e.g. GitHub or Stripe public OpenAPI → a handful of allowlisted actions) under `examples/`, paralleling the worked `connector_action` example from ADR-0022.
+- Follow-up: YAML spec input and a `$ref` deref pass for specs the caller has not pre-dereferenced.
 - Cross-reference: see [ADR-0024](./0024-mcp-connectors.md) for the complementary path — wrapping live **MCP servers** as connectors when no OpenAPI spec exists but an MCP server does.
