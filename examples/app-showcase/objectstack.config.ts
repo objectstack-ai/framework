@@ -49,7 +49,9 @@ export default defineStack({
     description: 'Kitchen-sink workspace covering all metadata types, all view types, and the major capability chains.',
   },
 
-  requires: ['ui', 'automation'],
+  // `approvals` loads ApprovalsServicePlugin so the `approval` flow node
+  // (ADR-0019) is contributed to the engine — the showcase flows use it.
+  requires: ['ui', 'automation', 'approvals'],
 
   // Infrastructure
   datasources: allDatasources,

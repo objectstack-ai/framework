@@ -65,8 +65,11 @@ export default defineStack({
   },
 
   // Auto-resolved by the CLI; `ui` enables the Studio shell, `automation` loads
-  // AutomationServicePlugin + node packs so screen flows can execute.
-  requires: ['ui', 'automation'],
+  // AutomationServicePlugin + node packs so screen flows can execute, and
+  // `approvals` loads ApprovalsServicePlugin so the `approval` flow node is
+  // contributed to the engine (ADR-0019) — required for the discount-approval
+  // flow to compile/register and to surface the node in the designer palette.
+  requires: ['ui', 'automation', 'approvals'],
 
   // Infrastructure
   datasources: [CrmDatasource, CrmAnalyticsDatasource],

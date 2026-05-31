@@ -20,6 +20,7 @@
 import {
   defineActionDescriptor,
   ApprovalNodeConfigSchema,
+  getApprovalNodeConfigJsonSchema,
   APPROVAL_NODE_TYPE,
   type ApprovalNodeConfig,
 } from '@objectstack/spec/automation';
@@ -74,6 +75,10 @@ export function registerApprovalNode(
       // Human decision: the run suspends here awaiting an external reply.
       supportsPause: true,
       isAsync: true,
+      // Publish the node's config contract (ADR-0018 §configSchema) so the
+      // Studio flow designer renders the Approval property form from the engine
+      // rather than a hardcoded client form — the engine owns the shape.
+      configSchema: getApprovalNodeConfigJsonSchema(),
     }),
     async execute(node, variables, context) {
       const parsed = ApprovalNodeConfigSchema.safeParse(node.config ?? {});

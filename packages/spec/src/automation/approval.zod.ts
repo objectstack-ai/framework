@@ -118,9 +118,43 @@ export const ApprovalNodeConfigSchema = lazySchema(() => z.object({
    * object. Omitted ⇒ status is exposed only via `sys_approval_request`.
    */
   approvalStatusField: z.string().optional()
-    .describe('Business-object field to mirror request status onto'),
+    // `xRef` marks this string as a typed reference (ADR-0018 §configSchema):
+    // the Studio designer renders an object-field picker instead of free text.
+    // `objectSource: '$trigger'` resolves the field catalog from the flow's
+    // trigger object (the record this approval acts on). A single `.meta()`
+    // carries both description and the annotation so neither is dropped.
+    .meta({
+      description: 'Business-object field to mirror request status onto',
+      xRef: { kind: 'object-field', objectSource: '$trigger' },
+    }),
 
   /** Optional per-node SLA escalation. */
   escalation: ApprovalEscalationSchema.optional().describe('Per-node SLA escalation'),
 }));
 export type ApprovalNodeConfig = z.infer<typeof ApprovalNodeConfigSchema>;
+
+/**
+ * JSON Schema for {@link ApprovalNodeConfigSchema}, memoized.
+ *
+ * Published on the Approval action descriptor's `configSchema`
+ * (ADR-0018/0019) so the **engine** is the single source of truth for the
+ * node's config contract: the Studio flow designer renders the Approval node's
+ * property form from this schema (rather than a hardcoded client form), and the
+ * same schema backs `registerFlow()` config validation. Derived with Zod v4's
+ * `z.toJSONSchema` in `input` mode (the author-facing shape — default-bearing
+ * fields are optional). Lazily computed so the wrapped schema is only resolved
+ * when a descriptor is actually built.
+ */
+let cachedApprovalNodeConfigJsonSchema: unknown;
+export function getApprovalNodeConfigJsonSchema(): unknown {
+  if (cachedApprovalNodeConfigJsonSchema === undefined) {
+    cachedApprovalNodeConfigJsonSchema = z.toJSONSchema(ApprovalNodeConfigSchema, {
+      target: 'draft-2020-12',
+      io: 'input',
+      // Approval config has no unrepresentable constructs today; keep the
+      // designer resilient if one is ever added rather than throwing at boot.
+      unrepresentable: 'any',
+    });
+  }
+  return cachedApprovalNodeConfigJsonSchema;
+}
