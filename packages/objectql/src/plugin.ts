@@ -820,8 +820,9 @@ export class ObjectQLPlugin implements Plugin {
   private async loadMetadataFromService(metadataService: any, ctx: PluginContext) {
     ctx.logger.info('Syncing metadata from external service into ObjectQL registry...');
     
-    // Metadata types to sync
-    const metadataTypes = ['object', 'view', 'app', 'flow', 'workflow', 'function', 'hook'];
+    // Metadata types to sync (ADR-0020: no `workflow` type — record state
+    // machines are a `state_machine` validation rule on the object)
+    const metadataTypes = ['object', 'view', 'app', 'flow', 'function', 'hook'];
     let totalLoaded = 0;
     
     for (const type of metadataTypes) {

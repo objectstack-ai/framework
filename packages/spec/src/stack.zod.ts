@@ -24,7 +24,6 @@ import { ActionSchema } from './ui/action.zod';
 import { ThemeSchema } from './ui/theme.zod';
 
 // Automation Protocol
-import { StateMachineSchema } from './automation/state-machine.zod';
 import { FlowSchema } from './automation/flow.zod';
 import { JobSchema } from './system/job.zod';
 
@@ -213,12 +212,13 @@ export const ObjectStackDefinitionSchema = lazySchema(() => z.object({
 
   /**
    * ObjectFlow: Automation Layer
-   * Business logic, approvals, and workflows.
+   * Business logic, approvals, and flows.
    *
    * ADR-0019: approvals are no longer a top-level collection — an approval is
    * authored as a flow with one or more Approval nodes, so it lives in `flows`.
+   * ADR-0020: there is no top-level `workflows` collection — record state
+   * machines are a `state_machine` validation rule on each object.
    */
-  workflows: z.array(StateMachineSchema).optional().describe('State-machine workflow definitions (record lifecycle state management)'),
   flows: z.array(FlowSchema).optional().describe('Screen Flows'),
   jobs: z.array(JobSchema).optional().describe('Background / Scheduled Jobs (run by IJobService on cron/interval/once schedules)'),
   emailTemplates: z.array(EmailTemplateDefinitionSchema).optional().describe('Email Templates resolved by IEmailService.sendTemplate({ template, locale })'),
@@ -868,7 +868,6 @@ const CONCAT_ARRAY_FIELDS = [
   'reports',
   'actions',
   'themes',
-  'workflows',
   'flows',
   'roles',
   'permissions',

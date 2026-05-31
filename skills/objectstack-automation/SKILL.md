@@ -181,49 +181,53 @@ variables: {
 
 ---
 
-## Workflows — State Machines & Approvals
+## State Machines & Approvals
 
-A **Workflow** defines the lifecycle of a record through states (statuses)
-and the transitions between them.
+A record's **state machine** locks the legal transitions of its status field
+so that automation — increasingly AI-generated — cannot drive a record into an
+illegal state.
 
-### State Machine Configuration
+### State Machine — a `state_machine` validation rule (ADR-0020)
+
+Since **ADR-0020** there is **no `workflow` metadata type** and no
+`object.stateMachines` map. A record state machine is **one `state_machine`
+validation rule** in the object's `validations` array: a flat `field` +
+`{ from: [allowedTo] }` transition table. It is **enforced on the write path** —
+an update whose `field` moves to a state not listed for the current state is
+rejected with the rule's `message`. A `from` state mapped to `[]` is a declared
+dead-end.
 
 ```typescript
+// On the object definition — crm_opportunity.validations[]
 {
+  type: 'state_machine',
   name: 'case_lifecycle',
-  field: 'status',       // the field that holds the state
-  states: {
-    new:       { label: 'New',       initial: true },
-    open:      { label: 'Open' },
-    escalated: { label: 'Escalated' },
-    resolved:  { label: 'Resolved' },
-    closed:    { label: 'Closed',    final: true },
+  label: 'Case Lifecycle',
+  field: 'status',                 // the field that holds the state
+  message: 'Invalid status transition.',
+  transitions: {
+    new:       ['open'],
+    open:      ['escalated', 'resolved'],
+    escalated: ['open', 'resolved'],
+    resolved:  ['open', 'closed'],
+    closed:    [],                 // final — no outgoing transitions
   },
-  transitions: [
-    { from: 'new',       to: 'open',      trigger: 'assign' },
-    { from: 'open',      to: 'escalated', trigger: 'escalate' },
-    { from: 'open',      to: 'resolved',  trigger: 'resolve' },
-    { from: 'escalated', to: 'open',      trigger: 'de_escalate' },
-    { from: 'escalated', to: 'resolved',  trigger: 'resolve' },
-    { from: 'resolved',  to: 'open',      trigger: 'reopen' },
-    { from: 'resolved',  to: 'closed',    trigger: 'close' },
-  ],
 }
 ```
 
-### Transition Guards
-
-Transitions can have conditions that must be met:
-
-```typescript
-{
-  from: 'open',
-  to: 'resolved',
-  trigger: 'resolve',
-  guard: P`record.resolution != null`,    // CEL predicate
-  actions: ['send_resolution_email'], // side-effect actions
-}
-```
+Notes:
+- **One rule per field.** Parallel lifecycles (e.g. `status` + `payment_status`)
+  are N separate `state_machine` rules, one per field.
+- **Conditional transitions / side effects are NOT part of the machine.** A
+  guard is expressed as a sibling `script` / `conditional` validation rule;
+  "do something when the state changes" is a **record-triggered Flow**
+  (ADR-0019) — see the migrated `high-value-deal` / `stale-opportunity` flows in
+  `examples/app-crm`.
+- **Introspection:** `GET /metadata/objects/:name/state/:field?from=:state`
+  returns the legal next states so UIs/agents can read the transition table
+  instead of hard-coding it (`next: null` when no FSM governs the field).
+- Predicate conditions in sibling rules evaluate against the merged record in
+  the **`record.<field>`** CEL scope (bare field names do not resolve).
 
 ### Approvals (Flow Nodes)
 
@@ -418,13 +422,19 @@ Triggers fire automatically when data events occur.
 5. **Set `timeoutMs` on HTTP nodes.** Default is generous; tighten it for
    critical paths.
 
-### State Machine Design
+### State Machine Design (ADR-0020)
 
-1. **Mark exactly one state as `initial: true`.**
-2. **Mark terminal states as `final: true`.**
-3. **Define explicit transitions** — do not rely on implicit "any → any".
-4. **Add guards** to transitions that require preconditions.
-5. **Use `actions` on transitions** for side-effects (emails, notifications).
+1. **Author it as a `state_machine` validation rule** on the object, not a
+   `workflow` metadata type (retired) — one rule per state field.
+2. **Define explicit transitions** — `{ from: [allowedTo] }`. A state mapped to
+   `[]` is a final/dead-end state.
+3. **Don't rely on implicit "any → any"** — an update to a `from` state not
+   listed as a key is treated leniently (no lock), so list every state you want
+   guarded.
+4. **Put guards in a sibling `script` / `conditional` rule**, not in the
+   transition table (the machine stays a flat table).
+5. **Put side-effects (emails, notifications, task creation) in a
+   record-triggered Flow** (ADR-0019), not on the transition.
 
 ### Trigger Design
 

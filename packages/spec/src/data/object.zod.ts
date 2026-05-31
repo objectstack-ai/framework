@@ -3,7 +3,6 @@
 import { z } from 'zod';
 import { FieldSchema } from './field.zod';
 import { ValidationRuleSchema } from './validation.zod';
-import { StateMachineSchema } from '../automation/state-machine.zod';
 import { ActionSchema } from '../ui/action.zod';
 import { ListViewSchema } from '../ui/view.zod';
 
@@ -523,17 +522,14 @@ const ObjectSchemaBase = z.object({
    * Best Practice: Define rules close to data.
    */
   validations: z.array(ValidationRuleSchema).optional().describe('Object-level validation rules'),
-  
-  /**
-   * State Machine(s)
-   * Named record of state machines, where each key is a unique machine identifier.
-   * Multiple machines allow parallel lifecycles (e.g., status + payment_status + approval_status).
-   * 
-   * @example stateMachines: { lifecycle: {...}, payment: {...}, approval: {...} }
-   */
-  stateMachines: z.record(z.string(), StateMachineSchema).optional().describe('Named state machines for parallel lifecycles (e.g., status, payment, approval)'),
 
-  /** 
+  // ADR-0020: record state machines are not a separate `stateMachines` map —
+  // each lifecycle is a `state_machine` rule in `validations` above (one rule
+  // per state field). Parallel lifecycles = multiple rules. The write path
+  // enforces the transition table; UIs read the legal next states via the
+  // `/meta/objects/:name/state/:field?from=` introspection endpoint.
+
+  /**
    * Display & UI Hints (Data-Layer)
    */
   displayNameField: z.string().optional().describe('Field to use as the record display name (e.g., "name", "title"). Defaults to "name" if present.'),

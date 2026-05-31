@@ -309,7 +309,8 @@ describe('overlay whitelist enforcement (shared-DB invariant)', () => {
             expect(allowedFromRegistry.has('object')).toBe(false);
             expect(allowedFromRegistry.has('field')).toBe(false);
             expect(allowedFromRegistry.has('flow')).toBe(true);
-            expect(allowedFromRegistry.has('workflow')).toBe(true);
+            // ADR-0020: `workflow` retired as a metadata type.
+            expect(allowedFromRegistry.has('workflow')).toBe(false);
             expect(allowedFromRegistry.has('agent')).toBe(true);
             expect(allowedFromRegistry.has('permission')).toBe(true);
             expect(allowedFromRegistry.has('role')).toBe(true);

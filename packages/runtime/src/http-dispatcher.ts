@@ -809,6 +809,26 @@ export class HttpDispatcher {
             return { handled: true, response: this.success({ types: ['object', 'app', 'plugin'] }) };
         }
 
+        // GET /metadata/objects/:name/state/:field?from=:state
+        // ADR-0020 D3.3 introspection: the legal next states declared by the
+        // object's `state_machine` validation rule for `:field`. Lets UIs /
+        // AI authors ask "from here, where can this record go?" instead of
+        // hard-coding the transition table. Returns `next: null` when no FSM
+        // governs the field, `next: []` for a declared dead-end state.
+        if (parts.length === 4 && (parts[0] === 'objects' || parts[0] === 'object') && parts[2] === 'state' && (!method || method === 'GET')) {
+            const name = parts[1];
+            const field = parts[3];
+            const from = query?.from !== undefined ? String(query.from) : undefined;
+            const qlService = await this.getObjectQLService();
+            const schema = qlService?.registry?.getObject(name);
+            if (!schema) return { handled: true, response: this.error('Object not found', 404) };
+            // Dynamic import (matches the runtime convention for @objectstack/objectql)
+            // so the dispatcher module graph doesn't statically pull in the objectql barrel.
+            const { legalNextStates } = await import('@objectstack/objectql');
+            const next = from === undefined ? null : legalNextStates(schema, field, from);
+            return { handled: true, response: this.success({ object: name, field, from: from ?? null, next }) };
+        }
+
         // GET /metadata/:type/:name(/:subname...)/published → get published version
         // Supports compound names like `lead/views/all_leads/published`.
         if (parts.length >= 3 && parts[parts.length - 1] === 'published' && (!method || method === 'GET')) {

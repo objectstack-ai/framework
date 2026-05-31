@@ -20,7 +20,7 @@ describe('MetadataPluginProtocol', () => {
       const types = [
         'object', 'field', 'trigger', 'validation', 'hook',
         'view', 'page', 'dashboard', 'app', 'action', 'report',
-        'flow', 'workflow',
+        'flow', // ADR-0020: `workflow` retired as a metadata type
         'datasource', 'translation', 'router', 'function', 'service',
         'permission', 'profile', 'role',
         'agent', 'tool', 'skill',
@@ -599,7 +599,8 @@ describe('MetadataPluginProtocol', () => {
       expect(byDomain('ui')).toContain('view');
       expect(byDomain('ui')).toContain('dashboard');
       expect(byDomain('automation')).toContain('flow');
-      expect(byDomain('automation')).toContain('workflow');
+      // ADR-0020: `workflow` retired — no longer in the registry.
+      expect(byDomain('automation')).not.toContain('workflow');
       expect(byDomain('system')).toContain('datasource');
       expect(byDomain('system')).toContain('translation');
       expect(byDomain('security')).toContain('permission');

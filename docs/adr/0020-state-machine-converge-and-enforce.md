@@ -1,6 +1,6 @@
 # ADR-0020: State Machine — converge three declaration forms to one enforced `state_machine`
 
-**Status**: Proposed (2026-05-31)
+**Status**: Accepted — Implemented (2026-05-31)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0019](./0019-approval-as-flow-node.md) (collapse approval into Flow — "one engine, fold the parasitic concept into its host"; this ADR applies the same principle to the state-machine concept), [ADR-0009](./0009-execution-pinned-metadata.md) (execution-pinned metadata), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring is the design center)
 **Revises**: the #1398 outcome that "reclaimed `workflow` for state machines" — that reclaim left a *name* (`workflow`) and *three* declaration shapes, but no runtime enforcement. This ADR finishes the job.
@@ -130,14 +130,26 @@ The transition declaration stays a flat, recognizable FSM (`field` + `{ from: [t
 
 ## Blast radius / implementation checklist
 
-- [ ] `spec`: remove `workflow` from the metadata type enum + registry ([`metadata-plugin.zod.ts:90`](../../packages/spec/src/kernel/metadata-plugin.zod.ts#L90), [`:612`](../../packages/spec/src/kernel/metadata-plugin.zod.ts#L612)) and the schema map ([`metadata-type-schemas.ts:85`](../../packages/spec/src/kernel/metadata-type-schemas.ts#L85)).
-- [ ] `spec`: **canonical home decided — the `state_machine` validation rule** ([`validation.zod.ts:105`](../../packages/spec/src/data/validation.zod.ts#L105)). Remove `object.stateMachines` ([`object.zod.ts:534`](../../packages/spec/src/data/object.zod.ts#L534)); delete the XState `StateMachineSchema` ([`state-machine.zod.ts`](../../packages/spec/src/automation/state-machine.zod.ts)); optionally add an optional per-transition CEL `guard` to `StateMachineValidationSchema`.
-- [ ] `spec`: remove/retire `IWorkflowService` ([`workflow-service.ts`](../../packages/spec/src/contracts/workflow-service.ts)) or repurpose it as the enforcement contract.
-- [ ] `objectql`: wire the `validations` union into the write path — **plumb the prior/merged record** into rule evaluation (extend [`validateRecord`](../../packages/objectql/src/validation/record-validator.ts#L198) signature or evaluate from a `beforeUpdate` step at [`engine.ts:1850`](../../packages/objectql/src/engine.ts#L1850)), then add `type` dispatch. Fixes `state_machine`, `cross_field`, and `script` together.
-- [ ] `metadata-collection.zod.ts`: drop the `workflows: 'workflow'` collection key ([`metadata-collection.zod.ts:117`](../../packages/spec/src/shared/metadata-collection.zod.ts#L117)).
-- [ ] `examples/app-crm`: rewrite `src/workflows/*.workflow.ts` — transition rules → `state_machine`; side-effect actions → record-triggered Flow; update `objectstack.config.ts` registration.
-- [ ] `examples/app-showcase`: **already carries the surviving shape** — `state_machine` rules on `Task`, `Project`, `Account` (added in this design pass, typecheck passing). Keep them as enforcement test fixtures; no new authoring needed.
-- [ ] Tests: add write-path tests asserting illegal transitions are rejected and legal ones pass (e.g. `Account` `active → prospect` rejected, `churned → active` allowed).
+- [x] `spec`: remove `workflow` from the metadata type enum + registry ([`metadata-plugin.zod.ts`](../../packages/spec/src/kernel/metadata-plugin.zod.ts)) and the schema map ([`metadata-type-schemas.ts`](../../packages/spec/src/kernel/metadata-type-schemas.ts)).
+- [x] `spec`: **canonical home — the `state_machine` validation rule** ([`validation.zod.ts`](../../packages/spec/src/data/validation.zod.ts)). Removed `object.stateMachines` ([`object.zod.ts`](../../packages/spec/src/data/object.zod.ts)) and the `stack.workflows` array ([`stack.zod.ts`](../../packages/spec/src/stack.zod.ts)). *(Deviation: kept the `StateMachineSchema` file — see Implementation notes.)*
+- [~] `spec`: `IWorkflowService` — **kept as a documented follow-up**, not removed (see Implementation notes).
+- [x] `objectql`: wire the `validations` union into the write path — new [`rule-validator.ts`](../../packages/objectql/src/validation/rule-validator.ts) (`evaluateValidationRules` / `needsPriorRecord` / `legalNextStates`), with the prior record plumbed into [`engine.ts`](../../packages/objectql/src/engine.ts) on single-row update. Enforces `state_machine`, `cross_field`, and `script` together.
+- [x] `metadata-collection.zod.ts`: dropped the `workflows` collection key + `workflows: 'workflow'` plural mapping ([`metadata-collection.zod.ts`](../../packages/spec/src/shared/metadata-collection.zod.ts)).
+- [x] `examples/app-crm`: rewrote `src/workflows/*.workflow.ts` — transition tables already live as the `opp_stage_transitions` `state_machine` rule on the opportunity object; side-effect actions became record-triggered / scheduled Flows ([`high-value-deal.flow.ts`](../../examples/app-crm/src/flows/high-value-deal.flow.ts), [`stale-opportunity.flow.ts`](../../examples/app-crm/src/flows/stale-opportunity.flow.ts)); removed the `workflows` registration from `objectstack.config.ts`.
+- [x] `examples/app-showcase`: carries the surviving shape — `state_machine` rules on `Task`, `Project`, `Account`. Predicate conditions corrected to the `record.<field>` CEL scope form so enforcement actually fires.
+- [x] Tests: [`rule-validator.test.ts`](../../packages/objectql/src/validation/rule-validator.test.ts) (16 cases — allow/reject/no-op transitions, execution-control, predicate fail-open, introspection). Updated `object.test.ts`, `metadata-plugin.test.ts`, `metadata-collection.test.ts`, `overlay-precedence.test.ts` for the retired shapes.
+
+## Implementation notes (deviations from the proposal)
+
+The proposal's intent is fully delivered — converge to the `state_machine` rule, retire the `workflow` metadata type, enforce on the write path — with three **bounded** deviations, all to avoid scope creep into unrelated subsystems:
+
+1. **`StateMachineSchema` (the XState-style schema) is kept, not deleted.** It is still imported by the agent conversation lifecycle ([`ai/agent.zod.ts`](../../packages/spec/src/ai/agent.zod.ts)) and the discovery protocol ([`api/protocol.zod.ts`](../../packages/spec/src/api/protocol.zod.ts)). Only its role as the **`workflow` metadata-type backing schema** and the **`object.stateMachines` / `stack.workflows`** homes were removed. Deleting the schema outright would have churned the agent/protocol surfaces, which is a separate concern.
+
+2. **The `workflow` *RPC service* surface is kept as a follow-up.** `CoreServiceName.workflow`, the `/api/v1/workflow` route catalog (`DEFAULT_WORKFLOW_ROUTES`), and `IWorkflowService` remain — they describe an *unimplemented optional service*, not the retired *metadata type*, and removing them touches the service-discovery contract and its tests. Tracked as a follow-up; the metadata-type retirement (the AI-hallucination hazard this ADR targets) is complete.
+
+3. **No per-transition CEL `guard` was added** to `StateMachineValidationSchema` (it was "optional" in D3/D4). The flat `field` + `transitions` table is enforced as-is; a conditional transition can be expressed today as a sibling `script`/`conditional` rule. Guards can be added later without a breaking change.
+
+**Enforcement scope:** rules run on single-row insert/update through the merged `{...previous, ...patch}` record. Multi-row (`updateMany`) updates **log a warning and skip** rule evaluation rather than silently enforcing on incomplete data — surfaced, not hidden.
 
 ## Alternatives considered
 

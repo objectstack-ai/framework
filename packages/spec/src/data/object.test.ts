@@ -506,108 +506,77 @@ describe('ObjectSchema', () => {
       expect(() => ObjectSchema.parse(taskObject)).not.toThrow();
     });
 
-    it('should valid object with state machine', () => {
+    // ADR-0020: record state machines are no longer a standalone
+    // `object.stateMachines` map. They converge onto a single
+    // `state_machine` validation rule on the object — a flat
+    // field + transitions table enforced on the write path.
+    it('should validate an object with a state_machine validation rule', () => {
       const objectWithState = {
         name: 'leave_request',
         fields: {
-          status: { type: 'text' }
+          status: { type: 'text' },
         },
-        stateMachines: {
-          leave_flow: {
-            id: 'leave_flow',
-            initial: 'draft',
-            states: {
-              draft: { on: { SUBMIT: 'pending' } },
-              pending: { on: { APPROVE: 'approved' } },
-              approved: { type: 'final' }
-            }
-          }
-        }
+        validations: [
+          {
+            type: 'state_machine',
+            name: 'leave_flow',
+            field: 'status',
+            message: 'Invalid status transition.',
+            transitions: {
+              draft: ['pending'],
+              pending: ['approved', 'draft'],
+              approved: [],
+            },
+          },
+        ],
       };
-      
+
       const result = ObjectSchema.parse(objectWithState);
-      expect(result.stateMachines).toBeDefined();
-      expect(result.stateMachines!.leave_flow.initial).toBe('draft');
+      const rule = result.validations!.find((v) => v.name === 'leave_flow');
+      expect(rule).toBeDefined();
+      expect(rule!.type).toBe('state_machine');
+      expect((rule as { field: string }).field).toBe('status');
+      expect((rule as { transitions: Record<string, string[]> }).transitions.draft).toEqual([
+        'pending',
+      ]);
     });
 
-    it('should support multiple parallel state machines via stateMachines', () => {
+    it('should allow multiple state_machine rules over distinct fields', () => {
       const order = {
         name: 'order',
         fields: {
           status: { type: 'text' },
           payment_status: { type: 'text' },
-          approval_status: { type: 'text' },
         },
-        stateMachines: {
-          lifecycle: {
-            id: 'order_lifecycle',
-            initial: 'draft',
-            states: {
-              draft: { on: { SUBMIT: 'submitted' } },
-              submitted: { on: { CONFIRM: 'confirmed' } },
-              confirmed: { on: { SHIP: 'shipped' } },
-              shipped: { on: { DELIVER: 'delivered' } },
-              delivered: { type: 'final' },
-            }
+        validations: [
+          {
+            type: 'state_machine',
+            name: 'lifecycle',
+            field: 'status',
+            message: 'Invalid status transition.',
+            transitions: {
+              draft: ['submitted'],
+              submitted: ['confirmed'],
+              confirmed: [],
+            },
           },
-          payment: {
-            id: 'order_payment',
-            initial: 'unpaid',
-            states: {
-              unpaid: { on: { PAY: 'partial', PAY_FULL: 'paid' } },
-              partial: { on: { PAY_FULL: 'paid' } },
-              paid: { on: { REFUND: 'refunded' } },
-              refunded: { type: 'final' },
-            }
+          {
+            type: 'state_machine',
+            name: 'payment',
+            field: 'payment_status',
+            message: 'Invalid payment_status transition.',
+            transitions: {
+              unpaid: ['partial', 'paid'],
+              partial: ['paid'],
+              paid: [],
+            },
           },
-          approval: {
-            id: 'order_approval',
-            initial: 'pending',
-            states: {
-              pending: { on: { APPROVE: 'approved', REJECT: 'rejected' } },
-              approved: { type: 'final' },
-              rejected: { on: { RESUBMIT: 'pending' } },
-            }
-          }
-        }
+        ],
       };
 
       const result = ObjectSchema.parse(order);
-      expect(result.stateMachines).toBeDefined();
-      expect(Object.keys(result.stateMachines!)).toEqual(['lifecycle', 'payment', 'approval']);
-      expect(result.stateMachines!.lifecycle.initial).toBe('draft');
-      expect(result.stateMachines!.payment.initial).toBe('unpaid');
-      expect(result.stateMachines!.approval.initial).toBe('pending');
-    });
-
-    it('should allow multiple stateMachines', () => {
-      const obj = {
-        name: 'contract',
-        fields: { status: { type: 'text' } },
-        stateMachines: {
-          contract_lifecycle: {
-            id: 'contract_lifecycle',
-            initial: 'draft',
-            states: {
-              draft: { on: { ACTIVATE: 'active' } },
-              active: { type: 'final' },
-            }
-          },
-          billing: {
-            id: 'contract_billing',
-            initial: 'unbilled',
-            states: {
-              unbilled: { on: { INVOICE: 'invoiced' } },
-              invoiced: { on: { PAY: 'paid' } },
-              paid: { type: 'final' },
-            }
-          }
-        }
-      };
-
-      const result = ObjectSchema.parse(obj);
-      expect(result.stateMachines?.contract_lifecycle.initial).toBe('draft');
-      expect(result.stateMachines?.billing.initial).toBe('unbilled');
+      const machines = result.validations!.filter((v) => v.type === 'state_machine');
+      expect(machines.map((m) => m.name)).toEqual(['lifecycle', 'payment']);
     });
   });
 });

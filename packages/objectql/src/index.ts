@@ -36,6 +36,8 @@ export type { WrapDeclarativeOptions } from './hook-wrappers.js';
 // Export Validation
 export { ValidationError, validateRecord } from './validation/record-validator.js';
 export type { FieldValidationError } from './validation/record-validator.js';
+export { evaluateValidationRules, needsPriorRecord, legalNextStates } from './validation/rule-validator.js';
+export type { EvaluateRulesOptions } from './validation/rule-validator.js';
 export {
     InMemoryHookMetricsRecorder,
     noopHookMetricsRecorder,

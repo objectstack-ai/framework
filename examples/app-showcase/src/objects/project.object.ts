@@ -56,7 +56,7 @@ export const Project = ObjectSchema.create({
       label: 'End After Start',
       description: 'Target end date must be on or after the start date.',
       fields: ['start_date', 'end_date'],
-      condition: P`has(start_date) && has(end_date) && end_date < start_date`,
+      condition: P`has(record.start_date) && has(record.end_date) && record.end_date < record.start_date`,
       message: 'Target End Date must be on or after the Start Date.',
     },
     {
@@ -64,7 +64,7 @@ export const Project = ObjectSchema.create({
       name: 'spent_within_budget',
       label: 'Spend Within 120% of Budget',
       description: 'Flag projects spending more than 120% of budget.',
-      condition: P`budget != null && spent != null && spent > budget * 1.2`,
+      condition: P`record.budget != null && record.spent != null && record.spent > record.budget * 1.2`,
       message: 'Spend exceeds 120% of budget — escalate before continuing.',
       severity: 'error' as const,
     },

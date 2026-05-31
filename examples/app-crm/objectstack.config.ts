@@ -12,7 +12,6 @@ import * as actions from './src/actions/index.js';
 import * as emails from './src/emails/index.js';
 import { allHooks } from './src/hooks/index.js';
 import { allFlows } from './src/flows/index.js';
-import { HighValueDealWorkflow, StaleOpportunityWorkflow } from './src/workflows/index.js';
 import {
   SalesAssistantAgent,
   LookupContactTool,
@@ -105,8 +104,11 @@ export default defineStack({
 
   // Logic
   hooks: allHooks,
+  // ADR-0020: `workflows` retired — record state machines are now a
+  // `state_machine` validation rule on the object (see
+  // src/objects/opportunity.object.ts) and side-effecting automation is
+  // modelled as Flows (high-value-deal, stale-opportunity in allFlows).
   flows: allFlows,
-  workflows: [HighValueDealWorkflow, StaleOpportunityWorkflow],
   jobs: [LeadScoringJob, PipelineReportJob, RenewalSweepJob],
   emailTemplates: Object.values(emails),
 
