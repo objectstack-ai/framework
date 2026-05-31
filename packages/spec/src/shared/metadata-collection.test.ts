@@ -248,7 +248,6 @@ describe('MAP_SUPPORTED_FIELDS', () => {
     expect(MAP_SUPPORTED_FIELDS).toContain('reports');
     expect(MAP_SUPPORTED_FIELDS).toContain('actions');
     expect(MAP_SUPPORTED_FIELDS).toContain('themes');
-    expect(MAP_SUPPORTED_FIELDS).toContain('workflows');
     expect(MAP_SUPPORTED_FIELDS).toContain('flows');
     expect(MAP_SUPPORTED_FIELDS).toContain('roles');
     expect(MAP_SUPPORTED_FIELDS).toContain('permissions');
@@ -341,14 +340,14 @@ describe('normalizePluginMetadata', () => {
       ]);
     });
 
-    it('should convert map-formatted workflows to an array', () => {
+    it('should convert map-formatted flows to an array', () => {
       const result = normalizePluginMetadata({
-        workflows: {
-          auto_assign: { objectName: 'lead', label: 'Auto Assign' },
+        flows: {
+          auto_assign: { label: 'Auto Assign' },
         },
       });
-      expect(result.workflows).toEqual([
-        { name: 'auto_assign', objectName: 'lead', label: 'Auto Assign' },
+      expect(result.flows).toEqual([
+        { name: 'auto_assign', label: 'Auto Assign' },
       ]);
     });
 

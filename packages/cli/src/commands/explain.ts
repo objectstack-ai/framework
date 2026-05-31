@@ -127,7 +127,7 @@ const SCHEMAS: Record<string, SchemaInfo> = {
     { type: 'assignment', field: 'assigned_to', value: '$currentUser' },
   ],
 }`,
-    related: ['object', 'trigger', 'workflow', 'agent'],
+    related: ['object', 'trigger', 'agent'],
     docsPath: 'automation/flow',
   },
 

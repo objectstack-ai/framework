@@ -28,6 +28,7 @@ import type { Expression } from '@objectstack/spec';
 import { isAggregatedViewContainer, expandViewContainer } from '@objectstack/spec';
 import { bindHooksToEngine } from './hook-binder.js';
 import { validateRecord } from './validation/record-validator.js';
+import { evaluateValidationRules, needsPriorRecord } from './validation/rule-validator.js';
 import { applyInMemoryAggregation } from './in-memory-aggregation.js';
 
 interface FormulaPlanEntry { name: string; expression: Expression; }
@@ -1741,7 +1742,10 @@ export class ObjectQL implements IDataEngine {
           for (const r of rows) {
             await this.encryptSecretFields(object, r, opCtx.context, hookContext.input.options);
           }
-          for (const r of rows) validateRecord(schemaForValidation, r, 'insert');
+          for (const r of rows) {
+            validateRecord(schemaForValidation, r, 'insert');
+            evaluateValidationRules(schemaForValidation as any, r, 'insert', { logger: this.logger });
+          }
           if (driver.bulkCreate) {
                result = await driver.bulkCreate(object, rows, hookContext.input.options as any);
           } else {
@@ -1757,6 +1761,7 @@ export class ObjectQL implements IDataEngine {
           );
           await this.encryptSecretFields(object, row, opCtx.context, hookContext.input.options);
           validateRecord(schemaForValidation, row, 'insert');
+          evaluateValidationRules(schemaForValidation as any, row, 'insert', { logger: this.logger });
           result = await driver.create(object, row, hookContext.input.options as any);
         }
 
@@ -1845,13 +1850,29 @@ export class ObjectQL implements IDataEngine {
 
        try {
            let result;
+           const updateSchema = this._registry.getObject(object);
            if (hookContext.input.id) {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
-               validateRecord(this._registry.getObject(object), hookContext.input.data as Record<string, unknown>, 'update');
+               validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
+               // ADR-0020: object-level rules (state_machine / cross_field /
+               // script) need the prior record — a PATCH carries only changed
+               // fields. Fetch it once, only when such a rule is declared.
+               let previous: Record<string, unknown> | null = null;
+               if (needsPriorRecord(updateSchema as any)) {
+                   const priorAst: QueryAST = { object, where: { id: hookContext.input.id }, limit: 1 };
+                   previous = await driver.findOne(object, priorAst, hookContext.input.options as any);
+               }
+               evaluateValidationRules(updateSchema as any, hookContext.input.data as Record<string, unknown>, 'update', { previous, logger: this.logger });
                result = await driver.update(object, hookContext.input.id as string, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else if (options?.multi && driver.updateMany) {
                await this.encryptSecretFields(object, hookContext.input.data as Record<string, unknown>, opCtx.context, hookContext.input.options);
-               validateRecord(this._registry.getObject(object), hookContext.input.data as Record<string, unknown>, 'update');
+               validateRecord(updateSchema, hookContext.input.data as Record<string, unknown>, 'update');
+               // Multi-row update: per-row prior state is not fetched (one query
+               // per matched row would be unbounded). state_machine /
+               // cross_field rules are skipped here; warn so the gap is visible.
+               if (needsPriorRecord(updateSchema as any)) {
+                   this.logger.warn('Object-level validation rules (state_machine/cross_field/script) are not enforced on multi-row updates', { object });
+               }
                const ast: QueryAST = { object, where: options.where };
                result = await driver.updateMany(object, ast, hookContext.input.data as Record<string, unknown>, hookContext.input.options as any);
            } else {

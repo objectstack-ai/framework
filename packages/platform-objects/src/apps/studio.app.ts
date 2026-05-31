@@ -207,14 +207,9 @@ export const STUDIO_APP: App = {
           params: { type: 'flow', package: '{active_package}' },
           icon: 'git-branch',
         },
-        {
-          id: 'nav_workflows',
-          type: 'component',
-          label: 'Workflow Rules',
-          componentRef: 'metadata:resource',
-          params: { type: 'workflow', package: '{active_package}' },
-          icon: 'zap',
-        },
+        // ADR-0020: no "Workflow Rules" nav — record state machines are a
+        // `state_machine` validation rule on the object, edited alongside the
+        // object's other validation rules (not a standalone metadata type).
         // ADR-0019: no standalone "Approval Processes" nav — approvals are
         // authored as Approval nodes inside a Flow (see nav_flows above).
       ],

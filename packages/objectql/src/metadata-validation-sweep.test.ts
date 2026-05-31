@@ -149,18 +149,10 @@ const FIXTURES: Record<string, Fixture> = {
         invalid: { name: 'sweep_flow', label: 'Sweep' },
         invalidatedField: 'type',
     },
-    workflow: {
-        // `workflow` is the state-machine schema (StateMachineSchema): id +
-        // initial + states. (The legacy workflow-rule shape was retired.)
-        valid: {
-            name: 'sweep_wf',
-            id: 'sweep_wf',
-            initial: 'open',
-            states: { open: { type: 'final' } },
-        },
-        invalid: { name: 'sweep_wf', id: 'sweep_wf', initial: 'open' },
-        invalidatedField: 'states',
-    },
+    // ADR-0020: `workflow` retired as a metadata type — record state
+    // machines are now a `state_machine` validation rule on the object
+    // (covered by rule-validator.test.ts), so there is no standalone
+    // `workflow` fixture here.
     approval: {
         valid: {
             name: 'sweep_approval',
