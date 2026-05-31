@@ -42,6 +42,7 @@ import type {
   MetadataTypeRegistryEntry,
 } from '@objectstack/spec/kernel';
 import type { MetadataOverlay } from '@objectstack/spec/kernel';
+import { getMetadataTypeActions } from '@objectstack/spec/kernel';
 import { createLogger, type Logger } from '@objectstack/core';
 import { JSONSerializer } from './serializers/json-serializer.js';
 import { YAMLSerializer } from './serializers/yaml-serializer.js';
@@ -1255,6 +1256,17 @@ export class MetadataManager implements IMetadataService {
     const entry = this.typeRegistry.find(e => e.type === type);
     if (!entry) return undefined;
 
+    // Merge declarative (live registry entry — covers built-ins AND
+    // plugin-contributed `additionalTypes`) + plugin-registered type-level
+    // actions. Deduped by name; imperatively-registered actions win on
+    // collision. Emitted so the metadata-admin engine can render per-type
+    // buttons (e.g. datasource "Test connection"). Omit the key entirely
+    // when the type has none, to keep the response lean.
+    const byName = new Map<string, any>();
+    for (const a of (entry.actions ?? [])) byName.set(a.name, a);
+    for (const a of getMetadataTypeActions(type)) byName.set(a.name, a);
+    const actions = Array.from(byName.values());
+
     return {
       type: entry.type,
       label: entry.label,
@@ -1262,6 +1274,7 @@ export class MetadataManager implements IMetadataService {
       filePatterns: entry.filePatterns,
       supportsOverlay: entry.supportsOverlay,
       domain: entry.domain,
+      ...(actions.length > 0 ? { actions } : {}),
     };
   }
 

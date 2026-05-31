@@ -36,6 +36,7 @@
  */
 
 import type { MetadataQuery, MetadataQueryResult, MetadataValidationResult, MetadataBulkResult, MetadataDependency } from '../kernel/metadata-plugin.zod';
+import type { Action } from '../ui/action.zod';
 import type { MetadataOverlay } from '../kernel/metadata-customization.zod';
 import type { PackagePublishResult, MetadataHistoryQueryOptions, MetadataHistoryQueryResult, MetadataDiffResult } from '../system/metadata-persistence.zod';
 
@@ -113,6 +114,14 @@ export interface MetadataTypeInfo {
     supportsOverlay: boolean;
     /** Protocol domain */
     domain: string;
+    /**
+     * Declarative type-level actions (buttons) for this metadata type — the
+     * merged result of the registry entry's declarative `actions` and any
+     * plugin-registered actions (`registerMetadataTypeActions`). The Studio
+     * metadata-admin engine renders these the same way `ObjectView` renders
+     * an object's actions. Omitted/empty when the type declares none.
+     */
+    actions?: Action[];
 }
 
 export interface IMetadataService {

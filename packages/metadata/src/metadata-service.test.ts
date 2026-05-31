@@ -628,6 +628,19 @@ describe('MetadataManager — IMetadataService Contract', () => {
       const info = await manager.getTypeInfo('unknown_type');
       expect(info).toBeUndefined();
     });
+
+    it('should emit declarative type-level actions (datasource Test connection)', async () => {
+      const info = await manager.getTypeInfo('datasource');
+      expect(info).toBeDefined();
+      const test = info!.actions?.find((a: any) => a.name === 'test_connection');
+      expect(test).toMatchObject({ type: 'api', method: 'POST' });
+    });
+
+    it('should omit the actions key for types with no actions', async () => {
+      const info = await manager.getTypeInfo('object');
+      expect(info).toBeDefined();
+      expect('actions' in info!).toBe(false);
+    });
   });
 
   // ==========================================

@@ -38,6 +38,7 @@ import { PageSchema } from '../ui/page.zod';
 import { DashboardSchema } from '../ui/dashboard.zod';
 import { AppSchema } from '../ui/app.zod';
 import { ActionSchema } from '../ui/action.zod';
+import type { Action } from '../ui/action.zod';
 import { ReportSchema } from '../ui/report.zod';
 
 import { FlowSchema } from '../automation/flow.zod';
@@ -56,6 +57,7 @@ import { ToolSchema } from '../ai/tool.zod';
 import { SkillSchema } from '../ai/skill.zod';
 
 import type { MetadataType } from './metadata-plugin.zod';
+import { DEFAULT_METADATA_TYPE_REGISTRY } from './metadata-plugin.zod';
 
 /**
  * Built-in mapping from metadata type identifier → its canonical Zod
@@ -133,4 +135,57 @@ export function listMetadataTypeSchemaTypes(): string[] {
   const types = new Set<string>(Object.keys(BUILTIN_METADATA_TYPE_SCHEMAS));
   for (const t of EXTRA_METADATA_TYPE_SCHEMAS.keys()) types.add(t);
   return Array.from(types).sort();
+}
+
+// ==========================================
+// Metadata Type Actions (type-level buttons)
+// ==========================================
+
+/**
+ * Runtime-extensible overlay of plugin-contributed **type-level** actions,
+ * keyed by metadata type. Mirrors `EXTRA_METADATA_TYPE_SCHEMAS` above.
+ *
+ * The merged view (built-in declarative actions from
+ * `DEFAULT_METADATA_TYPE_REGISTRY` + these registered ones) is what the
+ * `/api/v1/meta/types/:type` endpoint emits, so the Studio metadata-admin
+ * engine renders one button mechanism — the same `ActionSchema` business
+ * objects already use — for every metadata type.
+ */
+const EXTRA_METADATA_TYPE_ACTIONS = new Map<string, Action[]>();
+
+/**
+ * Register (or extend) the type-level actions for a metadata type.
+ *
+ * Plugins call this from `onInstall` to layer actions onto any type —
+ * built-in or custom — without forking the registry. Actions merge by
+ * `name`: a later registration with the same `name` replaces the earlier
+ * one; new names append. Idempotent for identical input.
+ *
+ * Declarative actions baked into `DEFAULT_METADATA_TYPE_REGISTRY` are the
+ * base layer; registered actions are merged on top by `getMetadataTypeActions`.
+ */
+export function registerMetadataTypeActions(type: string, actions: Action[]): void {
+  const byName = new Map<string, Action>();
+  for (const a of EXTRA_METADATA_TYPE_ACTIONS.get(type) ?? []) byName.set(a.name, a);
+  for (const a of actions) byName.set(a.name, a);
+  EXTRA_METADATA_TYPE_ACTIONS.set(type, Array.from(byName.values()));
+}
+
+/**
+ * Resolve the full, merged list of type-level actions for a metadata type.
+ *
+ * Order: declarative actions from the registry entry first, then
+ * plugin-registered actions (which override by `name`). Returns `[]` for a
+ * type with no actions. This is the single accessor the metadata API layer
+ * should call when emitting `MetadataTypeInfo.actions`.
+ */
+export function getMetadataTypeActions(type: string): Action[] {
+  const declarative =
+    (DEFAULT_METADATA_TYPE_REGISTRY.find((e) => e.type === type)?.actions as Action[] | undefined) ?? [];
+  const registered = EXTRA_METADATA_TYPE_ACTIONS.get(type) ?? [];
+  if (declarative.length === 0 && registered.length === 0) return [];
+  const byName = new Map<string, Action>();
+  for (const a of declarative) byName.set(a.name, a);
+  for (const a of registered) byName.set(a.name, a);
+  return Array.from(byName.values());
 }

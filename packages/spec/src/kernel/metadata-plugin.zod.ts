@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { MetadataManagerConfigSchema } from './metadata-loader.zod';
 import { MergeStrategyConfigSchema, CustomizationPolicySchema } from './metadata-customization.zod';
+import { ActionSchema } from '../ui/action.zod';
 
 /**
  * # Metadata Plugin Protocol
@@ -213,6 +214,29 @@ const MetadataTypeRegistryEntryBaseSchema = z.object({
   /** The domain this type belongs to */
   domain: z.enum(['data', 'ui', 'automation', 'system', 'security', 'ai'])
     .describe('Protocol domain'),
+
+  /**
+   * Declarative **type-level** actions for this metadata type.
+   *
+   * These are buttons the Studio metadata-admin engine renders for the type
+   * as a whole (or for a single item of the type) — the same `ActionSchema`
+   * business objects already use for row/header actions, reused verbatim so
+   * there is no third button mechanism to learn.
+   *
+   * The canonical example is the `datasource` **Test connection** button: an
+   * `ActionType: 'api'` action whose `url` calls the connection-probe
+   * endpoint. Built-in types declare actions here; plugins layer additional
+   * actions onto any type at runtime via `registerMetadataTypeActions()`
+   * (the engine merges declarative + registered when emitting
+   * `/api/v1/meta/types/:type`).
+   *
+   * Note: this is distinct from the per-record `actions` a business *object*
+   * carries (`ObjectSchema.actions`) — those act on rows of a user object,
+   * these act on definitions of a metadata type.
+   */
+  actions: z.array(ActionSchema).optional().describe(
+    'Declarative type-level actions (e.g. datasource "Test connection"), reusing ActionSchema; merged with plugin-registered actions when emitted'
+  ),
 });
 
 export const MetadataTypeRegistryEntrySchema = lazySchema(() =>
@@ -592,7 +616,37 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
   // Code-defined (`origin: 'code'`) datasources remain read-only and win on
   // name collision; record-level read-only gating is enforced by origin, not
   // by this flag. No per-org overlay (a datasource = one physical connection).
-  { type: 'datasource', label: 'Datasource', filePatterns: ['**/*.datasource.ts', '**/*.datasource.yml'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 5, domain: 'system' },
+  {
+    type: 'datasource',
+    label: 'Datasource',
+    filePatterns: ['**/*.datasource.ts', '**/*.datasource.yml'],
+    supportsOverlay: false,
+    allowOrgOverride: false,
+    allowRuntimeCreate: true,
+    supportsVersioning: false,
+    executionPinned: false,
+    loadOrder: 5,
+    domain: 'system',
+    // First metadata-admin type-level action (GAP 1): probe the live
+    // connection for an existing datasource. The matching route
+    // (`POST /api/v1/datasources/:name/test`) is registered by the host's
+    // datasource-admin backend; when that backend is absent the button is
+    // still emitted but the call returns "unavailable" rather than 404-ing
+    // the page. `${ctx.recordId}` resolves to the datasource's name.
+    actions: [
+      {
+        name: 'test_connection',
+        label: 'Test connection',
+        icon: 'plug-zap',
+        type: 'api',
+        target: '/api/v1/datasources/${ctx.recordId}/test',
+        method: 'POST',
+        variant: 'secondary',
+        refreshAfter: false,
+        locations: ['record_header', 'list_item'],
+      },
+    ],
+  },
   { type: 'external_catalog', label: 'External Catalog', filePatterns: ['**/*.external-catalog.ts', '**/*.external-catalog.yml', '**/*.external-catalog.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 6, domain: 'system' },
   { type: 'translation', label: 'Translation', filePatterns: ['**/*.translation.ts', '**/*.translation.yml', '**/*.translation.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 90, domain: 'system' },
   { type: 'router', label: 'Router', filePatterns: ['**/*.router.ts'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: false, supportsVersioning: false, executionPinned: false, loadOrder: 40, domain: 'system' },

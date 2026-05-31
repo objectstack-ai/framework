@@ -5,6 +5,7 @@ import { BaseResponseSchema } from './contract.zod';
 import { ObjectSchema } from '../data/object.zod';
 import { AppSchema } from '../ui/app.zod';
 import { MetadataTypeSchema, MetadataQuerySchema, MetadataQueryResultSchema, MetadataValidationResultSchema, MetadataBulkResultSchema, MetadataDependencySchema } from '../kernel/metadata-plugin.zod';
+import { ActionSchema } from '../ui/action.zod';
 import { MetadataOverlaySchema } from '../kernel/metadata-customization.zod';
 
 /**
@@ -314,6 +315,7 @@ export const MetadataTypeInfoResponseSchema = lazySchema(() => BaseResponseSchem
     filePatterns: z.array(z.string()).describe('File glob patterns'),
     supportsOverlay: z.boolean().describe('Overlay support'),
     domain: z.string().describe('Protocol domain'),
+    actions: z.array(ActionSchema).optional().describe('Declarative type-level actions (buttons) the metadata-admin UI renders for this type'),
   }).optional().describe('Type info'),
 }));
 
