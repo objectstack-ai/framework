@@ -1486,3 +1486,46 @@ describe('defineStack - Namespace Prefix Validation', () => {
     }
   });
 });
+
+describe('defineStack — at most one App per package (ADR-0019 D1/D3)', () => {
+  const appManifest = {
+    id: 'com.example.one',
+    version: '1.0.0',
+    type: 'app' as const,
+    name: 'One',
+  };
+
+  it('accepts an app package with exactly one app', () => {
+    expect(() =>
+      defineStack({ manifest: appManifest, apps: [{ name: 'app_one', label: 'App One' }] }),
+    ).not.toThrow();
+  });
+
+  it('accepts an app package with zero apps (not a suite)', () => {
+    expect(() => defineStack({ manifest: appManifest, apps: [] })).not.toThrow();
+  });
+
+  it('rejects an app package with more than one app (the banned suite shape)', () => {
+    expect(() =>
+      defineStack({
+        manifest: appManifest,
+        apps: [
+          { name: 'app_one', label: 'App One' },
+          { name: 'app_two', label: 'App Two' },
+        ],
+      }),
+    ).toThrow(/at most one app/);
+  });
+
+  it('does not constrain non-app package types', () => {
+    expect(() =>
+      defineStack({
+        manifest: { id: 'com.example.drv', version: '1.0.0', type: 'driver' as const, name: 'Driver' },
+        apps: [
+          { name: 'a', label: 'A' },
+          { name: 'b', label: 'B' },
+        ],
+      }),
+    ).not.toThrow();
+  });
+});
