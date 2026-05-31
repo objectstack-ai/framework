@@ -1523,7 +1523,7 @@ describe('defineStack — at most one App per package (ADR-0019 D1/D3)', () => {
       defineStack({
         manifest: { id: 'p', version: '1.0.0', type: 'driver' as const, name: 'Driver', namespace: 'demo' },
         objects: [obj],
-        apps: [appNav('a', 'A'), appNav('b', 'B')],
+        apps: [appNav('app_a', 'A'), appNav('app_b', 'B')],
       }),
     ).not.toThrow();
   });
