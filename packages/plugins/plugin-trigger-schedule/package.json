@@ -1,0 +1,55 @@
+{
+  "name": "@objectstack/plugin-trigger-schedule",
+  "version": "7.3.0",
+  "license": "Apache-2.0",
+  "description": "Schedule flow trigger for ObjectStack — auto-launches flows on a cron/interval/once schedule via the IJobService (ADR-0018)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "keywords": [
+    "objectstack",
+    "plugin",
+    "automation",
+    "flow",
+    "trigger",
+    "schedule",
+    "cron"
+  ],
+  "author": "ObjectStack",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/objectstack-ai/framework.git",
+    "directory": "packages/plugins/plugin-trigger-schedule"
+  },
+  "homepage": "https://objectstack.ai/docs",
+  "bugs": "https://github.com/objectstack-ai/framework/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
