@@ -105,6 +105,26 @@ export const CORE_PLUGIN_TYPES = [
   'objectql'    // Core: ObjectQL Engine Data Provider
 ] as const;
 
+/**
+ * Consumer-installable package types — ADR-0019 (App as the consumer unit).
+ *
+ * The package `type` enum is unchanged; this adds a *semantic* split over it:
+ * which types are the one user-visible noun a tenant browses, installs, opens,
+ * and uninstalls. Today that is only `app`. Every other type
+ * (`plugin`/`driver`/`server`/`ui`/`theme`/`agent`/`module`/…) is an internal
+ * contribution — it ships *inside* an App or is operator-provisioned — and is
+ * never independently listed or installed by a consumer.
+ */
+export const CONSUMER_INSTALLABLE_TYPES = ['app'] as const;
+
+/**
+ * Returns true when a package `type` is a consumer-facing installable unit
+ * (ADR-0019). Use this to filter the consumer Marketplace to `type: app`.
+ */
+export function isConsumerInstallable(type: string | undefined): boolean {
+  return type != null && (CONSUMER_INSTALLABLE_TYPES as readonly string[]).includes(type);
+}
+
 export const PluginSchema = lazySchema(() => PluginLifecycleSchema.extend({
   id: z.string().min(1).optional().describe('Unique Plugin ID (e.g. com.example.crm)'),
   type: z.enum([

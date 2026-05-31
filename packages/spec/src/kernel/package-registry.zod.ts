@@ -9,16 +9,18 @@ import { DependencyResolutionResultSchema } from './dependency-resolution.zod';
  * 
  * Defines the runtime state and lifecycle operations for installed packages.
  * 
- * ## Key Distinction: Package vs App
- * - **Package (Manifest)**: The unit of installation — a deployable artifact containing
- *   metadata (objects, actions, flows, etc.) and optionally one or more Apps.
- * - **App (AppSchema)**: A UI navigation shell defined inside a package.
- * 
- * A package may contain:
- * - Zero apps (pure functionality plugin, e.g. a storage driver)
- * - One app (typical business application)
- * - Multiple apps (suite of applications)
- * 
+ * ## Key Distinction: App vs Package (ADR-0019)
+ * - **App (AppSchema)**: the one consumer-facing unit — what a tenant downloads,
+ *   opens, and uninstalls. Only `type: app` packages are consumer-installable
+ *   (see `isConsumerInstallable`), and a consumer package defines **at most one
+ *   app** — there is no "suite contains apps" aggregator.
+ * - **Package (Manifest)**: the internal / control-plane artifact term (the
+ *   "row" in the installed-packages table). Never surfaced to consumers as a
+ *   separate noun.
+ * - **Internal contributions** (plugin/driver/server/…): the "frameworks inside
+ *   the .app bundle" — bundled within an App or operator-provisioned; a consumer
+ *   never installs them directly.
+ *
  * ## Architecture Alignment
  * - **Salesforce**: Managed Packages with install/uninstall lifecycle
  * - **VS Code**: Extension marketplace with enable/disable per-workspace

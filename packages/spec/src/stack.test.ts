@@ -1468,3 +1468,45 @@ describe('defineStack - Namespace Prefix Validation', () => {
     }
   });
 });
+
+describe('defineStack — at most one App per package (ADR-0019 D1/D3)', () => {
+  // A minimal app must carry navigation to a defined object so it passes the
+  // cross-reference / landing checks that run before the single-app rule.
+  const obj = { name: 'demo_task', label: 'Task', fields: { title: { type: 'text' as const } } };
+  const appNav = (name: string, label: string) => ({
+    name,
+    label,
+    navigation: [{ id: 'nav_tasks', type: 'object' as const, label: 'Tasks', objectName: 'demo_task' }],
+  });
+  const manifest = { id: 'p', version: '1.0.0', type: 'app' as const, name: 'P', namespace: 'demo' };
+
+  it('accepts an app package with exactly one app', () => {
+    expect(() =>
+      defineStack({ manifest, objects: [obj], apps: [appNav('my_app', 'My App')] }),
+    ).not.toThrow();
+  });
+
+  it('accepts an app package with zero apps (not a suite)', () => {
+    expect(() => defineStack({ manifest, objects: [obj], apps: [] })).not.toThrow();
+  });
+
+  it('rejects an app package with more than one app (the banned suite shape)', () => {
+    expect(() =>
+      defineStack({
+        manifest,
+        objects: [obj],
+        apps: [appNav('app_one', 'App One'), appNav('app_two', 'App Two')],
+      }),
+    ).toThrow(/at most one app/);
+  });
+
+  it('does not constrain non-app package types', () => {
+    expect(() =>
+      defineStack({
+        manifest: { id: 'p', version: '1.0.0', type: 'driver' as const, name: 'Driver', namespace: 'demo' },
+        objects: [obj],
+        apps: [appNav('app_a', 'A'), appNav('app_b', 'B')],
+      }),
+    ).not.toThrow();
+  });
+});

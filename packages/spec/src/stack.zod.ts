@@ -481,6 +481,30 @@ function validateNamespacePrefix(config: ObjectStackDefinition): string[] {
 }
 
 /**
+ * Validate the "at most one App per package" rule — ADR-0019 (D1/D3).
+ *
+ * A consumer package (`manifest.type === 'app'`) must not define **more than
+ * one** app — that is the banned "suite contains apps" shape. Fold the apps
+ * into a single app with multiple tabs, or split into separate packages. Zero
+ * apps is allowed (a package may still be under authoring, or define its app
+ * elsewhere); non-`app` package types are internal contributions and are not
+ * constrained here.
+ *
+ * Mirrors {@link validateNamespacePrefix}: returns one error per violation;
+ * `defineStack` aggregates and throws.
+ */
+function validateSingleApp(config: ObjectStackDefinition): string[] {
+  if (config.manifest?.type !== 'app') return [];
+  const apps = config.apps ?? [];
+  if (apps.length <= 1) return [];
+  const names = apps.map((a) => a.name).join(', ');
+  return [
+    `An 'app' package must define at most one app, but found ${apps.length} (${names}). ` +
+      `Fold them into one app with multiple tabs, or split into separate packages (ADR-0019 D3).`,
+  ];
+}
+
+/**
  * Collect all object names defined in a stack definition.
  */
 function collectObjectNames(config: ObjectStackDefinition): Set<string> {
@@ -776,6 +800,13 @@ export function defineStack(
     const lines = nsErrors.map((e) => `  ✗ ${e}`);
     const hint = `\n\nEvery object.name must be \`\${manifest.namespace}_\${shortName}\`. This is the only supported writing style — the platform does not provide ns() helpers or factory wrappers.`;
     throw new Error(`${header}\n\n${lines.join('\n')}${hint}`);
+  }
+
+  const appErrors = validateSingleApp(result.data);
+  if (appErrors.length > 0) {
+    const header = `defineStack single-app validation failed (${appErrors.length} issue${appErrors.length === 1 ? '' : 's'}):`;
+    const lines = appErrors.map((e) => `  ✗ ${e}`);
+    throw new Error(`${header}\n\n${lines.join('\n')}`);
   }
 
   return mergeActionsIntoObjects(result.data);

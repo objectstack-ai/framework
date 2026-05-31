@@ -2,6 +2,9 @@
 
 > **Author:** ObjectStack Core Team  
 > **Created:** 2026-02-17  
+> **Updated:** 2026-05-31 — §1–2 and §6 aligned to ADR-0019 (App as the
+> consumer-facing unit; no "suite contains apps"; consumer Marketplace lists
+> only `type: app`).  
 > **Status:** Design Specification  
 > **Target Version:** v3.2 – v4.0
 
@@ -35,33 +38,44 @@ The marketplace protocol consists of three primary schema files:
 
 ### Reference Implementation
 
-**HotCRM** (`objectstack-ai/hotcrm`) demonstrates a real-world metadata-only application with:
-- Root `objectstack.config.ts` with `type: 'app'` aggregating 13 plugins
-- 13 sub-plugins (crm, finance, marketing, products, support, hr, analytics, integration, community, healthcare, real-estate, education, financial-services)
-- 30+ metadata types per plugin
+**HotCRM** (`objectstack-ai/hotcrm`) demonstrates a real-world application. Per
+ADR-0019, it is being refolded into a **single consumer App** (download = open =
+uninstall) whose internal plugins are invisible "frameworks inside the bundle":
+- Root `objectstack.config.ts` with `type: 'app'` — one consumer-facing App
+- The former sub-plugins (crm, finance, marketing, …) are internal
+  contributions bundled inside the App, not separately listed or installed
+- The App owns the set of namespaces those contributions use; uninstall is
+  atomic over that set
 
 ---
 
 ## 2. Architecture Overview
 
-### 2.1 Package Taxonomy
+### 2.1 Package Taxonomy (ADR-0019)
 
-The ObjectStack ecosystem uses a clear hierarchy:
+The ObjectStack ecosystem exposes **one consumer-facing noun: the App.**
 
 ```
-Package (ManifestSchema)
-├── Type: app | plugin | driver | server | ui | theme | agent | module
-├── Namespace: Scoped identifier (e.g., "crm" → crm__account, crm__deal)
-└── May Contain: Zero apps | One app | Multiple apps
+App  ← the only consumer unit (download = open = uninstall)
+├── Type: app   (the only consumer-installable type; see isConsumerInstallable)
+├── Namespace(s): the App owns a set; uninstall is atomic over the set
+├── Apps:   at most one app surface per package (one app, many tabs — no suite)
+└── Internal contributions (invisible): plugin | driver | server | ui | theme | agent | module
+       — "frameworks inside the .app bundle": bundled or operator-provisioned,
+         never independently listed or installed by a consumer
 ```
 
-### 2.2 Package vs App vs Plugin
+### 2.2 App vs Package vs internal contribution
 
-From `packages/spec/src/kernel/package-registry.zod.ts`:
+From `packages/spec/src/kernel/package-registry.zod.ts` (ADR-0019):
 
-> **Package**: The unit of installation — a deployable artifact containing metadata  
-> **App**: A UI navigation shell defined inside a package  
-> A package may contain zero apps (driver), one app (typical), or multiple apps (suite)
+> **App**: the one consumer-facing unit — what a tenant downloads, opens, and
+> uninstalls. Only `type: app` is consumer-installable, and a consumer package
+> defines **at most one app** (no "suite contains apps").  
+> **Package**: the internal / control-plane artifact term; never surfaced to
+> consumers as a separate noun.  
+> **Internal contributions** (plugin/driver/server/…): ship inside an App or are
+> operator-provisioned; a consumer never installs them directly.
 
 ### 2.3 Namespace Scoping
 
@@ -353,56 +367,51 @@ Steps:
 
 ---
 
-## 6. Publishing Strategies for Multi-Plugin Applications
+## 6. Composing a Multi-Plugin Application (ADR-0019)
 
-### 6.1 HotCRM Architecture
+The consumer model has **one user-visible noun — the App — and no "suite
+contains apps" aggregator**. A solution built from many internal plugins has
+exactly two valid shapes; both ship as *one App* (or several independent Apps)
+to the consumer, never as a wrapper that surfaces N apps.
 
-13 plugins: crm, finance, marketing, products, support, hr, analytics, integration, community, healthcare, real-estate, education, financial-services
+### 6.1 Shape A — One App, internal plugins bundled (recommended for HotCRM)
 
-### 6.2 Strategy A: Suite Mode
-
-**Approach:** Bundle all 13 plugins in one package
-
-**Pros:** Simple install, guaranteed compatibility, single version  
-**Cons:** Large size, no modularity  
-**Use Case:** Enterprise bundle
-
-### 6.3 Strategy B: Individual Listings
-
-**Approach:** Each plugin published separately
-
-**Pros:** Modular, pay-per-module, independent versioning  
-**Cons:** Complex dependencies, version matrix  
-**Use Case:** Marketplace à la carte
-
-### 6.4 Strategy C: Hybrid (Recommended)
-
-**Approach:** Core bundle + industry extensions
-
-**Base Package:** crm + finance + products + support + hr + analytics + integration
-
-**Extensions (separate):**
-- healthcare
-- real-estate
-- education
-- financial-services
-
-**Pros:** Balanced, core always available, optional verticals  
-**Use Case:** Commercial SaaS with verticals
-
-### 6.5 Dependency Declaration
+Compose all internal plugins into a single `type: 'app'` package. The plugins
+are "frameworks inside the .app bundle" — invisible to the consumer. The App
+defines **at most one app surface** (one app with multiple tabs) and owns the
+set of namespaces its plugins use.
 
 ```typescript
+// objectstack.config.ts
 export default defineStack({
-  id: 'com.hotcrm.healthcare',
-  dependencies: {
-    'com.hotcrm.base': '^1.0.0',
-    'com.hotcrm.analytics': '^1.1.0'
-  }
+  manifest: { id: 'com.hotcrm', type: 'app', namespace: 'hotcrm', version: '2.0.0' },
+  plugins: [crmPlugin, financePlugin, marketingPlugin, /* … */], // invisible internals
+  apps: [hotcrmApp], // exactly one consumer app surface (multiple tabs), not a suite
 });
 ```
 
-Kernel resolves graph, installs deps first, validates versions, rejects cycles.
+**Pros:** one listing, one install, atomic versioning and uninstall, one noun
+for the consumer.
+
+### 6.2 Shape B — Several independent Apps (the iWork split)
+
+If verticals are genuinely separate products, ship each as its **own App
+package** — its own listing, install, namespace, and lifecycle (like Pages /
+Numbers / Keynote). This is *not* a suite: there is no wrapper above them.
+
+```bash
+os publish   # com.hotcrm.crm     (type: app)
+os publish   # com.hotcrm.finance (type: app)
+```
+
+**Pros:** granular adoption, independent versioning.
+**Cons:** verticals do not share one install; cross-app data sharing is a
+separate concern (see ADR-0019 §Out of scope).
+
+> **Not allowed:** a "meta-package" / suite whose only job is to surface N apps
+> to the consumer — the Office "suite contains applications" model ADR-0019
+> removes. `defineStack` enforces *at most one app* per `type: app` package, and
+> the consumer Marketplace lists only `type: app`.
 
 ---
 
@@ -591,7 +600,7 @@ This comprehensive design document establishes the **Marketplace Protocol** for 
 2. **Publishing**: 6-step flow (develop → validate → build → submit → review → publish)
 3. **Installation**: 4 channels (CLI, SDK, API, UI) with 30+ metadata type registration
 4. **Lifecycle**: State machine for install/enable/disable/upgrade/uninstall
-5. **Strategies**: 3 approaches for multi-plugin apps (Suite, Individual, Hybrid)
+5. **Composition** (ADR-0019): one App (internal plugins bundled) or several independent Apps — never a suite
 6. **Security**: 5-level verification, signing, automated scanning, permission review
 7. **Pricing**: 6 models (free to enterprise) with license validation
 8. **Roadmap**: 5 phases across 4 quarters
