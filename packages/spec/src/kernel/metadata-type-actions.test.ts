@@ -17,20 +17,17 @@ const action = (name: string, overrides: Partial<Action> = {}): Action =>
 
 describe('Metadata type-level actions', () => {
   describe('declarative actions on the registry entry', () => {
-    it('ships a Test-connection action on the datasource entry', () => {
+    // The open-source framework intentionally ships NO declarative type-level
+    // actions. The datasource "Test connection" button used to live here, but
+    // it was relocated to the datasource-admin backend plugin (which owns the
+    // route it calls) so the framework never advertises a button it can't serve.
+    it('ships no declarative action on the datasource entry', () => {
       const ds = DEFAULT_METADATA_TYPE_REGISTRY.find((e) => e.type === 'datasource');
-      expect(ds?.actions).toBeDefined();
-      const test = ds!.actions!.find((a) => a.name === 'test_connection');
-      expect(test).toMatchObject({
-        type: 'api',
-        method: 'POST',
-        target: '/api/v1/datasources/${ctx.recordId}/test',
-      });
+      expect(ds?.actions ?? []).toEqual([]);
     });
 
-    it('surfaces declarative actions through getMetadataTypeActions', () => {
-      const actions = getMetadataTypeActions('datasource');
-      expect(actions.map((a) => a.name)).toContain('test_connection');
+    it('returns [] for datasource until a plugin registers an action', () => {
+      expect(getMetadataTypeActions('datasource')).toEqual([]);
     });
 
     it('returns [] for a type with no actions', () => {
@@ -44,12 +41,29 @@ describe('Metadata type-level actions', () => {
       expect(getMetadataTypeActions('my_custom_type').map((a) => a.name)).toEqual(['do_thing']);
     });
 
-    it('merges plugin actions on top of declarative ones, declarative first', () => {
-      registerMetadataTypeActions('datasource', [action('rotate_secret')]);
-      const names = getMetadataTypeActions('datasource').map((a) => a.name);
-      expect(names).toContain('test_connection');
-      expect(names).toContain('rotate_secret');
-      expect(names.indexOf('test_connection')).toBeLessThan(names.indexOf('rotate_secret'));
+    it('surfaces a plugin-registered action on a built-in type (datasource)', () => {
+      // Mirrors what the datasource-admin plugin does at install time.
+      registerMetadataTypeActions('datasource', [
+        action('test_connection', {
+          method: 'POST',
+          target: '/api/v1/datasources/${ctx.recordId}/test',
+        }),
+      ]);
+      const test = getMetadataTypeActions('datasource').find((a) => a.name === 'test_connection');
+      expect(test).toMatchObject({
+        type: 'api',
+        method: 'POST',
+        target: '/api/v1/datasources/${ctx.recordId}/test',
+      });
+    });
+
+    it('appends later registrations after earlier ones', () => {
+      registerMetadataTypeActions('merge_order_type', [action('first_action')]);
+      registerMetadataTypeActions('merge_order_type', [action('second_action')]);
+      const names = getMetadataTypeActions('merge_order_type').map((a) => a.name);
+      expect(names).toContain('first_action');
+      expect(names).toContain('second_action');
+      expect(names.indexOf('first_action')).toBeLessThan(names.indexOf('second_action'));
     });
 
     it('dedupes by name — a later registration overrides the earlier', () => {

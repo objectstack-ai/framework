@@ -627,25 +627,13 @@ export const DEFAULT_METADATA_TYPE_REGISTRY: MetadataTypeRegistryEntry[] = [
     executionPinned: false,
     loadOrder: 5,
     domain: 'system',
-    // First metadata-admin type-level action (GAP 1): probe the live
-    // connection for an existing datasource. The matching route
-    // (`POST /api/v1/datasources/:name/test`) is registered by the host's
-    // datasource-admin backend; when that backend is absent the button is
-    // still emitted but the call returns "unavailable" rather than 404-ing
-    // the page. `${ctx.recordId}` resolves to the datasource's name.
-    actions: [
-      {
-        name: 'test_connection',
-        label: 'Test connection',
-        icon: 'plug-zap',
-        type: 'api',
-        target: '/api/v1/datasources/${ctx.recordId}/test',
-        method: 'POST',
-        variant: 'secondary',
-        refreshAfter: false,
-        locations: ['record_header', 'list_item'],
-      },
-    ],
+    // No declarative type-level action here. The metadata-admin
+    // "Test connection" button (GAP 1) is contributed at runtime by the
+    // datasource-admin backend plugin via `registerMetadataTypeActions`,
+    // co-located with the route handler it calls
+    // (`POST /api/v1/datasources/:name/test`). That keeps the open-source
+    // framework from advertising a button whose backend it doesn't ship:
+    // the button is emitted iff the plugin that serves it is installed.
   },
   { type: 'external_catalog', label: 'External Catalog', filePatterns: ['**/*.external-catalog.ts', '**/*.external-catalog.yml', '**/*.external-catalog.json'], supportsOverlay: false, allowOrgOverride: false, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 6, domain: 'system' },
   { type: 'translation', label: 'Translation', filePatterns: ['**/*.translation.ts', '**/*.translation.yml', '**/*.translation.json'], supportsOverlay: true, allowOrgOverride: true, allowRuntimeCreate: true, supportsVersioning: false, executionPinned: false, loadOrder: 90, domain: 'system' },

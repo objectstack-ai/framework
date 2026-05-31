@@ -629,9 +629,29 @@ describe('MetadataManager — IMetadataService Contract', () => {
       expect(info).toBeUndefined();
     });
 
-    it('should emit declarative type-level actions (datasource Test connection)', async () => {
+    it('should emit no type-level actions for datasource by default', async () => {
+      // The datasource "Test connection" action was relocated out of the
+      // open-source registry into the datasource-admin backend plugin, which
+      // registers it at install time. With that plugin absent (as in this
+      // unit test), the type emits no actions.
       const info = await manager.getTypeInfo('datasource');
       expect(info).toBeDefined();
+      expect('actions' in info!).toBe(false);
+    });
+
+    it('should surface a plugin-registered type-level action', async () => {
+      const { registerMetadataTypeActions } = await import('@objectstack/spec/kernel');
+      registerMetadataTypeActions('datasource', [
+        {
+          name: 'test_connection',
+          label: 'Test connection',
+          type: 'api',
+          method: 'POST',
+          target: '/api/v1/datasources/${ctx.recordId}/test',
+          refreshAfter: false,
+        } as any,
+      ]);
+      const info = await manager.getTypeInfo('datasource');
       const test = info!.actions?.find((a: any) => a.name === 'test_connection');
       expect(test).toMatchObject({ type: 'api', method: 'POST' });
     });
