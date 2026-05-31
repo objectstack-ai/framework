@@ -59,12 +59,53 @@ export interface ResolveOptions {
   fallbackChain?: string[];
 }
 
+/**
+ * Resolve a requested locale code against the locales actually present in a
+ * bundle, applying BCP-47 fallback so callers that pass a base language
+ * (e.g. `zh`) or a differently-cased / region-qualified variant still hit the
+ * available data (e.g. `zh-CN`). Mirrors `resolveLocale` in
+ * `@objectstack/core` but is inlined here so `@objectstack/spec` stays
+ * dependency-free.
+ *
+ * Order: exact → case-insensitive → base-language → variant-expansion.
+ * Returns the matched bundle key, or `undefined` when nothing matches.
+ */
+function resolveBundleLocale(
+  bundle: TranslationBundle,
+  requested: string,
+): string | undefined {
+  // 1. Exact match (fast path).
+  if (bundle[requested] !== undefined) return requested;
+
+  const available = Object.keys(bundle);
+  if (available.length === 0) return undefined;
+
+  const lower = requested.toLowerCase();
+  // 2. Case-insensitive match (e.g. `zh-cn` → `zh-CN`).
+  const caseMatch = available.find((code) => code.toLowerCase() === lower);
+  if (caseMatch) return caseMatch;
+
+  const base = lower.split('-')[0];
+  // 3. Base-language match (e.g. `zh-CN` → `zh`).
+  const baseMatch = available.find((code) => code.toLowerCase() === base);
+  if (baseMatch) return baseMatch;
+
+  // 4. Variant expansion (e.g. `zh` → `zh-CN`; first registered variant wins).
+  const variantMatch = available.find((code) => code.toLowerCase().split('-')[0] === base);
+  if (variantMatch) return variantMatch;
+
+  return undefined;
+}
+
 function pickData(
   bundle: TranslationBundle | undefined,
   locale: string,
 ): TranslationData | undefined {
   if (!bundle) return undefined;
-  return bundle[locale];
+  const exact = bundle[locale];
+  if (exact !== undefined) return exact;
+  const resolved = resolveBundleLocale(bundle, locale);
+  return resolved !== undefined ? bundle[resolved] : undefined;
 }
 
 function localeChain(opts?: ResolveOptions): string[] {
@@ -248,7 +289,194 @@ export function translateMetadataDocument(
   if (type === 'view') return translateView(doc, bundle, opts);
   if (type === 'action') return translateAction(doc, bundle, opts);
   if (type === 'object') return translateObject(doc, bundle, opts);
+  if (type === 'app') return translateApp(doc, bundle, opts);
+  if (type === 'dashboard') return translateDashboard(doc, bundle, opts);
   return doc;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// App metadata resolvers (label / description / navigation labels)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Minimal navigation-node shape consumed by `translateApp`. */
+export interface NavNodeLike {
+  id?: string;
+  label?: string;
+  children?: NavNodeLike[];
+  [key: string]: any;
+}
+
+/** Minimal app metadata shape consumed by `translateApp`. */
+export interface AppLike {
+  name: string;
+  label?: string;
+  description?: string;
+  navigation?: NavNodeLike[];
+  [key: string]: any;
+}
+
+function lookupAppAttr(
+  bundle: TranslationBundle | undefined,
+  appName: string,
+  attr: 'label' | 'description',
+  opts?: ResolveOptions,
+): string | undefined {
+  if (!bundle) return undefined;
+  for (const code of localeChain(opts)) {
+    const candidate = pickData(bundle, code)?.apps?.[appName]?.[attr];
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+  return undefined;
+}
+
+function lookupNavLabel(
+  bundle: TranslationBundle | undefined,
+  appName: string,
+  navId: string,
+  opts?: ResolveOptions,
+): string | undefined {
+  if (!bundle) return undefined;
+  for (const code of localeChain(opts)) {
+    const candidate = pickData(bundle, code)?.apps?.[appName]?.navigation?.[navId]?.label;
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Apply the active locale to an app metadata document — translates the app's
+ * `label` / `description` and walks the (possibly nested) `navigation` tree,
+ * replacing each node's `label` with `apps.<app>.navigation.<id>.label` when a
+ * translation exists. The input document is not mutated.
+ *
+ * Translation keys are addressed by the stable navigation-node `id`
+ * (e.g. `group_overview`, `nav_users`) — the same flat keyspace used by the
+ * `apps.<app>.navigation` map, regardless of tree depth.
+ */
+export function translateApp<T extends AppLike>(
+  doc: T,
+  bundle: TranslationBundle | undefined,
+  opts?: ResolveOptions,
+): T {
+  if (!doc || typeof doc !== 'object') return doc;
+  const appName = doc.name;
+  if (!appName || !bundle) return doc;
+
+  const label = lookupAppAttr(bundle, appName, 'label', opts) ?? doc.label;
+  const description = lookupAppAttr(bundle, appName, 'description', opts) ?? doc.description;
+
+  const translateNav = (node: NavNodeLike): NavNodeLike => {
+    if (!node || typeof node !== 'object') return node;
+    const next: NavNodeLike = { ...node };
+    if (typeof node.id === 'string') {
+      const translated = lookupNavLabel(bundle, appName, node.id, opts);
+      if (translated) next.label = translated;
+    }
+    if (Array.isArray(node.children)) {
+      next.children = node.children.map(translateNav);
+    }
+    return next;
+  };
+
+  const navigation = Array.isArray(doc.navigation)
+    ? doc.navigation.map(translateNav)
+    : doc.navigation;
+
+  return {
+    ...doc,
+    ...(label !== undefined ? { label } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(navigation !== undefined ? { navigation } : {}),
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Dashboard metadata resolvers (label / description / widget titles)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Minimal widget shape consumed by `translateDashboard`. */
+export interface WidgetLike {
+  id?: string;
+  title?: string;
+  description?: string;
+  [key: string]: any;
+}
+
+/** Minimal dashboard metadata shape consumed by `translateDashboard`. */
+export interface DashboardLike {
+  name: string;
+  label?: string;
+  description?: string;
+  widgets?: WidgetLike[];
+  [key: string]: any;
+}
+
+function lookupDashboardAttr(
+  bundle: TranslationBundle | undefined,
+  name: string,
+  attr: 'label' | 'description',
+  opts?: ResolveOptions,
+): string | undefined {
+  if (!bundle) return undefined;
+  for (const code of localeChain(opts)) {
+    const candidate = pickData(bundle, code)?.dashboards?.[name]?.[attr];
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+  return undefined;
+}
+
+function lookupWidgetAttr(
+  bundle: TranslationBundle | undefined,
+  dashboardName: string,
+  widgetId: string,
+  attr: 'title' | 'description',
+  opts?: ResolveOptions,
+): string | undefined {
+  if (!bundle) return undefined;
+  for (const code of localeChain(opts)) {
+    const candidate =
+      pickData(bundle, code)?.dashboards?.[dashboardName]?.widgets?.[widgetId]?.[attr];
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Apply the active locale to a dashboard metadata document — translates the
+ * dashboard's `label` / `description` and each widget's `title` /
+ * `description` against `dashboards.<name>.widgets.<id>.*`. The input document
+ * is not mutated.
+ */
+export function translateDashboard<T extends DashboardLike>(
+  doc: T,
+  bundle: TranslationBundle | undefined,
+  opts?: ResolveOptions,
+): T {
+  if (!doc || typeof doc !== 'object') return doc;
+  const name = doc.name;
+  if (!name || !bundle) return doc;
+
+  const label = lookupDashboardAttr(bundle, name, 'label', opts) ?? doc.label;
+  const description = lookupDashboardAttr(bundle, name, 'description', opts) ?? doc.description;
+
+  const widgets = Array.isArray(doc.widgets)
+    ? doc.widgets.map((w) => {
+        if (!w || typeof w !== 'object' || typeof w.id !== 'string') return w;
+        const next: WidgetLike = { ...w };
+        const title = lookupWidgetAttr(bundle, name, w.id, 'title', opts);
+        if (title) next.title = title;
+        const desc = lookupWidgetAttr(bundle, name, w.id, 'description', opts);
+        if (desc) next.description = desc;
+        return next;
+      })
+    : doc.widgets;
+
+  return {
+    ...doc,
+    ...(label !== undefined ? { label } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(widgets !== undefined ? { widgets } : {}),
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────

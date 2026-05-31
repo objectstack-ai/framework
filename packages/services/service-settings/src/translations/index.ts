@@ -15,11 +15,13 @@ import type { TranslationBundle } from '@objectstack/spec/system';
 import { en } from './en.js';
 import { zhCN } from './zh-CN.js';
 import { jaJP } from './ja-JP.js';
+import { esES } from './es-ES.js';
 
-export { en, zhCN, jaJP };
+export { en, zhCN, jaJP, esES };
 
 export const settingsBuiltinTranslations: TranslationBundle = {
   en,
   'zh-CN': zhCN,
   'ja-JP': jaJP,
+  'es-ES': esES,
 };

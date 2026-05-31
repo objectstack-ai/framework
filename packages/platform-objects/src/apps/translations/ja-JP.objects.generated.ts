@@ -110,7 +110,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       delete_my_account: {
         label: "アカウント削除",
-        confirmText: "Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.",
+        confirmText: "アカウントを完全に削除しますか？この操作は元に戻せません。すべてのセッションが終了され、設定された保持ポリシーに従って所有するすべてのデータが削除されます。",
         successMessage: "アカウントを削除しました"
       }
     }
@@ -243,7 +243,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       unlink_account: {
         label: "連携解除",
-        confirmText: "Unlink this identity link? The user will no longer be able to sign in with this provider until they re-link it from their account settings.",
+        confirmText: "このID連携を解除しますか？ユーザーがアカウント設定から再度連携するまで、このプロバイダーでサインインできなくなります。",
         successMessage: "アイデンティティ連携を解除しました"
       }
     }
@@ -377,7 +377,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       transfer_ownership: {
         label: "所有権の移譲",
-        confirmText: "Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.",
+        confirmText: "この組織の所有権を選択したメンバーに移譲しますか？あなたは管理者に降格され、所有者のみの権限を失います。",
         successMessage: "所有権を移譲しました"
       }
     }
@@ -465,7 +465,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       reject_invitation: {
         label: "招待を辞退",
-        confirmText: "Decline this invitation? The inviter will be notified and you will need a new invitation to join.",
+        confirmText: "この招待を辞退しますか？招待者に通知され、参加するには新しい招待が必要になります。",
         successMessage: "招待を辞退しました"
       }
     }
@@ -781,7 +781,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       regenerate_backup_codes: {
         label: "バックアップコード再生成",
-        confirmText: "Regenerate backup codes? All previous backup codes will stop working immediately."
+        confirmText: "バックアップコードを再生成しますか？以前のバックアップコードはすべて直ちに使用できなくなります。"
       }
     }
   },
@@ -1010,26 +1010,26 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     },
     _actions: {
       disable_oauth_application: {
-        label: "Disable OAuth Application",
-        confirmText: "Disable this OAuth application? Active access/refresh tokens issued to it will continue to be rejected at the token, authorize, and introspect endpoints. Existing integrations will stop working immediately.",
-        successMessage: "OAuth application disabled"
+        label: "OAuthアプリケーションを無効化",
+        confirmText: "このOAuthアプリケーションを無効化しますか？発行済みの有効なアクセストークン／リフレッシュトークンは、token、authorize、introspect の各エンドポイントで引き続き拒否されます。既存の連携は直ちに動作しなくなります。",
+        successMessage: "OAuthアプリケーションを無効化しました"
       },
       enable_oauth_application: {
-        label: "Enable OAuth Application",
-        confirmText: "Re-enable this OAuth application? Token issuance, authorization, and introspection will resume immediately.",
-        successMessage: "OAuth application enabled"
+        label: "OAuthアプリケーションを有効化",
+        confirmText: "このOAuthアプリケーションを再度有効化しますか？トークンの発行、認可、イントロスペクションが直ちに再開されます。",
+        successMessage: "OAuthアプリケーションを有効化しました"
       },
       create_oauth_application: {
-        label: "Register OAuth Application"
+        label: "OAuthアプリケーションを登録"
       },
       rotate_client_secret: {
         label: "クライアントシークレット更新",
-        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once."
+        confirmText: "このOAuthクライアントのシークレットをローテーションしますか？以前のシークレットは直ちに使用できなくなり、それを使用している連携は新しいシークレットに更新されるまで動作しなくなります。新しいシークレットは一度しか表示されません。"
       },
       delete_oauth_application: {
-        label: "Delete OAuth Application",
-        confirmText: "Permanently delete this OAuth application? All issued tokens and consents will be invalidated and integrations using this client_id will stop working immediately. This cannot be undone.",
-        successMessage: "OAuth application deleted"
+        label: "OAuthアプリケーションを削除",
+        confirmText: "このOAuthアプリケーションを完全に削除しますか？発行済みのすべてのトークンと同意が無効化され、この client_id を使用している連携は直ちに動作しなくなります。この操作は元に戻せません。",
+        successMessage: "OAuthアプリケーションを削除しました"
       }
     }
   },
@@ -1240,12 +1240,12 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       deactivate_role: {
         label: "ロールを無効化",
-        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
+        confirmText: "このロールを無効化しますか？このロールを持つユーザーの割り当ては維持されますが、再度有効化するまで権限の付与は停止されます。",
         successMessage: "ロールが無効化されました"
       },
       set_default_role: {
         label: "デフォルトに設定",
-        confirmText: "Make this the default role for new users? Existing users are unaffected.",
+        confirmText: "このロールを新規ユーザーのデフォルトロールにしますか？既存のユーザーには影響しません。",
         successMessage: "デフォルトロールを更新しました"
       },
       clone_role: {
@@ -1278,16 +1278,16 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         help: "JSON シリアライズされたフィールドレベルの読み取り/書き込み権限"
       },
       system_permissions: {
-        label: "System Permissions",
-        help: "JSON-serialized array of system capability names (e.g. [\"setup.access\",\"studio.access\",\"manage_users\"])"
+        label: "システム権限",
+        help: "システムケーパビリティ名のJSONシリアライズ配列（例: [\"setup.access\",\"studio.access\",\"manage_users\"]）"
       },
       row_level_security: {
-        label: "Row-Level Security",
-        help: "JSON-serialized array of row-level security policies (USING/CHECK clauses)"
+        label: "行レベルセキュリティ",
+        help: "行レベルセキュリティポリシーのJSONシリアライズ配列（USING/CHECK 句）"
       },
       tab_permissions: {
-        label: "Tab Permissions",
-        help: "JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)"
+        label: "タブ権限",
+        help: "アプリのタブ表示のJSONシリアライズマップ（visible | hidden | default_on | default_off）"
       },
       active: {
         label: "有効"
@@ -1320,7 +1320,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       deactivate_permission_set: {
         label: "無効化",
-        confirmText: "Deactivate this permission set? Existing assignments stay in place but stop granting access until re-activated.",
+        confirmText: "この権限セットを無効化しますか？既存の割り当ては維持されますが、再度有効化するまでアクセスの付与は停止されます。",
         successMessage: "権限セットが無効化されました"
       },
       clone_permission_set: {
@@ -1552,6 +1552,100 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "オブジェクト別"
       },
       all_rules: {
+        label: "すべて"
+      }
+    }
+  },
+  sys_share_link: {
+    label: "共有リンク",
+    pluralLabel: "共有リンク",
+    description: "単一レコードへのアクセスを許可する不透明なケーパビリティトークン。Notion / Figma スタイルの公開リンク共有。",
+    fields: {
+      id: {
+        label: "リンク ID"
+      },
+      token: {
+        label: "トークン",
+        help: "URL セーフな不透明ランダムトークン（22 文字以上）。この行で唯一の機密情報です。"
+      },
+      object_name: {
+        label: "オブジェクト",
+        help: "共有対象レコードのオブジェクト短縮名（例: ai_conversation、contracts_contract）"
+      },
+      record_id: {
+        label: "レコード",
+        help: "object_name 内における共有対象レコードの主キー"
+      },
+      permission: {
+        label: "権限",
+        help: "リンク保持者がレコードに対して実行できる操作",
+        options: {
+          view: "閲覧",
+          comment: "コメント",
+          edit: "編集"
+        }
+      },
+      audience: {
+        label: "対象者",
+        help: "トークン検証の上に適用されるアクセス制御レイヤー",
+        options: {
+          public: "公開（インデックス可能）",
+          link_only: "リンクを知っている全員",
+          signed_in: "サインイン済みユーザー",
+          email: "特定のメールアドレス"
+        }
+      },
+      expires_at: {
+        label: "有効期限",
+        help: "設定すると、このタイムスタンプ以降は resolveToken が null を返します"
+      },
+      email_allowlist: {
+        label: "メール許可リスト",
+        help: "audience=email のときに照合される小文字のメールアドレス"
+      },
+      password_hash: {
+        label: "パスワードハッシュ",
+        help: "Argon2/bcrypt ハッシュ。設定すると、表示前に UI がパスワードの入力を求めます。"
+      },
+      redact_fields: {
+        label: "リンク単位のマスキング",
+        help: "オブジェクト既定のマスキング集合に加えて、レスポンスから除外する追加フィールド"
+      },
+      label: {
+        label: "ラベル",
+        help: "共有ダイアログに表示される自由記述テキスト（例: \"ACME Q3 contract\"）"
+      },
+      revoked_at: {
+        label: "失効日時",
+        help: "設定すると、リンクは恒久的に無効化されます"
+      },
+      created_by: {
+        label: "作成者",
+        help: "リンクの発行者"
+      },
+      created_at: {
+        label: "作成日時"
+      },
+      last_used_at: {
+        label: "最終使用日時",
+        help: "resolveToken によって記録されます。ダッシュボードでアクティブなリンクを強調表示するために使用されます"
+      },
+      use_count: {
+        label: "使用回数",
+        help: "解決が成功するたびに resolveToken によって加算されます"
+      }
+    },
+    _views: {
+      active_links: {
+        label: "アクティブ"
+      },
+      by_me: {
+        label: "自分が作成"
+      },
+      revoked: {
+        label: "失効済み"
+      },
+      all_links: {
         label: "すべて"
       }
     }
@@ -2343,8 +2437,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         help: "送信時のレコードスナップショット"
       },
       process_hash: {
-        label: "Process Hash",
-        help: "sha256 of the approval process body at submit time (ADR-0009 execution pinning). Resolved through sys_metadata_history so process upgrades do not affect in-flight requests."
+        label: "プロセスハッシュ",
+        help: "送信時点の承認プロセス本体の sha256（ADR-0009 の実行ピン留め）。sys_metadata_history を介して解決されるため、プロセスのアップグレードは処理中のリクエストに影響しません。"
       },
       completed_at: {
         label: "完了日時"
@@ -2791,13 +2885,13 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
     },
     _views: {
       only_objects: {
-        label: "Objects"
+        label: "オブジェクト"
       },
       only_fields: {
-        label: "Fields"
+        label: "フィールド"
       },
       all_metadata: {
-        label: "All"
+        label: "すべて"
       }
     }
   },
@@ -2810,8 +2904,8 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         label: "ID"
       },
       event_seq: {
-        label: "Event Seq",
-        help: "Per-organization monotonic event log cursor."
+        label: "イベントシーケンス",
+        help: "組織ごとの単調増加するイベントログカーソル。"
       },
       name: {
         label: "名前"
@@ -2847,7 +2941,7 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
         help: "このバージョンで変更された内容の説明"
       },
       source: {
-        label: "Source"
+        label: "ソース"
       },
       organization_id: {
         label: "組織",
@@ -2858,6 +2952,147 @@ export const jaJPObjects: NonNullable<TranslationData['objects']> = {
       },
       recorded_at: {
         label: "記録日時"
+      }
+    }
+  },
+  sys_view_definition: {
+    label: "ビュー定義",
+    pluralLabel: "ビュー定義",
+    description: "実行時に作成されたビュー定義（共有／個人レイヤー）。パッケージレイヤーはソースから提供されます。",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      name: {
+        label: "名前"
+      },
+      object: {
+        label: "オブジェクト"
+      },
+      view_kind: {
+        label: "ビュー種別",
+        options: {
+          list: "リスト",
+          form: "フォーム"
+        }
+      },
+      label: {
+        label: "ラベル"
+      },
+      is_default: {
+        label: "デフォルト"
+      },
+      view_order: {
+        label: "並び順"
+      },
+      scope: {
+        label: "スコープ",
+        options: {
+          shared: "共有",
+          personal: "個人"
+        }
+      },
+      owner: {
+        label: "所有者"
+      },
+      hidden: {
+        label: "非表示"
+      },
+      config: {
+        label: "構成",
+        help: "ListView または FormView の構成（仕様の ViewItem.config に対応）。"
+      },
+      organization_id: {
+        label: "組織",
+        help: "マルチテナント分離のための組織。"
+      },
+      state: {
+        label: "状態",
+        options: {
+          draft: "下書き",
+          active: "有効",
+          archived: "アーカイブ済み"
+        }
+      },
+      created_by: {
+        label: "作成者"
+      },
+      created_at: {
+        label: "作成日時"
+      },
+      updated_by: {
+        label: "更新者"
+      },
+      updated_at: {
+        label: "更新日時"
+      }
+    }
+  },
+  sys_metadata_audit: {
+    label: "メタデータ監査",
+    pluralLabel: "メタデータ監査",
+    description: "メタデータ書き込み決定の追記専用監査証跡（ADR-0010）。",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      occurred_at: {
+        label: "発生日時"
+      },
+      actor: {
+        label: "実行主体",
+        help: "操作を行った主体——ユーザー ID、システム ID、または \"system\"。"
+      },
+      source: {
+        label: "ソース"
+      },
+      type: {
+        label: "メタデータ種別"
+      },
+      name: {
+        label: "名前"
+      },
+      organization_id: {
+        label: "組織"
+      },
+      operation: {
+        label: "操作",
+        options: {
+          save: "保存",
+          publish: "公開",
+          rollback: "ロールバック",
+          delete: "削除",
+          reset: "リセット"
+        }
+      },
+      outcome: {
+        label: "結果",
+        options: {
+          allowed: "許可",
+          denied: "拒否",
+          forced: "強制"
+        }
+      },
+      code: {
+        label: "コード"
+      },
+      lock_state: {
+        label: "ロック状態",
+        options: {
+          none: "なし",
+          "no-overlay": "オーバーレイ禁止",
+          "no-delete": "削除禁止",
+          full: "完全ロック"
+        }
+      },
+      lock_overridden: {
+        label: "ロックの上書き"
+      },
+      request_id: {
+        label: "リクエスト ID"
+      },
+      note: {
+        label: "メモ"
       }
     }
   },

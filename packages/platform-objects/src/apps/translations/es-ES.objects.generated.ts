@@ -110,7 +110,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       delete_my_account: {
         label: "Eliminar mi cuenta",
-        confirmText: "Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.",
+        confirmText: "¿Eliminar tu cuenta de forma permanente? Esta acción no se puede deshacer: se cerrarán todas tus sesiones y se eliminarán todos los datos de tu propiedad según la política de retención configurada.",
         successMessage: "Cuenta eliminada"
       }
     }
@@ -243,7 +243,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       unlink_account: {
         label: "Desvincular cuenta",
-        confirmText: "Unlink this identity link? The user will no longer be able to sign in with this provider until they re-link it from their account settings.",
+        confirmText: "¿Desvincular este vínculo de identidad? El usuario ya no podrá iniciar sesión con este proveedor hasta que lo vuelva a vincular desde la configuración de su cuenta.",
         successMessage: "Vínculo de identidad eliminado"
       }
     }
@@ -377,7 +377,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       transfer_ownership: {
         label: "Transferir propiedad",
-        confirmText: "Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.",
+        confirmText: "¿Transferir la propiedad de esta organización al miembro seleccionado? Pasarás a ser administrador y perderás los privilegios exclusivos del propietario.",
         successMessage: "Propiedad transferida"
       }
     }
@@ -465,7 +465,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       reject_invitation: {
         label: "Rechazar invitación",
-        confirmText: "Decline this invitation? The inviter will be notified and you will need a new invitation to join.",
+        confirmText: "¿Rechazar esta invitación? Se notificará a quien la envió y necesitarás una nueva invitación para unirte.",
         successMessage: "Invitación rechazada"
       }
     }
@@ -781,7 +781,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       regenerate_backup_codes: {
         label: "Regenerar códigos de respaldo",
-        confirmText: "Regenerate backup codes? All previous backup codes will stop working immediately."
+        confirmText: "¿Regenerar los códigos de respaldo? Todos los códigos de respaldo anteriores dejarán de funcionar de inmediato."
       }
     }
   },
@@ -1010,26 +1010,26 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
     },
     _actions: {
       disable_oauth_application: {
-        label: "Disable OAuth Application",
-        confirmText: "Disable this OAuth application? Active access/refresh tokens issued to it will continue to be rejected at the token, authorize, and introspect endpoints. Existing integrations will stop working immediately.",
-        successMessage: "OAuth application disabled"
+        label: "Deshabilitar aplicación OAuth",
+        confirmText: "¿Deshabilitar esta aplicación OAuth? Los tokens de acceso/actualización activos emitidos para ella seguirán siendo rechazados en los endpoints token, authorize e introspect. Las integraciones existentes dejarán de funcionar de inmediato.",
+        successMessage: "Aplicación OAuth deshabilitada"
       },
       enable_oauth_application: {
-        label: "Enable OAuth Application",
-        confirmText: "Re-enable this OAuth application? Token issuance, authorization, and introspection will resume immediately.",
-        successMessage: "OAuth application enabled"
+        label: "Habilitar aplicación OAuth",
+        confirmText: "¿Volver a habilitar esta aplicación OAuth? La emisión de tokens, la autorización y la introspección se reanudarán de inmediato.",
+        successMessage: "Aplicación OAuth habilitada"
       },
       create_oauth_application: {
-        label: "Register OAuth Application"
+        label: "Registrar aplicación OAuth"
       },
       rotate_client_secret: {
         label: "Rotar Client Secret",
-        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once."
+        confirmText: "¿Rotar el secreto de este cliente OAuth? El secreto anterior dejará de funcionar de inmediato y cualquier integración que lo utilice fallará hasta que se actualice con el nuevo secreto. El nuevo secreto se muestra una sola vez."
       },
       delete_oauth_application: {
-        label: "Delete OAuth Application",
-        confirmText: "Permanently delete this OAuth application? All issued tokens and consents will be invalidated and integrations using this client_id will stop working immediately. This cannot be undone.",
-        successMessage: "OAuth application deleted"
+        label: "Eliminar aplicación OAuth",
+        confirmText: "¿Eliminar de forma permanente esta aplicación OAuth? Todos los tokens y consentimientos emitidos quedarán invalidados y las integraciones que usen este client_id dejarán de funcionar de inmediato. Esta acción no se puede deshacer.",
+        successMessage: "Aplicación OAuth eliminada"
       }
     }
   },
@@ -1240,12 +1240,12 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       deactivate_role: {
         label: "Desactivar rol",
-        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
+        confirmText: "¿Desactivar este rol? Los usuarios con el rol conservan su asignación, pero el rol deja de otorgar permisos hasta que se vuelva a activar.",
         successMessage: "Rol desactivado"
       },
       set_default_role: {
         label: "Establecer como predeterminado",
-        confirmText: "Make this the default role for new users? Existing users are unaffected.",
+        confirmText: "¿Convertir este en el rol predeterminado para los nuevos usuarios? Los usuarios existentes no se ven afectados.",
         successMessage: "Rol predeterminado actualizado"
       },
       clone_role: {
@@ -1278,16 +1278,16 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Permisos de lectura/escritura a nivel de campo serializados en JSON."
       },
       system_permissions: {
-        label: "System Permissions",
-        help: "JSON-serialized array of system capability names (e.g. [\"setup.access\",\"studio.access\",\"manage_users\"])"
+        label: "Permisos del sistema",
+        help: "Array serializado en JSON de nombres de capacidades del sistema (p. ej. [\"setup.access\",\"studio.access\",\"manage_users\"])"
       },
       row_level_security: {
-        label: "Row-Level Security",
-        help: "JSON-serialized array of row-level security policies (USING/CHECK clauses)"
+        label: "Seguridad a nivel de fila",
+        help: "Array serializado en JSON de políticas de seguridad a nivel de fila (cláusulas USING/CHECK)"
       },
       tab_permissions: {
-        label: "Tab Permissions",
-        help: "JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)"
+        label: "Permisos de pestañas",
+        help: "Mapa serializado en JSON de la visibilidad de las pestañas de la app (visible | hidden | default_on | default_off)"
       },
       active: {
         label: "Activo"
@@ -1320,7 +1320,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       deactivate_permission_set: {
         label: "Desactivar",
-        confirmText: "Deactivate this permission set? Existing assignments stay in place but stop granting access until re-activated.",
+        confirmText: "¿Desactivar este conjunto de permisos? Las asignaciones existentes se mantienen, pero dejan de otorgar acceso hasta que se vuelva a activar.",
         successMessage: "Conjunto de permisos desactivado"
       },
       clone_permission_set: {
@@ -1556,6 +1556,100 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
+  sys_share_link: {
+    label: "Enlace de uso compartido",
+    pluralLabel: "Enlaces de uso compartido",
+    description: "Token de capacidad opaco que concede acceso a un único registro. Uso compartido mediante enlace público al estilo de Notion/Figma.",
+    fields: {
+      id: {
+        label: "ID del enlace"
+      },
+      token: {
+        label: "Token",
+        help: "Token aleatorio opaco seguro para URL (≥ 22 caracteres). El único secreto de esta fila."
+      },
+      object_name: {
+        label: "Objeto",
+        help: "Nombre corto del objeto del registro compartido (p. ej. ai_conversation, contracts_contract)"
+      },
+      record_id: {
+        label: "Registro",
+        help: "Clave principal del registro compartido dentro de object_name"
+      },
+      permission: {
+        label: "Permiso",
+        help: "Lo que el titular del enlace puede hacer con el registro",
+        options: {
+          view: "Ver",
+          comment: "Comentar",
+          edit: "Editar"
+        }
+      },
+      audience: {
+        label: "Audiencia",
+        help: "Capa de control aplicada por encima de la verificación del token",
+        options: {
+          public: "Público (indexable)",
+          link_only: "Cualquier persona con el enlace",
+          signed_in: "Usuarios con sesión iniciada",
+          email: "Correos específicos"
+        }
+      },
+      expires_at: {
+        label: "Caduca el",
+        help: "Cuando se establece, resolveToken devuelve null después de esta marca de tiempo"
+      },
+      email_allowlist: {
+        label: "Lista de correos permitidos",
+        help: "Direcciones en minúsculas que se comprueban cuando audience=email"
+      },
+      password_hash: {
+        label: "Hash de contraseña",
+        help: "Hash Argon2/bcrypt. Cuando se establece, la interfaz solicita una contraseña antes de mostrar el contenido."
+      },
+      redact_fields: {
+        label: "Campos ocultos por enlace",
+        help: "Campos adicionales que se eliminan de la respuesta, además del conjunto predeterminado del objeto"
+      },
+      label: {
+        label: "Etiqueta",
+        help: "Texto libre que se muestra en el cuadro de diálogo de uso compartido (p. ej. \"ACME Q3 contract\")"
+      },
+      revoked_at: {
+        label: "Revocado el",
+        help: "Cuando se establece, el enlace queda deshabilitado permanentemente"
+      },
+      created_by: {
+        label: "Creado por",
+        help: "Emisor del enlace"
+      },
+      created_at: {
+        label: "Creado el"
+      },
+      last_used_at: {
+        label: "Último uso el",
+        help: "Lo registra resolveToken; el panel lo usa para resaltar los enlaces activos"
+      },
+      use_count: {
+        label: "Número de usos",
+        help: "Lo incrementa resolveToken en cada resolución correcta"
+      }
+    },
+    _views: {
+      active_links: {
+        label: "Activos"
+      },
+      by_me: {
+        label: "Creados por mí"
+      },
+      revoked: {
+        label: "Revocados"
+      },
+      all_links: {
+        label: "Todos"
+      }
+    }
+  },
   sys_audit_log: {
     label: "Registro de auditoría",
     pluralLabel: "Registros de auditoría",
@@ -1607,7 +1701,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Agente de usuario"
       },
       tenant_id: {
-        label: "Tenant",
+        label: "Inquilino",
         help: "Contexto del tenant para el aislamiento multi-tenant."
       },
       metadata: {
@@ -2343,8 +2437,8 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Instantánea del registro en el momento del envío."
       },
       process_hash: {
-        label: "Process Hash",
-        help: "sha256 of the approval process body at submit time (ADR-0009 execution pinning). Resolved through sys_metadata_history so process upgrades do not affect in-flight requests."
+        label: "Hash del proceso",
+        help: "sha256 del cuerpo del proceso de aprobación en el momento del envío (fijación de ejecución de ADR-0009). Se resuelve a través de sys_metadata_history para que las actualizaciones del proceso no afecten a las solicitudes en curso."
       },
       completed_at: {
         label: "Completado el"
@@ -2361,7 +2455,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Mis pendientes"
       },
       submitted_by_me: {
-        label: "I Submitted"
+        label: "Enviadas por mí"
       },
       completed: {
         label: "Completadas"
@@ -2580,7 +2674,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Intentos máximos"
       },
       backoff_type: {
-        label: "Backoff",
+        label: "Retroceso",
         options: {
           fixed: "Fijo",
           exponential: "Exponencial"
@@ -2791,13 +2885,13 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
     },
     _views: {
       only_objects: {
-        label: "Objects"
+        label: "Objetos"
       },
       only_fields: {
-        label: "Fields"
+        label: "Campos"
       },
       all_metadata: {
-        label: "All"
+        label: "Todos"
       }
     }
   },
@@ -2810,8 +2904,8 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "ID"
       },
       event_seq: {
-        label: "Event Seq",
-        help: "Per-organization monotonic event log cursor."
+        label: "Secuencia de eventos",
+        help: "Cursor monotónico del registro de eventos por organización."
       },
       name: {
         label: "Nombre"
@@ -2847,7 +2941,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Descripción de lo que cambió en esta versión."
       },
       source: {
-        label: "Source"
+        label: "Origen"
       },
       organization_id: {
         label: "Organización",
@@ -2858,6 +2952,147 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
       },
       recorded_at: {
         label: "Registrado el"
+      }
+    }
+  },
+  sys_view_definition: {
+    label: "Definición de vista",
+    pluralLabel: "Definiciones de vista",
+    description: "Definiciones de vista creadas en tiempo de ejecución (capas compartida / personal). La capa de paquete se distribuye desde el código fuente.",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      name: {
+        label: "Nombre"
+      },
+      object: {
+        label: "Objeto"
+      },
+      view_kind: {
+        label: "Tipo de vista",
+        options: {
+          list: "Lista",
+          form: "Formulario"
+        }
+      },
+      label: {
+        label: "Etiqueta"
+      },
+      is_default: {
+        label: "Es predeterminada"
+      },
+      view_order: {
+        label: "Orden"
+      },
+      scope: {
+        label: "Ámbito",
+        options: {
+          shared: "Compartida",
+          personal: "Personal"
+        }
+      },
+      owner: {
+        label: "Propietario"
+      },
+      hidden: {
+        label: "Oculta"
+      },
+      config: {
+        label: "Configuración",
+        help: "Configuración de ListView o FormView (coincide con ViewItem.config de la especificación)."
+      },
+      organization_id: {
+        label: "Organización",
+        help: "Organización para el aislamiento multiinquilino."
+      },
+      state: {
+        label: "Estado",
+        options: {
+          draft: "Borrador",
+          active: "Activa",
+          archived: "Archivada"
+        }
+      },
+      created_by: {
+        label: "Creado por"
+      },
+      created_at: {
+        label: "Creado el"
+      },
+      updated_by: {
+        label: "Actualizado por"
+      },
+      updated_at: {
+        label: "Actualizado el"
+      }
+    }
+  },
+  sys_metadata_audit: {
+    label: "Auditoría de metadatos",
+    pluralLabel: "Auditoría de metadatos",
+    description: "Registro de auditoría de solo adición de las decisiones de escritura de metadatos (ADR-0010).",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      occurred_at: {
+        label: "Ocurrido el"
+      },
+      actor: {
+        label: "Actor",
+        help: "Principal que actúa: ID de usuario, ID de sistema o \"system\"."
+      },
+      source: {
+        label: "Origen"
+      },
+      type: {
+        label: "Tipo de metadatos"
+      },
+      name: {
+        label: "Nombre"
+      },
+      organization_id: {
+        label: "Organización"
+      },
+      operation: {
+        label: "Operación",
+        options: {
+          save: "Guardar",
+          publish: "Publicar",
+          rollback: "Revertir",
+          delete: "Eliminar",
+          reset: "Restablecer"
+        }
+      },
+      outcome: {
+        label: "Resultado",
+        options: {
+          allowed: "Permitido",
+          denied: "Denegado",
+          forced: "Forzado"
+        }
+      },
+      code: {
+        label: "Código"
+      },
+      lock_state: {
+        label: "Estado de bloqueo",
+        options: {
+          none: "Ninguno",
+          "no-overlay": "Sin superposición",
+          "no-delete": "Sin eliminación",
+          full: "Bloqueo total"
+        }
+      },
+      lock_overridden: {
+        label: "Bloqueo anulado"
+      },
+      request_id: {
+        label: "ID de solicitud"
+      },
+      note: {
+        label: "Nota"
       }
     }
   },
@@ -2888,9 +3123,9 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Capa de la jerarquía de resolución de configuración a la que pertenece esta fila.",
         options: {
           global: "Global",
-          tenant: "Tenant",
+          tenant: "Inquilino",
           user: "Usuario",
-          runtime: "Runtime"
+          runtime: "Tiempo de ejecución"
         }
       },
       user_id: {
@@ -2927,7 +3162,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         label: "Por espacio de nombres"
       },
       tenant_only: {
-        label: "Tenant"
+        label: "Inquilino"
       },
       user_only: {
         label: "Usuario"
@@ -3003,7 +3238,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Capa de cascada en la que se escribió la fila.",
         options: {
           global: "Global",
-          tenant: "Tenant",
+          tenant: "Inquilino",
           user: "Usuario"
         }
       },
@@ -3030,7 +3265,7 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
           api: "API",
           migration: "Migración",
           import: "Importar",
-          system: "System"
+          system: "Sistema"
         }
       },
       reason: {
@@ -3038,11 +3273,11 @@ export const esESObjects: NonNullable<TranslationData['objects']> = {
         help: "Justificación en texto libre proporcionada por el actor (opcional)."
       },
       old_hash: {
-        label: "Old Hash",
+        label: "Hash anterior",
         help: "SHA-256 del valor anterior (canonicalizado). Null cuando antes no estaba establecido."
       },
       new_hash: {
-        label: "New Hash",
+        label: "Hash nuevo",
         help: "SHA-256 del valor nuevo (canonicalizado). Null al restablecer."
       },
       encrypted: {

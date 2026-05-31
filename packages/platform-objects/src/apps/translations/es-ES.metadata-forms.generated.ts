@@ -857,7 +857,7 @@ export const esESMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     label: "Traducción"
   },
   router: {
-    label: "Router"
+    label: "Enrutador"
   },
   function: {
     label: "Función"

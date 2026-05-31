@@ -481,3 +481,154 @@ describe('resolveMetadataFormLabels', () => {
     expect(out.sections[0].label).toBe('Basics (en)');
   });
 });
+
+import {
+  translateApp,
+  translateDashboard,
+  resolveViewLabel as _resolveViewLabel,
+} from './i18n-resolver';
+
+describe('locale fallback resolution (BCP-47)', () => {
+  const bundle: TranslationBundle = {
+    'zh-CN': {
+      objects: { account: { label: '客户' } },
+    },
+  };
+
+  it('resolves base language to a registered region variant (zh → zh-CN)', () => {
+    const out = translateMetadataDocument(
+      'object',
+      { name: 'account', label: 'Account' },
+      bundle,
+      { locale: 'zh' },
+    );
+    expect(out.label).toBe('客户');
+  });
+
+  it('resolves case-insensitively (zh-cn → zh-CN)', () => {
+    const out = translateMetadataDocument(
+      'object',
+      { name: 'account', label: 'Account' },
+      bundle,
+      { locale: 'zh-cn' },
+    );
+    expect(out.label).toBe('客户');
+  });
+
+  it('resolves a region-qualified request down to base/other variant (zh-TW → zh-CN)', () => {
+    const out = translateMetadataDocument(
+      'object',
+      { name: 'account', label: 'Account' },
+      bundle,
+      { locale: 'zh-TW' },
+    );
+    expect(out.label).toBe('客户');
+  });
+
+  it('falls back to literal when no related locale is registered', () => {
+    const out = translateMetadataDocument(
+      'object',
+      { name: 'account', label: 'Account' },
+      bundle,
+      { locale: 'fr', fallbackChain: [] },
+    );
+    expect(out.label).toBe('Account');
+  });
+});
+
+describe('translateApp', () => {
+  const bundle: TranslationBundle = {
+    'zh-CN': {
+      apps: {
+        setup: {
+          label: '系统设置',
+          description: '平台设置与管理',
+          navigation: {
+            group_overview: { label: '总览' },
+            nav_users: { label: '用户' },
+          },
+        },
+      },
+    },
+  };
+
+  const app = {
+    name: 'setup',
+    label: 'Setup',
+    description: 'Platform settings and administration',
+    navigation: [
+      {
+        id: 'group_overview',
+        type: 'group',
+        label: 'Overview',
+        children: [{ id: 'nav_users', type: 'object', label: 'Users' }],
+      },
+    ],
+  };
+
+  it('translates app label/description and nested navigation labels', () => {
+    const out = translateApp(app, bundle, { locale: 'zh-CN' });
+    expect(out.label).toBe('系统设置');
+    expect(out.description).toBe('平台设置与管理');
+    expect(out.navigation[0].label).toBe('总览');
+    expect(out.navigation[0].children[0].label).toBe('用户');
+  });
+
+  it('works through translateMetadataDocument with app type', () => {
+    const out = translateMetadataDocument('app', app, bundle, { locale: 'zh' });
+    expect(out.navigation[0].children[0].label).toBe('用户');
+  });
+
+  it('does not mutate the input app', () => {
+    const snapshot = JSON.parse(JSON.stringify(app));
+    translateApp(app, bundle, { locale: 'zh-CN' });
+    expect(app).toEqual(snapshot);
+  });
+
+  it('falls back to literal labels when no translation present', () => {
+    const out = translateApp(app, undefined, { locale: 'zh-CN' });
+    expect(out.label).toBe('Setup');
+    expect(out.navigation[0].label).toBe('Overview');
+  });
+});
+
+describe('translateDashboard', () => {
+  const bundle: TranslationBundle = {
+    'zh-CN': {
+      dashboards: {
+        system_overview: {
+          label: '系统概览',
+          widgets: {
+            widget_total_users: { title: '用户总数', description: '系统中注册的用户总数' },
+          },
+        },
+      },
+    },
+  };
+
+  const dashboard = {
+    name: 'system_overview',
+    label: 'System Overview',
+    widgets: [
+      { id: 'widget_total_users', title: 'Total Users', description: 'Total registered users' },
+      { id: 'widget_other', title: 'Other' },
+    ],
+  };
+
+  it('translates dashboard label and widget title/description', () => {
+    const out = translateDashboard(dashboard, bundle, { locale: 'zh-CN' });
+    expect(out.label).toBe('系统概览');
+    expect(out.widgets[0].title).toBe('用户总数');
+    expect(out.widgets[0].description).toBe('系统中注册的用户总数');
+  });
+
+  it('leaves widgets without a translation entry unchanged', () => {
+    const out = translateDashboard(dashboard, bundle, { locale: 'zh-CN' });
+    expect(out.widgets[1].title).toBe('Other');
+  });
+
+  it('works through translateMetadataDocument with dashboard type', () => {
+    const out = translateMetadataDocument('dashboard', dashboard, bundle, { locale: 'zh-CN' });
+    expect(out.label).toBe('系统概览');
+  });
+});

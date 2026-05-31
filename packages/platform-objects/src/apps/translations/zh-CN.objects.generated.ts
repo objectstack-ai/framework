@@ -110,7 +110,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       delete_my_account: {
         label: "删除我的账号",
-        confirmText: "Permanently delete your account? This cannot be undone — all your sessions will be terminated and all data you own will be removed per the configured retention policy.",
+        confirmText: "确定要永久删除您的账户吗？此操作无法撤销——您的所有会话都将被终止，并将按照配置的保留策略移除您拥有的所有数据。",
         successMessage: "已删除账号"
       }
     }
@@ -243,7 +243,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       unlink_account: {
         label: "解除关联",
-        confirmText: "Unlink this identity link? The user will no longer be able to sign in with this provider until they re-link it from their account settings.",
+        confirmText: "确定要解除此身份关联吗？在用户从账户设置中重新关联之前，将无法再使用此提供方登录。",
         successMessage: "已解除身份关联"
       }
     }
@@ -377,7 +377,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       transfer_ownership: {
         label: "转移所有权",
-        confirmText: "Transfer ownership of this organization to the selected member? You will be demoted to admin and lose owner-only privileges.",
+        confirmText: "确定要将该组织的所有权转移给所选成员吗？您将被降级为管理员，并失去仅所有者拥有的权限。",
         successMessage: "已转移所有权"
       }
     }
@@ -465,7 +465,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       reject_invitation: {
         label: "拒绝邀请",
-        confirmText: "Decline this invitation? The inviter will be notified and you will need a new invitation to join.",
+        confirmText: "确定要拒绝此邀请吗？邀请人将收到通知，您需要新的邀请才能加入。",
         successMessage: "已拒绝邀请"
       }
     }
@@ -781,7 +781,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       regenerate_backup_codes: {
         label: "重新生成备用码",
-        confirmText: "Regenerate backup codes? All previous backup codes will stop working immediately."
+        confirmText: "确定要重新生成备份码吗？此前的所有备份码将立即失效。"
       }
     }
   },
@@ -1010,26 +1010,26 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     },
     _actions: {
       disable_oauth_application: {
-        label: "Disable OAuth Application",
-        confirmText: "Disable this OAuth application? Active access/refresh tokens issued to it will continue to be rejected at the token, authorize, and introspect endpoints. Existing integrations will stop working immediately.",
-        successMessage: "OAuth application disabled"
+        label: "停用 OAuth 应用",
+        confirmText: "确定要停用此 OAuth 应用吗？已为其签发的有效访问令牌/刷新令牌将继续在 token、authorize 和 introspect 端点被拒绝。现有集成将立即停止工作。",
+        successMessage: "OAuth 应用已停用"
       },
       enable_oauth_application: {
-        label: "Enable OAuth Application",
-        confirmText: "Re-enable this OAuth application? Token issuance, authorization, and introspection will resume immediately.",
-        successMessage: "OAuth application enabled"
+        label: "启用 OAuth 应用",
+        confirmText: "确定要重新启用此 OAuth 应用吗？令牌签发、授权和内省将立即恢复。",
+        successMessage: "OAuth 应用已启用"
       },
       create_oauth_application: {
-        label: "Register OAuth Application"
+        label: "注册 OAuth 应用"
       },
       rotate_client_secret: {
         label: "轮换 Client Secret",
-        confirmText: "Rotate this OAuth client's secret? The previous secret will stop working immediately and any integrations using it will break until they are updated with the new secret. The new secret is shown only once."
+        confirmText: "确定要轮换此 OAuth 客户端的密钥吗？旧密钥将立即失效，任何使用它的集成都将中断，直到更新为新密钥为止。新密钥仅显示一次。"
       },
       delete_oauth_application: {
-        label: "Delete OAuth Application",
-        confirmText: "Permanently delete this OAuth application? All issued tokens and consents will be invalidated and integrations using this client_id will stop working immediately. This cannot be undone.",
-        successMessage: "OAuth application deleted"
+        label: "删除 OAuth 应用",
+        confirmText: "确定要永久删除此 OAuth 应用吗？所有已签发的令牌和授权同意都将失效，使用此 client_id 的集成将立即停止工作。此操作无法撤销。",
+        successMessage: "OAuth 应用已删除"
       }
     }
   },
@@ -1240,12 +1240,12 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       deactivate_role: {
         label: "停用角色",
-        confirmText: "Deactivate this role? Users with the role keep their assignment but the role stops granting permissions until re-activated.",
+        confirmText: "确定要停用此角色吗？拥有该角色的用户仍保留其分配，但在重新激活之前该角色将不再授予权限。",
         successMessage: "角色已停用"
       },
       set_default_role: {
         label: "设为默认",
-        confirmText: "Make this the default role for new users? Existing users are unaffected.",
+        confirmText: "将此角色设为新用户的默认角色吗？现有用户不受影响。",
         successMessage: "已更新默认角色"
       },
       clone_role: {
@@ -1278,16 +1278,16 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         help: "字段级读写权限的 JSON 序列化内容"
       },
       system_permissions: {
-        label: "System Permissions",
-        help: "JSON-serialized array of system capability names (e.g. [\"setup.access\",\"studio.access\",\"manage_users\"])"
+        label: "系统权限",
+        help: "系统能力名称的 JSON 序列化数组（例如 [\"setup.access\",\"studio.access\",\"manage_users\"]）"
       },
       row_level_security: {
-        label: "Row-Level Security",
-        help: "JSON-serialized array of row-level security policies (USING/CHECK clauses)"
+        label: "行级安全",
+        help: "行级安全策略的 JSON 序列化数组（USING/CHECK 子句）"
       },
       tab_permissions: {
-        label: "Tab Permissions",
-        help: "JSON-serialized map of app tab visibility (visible | hidden | default_on | default_off)"
+        label: "标签页权限",
+        help: "应用标签页可见性的 JSON 序列化映射（visible | hidden | default_on | default_off）"
       },
       active: {
         label: "启用"
@@ -1320,7 +1320,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       deactivate_permission_set: {
         label: "停用",
-        confirmText: "Deactivate this permission set? Existing assignments stay in place but stop granting access until re-activated.",
+        confirmText: "确定要停用此权限集吗？现有分配仍将保留，但在重新激活之前将不再授予访问权限。",
         successMessage: "权限集已停用"
       },
       clone_permission_set: {
@@ -1552,6 +1552,100 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "按对象"
       },
       all_rules: {
+        label: "全部"
+      }
+    }
+  },
+  sys_share_link: {
+    label: "共享链接",
+    pluralLabel: "共享链接",
+    description: "授予对单条记录访问权限的不透明能力令牌。类似 Notion/Figma 的公开链接共享。",
+    fields: {
+      id: {
+        label: "链接 ID"
+      },
+      token: {
+        label: "令牌",
+        help: "URL 安全的不透明随机令牌（≥ 22 个字符）。本记录中唯一的机密信息。"
+      },
+      object_name: {
+        label: "对象",
+        help: "所共享记录的对象短名称（例如 ai_conversation、contracts_contract）"
+      },
+      record_id: {
+        label: "记录",
+        help: "object_name 内所共享记录的主键"
+      },
+      permission: {
+        label: "权限",
+        help: "链接持有者可对该记录执行的操作",
+        options: {
+          view: "查看",
+          comment: "评论",
+          edit: "编辑"
+        }
+      },
+      audience: {
+        label: "受众",
+        help: "在令牌校验之上额外施加的访问限制层",
+        options: {
+          public: "公开（可被索引）",
+          link_only: "任何持有链接的人",
+          signed_in: "已登录用户",
+          email: "指定邮箱"
+        }
+      },
+      expires_at: {
+        label: "过期时间",
+        help: "设置后，超过此时间点 resolveToken 将返回 null"
+      },
+      email_allowlist: {
+        label: "邮箱白名单",
+        help: "当 audience=email 时校验的小写邮箱地址"
+      },
+      password_hash: {
+        label: "密码哈希",
+        help: "Argon2/bcrypt 哈希值。设置后，界面会在呈现内容前提示输入密码。"
+      },
+      redact_fields: {
+        label: "按链接脱敏字段",
+        help: "在对象默认脱敏集之上，从响应中额外剔除的字段"
+      },
+      label: {
+        label: "标签",
+        help: "在共享对话框中显示的自由文本（例如 \"ACME Q3 合同\"）"
+      },
+      revoked_at: {
+        label: "撤销时间",
+        help: "设置后，该链接将被永久停用"
+      },
+      created_by: {
+        label: "创建人",
+        help: "链接的签发者"
+      },
+      created_at: {
+        label: "创建时间"
+      },
+      last_used_at: {
+        label: "最近使用时间",
+        help: "由 resolveToken 标记；仪表盘据此高亮显示活跃链接"
+      },
+      use_count: {
+        label: "使用次数",
+        help: "每次成功解析时由 resolveToken 递增"
+      }
+    },
+    _views: {
+      active_links: {
+        label: "活跃"
+      },
+      by_me: {
+        label: "我创建的"
+      },
+      revoked: {
+        label: "已撤销"
+      },
+      all_links: {
         label: "全部"
       }
     }
@@ -2343,8 +2437,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         help: "提交时的记录快照"
       },
       process_hash: {
-        label: "Process Hash",
-        help: "sha256 of the approval process body at submit time (ADR-0009 execution pinning). Resolved through sys_metadata_history so process upgrades do not affect in-flight requests."
+        label: "流程哈希",
+        help: "提交时审批流程主体的 sha256（ADR-0009 执行固定）。通过 sys_metadata_history 解析，因此流程升级不会影响进行中的请求。"
       },
       completed_at: {
         label: "完成时间"
@@ -2791,13 +2885,13 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
     },
     _views: {
       only_objects: {
-        label: "Objects"
+        label: "对象"
       },
       only_fields: {
-        label: "Fields"
+        label: "字段"
       },
       all_metadata: {
-        label: "All"
+        label: "全部"
       }
     }
   },
@@ -2810,8 +2904,8 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         label: "ID"
       },
       event_seq: {
-        label: "Event Seq",
-        help: "Per-organization monotonic event log cursor."
+        label: "事件序号",
+        help: "按组织的单调递增事件日志游标。"
       },
       name: {
         label: "名称"
@@ -2847,7 +2941,7 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
         help: "对该版本变更内容的说明"
       },
       source: {
-        label: "Source"
+        label: "来源"
       },
       organization_id: {
         label: "组织",
@@ -2858,6 +2952,147 @@ export const zhCNObjects: NonNullable<TranslationData['objects']> = {
       },
       recorded_at: {
         label: "记录时间"
+      }
+    }
+  },
+  sys_view_definition: {
+    label: "视图定义",
+    pluralLabel: "视图定义",
+    description: "运行时创建的视图定义（共享/个人层）。软件包层由源代码提供。",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      name: {
+        label: "名称"
+      },
+      object: {
+        label: "对象"
+      },
+      view_kind: {
+        label: "视图类型",
+        options: {
+          list: "列表",
+          form: "表单"
+        }
+      },
+      label: {
+        label: "标签"
+      },
+      is_default: {
+        label: "默认视图"
+      },
+      view_order: {
+        label: "排序"
+      },
+      scope: {
+        label: "范围",
+        options: {
+          shared: "共享",
+          personal: "个人"
+        }
+      },
+      owner: {
+        label: "所有者"
+      },
+      hidden: {
+        label: "隐藏"
+      },
+      config: {
+        label: "配置",
+        help: "ListView 或 FormView 配置（与规范 ViewItem.config 一致）。"
+      },
+      organization_id: {
+        label: "组织",
+        help: "用于多租户隔离的组织。"
+      },
+      state: {
+        label: "状态",
+        options: {
+          draft: "草稿",
+          active: "活动",
+          archived: "已归档"
+        }
+      },
+      created_by: {
+        label: "创建人"
+      },
+      created_at: {
+        label: "创建时间"
+      },
+      updated_by: {
+        label: "更新人"
+      },
+      updated_at: {
+        label: "更新时间"
+      }
+    }
+  },
+  sys_metadata_audit: {
+    label: "元数据审计",
+    pluralLabel: "元数据审计",
+    description: "元数据写入决策的仅追加审计记录（ADR-0010）。",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      occurred_at: {
+        label: "发生时间"
+      },
+      actor: {
+        label: "操作者",
+        help: "操作主体——用户 ID、系统 ID 或 \"system\"。"
+      },
+      source: {
+        label: "来源"
+      },
+      type: {
+        label: "元数据类型"
+      },
+      name: {
+        label: "名称"
+      },
+      organization_id: {
+        label: "组织"
+      },
+      operation: {
+        label: "操作",
+        options: {
+          save: "保存",
+          publish: "发布",
+          rollback: "回滚",
+          delete: "删除",
+          reset: "重置"
+        }
+      },
+      outcome: {
+        label: "结果",
+        options: {
+          allowed: "允许",
+          denied: "拒绝",
+          forced: "强制执行"
+        }
+      },
+      code: {
+        label: "代码"
+      },
+      lock_state: {
+        label: "锁定状态",
+        options: {
+          none: "无",
+          "no-overlay": "禁止覆盖",
+          "no-delete": "禁止删除",
+          full: "完全锁定"
+        }
+      },
+      lock_overridden: {
+        label: "锁定已被覆盖"
+      },
+      request_id: {
+        label: "请求 ID"
+      },
+      note: {
+        label: "备注"
       }
     }
   },

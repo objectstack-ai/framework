@@ -9,6 +9,13 @@ import { ObjectStackProtocol } from '@objectstack/spec/api';
 const logError = (...args: unknown[]) => (globalThis as any).console?.error(...args);
 
 /**
+ * Metadata types whose user-facing labels are localized at the REST boundary
+ * via `translateMetadataDocument`. Keep in sync with the type dispatch in
+ * `@objectstack/spec/system`'s `translateMetadataDocument`.
+ */
+const TRANSLATABLE_META_TYPES = new Set(['view', 'action', 'object', 'app', 'dashboard']);
+
+/**
  * Map a data-layer error to a clean HTTP response. Unknown-object errors
  * (SQLite "no such table", PG "relation does not exist", protocol
  * "object not found", etc.) are surfaced as a 404 with `code: 'object_not_found'`
@@ -917,7 +924,7 @@ export class RestServer {
      */
     private async translateMetaItem(req: any, type: string, environmentId: string | undefined, item: any, i18nService?: any): Promise<any> {
         if (!item || typeof item !== 'object') return item;
-        if (type !== 'view' && type !== 'action' && type !== 'object') return item;
+        if (!TRANSLATABLE_META_TYPES.has(type)) return item;
         // The cached read path resolves the i18n service up-front (to build a
         // locale-aware ETag) and passes it here so we don't repeat the
         // potentially registry-hitting lookup on every request.
@@ -935,7 +942,7 @@ export class RestServer {
      */
     private async translateMetaItems(req: any, type: string, environmentId: string | undefined, items: any): Promise<any> {
         if (!Array.isArray(items)) return items;
-        if (type !== 'view' && type !== 'action' && type !== 'object') return items;
+        if (!TRANSLATABLE_META_TYPES.has(type)) return items;
         const i18n = await this.resolveI18nService(environmentId, req);
         const bundle = this.buildTranslationBundle(i18n);
         if (!bundle) return items;

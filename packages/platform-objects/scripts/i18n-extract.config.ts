@@ -58,6 +58,7 @@ import {
   SysRolePermissionSet,
   SysRecordShare,
   SysSharingRule,
+  SysShareLink,
 } from '../src/security/index.js';
 
 // ── Audit ─────────────────────────────────────────────────────────────────
@@ -84,7 +85,12 @@ import {
 import { SysWebhook } from '../src/integration/index.js';
 
 // ── Metadata ──────────────────────────────────────────────────────────────
-import { SysMetadataObject, SysMetadataHistoryObject } from '../src/metadata/index.js';
+import {
+  SysMetadataObject,
+  SysMetadataHistoryObject,
+  SysViewDefinitionObject,
+  SysMetadataAuditObject,
+} from '../src/metadata/index.js';
 
 // ── System ────────────────────────────────────────────────────────────────
 import { SysSetting, SysSecret, SysSettingAudit } from '../src/system/index.js';
@@ -147,6 +153,7 @@ export default defineStack({
     SysRolePermissionSet,
     SysRecordShare,
     SysSharingRule,
+    SysShareLink,
 
     // Audit
     SysAuditLog,
@@ -172,6 +179,8 @@ export default defineStack({
     // Metadata
     SysMetadataObject,
     SysMetadataHistoryObject,
+    SysViewDefinitionObject,
+    SysMetadataAuditObject,
 
     // System
     SysSetting,

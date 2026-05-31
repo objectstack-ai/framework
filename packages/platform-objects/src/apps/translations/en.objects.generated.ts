@@ -1556,6 +1556,100 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       }
     }
   },
+  sys_share_link: {
+    label: "Share Link",
+    pluralLabel: "Share Links",
+    description: "Opaque capability token granting access to a single record. Notion/Figma-style public link sharing.",
+    fields: {
+      id: {
+        label: "Link ID"
+      },
+      token: {
+        label: "Token",
+        help: "Opaque URL-safe random token (≥ 22 chars). The only secret in this row."
+      },
+      object_name: {
+        label: "Object",
+        help: "Short object name of the shared record (e.g. ai_conversation, contracts_contract)"
+      },
+      record_id: {
+        label: "Record",
+        help: "Primary key of the shared record within object_name"
+      },
+      permission: {
+        label: "Permission",
+        help: "What the link holder can do with the record",
+        options: {
+          view: "View",
+          comment: "Comment",
+          edit: "Edit"
+        }
+      },
+      audience: {
+        label: "Audience",
+        help: "Gating layer applied on top of the token check",
+        options: {
+          public: "Public (indexable)",
+          link_only: "Anyone with the link",
+          signed_in: "Signed-in users",
+          email: "Specific emails"
+        }
+      },
+      expires_at: {
+        label: "Expires At",
+        help: "When set, resolveToken returns null after this timestamp"
+      },
+      email_allowlist: {
+        label: "Email Allowlist",
+        help: "Lowercased addresses checked when audience=email"
+      },
+      password_hash: {
+        label: "Password Hash",
+        help: "Argon2/bcrypt hash. When set, the UI prompts for a password before rendering."
+      },
+      redact_fields: {
+        label: "Per-Link Redactions",
+        help: "Extra fields stripped from the response, on top of the object-default set"
+      },
+      label: {
+        label: "Label",
+        help: "Free-text shown in the share dialog (e.g. \"ACME Q3 contract\")"
+      },
+      revoked_at: {
+        label: "Revoked At",
+        help: "When set, the link is permanently disabled"
+      },
+      created_by: {
+        label: "Created By",
+        help: "Issuer of the link"
+      },
+      created_at: {
+        label: "Created At"
+      },
+      last_used_at: {
+        label: "Last Used At",
+        help: "Stamped by resolveToken; used by the dashboard to highlight active links"
+      },
+      use_count: {
+        label: "Use Count",
+        help: "Incremented by resolveToken on every successful resolution"
+      }
+    },
+    _views: {
+      active_links: {
+        label: "Active"
+      },
+      by_me: {
+        label: "Created by Me"
+      },
+      revoked: {
+        label: "Revoked"
+      },
+      all_links: {
+        label: "All"
+      }
+    }
+  },
   sys_audit_log: {
     label: "Audit Log",
     pluralLabel: "Audit Logs",
@@ -2858,6 +2952,147 @@ export const enObjects: NonNullable<TranslationData['objects']> = {
       },
       recorded_at: {
         label: "Recorded At"
+      }
+    }
+  },
+  sys_view_definition: {
+    label: "View Definition",
+    pluralLabel: "View Definitions",
+    description: "Runtime-authored view definitions (shared / personal layers). The package layer ships from source.",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      name: {
+        label: "Name"
+      },
+      object: {
+        label: "Object"
+      },
+      view_kind: {
+        label: "View Kind",
+        options: {
+          list: "list",
+          form: "form"
+        }
+      },
+      label: {
+        label: "Label"
+      },
+      is_default: {
+        label: "Is Default"
+      },
+      view_order: {
+        label: "Order"
+      },
+      scope: {
+        label: "Scope",
+        options: {
+          shared: "shared",
+          personal: "personal"
+        }
+      },
+      owner: {
+        label: "Owner"
+      },
+      hidden: {
+        label: "Hidden"
+      },
+      config: {
+        label: "Config",
+        help: "ListView or FormView configuration (matches spec ViewItem.config)."
+      },
+      organization_id: {
+        label: "Organization",
+        help: "Organization for multi-tenant isolation."
+      },
+      state: {
+        label: "State",
+        options: {
+          draft: "draft",
+          active: "active",
+          archived: "archived"
+        }
+      },
+      created_by: {
+        label: "Created By"
+      },
+      created_at: {
+        label: "Created At"
+      },
+      updated_by: {
+        label: "Updated By"
+      },
+      updated_at: {
+        label: "Updated At"
+      }
+    }
+  },
+  sys_metadata_audit: {
+    label: "Metadata Audit",
+    pluralLabel: "Metadata Audit",
+    description: "Append-only audit trail of metadata write decisions (ADR-0010).",
+    fields: {
+      id: {
+        label: "ID"
+      },
+      occurred_at: {
+        label: "Occurred At"
+      },
+      actor: {
+        label: "Actor",
+        help: "Acting principal — user id, system id, or \"system\"."
+      },
+      source: {
+        label: "Source"
+      },
+      type: {
+        label: "Metadata Type"
+      },
+      name: {
+        label: "Name"
+      },
+      organization_id: {
+        label: "Organization"
+      },
+      operation: {
+        label: "Operation",
+        options: {
+          save: "save",
+          publish: "publish",
+          rollback: "rollback",
+          delete: "delete",
+          reset: "reset"
+        }
+      },
+      outcome: {
+        label: "Outcome",
+        options: {
+          allowed: "allowed",
+          denied: "denied",
+          forced: "forced"
+        }
+      },
+      code: {
+        label: "Code"
+      },
+      lock_state: {
+        label: "Lock State",
+        options: {
+          none: "none",
+          "no-overlay": "no-overlay",
+          "no-delete": "no-delete",
+          full: "full"
+        }
+      },
+      lock_overridden: {
+        label: "Lock Overridden"
+      },
+      request_id: {
+        label: "Request ID"
+      },
+      note: {
+        label: "Note"
       }
     }
   },

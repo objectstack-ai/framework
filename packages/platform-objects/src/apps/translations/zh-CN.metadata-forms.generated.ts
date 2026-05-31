@@ -203,10 +203,10 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     }
   },
   trigger: {
-    label: "Trigger"
+    label: "触发器"
   },
   validation: {
-    label: "Validation Rule"
+    label: "验证规则"
   },
   hook: {
     label: "钩子",
@@ -425,7 +425,7 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     },
     fields: {
       name: {
-        helpText: "snake_case unique identifier"
+        helpText: "snake_case 唯一标识符"
       },
       label: {
         helpText: "显示名"
@@ -848,22 +848,22 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     }
   },
   job: {
-    label: "Background Job"
+    label: "后台作业"
   },
   datasource: {
-    label: "Datasource"
+    label: "数据源"
   },
   translation: {
-    label: "Translation"
+    label: "翻译"
   },
   router: {
-    label: "Router"
+    label: "路由器"
   },
   function: {
-    label: "Function"
+    label: "函数"
   },
   service: {
-    label: "Service"
+    label: "服务"
   },
   email_template: {
     label: "邮件模板",
@@ -951,37 +951,37 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
     }
   },
   profile: {
-    label: "Profile",
+    label: "配置文件",
     sections: {
       identity: {
-        label: "Identity",
-        description: "Permission Sets stack on top of a Profile to grant additional access. Profiles are the base set assigned 1:1 to each user."
+        label: "标识",
+        description: "权限集叠加在配置文件之上以授予额外的访问权限。配置文件是按 1:1 分配给每个用户的基础集合。"
       },
       system_permissions: {
-        label: "System Permissions",
-        description: "High-level capabilities not tied to a specific object — e.g. manage_users, view_audit_logs."
+        label: "系统权限",
+        description: "与特定对象无关的高级能力——例如 manage_users、view_audit_logs。"
       },
       object_and_field_permissions: {
-        label: "Object & Field Permissions",
-        description: "Per-object CRUD + per-field FLS. Edit via the matrix editor or paste JSON here."
+        label: "对象与字段权限",
+        description: "按对象的增删改查 + 按字段的字段级安全（FLS）。可通过矩阵编辑器编辑，或在此处粘贴 JSON。"
       },
       tab_and_row_level_security: {
-        label: "Tab & Row-Level Security",
-        description: "Tab visibility, RLS policies, and custom context variables for predicate evaluation."
+        label: "标签页与行级安全",
+        description: "标签页可见性、RLS 策略，以及用于谓词求值的自定义上下文变量。"
       }
     },
     fields: {
       name: {
-        helpText: "Machine name (snake_case)"
+        helpText: "机器名（snake_case）"
       },
       label: {
-        helpText: "Display label for admins"
+        helpText: "面向管理员显示的标签"
       },
       isProfile: {
-        helpText: "Profile = base set assigned to users. Permission Set = additive grant."
+        helpText: "配置文件 = 分配给用户的基础集合。权限集 = 附加授予。"
       },
       systemPermissions: {
-        helpText: "List of system capability keys"
+        helpText: "系统能力键列表"
       },
       objects: {
         helpText: "{ \"account\": { allowRead: true, allowEdit: true, ... } }"
@@ -993,10 +993,10 @@ export const zhCNMetadataForms: NonNullable<TranslationData['metadataForms']> = 
         helpText: "{ \"app_crm\": \"visible\", \"app_admin\": \"hidden\" }"
       },
       rowLevelSecurity: {
-        helpText: "Array of RLS policies (see rls.zod.ts)"
+        helpText: "RLS 策略数组（参见 rls.zod.ts）"
       },
       contextVariables: {
-        helpText: "Custom variables referenced in RLS predicates"
+        helpText: "RLS 谓词中引用的自定义变量"
       }
     }
   },
