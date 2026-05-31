@@ -109,6 +109,34 @@ export interface RegisteredConnector {
     readonly handlers: Record<string, ConnectorActionHandler>;
 }
 
+/**
+ * A designer-facing view of one connector action — identity + its JSON-Schema
+ * input/output. The runtime handler is intentionally omitted; this is metadata.
+ */
+export interface ConnectorActionDescriptor {
+    readonly key: string;
+    readonly label: string;
+    readonly description?: string;
+    readonly inputSchema?: Record<string, unknown>;
+    readonly outputSchema?: Record<string, unknown>;
+}
+
+/**
+ * A designer-facing descriptor for a registered connector: its identity plus
+ * the actions it exposes. Served by `GET /api/v1/automation/connectors` so the
+ * flow designer can populate the `connector_action` node's connector → action
+ * → input pickers (ADR-0018 §Addendum, ADR-0022). Mirrors `ActionDescriptor`'s
+ * role for node types, but for the connector registry.
+ */
+export interface ConnectorDescriptor {
+    readonly name: string;
+    readonly label: string;
+    readonly type: string;
+    readonly description?: string;
+    readonly icon?: string;
+    readonly actions: ConnectorActionDescriptor[];
+}
+
 // ─── Core Automation Engine ─────────────────────────────────────────
 
 /**
@@ -299,6 +327,30 @@ export class AutomationEngine implements IAutomationService {
     /** Get all registered connector names. */
     getRegisteredConnectors(): string[] {
         return [...this.connectors.keys()];
+    }
+
+    /**
+     * Get a designer-facing descriptor for every registered connector — its
+     * identity plus the actions it exposes (input/output JSON Schema). Backs
+     * `GET /api/v1/automation/connectors` so the designer can fill the
+     * `connector_action` node's connector / action / input pickers (ADR-0022).
+     * Handlers are omitted — they are runtime code, not metadata.
+     */
+    getConnectorDescriptors(): ConnectorDescriptor[] {
+        return [...this.connectors.values()].map(({ def }) => ({
+            name: def.name,
+            label: def.label,
+            type: def.type,
+            description: def.description,
+            icon: def.icon,
+            actions: (def.actions ?? []).map((a) => ({
+                key: a.key,
+                label: a.label,
+                description: a.description,
+                inputSchema: a.inputSchema,
+                outputSchema: a.outputSchema,
+            })),
+        }));
     }
 
     /** Get all registered node types */

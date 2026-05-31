@@ -9,6 +9,8 @@ export type {
     ConnectorActionHandler,
     ConnectorActionContext,
     RegisteredConnector,
+    ConnectorDescriptor,
+    ConnectorActionDescriptor,
 } from './engine.js';
 
 // Kernel plugin — seeds all built-in nodes; this is the only plugin needed for

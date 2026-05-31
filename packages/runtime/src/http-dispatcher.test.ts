@@ -150,6 +150,11 @@ describe('HttpDispatcher', () => {
                     { type: 'http_request', name: 'HTTP Request', category: 'io', paradigms: ['flow', 'workflow_rule'], source: 'builtin' },
                     { type: 'send_sms', name: 'Send SMS', category: 'io', paradigms: ['flow'], source: 'plugin' },
                 ]),
+                getConnectorDescriptors: vi.fn().mockReturnValue([
+                    { name: 'rest', label: 'REST', type: 'api', actions: [{ key: 'request', label: 'Request' }] },
+                    { name: 'slack', label: 'Slack', type: 'api', actions: [{ key: 'chat.postMessage', label: 'Post Message' }] },
+                    { name: 'pg', label: 'Postgres', type: 'database', actions: [] },
+                ]),
             };
 
             // Set up kernel services to include automation
@@ -276,6 +281,40 @@ describe('HttpDispatcher', () => {
             const result = await dispatcher.handleAutomation('actions', 'GET', {}, { request: {} });
             expect(result.handled).toBe(true);
             expect(result.response?.body?.data?.actions).toEqual([]);
+            expect(result.response?.body?.data?.total).toBe(0);
+        });
+
+        // ── GET /connectors — connector descriptor registry (ADR-0022) ────
+        it('should list connector descriptors via GET /connectors', async () => {
+            const result = await dispatcher.handleAutomation('connectors', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(mockAutomationService.getConnectorDescriptors).toHaveBeenCalled();
+            expect(result.response?.body?.data?.total).toBe(3);
+            expect(result.response?.body?.data?.connectors.map((c: any) => c.name)).toEqual(
+                ['rest', 'slack', 'pg'],
+            );
+        });
+
+        it('must NOT let GET /connectors be shadowed by the /:name flow lookup', async () => {
+            const result = await dispatcher.handleAutomation('connectors', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            // The connector registry is returned, NOT a getFlow('connectors') result.
+            expect(mockAutomationService.getFlow).not.toHaveBeenCalled();
+            expect(result.response?.body?.data?.connectors).toBeDefined();
+        });
+
+        it('should filter GET /connectors by ?type', async () => {
+            const result = await dispatcher.handleAutomation('connectors', 'GET', {}, { request: {} }, { type: 'database' });
+            expect(result.handled).toBe(true);
+            expect(result.response?.body?.data?.total).toBe(1);
+            expect(result.response?.body?.data?.connectors[0].name).toBe('pg');
+        });
+
+        it('should return an empty registry when the service lacks getConnectorDescriptors', async () => {
+            delete mockAutomationService.getConnectorDescriptors;
+            const result = await dispatcher.handleAutomation('connectors', 'GET', {}, { request: {} });
+            expect(result.handled).toBe(true);
+            expect(result.response?.body?.data?.connectors).toEqual([]);
             expect(result.response?.body?.data?.total).toBe(0);
         });
     });

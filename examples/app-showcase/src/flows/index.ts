@@ -154,4 +154,63 @@ export const BudgetApprovalFlow = defineFlow({
   ],
 });
 
-export const allFlows = [TaskCompletedFlow, ReassignWizardFlow, BudgetApprovalFlow];
+/**
+ * Task Completed → Post to Slack — the worked `connector_action` example
+ * (ADR-0018 §Addendum, ADR-0022).
+ *
+ * Unlike {@link TaskCompletedFlow}, which hand-waves notification via a `script`
+ * node, this flow takes the "raw API call" path: a baseline `connector_action`
+ * node dispatches to the `slack` connector's `chat.postMessage` action. The
+ * `connector_action` node type is built into every automation engine; the
+ * `slack` connector itself is contributed at runtime by the
+ * `@objectstack/connector-slack` plugin (static bot-token auth). Load that
+ * plugin in your stack and the node resolves; omit it and the step fails with a
+ * clear "connector slack not registered" error rather than silently no-op'ing.
+ *
+ * The connector → action → input pickers the designer shows for this node are
+ * fed by `GET /api/v1/automation/connectors`, which enumerates the live
+ * registry (see `getConnectorDescriptors`).
+ */
+export const TaskCompletedSlackFlow = defineFlow({
+  name: 'showcase_task_completed_slack',
+  label: 'Post to Slack on Task Completed',
+  description: 'Posts to a Slack channel via the slack connector when a task is marked Done.',
+  type: 'autolaunched',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Task Update',
+      config: {
+        objectName: 'showcase_task',
+        triggerType: 'record-after-update',
+        condition: 'status == "done" && previous.status != "done"',
+      },
+    },
+    {
+      id: 'post_to_slack',
+      type: 'connector_action',
+      label: 'Post to #wins',
+      connectorConfig: {
+        connectorId: 'slack',
+        actionId: 'chat.postMessage',
+        input: {
+          channel: 'C0WINS000',
+          text: '✅ Task done: {record.title}',
+        },
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'post_to_slack' },
+    { id: 'e2', source: 'post_to_slack', target: 'end' },
+  ],
+});
+
+export const allFlows = [
+  TaskCompletedFlow,
+  ReassignWizardFlow,
+  BudgetApprovalFlow,
+  TaskCompletedSlackFlow,
+];

@@ -1668,6 +1668,7 @@ export class HttpDispatcher {
      * Routes:
      *   GET    /                     → listFlows
      *   GET    /actions              → getActionDescriptors (ADR-0018; ?paradigm/?source/?category filters)
+     *   GET    /connectors           → getConnectorDescriptors (ADR-0022; ?type filter)
      *   GET    /:name                → getFlow
      *   POST   /                     → createFlow (registerFlow)
      *   PUT    /:name                → updateFlow
@@ -1737,6 +1738,26 @@ export class HttpDispatcher {
             // Service present but does not implement the optional method:
             // report an empty (but valid) registry rather than a 404.
             return { handled: true, response: this.success({ actions: [], total: 0 }) };
+        }
+
+        // GET /connectors → list registered connector descriptors (ADR-0022).
+        // Like /actions, MUST precede the `/:name → getFlow` catch-all so a flow
+        // named "connectors" cannot shadow it. Backs the designer's
+        // `connector_action` connector/action/input pickers; the registry is
+        // empty in baseline and populated by connector plugins (e.g.
+        // @objectstack/connector-rest, @objectstack/connector-slack).
+        if (parts[0] === 'connectors' && parts.length === 1 && m === 'GET') {
+            if (typeof automationService.getConnectorDescriptors === 'function') {
+                let connectors = automationService.getConnectorDescriptors() ?? [];
+                // Optional filter mirrors the descriptor's connector type.
+                if (query?.type) {
+                    connectors = connectors.filter((c: any) => c?.type === query.type);
+                }
+                return { handled: true, response: this.success({ connectors, total: connectors.length }) };
+            }
+            // Service present but does not implement the optional method:
+            // report an empty (but valid) registry rather than a 404.
+            return { handled: true, response: this.success({ connectors: [], total: 0 }) };
         }
 
         // Routes with :name

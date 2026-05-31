@@ -176,4 +176,47 @@ describe('AutomationEngine connector registry', () => {
         expect(engine.getRegisteredConnectors()).not.toContain('fake');
         expect(engine.resolveConnectorAction('fake', 'echo')).toBeUndefined();
     });
+
+    it('exposes a designer-facing descriptor per connector, omitting handlers (ADR-0022)', () => {
+        engine.registerConnector(
+            {
+                name: 'fake',
+                label: 'Fake Connector',
+                type: 'api',
+                icon: 'plug',
+                authentication: { type: 'none' },
+                actions: [
+                    {
+                        key: 'echo',
+                        label: 'Echo',
+                        description: 'Echo the input back',
+                        inputSchema: { message: { type: 'string' } },
+                    },
+                ],
+            } as Connector,
+            { async echo() { return {}; } },
+        );
+
+        const descriptors = engine.getConnectorDescriptors();
+        expect(descriptors).toHaveLength(1);
+        const fake = descriptors[0];
+        expect(fake.name).toBe('fake');
+        expect(fake.label).toBe('Fake Connector');
+        expect(fake.type).toBe('api');
+        expect(fake.icon).toBe('plug');
+        expect(fake.actions).toHaveLength(1);
+        expect(fake.actions[0]).toEqual({
+            key: 'echo',
+            label: 'Echo',
+            description: 'Echo the input back',
+            inputSchema: { message: { type: 'string' } },
+            outputSchema: undefined,
+        });
+        // Handlers are runtime code, never leaked into the metadata view.
+        expect((fake as any).handlers).toBeUndefined();
+    });
+
+    it('returns an empty descriptor list when no connectors are registered', () => {
+        expect(engine.getConnectorDescriptors()).toEqual([]);
+    });
 });
