@@ -1,6 +1,6 @@
 # ADR-0021: Analytics — one semantic `dataset` layer, `report` / `dashboard` become pure presentation
 
-**Status**: Proposed (2026-05-31)
+**Status**: Proposed — **revised 2026-05-31 after an implementation scan** (see "Implementation scan" near the end; the original "the engine already does joins" premise was corrected)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0019](./0019-app-as-consumer-unit.md) + [ADR-0020](./0020-state-machine-converge-and-enforce.md) (the "one engine, fold the parasitic concept into its host" principle — applied here to analytics), [ADR-0017](./0017-object-has-many-view.md) (object-bound ListView is the row-level lens), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring is the design center)
 **Consumers**: `@objectstack/spec` (`ui/report.zod.ts`, `ui/dashboard.zod.ts`, `ui/view.zod.ts`, `data/query.zod.ts`, `kernel/metadata-type-schemas.ts`), `@objectstack/objectql` (query engine), `@objectstack/analytics-service`, all `examples/*`
@@ -11,7 +11,9 @@
 
 ## TL;DR
 
-The platform already owns a **complete query engine** — `QuerySchema` has `joins` (inner/left/right/full + strategies + subquery + cross-datasource), `aggregations`, `groupBy` (with date bucketing), `having`, and `windowFunctions` ([`query.zod.ts:586`](../../packages/spec/src/data/query.zod.ts#L586)).
+The platform's **query *schema*** (`QuerySchema`, [`query.zod.ts:586`](../../packages/spec/src/data/query.zod.ts#L586)) already *describes* `joins` (inner/left/right/full + strategies + subquery + cross-datasource), `aggregations`, `groupBy` (with date bucketing), `having`, and `windowFunctions`.
+
+> **Correction (revised 2026-05-31).** An implementation scan found the *runtime* does **not** match the schema: `groupBy` + `aggregations` execute (single-object only), but `joins` / `having` / `windowFunctions` are **schema-only — not executed** by `IDataEngine` or the SQL driver. A separate, already-implemented **Cube semantic layer** (`IAnalyticsService` + `CubeSchema`) is the *only* path that emits cross-object joins today (and it bypasses RLS/tenant). This reframes the work and the naming — see the "Implementation scan" section. The decisions below stand; the cost and the build-vs-reuse choice change.
 
 But **three presentation surfaces each re-implement their own crippled, single-object query inline** instead of using it:
 
@@ -298,6 +300,72 @@ Duplicate inline definitions that the codemod detects as identical (same object+
 **Files removed:** `ListChartConfigSchema` (in `view.zod.ts`); the inline-query fields enumerated above. **Files added:** `ui/dataset.zod.ts`. **Files reshaped:** `ui/report.zod.ts`, `ui/dashboard.zod.ts`.
 
 ---
+
+## Implementation scan (revised 2026-05-31) — reality, gaps, task list
+
+A four-area code scan (spec, runtime, frontend, examples) produced the following. **Three findings change the plan; read them before estimating.**
+
+### Finding 1 — the runtime does not match `QuerySchema`
+
+| Capability | Schema | Runtime reality |
+|---|---|---|
+| `groupBy` + `aggregations` | ✅ | ✅ executed — `in-memory-aggregation.ts` + `driver-sql` groupBy; **single-object only** |
+| `joins` | ✅ | ❌ **not executed** — `engine.find/aggregate` never read `joins`; SQL driver `find`/`aggregate` emit no JOIN. Cross-object is only FK-expand (`expandRelatedRecords`, N+1, *nested* — not a flat join, unusable for grouped aggregation) |
+| `having` | ✅ | ❌ not evaluated |
+| `windowFunctions` | ✅ | ❌ dead code (`findWithWindowFunctions` never called by `ObjectQL`) |
+
+So "revenue by `account.region`" — the headline dataset use case — **cannot run through `IDataEngine` today.** Joins are the gating runtime gap.
+
+### Finding 2 — a parallel semantic layer already exists (must reconcile)
+
+`data/analytics.zod.ts` `CubeSchema` + `contracts/analytics-service.ts` `IAnalyticsService` are **implemented** (`AnalyticsService` in `service-analytics`, `MemoryAnalyticsService` in `driver-memory`): a Cube.io-style `{ measures, dimensions, timeDimensions }` layer — conceptually the same "semantic layer" this ADR proposes. Its `NativeSQLStrategy` is the **only** code that emits cross-object `LEFT JOIN` (single-hop), but via raw `engine.execute()` which **bypasses the sharing-middleware RLS and tenant isolation** ([`engine.ts:2077`](../../packages/objectql/src/engine.ts#L2077) warns explicitly). It loads opt-in (`requires: ['analytics']`), and its grammar is **disjoint from `QuerySchema`** — nothing compiles `QuerySchema.joins/having/window` to execution.
+
+**Implication:** do not build a *third* semantic layer. Either (b) adopt/extend Cube as the dataset, or (c) compile `dataset` → `AnalyticsQuery` and reuse the Cube runtime (then harden its RLS/tenant). Both are far cheaper than teaching `IDataEngine` to join.
+
+### Finding 3 — naming collisions
+
+The ADR's `DatasetSchema` / `DimensionSchema` / `MeasureSchema` are all taken: `DatasetSchema` = seed data (`data/dataset.zod.ts`, widely consumed); `DimensionSchema` + `MetricSchema` = the existing Cube layer (`data/analytics.zod.ts`). The new type must be renamed or namespaced (e.g. `AnalyticsDataset` / `Measure`). **The ADR's literal names cannot land as-is.**
+
+### Other scan facts that size the work
+
+- **Rendering is in the sibling repo `objectui`**, not here — Dashboard/Report renderers, `useReportData`, builders, the `data-objectstack` adapter. Any field change is a **two-repo change** + a `.objectui-sha` bump.
+- **`ReportSchema` (pivot) has no runtime executor** — `plugin-reports` is a separate saved-query/CSV emailer; pivoting happens entirely client-side in `useReportData.ts`.
+- **Registration touches 4 surfaces**, not 1: `kernel/metadata-type-schemas.ts`, `kernel/metadata-plugin.zod.ts` (enum + `DEFAULT_METADATA_TYPE_REGISTRY`, `loadOrder` < report/dashboard), `shared/metadata-collection.zod.ts` (`MAP_SUPPORTED_FIELDS` + `PLURAL_TO_SINGULAR`), `objectql/engine.ts` `metadataArrayKeys` (**two** lists, L806 + L961).
+- **Migration scope:** 7 reports (2 files) + 64 widgets (4 files; heaviest `chart-gallery.dashboard.ts` = 38) + 2 chart-views (2 files) = **8 source files, two inline shapes**. Tests to rewrite: `view.test.ts` (214) + `dashboard.test.ts` (146) + `report.test.ts` (51) + `report-service.test.ts` + `view-expand.test.ts` + 3 example integration tests. No JSON/seed instance data. JSON-schema regenerates via `pnpm gen:schema`.
+
+### Pre-work decisions (gate everything)
+
+| # | Decision | Options | Recommendation |
+|---|---|---|---|
+| D-A | Relationship to the existing Cube layer | (a) new type wrapping `QuerySchema`, build joins into the engine; (b) dataset **is** Cube, renamed/extended; (c) dataset **compiles to** `AnalyticsQuery`, reuse Cube runtime | **(c) / (b)** — reuse the implemented, join-capable Cube runtime; don't build a third layer |
+| D-B | Naming collisions | rename (`AnalyticsDataset`/`Measure`) or namespace | rename; literal ADR names can't land |
+| D-C | Join execution + safety | build join/having into `IDataEngine`+SQL driver; **or** route via Cube `NativeSQLStrategy` **and add RLS + tenant scoping** to that path | reuse Cube path **+ harden RLS/tenant** (enterprise red line) |
+
+### Task list (workstreams; S≈½d, M≈1–3d, L≈1wk, XL≈2wk+; ⛔ = blocked by D-A/B/C)
+
+**WS0 · Design close-out (blocks all) — M**
+- ⛔ Resolve D-A / D-B / D-C; re-merge this ADR with the chosen direction.
+
+**WS1 · Spec / Schema (this repo) — L**
+- `ui/dataset.zod.ts` (resolved names; dimensions/measures; `query` *or* mapping to Cube).
+- Refactor `report.zod.ts` (→ `dataset`/`rows`/`columns`/`values`/`sections`), `dashboard.zod.ts` (widget → `dataset`/`report`/`dimensions`/`measures`/`viz`/`drillTo` + `superRefine`; globalFilters/dateRange → dimension names), `view.zod.ts` (drop `ListChartConfigSchema` + `type:'chart'`).
+- Wire the 4 registration surfaces (above). Rewrite `report.form.ts`/`dashboard.form.ts` + add `dataset.form.ts`. Adjust `analytics-service`/`report-service`/`ui-service` contracts. Run `pnpm gen:schema`.
+
+**WS2 · Runtime / engine (this repo) — XL (bottleneck)**
+- ⛔ Join execution (engine join/having, or route dataset → Cube `NativeSQLStrategy`).
+- ⛔ Add RLS + tenant safety to the join path.
+- Dataset executor (dataset + selected dims/measures + runtimeFilter/compareTo → executable query → chart data); server-side `compareTo` time-shift; dataset metadata loading.
+
+**WS3 · Frontend + designers (sibling repo `objectui`, cross-repo) — XL**
+- Rework `DashboardRenderer.getComponentSchema()` and `useReportData.ts` to bind to dataset+measures; adapt `data-objectstack` `aggregate()`; convert `WidgetConfigPanel`/`DashboardEditor`/`ReportDesigner`/`ReportConfigPanel` from field pickers to dataset+measure pickers; new dataset editor + picker; bump `.objectui-sha`.
+
+**WS4 · Migration codemod + tests (this repo) — L**
+- Codemod (two inline shapes) over 8 files; hoist duplicate inline definitions into named datasets. Rewrite the listed tests + barrels/`setup.app.ts`.
+
+**WS5 · Docs / skills (this repo) — M**
+- ~9 mdx pages + `meta.json` nav; `skills/objectstack-ui/SKILL.md` (major) + `objectstack-query` (minor).
+
+**Critical path:** WS0 → (WS1 ∥ WS2) → WS3 → WS4. **Rough order of magnitude:** ~6–8 weeks for one senior engineer across both repos; choosing D-A = (c) reuse Cube roughly halves WS2.
 
 ## Open questions
 
