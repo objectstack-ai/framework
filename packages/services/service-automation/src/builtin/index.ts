@@ -14,12 +14,14 @@
  *  - data    — get/create/update/delete_record   (platform CRUD baseline)
  *  - human   — screen / script                   (core flow capability)
  *  - io      — http_request                       (foundational outbound I/O)
+ *  - io      — connector_action                   (generic integration dispatch)
  *
- * Deliberately NOT baseline: `connector_action` (an integration concern that
- * needs a connector registry the platform does not ship). Third-party node
- * types — including connector_action — extend the registry at runtime via
- * `engine.registerNodeExecutor()`, keeping the action vocabulary open and
- * marketplace-extensible.
+ * `connector_action` is the *generic dispatch* counterpart to `http_request`
+ * (ADR-0018 §Addendum): the platform ships the node + an (initially empty)
+ * connector registry on the engine, and *concrete* connectors populate it at
+ * runtime via `engine.registerConnector()`. Third-party node types continue to
+ * extend the vocabulary via `engine.registerNodeExecutor()`, keeping the action
+ * list open and marketplace-extensible.
  */
 
 import type { PluginContext } from '@objectstack/core';
@@ -28,11 +30,13 @@ import { registerLogicNodes } from './logic-nodes.js';
 import { registerCrudNodes } from './crud-nodes.js';
 import { registerScreenNodes } from './screen-nodes.js';
 import { registerHttpNodes } from './http-nodes.js';
+import { registerConnectorNodes } from './connector-nodes.js';
 
 export { registerLogicNodes } from './logic-nodes.js';
 export { registerCrudNodes } from './crud-nodes.js';
 export { registerScreenNodes } from './screen-nodes.js';
 export { registerHttpNodes } from './http-nodes.js';
+export { registerConnectorNodes } from './connector-nodes.js';
 
 /**
  * Seed every built-in node executor into the engine. Called by
@@ -44,6 +48,7 @@ export function installBuiltinNodes(engine: AutomationEngine, ctx: PluginContext
     registerCrudNodes(engine, ctx);
     registerScreenNodes(engine, ctx);
     registerHttpNodes(engine, ctx);
+    registerConnectorNodes(engine, ctx);
 
     const types = engine.getRegisteredNodeTypes();
     ctx.logger.info(

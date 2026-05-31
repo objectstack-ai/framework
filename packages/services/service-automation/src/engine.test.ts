@@ -561,8 +561,10 @@ describe('AutomationServicePlugin (Kernel Integration)', () => {
         // HTTP node (foundational I/O)
         expect(nodeTypes).toContain('http_request');
 
-        // connector_action is an integration concern — NOT in the built-in baseline.
-        expect(nodeTypes).not.toContain('connector_action');
+        // connector_action is the generic-dispatch sibling of http_request and is
+        // baseline (ADR-0018 §Addendum): the engine ships the node + an empty
+        // connector registry; concrete connectors are plugins.
+        expect(nodeTypes).toContain('connector_action');
 
         await kernel.shutdown();
     });
@@ -767,10 +769,11 @@ describe('Built-in HTTP node', () => {
         expect(types).toContain('http_request');
     });
 
-    it('should NOT register connector_action in the built-in baseline', () => {
-        // connector_action is an integration concern requiring a connector
-        // registry the platform does not ship — left to the integration layer.
-        expect(engine.getRegisteredNodeTypes()).not.toContain('connector_action');
+    it('should register connector_action in the built-in baseline', () => {
+        // connector_action is baseline (ADR-0018 §Addendum): the engine ships the
+        // generic-dispatch node + an empty connector registry; concrete connectors
+        // are contributed by plugins via engine.registerConnector().
+        expect(engine.getRegisteredNodeTypes()).toContain('connector_action');
     });
 });
 

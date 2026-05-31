@@ -1,0 +1,36 @@
+{
+  "name": "@objectstack/connector-rest",
+  "version": "7.3.0",
+  "license": "Apache-2.0",
+  "description": "Generic REST connector for ObjectStack — the reference concrete connector that registers a `request` action on the automation engine's connector registry (ADR-0018 §Addendum).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup --config ../../../tsup.config.ts",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@objectstack/core": "workspace:*",
+    "@objectstack/spec": "workspace:*"
+  },
+  "devDependencies": {
+    "@objectstack/service-automation": "workspace:*",
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  },
+  "keywords": [
+    "objectstack",
+    "connector",
+    "rest",
+    "integration",
+    "http"
+  ]
+}

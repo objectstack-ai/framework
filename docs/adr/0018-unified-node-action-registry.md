@@ -195,3 +195,42 @@ No fourth engine. Workflow Rules stays a **simplified authoring view** for busin
 1. Does `connector_action` (the one verb already present in all three paradigms) become the *general* extension action, with `http`/`notify` as well-known specializations — or stay peer-level? Leaning: keep peer-level; `connector_action` targets a registered connector, `http` is raw.
 2. Should `screen` / `user_task` (human-input nodes) carry their own descriptor category (`human`) that the runtime treats as always-`isAsync`? Likely yes.
 3. Where does the action registry live for **cross-environment** consistency — is it per-environment (a plugin enabled in env A but not B yields different palettes)? Tie to the package/environment model (ADR-0006).
+
+---
+
+## Addendum (2026-05-31): `connector_action` is baseline generic dispatch
+
+> Status of this addendum: **implemented.** This re-scopes the §Migration M2 note and resolves §Open-questions #1. The baseline registry + `connector_action` executor ship in `service-automation`, with `@objectstack/connector-rest` as the first concrete connector plugin.
+
+### Decision
+
+`connector_action` is promoted to a **built-in (`source: 'builtin'`) baseline node**, the generic-dispatch counterpart to `http_request`:
+
+- where `http_request` calls **any raw URL**, `connector_action` invokes **any registered connector's declared action**;
+- the engine ships the dispatch node **plus an initially-empty connector registry** (`registerConnector` / `resolveConnectorAction` / `getRegisteredConnectors`);
+- **concrete** connectors (`@objectstack/connector-rest`, `connector-slack`, `connector-salesforce`, …) remain **plugins** that populate the registry at runtime.
+
+This is the **mechanism/policy split**: the *mechanism* (registry + dispatch node) is baseline; the *concrete integrations* (and their credentials/lifecycle) are not. It mirrors the ADR-0015 datasource split — federation contract is in the open framework, managed connection lifecycle lives outside it.
+
+### Why this reverses M2's "connector_action dropped from baseline"
+
+M2 dropped `connector_action` because it would need "a connector registry the platform doesn't ship." That is circular: the registry is the missing piece, and an **empty** registry is zero-dependency and zero-cost. The protocol already commits to the node — `connector_action` is in `FLOW_BUILTIN_NODE_TYPES` and `connectorConfig {connectorId, actionId, input}` is already a `FlowNode` field — but ships **no executor**, so any flow referencing it fails at execution. Shipping the empty registry + dispatch executor closes that spec/runtime gap without pulling any concrete integration into the core.
+
+### Resolves Open-question #1
+
+The leaning ("keep peer-level") is **overturned for the dispatch direction, kept for the verbs**: `connector_action` *does* become the general connector-extension action, while `http`/`notify` stay **peer-level raw verbs** (not specializations of it). `http_request` calls a URL with no registration; `connector_action` calls a registered, named capability. Both are baseline; neither is implemented in terms of the other.
+
+### Graceful degradation
+
+Because the registry starts empty, a flow that references a connector no plugin has registered **fails that step with a clear error** (`no handler for '<id>.<action>' — is the connector plugin registered?`) rather than failing to register the flow — the same fail-soft posture `http_request` takes on a bad URL.
+
+### Out of scope (deliberately not baseline)
+
+Managed credentials/secret vault, OAuth2 token refresh, multi-tenant connection lifecycle, and a connector marketplace are **not** part of this mechanism — they are the enterprise tier, on the ADR-0015 precedent. The open framework ships the contract + dispatch + an in-process registry only.
+
+### Implementation checklist
+
+- [x] `AutomationEngine`: connector registry (`registerConnector` / `unregisterConnector` / `resolveConnectorAction` / `getRegisteredConnectors`) + `ConnectorActionHandler` / `ConnectorActionContext` types.
+- [x] `builtin/connector-nodes.ts`: `connector_action` executor + descriptor (`category: 'io'`, `source: 'builtin'`, `paradigms: ['flow','workflow_rule','approval']`), wired into `installBuiltinNodes()`. The core plugin now seeds 11 baseline node types (was 10).
+- [x] First concrete plugin `@objectstack/connector-rest` (the reference connector) validating the registry — `request` action, static auth (`none`/`api-key`/`basic`/`bearer`), no OAuth2 refresh.
+- [x] Tests: baseline dispatch (fake connector) + REST plugin auth-header injection + end-to-end kernel boot (both plugins → `connector_action` flow → REST handler).
