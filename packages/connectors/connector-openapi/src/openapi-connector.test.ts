@@ -1,5 +1,7 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
 import { describe, it, expect } from 'vitest';
-import { createOpenApiConnector, type OpenApiDocument } from './openapi-connector';
+import { createOpenApiConnector, type OpenApiDocument } from './openapi-connector.js';
 
 const doc: OpenApiDocument = {
     openapi: '3.0.0',
@@ -44,26 +46,42 @@ const doc: OpenApiDocument = {
     },
 };
 
+/** A fake fetch that records calls and returns a JSON response (mirrors connector-rest tests). */
+function fakeFetch(payload: unknown) {
+    const calls: Array<{ url: string; init: { method?: string; body?: unknown; headers?: Record<string, string> } }> = [];
+    const fetchImpl = (async (url: string, init: { method?: string; body?: unknown; headers?: Record<string, string> }) => {
+        calls.push({ url, init });
+        return {
+            status: 200,
+            ok: true,
+            headers: { get: () => 'application/json' },
+            json: async () => payload,
+            text: async () => JSON.stringify(payload),
+        };
+    }) as unknown as typeof fetch;
+    return { calls, fetchImpl };
+}
+
 describe('createOpenApiConnector', () => {
     it('derives connector metadata from info + servers', () => {
-        const { definition } = createOpenApiConnector({ document: doc });
-        expect(definition.name).toBe('pet_store');
-        expect(definition.label).toBe('Pet Store');
-        expect(definition.description).toBe('A sample pet API');
-        expect(definition.type).toBe('api');
+        const { def } = createOpenApiConnector({ document: doc });
+        expect(def.name).toBe('pet_store');
+        expect(def.label).toBe('Pet Store');
+        expect(def.description).toBe('A sample pet API');
+        expect(def.type).toBe('api');
     });
 
-    it('maps each operation to an action and falls back to a slug name', () => {
-        const { definition } = createOpenApiConnector({ document: doc });
-        const names = definition.actions.map((a) => a.name);
-        expect(names).toContain('getPetById');
-        expect(names).toContain('createPet');
-        expect(names).toContain('get_pets'); // GET /pets has no operationId
+    it('maps each operation to an action and falls back to a slug key', () => {
+        const { def } = createOpenApiConnector({ document: doc });
+        const keys = (def.actions ?? []).map((a) => a.key);
+        expect(keys).toContain('getPetById');
+        expect(keys).toContain('createPet');
+        expect(keys).toContain('get_pets'); // GET /pets has no operationId
     });
 
     it('assembles input schema sections from parameters and requestBody', () => {
-        const { definition } = createOpenApiConnector({ document: doc });
-        const get = definition.actions.find((a) => a.name === 'getPetById');
+        const { def } = createOpenApiConnector({ document: doc });
+        const get = def.actions?.find((a) => a.key === 'getPetById');
         expect(get?.inputSchema).toMatchObject({
             type: 'object',
             properties: {
@@ -73,7 +91,7 @@ describe('createOpenApiConnector', () => {
             required: ['path'],
         });
 
-        const post = definition.actions.find((a) => a.name === 'createPet');
+        const post = def.actions?.find((a) => a.key === 'createPet');
         expect(post?.inputSchema).toMatchObject({
             properties: { body: { type: 'object', properties: { name: { type: 'string' } } } },
             required: ['body'],
@@ -81,35 +99,26 @@ describe('createOpenApiConnector', () => {
     });
 
     it('picks the success response schema as the output schema', () => {
-        const { definition } = createOpenApiConnector({ document: doc });
-        const get = definition.actions.find((a) => a.name === 'getPetById');
+        const { def } = createOpenApiConnector({ document: doc });
+        const get = def.actions?.find((a) => a.key === 'getPetById');
         expect(get?.outputSchema).toMatchObject({ type: 'object', properties: { id: { type: 'integer' } } });
     });
 
-    it('infers the declared security scheme when no auth is supplied', () => {
-        const { definition } = createOpenApiConnector({ document: doc });
-        expect(definition.authentication).toEqual({ kind: 'api-key', name: 'X-API-Key', in: 'header' });
-    });
-
-    it('reflects supplied credentialed auth in the definition metadata', () => {
-        const { definition } = createOpenApiConnector({ document: doc, auth: { kind: 'bearer', token: 'secret' } });
-        expect(definition.authentication).toEqual({ kind: 'bearer' });
+    it('defaults authentication to none and reflects supplied credentials', () => {
+        expect(createOpenApiConnector({ document: doc }).def.authentication).toEqual({ type: 'none' });
+        const withAuth = createOpenApiConnector({ document: doc, auth: { type: 'bearer', token: 'secret' } });
+        expect(withAuth.def.authentication).toEqual({ type: 'bearer', token: 'secret' });
     });
 
     it('honors an include allowlist', () => {
-        const { definition } = createOpenApiConnector({ document: doc, include: (op) => (op.tags ?? []).includes('pets') });
-        expect(definition.actions.map((a) => a.name)).toEqual(['getPetById', 'createPet']);
+        const { def } = createOpenApiConnector({ document: doc, include: (op) => (op.tags ?? []).includes('pets') });
+        expect((def.actions ?? []).map((a) => a.key)).toEqual(['getPetById', 'createPet']);
     });
 
     it('handler interpolates path params and forwards query via the REST request', async () => {
-        const calls: Array<{ url: string; init: { method?: string; body?: unknown } }> = [];
-        const fetchImpl = (async (url: string, init: { method?: string; body?: unknown }) => {
-            calls.push({ url, init });
-            return { status: 200, ok: true, text: async () => JSON.stringify({ id: 42 }) };
-        }) as unknown as typeof fetch;
-
+        const { calls, fetchImpl } = fakeFetch({ id: 42 });
         const { handlers } = createOpenApiConnector({ document: doc, fetchImpl });
-        const result = await handlers.getPetById({ path: { petId: 42 }, query: { detail: 'full' } });
+        const result = await handlers.getPetById({ path: { petId: 42 }, query: { detail: 'full' } }, {});
 
         expect(calls).toHaveLength(1);
         expect(calls[0].url).toBe('https://api.pets.example.com/v1/pets/42?detail=full');
@@ -118,14 +127,9 @@ describe('createOpenApiConnector', () => {
     });
 
     it('handler sends a JSON body for write operations', async () => {
-        const calls: Array<{ url: string; init: { method?: string; body?: unknown } }> = [];
-        const fetchImpl = (async (url: string, init: { method?: string; body?: unknown }) => {
-            calls.push({ url, init });
-            return { status: 201, ok: true, text: async () => '' };
-        }) as unknown as typeof fetch;
-
+        const { calls, fetchImpl } = fakeFetch({});
         const { handlers } = createOpenApiConnector({ document: doc, fetchImpl });
-        await handlers.createPet({ body: { name: 'Rex' } });
+        await handlers.createPet({ body: { name: 'Rex' } }, {});
 
         expect(calls[0].init.method).toBe('POST');
         expect(calls[0].init.body).toBe(JSON.stringify({ name: 'Rex' }));

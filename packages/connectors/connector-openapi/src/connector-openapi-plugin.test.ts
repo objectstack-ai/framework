@@ -1,7 +1,8 @@
+// Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
+
 import { describe, it, expect, vi } from 'vitest';
-import { registerOpenApiConnector } from './connector-openapi-plugin';
-import type { AutomationEngine } from '@objectstack/service-automation';
-import type { OpenApiDocument } from './openapi-connector';
+import { registerOpenApiConnector, type ConnectorRegistrySurface } from './connector-openapi-plugin.js';
+import type { OpenApiDocument } from './openapi-connector.js';
 
 const doc: OpenApiDocument = {
     info: { title: 'Mini' },
@@ -12,10 +13,13 @@ const doc: OpenApiDocument = {
 };
 
 describe('registerOpenApiConnector', () => {
-    it('registers the generated definition + handlers on the engine', () => {
+    it('registers the generated definition + handlers on the registry', () => {
         const registerConnector = vi.fn();
-        const engine = { registerConnector } as unknown as AutomationEngine;
-        registerOpenApiConnector(engine, { document: doc });
+        const registry = { registerConnector, unregisterConnector: vi.fn() } as unknown as ConnectorRegistrySurface;
+
+        const name = registerOpenApiConnector(registry, { document: doc });
+
+        expect(name).toBe('mini');
         expect(registerConnector).toHaveBeenCalledTimes(1);
         const [def, handlers] = registerConnector.mock.calls[0];
         expect(def.name).toBe('mini');
