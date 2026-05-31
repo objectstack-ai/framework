@@ -8,11 +8,11 @@ import type { AutomationEngine } from '../engine.js';
  * HTTP built-in node — `http_request` (foundational outbound I/O).
  *
  * Part of the platform baseline, so the core {@link AutomationServicePlugin}
- * seeds it directly (ADR-0018). The `connector_action` node was deliberately
- * NOT kept in the baseline: it is an *integration* concern that depends on a
- * connector registry the platform does not ship — the integration layer (or a
- * marketplace plugin) registers it via `engine.registerNodeExecutor()` when
- * connectors are present.
+ * seeds it directly (ADR-0018). Its generic-dispatch sibling `connector_action`
+ * (see {@link ./connector-nodes.ts}) is now also baseline: where `http_request`
+ * calls a raw URL, `connector_action` invokes a registered connector's action,
+ * with concrete connectors contributed by plugins via `engine.registerConnector()`
+ * (ADR-0018 §Addendum).
  *
  * ADR-0018 §M3 target: route `http_request` through the service-messaging
  * outbox (retry / idempotency / dead-letter) under the canonical `http` type.

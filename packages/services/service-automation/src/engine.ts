@@ -5,6 +5,8 @@ import type { ExecutionLog, ActionDescriptor } from '@objectstack/spec/automatio
 import type { AutomationContext, AutomationResult, ResumeSignal, IAutomationService } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES } from '@objectstack/spec/automation';
+import type { Connector } from '@objectstack/spec/integration';
+import { ConnectorSchema } from '@objectstack/spec/integration';
 
 // ─── Node Executor Interface (Plugin Extension Point) ───────────────
 
@@ -71,6 +73,40 @@ export interface FlowTrigger {
     readonly type: string;
     start(flowName: string, callback: (ctx: AutomationContext) => Promise<void>): void;
     stop(flowName: string): void;
+}
+
+// ─── Connector Registry (Plugin Extension Point) ────────────────────
+
+/**
+ * Context handed to a connector action handler. Carries the live flow variable
+ * map and the trigger context so a handler can read prior-node output, plus a
+ * logger. The platform ships the registry + the `connector_action` dispatch
+ * node (baseline, ADR-0018 §Addendum); *concrete* connectors — `connector-rest`,
+ * `connector-slack`, … — are plugins that register handlers here.
+ */
+export interface ConnectorActionContext {
+    readonly variables: Map<string, unknown>;
+    readonly automation: AutomationContext;
+    readonly logger: Logger;
+}
+
+/**
+ * A handler for one connector action. Receives the (already-resolved) input
+ * mapped from the flow node and returns the action's output, which the
+ * `connector_action` node writes back into flow variables.
+ */
+export type ConnectorActionHandler = (
+    input: Record<string, unknown>,
+    ctx: ConnectorActionContext,
+) => Promise<Record<string, unknown>>;
+
+/**
+ * A connector registered on the engine: its validated {@link Connector}
+ * definition plus the handler for each action it declares.
+ */
+export interface RegisteredConnector {
+    readonly def: Connector;
+    readonly handlers: Record<string, ConnectorActionHandler>;
 }
 
 // ─── Core Automation Engine ─────────────────────────────────────────
@@ -155,6 +191,8 @@ export class AutomationEngine implements IAutomationService {
     private nodeExecutors = new Map<string, NodeExecutor>();
     private actionDescriptors = new Map<string, ActionDescriptor>();
     private triggers = new Map<string, FlowTrigger>();
+    /** Connectors registered by integration plugins, keyed by connector name (ADR-0018 §Addendum). */
+    private connectors = new Map<string, RegisteredConnector>();
     private executionLogs: ExecutionLogEntry[] = [];
     private maxLogSize = 1000;
     private logger: Logger;
@@ -216,6 +254,51 @@ export class AutomationEngine implements IAutomationService {
     unregisterTrigger(type: string): void {
         this.triggers.delete(type);
         this.logger.info(`Trigger unregistered: ${type}`);
+    }
+
+    /**
+     * Register a connector (called by integration plugins, ADR-0018 §Addendum).
+     * Validates the definition against {@link ConnectorSchema} and asserts every
+     * declared action has a handler, so a half-wired connector fails loudly at
+     * registration rather than silently at dispatch. Re-registering the same
+     * name replaces (mirrors {@link registerNodeExecutor}).
+     */
+    registerConnector(def: Connector, handlers: Record<string, ConnectorActionHandler>): void {
+        const parsed = ConnectorSchema.parse(def);
+        for (const action of parsed.actions ?? []) {
+            if (typeof handlers[action.key] !== 'function') {
+                throw new Error(
+                    `Connector '${parsed.name}': action '${action.key}' is declared but no handler was provided`,
+                );
+            }
+        }
+        if (this.connectors.has(parsed.name)) {
+            this.logger.warn(`Connector '${parsed.name}' replaced`);
+        }
+        this.connectors.set(parsed.name, { def: parsed, handlers });
+        this.logger.info(
+            `Connector registered: ${parsed.name} (${Object.keys(handlers).length} action handlers)`,
+        );
+    }
+
+    /** Unregister a connector (hot-unplug). */
+    unregisterConnector(name: string): void {
+        this.connectors.delete(name);
+        this.logger.info(`Connector unregistered: ${name}`);
+    }
+
+    /**
+     * Resolve the handler for a connector action, used by the baseline
+     * `connector_action` node. Returns `undefined` when the connector or action
+     * is not registered, so the node can fail the step with a clear error.
+     */
+    resolveConnectorAction(connectorId: string, actionId: string): ConnectorActionHandler | undefined {
+        return this.connectors.get(connectorId)?.handlers[actionId];
+    }
+
+    /** Get all registered connector names. */
+    getRegisteredConnectors(): string[] {
+        return [...this.connectors.keys()];
     }
 
     /** Get all registered node types */

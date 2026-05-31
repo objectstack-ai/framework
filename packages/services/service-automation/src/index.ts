@@ -2,7 +2,14 @@
 
 // Core engine
 export { AutomationEngine } from './engine.js';
-export type { NodeExecutor, NodeExecutionResult, FlowTrigger } from './engine.js';
+export type {
+    NodeExecutor,
+    NodeExecutionResult,
+    FlowTrigger,
+    ConnectorActionHandler,
+    ConnectorActionContext,
+    RegisteredConnector,
+} from './engine.js';
 
 // Kernel plugin — seeds all built-in nodes; this is the only plugin needed for
 // a fully-functional automation capability.
@@ -18,4 +25,5 @@ export {
     registerCrudNodes,
     registerScreenNodes,
     registerHttpNodes,
+    registerConnectorNodes,
 } from './builtin/index.js';
