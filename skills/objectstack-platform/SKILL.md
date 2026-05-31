@@ -1060,7 +1060,7 @@ be re-run when commands are added.
 | Command | What it does |
 |:--------|:-------------|
 | `os init` | Scaffold a new project (alternative to `npx create-objectstack`) |
-| `os dev` | Start the dev server with hot metadata reload |
+| `os dev` | Start the dev server with hot metadata reload. `--fresh` = ephemeral clean DB + auto `--seed-admin`, which POSTs a sign-up after boot (default `admin@objectos.ai` / `admin123`; override with `--admin-email` / `--admin-password`). The seeded human is auto-promoted to **platform admin**, so Setup/Studio work on first login. |
 | `os studio` | Launch Studio UI against the local stack |
 | `os validate` | Validate `objectstack.config.ts` (Zod + cross-reference checks) |
 | `os lint` | Style/convention lint on metadata files |
@@ -1183,6 +1183,7 @@ describe('account hooks', () => {
 | Adapter 404s on auto-generated routes | `enable.apiEnabled: false` on the object, or missing `os build` |
 | LiteKernel test passes, ObjectKernel boot fails | Test missed a plugin dependency — list with `os info` |
 | Hot reload misses new objects | Barrel `src/objects/index.ts` not re-exporting — check the file |
+| Login works but **Setup / Studio missing** | The logged-in user isn't a platform admin. Setup/Studio are gated by `setup.access` / `studio.access` on `admin_full_access`, auto-granted only to the first registered **human** (`bootstrapPlatformAdmin`). The `usr_system` seed identity is skipped, so it can't steal the grant. Either sign up first (`--seed-admin`/`--fresh` does this) or check `sys_user_permission_set` for a cross-tenant (`organization_id = NULL`) `admin_full_access` link on your user. Don't edit nav code first. |
 
 ---
 

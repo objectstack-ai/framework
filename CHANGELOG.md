@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — First-boot platform-admin promotion no longer stolen by the `usr_system` seed identity
+
+`5e831dea3` (#1392) added `ensureSeedIdentity` to the runtime SeedLoader, which
+upserts a non-loginable system identity (`usr_system`, role `system`,
+`system@objectstack.local`) to own seeded records — created *before* the first
+human sign-up. Because `bootstrapPlatformAdmin` (`@objectstack/plugin-security`)
+promotes the **earliest-created** `sys_user`, on any app that ships seed data
+(e.g. the showcase / CRM examples) `usr_system` won the promotion and the real
+admin login stayed at `role: user`. Sign-in succeeded but **Setup and Studio**
+— gated by `setup.access` / `studio.access` on `admin_full_access` — were
+invisible, a silent and confusing regression.
+
+`bootstrap-platform-admin.ts` now excludes the system account
+(`id === SystemUserId.SYSTEM || role === 'system'`) when picking the first user
+to promote, and the "an admin already exists" short-circuit ignores any
+`admin_full_access` grant held by `usr_system`, so a database where it was
+wrongly promoted self-heals on the next boot. Verified end-to-end: `pnpm dev`
+→ the seeded admin's `get-session` now resolves `role: admin` and the
+cross-tenant `admin_full_access` grant belongs to the human admin.
+
+Alongside this, `os dev`'s seed-admin defaults changed from `admin@dev.local` /
+`admin12345` to the fixed, well-known `admin@objectos.ai` / `admin123`
+(`@objectstack/cli`), so tooling and docs never have to guess the credentials.
+
 ### Changed — Object metadata preview now mounts real `ObjectGrid`; Airtable widget removed (ADR-0014 addendum)
 
 The first cut of ADR-0014 shipped a parallel `FieldsTable` component

@@ -23,7 +23,7 @@ pnpm docs:dev         # docs site
 | **Frontend debug** (UI in `../objectui` calls backend) | `PORT=3000 pnpm dev:crm` | Port **must** be 3000 (UI hard-wired); persistent state; leave running |
 | **Backend-only debug** | `pnpm dev:crm -- --fresh -p <random>` | Random high port; ephemeral tempdir; **you must kill it** when done |
 
-`--fresh`: ephemeral tempdir (auto-deleted on exit) + `--seed-admin` (POSTs sign-up, prints creds — default `admin@dev.local` / `admin12345`, override via `--admin-email`/`--admin-password`).
+`--fresh`: ephemeral tempdir (auto-deleted on exit) + `--seed-admin` (POSTs sign-up, prints creds — default `admin@objectos.ai` / `admin123`, override via `--admin-email`/`--admin-password`). The seeded admin is auto-promoted to **platform admin** (the system seed identity `usr_system` is skipped), so Setup/Studio are reachable on first login.
 
 Rules: never run two backends on port 3000; for backend tasks pick a random port and tear it down; always use `pnpm dev:crm` (flags after `--` are forwarded), not raw `pnpm --filter`.
 

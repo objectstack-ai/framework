@@ -20,6 +20,7 @@
  */
 
 import type { PermissionSet } from '@objectstack/spec/security';
+import { SystemUserId } from '@objectstack/spec/system';
 
 interface BootstrapOptions {
   /** Logger from PluginContext. */
@@ -117,18 +118,32 @@ export async function bootstrapPlatformAdmin(
     ql,
     'sys_user_permission_set',
     { permission_set_id: adminPsId },
-    5,
+    50,
   );
-  if (existingAdminLinks.some((r) => !r.organization_id)) {
+  // A platform admin "already exists" only if a *human* holds the
+  // cross-tenant grant. The seed-data owner `usr_system` (provisioned by
+  // the SeedLoader, see runtime/app-plugin.ts `ensureSeedIdentity`) must
+  // never count — otherwise a DB where it was wrongly promoted would block
+  // every real admin forever. Ignoring it here makes the bootstrap
+  // self-healing on restart.
+  if (existingAdminLinks.some((r) => !r.organization_id && r.user_id !== SystemUserId.SYSTEM)) {
     return { seeded: seededCount, adminPromoted: false, reason: 'already_have_admin' };
   }
 
   const allUsers = await tryFind(ql, 'sys_user', {}, 50);
-  if (allUsers.length === 0) {
-    logger?.info?.('[security] no users yet — first sign-up will be promoted to platform admin');
+  // Exclude the non-loginable system service account. It is created during
+  // seed loading — *before* the first human sign-up — so without this filter
+  // it is the earliest user and steals the platform-admin promotion, leaving
+  // the real admin login without `setup.access` / `studio.access` (Setup and
+  // Studio then stay invisible even though login succeeds).
+  const humanUsers = allUsers.filter(
+    (u) => u.id !== SystemUserId.SYSTEM && u.role !== 'system',
+  );
+  if (humanUsers.length === 0) {
+    logger?.info?.('[security] no human users yet — first sign-up will be promoted to platform admin');
     return { seeded: seededCount, adminPromoted: false, reason: 'no_users' };
   }
-  const sorted = [...allUsers].sort((a, b) => {
+  const sorted = [...humanUsers].sort((a, b) => {
     const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
     const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
     return ta - tb;

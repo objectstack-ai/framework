@@ -240,7 +240,7 @@ than redefining the basics.
 
 | Name | Scope | What it unlocks | Notes |
 |:--|:--|:--|:--|
-| `admin_full_access` | Platform (no RLS) | All objects, all system permissions, Studio + Setup, cross-org reads | Reserved for platform operators. Auto-granted to the bootstrap admin (`bootstrapPlatformAdmin`). |
+| `admin_full_access` | Platform (no RLS) | All objects, all system permissions, Studio + Setup, cross-org reads | Reserved for platform operators. Auto-granted to the bootstrap admin (`bootstrapPlatformAdmin`) — the **first registered human**. The non-loginable seed-data identity `usr_system` (role `system`, provisioned before the first sign-up to own seeded rows) is deliberately skipped, so the real admin wins the promotion. |
 | `organization_admin` | Per-org (`tenant_isolation` RLS, only active when [`plugin-org-scoping`](#objectstackplugin-org-scoping) is loaded) | Wildcard CRUD inside the org, `manage_org_users`, Setup app shell (only org-scoped entries visible), invite members, manage roles assignment | **Read-only** on `sys_role`, `sys_permission_set`, `sys_role_permission_set`, `sys_user_permission_set`, `sys_user_role` to prevent self-elevation. Does **not** see Studio. |
 | `member_default` | Per-org | Standard end-user CRUD on org records | Default profile for invited members. |
 | `viewer_readonly` | Per-org | Read access only | For auditors / read-only stakeholders. |

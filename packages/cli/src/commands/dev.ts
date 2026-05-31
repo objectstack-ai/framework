@@ -63,8 +63,11 @@ export default class Dev extends Command {
     // so every run starts from a clean slate. Combine with `--seed-admin`
     // (default-on when --fresh) to also provision a logged-in admin
     // account, so backend debugging never blocks on first-run wizards.
+    // The seeded admin uses FIXED, well-known credentials by default
+    // (admin@objectos.ai / admin123) so tooling never has to guess them —
+    // override with --admin-email / --admin-password when needed.
     fresh: Flags.boolean({
-      description: 'Start with an ephemeral OS_HOME under the OS tempdir (clean DB, uploads, storage); auto-deletes on exit. Implies --seed-admin unless --no-seed-admin is given.',
+      description: 'Start with an ephemeral OS_HOME under the OS tempdir (clean DB, uploads, storage); auto-deletes on exit. Implies --seed-admin (admin@objectos.ai / admin123) unless --no-seed-admin is given.',
       default: false,
     }),
     'seed-admin': Flags.boolean({
@@ -73,11 +76,11 @@ export default class Dev extends Command {
     }),
     'admin-email': Flags.string({
       description: 'Email for the seeded admin account.',
-      default: 'admin@dev.local',
+      default: 'admin@objectos.ai',
     }),
     'admin-password': Flags.string({
       description: 'Password for the seeded admin account (min 8 chars).',
-      default: 'admin12345',
+      default: 'admin123',
     }),
   };
 
