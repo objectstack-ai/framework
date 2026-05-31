@@ -8,6 +8,7 @@ import {
 } from '@objectstack/platform-objects/audit';
 import { ApprovalService, type ApprovalEngine } from './approval-service.js';
 import { bindProcessHooks, unbindAllHooks } from './lifecycle-hooks.js';
+import { registerApprovalNode, type ApprovalAutomationSurface } from './approval-node.js';
 
 export interface ApprovalsPluginOptions {
   /** Disable runtime registration (schemas still register). */
@@ -106,6 +107,18 @@ export class ApprovalsServicePlugin implements Plugin {
 
     ctx.registerService('approvals', this.service);
     ctx.logger.info('ApprovalsServicePlugin: service registered');
+
+    // ADR-0019: contribute the `approval` node to the flow engine when one is
+    // present. Optional — the manual approval API works without it; this is the
+    // bridge that lets a flow suspend on an Approval node and resume on decision.
+    try {
+      const automation = ctx.getService<ApprovalAutomationSurface>('automation');
+      if (automation && typeof automation.registerNodeExecutor === 'function') {
+        registerApprovalNode(automation, this.service, ctx.logger);
+      }
+    } catch {
+      ctx.logger.info('ApprovalsServicePlugin: no automation engine — approval node not registered');
+    }
   }
 
   private async rebindHooks(): Promise<void> {

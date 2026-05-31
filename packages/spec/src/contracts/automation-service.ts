@@ -45,6 +45,31 @@ export interface AutomationResult {
     error?: string;
     /** Execution duration in milliseconds */
     durationMs?: number;
+    /**
+     * Lifecycle status. `'paused'` means the run suspended at a node (e.g.
+     * an Approval node awaiting a human decision, ADR-0019) and can be
+     * continued later with {@link IAutomationService.resume}. Absent or
+     * `'completed'`/`'failed'` ⇒ the run reached a terminal state.
+     */
+    status?: 'completed' | 'paused' | 'failed';
+    /** Run id — set when `status` is `'paused'`, so callers can resume it. */
+    runId?: string;
+}
+
+/** Signal payload used to resume a paused run (ADR-0019). */
+export interface ResumeSignal {
+    /**
+     * Output to merge into flow variables under the suspended node's id
+     * (e.g. `{ decision: 'approved' }` → `<nodeId>.decision`). Downstream
+     * edges branch on it exactly as for a normally-executed node.
+     */
+    output?: Record<string, unknown>;
+    /**
+     * Optional edge label to select which out-edge of the suspended node to
+     * follow (e.g. `'approve'` / `'reject'`). When omitted, traversal falls
+     * back to the node's conditional/unconditional edges.
+     */
+    branchLabel?: string;
 }
 
 export interface IAutomationService {
@@ -113,4 +138,22 @@ export interface IAutomationService {
      * @returns Array of registered action descriptors
      */
     getActionDescriptors?(): ActionDescriptor[];
+
+    /**
+     * Resume a run that suspended at a pausing node (ADR-0019). The run must
+     * have previously returned `{ status: 'paused', runId }` from
+     * {@link execute} (or a prior `resume`). Continues traversal from the
+     * suspended node's out-edges, applying `signal.output` / `signal.branchLabel`.
+     * @param runId - The paused run's id
+     * @param signal - Optional output to merge and/or branch label to follow
+     * @returns The result of continuing the run (may itself be `'paused'` again)
+     */
+    resume?(runId: string, signal?: ResumeSignal): Promise<AutomationResult>;
+
+    /**
+     * List the currently suspended (paused) runs awaiting a resume — id, the
+     * flow, the node they paused at, and any correlation key the pausing node
+     * attached. Backs operability (e.g. a "pending approvals" view).
+     */
+    listSuspendedRuns?(): Array<{ runId: string; flowName: string; nodeId: string; correlation?: string }>;
 }

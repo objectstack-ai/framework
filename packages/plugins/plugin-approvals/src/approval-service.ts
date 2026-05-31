@@ -1,6 +1,6 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { ApprovalProcessSchema } from '@objectstack/spec/automation';
+import { ApprovalProcessSchema, type ApprovalNodeConfig } from '@objectstack/spec/automation';
 import type {
   IApprovalService,
   ApprovalProcessRow,
@@ -796,6 +796,173 @@ export class ApprovalService implements IApprovalService {
       await this.runActions((process.definition as any)?.onRecall, 'recall', process, fresh!, undefined, input.actorId, input.comment);
     }
     return { request: fresh!, finalized: true };
+  }
+
+  // ── ADR-0019: Approval-as-flow-node ──────────────────────────
+  //
+  // A flow's Approval node opens a request via `openNodeRequest` (carrying its
+  // own approvers/behavior config and the suspended run id), then suspends. A
+  // later `decideNode` finalizes it; the node provider resumes the flow run
+  // down the matching `approve`/`reject` edge. These reuse the same approver
+  // expansion, audit rows, lock (the beforeUpdate hook keys on a *pending*
+  // request, so finalizing auto-releases it), and status mirror as the
+  // process-driven path — only the trigger and continuation differ.
+
+  /** Mirror a request status onto a business-object field, if configured. */
+  private async mirrorStatusField(object: string, recordId: string, field: string, status: string): Promise<void> {
+    try {
+      await this.engine.update(object, { id: recordId, [field]: status }, { context: SYSTEM_CTX });
+    } catch (err: any) {
+      this.logger?.warn?.(`[approvals] mirrorStatusField failed: ${err?.message ?? err}`);
+    }
+  }
+
+  /**
+   * Open a pending approval request on behalf of a flow's Approval node
+   * (ADR-0019). Self-contained: the node config (approvers/behavior/status
+   * field) is snapshotted on the row, since a node-driven request has no
+   * `sys_approval_process` to resolve against.
+   */
+  async openNodeRequest(
+    input: {
+      object: string;
+      recordId: string;
+      runId: string;
+      nodeId: string;
+      config: ApprovalNodeConfig;
+      flowName?: string;
+      submitterId?: string | null;
+      record?: any;
+      organizationId?: string | null;
+    },
+    context: SharingExecutionContext,
+  ): Promise<ApprovalRequestRow> {
+    if (!input.object) throw new Error('VALIDATION_FAILED: object is required');
+    if (!input.recordId) throw new Error('VALIDATION_FAILED: recordId is required');
+    if (!input.runId) throw new Error('VALIDATION_FAILED: runId is required');
+
+    // One pending request per (object, record) — same guard as submit().
+    const existing = await this.engine.find('sys_approval_request', {
+      where: { object_name: input.object, record_id: input.recordId, status: 'pending' },
+      limit: 1, context: SYSTEM_CTX,
+    });
+    if (Array.isArray(existing) && existing[0]) {
+      throw new Error(`DUPLICATE_REQUEST: a pending approval already exists for ${input.object}/${input.recordId}`);
+    }
+
+    const ctxOrg = (context as any)?.organizationId ?? (context as any)?.tenantId ?? input.organizationId ?? null;
+    const approvers = await this.expandApprovers({ approvers: input.config.approvers }, input.record, ctxOrg);
+
+    const now = this.clock.now().toISOString();
+    const id = uid('areq');
+    const processName = `flow:${input.flowName ?? input.nodeId}`;
+    const row: any = {
+      id,
+      process_name: processName,
+      object_name: input.object,
+      record_id: input.recordId,
+      submitter_id: input.submitterId ?? context.userId ?? null,
+      status: 'pending',
+      current_step: input.nodeId,
+      current_step_index: 0,
+      pending_approvers: approvers.join(','),
+      payload_json: input.record != null ? JSON.stringify(input.record) : null,
+      flow_run_id: input.runId,
+      flow_node_id: input.nodeId,
+      node_config_json: JSON.stringify(input.config),
+      organization_id: ctxOrg,
+      created_at: now,
+      updated_at: now,
+    };
+    await this.engine.insert('sys_approval_request', row, { context: SYSTEM_CTX });
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: id, organization_id: ctxOrg,
+      step_name: input.nodeId, step_index: 0, action: 'submit',
+      actor_id: input.submitterId ?? context.userId ?? null, comment: null, created_at: now,
+    }, { context: SYSTEM_CTX });
+
+    if (input.config.lockRecord !== false) {
+      // Lock is enforced by the existing beforeUpdate hook keyed on a pending
+      // request; no extra write needed here.
+    }
+    if (input.config.approvalStatusField) {
+      await this.mirrorStatusField(input.object, input.recordId, input.config.approvalStatusField, 'pending');
+    }
+
+    return rowFromRequest(row);
+  }
+
+  /**
+   * Record a decision on a node-driven request (ADR-0019). Honours the node's
+   * `unanimous` behavior (holds until every approver has approved). When the
+   * request finalizes, returns the suspended run id + node id so the node
+   * provider can resume the flow down the matching branch.
+   */
+  async decideNode(
+    requestId: string,
+    input: { decision: 'approve' | 'reject'; actorId: string; comment?: string },
+    context: SharingExecutionContext,
+  ): Promise<{ request: ApprovalRequestRow; runId: string | null; nodeId: string | null; finalized: boolean; decision: 'approve' | 'reject' }> {
+    if (!requestId) throw new Error('VALIDATION_FAILED: requestId is required');
+    if (!input?.actorId) throw new Error('VALIDATION_FAILED: actorId is required');
+    if (input.decision !== 'approve' && input.decision !== 'reject') {
+      throw new Error('VALIDATION_FAILED: decision must be approve|reject');
+    }
+
+    // Read the raw row to reach flow_* correlation + the node config snapshot.
+    const rawRows = await this.engine.find('sys_approval_request', {
+      where: { id: requestId }, limit: 1, context: SYSTEM_CTX,
+    });
+    const raw: any = Array.isArray(rawRows) ? rawRows[0] : null;
+    if (!raw) throw new Error(`REQUEST_NOT_FOUND: ${requestId}`);
+    if (raw.status !== 'pending') throw new Error(`INVALID_STATE: request is ${raw.status}`);
+
+    const pendingApprovers = csvSplit(raw.pending_approvers);
+    if (!context.isSystem && !pendingApprovers.includes(input.actorId)) {
+      throw new Error(`FORBIDDEN: actor '${input.actorId}' is not a pending approver`);
+    }
+
+    const config = parseJson<ApprovalNodeConfig>(raw.node_config_json, { approvers: [], behavior: 'first_response' } as any);
+    const org = raw.organization_id ?? null;
+    const nodeId: string | null = raw.flow_node_id ?? raw.current_step ?? null;
+    const runId: string | null = raw.flow_run_id ?? null;
+    const now = this.clock.now().toISOString();
+
+    // Audit the decision first so the unanimous tally below sees it.
+    await this.engine.insert('sys_approval_action', {
+      id: uid('aact'), request_id: requestId, organization_id: org,
+      step_name: nodeId, step_index: 0, action: input.decision,
+      actor_id: input.actorId, comment: input.comment ?? null, created_at: now,
+    }, { context: SYSTEM_CTX });
+
+    // Unanimous approve: advance only once every approver has approved.
+    if (input.decision === 'approve' && config.behavior === 'unanimous') {
+      const original = await this.expandApprovers(
+        { approvers: config.approvers }, parseJson(raw.payload_json, undefined), org,
+      );
+      const acts = await this.engine.find('sys_approval_action', {
+        where: { request_id: requestId, step_index: 0, action: 'approve' }, limit: 500, context: SYSTEM_CTX,
+      });
+      const approved = new Set<string>((acts ?? []).map((a: any) => String(a.actor_id ?? '')).filter(Boolean));
+      const stillPending = original.filter(a => !approved.has(a));
+      if (stillPending.length > 0) {
+        await this.engine.update('sys_approval_request', {
+          id: requestId, pending_approvers: stillPending.join(','), updated_at: now,
+        }, { context: SYSTEM_CTX });
+        const fresh = await this.getRequest(requestId, context);
+        return { request: fresh!, runId, nodeId, finalized: false, decision: input.decision };
+      }
+    }
+
+    const finalStatus = input.decision === 'approve' ? 'approved' : 'rejected';
+    await this.engine.update('sys_approval_request', {
+      id: requestId, status: finalStatus, pending_approvers: null, completed_at: now, updated_at: now,
+    }, { context: SYSTEM_CTX });
+    if (config.approvalStatusField) {
+      await this.mirrorStatusField(raw.object_name, raw.record_id, config.approvalStatusField, finalStatus);
+    }
+    const fresh = await this.getRequest(requestId, context);
+    return { request: fresh!, runId, nodeId, finalized: true, decision: input.decision };
   }
 
   async listActions(requestId: string, context: SharingExecutionContext): Promise<ApprovalActionRow[]> {

@@ -175,6 +175,36 @@ export const SysApprovalRequest = ObjectSchema.create({
       group: 'State',
     }),
 
+    // ── ADR-0019: approval-as-flow-node correlation ──────────────────
+    // When a request is opened by an Approval *node* (rather than a standalone
+    // process), these tie it back to the suspended flow run so a decision can
+    // resume it. Null for legacy process-driven requests.
+    flow_run_id: Field.text({
+      label: 'Flow Run',
+      required: false,
+      maxLength: 100,
+      readonly: true,
+      description: 'Suspended automation run id this request gates (ADR-0019). The decision resumes it.',
+      group: 'State',
+    }),
+
+    flow_node_id: Field.text({
+      label: 'Flow Node',
+      required: false,
+      maxLength: 100,
+      readonly: true,
+      description: 'Approval node id within the flow that opened this request (ADR-0019).',
+      group: 'State',
+    }),
+
+    node_config_json: Field.textarea({
+      label: 'Node Config',
+      required: false,
+      readonly: true,
+      description: 'Snapshot of the Approval node config (approvers/behavior) for node-driven requests (ADR-0019).',
+      group: 'State',
+    }),
+
     completed_at: Field.datetime({
       label: 'Completed At',
       required: false,

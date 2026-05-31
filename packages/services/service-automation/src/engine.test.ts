@@ -343,6 +343,170 @@ describe('AutomationEngine', () => {
         });
     });
 
+    describe('Durable Suspend / Resume (ADR-0019)', () => {
+        // A node that pauses the run on entry, exposing the run id it captured.
+        function registerPausingNode(captured: { runId?: unknown }) {
+            engine.registerNodeExecutor({
+                type: 'pause_node',
+                async execute(_node, variables) {
+                    captured.runId = variables.get('$runId');
+                    return { success: true, suspend: true, correlation: 'req_1' };
+                },
+            });
+        }
+
+        it('should suspend at a pausing node and return { status: "paused", runId }', async () => {
+            const captured: { runId?: unknown } = {};
+            registerPausingNode(captured);
+            engine.registerNodeExecutor({
+                type: 'after',
+                async execute() { return { success: true }; },
+            });
+
+            engine.registerFlow('pause_flow', {
+                name: 'pause_flow',
+                label: 'Pause Flow',
+                type: 'autolaunched',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 'pause', type: 'pause_node', label: 'Pause' },
+                    { id: 'after', type: 'after', label: 'After' },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'pause' },
+                    { id: 'e2', source: 'pause', target: 'after' },
+                    { id: 'e3', source: 'after', target: 'end' },
+                ],
+            });
+
+            const result = await engine.execute('pause_flow');
+            expect(result.success).toBe(true);
+            expect(result.status).toBe('paused');
+            expect(result.runId).toBeDefined();
+            // Run id was injected into the variable context for the node.
+            expect(captured.runId).toBe(result.runId);
+
+            // It appears in the suspended-runs listing with its correlation.
+            const suspended = engine.listSuspendedRuns();
+            expect(suspended).toHaveLength(1);
+            expect(suspended[0]).toMatchObject({
+                runId: result.runId,
+                flowName: 'pause_flow',
+                nodeId: 'pause',
+                correlation: 'req_1',
+            });
+        });
+
+        it('should continue downstream nodes on resume', async () => {
+            const executed: string[] = [];
+            const captured: { runId?: unknown } = {};
+            registerPausingNode(captured);
+            engine.registerNodeExecutor({
+                type: 'after',
+                async execute(node) { executed.push(node.id); return { success: true }; },
+            });
+
+            engine.registerFlow('resume_flow', {
+                name: 'resume_flow',
+                label: 'Resume Flow',
+                type: 'autolaunched',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 'pause', type: 'pause_node', label: 'Pause' },
+                    { id: 'after', type: 'after', label: 'After' },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'pause' },
+                    { id: 'e2', source: 'pause', target: 'after' },
+                    { id: 'e3', source: 'after', target: 'end' },
+                ],
+            });
+
+            const paused = await engine.execute('resume_flow');
+            expect(executed).not.toContain('after');
+
+            const resumed = await engine.resume(paused.runId!);
+            expect(resumed.success).toBe(true);
+            expect(resumed.status).toBeUndefined();
+            expect(executed).toContain('after');
+            // The suspension is consumed exactly once.
+            expect(engine.listSuspendedRuns()).toHaveLength(0);
+        });
+
+        it('should select the branch named by the resume signal label', async () => {
+            const executed: string[] = [];
+            const captured: { runId?: unknown } = {};
+            registerPausingNode(captured);
+            engine.registerNodeExecutor({
+                type: 'branch_node',
+                async execute(node) { executed.push(node.id); return { success: true }; },
+            });
+
+            engine.registerFlow('decision_flow', {
+                name: 'decision_flow',
+                label: 'Decision Flow',
+                type: 'autolaunched',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 'pause', type: 'pause_node', label: 'Approval' },
+                    { id: 'approved', type: 'branch_node', label: 'Approved' },
+                    { id: 'rejected', type: 'branch_node', label: 'Rejected' },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'pause' },
+                    { id: 'e2', source: 'pause', target: 'approved', label: 'approve' },
+                    { id: 'e3', source: 'pause', target: 'rejected', label: 'reject' },
+                    { id: 'e4', source: 'approved', target: 'end' },
+                    { id: 'e5', source: 'rejected', target: 'end' },
+                ],
+            });
+
+            const paused = await engine.execute('decision_flow');
+            await engine.resume(paused.runId!, { branchLabel: 'approve', output: { decision: 'approved' } });
+
+            expect(executed).toContain('approved');
+            expect(executed).not.toContain('rejected');
+        });
+
+        it('should fail to resume an unknown run', async () => {
+            const result = await engine.resume('run_does_not_exist');
+            expect(result.success).toBe(false);
+            expect(result.error).toContain('No suspended run');
+        });
+
+        it('should opt-in screen node into suspend via config.waitForInput', async () => {
+            const kernel = new LiteKernel();
+            kernel.use(new AutomationServicePlugin());
+            await kernel.bootstrap();
+            const e = kernel.getService<AutomationEngine>('automation');
+
+            e.registerFlow('screen_wait', {
+                name: 'screen_wait',
+                label: 'Screen Wait',
+                type: 'autolaunched',
+                nodes: [
+                    { id: 'start', type: 'start', label: 'Start' },
+                    { id: 'screen', type: 'screen', label: 'Screen', config: { waitForInput: true } },
+                    { id: 'end', type: 'end', label: 'End' },
+                ],
+                edges: [
+                    { id: 'e1', source: 'start', target: 'screen' },
+                    { id: 'e2', source: 'screen', target: 'end' },
+                ],
+            });
+
+            const paused = await e.execute('screen_wait');
+            expect(paused.status).toBe('paused');
+
+            const resumed = await e.resume(paused.runId!);
+            expect(resumed.success).toBe(true);
+            expect(resumed.status).toBeUndefined();
+        });
+    });
+
     describe('IAutomationService Contract', () => {
         it('should satisfy IAutomationService interface', () => {
             const service: IAutomationService = engine;
