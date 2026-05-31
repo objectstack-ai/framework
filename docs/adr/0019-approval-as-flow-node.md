@@ -1,0 +1,166 @@
+# ADR-0019: Collapse Approval into Flow — one engine, approval as a durable-pause node
+
+**Status**: Proposed (2026-05-31)
+**Deciders**: ObjectStack Protocol Architects
+**Builds on**: [ADR-0018](./0018-unified-node-action-registry.md) (open action registry — approval becomes a consumer), [ADR-0009](./0009-execution-pinned-metadata.md) (execution pinning — reconcile to one mechanism), [ADR-0012](./0012-notification-platform.md) (outbox / `notify`), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI authoring — the design center)
+**Revises**: ADR-0018's premise that Approval stays a separate paradigm with its own closed `ApprovalActionType` enum, and the "Workflow-Rule → Flow compiler" (M5) — both dropped here (greenfield, no legacy).
+**Consumers**: `@objectstack/spec` (`automation/approval.*`, `automation/flow.zod.ts`), `@objectstack/services/service-automation`, `@objectstack/plugins/plugin-approvals`, `@objectstack/platform-objects` (`audit/sys-approval-*`), `../objectui` (`plugin-workflow` designer)
+
+---
+
+## TL;DR
+
+Approval is currently a **second execution engine** (`@objectstack/plugin-approvals`, ~1500 LOC) that runs *beside* Flow with its own action executor, its own execution pinning, and its own lifecycle. Its declarative `ApprovalProcessSchema` cannot express a graphical branch and cannot place an ordinary Flow node (e.g. an HTTP connector) between two approval steps, so admins must choose which tool to model in.
+
+ADR-0018 opened the node/action registry; this ADR uses it to **collapse approval onto the one Flow engine**. Approval becomes a **first-class durable-pause node** contributed through the open registry (like the existing `screen` node), not a parallel engine and not engine core. The standalone `ApprovalProcessSchema` is **deprecated as an authoring type** — its step-sequencing dissolves into Flow graph edges, its per-step actions into downstream Flow nodes (over the ADR-0018 registry), and its approver/escalation/lock model into **node config**. The approval *runtime state* (`sys_approval_request` / `sys_approval_action`, lock, status mirror, approver resolution) is **kept** — it just stops carrying a second execution loop.
+
+Because the future authoring path is **AI generates the Flow, the human previews the diagram and confirms**, a single composable IR (one Flow graph with rich nodes) beats a constrained side DSL: the human reviews one picture, and the AI targets one representation instead of choosing among DSLs with escape hatches.
+
+## Context
+
+### Greenfield — no migration constraint
+
+The platform is not launched; there is no production approval data and no legacy automation to translate. This removes the usual reason to keep a deprecated model alive for compatibility, and it removes the reason for a Workflow-Rule → Flow compiler entirely (Workflow Rules were already removed in #1398, and `workflow` was reclaimed for state machines). **Migration is a code refactor, not a data migration.**
+
+### Today: approval is a separate engine (the Salesforce pit, in our codebase)
+
+ADR-0018 §Context argued — correctly — that *multiple authoring paradigms are fine; multiple execution vocabularies are not*. Approval is where that line is currently crossed at the **engine** level, not just the vocabulary level:
+
+- `@objectstack/plugin-approvals` is ~1500 LOC of runtime: an 816-line `approval-service.ts` state machine, a **313-line parallel `action-executor.ts`**, 250-line lifecycle hooks, and a 128-line plugin.
+- The contract is explicit that this is a separate engine: [`spec/contracts/approval-service.ts:11`](../../packages/spec/src/contracts/approval-service.ts#L11) — *"Sits on top of (but does not depend on) `IWorkflowService` … driven by humans rather than transition rules."*
+- The parallel `action-executor.ts` re-implements `field_update` / `inbox_notify` / `webhook` and carries the **same** `connector_action` / `script` / `email_alert` "unimplemented, logged + skipped" stubs that ADR-0018 set out to retire.
+- It has its **own** ADR-0009 execution pinning (`process_hash` → `getByHash`), parallel to Flow's.
+- It registers its own lifecycle hooks: `afterInsert` auto-trigger, `beforeUpdate` record-lock ([`plugin-approvals/src/lifecycle-hooks.ts`](../../packages/plugins/plugin-approvals/src/lifecycle-hooks.ts)).
+
+This is precisely the failure mode Salesforce lived for years: Approval Process as a separate engine from Flow, never cleanly folded in, leaving admins to pick a tool and the platform to maintain two of everything.
+
+### Why the declarative `ApprovalProcessSchema` hits a wall
+
+[`automation/approval.zod.ts`](../../packages/spec/src/automation/approval.zod.ts) is a *linear* model: `steps[]`, per-step `approvers` / `behavior` / `rejectionBehavior`, and per-step `onApprove` / `onReject` actions drawn from a **closed** `ApprovalActionType` enum. Two concrete things it cannot do:
+
+1. **No graphical branch.** A reviewer cannot see, or author, an arbitrary branch — only a step list plus `rejectionBehavior: back_to_previous`.
+2. **No mid-process Flow step.** You cannot place a connector / HTTP / decision node *between* approval step 2 and step 3; the only "between" available is the limited per-step action enum. Any real integration forces an escape out of the model.
+
+The result is exactly the tool-choice tax: simple approvals go in the approval model, anything composite has to be rebuilt as a Flow.
+
+### The design-center shift: AI generates, humans preview
+
+The intended authoring path (ADR-0010 / ADR-0011) is **AI generates the automation; the human previews the design diagram and confirms it matches intent**. This changes what the representation must optimize for:
+
+- The "fill a 30-second form vs. wire a 30-node graph" authoring-ergonomics argument for a constrained DSL **evaporates** — the human is not authoring either way; the AI is, and the human *reviews a diagram*.
+- Reviewing **one** unified Flow graph is easier than reviewing "a linear approval config *and* a Flow graph" side by side.
+- An AI targets **one composable IR** more reliably than it chooses among several constrained DSLs and their escape hatches.
+
+So the design center now favors a single expressive Flow representation with a rich Approval node, not a separate approval DSL.
+
+## Decision
+
+Collapse approval onto the one Flow engine. The four sub-decisions:
+
+### D1 — One execution engine; approval rides it as a durable-pause node
+
+There is **one** execution loop: the Flow engine. The engine core owns a generic **durable-pause-and-resume** primitive — a node may suspend the run and resume on an external signal (timer, event, or a human decision). The `screen` node already uses this (`supportsPause` / `isAsync`); we formalize "resume on external signal" as the shared mechanism. Approval is a node that uses it. The parallel approval execution loop (`approval-service.ts`'s stepping + `action-executor.ts`) is removed.
+
+> The "one engine" property — not "one state table" — is what avoids the Salesforce pit. The pit was two *execution loops*. Approval keeping its own state objects is correct and necessary (see "What must NOT be lost"); a second execution loop is not.
+
+### D2 — Approval is a plugin that contributes a node, not engine core
+
+The Approval node is registered through the **ADR-0018 open registry** (`registerNodeExecutor`), by a slimmed-down approval plugin — **not** baked into `service-automation` core. Rationale:
+
+- It is the ADR-0018 thesis applied to ourselves: the engine is the substrate, capabilities are contributed nodes.
+- **Layering.** Approver resolution depends on the org / sharing model — `sys_team`, `sys_department` (recursive BFS), `sys_user.manager_id`, `sys_department_member` ([`plugin-approvals/src/approval-service.ts:175`](../../packages/plugins/plugin-approvals/src/approval-service.ts#L175)). The Flow engine core must **not** depend on the org model; the approval plugin may. So approval cannot live in core.
+- `service-automation` stays lean; approval becomes a well-behaved node provider that rides the engine instead of a parallel engine.
+
+### D3 — Deprecate `ApprovalProcessSchema` as a top-level authoring type; re-home its concepts
+
+`ApprovalProcessSchema` / `approval.form.ts` are deprecated as a standalone *authoring* metadata type. Nothing is thrown away — each concept moves:
+
+| In `approval.zod.ts` today | Re-homed to |
+|:---|:---|
+| `steps[]` (sequence) | Multiple Approval nodes connected by Flow edges (sequence becomes a graph) |
+| `rejectionBehavior: back_to_previous` | A back-edge in the Flow graph (the branch is now visible) |
+| `onApprove` / `onReject` + `ApprovalActionType` enum | Downstream Flow nodes on the node's approve/reject outputs, over the ADR-0018 registry (**enum deleted**) |
+| `ApproverType` (user/role/team/department/manager/field/queue), `behavior` (unanimous/first_response), `escalation`, `lockRecord`, `approvalStatusField` | **Approval node config schema** (`configSchemaRef` per the descriptor) |
+
+### D4 — Delete the parallel pieces
+
+- `plugin-approvals/src/action-executor.ts` (313 LOC) — replaced by downstream Flow nodes + the ADR-0018 action registry.
+- `ApprovalActionType` enum and the dangling `connector_action` it still carries.
+- The Workflow-Rule → Flow compiler (ADR-0018 M5) and the `connector_action` remnants in `flow.zod.ts` — no legacy to migrate.
+- Reconcile to **one** ADR-0009 execution-pinning mechanism: the Flow definition is pinned; approval's separate `process_hash` pinning is retired.
+
+### What must NOT be lost
+
+The normalized **approval runtime state** is kept as first-class state owned by the approval plugin:
+
+- `sys_approval_request` (current step, current approver, status, history pointer) and `sys_approval_action` (immutable audit) — a Flow-run log **cannot** answer "approvals pending on Alice > 3 days", drive a "my approvals" inbox, or serve recall / delegate. These need the normalized shape.
+- Record lock (`beforeUpdate` hook) + status mirror field; approver resolution (team / department BFS / manager / role / queue, ~200 LOC) — moved nearly verbatim under the node, not rewritten.
+- Approve / reject / **recall**, `unanimous` / `first_response`, and SLA escalation remain required capabilities of the Approval node — enumerated here so a naive "just use a pause node" refactor cannot silently drop them.
+
+## Consequences
+
+**Positive**
+- One execution engine — the Salesforce two-engine pit is closed in our own codebase.
+- One authoring surface — no admin tool-choice; approvals and integrations live in the same Flow.
+- Graphical branching and a connector node *between* approval steps both become trivial — the two concrete walls of `ApprovalProcessSchema` are gone.
+- One IR for AI to emit and a human to review; one action vocabulary (ADR-0018 registry) instead of a parallel enum.
+- Net deletion: the 313-LOC parallel `action-executor.ts`, `ApprovalActionType`, the M5 compiler, and the `connector_action` remnants.
+
+**Cost / risk**
+- ~1500-LOC plugin refactor — but roughly half is *keep-and-re-home* (approver resolution ~200 LOC, state objects, lock hooks ~250 LOC), not rewrite. No data migration (greenfield).
+- The engine core must generalize durable-pause into "resume on external human decision"; today only `screen` exercises the pause path.
+- **Primary risk:** a refactor that degrades approval into a bare pause node and drops approver richness / escalation / recall / audit. Mitigated by enumerating these as required node capabilities (above) and by keeping the existing `approval-service.test.ts` / `phase-b.test.ts` behavioral suites green against the new node.
+
+## Phased plan
+
+Tracked separately from the ADR-0018 PR. The first three phases land **additively** — the
+node path is built and proven green *beside* the standalone engine, so the destructive
+removal (A4/A5) can be reviewed and sequenced on its own once consumers move over.
+
+1. **A1 — this ADR.** ✅ **Done.** Fix the boundary before code.
+2. **A2 — engine durable pause + node config schema.** ✅ **Done.** Generalized the engine's
+   durable-pause into a real **suspend/resume** primitive (`AutomationResult.status: 'paused'`
+   + `runId`, `IAutomationService.resume` / `listSuspendedRuns`, in-memory `suspendedRuns`;
+   the `screen` node opts in via `config.waitForInput`). Added the canonical Approval **node**
+   config (`ApprovalNodeConfigSchema`, `APPROVAL_NODE_TYPE`, `ApprovalDecision`,
+   `APPROVAL_BRANCH_LABELS`) lowering `ApproverType` / `behavior` / `escalation` /
+   `lockRecord` / `approvalStatusField` to node config; deprecated `ApprovalProcessSchema`
+   (JSDoc) without removing it yet.
+3. **A3 — node provider (additive).** ✅ **Done.** `plugin-approvals` now contributes the
+   `approval` node via the ADR-0018 registry (`approval-node.ts`): on entry it opens a
+   `sys_approval_request` (reusing approver resolution / audit / lock / status mirror verbatim)
+   and **suspends**; `decideApprovalNode` finalizes and **resumes** the run down the matching
+   `approve` / `reject` edge. New correlation fields on `sys_approval_request`
+   (`flow_run_id` / `flow_node_id` / `node_config_json`). The standalone process engine is left
+   intact for the migration window.
+4. **A4 — delete parallel pieces.** ⏳ **Follow-up PR (destructive).** Remove
+   `action-executor.ts`, `ApprovalActionType`, `ApprovalProcessSchema` (top-level) +
+   `approval.form.ts`; route all actions through the ADR-0018 registry; retire `process_hash`
+   pinning in favor of Flow pinning. Gated on consumers (CRM examples, API routes, app seeders,
+   `metadata-type-schemas.ts` / `metadata-form-registry.ts`) migrating off the process model.
+5. **A5 — cleanup.** ⏳ **Follow-up PR.** Remove the `workflow_rule` paradigm remnants (the M5
+   compiler itself was already removed in #1398) and `connector_action` remnants in
+   `flow.zod.ts`; migrate `approval-service.test.ts` / `phase-b.test.ts` to drive the
+   Approval node.
+
+> **Landed in this PR:** A1–A3. The engine gained real durable suspend/resume (P1), spec gained
+> the Approval node contract (P2), and `plugin-approvals` gained the working node bridge (P3) —
+> all additive and green (spec 6605, service-automation 79, plugin-approvals 41). A4/A5 are the
+> destructive removal of the now-superseded standalone engine and are deliberately a separate PR.
+
+## Migration map
+
+| Asset | Disposition |
+|:---|:---|
+| `plugin-approvals` execution loop + `action-executor.ts` | **Delete** (engine + actions now Flow's) |
+| `ApprovalActionType`, `connector_action` remnants, M5 compiler | **Delete** |
+| `ApprovalProcessSchema`, `approval.form.ts` (top-level authoring type) | **Deprecate / remove** — concepts → Approval node config + Flow graph |
+| `ApproverType`, `behavior`, `escalation`, `lockRecord`, `approvalStatusField` | **Re-home** → Approval node config schema |
+| Approver resolution (team/dept BFS/manager/role/queue) | **Keep** (move under node, ~verbatim) |
+| `sys_approval_request` / `sys_approval_action`, lock hook, status mirror | **Keep** (first-class approval state, owned by the plugin) |
+| `approval-service.test.ts` / `phase-b.test.ts` | **Migrate** to drive the Approval node |
+
+## Tiering (open-source vs enterprise)
+
+The open-source / enterprise split is **not** an architectural concern and is **out of scope for this ADR** — the open registry (ADR-0018) plus the node-config shape make the tier line a *packaging* decision (which approver types / orchestration features ship in which package), not an engine boundary. The split is maintained privately in `cloud/docs/design/approval-tiering.md`. This ADR keeps the engine and the node contract tier-neutral.
+

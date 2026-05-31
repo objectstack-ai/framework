@@ -21,6 +21,12 @@ export const ApproverType = z.enum([
 /**
  * Approval Action Type
  * Actions to execute on transition
+ *
+ * @deprecated ADR-0019 — actions are no longer attached to approval steps.
+ * In the flow model, "on approve / on reject" work is expressed as the
+ * downstream nodes wired to the Approval node's `approve` / `reject` out-edges
+ * (any registered action node — http, notify, update_record, …). Retained only
+ * until {@link ApprovalProcessSchema} is removed.
  */
 export const ApprovalActionType = z.enum([
   'field_update',
@@ -76,9 +82,21 @@ export const ApprovalStepSchema = lazySchema(() => z.object({
 
 /**
  * Approval Process Protocol
- * 
+ *
  * Defines a complex review and approval cycle for a record.
  * Manages state locking, notifications, and transition logic.
+ *
+ * @deprecated ADR-0019 — the standalone approval *authoring* type is collapsed
+ * into Flow. An approval is now authored as a flow with one or more **Approval
+ * nodes** (see {@link ApprovalNodeConfigSchema}); the engine rides its durable
+ * pause. The process-level concepts re-home as follows:
+ *   - `steps`            → successive Approval nodes on the canvas
+ *   - `entryCriteria`    → the condition on the edge entering the node
+ *   - `onApprove`/`onReject` → the nodes wired to the node's `approve`/`reject` edges
+ *   - `rejectionBehavior: back_to_previous` → a back-edge to an earlier node
+ *   - `lockRecord` / `approvalStatusField` / `escalation` / `behavior` / approvers
+ *                        → {@link ApprovalNodeConfigSchema} node config
+ * This schema is retained only for the migration window and will be removed.
  */
 export const ApprovalProcessSchema = lazySchema(() => z.object({
   name: SnakeCaseIdentifierSchema.describe('Unique process name'),
@@ -132,3 +150,99 @@ export const ApprovalProcess = Object.assign(ApprovalProcessSchema, {
 
 export type ApprovalProcess = z.infer<typeof ApprovalProcessSchema>;
 export type ApprovalStep = z.infer<typeof ApprovalStepSchema>;
+
+// ==========================================================================
+// Approval as a Flow Node (ADR-0019, canonical)
+// ==========================================================================
+
+/**
+ * Registry node type for the Approval node. The `plugin-approvals` package
+ * registers an executor under this type (ADR-0018), so an approval rides the
+ * one flow engine as a durable-pause node rather than a second engine.
+ */
+export const APPROVAL_NODE_TYPE = 'approval' as const;
+
+/**
+ * Canonical decisions an Approval node emits. The engine selects the
+ * downstream branch by matching these against out-edge `label`s
+ * (see {@link ApprovalNodeConfigSchema}).
+ */
+export const ApprovalDecision = z.enum(['approve', 'reject']);
+export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
+
+/**
+ * Edge labels an Approval node's out-edges use to declare which branch a
+ * decision follows. `resume(runId, { branchLabel })` passes the matching
+ * label so the engine continues down the right edge.
+ */
+export const APPROVAL_BRANCH_LABELS = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+/** A single approver assignment on an Approval node. */
+export const ApprovalNodeApproverSchema = lazySchema(() => z.object({
+  type: ApproverType,
+  /**
+   * The approver reference, interpreted per `type`: a user id (`user`), role
+   * name (`role`), team/department id (`team`/`department`), field name
+   * holding a user id (`field`), or queue id (`queue`). Omitted for `manager`
+   * (resolved from the submitter's `manager_id`).
+   */
+  value: z.string().optional().describe('User id / role / team / department / field / queue — per `type`'),
+}));
+export type ApprovalNodeApprover = z.infer<typeof ApprovalNodeApproverSchema>;
+
+/**
+ * Per-node SLA escalation — lowered from {@link ApprovalProcessSchema.escalation}
+ * to the node, so each Approval step on the canvas carries its own SLA.
+ */
+export const ApprovalEscalationSchema = lazySchema(() => z.object({
+  enabled: z.boolean().default(false).describe('Enable SLA-based escalation for this node'),
+  timeoutHours: z.number().min(1).describe('Hours before escalation triggers'),
+  action: z.enum(['reassign', 'auto_approve', 'auto_reject', 'notify']).default('notify')
+    .describe('Action on escalation timeout'),
+  escalateTo: z.string().optional().describe('User id, role, or manager level to escalate to'),
+  notifySubmitter: z.boolean().default(true).describe('Notify the original submitter on escalation'),
+}));
+export type ApprovalEscalation = z.infer<typeof ApprovalEscalationSchema>;
+
+/**
+ * Config for an **Approval node** (`type: 'approval'`) on a flow — the ADR-0019
+ * replacement for an {@link ApprovalStepSchema}. The node opens an approval
+ * request on entry, suspends the run, and resumes down its `approve` / `reject`
+ * out-edge once a decision is recorded.
+ *
+ * What does NOT live here (re-homed to the flow graph, by design):
+ *  - **entry criteria** → the condition on the edge entering this node
+ *  - **on-approve / on-reject actions** → the nodes wired to the
+ *    `approve` / `reject` out-edges
+ *  - **back-to-previous rejection** → a back-edge to an earlier node
+ *
+ * Approval *state* (request/action rows, record lock, status mirror) remains
+ * first-class engine-adjacent state owned by `plugin-approvals`; this config
+ * only describes how the node behaves.
+ */
+export const ApprovalNodeConfigSchema = lazySchema(() => z.object({
+  /** Who may act on this step. */
+  approvers: z.array(ApprovalNodeApproverSchema).min(1).describe('Allowed approvers for this node'),
+
+  /** How multiple approvers combine. (Enterprise adds quorum/weighted — ADR-0019 tiering.) */
+  behavior: z.enum(['first_response', 'unanimous']).default('first_response')
+    .describe('How to combine multiple approvers'),
+
+  /** Lock the triggering record from edits while this node is pending. */
+  lockRecord: z.boolean().default(true).describe('Lock the record from editing while pending'),
+
+  /**
+   * Field on the business object to mirror the request status onto
+   * (`pending`/`approved`/`rejected`/`recalled`). Should be readonly on the
+   * object. Omitted ⇒ status is exposed only via `sys_approval_request`.
+   */
+  approvalStatusField: z.string().optional()
+    .describe('Business-object field to mirror request status onto'),
+
+  /** Optional per-node SLA escalation. */
+  escalation: ApprovalEscalationSchema.optional().describe('Per-node SLA escalation'),
+}));
+export type ApprovalNodeConfig = z.infer<typeof ApprovalNodeConfigSchema>;

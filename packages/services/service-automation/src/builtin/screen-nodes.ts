@@ -9,10 +9,12 @@ import type { AutomationEngine } from '../engine.js';
  * Part of the core flow capability, so the {@link AutomationServicePlugin}
  * seeds them directly (ADR-0018) rather than shipping a separate plugin.
  *
- * - 'screen' nodes are pass-through on the server. The engine already injects
- *   `isInput: true` flow variables from `context.params` into the top-level
- *   variables map before execution begins, so screen nodes have no remaining
- *   server-side work.
+ * - 'screen' nodes are pass-through on the server by default. The engine already
+ *   injects `isInput: true` flow variables from `context.params` into the
+ *   top-level variables map before execution begins, so a plain screen node has
+ *   no remaining server-side work. A screen with `config.waitForInput === true`
+ *   instead opts into the engine's durable pause (ADR-0019): it suspends the run
+ *   on entry and continues via `resume()` once the input arrives.
  * - 'script' nodes dispatch by `config.actionType`. Currently only 'email'
  *   has a (logger-backed) implementation; unknown action types still succeed
  *   so flows can continue and downstream nodes can react.
@@ -28,7 +30,12 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
         // Human-input nodes suspend the flow awaiting input.
         supportsPause: true, isAsync: true,
       }),
-      async execute(_node, _variables, _context) {
+      async execute(node, _variables, _context) {
+        const cfg = (node.config ?? {}) as Record<string, unknown>;
+        // Opt-in durable pause: suspend the run awaiting the screen's input.
+        if (cfg.waitForInput === true) {
+          return { success: true, suspend: true };
+        }
         return { success: true };
       },
     });

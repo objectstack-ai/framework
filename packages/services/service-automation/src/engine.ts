@@ -2,7 +2,7 @@
 
 import type { FlowParsed, FlowNodeParsed, FlowEdgeParsed } from '@objectstack/spec/automation';
 import type { ExecutionLog, ActionDescriptor } from '@objectstack/spec/automation';
-import type { AutomationContext, AutomationResult, IAutomationService } from '@objectstack/spec/contracts';
+import type { AutomationContext, AutomationResult, ResumeSignal, IAutomationService } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES } from '@objectstack/spec/automation';
 
@@ -45,6 +45,21 @@ export interface NodeExecutionResult {
     error?: string;
     /** Used by decision nodes — returns the selected branch label */
     branchLabel?: string;
+    /**
+     * ADR-0019 durable pause. When `true`, the node has done its on-entry work
+     * (e.g. opened an approval request) and the run should **suspend** here: the
+     * engine persists a continuation, stops traversal, and `execute()` returns
+     * `{ status: 'paused', runId }`. The run is continued later via
+     * {@link AutomationEngine.resume}. Any `output` is written to variables
+     * before suspending. The node reads its own run id from the `$runId`
+     * flow variable so it can map the run to external state.
+     */
+    suspend?: boolean;
+    /**
+     * Optional correlation key surfaced on the suspended-run record (e.g. an
+     * approval request id). For observability / lookup; not required to resume.
+     */
+    correlation?: string;
 }
 
 // ─── Trigger Interface (Plugin Extension Point) ─────────────────────
@@ -92,6 +107,47 @@ interface ExecutionLogEntry {
     error?: string;
 }
 
+/**
+ * Internal sentinel thrown by {@link AutomationEngine.executeNode} when a node
+ * signals `suspend`. It unwinds the synchronous DAG recursion up to
+ * `execute()` / `resume()`, which converts it into a persisted continuation
+ * rather than a failed run. (Not exported — callers see `status: 'paused'`.)
+ *
+ * NOTE: suspend is supported on the serial / main execution path. A node that
+ * suspends inside a `Promise.all` parallel branch will unwind that branch, but
+ * sibling parallel branches already in flight are not cancelled — durable
+ * pause across parallel gateways is out of scope for ADR-0019 M1.
+ */
+class FlowSuspendSignal {
+    readonly __flowSuspend = true as const;
+    constructor(readonly nodeId: string, readonly correlation?: string) {}
+}
+
+function isSuspendSignal(err: unknown): err is FlowSuspendSignal {
+    return typeof err === 'object' && err !== null && (err as FlowSuspendSignal).__flowSuspend === true;
+}
+
+/**
+ * A run paused at a node, awaiting {@link AutomationEngine.resume}. Held
+ * in-memory, matching the engine's existing in-memory run model — durable
+ * persistence of suspended runs across process restart is a follow-up tracked
+ * with run-state persistence generally (ADR-0019 §Consequences).
+ */
+interface SuspendedRun {
+    runId: string;
+    flowName: string;
+    flowVersion?: number;
+    /** The node the run paused at; resume continues from its out-edges. */
+    nodeId: string;
+    /** Snapshot of the flow variable map at suspend time. */
+    variables: Record<string, unknown>;
+    steps: StepLogEntry[];
+    context: AutomationContext;
+    startedAt: string;
+    startTime: number;
+    correlation?: string;
+}
+
 export class AutomationEngine implements IAutomationService {
     private flows = new Map<string, FlowParsed>();
     private flowEnabled = new Map<string, boolean>();
@@ -103,6 +159,8 @@ export class AutomationEngine implements IAutomationService {
     private maxLogSize = 1000;
     private logger: Logger;
     private runCounter = 0;
+    /** Runs paused at a node, keyed by runId (ADR-0019). In-memory, see {@link SuspendedRun}. */
+    private suspendedRuns = new Map<string, SuspendedRun>();
 
     constructor(logger: Logger) {
         this.logger = logger;
@@ -295,6 +353,9 @@ export class AutomationEngine implements IAutomationService {
         }
 
         const runId = `run_${++this.runCounter}`;
+        // Expose the run id to executors (ADR-0019): a pausing node (e.g. Approval)
+        // reads `$runId` to map its external state back to this run for resume.
+        variables.set('$runId', runId);
         const startedAt = new Date().toISOString();
         const steps: StepLogEntry[] = [];
 
@@ -347,6 +408,45 @@ export class AutomationEngine implements IAutomationService {
                 durationMs,
             };
         } catch (err: unknown) {
+            // A node asked to suspend the run (ADR-0019 durable pause). Snapshot
+            // the live state, record a `paused` log, and return the run id so the
+            // caller can later `resume()` it. This is NOT a failure.
+            if (isSuspendSignal(err)) {
+                const durationMs = Date.now() - startTime;
+                this.suspendedRuns.set(runId, {
+                    runId,
+                    flowName,
+                    flowVersion: flow.version,
+                    nodeId: err.nodeId,
+                    variables: Object.fromEntries(variables),
+                    steps,
+                    context: context ?? {},
+                    startedAt,
+                    startTime,
+                    correlation: err.correlation,
+                });
+                this.recordLog({
+                    id: runId,
+                    flowName,
+                    flowVersion: flow.version,
+                    status: 'paused',
+                    startedAt,
+                    durationMs,
+                    trigger: {
+                        type: context?.event ?? 'manual',
+                        userId: context?.userId,
+                        object: context?.object,
+                    },
+                    steps,
+                });
+                return {
+                    success: true,
+                    status: 'paused',
+                    runId,
+                    durationMs,
+                };
+            }
+
             const errorMessage = err instanceof Error ? err.message : String(err);
 
             // Record failed execution log
@@ -378,6 +478,133 @@ export class AutomationEngine implements IAutomationService {
                 durationMs,
             };
         }
+    }
+
+    /**
+     * Resume a run suspended at a node (ADR-0019 durable pause). Restores the
+     * snapshotted variables, merges `signal.output` under the suspended node's
+     * id, and continues traversal from that node's out-edges — optionally
+     * restricted to the edge labelled `signal.branchLabel` (e.g. the approval
+     * decision). The continuation may itself suspend again, in which case this
+     * returns `{ status: 'paused', runId }` afresh.
+     */
+    async resume(runId: string, signal?: ResumeSignal): Promise<AutomationResult> {
+        const run = this.suspendedRuns.get(runId);
+        if (!run) {
+            return { success: false, error: `No suspended run '${runId}'` };
+        }
+        const flow = this.flows.get(run.flowName);
+        if (!flow) {
+            return { success: false, error: `Flow '${run.flowName}' not found for run '${runId}'` };
+        }
+        const node = flow.nodes.find(n => n.id === run.nodeId);
+        if (!node) {
+            return { success: false, error: `Suspended node '${run.nodeId}' no longer exists in flow '${run.flowName}'` };
+        }
+        // Consume the suspension — a run resumes exactly once per pause.
+        this.suspendedRuns.delete(runId);
+
+        // Restore variable context and apply the resume signal's output as if it
+        // were the node's output, so downstream edges branch on it.
+        const variables = new Map<string, unknown>(Object.entries(run.variables));
+        if (signal?.output) {
+            for (const [key, value] of Object.entries(signal.output)) {
+                variables.set(`${run.nodeId}.${key}`, value);
+            }
+        }
+
+        const steps = run.steps;
+        const context = run.context;
+
+        try {
+            await this.traverseNext(node, flow, variables, context, steps, signal?.branchLabel);
+
+            // Collect output variables
+            const output: Record<string, unknown> = {};
+            if (flow.variables) {
+                for (const v of flow.variables) {
+                    if (v.isOutput) output[v.name] = variables.get(v.name);
+                }
+            }
+            const durationMs = Date.now() - run.startTime;
+            this.recordLog({
+                id: runId,
+                flowName: run.flowName,
+                flowVersion: run.flowVersion,
+                status: 'completed',
+                startedAt: run.startedAt,
+                completedAt: new Date().toISOString(),
+                durationMs,
+                trigger: {
+                    type: context.event ?? 'manual',
+                    userId: context.userId,
+                    object: context.object,
+                },
+                steps,
+                output,
+            });
+            return { success: true, output, durationMs };
+        } catch (err: unknown) {
+            // Re-suspended at a downstream node: persist a fresh continuation.
+            if (isSuspendSignal(err)) {
+                const durationMs = Date.now() - run.startTime;
+                this.suspendedRuns.set(runId, {
+                    ...run,
+                    nodeId: err.nodeId,
+                    variables: Object.fromEntries(variables),
+                    steps,
+                    correlation: err.correlation,
+                });
+                this.recordLog({
+                    id: runId,
+                    flowName: run.flowName,
+                    flowVersion: run.flowVersion,
+                    status: 'paused',
+                    startedAt: run.startedAt,
+                    durationMs,
+                    trigger: {
+                        type: context.event ?? 'manual',
+                        userId: context.userId,
+                        object: context.object,
+                    },
+                    steps,
+                });
+                return { success: true, status: 'paused', runId, durationMs };
+            }
+
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            const durationMs = Date.now() - run.startTime;
+            this.recordLog({
+                id: runId,
+                flowName: run.flowName,
+                flowVersion: run.flowVersion,
+                status: 'failed',
+                startedAt: run.startedAt,
+                completedAt: new Date().toISOString(),
+                durationMs,
+                trigger: {
+                    type: context.event ?? 'manual',
+                    userId: context.userId,
+                    object: context.object,
+                },
+                steps,
+                error: errorMessage,
+            });
+            return { success: false, error: errorMessage, durationMs };
+        }
+    }
+
+    /**
+     * List the runs currently suspended awaiting {@link resume} (ADR-0019).
+     * Backs operability surfaces such as a "pending approvals" view.
+     */
+    listSuspendedRuns(): Array<{ runId: string; flowName: string; nodeId: string; correlation?: string }> {
+        return [...this.suspendedRuns.values()].map(r => ({
+            runId: r.runId,
+            flowName: r.flowName,
+            nodeId: r.nodeId,
+            correlation: r.correlation,
+        }));
     }
 
     // ── DAG Traversal Core ──────────────────────────────────
@@ -628,12 +855,48 @@ export class AutomationEngine implements IAutomationService {
                     variables.set(`${node.id}.${key}`, value);
                 }
             }
+
+            // ADR-0019 durable pause: the node did its on-entry work and asked to
+            // suspend here. Output is already written above; unwind the recursion
+            // up to execute()/resume(), which persists a continuation. Traversal
+            // of this node's out-edges happens on resume, not now.
+            if (result.suspend) {
+                throw new FlowSuspendSignal(node.id, result.correlation);
+            }
         }
 
+        // Continue to the node's successors.
+        await this.traverseNext(node, flow, variables, context, steps);
+    }
+
+    /**
+     * Traverse a node's out-edges and execute its successors. Split out of
+     * {@link executeNode} so {@link resume} can re-enter traversal from a
+     * suspended node without re-running the node body.
+     *
+     * @param branchLabel - When set (e.g. from a resume signal), restrict
+     *   traversal to out-edges whose `label` matches — this is how an Approval
+     *   node's `approve`/`reject` decision selects its downstream branch. When
+     *   no edge carries the label, traversal falls back to the normal edge set.
+     */
+    private async traverseNext(
+        node: FlowNodeParsed,
+        flow: FlowParsed,
+        variables: Map<string, unknown>,
+        context: AutomationContext,
+        steps: StepLogEntry[],
+        branchLabel?: string,
+    ): Promise<void> {
         // Find next nodes — separate conditional and unconditional edges
-        const outEdges = flow.edges.filter(
+        let outEdges = flow.edges.filter(
             e => e.source === node.id && e.type !== 'fault',
         );
+
+        // Branch selection (resume): prefer edges tagged with the decision label.
+        if (branchLabel) {
+            const labeled = outEdges.filter(e => e.label === branchLabel);
+            if (labeled.length > 0) outEdges = labeled;
+        }
 
         const conditionalEdges: FlowEdgeParsed[] = [];
         const unconditionalEdges: FlowEdgeParsed[] = [];
