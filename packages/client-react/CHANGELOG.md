@@ -1,5 +1,35 @@
 # @objectstack/client-react
 
+## 7.4.0
+
+### Minor Changes
+
+- 58b450b: Make metadata labels follow the active UI language without a page refresh (#1319).
+
+  The client now carries the active locale on every request (`Accept-Language`,
+  `setLocale`/`getLocale`), the protocol ETag is locale-aware so cached metadata
+  no longer collides across languages, and the `client-react` metadata hooks
+  refetch when the locale changes. The `apps/account` console wires its router
+  locale through so a language switch relabels server-resolved object/field/view
+  labels in place instead of leaving the UI half-translated until reload.
+
+### Patch Changes
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/client@7.4.0
+  - @objectstack/core@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

@@ -1,5 +1,165 @@
 # @objectstack/service-automation
 
+## 7.4.0
+
+### Minor Changes
+
+- 13632b1: ADR-0030 P0 (framework) — converge notifications onto a single ingress and the
+  layered model. Every producer now publishes through
+  `NotificationService.emit(EmitInput)`; the in-app inbox is a materialization of
+  delivery, not a row producers write.
+
+  **Single ingress (`@objectstack/service-messaging`) — breaking**
+
+  - `MessagingService.emit` takes the new `EmitInput` contract (`topic` /
+    `audience` / `payload` / `severity` / `dedupKey` / `source` / `actorId` /
+    `organizationId` / `channels`) instead of the flat `Notification` shape. It
+    writes the L2 `sys_notification` event (idempotent on `dedupKey`), resolves the
+    audience, then fans out; it returns `{ notificationId, deduped, deliveries,
+delivered, failed }`.
+  - New `sys_notification_receipt` object — the read-state spine
+    (`delivered|read|clicked|dismissed`), keyed `(notification_id, user_id,
+channel)`. The inbox channel writes a `delivered` receipt on materialization.
+  - `sys_inbox_message`: adds `notification_id` / `delivery_id`, **drops `read`**
+    (read-state moved to the receipt), adds the user `mine` list view.
+
+  **Event re-model (`@objectstack/platform-objects`) — breaking**
+
+  - `sys_notification` is re-modeled from a per-user inbox into the L2 **event**
+    (`topic`, `payload`, `severity`, `dedup_key`, `source_*`, `actor_id`). Removes
+    `recipient_id` / `is_read` / `read_at` / `type` / `title` / `body` / `url` /
+    `actor_name` and the inbox actions/views. App-nav: the account inbox points at
+    `sys_inbox_message`; Setup shows the notification event log.
+
+  **Producers routed through `emit()`**
+
+  - `@objectstack/service-automation`: the `notify` node maps its config to
+    `EmitInput`.
+  - `@objectstack/plugin-audit`: collaboration `@mention` → `collab.mention` and
+    assignment → `collab.assignment` (both with a `dedupKey`); no more direct
+    `sys_notification` writes. Collaboration notifications now require
+    `MessagingServicePlugin` (they degrade to a warn otherwise).
+
+  **Migration (`@objectstack/metadata`)**
+
+  - Idempotent `migrateSysNotificationToEvent` splits legacy `sys_notification`
+    inbox rows into `sys_inbox_message` + receipts and rewrites the event row.
+
+  **Startup (`@objectstack/cli`, `@objectstack/runtime`)**
+
+  - `messaging` is now a foundational capability. On `objectstack serve` it is
+    added to `ALWAYS_ON_CAPABILITIES` (every non-`minimal` preset starts it); on
+    cloud per-project kernels the capability loader expands `requires` to add
+    `messaging` whenever `audit` is present. This keeps collaboration `@mention` /
+    assignment notifications (which now flow through the pipeline) working out of
+    the box on both paths. `--preset minimal` opts out.
+
+  The Console bell repoint (objectui) and phases P1–P3 are tracked in
+  `docs/handoff/adr-0030-notification-convergence.md`.
+
+- 13d8653: Record-change flow trigger — auto-launch flows on data mutations.
+
+  Completes the automation engine's `FlowTrigger` extension point so flows whose
+  `start` node declares a record-change trigger (`config: { objectName,
+triggerType: 'record-after-update', condition }`) actually fire on the matching
+  mutation. Previously the slot was dead — nothing called `trigger.start` — so
+  such flows could only run via a manual `engine.execute()`.
+
+  **Engine baseline (`@objectstack/service-automation`)**
+
+  - Redefines `FlowTrigger` around a parsed `FlowTriggerBinding` (flowName,
+    object, event, condition, schedule, raw config). The engine parses the start
+    node and hands the trigger a normalized binding, keeping trigger plugins
+    decoupled from flow-definition internals (mirrors `connector_action` ↔
+    `connector-rest`).
+  - Ordering-independent, bidirectional wiring: `registerFlow`/`toggleFlow`
+    activate bindings; `registerTrigger` retro-binds already-registered flows (a
+    trigger plugin wires up on `kernel:ready`, after flows are pulled in);
+    `unregisterFlow`/`unregisterTrigger`/disable tear them down.
+  - Centralized start-condition gate in `execute()`: the start node's `condition`
+    (e.g. `status == 'done' && previous.status != 'done'`) is evaluated once for
+    every trigger type and manual runs; false ⇒ `{ skipped: true }`.
+  - Seeds `record`, flattened record fields, and `previous` into flow variables.
+  - New `getActiveTriggerBindings()` getter + exports `FlowTriggerBinding`.
+
+  **Spec (`@objectstack/spec`)**
+
+  - Adds `previous?` to `AutomationContext` — the pre-update "old" row, so flows
+    can gate on transitions.
+
+  **New package (`@objectstack/plugin-trigger-record-change`)**
+
+  - The concrete trigger: subscribes to ObjectQL lifecycle hooks
+    (`record-after-update` → `afterUpdate`, etc.), builds an `AutomationContext`
+    from the new/old record, and runs the flow. Error-isolated (a flow failure
+    never breaks the CRUD write); graceful degrade when the automation service or
+    ObjectQL engine is absent (mirrors `plugin-audit`).
+
+  The `schedule` trigger (ticker/cron + `sys_job` lifecycle) is a follow-up.
+
+- ff3d006: Screen-flow runtime — interactive `screen` nodes (suspend → render → resume).
+
+  A `screen` node that declares input fields now suspends the run on entry
+  (reusing the ADR-0019 durable pause), surfaces a `ScreenSpec` describing the
+  form, and resumes with the collected values applied as **bare** flow variables
+  so downstream nodes read them via `{var}`. (`waitForInput: false` forces the
+  old server pass-through.)
+
+  - **spec**: `AutomationResult.screen?: ScreenSpec`, `ResumeSignal.variables?`
+    (bare vars), `IAutomationService.getSuspendedScreen?(runId)`.
+  - **service-automation**: the `screen` executor builds the `ScreenSpec` and
+    suspends when fields are present; the suspend/resume plumbing threads the
+    screen through `FlowSuspendSignal` → `SuspendedRun` → the paused result;
+    `resume()` sets `signal.variables` as bare flow variables; `getSuspendedScreen`.
+  - **runtime**: `POST /api/v1/automation/:name/runs/:runId/resume` (body
+    `{ inputs }`) and `GET …/runs/:runId/screen`, wired through both the
+    dispatcher route table and `handleAutomation`.
+
+  Verified end-to-end headlessly: the showcase Reassign Wizard launches → pauses
+  at the "New Assignee" screen → resumes with the input → the task is reassigned.
+  The objectui `FlowRunner` UI that renders these screens ships separately.
+
+### Patch Changes
+
+- a6d4cbb: Fix conditional & record-change flows silently skipping.
+
+  Two bugs together caused every flow with a start-node / edge **condition** to
+  silently skip (record-change triggers fired but the flow body never ran;
+  audit-style `previous.*` gates and `budget > 100000`-style gates all evaluated
+  to false):
+
+  - **service-automation — CEL engine unreachable in ESM.** The condition
+    evaluator loaded the formula engine via a CommonJS `require('@objectstack/formula')`.
+    In the package's ESM build (`"type": "module"`) that resolves to tsup's
+    throwing `__require` stub, so **every** CEL evaluation threw and the
+    swallowing `catch` returned `false`. Replaced with a static top-level import,
+    which binds correctly in both the ESM and CJS builds.
+
+  - **objectql — prior record not exposed to update hooks.** `HookContext`
+    documents a `previous` snapshot for update/delete, but `engine.update` never
+    populated it (the row it fetched for validation was a local var). Record-change
+    conditions like `status == "done" && previous.status != "done"` therefore had
+    no `previous` to read. The engine now attaches the pre-update record to
+    `hookContext.previous` for single-id updates whenever a validation rule needs
+    it or an `afterUpdate` hook is registered.
+
+  Both paths are covered by new unit tests.
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/formula@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

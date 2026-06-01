@@ -1,5 +1,259 @@
 # @objectstack/cli
 
+## 7.4.0
+
+### Minor Changes
+
+- 70b63f2: `objectstack dev` now defaults to SQLite and auto-seeds an admin.
+
+  - **Default driver → SQLite.** With no `OS_DATABASE_URL`/`OS_DATABASE_DRIVER`,
+    dev now prefers `SqlDriver(sqlite, :memory:)` over the pure-JS `InMemoryDriver`
+    for production-like SQL semantics. It probes by opening a connection (knex
+    loads `better-sqlite3` lazily at first query) and falls back to
+    `InMemoryDriver` **with a warning** if the native binary is unavailable —
+    closing a hole where the surrounding silent catch could leave the kernel with
+    no driver.
+  - **`--seed-admin` defaults ON in dev.** Idempotent and non-destructive: POSTs
+    the public sign-up endpoint, creating `admin@objectos.ai` only on an empty DB
+    (then promoted to platform admin) and skipping when the email already exists
+    (422/400), so a custom password is never overwritten. Disable with
+    `--no-seed-admin`.
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — CLI surface.
+
+  New `os datasource` command group: `list-tables` (list remote tables),
+  `introspect` (generate a reviewable `*.object.ts` draft from a remote table),
+  and `validate` (validate federated objects against the remote schema; exits
+  non-zero on mismatch). Backed by the `/api/v1/datasources/:name/external/*`
+  REST routes.
+
+- 394d34f: Messaging + triggers capability tokens, and notify-by-email recipient resolution.
+
+  Make the `notify` flow node and auto-firing flows usable from a plain
+  `defineStack({ requires: [...] })` — no hand-wired plugin instances.
+
+  - **CLI / runtime — new capability tokens.** `messaging` →
+    `MessagingServicePlugin` (the `notify` node delivers to the inbox channel
+    instead of degrading to a logged no-op); `triggers` →
+    `RecordChangeTriggerPlugin` + `ScheduleTriggerPlugin` (autolaunched / schedule
+    flows actually fire — pair `triggers` with `job` for cron/interval). Wired
+    identically in the CLI `CAPABILITY_PROVIDERS` table and the runtime
+    `capability-loader`.
+  - **Inbox channel — notify-by-email.** Flows commonly address recipients by
+    email (e.g. `{record.assignee}`), but `sys_inbox_message` is keyed by user id.
+    The inbox channel now resolves an email-shaped recipient to its `sys_user.id`
+    (configurable via `InboxChannelOptions.userObject`), with a verbatim fallback
+    when the recipient is not email-shaped, no user matches, or the lookup fails —
+    so a failed resolution can never drop the row.
+
+### Patch Changes
+
+- 23c7107: ADR-0020 — converge the three "state machine" declaration shapes to one
+  **enforced** `state_machine` validation rule.
+
+  Before this change a record state machine could be declared three ways (a
+  `workflow` metadata type, an `object.stateMachines` map, or a `state_machine`
+  validation rule) and **none of them were enforced at runtime** — a declarative
+  guardrail that was pure decoration, and a hallucination trap for AI authors.
+
+  **Enforcement (`@objectstack/objectql`)**
+
+  - New `validation/rule-validator.ts` evaluates the object's `validations` union
+    on the write path: `evaluateValidationRules`, `needsPriorRecord`, and the
+    `legalNextStates` introspection helper (all exported from the package root).
+  - `state_machine` rules reject illegal `field` transitions on update (with the
+    rule's `message`); `script` / `cross_field` predicate rules now also fire
+    (they were silently broken on PATCH updates because only the patch, not the
+    prior record, was available). The engine plumbs the prior record into
+    rule evaluation on single-row update; multi-row (`updateMany`) updates log a
+    warning and skip rule evaluation rather than enforce on incomplete data.
+
+  **Convergence / retirement (`@objectstack/spec`) — breaking**
+
+  - Retires the `workflow` metadata type (removed from the metadata-type enum,
+    the registry, the schema map, the `workflows` collection key, and the
+    plural→singular mapping).
+  - Removes the `object.stateMachines` map and the `stack.workflows` array. The
+    `state_machine` validation rule is the single canonical home.
+  - The XState-style `StateMachineSchema` file is **kept** (still used by the
+    agent conversation lifecycle and the discovery protocol); only its role as
+    the `workflow` metadata-type backing schema was removed. The optional
+    `workflow` **RPC service** surface (`CoreServiceName.workflow`,
+    `/api/v1/workflow`, `IWorkflowService`) is kept as a documented follow-up.
+
+  **Introspection (`@objectstack/runtime`)**
+
+  - Adds `GET /metadata/objects/:name/state/:field?from=:state`, returning the
+    legal next states for a field (`next: null` when no FSM governs the field,
+    `[]` for a declared dead-end) so UIs/agents read the transition table instead
+    of re-deriving it.
+
+  **Surfaces (`@objectstack/platform-objects`, `@objectstack/cli`)**
+
+  - Studio drops the standalone "Workflow Rules" nav (state machines are edited
+    alongside the object's other validation rules).
+  - `explain` no longer lists `workflow` as a related metadata type.
+
+  Migration: replace a `workflow` / `StateMachineConfig` declaration with a
+  `state_machine` validation rule on the object (`field` + `{ from: [allowedTo] }`
+  transition table), and move any side-effecting actions (emails, task creation)
+  into a record-triggered or scheduled Flow (ADR-0019). See the migrated
+  `examples/app-crm` flows for the pattern.
+
+- 13632b1: ADR-0030 P0 (framework) — converge notifications onto a single ingress and the
+  layered model. Every producer now publishes through
+  `NotificationService.emit(EmitInput)`; the in-app inbox is a materialization of
+  delivery, not a row producers write.
+
+  **Single ingress (`@objectstack/service-messaging`) — breaking**
+
+  - `MessagingService.emit` takes the new `EmitInput` contract (`topic` /
+    `audience` / `payload` / `severity` / `dedupKey` / `source` / `actorId` /
+    `organizationId` / `channels`) instead of the flat `Notification` shape. It
+    writes the L2 `sys_notification` event (idempotent on `dedupKey`), resolves the
+    audience, then fans out; it returns `{ notificationId, deduped, deliveries,
+delivered, failed }`.
+  - New `sys_notification_receipt` object — the read-state spine
+    (`delivered|read|clicked|dismissed`), keyed `(notification_id, user_id,
+channel)`. The inbox channel writes a `delivered` receipt on materialization.
+  - `sys_inbox_message`: adds `notification_id` / `delivery_id`, **drops `read`**
+    (read-state moved to the receipt), adds the user `mine` list view.
+
+  **Event re-model (`@objectstack/platform-objects`) — breaking**
+
+  - `sys_notification` is re-modeled from a per-user inbox into the L2 **event**
+    (`topic`, `payload`, `severity`, `dedup_key`, `source_*`, `actor_id`). Removes
+    `recipient_id` / `is_read` / `read_at` / `type` / `title` / `body` / `url` /
+    `actor_name` and the inbox actions/views. App-nav: the account inbox points at
+    `sys_inbox_message`; Setup shows the notification event log.
+
+  **Producers routed through `emit()`**
+
+  - `@objectstack/service-automation`: the `notify` node maps its config to
+    `EmitInput`.
+  - `@objectstack/plugin-audit`: collaboration `@mention` → `collab.mention` and
+    assignment → `collab.assignment` (both with a `dedupKey`); no more direct
+    `sys_notification` writes. Collaboration notifications now require
+    `MessagingServicePlugin` (they degrade to a warn otherwise).
+
+  **Migration (`@objectstack/metadata`)**
+
+  - Idempotent `migrateSysNotificationToEvent` splits legacy `sys_notification`
+    inbox rows into `sys_inbox_message` + receipts and rewrites the event row.
+
+  **Startup (`@objectstack/cli`, `@objectstack/runtime`)**
+
+  - `messaging` is now a foundational capability. On `objectstack serve` it is
+    added to `ALWAYS_ON_CAPABILITIES` (every non-`minimal` preset starts it); on
+    cloud per-project kernels the capability loader expands `requires` to add
+    `messaging` whenever `audit` is present. This keeps collaboration `@mention` /
+    assignment notifications (which now flow through the pipeline) working out of
+    the box on both paths. `--preset minimal` opts out.
+
+  The Console bell repoint (objectui) and phases P1–P3 are tracked in
+  `docs/handoff/adr-0030-notification-convergence.md`.
+
+- 08fbbb4: Fix: the first-boot platform-admin promotion no longer gets stolen by the
+  `usr_system` seed identity, and the dev seed admin uses fixed, well-known
+  credentials.
+
+  **`@objectstack/plugin-security` — `bootstrapPlatformAdmin` skips the system user**
+
+  `5e831dea3` (#1392) added `ensureSeedIdentity` to the runtime SeedLoader,
+  which upserts a non-loginable system identity (`usr_system`, role `system`,
+  `system@objectstack.local`) to own seeded records — created _before_ the first
+  human sign-up. Because `bootstrapPlatformAdmin` promoted the **earliest-created**
+  `sys_user`, on any app that ships seed data `usr_system` won the promotion and
+  the real admin login stayed at `role: user`. Login succeeded but Setup and
+  Studio (gated by `setup.access` / `studio.access` on `admin_full_access`) were
+  invisible — a silent, confusing regression.
+
+  `bootstrap-platform-admin.ts` now filters out the system account
+  (`id === SystemUserId.SYSTEM || role === 'system'`) when picking the first user
+  to promote, and the "an admin already exists" short-circuit ignores any
+  `admin_full_access` grant held by `usr_system` — so a database where it was
+  wrongly promoted self-heals on the next boot.
+
+  **`@objectstack/cli` — `os dev` seeds `admin@objectos.ai` / `admin123`**
+
+  The `--admin-email` / `--admin-password` defaults changed from
+  `admin@dev.local` / `admin12345` to the fixed, well-known
+  `admin@objectos.ai` / `admin123`, so tooling and docs never have to guess the
+  seeded credentials. Override with `--admin-email` / `--admin-password`.
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [4404572]
+- Updated dependencies [eea3f1b]
+- Updated dependencies [e478e0c]
+- Updated dependencies [4cc2ced]
+- Updated dependencies [13632b1]
+- Updated dependencies [a40d010]
+- Updated dependencies [f3424fc]
+- Updated dependencies [c8753ef]
+- Updated dependencies [406fda5]
+- Updated dependencies [f115182]
+- Updated dependencies [24c9013]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [a6d4cbb]
+- Updated dependencies [08fbbb4]
+- Updated dependencies [58b450b]
+- Updated dependencies [394d34f]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [3a45780]
+- Updated dependencies [c381977]
+- Updated dependencies [13d8653]
+- Updated dependencies [03fd7f0]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/objectql@7.4.0
+  - @objectstack/runtime@7.4.0
+  - @objectstack/platform-objects@7.4.0
+  - @objectstack/plugin-auth@7.4.0
+  - @objectstack/plugin-webhooks@7.4.0
+  - @objectstack/plugin-approvals@7.4.0
+  - @objectstack/plugin-security@7.4.0
+  - @objectstack/plugin-sharing@7.4.0
+  - @objectstack/service-messaging@7.4.0
+  - @objectstack/plugin-audit@7.4.0
+  - @objectstack/service-automation@7.4.0
+  - @objectstack/driver-sql@7.4.0
+  - @objectstack/rest@7.4.0
+  - @objectstack/service-external-datasource@7.4.0
+  - @objectstack/service-ai@7.4.0
+  - @objectstack/client@7.4.0
+  - @objectstack/service-settings@7.4.0
+  - @objectstack/plugin-trigger-record-change@7.4.0
+  - @objectstack/plugin-trigger-schedule@7.4.0
+  - @objectstack/account@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/observability@7.4.0
+  - @objectstack/driver-memory@7.4.0
+  - @objectstack/driver-mongodb@7.4.0
+  - @objectstack/driver-sqlite-wasm@7.4.0
+  - @objectstack/plugin-email@7.4.0
+  - @objectstack/plugin-hono-server@7.4.0
+  - @objectstack/plugin-mcp-server@7.4.0
+  - @objectstack/plugin-org-scoping@7.4.0
+  - @objectstack/plugin-reports@7.4.0
+  - @objectstack/service-analytics@7.4.0
+  - @objectstack/service-cache@7.4.0
+  - @objectstack/service-feed@7.4.0
+  - @objectstack/service-job@7.4.0
+  - @objectstack/service-package@7.4.0
+  - @objectstack/service-queue@7.4.0
+  - @objectstack/service-realtime@7.4.0
+  - @objectstack/service-storage@7.4.0
+  - @objectstack/types@7.4.0
+  - @objectstack/console@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

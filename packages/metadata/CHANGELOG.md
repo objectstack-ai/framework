@@ -1,5 +1,88 @@
 # @objectstack/metadata
 
+## 7.4.0
+
+### Minor Changes
+
+- 13632b1: ADR-0030 P0 (framework) — converge notifications onto a single ingress and the
+  layered model. Every producer now publishes through
+  `NotificationService.emit(EmitInput)`; the in-app inbox is a materialization of
+  delivery, not a row producers write.
+
+  **Single ingress (`@objectstack/service-messaging`) — breaking**
+
+  - `MessagingService.emit` takes the new `EmitInput` contract (`topic` /
+    `audience` / `payload` / `severity` / `dedupKey` / `source` / `actorId` /
+    `organizationId` / `channels`) instead of the flat `Notification` shape. It
+    writes the L2 `sys_notification` event (idempotent on `dedupKey`), resolves the
+    audience, then fans out; it returns `{ notificationId, deduped, deliveries,
+delivered, failed }`.
+  - New `sys_notification_receipt` object — the read-state spine
+    (`delivered|read|clicked|dismissed`), keyed `(notification_id, user_id,
+channel)`. The inbox channel writes a `delivered` receipt on materialization.
+  - `sys_inbox_message`: adds `notification_id` / `delivery_id`, **drops `read`**
+    (read-state moved to the receipt), adds the user `mine` list view.
+
+  **Event re-model (`@objectstack/platform-objects`) — breaking**
+
+  - `sys_notification` is re-modeled from a per-user inbox into the L2 **event**
+    (`topic`, `payload`, `severity`, `dedup_key`, `source_*`, `actor_id`). Removes
+    `recipient_id` / `is_read` / `read_at` / `type` / `title` / `body` / `url` /
+    `actor_name` and the inbox actions/views. App-nav: the account inbox points at
+    `sys_inbox_message`; Setup shows the notification event log.
+
+  **Producers routed through `emit()`**
+
+  - `@objectstack/service-automation`: the `notify` node maps its config to
+    `EmitInput`.
+  - `@objectstack/plugin-audit`: collaboration `@mention` → `collab.mention` and
+    assignment → `collab.assignment` (both with a `dedupKey`); no more direct
+    `sys_notification` writes. Collaboration notifications now require
+    `MessagingServicePlugin` (they degrade to a warn otherwise).
+
+  **Migration (`@objectstack/metadata`)**
+
+  - Idempotent `migrateSysNotificationToEvent` splits legacy `sys_notification`
+    inbox rows into `sys_inbox_message` + receipts and rewrites the event row.
+
+  **Startup (`@objectstack/cli`, `@objectstack/runtime`)**
+
+  - `messaging` is now a foundational capability. On `objectstack serve` it is
+    added to `ALWAYS_ON_CAPABILITIES` (every non-`minimal` preset starts it); on
+    cloud per-project kernels the capability loader expands `requires` to add
+    `messaging` whenever `audit` is present. This keeps collaboration `@mention` /
+    assignment notifications (which now flow through the pipeline) working out of
+    the box on both paths. `--preset minimal` opts out.
+
+  The Console bell repoint (objectui) and phases P1–P3 are tracked in
+  `docs/handoff/adr-0030-notification-convergence.md`.
+
+### Patch Changes
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [4404572]
+- Updated dependencies [eea3f1b]
+- Updated dependencies [e478e0c]
+- Updated dependencies [4cc2ced]
+- Updated dependencies [13632b1]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [c381977]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/platform-objects@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/types@7.4.0
+  - @objectstack/metadata-core@7.4.0
+  - @objectstack/metadata-fs@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes
