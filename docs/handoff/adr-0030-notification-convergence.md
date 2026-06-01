@@ -141,15 +141,24 @@ flipped — the inbox is being populated the whole time.)
 
 ---
 
-## Remaining phases (from the build spec)
+## Phase status (from the build spec)
 
-- **P1 — Reliable delivery**: `sys_notification_delivery` outbox + dispatcher
-  (state machine, retry/backoff, dead-letter, `dedup_key`); `RecipientResolver`
-  (reuse sharing/CEL resolver) owning `role:`/`owner_of:`/`team:`/email→id. Move
-  the inbox channel's email→id fallback up here.
-- **P2 — Subscription + preference**: `sys_notification_subscription` +
-  `sys_notification_preference` objects + Studio config UI; mandatory-topic
-  bypass; admin-global + per-user-override defaults.
+- **P0 — Seams**: ✅ shipped (#1434). Single ingress, event re-model, receipt,
+  producers routed through `emit()`. (objectui bell cut-over + mark-read write
+  path still pending — see above.)
+- **P1 — Reliable delivery**: ✅ shipped (#1441). `sys_notification_delivery`
+  outbox + `NotificationDispatcher` (state machine, retry/backoff, dead-letter);
+  `RecipientResolver` owns `role:`/`owner_of:`/`team:`/email→id (the inbox
+  channel's email→id fallback moved up). So the audience-selector caveat above is
+  now resolved when a data engine is present.
+- **P2 — Subscription + preference**: ✅ shipped. `sys_notification_preference`
+  (per user×topic×channel toggle, admin-global `*` defaults + per-user override,
+  wildcards) + `sys_notification_subscription`; `PreferenceResolver` wired into
+  `emit()` (most-specific-wins, **mandatory-topic bypass**, **fail-open**); both
+  objects contributed to the Setup Configuration nav.
+  - *Follow-ups*: subscription-driven fan-out (expand a topic's subscribers when
+    a producer emits without an explicit audience) is schema-only so far;
+    `digest`/`quiet_hours` fields exist but the batching middleware is P3.
 - **P3 — Channels + templates + digest**: email/push/webhook/Slack channels on
   connectors (ADR-0022); `sys_notification_template` (topic×channel×locale) +
   renderer; digest / quiet-hours middleware.

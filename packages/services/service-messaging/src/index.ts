@@ -42,6 +42,15 @@ export type {
     ResolveContext,
 } from './recipient-resolver.js';
 
+// Preference filter (ADR-0030 P2)
+export { PreferenceResolver, PREFERENCE_OBJECT } from './preference-resolver.js';
+export type {
+    PreferenceResolverOptions,
+    PreferenceResolverLogger,
+    PreferenceContext,
+    PreferenceTarget,
+} from './preference-resolver.js';
+
 // Channel seam
 export { createInboxChannel, INBOX_OBJECT, RECEIPT_OBJECT } from './inbox-channel.js';
 export type { InboxChannelOptions } from './inbox-channel.js';
@@ -77,4 +86,10 @@ export type {
 } from './dispatcher.js';
 
 // Objects (metadata definitions)
-export { InboxMessage, NotificationReceipt, NotificationDelivery } from './objects/index.js';
+export {
+    InboxMessage,
+    NotificationReceipt,
+    NotificationDelivery,
+    NotificationPreference,
+    NotificationSubscription,
+} from './objects/index.js';

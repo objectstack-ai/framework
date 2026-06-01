@@ -7,6 +7,7 @@ import type {
     Notification,
 } from './channel.js';
 import { RecipientResolver } from './recipient-resolver.js';
+import { PreferenceResolver, type PreferenceTarget } from './preference-resolver.js';
 import type { INotificationOutbox } from './outbox.js';
 
 /** The L2 event object every `emit()` writes one row to (ADR-0030). */
@@ -84,6 +85,14 @@ export interface MessagingServiceContext extends MessagingChannelContext {
     now?(): string;
     /** Override the recipient resolver (tests). Defaults to a data-backed one. */
     recipientResolver?: RecipientResolver;
+    /** Override the preference resolver (tests). Defaults to a data-backed one. */
+    preferenceResolver?: PreferenceResolver;
+    /**
+     * Topics that bypass the per-user preference matrix (ADR-0030 P2) — e.g.
+     * security/system alerts users must not be able to mute. Exact match, or a
+     * `prefix.` entry for prefix match.
+     */
+    mandatoryTopics?: readonly string[];
     /**
      * Durable delivery outbox (ADR-0030 P1). When present, `emit()` enqueues a
      * `pending` delivery row per `(recipient × channel)` and the
@@ -114,6 +123,7 @@ export class MessagingService {
     private readonly channels = new Map<string, MessagingChannel>();
     private readonly now: () => string;
     private readonly resolver: RecipientResolver;
+    private readonly preferences: PreferenceResolver;
     private outbox?: INotificationOutbox;
 
     constructor(private readonly ctx: MessagingServiceContext) {
@@ -121,6 +131,13 @@ export class MessagingService {
         this.resolver =
             ctx.recipientResolver ??
             new RecipientResolver({ getData: () => ctx.getData?.(), logger: ctx.logger });
+        this.preferences =
+            ctx.preferenceResolver ??
+            new PreferenceResolver({
+                getData: () => ctx.getData?.(),
+                logger: ctx.logger,
+                mandatoryTopics: ctx.mandatoryTopics,
+            });
         this.outbox = ctx.outbox;
     }
 
@@ -192,19 +209,22 @@ export class MessagingService {
             return { notificationId, deduped: false, deliveries: [], delivered: 0, failed: 0 };
         }
 
-        // 4) Either enqueue durable deliveries (P1 outbox) or fan out inline (P0).
+        // 3b) Preference filter (ADR-0030 P2): drop the (recipient × channel)
+        //     pairs the user muted. Mandatory topics bypass; fail-open on error.
         const payload = input.payload ?? {};
         const channels = input.channels?.length ? input.channels : ['inbox'];
+        const targets = await this.preferences.filter(recipients, channels, {
+            topic: input.topic,
+            organizationId: input.organizationId,
+        });
+        if (targets.length === 0) {
+            this.ctx.logger.info(`[messaging] emit: topic '${input.topic}' suppressed for all recipients by preference`);
+            return { notificationId, deduped: false, deliveries: [], delivered: 0, failed: 0 };
+        }
 
+        // 4) Either enqueue durable deliveries (P1 outbox) or fan out inline (P0).
         if (this.outbox) {
-            const deliveries = await this.enqueueDeliveries(
-                this.outbox,
-                notificationId,
-                recipients,
-                channels,
-                input,
-                payload,
-            );
+            const deliveries = await this.enqueueDeliveries(this.outbox, notificationId, targets, input, payload);
             const delivered = deliveries.filter((d) => d.ok).length;
             return { notificationId, deduped: false, deliveries, delivered, failed: deliveries.length - delivered };
         }
@@ -222,7 +242,7 @@ export class MessagingService {
             payload: input.payload,
         };
 
-        const { deliveries, delivered, failed } = await this.fanOut(notification, recipients);
+        const { deliveries, delivered, failed } = await this.fanOut(notification, targets);
         return { notificationId, deduped: false, deliveries, delivered, failed };
     }
 
@@ -235,8 +255,7 @@ export class MessagingService {
     private async enqueueDeliveries(
         outbox: INotificationOutbox,
         notificationId: string,
-        recipients: string[],
-        channels: string[],
+        targets: PreferenceTarget[],
         input: EmitInput,
         payload: Record<string, unknown>,
     ): Promise<DeliveryOutcome[]> {
@@ -250,8 +269,8 @@ export class MessagingService {
             actionUrl: str(payload.url) ?? str(payload.actionUrl),
         };
         const deliveries: DeliveryOutcome[] = [];
-        for (const channel of channels) {
-            for (const recipient of recipients) {
+        for (const { recipient, channels } of targets) {
+            for (const channel of channels) {
                 try {
                     const id = await outbox.enqueue({
                         notificationId,
@@ -314,41 +333,32 @@ export class MessagingService {
     }
 
     /**
-     * Fan a notification out to its channels and recipients. Each
-     * `(channel, recipient)` pair becomes one `send()` call. An unregistered
+     * Fan a notification out to each recipient's accepted channels. Each
+     * `(recipient, channel)` pair becomes one `send()` call. An unregistered
      * channel, or a channel that throws, is reported as a failed delivery — it
      * never aborts the rest of the fan-out.
      */
     private async fanOut(
         notification: Notification,
-        recipients: string[],
+        targets: PreferenceTarget[],
     ): Promise<{ deliveries: DeliveryOutcome[]; delivered: number; failed: number }> {
-        const channels = notification.channels?.length ? notification.channels : ['inbox'];
         const deliveries: DeliveryOutcome[] = [];
 
-        for (const channelId of channels) {
-            const channel = this.channels.get(channelId);
-            if (!channel) {
-                // Surface the gap per recipient so the caller sees who missed out.
-                for (const recipient of recipients) {
+        for (const { recipient, channels } of targets) {
+            for (const channelId of channels) {
+                const channel = this.channels.get(channelId);
+                if (!channel) {
                     deliveries.push({
                         channel: channelId,
                         recipient,
                         ok: false,
                         error: `channel '${channelId}' not registered`,
                     });
+                    this.ctx.logger.warn(`[messaging] emit: channel '${channelId}' not registered`);
+                    continue;
                 }
-                this.ctx.logger.warn(`[messaging] emit: channel '${channelId}' not registered`);
-                continue;
-            }
-
-            for (const recipient of recipients) {
                 try {
-                    const result = await channel.send(this.ctx, {
-                        notification,
-                        channel: channelId,
-                        recipient,
-                    });
+                    const result = await channel.send(this.ctx, { notification, channel: channelId, recipient });
                     deliveries.push({
                         channel: channelId,
                         recipient,
