@@ -152,6 +152,11 @@ export interface RollbackInput {
 
 /**
  * Input for uploading a package artifact.
+ *
+ * Carries both pure-metadata packages and code-bearing `.osplugin` plugins
+ * (ADR-0025): the plugin fields below are optional and absent for metadata
+ * packages. They align with the cloud control plane's plugin publish path
+ * (`preparePluginVersion` / `verifyPublisherSignature`).
  */
 export interface UploadArtifactInput {
   /** Package artifact metadata */
@@ -160,6 +165,26 @@ export interface UploadArtifactInput {
   content: string;
   /** Publisher authentication token */
   token?: string;
+
+  // ---- Plugin distribution (ADR-0025) ----
+
+  /**
+   * Artifact discriminator. `plugin` triggers the signed/permissioned
+   * path (verify signature → permission audit → store blob → pending review);
+   * `metadata` (default) is the legacy pure-metadata fast path.
+   */
+  kind?: 'metadata' | 'plugin';
+  /**
+   * Detached publisher signature over the raw artifact bytes, in the
+   * canonical `ed25519:<keyId>:<base64url>` format (produced by
+   * `os plugin sign`). Verified server-side before the version is stored.
+   */
+  signature?: string;
+  /**
+   * Expected SHA-256 (hex) of the artifact bytes for tamper detection on
+   * upload. The server recomputes and rejects on mismatch.
+   */
+  expectedChecksum?: string;
 }
 
 /**
@@ -174,6 +199,22 @@ export interface UploadArtifactResult {
   sha256?: string;
   /** Error message if upload failed */
   errorMessage?: string;
+
+  // ---- Plugin distribution (ADR-0025) ----
+
+  /** Identifier of the created package version row (e.g. sys_package_version id). */
+  versionId?: string;
+  /**
+   * Listing/review state after upload — e.g. `pending_review` when a plugin
+   * requires human approval before it can be installed (ADR §3.7).
+   */
+  listingStatus?: string;
+  /**
+   * Whether the publisher signature was present AND cryptographically
+   * verified. `false` means accepted-but-unverified (trust tier gates apply)
+   * or no signature supplied.
+   */
+  signatureVerified?: boolean;
 }
 
 // ==========================================
