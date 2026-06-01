@@ -1,40 +1,45 @@
-# ADR-0025: `@objectstack/metadata-authoring` — Staged Authoring & Package Publish
+# ADR-0025: `@objectstack/metadata-authoring` — Staged Authoring, Publish & Promotion Lifecycle
 
 **Status**: Proposed (2026-06-01)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: [ADR-0003](./0003-package-as-first-class-citizen.md) (package + versioned releases), [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type, org overlay), [ADR-0008](./0008-metadata-repository-and-change-log.md) (Repository · ChangeLog · Cache · Registry; the four write surfaces), [ADR-0010](./0010-metadata-protection-model.md) (L1/L2/L3 protection), [ADR-0016](./0016-studio-package-authoring-and-publish.md) (Studio authoring → bind → distribute loop — **this ADR revives its §2 draft-workspace north-star**)
-**Consumers**: `@objectstack/rest` (HTTP `/meta/*` + `/packages/*` routes), `@objectstack/objectql` (provides the storage + schema-sync adapters), `@objectstack/runtime` (wires the service at kernel bootstrap, owns env activation), `@objectstack/cli` (`os package publish`), `../objectui` (Studio — the visual editor)
+**Builds on**: [ADR-0002](./0002-environment-database-isolation.md) (per-environment database), [ADR-0003](./0003-package-as-first-class-citizen.md) (package · version · installation), [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type, org overlay), [ADR-0006 v4](./0006-project-environment-split.v4.md) (unify on package, drop project), [ADR-0008](./0008-metadata-repository-and-change-log.md) (Repository · ChangeLog · Cache · Registry; four write surfaces), [ADR-0010](./0010-metadata-protection-model.md) (L1/L2/L3 protection), [ADR-0016](./0016-studio-package-authoring-and-publish.md) (Studio authoring loop — **this ADR revives its §2 draft-workspace north-star**), [ADR-0019](./0019-approval-as-flow-node.md) (approvals)
+**Consumers**: `@objectstack/rest` (HTTP `/meta/*` + `/api/v1/cloud/packages/*` routes), `@objectstack/objectql` (storage + schema-sync + destructive-check adapters), `@objectstack/runtime` (kernel bootstrap; owns env activation / install-pointer swap), `@objectstack/cli` (`os package publish`), `@objectstack/plugins/plugin-approvals` (publish gate), `../objectui` (Studio)
 
 ---
 
 ## TL;DR
 
-Authoring metadata is **not** one operation — it is two, on two cadences:
+Authoring a metadata-driven app is a **multi-stage business process**, not a
+single write. This ADR defines that process and the package that owns it:
 
-- **Stage** (high-frequency, cheap, zero runtime impact): every visual edit
-  accumulates as a *draft* in a workspace bound to a **package version under
-  development**. No DDL runs. The live system is untouched.
-- **Publish** (low-frequency, batched, transactional): the whole draft package
-  version is validated as a set, its schema migration plan is computed and
-  previewed, the **physical DDL runs once for the batch**, the version is
-  **sealed** (immutable, semver + checksum), and the environment's **active
-  version pointer is swapped** — atomically activating everything and
-  invalidating the registry once. Rollback = swap the pointer back.
+```
+open draft → stage edits → validate+diff → sandbox preview
+   → publish (seal + batch-migrate + activate)
+   → promote Dev→Staging→Prod (approval-gated)
+   → rollback / deprecate / distribute
+```
 
-A first design draft of this ADR modelled a single `commit(change)` that
-persisted *and* ran DDL *and* hot-activated on **every edit**. That is an
-anti-pattern for a low-code platform — no mainstream system `ALTER TABLE`s the
-production database on each canvas click (see §Context). This revision splits it
-into **`stage()` + `publish()`** and makes the **package version** — not a
-person's env-local overlay rows — the unit of work.
+Two cadences underpin it:
 
-**Decision:** ship `@objectstack/metadata-authoring`, a server-side,
-**transport-agnostic** package that owns both phases. It invents no storage and
-no protocol; it depends only on `@objectstack/spec` + `@objectstack/metadata-core`
-and reaches storage/DDL/activation through injected **ports** whose adapters live
-in `objectql`/`runtime`. Any surface (Studio, REST, CLI, AI agent, Git webhook)
-drives the *same* stage/publish code path — the ADR-0008 "four write surfaces"
-goal, with a single owner.
+- **Stage** — high-frequency, cheap, **zero runtime/DDL impact**. Each visual
+  edit accumulates as a *draft* bound to a **package version under development**.
+- **Publish** — low-frequency, batched, transactional. The whole draft is
+  validated as a set, its migration plan computed and previewed, the **physical
+  DDL runs once**, the version is **sealed** (immutable, semver + checksum), and
+  the target environment's **install pointer is swapped** — activating
+  atomically.
+
+**Key finding from the codebase:** the *data model* for all of this already
+exists (`sys_package`, `sys_package_version{status: draft|published|deprecated}`,
+`sys_package_installation{packageVersionId, status}`, `sys_environment`,
+`sys_metadata{state, package_version_id}`), and destructive-change detection
+already exists in `objectql`. **What is missing is the orchestration** — a single
+owner that sequences stage → diff → publish → promote → rollback across these
+tables. `@objectstack/metadata-authoring` is that owner: server-side,
+transport-agnostic, depending only on `spec` + `metadata-core`, reaching
+storage/DDL/activation through injected **ports** (adapters in
+`objectql`/`runtime`). Every surface — Studio, REST, CLI, AI agent, Git webhook —
+drives the same lifecycle.
 
 ---
 
@@ -42,242 +47,359 @@ goal, with a single owner.
 
 ### How mainstream low-code / metadata platforms handle this
 
-Twenty years of consensus across the vendors ADR-0008 already cites:
+| System | Edit sandbox | Staging unit | Publish action | DDL timing | Promotion | Rollback |
+|:--|:--|:--|:--|:--|:--|:--|
+| **Salesforce** | Sandbox / Scratch Org | Change Set / **Unlocked Package version** | Metadata API *Deploy* / install | **At deploy** | Sandbox→Prod change set | Re-deploy prior version; drop-field manual |
+| **ServiceNow** | Dev instance + **Update Set** | Update Set (scoped app) | Commit / move Update Set | At commit | Dev→Test→Prod instances | "Back out" the Update Set |
+| **Mendix** | Working copy + Team Server | Model revision / branch | **Deploy** builds package, runs DB sync | **At deploy** | Dev→Acc→Prod | Redeploy prior; forward-only |
+| **OutSystems** | Service Studio module | Module version | **1-Click Publish** | **At publish** | LifeTime Dev→QA→Prod | Revert to prior version |
+| **Hasura** | Console dev mode | Migration files + metadata | `apply` to an env | **Explicit migration** | per-env apply | `down` migrations |
 
-| System | Edit sandbox (where drafts live) | Staging unit | Publish action | Physical schema (DDL) timing | Rollback |
-|:-------|:---------------------------------|:-------------|:---------------|:-----------------------------|:---------|
-| **Salesforce** | Sandbox / Scratch Org | Change Set / **Unlocked Package version** | Metadata API *Deploy* / install package | **At deploy**, validated then activated | Re-deploy prior version; destructive (drop field) is manual |
-| **ServiceNow** | Dev instance + **Update Set** | Update Set (scoped app) | Commit / move Update Set; App Repo publish | At commit | "Back out" the Update Set |
-| **Mendix** | Working copy + Team Server (Git-like) | Model revision / branch | **Deploy** builds a package, runs DB sync | **At deploy** (auto migration) | Redeploy prior package; forward-only migrations |
-| **OutSystems** | Service Studio module | Module version | **1-Click Publish**; LifeTime promotes Dev→QA→Prod | **At publish** (compile + schema upgrade) | Revert to prior published version |
-| **Hasura** | Console dev mode | Migration files + metadata | `apply` migrations + metadata to an env | **Explicit migration step** (up/down) | `down` migrations |
-| **Retool / Budibase** | Edit / draft mode | App version | Release a version | Data-app oriented, weak DDL | Roll back to a version |
+**Consensus this ADR adopts:** editing ≠ committing; the publish unit is an
+immutable **package version**; DDL runs **at publish**, batched and previewable;
+activation is a **pointer swap**; promotion across environments reuses the same
+machinery; rollback swaps the pointer back.
 
-**The shared pattern — what this ADR adopts:**
+### What already exists in ObjectStack (we orchestrate, not invent)
 
-1. **Editing ≠ committing.** Edits accumulate in a **sandbox workspace** with
-   zero impact on the running system.
-2. **The publish unit is a package *version*** — immutable, semver'd, validated
-   as a whole — not a person's scattered overlay rows.
-3. **DDL / data migration runs *at publish*, batched**, with a **diff/preview**
-   of the whole migration plan beforehand.
-4. **Activation is a pointer swap**: publish atomically switches the installed
-   version and invalidates the cache once; rollback swaps the pointer back.
-5. **Multi-environment promotion** (Dev/Sandbox preview → Production) uses the
-   same machinery.
+| Capability | Where | Notes |
+|:--|:--|:--|
+| Package identity | `spec/src/cloud/package.zod.ts` | `manifestId`, `visibility ∈ {private,org,marketplace}`, `publisher` |
+| Versioned snapshot | `spec/src/cloud/package-version.zod.ts` | `version` (semver), **`status ∈ {draft,published,deprecated}`**, `manifestJson`, `checksum`, `dependencies[{packageId,versionRange,optional}]`, `minPlatformVersion`, `isPreRelease` |
+| Env install pointer | `spec/src/cloud/environment-package.zod.ts` | **`packageVersionId`** (the pointer), `status ∈ {installed,installing,upgrading,disabled,error}`, `enabled`, `withSampleData` |
+| Environment | `spec/src/cloud/environment.zod.ts` | per-env DB (ADR-0002); type ∈ {production,sandbox,development,test,staging,preview,trial} (advisory); members ∈ {owner,admin,maker,reader,guest} |
+| Metadata row | `platform-objects/.../sys-metadata.object.ts` | **`state ∈ {draft,active,archived,deprecated}`**, `package_version_id` FK, `managed_by`, `scope` |
+| Destructive detection | `objectql/.../protocol-destructive.test.ts` | `field_removed`, `field_type_change`, `field_required_no_default`; `force` bypass |
+| Schema DDL | `driver-sql` `ISchemaDriver` | `createCollection/addColumn/modifyColumn/dropColumn`, `syncSchemasBatch` |
+| Publish endpoints | `cli/.../package/publish.ts` | `POST /api/v1/cloud/packages` → `/versions` → install; `allowDraft` for dev/sandbox |
+| Approvals | `plugin-approvals` | `sys_approval_request/action` — exists, **not yet wired to publish** |
 
-This is, notably, **ObjectStack's own ADR-0016 §2 north-star** ("draft
-`sys_package_version` = authoring workspace → one-click publish seals it"). The
-§9 MVP took a local-first shortcut (flat `package_id` binding, edits written as
-*live* overlay rows). ADR-0025 formalizes the staged path the §9 note explicitly
-reserved for "the cloud phase".
+The §9 MVP of ADR-0016 took a shortcut: edits write *live* `sys_metadata`
+overlay rows bound to a flat `package_id`, immediately active. This ADR revives
+§2's north-star — drafts bound to a **draft version**, sealed on publish.
 
-### "Persist to the database" is two layers — and they happen at different times
+---
 
-| Layer | Meaning | Cadence in this model | Today's location |
-|:------|:--------|:----------------------|:-----------------|
-| **L1 — definition persistence** | Store the JSON definition of object/view/field/app | **Stage** writes drafts; **Publish** seals them | `objectql/sys-metadata-repository.ts`, `metadata/loaders/database-loader.ts` |
-| **L2 — physical schema (DDL)** | Create/alter the *real business table* | **Publish only**, batched for the whole package | `objectql/engine.ts → driver.syncSchema()` → `ISchemaDriver` (`createCollection/addColumn/modifyColumn/dropColumn`) |
+## The complete development lifecycle
 
-The earlier draft ran L2 on every edit. Here L2 is deferred to publish and
-planned/previewed as a set — matching Salesforce deploy, Mendix/OutSystems
-publish, and Hasura migrations.
+### Actors & roles (from `EnvironmentRole`)
+
+| Role | Can stage | Can publish (seal) | Can promote to prod | Can rollback |
+|:--|:-:|:-:|:-:|:-:|
+| `maker` | ✓ | ✓ (to dev/sandbox) | — (requests approval) | — |
+| `admin` | ✓ | ✓ | ✓ | ✓ |
+| `owner` | ✓ | ✓ | ✓ | ✓ |
+| `reader`/`guest` | — | — | — | — |
+
+### End-to-end flow
+
+```
+ ┌── DEV ENVIRONMENT (type: development) ─────────────────────────────┐
+ │                                                                     │
+ │  (A) openDraft(pkg)  ── draft sys_package_version{status:draft}     │
+ │        │                                                            │
+ │  (B) stage(change) ×N ── sys_metadata{state:draft,                  │
+ │        │                   package_version_id=draft.id}  (no DDL)   │
+ │        │                                                            │
+ │  (C) diff()/validate() ── plan = draft vs active; set-validation    │
+ │        │                                                            │
+ │  (D) preview ── install draft into dev env (allowDraft=true)        │
+ │        │           sys_package_installation.packageVersionId=draft  │
+ │        ▼                                                            │
+ │  (E) publish(pkg,{targetEnv:dev})                                   │
+ │        1 validate set   2 plan migration   3 dry-run preview        │
+ │        4 batch DDL      5 SEAL → status:published, semver, checksum │
+ │        6 swap install pointer (activate)  7 open next draft         │
+ └────────────────────────────────┬────────────────────────────────--┘
+                                   │  (F) promote (approval-gated)
+                                   ▼
+ ┌── STAGING (type: staging) ─────────────────────────────────────────┐
+ │  install the SAME sealed version → run its migration → activate     │
+ └────────────────────────────────┬────────────────────────────────--┘
+                                   │  (F) promote (approval-gated, admin)
+                                   ▼
+ ┌── PRODUCTION (type: production) ───────────────────────────────────┐
+ │  install the SAME sealed version → migration (destructive-gated)    │
+ │  (G) rollback = swap pointer back to prior published version        │
+ └─────────────────────────────────────────────────────────────────--┘
+```
+
+**The unit that flows between environments is the sealed `sys_package_version`,
+never raw rows** — identical to Salesforce package versions / OutSystems module
+versions.
+
+### Package-version state machine
+
+```
+        openDraft                publish(seal)              deprecate
+  ∅ ───────────────▶ draft ───────────────────▶ published ───────────▶ deprecated
+                      │ ▲                          │  ▲
+        stage/discard │ └── open next draft ───────┘  │ rollback target
+                      ▼          (after publish)      │ (pointer swaps here)
+                   (mutable)                     (immutable)
+```
+
+- **draft** — mutable; only dev/sandbox may install it (`allowDraft`). Holds the
+  staged `sys_metadata{state:draft, package_version_id=draft.id}` rows.
+- **published** — immutable (frozen `manifestJson` + `checksum` + semver);
+  installable into any environment. This is the promotion/rollback unit.
+- **deprecated** — published-but-discouraged; blocks new installs unless
+  `allowDeprecated`.
+
+Installation status (`installing → upgrading → installed | error | disabled`)
+tracks the per-environment apply; activation succeeds only when the pointer swap
++ migration complete.
 
 ---
 
 ## Decision
 
-Introduce `packages/metadata-authoring` — `@objectstack/metadata-authoring` — a
-transport-agnostic package owning two phases.
+Ship `packages/metadata-authoring` (`@objectstack/metadata-authoring`) — the
+transport-agnostic owner of the lifecycle above.
 
-### Phase A — Stage (draft authoring)
+### 1. Scope & boundary
 
-- **Unit:** a **draft package version** = the authoring workspace. A package has
-  at most one active `draft` `sys_package_version` per org (ADR-0003 already
-  defines `status ∈ {draft, published, deprecated}`; ADR-0016 §2.1 already
-  modelled this). Studio's `active_package` selector designates the authoring
-  target.
-- **`stage(change)`** validates the *single* item (Zod from `spec`) + L1/L2/L3
-  protection + `allowOrgOverride`, then writes the definition into the draft
-  workspace — `sys_metadata` rows tagged `package_version_id = <draft.id>`.
-- **No DDL. No live activation. No production registry mutation.** Optimistic
-  concurrency is enforced *within the draft* (per-row `checksum`).
-- Supports **discard** (revert a single staged item), **diff** (draft vs. the
-  currently-active version), and optional **sandbox preview** (a dev env installs
-  the draft with `allowDraft`, ADR-0003/0016 §2.3 — never auto-promoted to prod).
-- When **"no package"** is selected, the ADR-0016 §9 behavior holds: a NULL-package
-  env-local overlay (`provenance='runtime'`) — personal customization, not a
-  shippable artifact. (This is the only path that bypasses staging.)
+**In:** orchestration of `openDraft / stage / discard / diff / validate /
+preview / publish / promote / rollback / deprecate`; the migration-plan (diff)
+engine; the publish-time DDL batching + activation sequencing; approval-gate
+invocation.
 
-### Phase B — Publish (deploy)
+**Out (depended on, never re-implemented):** Zod schemas (`spec`); storage
+(`objectql` `SysMetadataRepository`, the `sys_*` objects); DDL execution
+(`driver-*` `ISchemaDriver`); env DB routing & install-pointer persistence
+(`runtime`); HTTP (`rest`); the visual editor (`../objectui`).
 
-`publish(packageRef, { targetEnv })`:
+### 2. Lifecycle phases (detail)
 
-1. **Validate the set** — cross-references resolve, no dangling refs, the draft
-   is internally consistent (not just each row in isolation).
-2. **Plan the migration** — `diff(draft, activeVersion)` → an ordered list of
-   `SchemaChange` (DDL) + data backfills. Powers dry-run.
-3. **Preview** — `publish(..., { dryRun: true })` returns the plan
-   ("will add column `contact.phone TEXT`", "will drop `contact.fax` —
-   destructive") without executing.
-4. **Execute L2 DDL** for the whole package, batched (prefer
-   `driver.syncSchemasBatch` where supported), with the schema-ahead recovery
-   rule (§Atomicity). `schemaMode: 'external'` skips L2.
-5. **Seal** the draft → `published` `sys_package_version` (freeze
-   `manifest_json`, compute checksum, assign immutable semver — ADR-0016 §2.4).
-6. **Swap the active pointer** — upsert `sys_package_installation` for `targetEnv`
-   to the new `package_version_id`. **This is the activation**: one atomic
-   pointer move, one registry invalidation + ChangeLog event.
-7. **Open a fresh `draft`** for continued authoring (next version).
+**(A) Open workspace.** `openDraft(pkgRef, orgId)` ensures ≤1 active `draft`
+`sys_package_version` per package per org (ADR-0016 §2.1). Idempotent; returns
+the draft id all staging binds to.
 
-**Rollback** = swap the installation pointer back to a prior sealed version
-(+ a reverse/compensating migration when schema changed — forward-only by
-default, as Mendix/Rails; destructive reversals are surfaced, not auto-run).
+**(B) Stage.** `stage(change)` runs **per-item** validation only —
+Zod (`spec`) + ADR-0010 protection + `allowOrgOverride` whitelist — then writes
+`sys_metadata{state:'draft', package_version_id=draft.id}`. **No DDL, no
+activation.** OCC is per-row within the draft (`checksum`/`parentVersion`).
+`discard(ref)` removes a staged row; "no package" selected ⇒ legacy env-local
+overlay path (ADR-0016 §9), the only non-staged route.
 
-### Public API
+**(C) Validate & diff.** `diff(pkgRef)` returns a `MigrationPlan` = the schema
+delta between the draft and the **currently-active** sealed version, plus a
+**set-level** validation (cross-references resolve, no dangling refs, no
+duplicate FQNs) that per-item staging cannot catch.
+
+**(D) Sandbox preview.** Install the draft into a `development`/`sandbox`
+environment with `allowDraft=true` (`sys_package_installation.packageVersionId =
+draft.id`), so authors run their in-progress package live before sealing. Never
+auto-promoted.
+
+**(E) Publish (seal + migrate + activate).** `publish(pkgRef,{targetEnv})`:
+1. **Validate the set** (C).
+2. **Plan migration** — `diff` → ordered `SchemaChange[]` + `backfills[]`.
+3. **Preview** (`dryRun:true`) returns the plan without executing.
+4. **Execute L2 DDL**, batched (`syncSchemasBatch`), destructive-gated (§4).
+5. **Seal** → `status:'published'`, freeze `manifestJson`, compute `checksum`,
+   assign semver; flip the draft's `sys_metadata` rows `state:'draft' → 'active'`.
+6. **Swap install pointer** — upsert `sys_package_installation` for `targetEnv`
+   to the new `packageVersionId` (status `upgrading → installed`); one registry
+   invalidation + one ChangeLog event.
+7. **Open next draft** for continued authoring.
+
+**(F) Promote across environments.** Promotion = installing the **same sealed
+version** into the next environment up (Dev→Staging→Prod), reusing
+`InstallPackageToEnvironment` + the same migration executor. Gated by approval
+(§6) and role (`promote-to-production` requires `admin`/`owner`). No re-seal — the
+checksum that ran in staging is the checksum that runs in prod (Salesforce/
+OutSystems parity).
+
+**(G) Rollback.** Swap `sys_package_installation.packageVersionId` back to a
+prior `published` version (atomic pointer move) + run the **reverse migration**.
+Reverse DDL is forward-only-with-compensation by default (Mendix/Rails norm):
+additive reversals (re-add a column) are auto-generated; destructive reversals
+(restore dropped data) are **surfaced, not auto-run**.
+
+**(H) Deprecate & distribute.** `deprecate(versionRef)` flips `status:'deprecated'`
+(blocks new installs). Distribution reuses ADR-0016 §9 export/import of a sealed
+version (zero-cloud) and the `visibility:'marketplace'` publish path.
+
+### 3. Data-model mapping (no new tables)
+
+| Phase | Object touched | Effect |
+|:--|:--|:--|
+| A openDraft | `sys_package_version` | insert `{status:'draft'}` |
+| B stage | `sys_metadata` | upsert `{state:'draft', package_version_id=draft.id}` |
+| C diff | (read) `sys_metadata` + active version | compute plan |
+| D preview | `sys_package_installation` | pointer → draft.id (`allowDraft`) |
+| E publish | `sys_package_version`, `sys_metadata`, physical tables, `sys_package_installation` | seal + DDL + rows→active + pointer swap |
+| F promote | `sys_package_installation` (+ physical tables in target env DB) | install sealed version in next env |
+| G rollback | `sys_package_installation` (+ reverse DDL) | pointer → prior version |
+| H deprecate | `sys_package_version` | `status:'deprecated'` |
+
+### 4. Migration & data lifecycle (the hard part)
+
+- **MigrationPlan** = `{ changes: SchemaChange[], backfills: string[], destructive: boolean }`,
+  computed from the field-level diff of draft vs active object definitions.
+- **Reuse existing destructive detection** (`field_removed`,
+  `field_type_change`, `field_required_no_default`). Policy by **environment
+  type**: destructive changes are **blocked on `production`** unless an explicit
+  `force` + approval; allowed on `development`/`sandbox`.
+- **Backfill**: `field_required_no_default` requires either a default or a
+  backfill expression before the column can be `NOT NULL` — surfaced in the plan.
+- **Atomicity (publish only).** DDL is frequently non-transactional (MySQL
+  implicit-commit; Mongo/Memory none). So: (1) plan, (2) apply DDL first —
+  failure means nothing sealed/activated, abort; (3) seal + pointer swap +
+  changelog inside `TransactionPort.run()`. If step 3 fails after DDL, emit a
+  `schema-ahead` repair event rather than fake a DDL rollback; idempotent
+  `syncSchemas` reconciles. Because activation is a **pointer swap**, a failed
+  publish leaves the previously active version serving traffic untouched.
+
+### 5. Concurrency & collaboration
+
+- **One active draft per package per org** (ADR-0016 §2.1) — serializes the
+  authoring workspace; avoids divergent drafts in v1 (Git-style branching is a
+  non-goal, matching ADR-0016).
+- **Per-row OCC** inside the draft (`checksum`/`If-Match`): two makers editing
+  *different* objects don't conflict; editing the *same* row raises
+  `ConflictError`.
+- **Advisory edit locks** (optional, v2): soft-lock a metadata item to a maker
+  while open in Studio.
+
+### 6. Governance & approvals
+
+- Wire `plugin-approvals` (`sys_approval_request`) as a **publish/promote gate**:
+  `promote(...,{targetEnv:prod})` raises an approval request; the install pointer
+  swaps only on approval. Configurable per environment (prod gated, dev open).
+- Every transition emits a ChangeLog event (ADR-0008) + `sys_metadata_audit`
+  (ADR-0010) row: who staged / sealed / promoted / rolled back, with checksums.
+
+### 7. Public API
 
 ```ts
-// ── Phase A: stage ───────────────────────────────────────────────
-interface StageChange {
-  op: 'put' | 'delete';
-  type: string;            // 'object' | 'view' | 'field' | ...
-  name: string;
-  item?: unknown;
-  orgId: string;
-  packageRef: PackageRef;  // the draft workspace this binds to
-  actor?: string;
-  parentVersion?: string;  // OCC within the draft (maps from If-Match)
-}
-interface StageResult { ref; draftVersion: string; warnings: string[]; }
-
-// ── Phase B: publish ─────────────────────────────────────────────
-interface SchemaChange {
-  kind: 'create_table'|'add_column'|'modify_column'|'drop_column'|'create_index'|'drop_index';
-  table: string; detail: string; destructive: boolean;
-}
-interface MigrationPlan { changes: SchemaChange[]; backfills: string[]; destructive: boolean; }
-interface PublishResult {
-  packageVersionId: string; semver: string;
-  plan: MigrationPlan; activatedEnv: string; changeLogSeq: number;
-}
-
 class MetadataAuthoringService {
-  // staging
-  stage(change: StageChange): Promise<StageResult>;
-  discard(ref: MetaRef, packageRef: PackageRef): Promise<void>;
-  diff(packageRef: PackageRef): Promise<MigrationPlan>;       // draft vs active
+  // workspace
+  openDraft(pkg: PackageRef, orgId: string): Promise<DraftHandle>;
 
-  // publishing
-  publish(packageRef: PackageRef, opts: { targetEnv: string; dryRun?: boolean; force?: boolean }): Promise<PublishResult>;
-  rollback(packageRef: PackageRef, toVersionId: string, opts: { targetEnv: string }): Promise<PublishResult>;
+  // stage (Phase B) — no DDL, no activation
+  stage(change: StageChange): Promise<StageResult>;
+  discard(ref: MetaRef, draft: DraftHandle): Promise<void>;
+
+  // review (Phase C)
+  diff(draft: DraftHandle): Promise<MigrationPlan>;
+  validateSet(draft: DraftHandle): Promise<ValidationReport>;
+
+  // publish (Phase E) — seal + batch DDL + pointer-swap activate
+  publish(draft: DraftHandle, opts: { targetEnv: string; dryRun?: boolean; force?: boolean }): Promise<PublishResult>;
+
+  // promote (Phase F) — same sealed version into next env, approval-gated
+  promote(versionId: string, opts: { targetEnv: string; force?: boolean }): Promise<PromoteResult>;
+
+  // rollback / deprecate (Phase G/H)
+  rollback(opts: { targetEnv: string; toVersionId: string }): Promise<PromoteResult>;
+  deprecate(versionId: string): Promise<void>;
 }
+
+interface StageChange { op:'put'|'delete'; type:string; name:string; item?:unknown;
+                        orgId:string; draft:DraftHandle; actor?:string; parentVersion?:string }
+interface SchemaChange { kind:'create_table'|'add_column'|'modify_column'|'drop_column'|'create_index'|'drop_index';
+                         table:string; detail:string; destructive:boolean }
+interface MigrationPlan { changes:SchemaChange[]; backfills:string[]; destructive:boolean }
+interface PublishResult { packageVersionId:string; semver:string; plan:MigrationPlan;
+                          activatedEnv:string; changeLogSeq:number }
 ```
 
-### Ports (dependency inversion — how the cycle is broken)
-
-The service depends on **interfaces**, not on `objectql`. Adapters implementing
-these ports live in `objectql`/`runtime` and are injected at kernel bootstrap.
+### 8. Ports & dependency graph
 
 ```ts
-interface DraftWorkspacePort   { get; put; delete; list; diffAgainstActive; }  // draft-scoped sys_metadata
-interface PackageVersionPort   { openDraft; seal; getActive; }                 // sys_package_version lifecycle
-interface InstallationPort     { activate(env, versionId); current(env); }     // sys_package_installation pointer swap
-interface SchemaSyncPort       { plan(objs, prev): SchemaChange[]; apply(changes, tx): Promise<void>; } // ISchemaDriver
-interface ChangeLogPort        { append(event): Promise<number>; }
-interface RegistryPort         { invalidate(ref): void; broadcast(event): void; }
-interface TransactionPort      { run<T>(fn): Promise<T>; }                      // engine.transaction()
+interface DraftWorkspacePort { get; put; delete; list; }              // draft-scoped sys_metadata
+interface PackageVersionPort { openDraft; seal; getActive; deprecate } // sys_package_version lifecycle
+interface InstallationPort   { activate(env,versionId); current(env) } // sys_package_installation pointer
+interface SchemaSyncPort     { plan(objs,prev):SchemaChange[]; apply(changes,tx) } // ISchemaDriver + destructive check
+interface ApprovalPort       { request(kind,ctx):Promise<ApprovalOutcome> }        // plugin-approvals
+interface ChangeLogPort      { append(event):Promise<number> }
+interface RegistryPort       { invalidate(ref); broadcast(event) }
+interface TransactionPort    { run<T>(fn):Promise<T> }                 // engine.transaction()
 ```
-
-### Dependency graph (must stay acyclic)
 
 ```
 spec  (contracts / Zod)
   ▲ ▲ ▲
-  │ │ └──── metadata-authoring ──┐  depends: spec, metadata-core, PORTS only
-  │ │                             │  (NOT objectql / runtime directly)
-  │ └── objectql ──(impl ports)───┤  DraftWorkspace / SchemaSync / Tx adapters
-  │     runtime  ──(impl ports)───┘  PackageVersion / Installation (env activation)
+  │ │ └── metadata-authoring ──┐ depends: spec, metadata-core, PORTS only
+  │ │                           │ (NOT objectql / runtime directly)
+  │ ├── objectql ──(impl ports)─┤ DraftWorkspace / SchemaSync(+destructive) / Tx
+  │ ├── runtime  ──(impl ports)─┤ PackageVersion / Installation / env activation
+  │ └── plugin-approvals ───────┘ Approval
   └── metadata-core (Repository iface / ChangeLog / canonicalize / errors)
         ▲
-rest → metadata-authoring          rest only translates HTTP ⇄ stage()/publish()
-cli  → metadata-authoring          `os package publish` hits the same publish()
+rest → metadata-authoring     HTTP ⇄ lifecycle calls
+cli  → metadata-authoring     `os package publish` → publish()/promote()
 ```
 
-### Atomicity strategy (publish only)
+### 9. Atomicity
 
-L1 (sealing definitions) is transactional. **L2 (DDL) frequently is not** —
-MySQL implicit-commits DDL, Postgres is partially transactional, Mongo/Memory
-have none. So publish does **not** fake a single rollback:
-
-1. **Plan** all schema changes (also powers dry-run).
-2. **Apply DDL first**, batched. On failure: nothing was sealed/activated; abort.
-3. **Then seal + swap the pointer + changelog** inside `TransactionPort.run()`.
-   If *this* fails after DDL succeeded, the schema is "ahead" of any activated
-   version: emit a `schema-ahead` repair event/warning rather than fake a DDL
-   rollback. Idempotent `syncSchemas` reconciles on the next publish/boot.
-
-Because activation is a **pointer swap**, a failed publish leaves the previously
-active version serving traffic untouched — the running app never sees a
-half-applied package.
+See §4 — DDL-first, then seal+swap inside a transaction, `schema-ahead`
+compensation for the non-transactional gap, pointer-swap activation isolating
+in-flight failures from live traffic.
 
 ---
 
 ## Consequences
 
 ### Positive
-
-- **Editing is free and safe**: staging never touches production schema or the
-  live registry — matching every mainstream platform's sandbox model.
-- **Publish is a reviewable, batched, atomic unit** with a previewable migration
-  plan and pointer-swap activation/rollback.
-- **The package version is the unit of work**, so changes are shippable,
-  versioned, and promotable across environments — not trapped as personal
-  overlay rows.
-- **One stage/publish path for all surfaces** (Studio, REST, CLI, AI, Git) — the
-  ADR-0008 goal, single owner. `os package publish` and the Studio button hit
-  the same `publish()` (ADR-0016 CLI-parity goal).
-- Revives ADR-0016 §2 without re-modelling — §9's local export/import still works
-  as the no-cloud distribution of a sealed version.
+- A named owner for the **whole** authoring lifecycle; every surface (Studio /
+  REST / CLI / AI / Git) drives the same path (ADR-0008 goal; ADR-0016 CLI parity).
+- Editing is free and safe; production schema changes are batched, previewed,
+  approval-gated, and reversible by pointer swap.
+- **Reuses the entire existing data model** — no new tables; the net-new code is
+  the orchestration + diff/plan engine.
+- Promotion across `development→staging→production` falls out of the same
+  install-pointer mechanism + per-environment-type policy.
 
 ### Negative / risks
+- Significant orchestration surface; the diff/migration-plan engine and the
+  reverse-migration path are genuinely hard and need per-driver integration tests
+  (sql, sqlite-wasm, mongodb, memory).
+- Destructive reversal (un-dropping data) is forward-only-with-compensation;
+  true data restore is out of scope (industry norm).
+- Reconciling §9 flat-`package_id` rows already in the wild with version-bound
+  drafts needs a one-time migration (treat them as the package's published seed).
+- "One active draft per package/org" defers multi-branch authoring (accepted v1
+  limitation, per ADR-0016 non-goals).
 
-- More moving parts than the §9 MVP: a draft-version workspace, a diff/plan
-  engine, and pointer-swap activation.
-- The destructive-reversal side of rollback (un-dropping a column) is genuinely
-  hard; default is forward-only with surfaced compensations (industry norm).
-- Per-driver migration/rollback integration tests needed (sql, sqlite-wasm,
-  mongodb, memory).
-- Reconciling the §9 flat `package_id` rows already in the wild with
-  `package_version_id`-bound drafts needs a migration (treat existing
-  `package_id` rows as the package's seed/published baseline).
+### Gap analysis — exists vs. net-new
+
+| Needed | Status |
+|:--|:--|
+| package/version/installation/env/metadata schemas | **exists** (`spec/src/cloud/*`, `sys-metadata`) |
+| destructive-change detection | **exists** (`objectql`) |
+| DDL execution + batch sync | **exists** (`ISchemaDriver`, `syncSchemasBatch`) |
+| publish/install REST + CLI | **exists** (`/api/v1/cloud/packages`, `os package publish`) |
+| approvals primitive | **exists** (`plugin-approvals`) |
+| **draft-version staging binding (stage/discard)** | **net-new** |
+| **diff / migration-plan engine + dry-run preview** | **net-new** |
+| **publish-time batched DDL + seal + pointer-swap orchestration** | **net-new** |
+| **promotion + approval-gate wiring** | **net-new** (primitives exist) |
+| **reverse-migration / rollback executor** | **net-new** |
 
 ### Migration plan (incremental, each phase ships green)
-
-- **Phase 0** — New empty package; define `ports.ts`, `StageChange`,
-  `PublishResult`, `MigrationPlan`. Zero behavior change.
-- **Phase 1** — Implement `stage()` over a `DraftWorkspacePort` adapter backed by
-  `package_version_id`-tagged `sys_metadata`. Studio `save` routes to `stage()`;
-  no DDL, no activation. Existing live-overlay path stays for "no package".
-- **Phase 2** — Implement the diff/plan engine + `publish()` (seal + batched DDL +
-  pointer-swap activation + changelog). Wire `os package publish` and the Studio
-  publish button to it.
-- **Phase 3** — `rollback()`, dry-run preview UI, destructive-change gating,
-  schema-ahead recovery hardening across drivers.
-- **Phase 4** — Migrate existing §9 `package_id` rows to the version-bound model;
-  update `ARCHITECTURE.md`; mark this ADR `Accepted`.
+- **Phase 0** — empty package; `ports.ts`, `StageChange`/`MigrationPlan`/
+  `PublishResult` types; the state-machine doc. Zero behavior change.
+- **Phase 1** — `openDraft` + `stage`/`discard` over `DraftWorkspacePort`
+  (`package_version_id`-tagged drafts). Studio `save` → `stage()`; no DDL.
+- **Phase 2** — `diff`/`validateSet` + migration-plan engine + dry-run preview.
+- **Phase 3** — `publish` (seal + batched DDL + pointer-swap activate); wire
+  `os package publish` and the Studio publish button.
+- **Phase 4** — `promote` (Dev→Staging→Prod) + approval-gate; `rollback`;
+  destructive gating by environment type.
+- **Phase 5** — migrate §9 `package_id` rows to version-bound; update
+  `ARCHITECTURE.md`; mark this ADR `Accepted`.
 
 ---
 
 ## Alternatives considered
-
-- **Per-edit `commit` (the first draft).** Rejected: `ALTER TABLE` on every
-  canvas edit is an anti-pattern; no staging, no reviewable unit, dangerous on
-  production data.
-- **Keep §9's flat live-overlay binding as the only model.** Rejected: edits are
-  immediately live and tied to env/person, so there is no draft to review and no
-  shippable, versioned unit — the user's two objections.
-- **L1-only package** (persist definitions; leave DDL to boot-time `syncSchemas`).
-  Rejected: the no-code loop needs publish to *also* materialize schema, planned
-  and previewed as a set.
-- **Fold into `objectql` or `rest`.** Rejected: couples the authoring lifecycle to
-  the data engine or to HTTP, blocking four-surface reuse (CLI/AI/Git).
+- **Per-edit `commit` (first draft).** Rejected: `ALTER TABLE` on every canvas
+  click; no staging, no reviewable unit, dangerous on production data.
+- **Keep §9 flat live-overlay binding only.** Rejected: edits immediately live
+  and tied to a person/env; no draft to review, no shippable versioned unit.
+- **Branch-per-author (Git-style) drafts in v1.** Deferred: one active draft per
+  package/org keeps resolution trivial (ADR-0016 non-goal); revisit with merge.
+- **Fold into `objectql`/`rest`.** Rejected: couples the lifecycle to the data
+  engine or to HTTP, blocking four-surface reuse (CLI/AI/Git).
