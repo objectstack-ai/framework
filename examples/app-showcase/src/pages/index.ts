@@ -45,7 +45,11 @@ export const ComponentGalleryPage: Page = {
       name: 'sidebar',
       width: 'small',
       components: [
-        { type: 'ai:chat_window', properties: { agentName: 'showcase_assistant' } },
+        // NOTE: `ai:chat_window` is intentionally NOT a supported inline page
+        // component — the canonical chat entry point is the floating chatbot
+        // overlay (plugin-chatbot), so referencing it here surfaces a loud
+        // "Unknown component type". Use a supported inline AI block instead.
+        { type: 'ai:input', properties: { agentName: 'showcase_assistant', placeholder: 'Ask the showcase assistant…' } },
       ],
     },
   ],
