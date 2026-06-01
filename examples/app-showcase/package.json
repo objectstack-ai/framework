@@ -12,7 +12,7 @@
     "./coverage": "./src/coverage.ts"
   },
   "scripts": {
-    "dev": "objectstack dev",
+    "dev": "objectstack dev --seed-admin",
     "start": "objectstack start",
     "build": "objectstack build",
     "typecheck": "tsc --noEmit",
