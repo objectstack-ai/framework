@@ -1,6 +1,11 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.2/schema.json",
-  "changelog": ["@changesets/cli/changelog", { "repo": "objectstack-ai/spec" }],
+  "changelog": [
+    "@changesets/cli/changelog",
+    {
+      "repo": "objectstack-ai/spec"
+    }
+  ],
   "commit": false,
   "fixed": [
     [
@@ -71,7 +76,8 @@
       "@objectstack/embedder-openai",
       "@objectstack/account",
       "create-objectstack",
-      "objectstack-vscode"
+      "objectstack-vscode",
+      "@objectstack/connector-openapi"
     ]
   ],
   "linked": [],

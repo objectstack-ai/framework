@@ -141,8 +141,8 @@ A spec that declares OAuth2 is still importable open-source — we generate the 
 
 ## Status & follow-ups
 
-- **This ADR changes no shipped code.** It records the decision to add a generator package on top of the existing connector baseline.
-- Follow-up: scaffold `packages/connectors/connector-openapi` mirroring `connector-rest`, with `createOpenApiConnector` + `ConnectorOpenApiPlugin`.
-- Follow-up: a small `openapi-to-connector` CLI that emits a reviewable `*.connector.json`.
+- ✅ **Implemented:** `packages/connectors/connector-openapi` mirrors `connector-rest` / `connector-mcp`, exporting `createOpenApiConnector` (one operation → one action) + `registerOpenApiConnector`. Each generated action drives one shared static-auth HTTP transport that mirrors `connector-rest` (build URL from base+path+query, apply static auth, JSON-encode the body, normalise the response to `{ status, ok, body }`) — kept inline so the package stays self-contained (depends only on `@objectstack/core` + `@objectstack/spec`, like its sibling connectors), and returns the `{ def, handlers }` shape consumed by `engine.registerConnector`. Input schemas are assembled as `{ path, query, header, body }` from `parameters` + `requestBody`; output schemas from the `200`/`2xx`/`default` JSON response; static auth (`none`/`api-key`/`basic`/`bearer`) is supplied by the caller. Includes an `include` allowlist for trimming large specs.
+- Follow-up: a small `openapi-to-connector` CLI that emits a reviewable `*.connector.json` (deferred — needs a multi-entry build, whereas every connector package currently uses the shared single-entry `tsup` config).
 - Follow-up: a worked example (e.g. GitHub or Stripe public OpenAPI → a handful of allowlisted actions) under `examples/`, paralleling the worked `connector_action` example from ADR-0022.
+- Follow-up: YAML spec input and a `$ref` deref pass for specs the caller has not pre-dereferenced.
 - Cross-reference: see [ADR-0024](./0024-mcp-connectors.md) for the complementary path — wrapping live **MCP servers** as connectors when no OpenAPI spec exists but an MCP server does.
