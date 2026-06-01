@@ -132,7 +132,18 @@ export async function loadCapabilities(opts: LoadCapabilitiesOptions): Promise<s
     const logger: Logger = opts.logger ?? console;
     const installed: string[] = [];
 
-    for (const cap of requires) {
+    // De-dupe, then ensure dependent capabilities are present. ADR-0030:
+    // collaboration notifications (audit @mention/assignment) and the bell now
+    // deliver through the messaging pipeline, so `messaging` must load whenever
+    // `audit` does — otherwise those notifications silently no-op on cloud
+    // per-project kernels (which, unlike `objectstack serve`, have no
+    // always-on capability slate). Mirrors the CLI's foundational defaults.
+    const resolved = [...new Set(requires)];
+    if (resolved.includes('audit') && !resolved.includes('messaging')) {
+        resolved.push('messaging');
+    }
+
+    for (const cap of resolved) {
         const spec = CAPABILITY_PROVIDERS[cap];
         if (!spec) {
             // Tier-gated capability (auth/ui/i18n) — wired elsewhere.

@@ -19,11 +19,18 @@ export { MessagingServicePlugin } from './messaging-service-plugin.js';
 export type { MessagingServicePluginOptions } from './messaging-service-plugin.js';
 
 // Service + types
-export { MessagingService } from './messaging-service.js';
-export type { DeliveryOutcome, EmitResult } from './messaging-service.js';
+export { MessagingService, NOTIFICATION_EVENT_OBJECT } from './messaging-service.js';
+export type {
+    DeliveryOutcome,
+    EmitResult,
+    EmitInput,
+    Audience,
+    AudienceSpec,
+    MessagingServiceContext,
+} from './messaging-service.js';
 
 // Channel seam
-export { createInboxChannel, INBOX_OBJECT } from './inbox-channel.js';
+export { createInboxChannel, INBOX_OBJECT, RECEIPT_OBJECT } from './inbox-channel.js';
 export type { InboxChannelOptions } from './inbox-channel.js';
 export type {
     MessagingChannel,
@@ -35,4 +42,4 @@ export type {
 } from './channel.js';
 
 // Objects (metadata definitions)
-export { InboxMessage } from './objects/index.js';
+export { InboxMessage, NotificationReceipt } from './objects/index.js';

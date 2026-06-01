@@ -3,7 +3,7 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { IDataEngine } from '@objectstack/spec/contracts';
 import { SysAuditLog, SysActivity, SysComment, SysAttachment, SysNotification } from '@objectstack/platform-objects/audit';
-import { installAuditWriters } from './audit-writers.js';
+import { installAuditWriters, type MessagingEmitSurface } from './audit-writers.js';
 
 /**
  * AuditPlugin
@@ -59,7 +59,18 @@ export class AuditPlugin implements Plugin {
         ctx.logger.warn('AuditPlugin: ObjectQL engine not available — audit writers NOT installed');
         return;
       }
-      installAuditWriters(engine as any, this.name);
+      // Resolve the messaging service lazily at hook time so collaboration
+      // @mention / assignment notifications go through the ADR-0030 single
+      // ingress (emit) instead of writing sys_notification directly. Messaging
+      // may register after audit; lazy resolution tolerates either order.
+      const getMessaging = (): MessagingEmitSurface | undefined => {
+        try {
+          return ctx.getService<MessagingEmitSurface>('messaging');
+        } catch {
+          return undefined;
+        }
+      };
+      installAuditWriters(engine as any, this.name, { getMessaging });
       process.stderr.write('[AuditPlugin] writers installed\n');
       ctx.logger.info('AuditPlugin: audit + activity writers installed');
     });

@@ -1,10 +1,53 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
+import type { IDataEngine } from '@objectstack/spec/contracts';
 import type {
     MessagingChannel,
     MessagingChannelContext,
     Notification,
 } from './channel.js';
+
+/** The L2 event object every `emit()` writes one row to (ADR-0030). */
+export const NOTIFICATION_EVENT_OBJECT = 'sys_notification';
+
+/**
+ * Audience selector for {@link EmitInput}. P0 resolves explicit user ids and
+ * email-shaped recipients inline (email→id is finished at the inbox channel);
+ * `role:` / `team:` / `owner_of:` selectors are forwarded but only fully
+ * expanded by the `RecipientResolver` in P1.
+ */
+export type AudienceSpec =
+    | string // user id | email | 'role:x' | 'team:x'
+    | { ownerOf: { object: string; id: string } };
+
+export type Audience = AudienceSpec | readonly AudienceSpec[];
+
+/**
+ * The single notification ingress (ADR-0030 §3). Every producer — the flow
+ * `notify` node, collaboration `@mention`, record assignment, system alerts —
+ * calls `emit()` with this shape. No producer writes a per-user inbox row
+ * directly; the in-app inbox is a *materialization of delivery*.
+ */
+export interface EmitInput {
+    /** Topic id, e.g. `task.assigned`, `collab.mention`. */
+    readonly topic: string;
+    /** Who should receive it. See {@link Audience}. */
+    readonly audience: Audience;
+    /** Template inputs carried to channels (title/body/url/actor/source/…). */
+    readonly payload?: Record<string, unknown>;
+    /** Severity hint for rendering / filtering. */
+    readonly severity?: 'info' | 'warning' | 'critical';
+    /** Idempotency key within a topic window; a repeat `emit` is a no-op. */
+    readonly dedupKey?: string;
+    /** The record that triggered the event. */
+    readonly source?: { object: string; id: string };
+    /** User who caused the event (mentioner, assigner). */
+    readonly actorId?: string;
+    /** Tenant stamp for sudo/background paths so RLS matches recipients. */
+    readonly organizationId?: string;
+    /** Channels to fan out to. Defaults to `['inbox']` (always on). */
+    readonly channels?: string[];
+}
 
 /** Per-delivery outcome record returned from {@link MessagingService.emit}. */
 export interface DeliveryOutcome {
@@ -17,30 +60,55 @@ export interface DeliveryOutcome {
 
 /** Aggregate result of fanning one notification out to its channels. */
 export interface EmitResult {
+    /** Id of the L2 `sys_notification` event written (or matched, on dedup). */
+    readonly notificationId: string;
+    /** True when `dedupKey` matched an existing event and fan-out was skipped. */
+    readonly deduped: boolean;
     readonly deliveries: DeliveryOutcome[];
     readonly delivered: number;
     readonly failed: number;
 }
 
+/** Context the service needs: a logger, plus data access for the L2 event. */
+export interface MessagingServiceContext extends MessagingChannelContext {
+    /**
+     * Resolve the runtime data engine used to persist the L2 event. Returns
+     * `undefined` on a minimal/test stack with no data layer — `emit()` then
+     * uses a synthetic id and warns rather than throwing, matching the
+     * platform's CRUD-node degradation.
+     */
+    getData?(): IDataEngine | undefined;
+    /** Clock injection for deterministic tests. Defaults to `new Date()`. */
+    now?(): string;
+}
+
+/** Selector prefixes the inline resolver forwards verbatim (expanded in P1). */
+const DEFERRED_SELECTOR = /^(role:|team:|owner_of:)/;
+
 /**
- * MessagingService — the M1-minimal outbound dispatcher (ADR-0012).
+ * MessagingService — the notification dispatcher (ADR-0012 / ADR-0030).
  *
- * Holds the `MessagingChannel` registry and implements `emit()`: it fans a
- * notification out to `(channel × recipient)` deliveries and calls each
- * channel's `send()`. The always-on `inbox` channel is registered by the
- * plugin; other channels (email/webhook/push/IM) register themselves.
+ * Holds the `MessagingChannel` registry and implements the single ingress
+ * `emit(EmitInput)`:
+ *   1. write the L2 `sys_notification` event (idempotent on `dedupKey`);
+ *   2. resolve the audience to recipient ids (inline in P0; `RecipientResolver`
+ *      owns role/team/owner_of expansion in P1);
+ *   3. fan `(channel × recipient)` deliveries and call each channel's `send()`,
+ *      which materializes the artifact (inbox row + receipt, email, …).
  *
- * Deliberately *not* in this milestone (see ADR-0012 §M1 vs the deferred
- * scope): the durable outbox, retry schedule, cluster-lock, dead-letter, the
- * topic catalog, the per-user preference matrix, renderers, and middleware.
- * `emit()` is synchronous best-effort fan-out; failures are reported in the
- * result rather than persisted for retry. The seam (`MessagingChannel`,
- * `Notification`) is shaped so those land without breaking callers.
+ * Deliberately *not* in this phase (ADR-0030 P1+): the durable outbox, retry
+ * schedule, cluster-lock, dead-letter, the per-user preference matrix,
+ * renderers/templates, and digest middleware. `emit()` is best-effort fan-out;
+ * failures are reported in the result. The seams are shaped so those land
+ * without breaking callers.
  */
 export class MessagingService {
     private readonly channels = new Map<string, MessagingChannel>();
+    private readonly now: () => string;
 
-    constructor(private readonly ctx: MessagingChannelContext) {}
+    constructor(private readonly ctx: MessagingServiceContext) {
+        this.now = ctx.now ?? (() => new Date().toISOString());
+    }
 
     /** Register a channel implementation. A duplicate id warns and replaces. */
     registerChannel(channel: MessagingChannel): void {
@@ -67,14 +135,136 @@ export class MessagingService {
     }
 
     /**
+     * The single notification ingress. Writes the L2 event, resolves the
+     * audience, and fans the result out to its channels. An unregistered
+     * channel, or a channel that throws, is reported as a failed delivery — it
+     * never aborts the rest of the fan-out. A `dedupKey` that matches an
+     * existing event short-circuits: the event id is returned and no new
+     * deliveries are produced.
+     */
+    async emit(input: EmitInput): Promise<EmitResult> {
+        const data = this.ctx.getData?.();
+
+        // 1) Idempotency — a prior event with the same dedup_key is a no-op.
+        if (input.dedupKey && data) {
+            const existing = await this.findEventByDedupKey(data, input.dedupKey);
+            if (existing) {
+                this.ctx.logger.info(
+                    `[messaging] emit: dedupKey '${input.dedupKey}' already emitted (${existing}); skipping`,
+                );
+                return { notificationId: existing, deduped: true, deliveries: [], delivered: 0, failed: 0 };
+            }
+        }
+
+        // 2) Write the L2 event (or synthesize an id when there is no data layer).
+        const notificationId = await this.writeEvent(data, input);
+
+        // 3) Resolve the audience to recipients.
+        const recipients = this.resolveRecipients(input.audience);
+        if (recipients.length === 0) {
+            this.ctx.logger.warn(`[messaging] emit: topic '${input.topic}' resolved to 0 recipients`);
+            return { notificationId, deduped: false, deliveries: [], delivered: 0, failed: 0 };
+        }
+
+        // 4) Derive the per-recipient notification and fan out to channels.
+        const payload = input.payload ?? {};
+        const notification: Notification = {
+            notificationId,
+            organizationId: input.organizationId,
+            topic: input.topic,
+            title: str(payload.title) ?? input.topic,
+            body: str(payload.body) ?? '',
+            severity: input.severity ?? 'info',
+            recipients,
+            channels: input.channels,
+            actionUrl: str(payload.url) ?? str(payload.actionUrl),
+            payload: input.payload,
+        };
+
+        const { deliveries, delivered, failed } = await this.fanOut(notification, recipients);
+        return { notificationId, deduped: false, deliveries, delivered, failed };
+    }
+
+    /** Find an existing event id by its dedup key, tolerating lookup failure. */
+    private async findEventByDedupKey(data: IDataEngine, dedupKey: string): Promise<string | undefined> {
+        try {
+            const row = await data.findOne(NOTIFICATION_EVENT_OBJECT, {
+                where: { dedup_key: dedupKey },
+                fields: ['id'],
+            });
+            const id = row?.id;
+            return id != null && String(id).length > 0 ? String(id) : undefined;
+        } catch (err) {
+            this.ctx.logger.warn(`[messaging] dedup lookup failed (${(err as Error).message}); proceeding`);
+            return undefined;
+        }
+    }
+
+    /**
+     * Persist the L2 event and return its id. With no data layer (minimal/test
+     * stacks) we warn and synthesize an id so fan-out can still be exercised.
+     */
+    private async writeEvent(data: IDataEngine | undefined, input: EmitInput): Promise<string> {
+        if (!data) {
+            this.ctx.logger.warn('[messaging] no data engine registered; event not persisted');
+            return `evt_${Math.random().toString(36).slice(2)}`;
+        }
+        const row: Record<string, unknown> = {
+            topic: input.topic,
+            payload: input.payload ?? null,
+            severity: input.severity ?? 'info',
+            dedup_key: input.dedupKey ?? null,
+            // Normalize empty strings to null so the (source_object, source_id)
+            // index keys on real ids, never '' (producers may pass a bare object
+            // with no id — e.g. a comment thread_id with no record part).
+            source_object: str(input.source?.object) ?? null,
+            source_id: str(input.source?.id) ?? null,
+            actor_id: input.actorId ?? null,
+            organization_id: input.organizationId ?? null,
+            created_at: this.now(),
+        };
+        const created = await data.insert(NOTIFICATION_EVENT_OBJECT, row);
+        const id = Array.isArray(created) ? created[0]?.id : created?.id ?? created;
+        return id != null ? String(id) : `evt_${Math.random().toString(36).slice(2)}`;
+    }
+
+    /**
+     * Expand an audience to a flat recipient list. P0 keeps explicit ids and
+     * email-shaped entries (email→id finishes at the inbox channel); deferred
+     * `role:`/`team:`/`owner_of:` selectors warn and are dropped until the P1
+     * `RecipientResolver` lands.
+     */
+    private resolveRecipients(audience: Audience): string[] {
+        const specs = Array.isArray(audience) ? audience : [audience as AudienceSpec];
+        const out: string[] = [];
+        for (const spec of specs) {
+            if (typeof spec !== 'string') {
+                this.ctx.logger.warn(
+                    `[messaging] owner_of: audience resolution lands in P1; '${JSON.stringify(spec)}' skipped`,
+                );
+                continue;
+            }
+            if (DEFERRED_SELECTOR.test(spec)) {
+                this.ctx.logger.warn(`[messaging] audience selector '${spec}' resolution lands in P1; skipped`);
+                continue;
+            }
+            if (spec.trim()) out.push(spec.trim());
+        }
+        // De-dup while preserving order.
+        return [...new Set(out)];
+    }
+
+    /**
      * Fan a notification out to its channels and recipients. Each
      * `(channel, recipient)` pair becomes one `send()` call. An unregistered
-     * channel, or a channel that throws, is reported as a failed delivery —
-     * it never aborts the rest of the fan-out.
+     * channel, or a channel that throws, is reported as a failed delivery — it
+     * never aborts the rest of the fan-out.
      */
-    async emit(notification: Notification): Promise<EmitResult> {
+    private async fanOut(
+        notification: Notification,
+        recipients: string[],
+    ): Promise<{ deliveries: DeliveryOutcome[]; delivered: number; failed: number }> {
         const channels = notification.channels?.length ? notification.channels : ['inbox'];
-        const recipients = notification.recipients ?? [];
         const deliveries: DeliveryOutcome[] = [];
 
         for (const channelId of channels) {
@@ -121,4 +311,11 @@ export class MessagingService {
         const delivered = deliveries.filter((d) => d.ok).length;
         return { deliveries, delivered, failed: deliveries.length - delivered };
     }
+}
+
+/** Coerce a payload value to a non-empty string, else `undefined`. */
+function str(v: unknown): string | undefined {
+    if (v == null) return undefined;
+    const s = String(v);
+    return s.length > 0 ? s : undefined;
 }
