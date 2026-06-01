@@ -596,6 +596,49 @@ export class SchemaRegistry {
   }
 
   /**
+   * ADR-0029 K0 — assert every registered object resolves to exactly one
+   * owner.
+   *
+   * A second `own` from a different package is already rejected eagerly in
+   * {@link registerObject} (it throws). This is the install-time backstop
+   * called once all packages are registered (kernel bootstrap complete),
+   * and it additionally catches the case `registerObject` cannot: an object
+   * that has only `extend` contributions and **no owner** — which would
+   * otherwise resolve to nothing. Surfacing it here turns a silent
+   * "extend a non-existent object" into a clear bootstrap error.
+   *
+   * This is the invariant the kernel-decomposition (ADR-0029) relies on:
+   * the `sys` namespace is shared across many first-party plugins, but each
+   * object name has exactly one owner.
+   *
+   * @throws Error listing every object whose owner count is not exactly 1.
+   */
+  assertSingleOwnerPerObject(): void {
+    const violations: string[] = [];
+    for (const [fqn, contributors] of this.objectContributors.entries()) {
+      const owners = contributors.filter(c => c.ownership === 'own');
+      if (owners.length === 0) {
+        const extenders = contributors.map(c => c.packageId).join(', ') || '(none)';
+        violations.push(
+          `Object "${fqn}" has no owner — only extend contributions from [${extenders}]. ` +
+          `Exactly one package must register it with ownership 'own'.`
+        );
+      } else if (owners.length > 1) {
+        const names = owners.map(c => c.packageId).join(', ');
+        violations.push(
+          `Object "${fqn}" has ${owners.length} owners [${names}] — exactly one is allowed.`
+        );
+      }
+    }
+    if (violations.length > 0) {
+      throw new Error(
+        `[Registry] single-owner-per-object check failed (ADR-0029):\n  ` +
+        violations.join('\n  ')
+      );
+    }
+  }
+
+  /**
    * Unregister all objects contributed by a package.
    * 
    * @throws Error if trying to uninstall an owner that has extenders

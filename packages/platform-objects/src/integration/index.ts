@@ -3,12 +3,15 @@
 /**
  * platform-objects/integration — External Integration Platform Objects
  *
- * Outbound HTTP webhooks (and, in the future, inbound receivers) live
- * here because they apply to every kernel — standalone, single-tenant,
- * and multi-tenant cloud projects alike. Any project can configure a
- * webhook to notify an external system on record events; the runtime
- * is provided by @objectstack/service-automation's built-in `http_request`
- * node (seeded by AutomationServicePlugin).
+ * **Empty since ADR-0029 (K2.a).** `sys_webhook` moved to its owner,
+ * `@objectstack/plugin-webhooks` (alongside `sys_webhook_delivery`), so the
+ * plugin ships its data model and behavior as one unit. Import the schema
+ * from `@objectstack/plugin-webhooks/schema` instead.
+ *
+ * The subpath (`@objectstack/plugin-webhooks/integration`) is retained as an
+ * empty barrel to avoid churning the package `exports` map / tsup entries
+ * during the incremental decomposition; it can be removed once the
+ * decomposition completes (ADR-0029 K4).
  */
 
-export { SysWebhook } from './sys-webhook.object.js';
+export {};

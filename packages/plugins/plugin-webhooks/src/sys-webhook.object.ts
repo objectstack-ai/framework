@@ -17,11 +17,16 @@ import { ObjectSchema, Field } from '@objectstack/spec/data';
  * targeted object, and dispatches outbound HTTP calls when matching
  * record events fire.
  *
+ * Ownership (ADR-0029 K2.a): this object is **owned by
+ * `@objectstack/plugin-webhooks`** — the plugin that consumes these rows —
+ * alongside its sibling `sys_webhook_delivery`. It used to live in the
+ * `@objectstack/platform-objects` monolith and be imported here; the
+ * definition now lives with its owner so the plugin ships both data and
+ * behavior as one unit.
+ *
  * Platform-wide on purpose: every project (standalone, single-tenant,
  * cloud) can integrate with external systems (Slack, Stripe, internal
- * services) the same way. The control-plane-only `sys_environment*`
- * objects live in @objectstack/service-tenant; webhooks are
- * orthogonal and ship with every kernel.
+ * services) the same way.
  *
  * @namespace sys
  */

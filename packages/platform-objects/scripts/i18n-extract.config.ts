@@ -81,7 +81,9 @@ import {
 } from '../src/audit/index.js';
 
 // ── Integration ───────────────────────────────────────────────────────────
-import { SysWebhook } from '../src/integration/index.js';
+// sys_webhook moved to @objectstack/plugin-webhooks per ADR-0029 (K2.a).
+// Its i18n extraction must move to that plugin before the next regeneration
+// (ADR-0029 D8); existing generated bundles keep working until then.
 
 // ── Metadata ──────────────────────────────────────────────────────────────
 import {
@@ -171,8 +173,7 @@ export default defineStack({
     SysJobRun,
     SysJobQueue,
 
-    // Integration
-    SysWebhook,
+    // Integration: sys_webhook moved to @objectstack/plugin-webhooks (ADR-0029 D8).
 
     // Metadata
     SysMetadataObject,

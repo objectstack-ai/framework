@@ -7,7 +7,6 @@ import type {
     IDataEngine,
     IRealtimeService,
 } from '@objectstack/spec/contracts';
-import { SysWebhook } from '@objectstack/platform-objects/integration';
 import { AutoEnqueuer, type AutoEnqueuerOptions } from './auto-enqueuer.js';
 import { WebhookDispatcher, type DispatcherOptions } from './dispatcher.js';
 import { MemoryWebhookOutbox } from './memory-outbox.js';
@@ -17,6 +16,7 @@ import {
     type DeliveryRetentionOptions,
 } from './retention.js';
 import { SqlWebhookOutbox } from './sql-outbox.js';
+import { SysWebhook } from './sys-webhook.object.js';
 import { SysWebhookDelivery } from './sys-webhook-delivery.object.js';
 
 export interface WebhookOutboxPluginOptions
@@ -117,12 +117,12 @@ export class WebhookOutboxPlugin implements Plugin {
             );
         }
 
-        // Register the schemas this plugin owns at runtime. `sys_webhook`
-        // (config) lives in @objectstack/platform-objects but no other
-        // plugin claims it — the webhook plugin is the natural owner
-        // since it's the consumer of those rows. `sys_webhook_delivery`
-        // (telemetry) is plugin-private. Registering them here means a
-        // stack just needs `plugins: [new WebhookOutboxPlugin(...)]`
+        // Register the schemas this plugin owns at runtime (ADR-0029 K2.a).
+        // Both `sys_webhook` (config) and `sys_webhook_delivery` (telemetry)
+        // are now defined and owned here — the webhook plugin ships its data
+        // model and behavior as one unit instead of importing `sys_webhook`
+        // from the @objectstack/platform-objects monolith. Registering them
+        // here means a stack just needs `plugins: [new WebhookOutboxPlugin(...)]`
         // and both objects auto-appear in REST/Studio/Setup nav.
         const manifest = ctx.getService<{ register(m: any): void }>('manifest');
         if (manifest && typeof manifest.register === 'function') {
