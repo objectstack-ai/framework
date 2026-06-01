@@ -1,5 +1,42 @@
 # @objectstack/driver-sql
 
+## 7.4.0
+
+### Minor Changes
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — Phase 1.
+
+  Adds the spec foundation and the DDL gate for federating mature external
+  databases without ObjectStack ever mutating their schema:
+
+  - `Datasource.schemaMode` (`managed` | `external` | `validate-only`) and
+    `Datasource.external` settings, with a cross-field invariant.
+  - `Object.external` binding (remote table/schema, writability, column map).
+  - Shared error contract: `ExternalSchemaMismatchError`,
+    `ExternalWriteForbiddenError`, `ExternalSchemaModeViolationError`
+    (stable `code`s) + structured `SchemaDiffEntry` rendering.
+  - `driver-sql` DDL gate: schema-mutating DDL (`initObjects`/`syncSchema`/
+    `dropTable`) is rejected when `schemaMode !== 'managed'`.
+
+  All changes are additive and backward-compatible (`schemaMode` defaults to
+  `'managed'`).
+
+### Patch Changes
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/core@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

@@ -1,5 +1,58 @@
 # @objectstack/service-settings
 
+## 7.4.0
+
+### Patch Changes
+
+- 82eb6cf: Fix system-metadata translations: locale fallback, app/dashboard localization, and coverage gaps.
+
+  Switching the UI language left many surfaces in English. Three root causes
+  are addressed:
+
+  - **Locale fallback (server).** The metadata translation resolver
+    (`@objectstack/spec` `i18n-resolver`) now resolves a requested locale
+    against the locales actually present in the bundle (exact →
+    case-insensitive → base-language → variant), so a request for `zh`
+    correctly hits the `zh-CN` bundle instead of falling back to English.
+    This mirrors `resolveLocale` in `@objectstack/core` and benefits every
+    resolver (objects, views, actions, settings, metadata forms).
+
+  - **App & dashboard localization (server).** Added `translateApp` and
+    `translateDashboard` resolvers and wired `app`/`dashboard` into the REST
+    `/meta` translation path. App labels, sidebar/navigation group labels,
+    and dashboard titles/widgets were previously never localized at the API
+    boundary even though the translation data existed.
+
+  - **Coverage & quality (data).** Added translations for the previously
+    untranslated platform objects `sys_share_link`, `sys_view_definition`,
+    and `sys_metadata_audit` (and registered them in the i18n-extract config
+    so future extractions keep them). Replaced English placeholder strings
+    left in the `zh-CN` / `ja-JP` / `es-ES` object and metadata-form bundles
+    (notably action `confirmText` / `successMessage` prompts). Added the
+    missing `es-ES` built-in Settings bundle in `@objectstack/service-settings`.
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [4404572]
+- Updated dependencies [eea3f1b]
+- Updated dependencies [e478e0c]
+- Updated dependencies [4cc2ced]
+- Updated dependencies [13632b1]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [c381977]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/platform-objects@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/types@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

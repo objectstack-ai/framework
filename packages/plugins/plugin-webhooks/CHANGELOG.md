@@ -1,5 +1,110 @@
 # @objectstack/plugin-webhooks
 
+## 7.4.0
+
+### Minor Changes
+
+- c72daad: ADR-0029 D7 — Setup app navigation contributions.
+
+  Adds the UI-layer analog of object `own`/`extend`: a package can contribute
+  navigation items into an app it does not own, so a shared admin app can be a
+  thin shell while each capability plugin ships the menu for the objects it owns.
+
+  - **`@objectstack/spec`** — new `NavigationContributionSchema` (`{ app, group?,
+priority, items }`) and an optional `navigationContributions` field on the
+    manifest.
+  - **`@objectstack/objectql`** — `SchemaRegistry.registerAppNavContribution()`
+    plus lazy merge in `getApp` / `getAllApps` (by target group id + priority,
+    cloning so the stored app is never mutated); the engine wires
+    `manifest.navigationContributions` during app registration.
+  - **`@objectstack/platform-objects`** — the Setup app becomes a **shell** of
+    empty group anchors; its entries for platform-objects-owned objects move to
+    `SETUP_NAV_CONTRIBUTIONS`.
+  - **`@objectstack/plugin-auth`** — registers `SETUP_NAV_CONTRIBUTIONS` alongside
+    the Setup app it already registers.
+  - **`@objectstack/plugin-webhooks`** — contributes its `Webhooks` /
+    `Webhook Deliveries` entries into the Setup `group_integrations` slot (it owns
+    `sys_webhook` / `sys_webhook_delivery` per K2.a), demonstrating end-to-end
+    cross-plugin contribution.
+
+  The rendered Setup nav is identical to the former static artifact — just
+  assembled from its owners. A disabled/absent capability contributes nothing and
+  its slot stays empty (in addition to the existing `requiresObject` gating).
+  This unblocks moving each remaining K2 domain's menu out of the monolith with
+  its objects.
+
+- eea3f1b: ADR-0029 K0 + K2.a — single-owner invariant and webhooks ownership pilot.
+
+  **K0 (`@objectstack/objectql`)** — add `SchemaRegistry.assertSingleOwnerPerObject()`,
+  the install-time backstop for the kernel-decomposition invariant: every
+  registered object must resolve to exactly one `own` contributor. A second
+  cross-package owner is already rejected at registration time; this additionally
+  catches "extend with no owner" (which would otherwise resolve to nothing). Call
+  after kernel bootstrap completes.
+
+  **K2.a (`@objectstack/plugin-webhooks` ← `@objectstack/platform-objects`)** — move
+  the `sys_webhook` object definition out of the `platform-objects` monolith into
+  `@objectstack/plugin-webhooks`, where it joins its sibling `sys_webhook_delivery`
+  so the plugin owns both its data model and behavior as one unit. `sys_webhook` is
+  no longer exported from `@objectstack/platform-objects` (or its `/integration`
+  subpath, now an empty barrel); import it from `@objectstack/plugin-webhooks/schema`
+  instead. Runtime behavior is unchanged — the webhook plugin already registered
+  `sys_webhook` at runtime; only the definition's home moved. Setup-app navigation
+  (which references `sys_webhook` by name) and existing i18n bundles (object-name
+  keyed) continue to work. Per ADR-0029 D8, migrating the object's i18n extraction
+  into the plugin is a tracked follow-up before the next translation regeneration.
+
+### Patch Changes
+
+- 4404572: ADR-0029 D8 — migrate i18n ownership for the moved domains to their plugins.
+
+  The object translations for the domains decomposed in K2.a/K2.b/K2 previously
+  lived in the `@objectstack/platform-objects` generated bundles even though the
+  objects now live in their capability plugins. This moves each domain's i18n
+  extraction + bundles to the owning plugin, preserving every hand-translated
+  string (zh-CN / ja-JP / es-ES):
+
+  - Each plugin gains a build-time `scripts/i18n-extract.config.ts` and a
+    `src/translations/` bundle (`{locale}.objects.generated.ts` + an `index.ts`
+    barrel), generated with `os i18n extract` and self-baselined so re-runs
+    preserve translations.
+  - Each plugin loads its bundle at runtime on `kernel:ready` via
+    `i18n.loadTranslations` (the i18n service is optional — load is best-effort).
+    - `plugin-webhooks` ← `sys_webhook`, `sys_webhook_delivery`
+    - `plugin-approvals` ← `sys_approval_request`, `sys_approval_action`
+    - `plugin-security` ← `sys_role`, `sys_permission_set`,
+      `sys_user_permission_set`, `sys_role_permission_set`
+    - `plugin-sharing` ← `sys_record_share`, `sys_sharing_rule`, `sys_share_link`
+  - `@objectstack/platform-objects` translation bundles are regenerated to drop
+    those objects' keys (its extract config already excluded them); all other
+    objects' translations and the metadata-form bundles are preserved.
+
+  Net runtime effect is unchanged (same translations load, now contributed by the
+  package that owns each object) — closing the D8 follow-up tracked since K2.a.
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [4404572]
+- Updated dependencies [eea3f1b]
+- Updated dependencies [e478e0c]
+- Updated dependencies [4cc2ced]
+- Updated dependencies [13632b1]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [c381977]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/platform-objects@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/service-cluster@7.4.0
+  - @objectstack/types@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes

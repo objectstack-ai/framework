@@ -1,5 +1,175 @@
 # @objectstack/objectql
 
+## 7.4.0
+
+### Minor Changes
+
+- 23c7107: ADR-0020 — converge the three "state machine" declaration shapes to one
+  **enforced** `state_machine` validation rule.
+
+  Before this change a record state machine could be declared three ways (a
+  `workflow` metadata type, an `object.stateMachines` map, or a `state_machine`
+  validation rule) and **none of them were enforced at runtime** — a declarative
+  guardrail that was pure decoration, and a hallucination trap for AI authors.
+
+  **Enforcement (`@objectstack/objectql`)**
+
+  - New `validation/rule-validator.ts` evaluates the object's `validations` union
+    on the write path: `evaluateValidationRules`, `needsPriorRecord`, and the
+    `legalNextStates` introspection helper (all exported from the package root).
+  - `state_machine` rules reject illegal `field` transitions on update (with the
+    rule's `message`); `script` / `cross_field` predicate rules now also fire
+    (they were silently broken on PATCH updates because only the patch, not the
+    prior record, was available). The engine plumbs the prior record into
+    rule evaluation on single-row update; multi-row (`updateMany`) updates log a
+    warning and skip rule evaluation rather than enforce on incomplete data.
+
+  **Convergence / retirement (`@objectstack/spec`) — breaking**
+
+  - Retires the `workflow` metadata type (removed from the metadata-type enum,
+    the registry, the schema map, the `workflows` collection key, and the
+    plural→singular mapping).
+  - Removes the `object.stateMachines` map and the `stack.workflows` array. The
+    `state_machine` validation rule is the single canonical home.
+  - The XState-style `StateMachineSchema` file is **kept** (still used by the
+    agent conversation lifecycle and the discovery protocol); only its role as
+    the `workflow` metadata-type backing schema was removed. The optional
+    `workflow` **RPC service** surface (`CoreServiceName.workflow`,
+    `/api/v1/workflow`, `IWorkflowService`) is kept as a documented follow-up.
+
+  **Introspection (`@objectstack/runtime`)**
+
+  - Adds `GET /metadata/objects/:name/state/:field?from=:state`, returning the
+    legal next states for a field (`next: null` when no FSM governs the field,
+    `[]` for a declared dead-end) so UIs/agents read the transition table instead
+    of re-deriving it.
+
+  **Surfaces (`@objectstack/platform-objects`, `@objectstack/cli`)**
+
+  - Studio drops the standalone "Workflow Rules" nav (state machines are edited
+    alongside the object's other validation rules).
+  - `explain` no longer lists `workflow` as a related metadata type.
+
+  Migration: replace a `workflow` / `StateMachineConfig` declaration with a
+  `state_machine` validation rule on the object (`field` + `{ from: [allowedTo] }`
+  transition table), and move any side-effecting actions (emails, task creation)
+  into a record-triggered or scheduled Flow (ADR-0019). See the migrated
+  `examples/app-crm` flows for the pattern.
+
+- c72daad: ADR-0029 D7 — Setup app navigation contributions.
+
+  Adds the UI-layer analog of object `own`/`extend`: a package can contribute
+  navigation items into an app it does not own, so a shared admin app can be a
+  thin shell while each capability plugin ships the menu for the objects it owns.
+
+  - **`@objectstack/spec`** — new `NavigationContributionSchema` (`{ app, group?,
+priority, items }`) and an optional `navigationContributions` field on the
+    manifest.
+  - **`@objectstack/objectql`** — `SchemaRegistry.registerAppNavContribution()`
+    plus lazy merge in `getApp` / `getAllApps` (by target group id + priority,
+    cloning so the stored app is never mutated); the engine wires
+    `manifest.navigationContributions` during app registration.
+  - **`@objectstack/platform-objects`** — the Setup app becomes a **shell** of
+    empty group anchors; its entries for platform-objects-owned objects move to
+    `SETUP_NAV_CONTRIBUTIONS`.
+  - **`@objectstack/plugin-auth`** — registers `SETUP_NAV_CONTRIBUTIONS` alongside
+    the Setup app it already registers.
+  - **`@objectstack/plugin-webhooks`** — contributes its `Webhooks` /
+    `Webhook Deliveries` entries into the Setup `group_integrations` slot (it owns
+    `sys_webhook` / `sys_webhook_delivery` per K2.a), demonstrating end-to-end
+    cross-plugin contribution.
+
+  The rendered Setup nav is identical to the former static artifact — just
+  assembled from its owners. A disabled/absent capability contributes nothing and
+  its slot stays empty (in addition to the existing `requiresObject` gating).
+  This unblocks moving each remaining K2 domain's menu out of the monolith with
+  its objects.
+
+- eea3f1b: ADR-0029 K0 + K2.a — single-owner invariant and webhooks ownership pilot.
+
+  **K0 (`@objectstack/objectql`)** — add `SchemaRegistry.assertSingleOwnerPerObject()`,
+  the install-time backstop for the kernel-decomposition invariant: every
+  registered object must resolve to exactly one `own` contributor. A second
+  cross-package owner is already rejected at registration time; this additionally
+  catches "extend with no owner" (which would otherwise resolve to nothing). Call
+  after kernel bootstrap completes.
+
+  **K2.a (`@objectstack/plugin-webhooks` ← `@objectstack/platform-objects`)** — move
+  the `sys_webhook` object definition out of the `platform-objects` monolith into
+  `@objectstack/plugin-webhooks`, where it joins its sibling `sys_webhook_delivery`
+  so the plugin owns both its data model and behavior as one unit. `sys_webhook` is
+  no longer exported from `@objectstack/platform-objects` (or its `/integration`
+  subpath, now an empty barrel); import it from `@objectstack/plugin-webhooks/schema`
+  instead. Runtime behavior is unchanged — the webhook plugin already registered
+  `sys_webhook` at runtime; only the definition's home moved. Setup-app navigation
+  (which references `sys_webhook` by name) and existing i18n bundles (object-name
+  keyed) continue to work. Per ADR-0029 D8, migrating the object's i18n extraction
+  into the plugin is a tracked follow-up before the next translation regeneration.
+
+- 2faf9f2: External Datasource Federation (ADR-0015) — write gate (Gate 3) + introspection plumbing.
+
+  - Write gate: ObjectQL `insert`/`update`/`delete` now block writes to a
+    federated datasource (`schemaMode !== 'managed'`) unless BOTH
+    `datasource.external.allowWrites` and `object.external.writable` are true,
+    throwing `ExternalWriteForbiddenError` (code `EXTERNAL_WRITE_FORBIDDEN`).
+    Managed datasources (and objects without a datasource definition) are
+    unaffected. New `registerDatasourceDef()` records declarative datasource
+    ownership; manifests carrying `datasources` are indexed during `registerApp`.
+  - `engine.introspectDatasource(name)` delegates to the named driver's
+    `introspectSchema()`, wiring the external-datasource service end-to-end.
+
+### Patch Changes
+
+- a6d4cbb: Fix conditional & record-change flows silently skipping.
+
+  Two bugs together caused every flow with a start-node / edge **condition** to
+  silently skip (record-change triggers fired but the flow body never ran;
+  audit-style `previous.*` gates and `budget > 100000`-style gates all evaluated
+  to false):
+
+  - **service-automation — CEL engine unreachable in ESM.** The condition
+    evaluator loaded the formula engine via a CommonJS `require('@objectstack/formula')`.
+    In the package's ESM build (`"type": "module"`) that resolves to tsup's
+    throwing `__require` stub, so **every** CEL evaluation threw and the
+    swallowing `catch` returned `false`. Replaced with a static top-level import,
+    which binds correctly in both the ESM and CJS builds.
+
+  - **objectql — prior record not exposed to update hooks.** `HookContext`
+    documents a `previous` snapshot for update/delete, but `engine.update` never
+    populated it (the row it fetched for validation was a local var). Record-change
+    conditions like `status == "done" && previous.status != "done"` therefore had
+    no `previous` to read. The engine now attaches the pre-update record to
+    `hookContext.previous` for single-id updates whenever a validation rule needs
+    it or an `afterUpdate` hook is registered.
+
+  Both paths are covered by new unit tests.
+
+- 58b450b: Make metadata labels follow the active UI language without a page refresh (#1319).
+
+  The client now carries the active locale on every request (`Accept-Language`,
+  `setLocale`/`getLocale`), the protocol ETag is locale-aware so cached metadata
+  no longer collides across languages, and the `client-react` metadata hooks
+  refetch when the locale changes. The `apps/account` console wires its router
+  locale through so a language switch relabels server-resolved object/field/view
+  labels in place instead of leaving the UI half-translated until reload.
+
+- Updated dependencies [23c7107]
+- Updated dependencies [c72daad]
+- Updated dependencies [f115182]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [2faf9f2]
+- Updated dependencies [58b450b]
+- Updated dependencies [82eb6cf]
+- Updated dependencies [13d8653]
+- Updated dependencies [ff3d006]
+- Updated dependencies [5e831de]
+  - @objectstack/spec@7.4.0
+  - @objectstack/core@7.4.0
+  - @objectstack/formula@7.4.0
+  - @objectstack/types@7.4.0
+  - @objectstack/metadata-core@7.4.0
+
 ## 7.3.0
 
 ### Patch Changes
