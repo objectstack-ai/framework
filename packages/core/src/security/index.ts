@@ -44,6 +44,7 @@ export {
   PluginPermissionEnforcer,
   SecurePluginContext,
   createPluginPermissionEnforcer,
+  buildPermissionsFromGrants,
   type PluginPermissions,
   type PermissionCheckResult,
 } from './plugin-permission-enforcer.js';

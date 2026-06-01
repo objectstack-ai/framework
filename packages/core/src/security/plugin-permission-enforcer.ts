@@ -1,7 +1,7 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
 import type { Logger } from '@objectstack/spec/contracts';
-import type { PluginCapability } from '@objectstack/spec/kernel';
+import type { PluginCapability, PluginPermissions as GrantedPermissions } from '@objectstack/spec/kernel';
 import type { PluginContext } from '../types.js';
 
 /**
@@ -88,8 +88,31 @@ export class PluginPermissionEnforcer {
   }
   
   /**
+   * Register the install-time GRANTED permission set for a plugin
+   * (ADR-0025 F4). This is the structured `{ services, hooks, network, fs }`
+   * grant that the cloud control plane persists to
+   * `sys_package_installation.granted_permissions` after the user consents
+   * at install (ADR §3.5 step 2). The runtime calls this when materializing
+   * a third-party plugin so {@link SecurePluginContext} enforces exactly the
+   * consented surface — independent of whatever the manifest *requested*.
+   *
+   * Prefer this over {@link registerPluginPermissions} for distributed
+   * plugins: it enforces what was granted, not what was declared.
+   */
+  registerGrantedPermissions(pluginName: string, granted: GrantedPermissions | null | undefined): void {
+    this.permissionRegistry.set(pluginName, buildPermissionsFromGrants(granted));
+    this.logger.info(`Granted permissions registered for plugin: ${pluginName}`, {
+      plugin: pluginName,
+      services: granted?.services?.length ?? 0,
+      hooks: granted?.hooks?.length ?? 0,
+      network: granted?.network?.length ?? 0,
+      fs: granted?.fs?.length ?? 0,
+    });
+  }
+
+  /**
    * Enforce service access permission
-   * 
+   *
    * @param pluginName - Plugin requesting access
    * @param serviceName - Service to access
    * @throws Error if permission denied
@@ -435,10 +458,62 @@ export class SecurePluginContext implements PluginContext {
 
 /**
  * Create a plugin permission enforcer
- * 
+ *
  * @param logger - Logger instance
  * @returns Plugin permission enforcer
  */
 export function createPluginPermissionEnforcer(logger: Logger): PluginPermissionEnforcer {
   return new PluginPermissionEnforcer(logger);
+}
+
+/**
+ * Glob match supporting `*` (within a path segment) and `**` (across
+ * segments). A bare `*` entry matches everything.
+ */
+function grantGlobMatch(pattern: string, value: string): boolean {
+  if (pattern === '*' || pattern === '**') return true;
+  const regexStr = pattern
+    .split('**')
+    .map((segment) => segment.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'))
+    .join('.*');
+  return new RegExp(`^${regexStr}$`).test(value);
+}
+
+/** Extract the host from a URL for network-grant matching; falls back to the raw value. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+const inList = (list: string[] | undefined, value: string): boolean =>
+  Array.isArray(list) && list.some((p) => p === value || grantGlobMatch(p, value));
+
+/**
+ * Build the runtime {@link PluginPermissions} bag from a structured
+ * install-time grant set (ADR-0025 §3.2 `{ services, hooks, network, fs }`).
+ *
+ * Matching: an entry allows when it equals the requested value, is a glob
+ * that matches it, or is the wildcard `*`. Network grants match against the
+ * request URL's host (or the raw URL). `fs` governs both read and write —
+ * the structured grant set does not split the two. A null/empty grant set
+ * denies everything (principle of least privilege).
+ */
+export function buildPermissionsFromGrants(
+  granted: GrantedPermissions | null | undefined,
+): PluginPermissions {
+  const services = granted?.services;
+  const hooks = granted?.hooks;
+  const network = granted?.network;
+  const fs = granted?.fs;
+  return {
+    canAccessService: (name) => inList(services, name),
+    canTriggerHook: (name) => inList(hooks, name),
+    canReadFile: (path) => inList(fs, path),
+    canWriteFile: (path) => inList(fs, path),
+    canNetworkRequest: (url) =>
+      inList(network, hostOf(url)) || inList(network, url),
+  };
 }
