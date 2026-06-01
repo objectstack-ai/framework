@@ -3,8 +3,21 @@
 import type { IDataEngine } from '@objectstack/spec/contracts';
 import type { Audience, AudienceSpec } from './messaging-service.js';
 
-/** Cheap RFC-ish heuristic — "looks like an email" so we attempt id resolution. */
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * Cheap "looks like an email" heuristic so we attempt id resolution. Hand-rolled
+ * (no regex) to stay strictly linear — the obvious `^[^\s@]+@[^\s@]+\.[^\s@]+$`
+ * has overlapping quantifiers (the `.` is also in `[^\s@]`) and backtracks
+ * polynomially on adversarial input (ReDoS). This is O(n).
+ */
+function looksLikeEmail(s: string): boolean {
+    if (!s || /\s/.test(s)) return false; // single char-class test — linear
+    const at = s.indexOf('@');
+    if (at <= 0 || at !== s.lastIndexOf('@') || at === s.length - 1) return false;
+    const domain = s.slice(at + 1);
+    const dot = domain.indexOf('.');
+    // a dot in the domain, not first or last char
+    return dot > 0 && dot < domain.length - 1;
+}
 
 /** The user identity object an email-shaped recipient is resolved against. */
 export const USER_OBJECT = 'sys_user';
@@ -124,7 +137,7 @@ export class RecipientResolver {
             this.opts.logger.warn(`[recipients] malformed owner_of spec '${value}'; skipped`);
             return [];
         }
-        if (EMAIL_SHAPE.test(value)) return [await this.resolveEmail(value, data)];
+        if (looksLikeEmail(value)) return [await this.resolveEmail(value, data)];
         // Bare user id.
         return [value];
     }

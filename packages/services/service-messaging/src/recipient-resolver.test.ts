@@ -84,6 +84,24 @@ describe('RecipientResolver', () => {
         expect(await resolver(data).resolve(['ghost@example.com'])).toEqual(['ghost@example.com']);
     });
 
+    it('treats an @-containing token without a domain dot as a bare id (no email lookup)', async () => {
+        const data = fakeData();
+        // 'svc@queue' has no domain dot → not email-shaped → passed through verbatim.
+        expect(await resolver(data).resolve(['svc@queue'])).toEqual(['svc@queue']);
+        expect(data.calls.filter((c) => c.object === 'sys_user')).toHaveLength(0);
+    });
+
+    it('does not treat whitespace-bearing tokens as emails (and stays linear on adversarial input)', async () => {
+        const data = fakeData();
+        // The old regex backtracked polynomially on '!@' + '!.'×N; the linear
+        // heuristic returns promptly. No sys_user lookup for a whitespace token.
+        const adversarial = `a@${'!.'.repeat(5000)}`;
+        const started = Date.now();
+        await resolver(data).resolve([adversarial, 'a b@x.com']);
+        expect(Date.now() - started).toBeLessThan(1000);
+        expect(data.calls.filter((c) => c.object === 'sys_user' && c.query?.where?.email === 'a b@x.com')).toHaveLength(0);
+    });
+
     it('expands role: via sys_member (tenant-scoped) and de-dups', async () => {
         const data = fakeData({ members: { admin: ['a', 'b', 'a'] } });
         const out = await resolver(data).resolve(['role:admin'], { organizationId: 'org_1' });
