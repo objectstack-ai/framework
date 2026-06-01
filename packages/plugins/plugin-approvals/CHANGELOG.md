@@ -1,5 +1,15 @@
 # @objectstack/plugin-approvals
 
+## 7.5.0
+
+### Patch Changes
+
+- @objectstack/spec@7.5.0
+- @objectstack/core@7.5.0
+- @objectstack/metadata-core@7.5.0
+- @objectstack/formula@7.5.0
+- @objectstack/platform-objects@7.5.0
+
 ## 7.4.1
 
 ### Patch Changes
