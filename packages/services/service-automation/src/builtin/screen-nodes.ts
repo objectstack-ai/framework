@@ -9,12 +9,13 @@ import type { AutomationEngine } from '../engine.js';
  * Part of the core flow capability, so the {@link AutomationServicePlugin}
  * seeds them directly (ADR-0018) rather than shipping a separate plugin.
  *
- * - 'screen' nodes are pass-through on the server by default. The engine already
- *   injects `isInput: true` flow variables from `context.params` into the
- *   top-level variables map before execution begins, so a plain screen node has
- *   no remaining server-side work. A screen with `config.waitForInput === true`
- *   instead opts into the engine's durable pause (ADR-0019): it suspends the run
- *   on entry and continues via `resume()` once the input arrives.
+ * - 'screen' nodes collect user input. A screen that declares `config.fields`
+ *   (or sets `config.waitForInput === true`) suspends the run on entry via the
+ *   engine's durable pause (ADR-0019), surfacing a `ScreenSpec` for the client
+ *   to render; the run continues via `resume()` with the collected values (set
+ *   as bare flow variables). A field-less screen — or one with
+ *   `waitForInput === false` — stays a server pass-through (input vars, if any,
+ *   are already injected from `context.params`).
  * - 'script' nodes dispatch by `config.actionType`. Currently only 'email'
  *   has a (logger-backed) implementation; unknown action types still succeed
  *   so flows can continue and downstream nodes can react.
@@ -32,11 +33,33 @@ export function registerScreenNodes(engine: AutomationEngine, ctx: PluginContext
       }),
       async execute(node, _variables, _context) {
         const cfg = (node.config ?? {}) as Record<string, unknown>;
-        // Opt-in durable pause: suspend the run awaiting the screen's input.
-        if (cfg.waitForInput === true) {
-          return { success: true, suspend: true };
+        const rawFields = Array.isArray(cfg.fields) ? (cfg.fields as Array<Record<string, unknown>>) : [];
+        const hasFields = rawFields.length > 0;
+        // Suspend to collect input when the screen declares fields, or opts in
+        // explicitly. `waitForInput === false` forces a server pass-through.
+        const shouldPause = cfg.waitForInput === true || (hasFields && cfg.waitForInput !== false);
+        if (!shouldPause) {
+          return { success: true };
         }
-        return { success: true };
+        const fields = rawFields.map((f) => ({
+          name: String(f.name ?? ''),
+          label: f.label != null ? String(f.label) : undefined,
+          type: f.type != null ? String(f.type) : undefined,
+          required: f.required === true,
+          options: Array.isArray(f.options) ? (f.options as Array<{ value: unknown; label: string }>) : undefined,
+          defaultValue: f.defaultValue,
+          placeholder: f.placeholder != null ? String(f.placeholder) : undefined,
+        })).filter((f) => f.name.length > 0);
+        return {
+          success: true,
+          suspend: true,
+          screen: {
+            nodeId: node.id,
+            title: (cfg.title as string | undefined) ?? node.label ?? 'Input',
+            description: cfg.description as string | undefined,
+            fields,
+          },
+        };
       },
     });
 

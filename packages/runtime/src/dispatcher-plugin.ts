@@ -775,6 +775,26 @@ export function createDispatcherPlugin(config: DispatcherPluginConfig = {}): Plu
                         errorResponse(err, res);
                     }
                 });
+
+                // Screen-flow runtime (ADR-0019): resume a paused run with a
+                // screen node's collected input, and re-fetch its pending screen.
+                server!.post(`${base}/automation/:name/runs/:runId/resume`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.dispatch('POST', `/automation/${req.params.name}/runs/${req.params.runId}/resume`, req.body, req.query, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
+
+                server!.get(`${base}/automation/:name/runs/:runId/screen`, async (req: any, res: any) => {
+                    try {
+                        const result = await dispatcher.dispatch('GET', `/automation/${req.params.name}/runs/${req.params.runId}/screen`, undefined, req.query, { request: req });
+                        sendResult(result, res);
+                    } catch (err: any) {
+                        errorResponse(err, res);
+                    }
+                });
             };
 
             // ── AI / Assistants ─────────────────────────────────────────

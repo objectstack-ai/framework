@@ -2,7 +2,7 @@
 
 import type { FlowParsed, FlowNodeParsed, FlowEdgeParsed } from '@objectstack/spec/automation';
 import type { ExecutionLog, ActionDescriptor } from '@objectstack/spec/automation';
-import type { AutomationContext, AutomationResult, ResumeSignal, IAutomationService } from '@objectstack/spec/contracts';
+import type { AutomationContext, AutomationResult, ResumeSignal, IAutomationService, ScreenSpec } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
 import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES } from '@objectstack/spec/automation';
 import type { Connector } from '@objectstack/spec/integration';
@@ -69,6 +69,12 @@ export interface NodeExecutionResult {
      * approval request id). For observability / lookup; not required to resume.
      */
     correlation?: string;
+    /**
+     * Screen to render — set by a `screen` node that suspends to collect input.
+     * Surfaced on the paused {@link AutomationResult} so a UI runner can render
+     * the form and `resume()` with the values.
+     */
+    screen?: ScreenSpec;
 }
 
 // ─── Trigger Interface (Plugin Extension Point) ─────────────────────
@@ -227,7 +233,7 @@ interface ExecutionLogEntry {
  */
 class FlowSuspendSignal {
     readonly __flowSuspend = true as const;
-    constructor(readonly nodeId: string, readonly correlation?: string) {}
+    constructor(readonly nodeId: string, readonly correlation?: string, readonly screen?: ScreenSpec) {}
 }
 
 function isSuspendSignal(err: unknown): err is FlowSuspendSignal {
@@ -253,6 +259,8 @@ interface SuspendedRun {
     startedAt: string;
     startTime: number;
     correlation?: string;
+    /** Screen the run paused on (screen-flow runtime), for re-fetch + UI render. */
+    screen?: ScreenSpec;
 }
 
 export class AutomationEngine implements IAutomationService {
@@ -750,6 +758,7 @@ export class AutomationEngine implements IAutomationService {
                     startedAt,
                     startTime,
                     correlation: err.correlation,
+                    screen: err.screen,
                 });
                 this.recordLog({
                     id: runId,
@@ -770,6 +779,7 @@ export class AutomationEngine implements IAutomationService {
                     status: 'paused',
                     runId,
                     durationMs,
+                    screen: err.screen,
                 };
             }
 
@@ -838,6 +848,14 @@ export class AutomationEngine implements IAutomationService {
                 variables.set(`${run.nodeId}.${key}`, value);
             }
         }
+        // Bare flow variables — a `screen` node's collected inputs land under
+        // their plain names so downstream `{var}` interpolation / conditions
+        // read them directly (e.g. `new_assignee` → update_record fields).
+        if (signal?.variables) {
+            for (const [key, value] of Object.entries(signal.variables)) {
+                variables.set(key, value);
+            }
+        }
 
         const steps = run.steps;
         const context = run.context;
@@ -880,6 +898,7 @@ export class AutomationEngine implements IAutomationService {
                     variables: Object.fromEntries(variables),
                     steps,
                     correlation: err.correlation,
+                    screen: err.screen,
                 });
                 this.recordLog({
                     id: runId,
@@ -895,7 +914,7 @@ export class AutomationEngine implements IAutomationService {
                     },
                     steps,
                 });
-                return { success: true, status: 'paused', runId, durationMs };
+                return { success: true, status: 'paused', runId, durationMs, screen: err.screen };
             }
 
             const errorMessage = err instanceof Error ? err.message : String(err);
@@ -931,6 +950,15 @@ export class AutomationEngine implements IAutomationService {
             nodeId: r.nodeId,
             correlation: r.correlation,
         }));
+    }
+
+    /**
+     * The screen a paused run is currently waiting on (screen-flow runtime), or
+     * `null` if the run isn't suspended / didn't pause at a screen node. Lets a
+     * UI flow-runner re-fetch the form after a refresh.
+     */
+    getSuspendedScreen(runId: string): ScreenSpec | null {
+        return this.suspendedRuns.get(runId)?.screen ?? null;
     }
 
     // ── DAG Traversal Core ──────────────────────────────────
@@ -1187,7 +1215,7 @@ export class AutomationEngine implements IAutomationService {
             // up to execute()/resume(), which persists a continuation. Traversal
             // of this node's out-edges happens on resume, not now.
             if (result.suspend) {
-                throw new FlowSuspendSignal(node.id, result.correlation);
+                throw new FlowSuspendSignal(node.id, result.correlation, result.screen);
             }
         }
 
