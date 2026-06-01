@@ -2,6 +2,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MessagingService } from './messaging-service.js';
+import { MemoryNotificationOutbox } from './memory-outbox.js';
 import type { Delivery, MessagingChannel, SendResult } from './channel.js';
 
 function silentLogger() {
@@ -215,6 +216,30 @@ describe('MessagingService', () => {
             const result = await service.emit({ topic: 't', audience: ['user_1'], payload: { title: 'x' } });
             expect(result.failed).toBe(1);
             expect(result.deliveries[0].error).toBe('quota exceeded');
+        });
+    });
+
+    describe('emit() with a delivery outbox (P1)', () => {
+        it('enqueues a pending delivery per (recipient × channel) instead of fanning out inline', async () => {
+            const outbox = new MemoryNotificationOutbox(1);
+            const inbox = recordingChannel('inbox');
+            service = new MessagingService({ logger: silentLogger(), outbox });
+            service.registerChannel(inbox.channel);
+
+            const result = await service.emit({
+                topic: 'deal.won',
+                audience: ['user_1', 'user_2'],
+                payload: { title: 'Deal closed', body: 'Acme' },
+            });
+
+            // Nothing sent inline — the dispatcher owns the send.
+            expect(inbox.seen).toHaveLength(0);
+            expect(result.delivered).toBe(2); // 2 enqueued (accepted)
+            const rows = await outbox.list();
+            expect(rows).toHaveLength(2);
+            expect(rows.every((r) => r.status === 'pending')).toBe(true);
+            expect(rows[0].payload).toMatchObject({ title: 'Deal closed', body: 'Acme', severity: 'info' });
+            expect(rows.map((r) => r.recipientId).sort()).toEqual(['user_1', 'user_2']);
         });
     });
 
