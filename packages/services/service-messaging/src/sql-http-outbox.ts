@@ -2,44 +2,42 @@
 
 import { randomUUID } from 'node:crypto';
 import type { IDataEngine } from '@objectstack/spec/contracts';
-import type {
-    AckResult,
-    ClaimOptions,
-    DeliveryStatus,
-    EnqueueInput,
-    IWebhookOutbox,
-    WebhookDelivery,
-} from './outbox.js';
-import { RedeliverError } from './outbox.js';
-import { hashPartition } from './partition.js';
-import { SYS_WEBHOOK_DELIVERY } from './schema.js';
+import { hashPartition } from './backoff.js';
+import {
+    HttpRedeliverError,
+    type EnqueueHttpInput,
+    type HttpAckResult,
+    type HttpClaimOptions,
+    type HttpDelivery,
+    type HttpDeliveryStatus,
+    type IHttpOutbox,
+} from './http-outbox.js';
+import { SYS_HTTP_DELIVERY } from './objects/http-delivery.object.js';
 
-export interface SqlWebhookOutboxOptions {
+export interface SqlHttpOutboxOptions {
     /**
      * Total partition count — MUST match the dispatcher's `partitionCount`.
      * Used at enqueue time to precompute `partition_key`.
      */
     partitionCount: number;
-    /**
-     * Object name to read/write. Defaults to `sys_webhook_delivery`. Override
-     * only if you've registered the schema under a different name.
-     */
+    /** Object name to read/write. Defaults to `sys_http_delivery`. */
     objectName?: string;
 }
 
 interface DeliveryRow {
     id: string;
-    webhook_id: string;
-    event_id: string;
-    event_type: string;
+    source: string;
+    ref_id: string;
+    dedup_key: string;
+    label?: string | null;
     url: string;
     method?: string | null;
     headers_json?: string | null;
-    secret?: string | null;
+    signing_secret?: string | null;
     timeout_ms?: number | null;
     payload_json: string;
     partition_key: number;
-    status: DeliveryStatus;
+    status: HttpDeliveryStatus;
     attempts: number;
     claimed_by?: string | null;
     claimed_at?: number | null;
@@ -53,68 +51,52 @@ interface DeliveryRow {
 }
 
 /**
- * Durable `IWebhookOutbox` backed by ObjectQL — the production storage
- * impl. Works against any registered driver (SQL, Turso, Mongo, in-memory)
- * because everything goes through the driver-agnostic `IDataEngine` API.
+ * Durable {@link IHttpOutbox} backed by ObjectQL — the production storage impl
+ * for the generic outbound-HTTP outbox (ADR-0018 M3). Works against any
+ * registered driver through the driver-agnostic `IDataEngine` API.
  *
- * **Why no `FOR UPDATE SKIP LOCKED`?** ObjectQL is driver-agnostic — that
- * SQL feature is Postgres-only. We get equivalent safety from two layers:
- *
- *   1. `cluster.lock` held per partition by the dispatcher (the primary
- *      mutex). One node owns one partition at a time → no two claimers.
- *   2. Atomic `UPDATE WHERE status='pending'` (the backup). Even if two
- *      claimers slip through (e.g. admin reschedule + dispatcher), only
- *      the first UPDATE matches each row.
- *
- * **Why precompute `partition_key` on enqueue?** ObjectQL has no
- * cross-driver `hash()` function in WHERE clauses. Storing the partition
- * as a column makes the claim query a plain indexed lookup.
- *
- * **Dedup race**: SELECT-then-INSERT has a tiny window where two
- * concurrent producers both miss the SELECT and both INSERT. The unique
- * index `(event_id, webhook_id)` on the table catches it — the second
- * INSERT errors, the producer ignores it. Receivers MUST be idempotent
- * on the `X-Objectstack-Delivery` header anyway.
+ * Mirrors `SqlWebhookOutbox` exactly (cluster-lock + atomic
+ * `UPDATE WHERE status='pending'` for the exactly-once claim; precomputed
+ * `partition_key`; SELECT-then-INSERT dedup converging on the unique index).
+ * Dedup uniqueness is `(source, dedup_key)`; partition affinity is on `ref_id`.
  */
-export class SqlWebhookOutbox implements IWebhookOutbox {
+export class SqlHttpOutbox implements IHttpOutbox {
     private readonly objectName: string;
     private readonly partitionCount: number;
 
     constructor(
         private readonly engine: IDataEngine,
-        opts: SqlWebhookOutboxOptions,
+        opts: SqlHttpOutboxOptions,
     ) {
         if (opts.partitionCount <= 0) {
-            throw new Error('SqlWebhookOutbox: partitionCount must be > 0');
+            throw new Error('SqlHttpOutbox: partitionCount must be > 0');
         }
-        this.objectName = opts.objectName ?? SYS_WEBHOOK_DELIVERY;
+        this.objectName = opts.objectName ?? SYS_HTTP_DELIVERY;
         this.partitionCount = opts.partitionCount;
     }
 
-    async enqueue(input: EnqueueInput): Promise<string> {
-        // Cheap pre-check to absorb most duplicates without hitting the
-        // unique-index error path. Race window with the INSERT below is
-        // intentional and documented.
+    async enqueue(input: EnqueueHttpInput): Promise<string> {
         const existing = await this.engine.findOne(this.objectName, {
-            where: { event_id: input.eventId, webhook_id: input.webhookId },
+            where: { source: input.source, dedup_key: input.dedupKey },
             fields: ['id'],
         });
         if (existing?.id) return existing.id as string;
 
         const id = randomUUID();
         const now = Date.now();
-        const row: Omit<DeliveryRow, 'response_body' | 'error'> = {
+        const row: DeliveryRow = {
             id,
-            webhook_id: input.webhookId,
-            event_id: input.eventId,
-            event_type: input.eventType,
+            source: input.source,
+            ref_id: input.refId,
+            dedup_key: input.dedupKey,
+            label: input.label,
             url: input.url,
             method: input.method ?? 'POST',
             headers_json: input.headers ? JSON.stringify(input.headers) : undefined,
-            secret: input.secret,
+            signing_secret: input.signingSecret,
             timeout_ms: input.timeoutMs,
             payload_json: JSON.stringify(input.payload ?? null),
-            partition_key: hashPartition(input.webhookId, this.partitionCount),
+            partition_key: hashPartition(input.refId, this.partitionCount),
             status: 'pending',
             attempts: 0,
             created_at: now,
@@ -124,10 +106,8 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
             await this.engine.insert(this.objectName, row);
             return id;
         } catch (err) {
-            // Unique-index collision (dedup race) → look up the winner and
-            // return its id. Any other error propagates.
             const winner = await this.engine.findOne(this.objectName, {
-                where: { event_id: input.eventId, webhook_id: input.webhookId },
+                where: { source: input.source, dedup_key: input.dedupKey },
                 fields: ['id'],
             });
             if (winner?.id) return winner.id as string;
@@ -135,7 +115,7 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
         }
     }
 
-    async claim(opts: ClaimOptions): Promise<WebhookDelivery[]> {
+    async claim(opts: HttpClaimOptions): Promise<HttpDelivery[]> {
         const now = opts.now ?? Date.now();
 
         // 1. Reap stale in_flight rows — visibility-timeout recovery.
@@ -152,59 +132,36 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
         );
 
         // 2. Pick candidate ids.
-        const partitionFilter = opts.partition
-            ? { partition_key: opts.partition.index }
-            : {};
+        const partitionFilter = opts.partition ? { partition_key: opts.partition.index } : {};
         const candidates = await this.engine.find(this.objectName, {
             where: {
                 status: 'pending',
                 ...partitionFilter,
-                // next_retry_at <= now OR null
-                $or: [
-                    { next_retry_at: null },
-                    { next_retry_at: { $lte: now } },
-                ],
+                $or: [{ next_retry_at: null }, { next_retry_at: { $lte: now } }],
             },
             fields: ['id'],
-            // No orderBy for portability — drivers handle the natural insert order.
             limit: opts.limit,
         });
         if (candidates.length === 0) return [];
 
         const ids = (candidates as Array<{ id: string }>).map((c) => c.id);
 
-        // 3. Atomic claim. WHERE status='pending' rejects any rows another
-        //    worker swept up between steps 2 and 3.
+        // 3. Atomic claim. WHERE status='pending' rejects rows another worker took.
         await this.engine.update(
             this.objectName,
-            {
-                status: 'in_flight',
-                claimed_by: opts.nodeId,
-                claimed_at: now,
-                updated_at: now,
-            },
-            {
-                where: { id: { $in: ids }, status: 'pending' },
-                multi: true,
-            },
+            { status: 'in_flight', claimed_by: opts.nodeId, claimed_at: now, updated_at: now },
+            { where: { id: { $in: ids }, status: 'pending' }, multi: true },
         );
 
         // 4. Read back the rows we actually own.
         const claimed = (await this.engine.find(this.objectName, {
-            where: {
-                id: { $in: ids },
-                claimed_by: opts.nodeId,
-                claimed_at: now,
-                status: 'in_flight',
-            },
+            where: { id: { $in: ids }, claimed_by: opts.nodeId, claimed_at: now, status: 'in_flight' },
         })) as DeliveryRow[];
 
         return claimed.map((r) => this.toDelivery(r));
     }
 
-    async ack(id: string, result: AckResult): Promise<void> {
-        // ObjectQL has no atomic $inc across drivers, so read-then-write.
-        // Safe enough: ack is single-writer per row (only the claimer acks).
+    async ack(id: string, result: HttpAckResult): Promise<void> {
         const current = (await this.engine.findOne(this.objectName, {
             where: { id },
             fields: ['attempts'],
@@ -212,7 +169,7 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
         if (!current) return;
 
         const now = Date.now();
-        let status: DeliveryStatus;
+        let status: HttpDeliveryStatus;
         let nextRetryAt: number | null;
         let error: string | null;
 
@@ -248,38 +205,26 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
         );
     }
 
-    async list(filter?: { status?: DeliveryStatus }): Promise<WebhookDelivery[]> {
-        const rows = (await this.engine.find(this.objectName, {
-            where: filter?.status ? { status: filter.status } : {},
-        })) as DeliveryRow[];
+    async list(filter?: { status?: HttpDeliveryStatus; source?: string }): Promise<HttpDelivery[]> {
+        const where: Record<string, unknown> = {};
+        if (filter?.status) where.status = filter.status;
+        if (filter?.source) where.source = filter.source;
+        const rows = (await this.engine.find(this.objectName, { where })) as DeliveryRow[];
         return rows.map((r) => this.toDelivery(r));
     }
 
-    async redeliver(id: string): Promise<WebhookDelivery> {
-        const current = (await this.engine.findOne(this.objectName, {
-            where: { id },
-        })) as DeliveryRow | null;
+    async redeliver(id: string): Promise<HttpDelivery> {
+        const current = (await this.engine.findOne(this.objectName, { where: { id } })) as DeliveryRow | null;
         if (!current) {
-            throw new RedeliverError(
-                `Delivery row '${id}' not found`,
-                'not_found',
-            );
+            throw new HttpRedeliverError(`Delivery row '${id}' not found`, 'not_found');
         }
-        if (
-            current.status !== 'success' &&
-            current.status !== 'failed' &&
-            current.status !== 'dead'
-        ) {
-            throw new RedeliverError(
+        if (current.status !== 'success' && current.status !== 'failed' && current.status !== 'dead') {
+            throw new HttpRedeliverError(
                 `Delivery row '${id}' is '${current.status}', expected one of: success, failed, dead`,
                 'not_eligible',
             );
         }
         const now = Date.now();
-        // Guarded UPDATE — re-check status server-side so two concurrent
-        // redeliver calls cannot both flip the row, and so a dispatcher
-        // tick that flipped the row to in_flight between our SELECT and
-        // UPDATE cannot be clobbered.
         await this.engine.update(
             this.objectName,
             {
@@ -294,37 +239,26 @@ export class SqlWebhookOutbox implements IWebhookOutbox {
                 error: null,
                 updated_at: now,
             },
-            {
-                where: {
-                    id,
-                    status: { $in: ['success', 'failed', 'dead'] },
-                },
-                multi: false,
-            },
+            { where: { id, status: { $in: ['success', 'failed', 'dead'] } }, multi: false },
         );
-        const after = (await this.engine.findOne(this.objectName, {
-            where: { id },
-        })) as DeliveryRow | null;
+        const after = (await this.engine.findOne(this.objectName, { where: { id } })) as DeliveryRow | null;
         if (!after || after.status !== 'pending') {
-            // Lost the race — another writer flipped the row.
-            throw new RedeliverError(
-                `Delivery row '${id}' state changed during redeliver`,
-                'not_eligible',
-            );
+            throw new HttpRedeliverError(`Delivery row '${id}' state changed during redeliver`, 'not_eligible');
         }
         return this.toDelivery(after);
     }
 
-    private toDelivery(r: DeliveryRow): WebhookDelivery {
+    private toDelivery(r: DeliveryRow): HttpDelivery {
         return {
             id: r.id,
-            webhookId: r.webhook_id,
-            eventId: r.event_id,
-            eventType: r.event_type,
+            source: r.source,
+            refId: r.ref_id,
+            dedupKey: r.dedup_key,
+            label: r.label ?? undefined,
             url: r.url,
             method: r.method ?? undefined,
             headers: r.headers_json ? JSON.parse(r.headers_json) : undefined,
-            secret: r.secret ?? undefined,
+            signingSecret: r.signing_secret ?? undefined,
             timeoutMs: r.timeout_ms ?? undefined,
             payload: JSON.parse(r.payload_json),
             status: r.status,

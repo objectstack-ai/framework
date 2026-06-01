@@ -1,50 +1,45 @@
 // Copyright (c) 2026 ObjectStack. Licensed under the Apache-2.0 license.
 
 import { randomUUID } from 'node:crypto';
-import type {
-    AckResult,
-    ClaimOptions,
-    EnqueueInput,
-    DeliveryStatus,
-    IWebhookOutbox,
-    WebhookDelivery,
-} from './outbox.js';
-import { RedeliverError } from './outbox.js';
-import { hashPartition } from './partition.js';
+import { hashPartition } from './backoff.js';
+import {
+    HttpRedeliverError,
+    type EnqueueHttpInput,
+    type HttpAckResult,
+    type HttpClaimOptions,
+    type HttpDelivery,
+    type HttpDeliveryStatus,
+    type IHttpOutbox,
+} from './http-outbox.js';
 
 /**
- * In-memory `IWebhookOutbox` for tests and single-process development.
- *
- * Implements the atomic-claim semantics by running its claim/ack logic
- * synchronously (single-threaded JS event loop) inside one `Map`. Two
- * `MemoryWebhookOutbox` instances do NOT share state — for the cross-node
- * test the *same* instance is passed to both dispatchers (simulating one
- * shared database).
- *
- * A production SQL-backed implementation will live in a sibling file and
- * use `SELECT ... FOR UPDATE SKIP LOCKED`.
+ * In-memory {@link IHttpOutbox} for tests and single-process development.
+ * Mirrors `MemoryWebhookOutbox`: atomic-claim semantics come for free from the
+ * single-threaded event loop operating on one `Map`. Two instances do NOT share
+ * state — pass the same instance to both dispatchers to simulate one DB.
  */
-export class MemoryWebhookOutbox implements IWebhookOutbox {
-    private readonly rows = new Map<string, WebhookDelivery>();
-    /** Dedup index keyed by `${eventId}::${webhookId}` -> row id. */
+export class MemoryHttpOutbox implements IHttpOutbox {
+    private readonly rows = new Map<string, HttpDelivery>();
+    /** Dedup index keyed by `${source}::${dedupKey}` -> row id. */
     private readonly dedup = new Map<string, string>();
 
-    async enqueue(input: EnqueueInput): Promise<string> {
-        const dedupKey = `${input.eventId}::${input.webhookId}`;
+    async enqueue(input: EnqueueHttpInput): Promise<string> {
+        const dedupKey = `${input.source}::${input.dedupKey}`;
         const existing = this.dedup.get(dedupKey);
         if (existing) return existing;
 
         const id = randomUUID();
         const now = Date.now();
-        const row: WebhookDelivery = {
+        const row: HttpDelivery = {
             id,
-            webhookId: input.webhookId,
-            eventId: input.eventId,
-            eventType: input.eventType,
+            source: input.source,
+            refId: input.refId,
+            dedupKey: input.dedupKey,
+            label: input.label,
             url: input.url,
             method: input.method ?? 'POST',
             headers: input.headers,
-            secret: input.secret,
+            signingSecret: input.signingSecret,
             timeoutMs: input.timeoutMs,
             payload: input.payload,
             status: 'pending',
@@ -57,11 +52,10 @@ export class MemoryWebhookOutbox implements IWebhookOutbox {
         return id;
     }
 
-    async claim(opts: ClaimOptions): Promise<WebhookDelivery[]> {
+    async claim(opts: HttpClaimOptions): Promise<HttpDelivery[]> {
         const now = opts.now ?? Date.now();
-        const claimed: WebhookDelivery[] = [];
+        const claimed: HttpDelivery[] = [];
 
-        // First pass: reap expired in_flight rows (visibility timeout).
         for (const row of this.rows.values()) {
             if (
                 row.status === 'in_flight' &&
@@ -80,7 +74,7 @@ export class MemoryWebhookOutbox implements IWebhookOutbox {
             if (row.status !== 'pending') continue;
             if (row.nextRetryAt !== undefined && row.nextRetryAt > now) continue;
             if (opts.partition) {
-                const p = hashPartition(row.webhookId, opts.partition.count);
+                const p = hashPartition(row.refId, opts.partition.count);
                 if (p !== opts.partition.index) continue;
             }
             row.status = 'in_flight';
@@ -92,7 +86,7 @@ export class MemoryWebhookOutbox implements IWebhookOutbox {
         return claimed;
     }
 
-    async ack(id: string, result: AckResult): Promise<void> {
+    async ack(id: string, result: HttpAckResult): Promise<void> {
         const row = this.rows.get(id);
         if (!row) return;
         const now = Date.now();
@@ -104,7 +98,7 @@ export class MemoryWebhookOutbox implements IWebhookOutbox {
         row.responseCode = result.httpStatus;
         row.responseBody = result.responseBody;
 
-        let status: DeliveryStatus;
+        let status: HttpDeliveryStatus;
         if (result.success) {
             status = 'success';
             row.nextRetryAt = undefined;
@@ -121,21 +115,20 @@ export class MemoryWebhookOutbox implements IWebhookOutbox {
         row.status = status;
     }
 
-    async list(filter?: { status?: DeliveryStatus }): Promise<WebhookDelivery[]> {
-        const all = Array.from(this.rows.values()).map((r) => ({ ...r }));
-        return filter?.status ? all.filter((r) => r.status === filter.status) : all;
+    async list(filter?: { status?: HttpDeliveryStatus; source?: string }): Promise<HttpDelivery[]> {
+        let all = Array.from(this.rows.values()).map((r) => ({ ...r }));
+        if (filter?.status) all = all.filter((r) => r.status === filter.status);
+        if (filter?.source) all = all.filter((r) => r.source === filter.source);
+        return all;
     }
 
-    async redeliver(id: string): Promise<WebhookDelivery> {
+    async redeliver(id: string): Promise<HttpDelivery> {
         const row = this.rows.get(id);
         if (!row) {
-            throw new RedeliverError(
-                `Delivery row '${id}' not found`,
-                'not_found',
-            );
+            throw new HttpRedeliverError(`Delivery row '${id}' not found`, 'not_found');
         }
         if (row.status !== 'success' && row.status !== 'failed' && row.status !== 'dead') {
-            throw new RedeliverError(
+            throw new HttpRedeliverError(
                 `Delivery row '${id}' is '${row.status}', expected one of: success, failed, dead`,
                 'not_eligible',
             );

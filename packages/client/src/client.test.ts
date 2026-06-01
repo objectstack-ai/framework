@@ -440,7 +440,7 @@ describe('Notifications namespace', () => {
     it('should list notifications with filters', async () => {
         const { client, fetchMock } = createMockClient({
             success: true,
-            data: { notifications: [], total: 0 }
+            data: { notifications: [], unreadCount: 0 }
         });
         await client.notifications.list({ read: false, limit: 10 });
         const url = fetchMock.mock.calls[0][0] as string;
@@ -452,10 +452,10 @@ describe('Notifications namespace', () => {
     it('should mark notifications as read', async () => {
         const { client, fetchMock } = createMockClient({
             success: true,
-            data: { updated: 2 }
+            data: { success: true, readCount: 2 }
         });
         const result = await client.notifications.markRead(['n1', 'n2']);
-        expect(result.updated).toBe(2);
+        expect(result.readCount).toBe(2);
         const body = JSON.parse(fetchMock.mock.calls[0][1].body);
         expect(body.ids).toEqual(['n1', 'n2']);
     });
@@ -463,10 +463,10 @@ describe('Notifications namespace', () => {
     it('should mark all notifications as read', async () => {
         const { client, fetchMock } = createMockClient({
             success: true,
-            data: { updated: 5 }
+            data: { success: true, readCount: 5 }
         });
         const result = await client.notifications.markAllRead();
-        expect(result.updated).toBe(5);
+        expect(result.readCount).toBe(5);
         const [url, opts] = fetchMock.mock.calls[0];
         expect(url).toContain('/api/v1/notifications/read/all');
         expect(opts.method).toBe('POST');

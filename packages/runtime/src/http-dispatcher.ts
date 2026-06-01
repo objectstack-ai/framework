@@ -1213,6 +1213,56 @@ export class HttpDispatcher {
     }
 
     /**
+     * Handles in-app notification requests (ADR-0030) — the
+     * `/api/v1/notifications` surface backed by the messaging service's inbox
+     * read API. Reads the L5 `sys_inbox_message` + `sys_notification_receipt`
+     * join; mark-read upserts the receipt keyed `(notification_id, user_id,
+     * channel:'inbox')`. The routes are `auth: true`, so an authenticated user
+     * is required.
+     *
+     * Routes (path is the sub-path after `/notifications`):
+     *   GET  ''          → listInbox    (query: read, type, limit)
+     *   POST /read       → markRead     (body: { ids: string[] })
+     *   POST /read/all   → markAllRead
+     */
+    async handleNotification(path: string, method: string, body: any, query: any, context: HttpProtocolContext): Promise<HttpDispatcherResult> {
+        const service = await this.resolveService(CoreServiceName.enum.notification, context.environmentId) as any;
+        if (!service || typeof service.listInbox !== 'function') return { handled: false };
+
+        const userId: string | undefined = context.executionContext?.userId;
+        if (!userId) {
+            return { handled: true, response: this.error('Authentication required', 401) };
+        }
+
+        const m = method.toUpperCase();
+        const subPath = path.replace(/^\/+/, '').replace(/\/+$/, '');
+
+        // GET /notifications — list the user's inbox joined with read-state.
+        if (subPath === '' && m === 'GET') {
+            const read = query?.read === undefined ? undefined : String(query.read) === 'true';
+            const limit = query?.limit ? Number(query.limit) : undefined;
+            const type = query?.type ? String(query.type) : undefined;
+            const result = await service.listInbox(userId, { read, type, limit });
+            return { handled: true, response: this.success(result) };
+        }
+
+        // POST /notifications/read — mark specific notifications read.
+        if (subPath === 'read' && m === 'POST') {
+            const ids: string[] = Array.isArray(body?.ids) ? body.ids.map((x: unknown) => String(x)) : [];
+            const result = await service.markRead(userId, ids);
+            return { handled: true, response: this.success(result) };
+        }
+
+        // POST /notifications/read/all — mark all of the user's inbox read.
+        if (subPath === 'read/all' && m === 'POST') {
+            const result = await service.markAllRead(userId);
+            return { handled: true, response: this.success(result) };
+        }
+
+        return { handled: false };
+    }
+
+    /**
      * Handles i18n requests
      * path: sub-path after /i18n/
      *
@@ -2355,6 +2405,12 @@ export class HttpDispatcher {
         
         if (cleanPath.startsWith('/analytics')) {
              return this.handleAnalytics(cleanPath.substring(10), method, body, context);
+        }
+
+        // In-app notifications (ADR-0030) — inbox list + receipt mark-read,
+        // backed by the messaging service registered under the `notification` slot.
+        if (cleanPath.startsWith('/notifications')) {
+             return this.handleNotification(cleanPath.substring(14), method, body, query, context);
         }
 
         if (cleanPath.startsWith('/packages')) {
