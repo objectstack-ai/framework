@@ -1,6 +1,6 @@
 # ADR-0030 — Notification Platform Convergence (single ingress, layered pipeline)
 
-**Status**: Proposed (2026-06-01)
+**Status**: Accepted (2026-06-01) — **P0–P3b1 shipped**; P3b-2 (digest) + cross-repo objectui cut-over remain. See [§ Implementation status & remaining work](#implementation-status--remaining-work).
 **Supersedes / refines**: [ADR-0012 — Notification Platform](./0012-notification-platform.md) (Draft)
 **Related**: [ADR-0019 — Approval as a Flow Node](./0019-approval-as-flow-node.md), [ADR-0022 — Connectors vs Messaging Channels](./0022-connectors-vs-messaging-channels.md)
 **Build spec**: [docs/design/notification-platform-convergence.md](../design/notification-platform-convergence.md)
@@ -66,3 +66,70 @@ Acceptance criteria per phase live in the build spec.
 - **Positive**: one governed ingress; the bell reflects every producer; reliability, preferences, multi-channel, templates all become reachable incrementally; matches mature notification platforms and low-code expectations.
 - **Cost**: P0 spans framework + objectui (UI bell re-points to `sys_inbox_message`) and requires a `sys_notification` data migration. This is a multi-phase investment (ADR-0012 already flagged the full platform as such).
 - **ADR-0012** is marked superseded by this ADR; its 5-layer model is retained and realized, not discarded.
+
+## Implementation status & remaining work
+
+As of 2026-06-01 the framework side of the pipeline is largely built and merged.
+The detailed cut-over runbook and per-item notes live in
+[docs/handoff/adr-0030-notification-convergence.md](../handoff/adr-0030-notification-convergence.md).
+
+### Shipped (merged to `main`)
+
+| Phase | What landed | PR |
+|---|---|---|
+| **P0 — Seams** | Single ingress `MessagingService.emit(EmitInput)`; `sys_notification` re-modeled to the L2 event; `sys_notification_receipt`; `sys_inbox_message` materialization (+`notification_id`, read-state moved to receipt); `notify` node + collaboration `@mention`/assignment routed through `emit()`; idempotent `migrateSysNotificationToEvent`. | #1434 |
+| **P1 — Reliable delivery** | `sys_notification_delivery` outbox + `NotificationDispatcher` (claim/retry/backoff/dead-letter, partitioned, cluster-lock); `RecipientResolver` (`role:`/`team:`/`owner_of:`/email→id). | #1441 |
+| **P2 — Subscription + preference** | `sys_notification_preference` (user×topic×channel, admin-global `*` defaults + per-user override, wildcards) + `sys_notification_subscription`; `PreferenceResolver` wired into `emit()` (most-specific-wins, mandatory bypass, fail-open). | #1444 |
+| **P3a — email channel + templates** | `createEmailChannel` (delegates transport to the `email` service per ADR-0022); `sys_notification_template` (topic×channel×locale) + declarative `{{ payload.x }}` renderer with `payload.title`/`body` fallback. | #1449 |
+| **P3b-1 — quiet-hours** | Deferred dispatch on the outbox (`EnqueueDeliveryInput.notBefore` → `nextAttemptAt`); `quietHoursDeferral()` (tz/HH:MM, overnight-aware); `critical` bypass. | #1453 |
+| Startup | `messaging` is foundational: in `ALWAYS_ON_CAPABILITIES` (CLI) and auto-loaded when `audit` is required (cloud capability-loader). | (in #1434) |
+
+### Remaining work (handed off to a follow-up agent)
+
+**1. P3b-2 — Digest (completes the build spec).** Build on P3b-1's deferral:
+enqueue digest items deferred to the next window, then a **collapse** step merges
+same-`(user, channel, window)` deliveries into one materialization at window time.
+Needs: a `digest_key` on `sys_notification_delivery`; a digest assembler (in/beside
+the dispatcher); a digest render template. Consumes P2's `digest` field;
+`critical`/mandatory bypass.
+
+**2. Cross-repo objectui cut-over (the user-facing delivery — separate `objectui` repo).**
+- Repoint the Console bell (`AppHeader`/`InboxPopover`/record views) from
+  `sys_notification` to **`sys_inbox_message`** (the `mine` view), joining
+  `sys_notification_receipt` for read-state.
+- Add the **mark-read write path**: a receipt-upsert REST route / action keyed on
+  `(notification_id, user_id, channel)` (the framework has the receipt object +
+  `delivered` writes, but nothing flips it to `read` yet). Repoint the SDK
+  `client.notifications.*` helpers to the receipt.
+- Run `migrateSysNotificationToEvent` during the cut-over so historical bell rows
+  carry over. **Sequence:** ship back-end → run migration → flip UI (runbook in the
+  handoff doc).
+
+**3. Incremental channels & low-code surface (same `MessagingChannel` seam — each gets retry/outbox for free).**
+- **push** (`sys_user_device` + APNs/FCM), **webhook** (reuse the `plugin-webhooks`
+  outbox rather than a redundant channel), **Slack notification channel**
+  (enterprise-tier: identity mapping `sys_channel_user_link` + OAuth; `send()`
+  delegates to the existing `connector-slack` per ADR-0022 — the raw
+  `connector_action` Slack path already works today).
+- **`defineTopic()`** declarative topic catalog (Studio discoverability for topics /
+  templates / preferences) — the low-code backbone.
+- **Subscription-driven fan-out**: expand a topic's `sys_notification_subscription`
+  principals when a producer emits without an explicit audience (object exists;
+  expansion not wired).
+- **MJML** compilation for email (P3a treats `mjml` format as raw HTML).
+- Quiet-hours **tz fallback** to a `sys_user` timezone field (currently
+  `quiet_hours.tz` → UTC).
+
+**4. Hardening / hygiene.**
+- Make event dedup race-safe: a **unique index on `sys_notification.dedup_key`** +
+  graceful conflict handling (today it's a non-transactional check-then-insert on a
+  non-unique index — best-effort).
+- **Retention/pruning** for the `sys_notification` event log (every `emit` writes a
+  row; high-frequency periodic flows grow it unbounded).
+- **Regenerate** `packages/platform-objects/src/apps/translations/*.generated.ts`
+  (stale `sys_notification` field labels from before the re-model — harmless but
+  drifted).
+- **CI infra:** the intermittent `@objectstack/spec` subpath **build-order race**
+  (`pnpm -r build` dependents typecheck before spec's dist DTS is flushed) flakes
+  Build/Test Core; tightening the build-dependency ordering would stop the repeated
+  re-kicks.
