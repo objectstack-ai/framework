@@ -29,6 +29,19 @@ export type {
     MessagingServiceContext,
 } from './messaging-service.js';
 
+// Recipient resolution (ADR-0030 P1)
+export {
+    RecipientResolver,
+    USER_OBJECT,
+    MEMBER_OBJECT,
+    TEAM_MEMBER_OBJECT,
+} from './recipient-resolver.js';
+export type {
+    RecipientResolverOptions,
+    RecipientResolverLogger,
+    ResolveContext,
+} from './recipient-resolver.js';
+
 // Channel seam
 export { createInboxChannel, INBOX_OBJECT, RECEIPT_OBJECT } from './inbox-channel.js';
 export type { InboxChannelOptions } from './inbox-channel.js';
@@ -41,5 +54,27 @@ export type {
     ErrorClass,
 } from './channel.js';
 
+// Reliable delivery — outbox + dispatcher (ADR-0030 P1)
+export type {
+    INotificationOutbox,
+    NotificationDeliveryRecord,
+    DeliveryStatus,
+    DeliveryPayload,
+    EnqueueDeliveryInput,
+    ClaimOptions,
+    AckResult,
+} from './outbox.js';
+export { SqlNotificationOutbox, DELIVERY_OBJECT } from './sql-outbox.js';
+export type { SqlNotificationOutboxOptions } from './sql-outbox.js';
+export { MemoryNotificationOutbox } from './memory-outbox.js';
+export { hashPartition, nextRetryDelayMs, classifyDeliveryAttempt } from './backoff.js';
+export { NotificationDispatcher } from './dispatcher.js';
+export type {
+    NotificationDispatcherOptions,
+    ChannelRegistry,
+    DispatchCluster,
+    DispatchLockHandle,
+} from './dispatcher.js';
+
 // Objects (metadata definitions)
-export { InboxMessage, NotificationReceipt } from './objects/index.js';
+export { InboxMessage, NotificationReceipt, NotificationDelivery } from './objects/index.js';

@@ -21,6 +21,7 @@ pnpm docs:dev         # docs site
 | Scenario | Command | Notes |
 |:---|:---|:---|
 | **Frontend debug** (UI in `../objectui` calls backend) | `PORT=3000 pnpm dev:crm` | Port **must** be 3000 (UI hard-wired); persistent state; leave running |
+| **Frontend debug (showcase)** | `PORT=3000 pnpm dev` | `pnpm dev` = the **showcase** example; same port-3000 rule. Use this (not `dev:crm`) when debugging showcase UI/automation |
 | **Backend-only debug** | `pnpm dev:crm -- --fresh -p <random>` | Random high port; ephemeral tempdir; **you must kill it** when done |
 
 `--fresh`: ephemeral tempdir (auto-deleted on exit) + `--seed-admin` (POSTs sign-up, prints creds — default `admin@objectos.ai` / `admin123`, override via `--admin-email`/`--admin-password`). The seeded admin is auto-promoted to **platform admin** (the system seed identity `usr_system` is skipped), so Setup/Studio are reachable on first login.
@@ -37,6 +38,8 @@ kill $(lsof -ti tcp:38421)         # tear down — tempdir auto-deletes
 This repo ships **backend only**. All Studio/Console UI work happens in `../objectui` (separate repo, checked out next to `framework/`). Workflow: edit + commit + push in `../objectui`, then in `framework/` run `pnpm objectui:refresh` to pull its build into `packages/console/`.
 
 Other scripts: `objectui:bump` (pull only), `objectui:build`, `objectui:clean`. ⚠️ Never hand-edit `packages/console/dist/` or `.cache/objectui-*/` — regenerated.
+
+**Fast iteration on `../objectui` src (no commit/refresh loop):** run objectui's own console dev server — `cd ../objectui && pnpm --filter @object-ui/console dev` (Vite on **:5180**, HMR). Its `/api` proxy targets `DEV_PROXY_TARGET || http://localhost:3000`, so **run the backend you're testing on :3000** (`PORT=3000 pnpm dev` for showcase) and browse `:5180`. Note `:3001/_console` (or whatever the backend serves) is the **published** console, not your `../objectui` src — only `:5180` reflects local UI edits. See `../objectui/AGENTS.md` for the app-id / localStorage / auth gotchas.
 
 ---
 

@@ -9,9 +9,10 @@
  * in `@objectstack/platform-objects`. They are registered alongside
  * `SETUP_APP` (via `plugin-auth`'s `manifest.register`).
  *
- * Some entries are intentionally contributed by the capability plugin that owns
- * the underlying objects rather than living here (ADR-0029 K2):
+ * Some entries/groups are intentionally contributed by the capability plugin
+ * that owns the underlying objects rather than living here (ADR-0029 K2):
  *   - `group_integrations` → `@objectstack/plugin-webhooks` (K2.a)
+ *   - `group_approvals`     → `@objectstack/plugin-approvals` (K2.b)
  *   - `group_access_control` Roles / Permission Sets → `@objectstack/plugin-security`
  *   - `group_access_control` Sharing Rules / Record Shares → `@objectstack/plugin-sharing`
  * As each remaining domain moves to its capability plugin, its entries move out
@@ -70,15 +71,8 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
       { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'sys_api_key', icon: 'key', requiredPermissions: ['manage_platform_settings'] },
     ],
   },
-  {
-    app: 'setup',
-    group: 'group_approvals',
-    priority: BASE_PRIORITY,
-    items: [
-      { id: 'nav_approval_requests', type: 'object', label: 'Requests', objectName: 'sys_approval_request', icon: 'inbox', requiresObject: 'sys_approval_request' },
-      { id: 'nav_approval_actions', type: 'object', label: 'Action History', objectName: 'sys_approval_action', icon: 'history', requiresObject: 'sys_approval_action' },
-    ],
-  },
+  // group_approvals is contributed by @objectstack/plugin-approvals, which owns
+  // sys_approval_request / sys_approval_action (ADR-0029 K2.b).
   {
     app: 'setup',
     group: 'group_configuration',

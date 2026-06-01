@@ -6,6 +6,8 @@ import type {
     MessagingChannelContext,
     Notification,
 } from './channel.js';
+import { RecipientResolver } from './recipient-resolver.js';
+import type { INotificationOutbox } from './outbox.js';
 
 /** The L2 event object every `emit()` writes one row to (ADR-0030). */
 export const NOTIFICATION_EVENT_OBJECT = 'sys_notification';
@@ -80,10 +82,16 @@ export interface MessagingServiceContext extends MessagingChannelContext {
     getData?(): IDataEngine | undefined;
     /** Clock injection for deterministic tests. Defaults to `new Date()`. */
     now?(): string;
+    /** Override the recipient resolver (tests). Defaults to a data-backed one. */
+    recipientResolver?: RecipientResolver;
+    /**
+     * Durable delivery outbox (ADR-0030 P1). When present, `emit()` enqueues a
+     * `pending` delivery row per `(recipient × channel)` and the
+     * `NotificationDispatcher` performs the send + retries. When absent, `emit()`
+     * fans out inline (best-effort, no retry) — the P0 behavior.
+     */
+    outbox?: INotificationOutbox;
 }
-
-/** Selector prefixes the inline resolver forwards verbatim (expanded in P1). */
-const DEFERRED_SELECTOR = /^(role:|team:|owner_of:)/;
 
 /**
  * MessagingService — the notification dispatcher (ADR-0012 / ADR-0030).
@@ -105,9 +113,24 @@ const DEFERRED_SELECTOR = /^(role:|team:|owner_of:)/;
 export class MessagingService {
     private readonly channels = new Map<string, MessagingChannel>();
     private readonly now: () => string;
+    private readonly resolver: RecipientResolver;
+    private outbox?: INotificationOutbox;
 
     constructor(private readonly ctx: MessagingServiceContext) {
         this.now = ctx.now ?? (() => new Date().toISOString());
+        this.resolver =
+            ctx.recipientResolver ??
+            new RecipientResolver({ getData: () => ctx.getData?.(), logger: ctx.logger });
+        this.outbox = ctx.outbox;
+    }
+
+    /**
+     * Attach the durable delivery outbox after construction. The plugin wires
+     * this once the data engine is resolvable (kernel:ready), switching `emit()`
+     * from inline fan-out to the reliable enqueue → dispatcher path.
+     */
+    setOutbox(outbox: INotificationOutbox): void {
+        this.outbox = outbox;
     }
 
     /** Register a channel implementation. A duplicate id warns and replaces. */
@@ -159,15 +182,33 @@ export class MessagingService {
         // 2) Write the L2 event (or synthesize an id when there is no data layer).
         const notificationId = await this.writeEvent(data, input);
 
-        // 3) Resolve the audience to recipients.
-        const recipients = this.resolveRecipients(input.audience);
+        // 3) Resolve the audience to recipient user ids (RecipientResolver owns
+        //    role:/team:/owner_of:/email→id expansion).
+        const recipients = await this.resolver.resolve(input.audience, {
+            organizationId: input.organizationId,
+        });
         if (recipients.length === 0) {
             this.ctx.logger.warn(`[messaging] emit: topic '${input.topic}' resolved to 0 recipients`);
             return { notificationId, deduped: false, deliveries: [], delivered: 0, failed: 0 };
         }
 
-        // 4) Derive the per-recipient notification and fan out to channels.
+        // 4) Either enqueue durable deliveries (P1 outbox) or fan out inline (P0).
         const payload = input.payload ?? {};
+        const channels = input.channels?.length ? input.channels : ['inbox'];
+
+        if (this.outbox) {
+            const deliveries = await this.enqueueDeliveries(
+                this.outbox,
+                notificationId,
+                recipients,
+                channels,
+                input,
+                payload,
+            );
+            const delivered = deliveries.filter((d) => d.ok).length;
+            return { notificationId, deduped: false, deliveries, delivered, failed: deliveries.length - delivered };
+        }
+
         const notification: Notification = {
             notificationId,
             organizationId: input.organizationId,
@@ -183,6 +224,50 @@ export class MessagingService {
 
         const { deliveries, delivered, failed } = await this.fanOut(notification, recipients);
         return { notificationId, deduped: false, deliveries, delivered, failed };
+    }
+
+    /**
+     * Enqueue one `pending` delivery row per `(channel × recipient)`. The
+     * dispatcher does the actual send + retry; here `ok` means "accepted for
+     * delivery" (enqueued), not yet delivered — progress is observable on the
+     * `sys_notification_delivery` row.
+     */
+    private async enqueueDeliveries(
+        outbox: INotificationOutbox,
+        notificationId: string,
+        recipients: string[],
+        channels: string[],
+        input: EmitInput,
+        payload: Record<string, unknown>,
+    ): Promise<DeliveryOutcome[]> {
+        // Snapshot the rendered content onto each delivery so a later event edit
+        // can't rewrite an in-flight send.
+        const deliveryPayload = {
+            ...payload,
+            title: str(payload.title) ?? input.topic,
+            body: str(payload.body) ?? '',
+            severity: input.severity ?? 'info',
+            actionUrl: str(payload.url) ?? str(payload.actionUrl),
+        };
+        const deliveries: DeliveryOutcome[] = [];
+        for (const channel of channels) {
+            for (const recipient of recipients) {
+                try {
+                    const id = await outbox.enqueue({
+                        notificationId,
+                        recipientId: recipient,
+                        channel,
+                        topic: input.topic,
+                        payload: deliveryPayload,
+                        organizationId: input.organizationId,
+                    });
+                    deliveries.push({ channel, recipient, ok: true, externalId: id });
+                } catch (err) {
+                    deliveries.push({ channel, recipient, ok: false, error: (err as Error)?.message ?? String(err) });
+                }
+            }
+        }
+        return deliveries;
     }
 
     /** Find an existing event id by its dedup key, tolerating lookup failure. */
@@ -226,32 +311,6 @@ export class MessagingService {
         const created = await data.insert(NOTIFICATION_EVENT_OBJECT, row);
         const id = Array.isArray(created) ? created[0]?.id : created?.id ?? created;
         return id != null ? String(id) : `evt_${Math.random().toString(36).slice(2)}`;
-    }
-
-    /**
-     * Expand an audience to a flat recipient list. P0 keeps explicit ids and
-     * email-shaped entries (email→id finishes at the inbox channel); deferred
-     * `role:`/`team:`/`owner_of:` selectors warn and are dropped until the P1
-     * `RecipientResolver` lands.
-     */
-    private resolveRecipients(audience: Audience): string[] {
-        const specs = Array.isArray(audience) ? audience : [audience as AudienceSpec];
-        const out: string[] = [];
-        for (const spec of specs) {
-            if (typeof spec !== 'string') {
-                this.ctx.logger.warn(
-                    `[messaging] owner_of: audience resolution lands in P1; '${JSON.stringify(spec)}' skipped`,
-                );
-                continue;
-            }
-            if (DEFERRED_SELECTOR.test(spec)) {
-                this.ctx.logger.warn(`[messaging] audience selector '${spec}' resolution lands in P1; skipped`);
-                continue;
-            }
-            if (spec.trim()) out.push(spec.trim());
-        }
-        // De-dup while preserving order.
-        return [...new Set(out)];
     }
 
     /**

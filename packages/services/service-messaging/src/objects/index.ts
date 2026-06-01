@@ -2,3 +2,4 @@
 
 export { InboxMessage } from './inbox-message.object.js';
 export { NotificationReceipt } from './notification-receipt.object.js';
+export { NotificationDelivery } from './notification-delivery.object.js';
