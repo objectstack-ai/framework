@@ -88,6 +88,34 @@ describe('migrateSysNotificationToEvent', () => {
         expect(d.updates[0].bindings).toEqual(['n1']);
     });
 
+    it('works on a Postgres-style driver where PRAGMA throws (information_schema fallback)', async () => {
+        // PRAGMA raises a syntax error on Postgres; columnExists must fall
+        // through to information_schema rather than reporting not_applicable.
+        const rows = [
+            { id: 'n1', recipient_id: 'u1', type: 'mention', title: 'hi', body: null, url: null, actor_name: null, is_read: false, read_at: null, created_at: '2026-01-01T00:00:00.000Z', organization_id: 'org_1' },
+        ];
+        const updates: Array<{ sql: string; bindings: any[] }> = [];
+        const pgDriver = {
+            async raw(sql: string, bindings: any[] = []) {
+                if (sql.startsWith('PRAGMA')) throw new Error('syntax error at or near "PRAGMA"');
+                if (sql.includes('information_schema')) {
+                    // bindings = [table, column]; report the column as present.
+                    return [{ column_name: bindings[1] }];
+                }
+                if (sql.startsWith('SELECT id, recipient_id')) return rows;
+                if (sql.startsWith('UPDATE')) { updates.push({ sql, bindings }); return []; }
+                return [];
+            },
+        } as any;
+        const e = fakeEngine();
+
+        const result = await migrateSysNotificationToEvent({ driver: pgDriver, data: e.engine });
+
+        expect(result.status).toBe('migrated');
+        expect(result.migrated).toBe(1);
+        expect(e.inserts.map((i) => i.object)).toEqual(['sys_inbox_message', 'sys_notification_receipt']);
+    });
+
     it('is idempotent — no legacy rows means already_done', async () => {
         const d = fakeDriver([]);
         const e = fakeEngine();

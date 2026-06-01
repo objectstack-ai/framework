@@ -103,12 +103,16 @@ export async function migrateSysNotificationToEvent(
             const createdAt = row.created_at != null ? String(row.created_at) : now();
             const title = row.title != null ? String(row.title) : (row.type != null ? String(row.type) : 'Notification');
             const isRead = row.is_read === true || row.is_read === 1 || row.is_read === '1';
+            // One topic for both the inbox row and the rewritten event, so the
+            // materialization and its L2 event never disagree (empty/null legacy
+            // `type` → 'legacy').
+            const eventTopic = row.type != null && String(row.type).length > 0 ? String(row.type) : 'legacy';
 
             // L5 in-app materialization.
             await data.insert(INBOX_OBJECT, {
                 user_id: recipientId,
                 notification_id: id,
-                topic: row.type ?? null,
+                topic: eventTopic,
                 title,
                 body_md: row.body ?? null,
                 severity: 'info',
@@ -134,7 +138,7 @@ export async function migrateSysNotificationToEvent(
                 EVENT_OBJECT,
                 {
                     id,
-                    topic: row.type != null && String(row.type).length > 0 ? String(row.type) : 'legacy',
+                    topic: eventTopic,
                     severity: 'info',
                     payload: {
                         title: row.title ?? null,
@@ -179,19 +183,30 @@ async function selectLegacyRows(driver: any): Promise<any[]> {
 }
 
 async function columnExists(driver: any, table: string, column: string): Promise<boolean> {
+    // SQLite path: PRAGMA table_info. On Postgres/others this raises a syntax
+    // error — swallow it *locally* and fall through to information_schema (the
+    // outer-catch version of this would never reach the fallback, making the
+    // migration silently no-op on every non-SQLite DB).
     try {
-        const rows: any[] = await driver.raw(`PRAGMA table_info("${table}")`);
-        if (Array.isArray(rows) && rows.length > 0) {
-            const list: any[] = Array.isArray(rows[0]) ? rows[0] : rows;
-            if (list.some((r: any) => r?.name != null)) {
-                return list.some((r: any) => r?.name === column);
-            }
+        const rows: any = await driver.raw(`PRAGMA table_info("${table}")`);
+        const list: any[] = Array.isArray(rows)
+            ? (Array.isArray(rows[0]) ? rows[0] : rows)
+            : [];
+        if (list.length > 0 && list.some((r: any) => r?.name != null)) {
+            return list.some((r: any) => r?.name === column);
         }
-        const result: any[] = await driver.raw(
+    } catch {
+        /* not SQLite — fall through to information_schema */
+    }
+    // Postgres / others.
+    try {
+        const result: any = await driver.raw(
             `SELECT column_name FROM information_schema.columns WHERE table_name = ? AND column_name = ?`,
             [table, column],
         );
-        const list: any[] = Array.isArray(result[0]) ? result[0] : result;
+        const list: any[] = Array.isArray(result)
+            ? (Array.isArray(result[0]) ? result[0] : result)
+            : [];
         return list.length > 0;
     } catch {
         return false;

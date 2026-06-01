@@ -101,17 +101,36 @@ flipped — the inbox is being populated the whole time.)
 
 - **Messaging is now foundational (auto-on).** Collaboration notifications
   require the messaging pipeline (with no `messaging` service registered,
-  `@mention`/assignment are skipped + warned, like the `notify` node). To make
-  this work out of the box, `messaging` was added to
-  `Serve.ALWAYS_ON_CAPABILITIES` (`packages/cli/src/commands/serve.ts`) — every
-  non-`minimal` preset now starts `MessagingServicePlugin`. **Cloud / per-project
-  hosts** load capabilities from the artifact's `requires` (no shared always-on
-  list), so artifact builders should include `messaging` in the foundational
-  `requires` to mirror this. `--preset minimal` still opts out (and then
-  collaboration notifications no-op by design).
-- **No mark-read endpoint yet.** P0 added the receipt object + `delivered` writes;
-  flipping to `read` needs a small write path (a receipt upsert action or REST
-  route). Decide whether that lands as the tail of P0 (alongside objectui) or P1.
+  `@mention`/assignment are skipped + warned, like the `notify` node). Two seams
+  guarantee it loads:
+  - `objectstack serve`: `messaging` is in `Serve.ALWAYS_ON_CAPABILITIES`
+    (`packages/cli/src/commands/serve.ts`) — every non-`minimal` preset starts it.
+  - Cloud / per-project kernels (`capability-loader.ts`): no always-on slate, so
+    the loader now expands `requires` to add `messaging` whenever `audit` is
+    present. Artifacts requiring `audit` therefore get the pipeline automatically.
+
+  `--preset minimal` (CLI) and artifacts that require neither `audit` nor
+  `messaging` opt out — collaboration notifications then no-op by design.
+
+- **Dedup is best-effort in P0.** `emit()` idempotency is a non-transactional
+  check-then-insert and `sys_notification.dedup_key` is a non-unique index, so a
+  concurrent duplicate `emit` with the same `dedupKey` can still produce two
+  events. Robust, race-safe dedup is part of the **P1 outbox** (durable spine +
+  unique dedup). Assignment `dedupKey`s are scoped by the record's write-version
+  (`updated_at`) so re-assignments aren't permanently suppressed.
+
+- **Event-log growth.** Every `emit()` writes one `sys_notification` event row.
+  High-frequency periodic `notify` flows accumulate rows unbounded; retention /
+  pruning is a P1+ concern (the event log is the durable audit of what was sent).
+- **No mark-read write path yet — required for the objectui cut-over.** P0 added
+  the receipt object + `delivered` writes, but nothing transitions a receipt to
+  `read`/`clicked`/`dismissed`. The bell's mark-read therefore needs a small
+  write ingress (a receipt-upsert REST route or an `sys_inbox_message` action
+  keyed on `(notification_id, user_id, channel)`), landed **together with** the
+  objectui bell repoint. The SDK `client.notifications.markRead/list({read})`
+  helpers target the old `sys_notification` read-state and must be repointed to
+  the receipt at the same time. Until then read-state is write-less (every row
+  shows as unread). Decide: tail of P0 (with objectui) vs P1.
 - **Translations**: `packages/platform-objects/src/apps/translations/*.generated.ts`
   still carry the old `sys_notification` field labels (`is_read`, etc.). Harmless
   (unused) but should be regenerated.

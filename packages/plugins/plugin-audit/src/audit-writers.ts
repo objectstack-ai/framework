@@ -426,6 +426,15 @@ async function writeAssignmentNotifications(
     // channel materializes the bell row + a delivered receipt. organizationId
     // is propagated so the recipient (same tenant as the action) sees the
     // materialized row through RLS.
+    // Dedup only a true double-fire of the SAME write: scope the key by the
+    // record's write-version (updated_at). Without a version component the key
+    // would be permanent and a legitimate re-assignment back to a prior owner
+    // would be silently suppressed. When no version field exists, omit the key
+    // (every assignment notifies — same as the pre-ADR-0030 direct-write path).
+    const writeVersion =
+      (params.after && typeof params.after === 'object'
+        ? params.after.updated_at ?? params.after.modified_at ?? params.after.updated_date
+        : null) ?? null;
     await messaging.emit({
       topic: 'collab.assignment',
       audience: [newOwner],
@@ -433,7 +442,9 @@ async function writeAssignmentNotifications(
       source: { object: params.object, id: params.recordId },
       actorId: params.actorId ?? undefined,
       organizationId: params.tenantId ?? undefined,
-      dedupKey: `collab.assignment:${params.object}:${params.recordId}:${newOwner}`,
+      dedupKey: writeVersion
+        ? `collab.assignment:${params.object}:${params.recordId}:${newOwner}:${writeVersion}`
+        : undefined,
       payload: {
         title: `${params.object} "${params.label}" assigned to you`,
       },

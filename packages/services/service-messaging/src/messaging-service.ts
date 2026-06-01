@@ -214,8 +214,11 @@ export class MessagingService {
             payload: input.payload ?? null,
             severity: input.severity ?? 'info',
             dedup_key: input.dedupKey ?? null,
-            source_object: input.source?.object ?? null,
-            source_id: input.source?.id ?? null,
+            // Normalize empty strings to null so the (source_object, source_id)
+            // index keys on real ids, never '' (producers may pass a bare object
+            // with no id — e.g. a comment thread_id with no record part).
+            source_object: str(input.source?.object) ?? null,
+            source_id: str(input.source?.id) ?? null,
             actor_id: input.actorId ?? null,
             organization_id: input.organizationId ?? null,
             created_at: this.now(),
