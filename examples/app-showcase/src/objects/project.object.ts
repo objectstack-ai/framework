@@ -74,6 +74,9 @@ export const Project = ObjectSchema.create({
       label: 'Project Status Flow',
       description: 'Projects progress through valid status transitions.',
       field: 'status',
+      // State machines validate *transitions*, so they run on update only —
+      // an insert sets the initial state (constrained by the select options).
+      events: ['update'] as const,
       message: 'Invalid project status transition.',
       transitions: {
         planned: ['active', 'cancelled'],
@@ -81,6 +84,25 @@ export const Project = ObjectSchema.create({
         on_hold: ['active', 'cancelled'],
         completed: [],
         cancelled: ['planned'],
+      },
+    },
+    {
+      // Advisory (severity: 'warning') state machine — demonstrates a soft
+      // transition guard: health should escalate/de-escalate one step at a
+      // time (green↔yellow↔red). A jump (e.g. green→red) is *flagged* (logged
+      // server-side) but NOT blocked, unlike the error-severity status flow.
+      type: 'state_machine' as const,
+      name: 'project_health_progression',
+      label: 'Project Health Progression (advisory)',
+      description: 'Health should change one step at a time; skips are warned, not blocked.',
+      field: 'health',
+      events: ['update'] as const,
+      severity: 'warning' as const,
+      message: 'Health changed by more than one step — confirm this is intentional.',
+      transitions: {
+        green: ['yellow'],
+        yellow: ['green', 'red'],
+        red: ['yellow'],
       },
     },
   ],

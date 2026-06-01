@@ -48,6 +48,8 @@ export const Account = ObjectSchema.create({
       label: 'Account Lifecycle',
       description: 'Accounts move prospect → active → churned, and can be reactivated.',
       field: 'status',
+      // Transitions are validated on update; insert sets the initial state.
+      events: ['update'] as const,
       message: 'Invalid account lifecycle transition.',
       transitions: {
         prospect: ['active', 'churned'],

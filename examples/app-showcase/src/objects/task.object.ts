@@ -66,6 +66,8 @@ export const Task = ObjectSchema.create({
       label: 'Task Status Flow',
       description: 'Tasks move forward through the board (reopen allowed from Done).',
       field: 'status',
+      // Transitions are validated on update; insert sets the initial state.
+      events: ['update'] as const,
       message: 'Invalid task status transition.',
       transitions: {
         backlog: ['todo'],
