@@ -51,6 +51,10 @@ export const Account = ObjectSchema.create({
     support_config: Field.json({ label: 'Support Config' }),
     // Captured only when an account churns; required by the `conditional` rule.
     churn_reason: Field.text({ label: 'Churn Reason', maxLength: 500 }),
+    // A plain text field (deliberately NOT Field.email) so the `format` rule's
+    // named `email` format is what enforces validity — demonstrating the named
+    // format branch rather than the field-type's built-in check.
+    billing_email: Field.text({ label: 'Billing Email', maxLength: 200 }),
   },
 
   // A third `state_machine` example with a different topology than
@@ -85,6 +89,18 @@ export const Account = ObjectSchema.create({
       message: 'Tax ID must look like 12-3456789.',
     },
     {
+      // `format` — the *named* format branch (`email` / `url` / `phone` / `json`),
+      // complementing the regex example above. Validates `billing_email` only
+      // when the write supplies a non-empty value.
+      type: 'format' as const,
+      name: 'billing_email_format',
+      label: 'Billing Email Format',
+      description: 'Billing email must be a valid email address.',
+      field: 'billing_email',
+      format: 'email' as const,
+      message: 'Billing Email must be a valid email address.',
+    },
+    {
       // `json_schema` — validate the JSON `support_config` blob against a
       // JSON Schema (compiled by ajv). Accepts a parsed object or a JSON
       // string; an unparseable string is itself a violation.
@@ -105,16 +121,17 @@ export const Account = ObjectSchema.create({
       },
     },
     {
-      // `conditional` — only enforce the inner rule when `when` holds. Here:
-      // an account may only be marked churned if it records why. The nested
-      // rule supplies the message; this conditional's severity (default
-      // `error`) decides that it blocks.
+      // `conditional` with BOTH branches — `when` picks `then` (true) or
+      // `otherwise` (false). A churned account must record *why*; a
+      // non-churned account must NOT carry a stale churn reason. The
+      // `otherwise` branch only flags an explicitly-set reason (it `has()`-
+      // guards the absent case), so ordinary non-churned writes are untouched.
       type: 'conditional' as const,
-      name: 'churn_requires_reason',
-      label: 'Churn Requires a Reason',
-      description: 'A churned account must record a churn reason.',
+      name: 'churn_reason_consistency',
+      label: 'Churn Reason Consistency',
+      description: 'A churned account needs a reason; a non-churned account must not have one.',
       when: P`record.status == 'churned'`,
-      message: 'Churn reason validation.',
+      message: 'Churn reason consistency.',
       then: {
         type: 'script' as const,
         name: 'churn_reason_present',
@@ -122,6 +139,14 @@ export const Account = ObjectSchema.create({
         // `has()` guards the absent-key case (a PATCH that never mentions
         // churn_reason); the equality checks catch an explicit null / blank.
         condition: P`!has(record.churn_reason) || record.churn_reason == null || record.churn_reason == ''`,
+      },
+      otherwise: {
+        type: 'script' as const,
+        name: 'churn_reason_absent',
+        message: 'A churn reason should only be set when the account is churned.',
+        // Only fires if a non-empty reason is explicitly present on a
+        // non-churned account — absent/blank is fine.
+        condition: P`has(record.churn_reason) && record.churn_reason != null && record.churn_reason != ''`,
       },
     },
   ],
