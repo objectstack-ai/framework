@@ -1321,6 +1321,8 @@ export class AutomationEngine implements IAutomationService {
         }
         // A synthetic flow view — executeNode/traverseNext only read `nodes`/`edges`.
         const subFlow = { nodes: region.nodes, edges: region.edges ?? [] } as unknown as FlowParsed;
+        // TODO(#1479): merge region step logs into the parent run log so
+        // per-iteration body steps surface in run observability.
         const regionSteps: StepLogEntry[] = [];
         try {
             await this.executeNode(entry, subFlow, variables, context, regionSteps);
