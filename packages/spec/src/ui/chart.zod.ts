@@ -43,35 +43,30 @@ export const ChartTypeSchema = lazySchema(() => z.enum([
   
   // Composition
   'treemap',
-  'sunburst',
   'sankey',
-  'word-cloud',
-  
+
   // Performance
   'gauge',
   'solid-gauge',
   'metric',
   'kpi',
   'bullet',
-  
-  // Geo
-  'choropleth',
-  'bubble-map',
-  'gl-map',
-  
+
   // Advanced
-  'heatmap',
   'radar',
-  'waterfall',
-  'box-plot',
-  'violin',
-  'candlestick',
-  'stock',
-  
+
   // Tabular
   'table',
   'pivot',
 ]));
+
+// NOTE: chart families that require data shapes the platform does not model
+// (OHLC for candlestick/stock, per-record distributions for box-plot/violin),
+// geographic data (choropleth/bubble-map/gl-map), or dependencies the default
+// Recharts renderer lacks (sunburst, heatmap, word-cloud, waterfall) were
+// removed from this taxonomy: advertising a chart type the renderer can't draw
+// is worse than not offering it. They can return via an opt-in renderer plugin
+// once there is real demand and a data model to back them.
 
 export type ChartType = z.infer<typeof ChartTypeSchema>;
 

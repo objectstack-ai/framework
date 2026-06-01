@@ -22,7 +22,7 @@ import { ChartTypeSchema } from './chart.zod';
 
 describe('ChartTypeSchema', () => {
   it('should accept all chart types', () => {
-    const types = ['metric', 'bar', 'line', 'pie', 'funnel', 'table', 'bubble', 'gauge', 'heatmap', 'pivot', 'grouped-bar'];
+    const types = ['metric', 'bar', 'line', 'pie', 'funnel', 'table', 'bubble', 'gauge', 'treemap', 'pivot', 'grouped-bar'];
     
     types.forEach(type => {
       expect(() => ChartTypeSchema.parse(type)).not.toThrow();

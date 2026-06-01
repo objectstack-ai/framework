@@ -40,8 +40,8 @@ describe('ChartTypeSchema', () => {
   });
 
   it('should accept all composition chart types', () => {
-    const types = ['treemap', 'sunburst', 'sankey'] as const;
-    
+    const types = ['treemap', 'sankey'] as const;
+
     types.forEach(type => {
       expect(() => ChartTypeSchema.parse(type)).not.toThrow();
     });
@@ -49,25 +49,26 @@ describe('ChartTypeSchema', () => {
 
   it('should accept all performance chart types', () => {
     const types = ['gauge', 'metric', 'kpi'] as const;
-    
-    types.forEach(type => {
-      expect(() => ChartTypeSchema.parse(type)).not.toThrow();
-    });
-  });
 
-  it('should accept all geo chart types', () => {
-    const types = ['choropleth', 'bubble-map'] as const;
-    
     types.forEach(type => {
       expect(() => ChartTypeSchema.parse(type)).not.toThrow();
     });
   });
 
   it('should accept all advanced chart types', () => {
-    const types = ['heatmap', 'radar', 'waterfall', 'box-plot', 'violin'] as const;
-    
+    const types = ['radar'] as const;
+
     types.forEach(type => {
       expect(() => ChartTypeSchema.parse(type)).not.toThrow();
+    });
+  });
+
+  it('should reject chart types dropped from the taxonomy (unimplementable)', () => {
+    const removed = ['sunburst', 'word-cloud', 'choropleth', 'bubble-map', 'gl-map',
+      'heatmap', 'waterfall', 'box-plot', 'violin', 'candlestick', 'stock'] as const;
+
+    removed.forEach(type => {
+      expect(() => ChartTypeSchema.parse(type)).toThrow();
     });
   });
 
@@ -173,14 +174,14 @@ describe('Real-World Chart Configuration Examples', () => {
     expect(() => ChartConfigSchema.parse(config)).not.toThrow();
   });
 
-  it('should accept heatmap for correlation analysis', () => {
+  it('should accept treemap for composition analysis', () => {
     const config: ChartConfig = {
-      type: 'heatmap',
-      title: 'User Activity Heatmap',
-      description: 'Hourly user activity by day of week',
+      type: 'treemap',
+      title: 'Hours by Status',
+      description: 'Relative size of each status bucket',
       showLegend: true,
       showDataLabels: false,
-      colors: ['#440154', '#31688e', '#35b779', '#fde724'],
+      colors: ['#7C3AED', '#06B6D4', '#10B981', '#F59E0B'],
     };
     expect(() => ChartConfigSchema.parse(config)).not.toThrow();
   });
@@ -196,11 +197,11 @@ describe('Real-World Chart Configuration Examples', () => {
     expect(() => ChartConfigSchema.parse(config)).not.toThrow();
   });
 
-  it('should accept waterfall chart for financial analysis', () => {
+  it('should accept sankey chart for flow analysis', () => {
     const config: ChartConfig = {
-      type: 'waterfall',
-      title: 'Profit & Loss Breakdown',
-      description: 'Revenue, costs, and profit components',
+      type: 'sankey',
+      title: 'Status Flow',
+      description: 'Flow weighted by record count',
       showLegend: false,
       showDataLabels: true,
       colors: ['#22c55e', '#ef4444', '#6366f1'],

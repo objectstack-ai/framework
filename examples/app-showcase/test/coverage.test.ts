@@ -50,7 +50,7 @@ describe('showcase coverage (introspected against the spec)', () => {
 
   it('covers every ChartType', () => {
     const expected = enumValues(ui.ChartTypeSchema);
-    expect(expected.length).toBeGreaterThan(30);
+    expect(expected.length).toBeGreaterThan(20);
     const used = new Set<string>();
     for (const w of ChartGalleryDashboard.widgets ?? []) if (w.type) used.add(w.type);
     expectFullCoverage('ChartType', expected, used);

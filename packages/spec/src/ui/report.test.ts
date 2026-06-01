@@ -157,7 +157,7 @@ describe('ReportChartSchema', () => {
   it('should accept different chart types', () => {
     const types: Array<ReportChart['type']> = [
       'bar', 'column', 'line', 'pie', 'donut', 'scatter', 'funnel',
-      'area', 'gauge', 'heatmap', 'waterfall', 'metric'
+      'area', 'gauge', 'treemap', 'sankey', 'metric'
     ];
 
     types.forEach(type => {

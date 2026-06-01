@@ -6,11 +6,11 @@ const task = 'showcase_task';
 const project = 'showcase_project';
 
 /**
- * Chart Gallery — one widget per chart family so the dashboard renderer can
- * be exercised against every visualisation type. `type` accepts the full
- * `ChartTypeSchema` taxonomy (38 members); this dashboard covers a
- * representative widget for each category (comparison, trend, distribution,
- * relationship, composition, performance, tabular).
+ * Chart Gallery — one widget per chart family so the dashboard renderer can be
+ * exercised against every visualisation type. Covers the full `ChartTypeSchema`
+ * taxonomy (comparison, trend, distribution, relationship, composition,
+ * performance, tabular) — every type here renders; the taxonomy intentionally
+ * excludes families the renderer cannot draw (geo maps, OHLC, distributions).
  */
 export const ChartGalleryDashboard: Dashboard = {
   name: 'showcase_chart_gallery',
@@ -46,30 +46,21 @@ export const ChartGalleryDashboard: Dashboard = {
     // ── Relationship ─────────────────────────────────────────────────────
     { id: 'scatter_estimate', type: 'scatter', title: 'Estimate vs Progress', object: task, aggregate: 'avg', valueField: 'estimate_hours', categoryField: 'progress', layout: { x: 0, y: 18, w: 4, h: 4 } },
     { id: 'bubble_budget', type: 'bubble', title: 'Budget Bubble', object: project, aggregate: 'sum', valueField: 'budget', categoryField: 'account', layout: { x: 4, y: 18, w: 4, h: 4 } },
-    { id: 'heatmap_load', type: 'heatmap', title: 'Load Heatmap', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 8, y: 18, w: 4, h: 4 } },
 
     // ── Composition ──────────────────────────────────────────────────────
-    { id: 'treemap_hours', type: 'treemap', title: 'Hours Treemap', object: task, aggregate: 'sum', valueField: 'estimate_hours', categoryField: 'status', layout: { x: 0, y: 22, w: 4, h: 4 } },
-    { id: 'sunburst_status', type: 'sunburst', title: 'Status Sunburst', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 4, y: 22, w: 4, h: 4 } },
-    { id: 'sankey_flow', type: 'sankey', title: 'Status Flow (Sankey)', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 8, y: 26, w: 4, h: 4 } },
-    { id: 'radar_priority', type: 'radar', title: 'Priority Radar', object: task, aggregate: 'count', categoryField: 'priority', layout: { x: 8, y: 22, w: 4, h: 4 } },
-    { id: 'waterfall_budget', type: 'waterfall', title: 'Budget Waterfall', object: project, aggregate: 'sum', valueField: 'budget', categoryField: 'status', layout: { x: 0, y: 26, w: 6, h: 4 } },
+    { id: 'treemap_hours', type: 'treemap', title: 'Hours Treemap', object: task, aggregate: 'sum', valueField: 'estimate_hours', categoryField: 'status', layout: { x: 8, y: 18, w: 4, h: 4 } },
+    { id: 'sankey_flow', type: 'sankey', title: 'Status Flow (Sankey)', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 0, y: 22, w: 4, h: 4 } },
+    { id: 'radar_priority', type: 'radar', title: 'Priority Radar', object: task, aggregate: 'count', categoryField: 'priority', layout: { x: 4, y: 22, w: 4, h: 4 } },
+
+    // ── Performance ──────────────────────────────────────────────────────
+    { id: 'solid_gauge', type: 'solid-gauge', title: 'Solid Gauge', object: task, aggregate: 'avg', valueField: 'progress', layout: { x: 8, y: 22, w: 4, h: 4 } },
+
+    // ── Comparison / trend variants ──────────────────────────────────────
+    { id: 'bipolar_bar', type: 'bi-polar-bar', title: 'Bi-polar Bar', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 0, y: 26, w: 6, h: 4 } },
+    { id: 'step_line', type: 'step-line', title: 'Step Line', object: task, aggregate: 'count', categoryField: 'created_at', categoryGranularity: 'week', layout: { x: 6, y: 26, w: 6, h: 4 } },
 
     // ── Tabular ──────────────────────────────────────────────────────────
-    { id: 'table_projects', type: 'table', title: 'Projects Table', object: project, aggregate: 'count', layout: { x: 6, y: 26, w: 6, h: 4 } },
-    { id: 'pivot_tasks', type: 'pivot', title: 'Tasks Pivot', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 0, y: 30, w: 12, h: 4 } },
-
-    // ── Remaining chart families (full ChartType coverage) ───────────────
-    { id: 'bipolar_bar', type: 'bi-polar-bar', title: 'Bi-polar Bar', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 0, y: 34, w: 3, h: 4 } },
-    { id: 'step_line', type: 'step-line', title: 'Step Line', object: task, aggregate: 'count', categoryField: 'created_at', categoryGranularity: 'week', layout: { x: 3, y: 34, w: 3, h: 4 } },
-    { id: 'solid_gauge', type: 'solid-gauge', title: 'Solid Gauge', object: task, aggregate: 'avg', valueField: 'progress', layout: { x: 6, y: 34, w: 3, h: 4 } },
-    { id: 'word_cloud', type: 'word-cloud', title: 'Label Cloud', object: task, aggregate: 'count', categoryField: 'labels', layout: { x: 9, y: 34, w: 3, h: 4 } },
-    { id: 'choropleth', type: 'choropleth', title: 'Choropleth', object: task, aggregate: 'count', categoryField: 'location', layout: { x: 0, y: 38, w: 4, h: 4 } },
-    { id: 'bubble_map', type: 'bubble-map', title: 'Bubble Map', object: task, aggregate: 'count', categoryField: 'location', layout: { x: 4, y: 38, w: 4, h: 4 } },
-    { id: 'gl_map', type: 'gl-map', title: 'GL Map', object: task, aggregate: 'count', categoryField: 'location', layout: { x: 8, y: 38, w: 4, h: 4 } },
-    { id: 'box_plot', type: 'box-plot', title: 'Estimate Box Plot', object: task, aggregate: 'avg', valueField: 'estimate_hours', categoryField: 'status', layout: { x: 0, y: 42, w: 3, h: 4 } },
-    { id: 'violin', type: 'violin', title: 'Estimate Violin', object: task, aggregate: 'avg', valueField: 'estimate_hours', categoryField: 'priority', layout: { x: 3, y: 42, w: 3, h: 4 } },
-    { id: 'candlestick', type: 'candlestick', title: 'Budget Candlestick', object: project, aggregate: 'sum', valueField: 'budget', categoryField: 'start_date', categoryGranularity: 'month', layout: { x: 6, y: 42, w: 3, h: 4 } },
-    { id: 'stock', type: 'stock', title: 'Spend Stock', object: project, aggregate: 'sum', valueField: 'spent', categoryField: 'start_date', categoryGranularity: 'month', layout: { x: 9, y: 42, w: 3, h: 4 } },
+    { id: 'table_projects', type: 'table', title: 'Projects Table', object: project, aggregate: 'count', layout: { x: 0, y: 30, w: 6, h: 4 } },
+    { id: 'pivot_tasks', type: 'pivot', title: 'Tasks Pivot', object: task, aggregate: 'count', categoryField: 'status', layout: { x: 6, y: 30, w: 6, h: 4 } },
   ],
 };
