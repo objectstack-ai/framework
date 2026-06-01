@@ -4,6 +4,22 @@
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0003](./0003-package-as-first-class-citizen.md) (package + versioned releases), [ADR-0004](./0004-cloud-multi-kernel.md) (cloud multi-kernel), [ADR-0010](./0010-metadata-protection-model.md) (L1/L2/L3 protection), [ADR-0016](./0016-studio-package-authoring-and-publish.md) (package authoring & publish, local export/import)
 **Consumers**: `@objectstack/core` (kernel, plugin-loader, security), `@objectstack/runtime` (sandbox, marketplace install), `@objectstack/cli`, `@objectstack/spec/system` (ObjectStackManifest), `@objectstack/spec/cloud`, `../objectui` (Studio)
+**Related**: [ADR-0026](./0026-client-ui-plugin-distribution.md) (client-side UI plugins — out of scope here), [ADR-0007](./0007-settings-manifest-and-kv-store.md) (settings + secret store), [ADR-0022](./0022-connectors-vs-messaging-channels.md)/[ADR-0023](./0023-openapi-to-connector-generator.md)/[ADR-0024](./0024-mcp-connectors.md) (connectors)
+
+---
+
+> **Revision note (2026-06-01) — read §3.10 first.** §§1–3.9 capture the original
+> two-channel framing (declarative JSON package vs. `.osplugin` code plugin).
+> A scenario review (what the marketplace actually needs to carry) surfaced six
+> refinements, consolidated in **§3.10**. The headline corrections: (1) trust is
+> **default-deny** — third-party plugins default to an isolated tier, in-process
+> `node` is opt-in via verification; (2) `@objectstack/*` deps are **externalized
+> as peer deps** (host-provided singletons), never bundled; (3) compatibility is
+> gated **protocol-first**, not on platform semver; (4) plugin permissions compose
+> with the **object/field-level RLS** layer; (5) secrets live in the **settings/KV
+> store** (ADR-0007), never in the artifact; (6) connectors span a declarative
+> (OpenAPI/MCP-generated) sub-path, not only hand-written code plugins. Client-side
+> **UI** plugins are split out to ADR-0026.
 
 ---
 
@@ -79,6 +95,12 @@ introduces a **trust boundary** the JSON flow never had.
   but the first slice targets Tier 0/Tier 1.
 - Replacing the metadata-only JSON flow — it remains the fast path and becomes
   a special case.
+- **Client-side UI plugins** (custom field renderers, view types, widgets) —
+  these load in the browser and need a different module/sandbox model; see
+  ADR-0026.
+- **Sandboxed-script packages** (validations, formulas, small automations) — these
+  ride the existing JSON flow + QuickJS bodies (the "L1" layer in §3.10) and need
+  neither the `.osplugin` pipeline nor an install-time permission prompt.
 
 ## 2. Decision
 
@@ -146,6 +168,14 @@ checks the existing `PluginPermissionEnforcer` already implements
   Only for plugins that genuinely need native addons or very large deps; slower
   and requires a toolchain/network at install. Disallowed for unverified
   publishers (§3.7).
+
+**Externalize the host runtime (both strategies).** `@objectstack/*` packages
+(`core`, `spec`, …) are declared as **peerDependencies** and marked `external` in
+the bundle — the plugin binds to the **host's** copy at load time. Bundling them
+would create a second engine/Zod instance inside the plugin (duplicate registries,
+broken `instanceof`, double validation). Rule: **bundle third-party libs,
+externalize `@objectstack/*` (host-provided singletons)**. Version compatibility
+of these peers is gated by §3.8.
 
 ### 3.4 Build → sign → publish pipeline
 
@@ -226,8 +256,13 @@ code is loaded:
 | **T1 Sandboxed** | `sandbox` | QuickJS-WASM (`quickjs-runner.ts`); no Node API; only capability-gated `ctx.api/crypto/log` | Pure-logic plugins (hooks, formulas, transforms) | sandbox exists; extend to "script plugins" |
 | **T2 Out-of-process** | `worker` | Worker thread / child process / WASM component + RPC bridge; crash/timeout/memory isolation | Untrusted 3rd-party needing richer APIs | reserved (future) |
 
-The marketplace may **force a lower-privilege tier** for unverified publishers
-(e.g. only `sandbox`/`worker`).
+**Trust is default-deny.** Tier 0 (`node`, in-process) means *arbitrary code in
+the host process* — the platform's single biggest risk surface. It is **reserved
+for first-party and verified/enterprise-signed publishers**. Community / unverified
+third-party plugins **default to T1 (`sandbox`) or T2 (`worker`)**; `node` is an
+opt-in privilege unlocked only after publisher verification. The marketplace
+enforces this at publish time (an unverified publisher cannot ship `runtime:
+'node'`), not merely "may force" it at install.
 
 ### 3.7 Security model (reuses existing components)
 
@@ -257,9 +292,14 @@ Reuse the `sys_*` shape:
 | Immutable version | `sys_plugin_version` (semver, checksum, signature, `permissions`, `engines`, SBOM, blob pointer, `status`) |
 | Install state | `sys_plugin_installation` (`env_id`, `version_id`, `granted_permissions`, `is_preview`, `status`) |
 
-`engines` ranges gate compatibility; support deprecate/yank. **Update** = install
-the new version side-by-side, swap the installation pointer; if the new version
-**widens permissions**, require re-consent before activation.
+Compatibility is gated **protocol-first** (per §3.10 #3): the host checks that it
+provides every `capabilities.implements[].protocol` at a compatible version, then
+falls back to `engines.platform`/`engines.protocol` ranges as a secondary guard.
+This is more stable than platform semver and reuses the existing capability
+declaration. Support deprecate/yank. **Update** = install the new version
+side-by-side, swap the installation pointer; if the new version **widens
+permissions** (services, hooks, network hosts, or RLS scopes — §3.10 #4), require
+re-consent before activation.
 
 ### 3.9 Composition with metadata packages (unification)
 
@@ -268,6 +308,56 @@ A plugin may also ship declarative metadata via `contributes`. Install is then a
 pure-element package is the degenerate plugin — `dist` empty, `permissions`
 empty — so it falls straight back onto today's simple JSON path. One install
 pipeline, two ends of a spectrum.
+
+### 3.10 Refinements from scenario review (2026-06-01)
+
+A pass over *what the marketplace must actually carry* (vertical apps, templates,
+drivers, connectors, AI extensions, auth, automation, governance, UI widgets)
+yielded a sharper model and six corrections.
+
+**Three artifact layers, not two.** The metadata/code split is really a spectrum:
+
+| Layer | Form | Install trust decision | Channel |
+|---|---|---|---|
+| **L0 declarative** | objects/views/flows/dashboards/permissions/themes/translations JSON | none (it is data) | existing JSON hot-register |
+| **L1 declarative + sandboxed script** | JSON carrying L1 expression / L2 `ScriptBody` (validations, formulas, small automations) | "scripts allowed" only; runs in the existing QuickJS sandbox | JSON flow — **no `.osplugin`** |
+| **L2 code plugin** | real npm deps + host APIs (drivers, connectors, AI, auth, …) | explicit permission consent + signature | `.osplugin` (this ADR) |
+
+Recognizing **L1** explicitly means most "custom logic" (the bulk of what users
+think needs code) rides the simple JSON flow + sandbox and never touches the
+heavy code-plugin pipeline. This *strengthens* the §3.9 superset/spectrum claim.
+
+**The six corrections:**
+
+1. **Default-deny trust (see §3.6).** T0 in-process is reserved for first-party /
+   verified publishers; third-party defaults to T1/T2; enforced at publish.
+2. **Externalize `@objectstack/*` (see §3.3).** Host runtime is a peer-dep
+   singleton; bundling it forks the engine.
+3. **Protocol-first compatibility (see §3.8).** Gate primarily on the
+   `capabilities.implements[].protocol` version the host provides (e.g.
+   `storage.protocol.v1`), with `engines.platform` as a secondary guard —
+   protocols are stable across platform major versions, semver is not.
+4. **Permissions compose with RLS.** The coarse service/hook/file/network gate is
+   necessary but not sufficient for connectors. Data-affecting permissions
+   (which objects/fields a plugin may read/write, which OAuth scopes, which
+   external hosts) must compose with the platform's object/field-level security
+   (`plugin-security` / RLS), not be a parallel coarse gate. The granted set in
+   `sys_plugin_installation` therefore references RLS scopes, not just service
+   names.
+5. **Secrets never ship in the artifact.** Connectors need credentials
+   (API keys, OAuth tokens). The `.osplugin` must not carry secrets; the
+   `configuration` schema marks secret fields, and install wires them to the
+   platform settings / KV secret store (ADR-0007) via secret-refs. The plugin
+   reads them through `PluginContext`, gated by the network/service permission.
+6. **Connectors span declarative + code.** With ADR-0023 (OpenAPI→connector) and
+   ADR-0024 (MCP connectors), any integration describable by OpenAPI/MCP is a
+   **declarative connector config** (closer to L0/L1); only integrations needing
+   custom auth, pagination, or streaming fall to an L2 code plugin. The connector
+   catalog is therefore not monolithically "code plugins."
+
+**Client-side UI plugins** (field renderers, view types, widgets) are a real
+marketplace need this ADR does **not** cover — they load in the browser and need
+a module-federation / iframe-sandbox model. Split to **ADR-0026**.
 
 ## 4. Phasing
 
@@ -346,6 +436,10 @@ pipeline, two ends of a spectrum.
 - [ADR-0004](./0004-cloud-multi-kernel.md) — Cloud multi-kernel
 - [ADR-0010](./0010-metadata-protection-model.md) — L1/L2/L3 protection
 - [ADR-0016](./0016-studio-package-authoring-and-publish.md) — Package authoring & publish; local export/import (§9)
+- [ADR-0007](./0007-settings-manifest-and-kv-store.md) — Settings manifest + KV/secret store (§3.10 #5)
+- [ADR-0022](./0022-connectors-vs-messaging-channels.md) / [ADR-0023](./0023-openapi-to-connector-generator.md) / [ADR-0024](./0024-mcp-connectors.md) — Connectors: declarative generation vs. code plugins (§3.10 #6)
+- [ADR-0026](./0026-client-ui-plugin-distribution.md) — Client-side UI plugin distribution (browser module/sandbox)
+- `packages/plugins/plugin-security/` — RBAC/RLS; composes with plugin permissions (§3.10 #4)
 - `packages/core/src/plugin-loader.ts` — plugin loading, lifecycle, health, signature
 - `packages/core/src/types.ts` — `Plugin` (`init/start/destroy`) + `PluginContext`
 - `packages/core/src/security/plugin-permission-enforcer.ts` — capability-based enforcement
