@@ -239,7 +239,7 @@ export class MessagingService {
             severity: input.severity ?? 'info',
             recipients,
             channels: input.channels,
-            actionUrl: str(payload.url) ?? str(payload.actionUrl),
+            actionUrl: actionUrlFor(input, payload),
             payload: input.payload,
         };
 
@@ -267,7 +267,7 @@ export class MessagingService {
             title: str(payload.title) ?? input.topic,
             body: str(payload.body) ?? '',
             severity: input.severity ?? 'info',
-            actionUrl: str(payload.url) ?? str(payload.actionUrl),
+            actionUrl: actionUrlFor(input, payload),
         };
         const deliveries: DeliveryOutcome[] = [];
         for (const { recipient, channels, notBefore } of targets) {
@@ -391,4 +391,20 @@ function str(v: unknown): string | undefined {
     if (v == null) return undefined;
     const s = String(v);
     return s.length > 0 ? s : undefined;
+}
+
+/**
+ * The deep-link the in-app materialization should carry. An explicit
+ * `payload.url`/`payload.actionUrl` wins; otherwise, when the emit names a
+ * `source` record, synthesize an app-relative `/{object}/{id}` link so the
+ * materialization is self-sufficient for navigation (the bell no longer has the
+ * L2 event's `source_object/source_id` to fall back on — ADR-0030 L5). Returns
+ * `undefined` when there is nothing to link to.
+ */
+function actionUrlFor(input: EmitInput, payload: Record<string, unknown>): string | undefined {
+    const explicit = str(payload.url) ?? str(payload.actionUrl);
+    if (explicit) return explicit;
+    const obj = str(input.source?.object);
+    const id = str(input.source?.id);
+    return obj && id ? `/${obj}/${id}` : undefined;
 }

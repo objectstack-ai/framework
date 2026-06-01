@@ -105,6 +105,39 @@ describe('MessagingService', () => {
             expect(result.deliveries[0]).toMatchObject({ channel: 'inbox', recipient: 'user_1', ok: true, externalId: 'row_1' });
         });
 
+        it('synthesizes an action_url from source when no explicit url is given (ADR-0030 L5 deep-link)', async () => {
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+            await service.emit({
+                topic: 'collab.assignment',
+                audience: ['user_1'],
+                payload: { title: 'Assigned to you' },
+                source: { object: 'showcase_task', id: 't_42' },
+            });
+            // The materialization carries a navigable link the bell can follow,
+            // even though the producer didn't set payload.url.
+            expect(inbox.seen[0].notification.actionUrl).toBe('/showcase_task/t_42');
+        });
+
+        it('prefers an explicit payload.url over the source-derived link', async () => {
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+            await service.emit({
+                topic: 't',
+                audience: ['user_1'],
+                payload: { title: 'Hi', url: '/custom/landing' },
+                source: { object: 'showcase_task', id: 't_42' },
+            });
+            expect(inbox.seen[0].notification.actionUrl).toBe('/custom/landing');
+        });
+
+        it('leaves action_url undefined when there is neither a url nor a source', async () => {
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+            await service.emit({ topic: 't', audience: ['user_1'], payload: { title: 'Hi' } });
+            expect(inbox.seen[0].notification.actionUrl).toBeUndefined();
+        });
+
         it('accepts a single (non-array) audience entry', async () => {
             const inbox = recordingChannel('inbox');
             service.registerChannel(inbox.channel);
