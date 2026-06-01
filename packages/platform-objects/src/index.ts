@@ -8,7 +8,7 @@
  *
  * Subpath imports available:
  *   @objectstack/platform-objects/identity     — user, session, org, team, api-key, ...
- *   @objectstack/platform-objects/security     — role, permission-set
+ *   @objectstack/platform-objects/security     — (empty; RBAC moved to @objectstack/plugin-security, sharing to @objectstack/plugin-sharing per ADR-0029)
  *   @objectstack/platform-objects/audit        — audit-log, presence
  *   @objectstack/platform-objects/integration  — (empty; sys_webhook moved to @objectstack/plugin-webhooks per ADR-0029)
  *   @objectstack/platform-objects/metadata     — sys_metadata, sys_metadata_history

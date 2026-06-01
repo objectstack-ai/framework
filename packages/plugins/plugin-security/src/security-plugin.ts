@@ -132,6 +132,20 @@ export class SecurityPlugin implements Plugin {
       // can resolve them by name when SecurityPlugin middleware queries
       // `metadata.list('permissions')`.
       permissions: this.bootstrapPermissionSets,
+      // ADR-0029 D7 — contribute the RBAC entries into the Setup app's
+      // `group_access_control` slot. This plugin owns these objects (K2), so it
+      // ships their menu too; when the plugin is absent the entries don't appear.
+      navigationContributions: [
+        {
+          app: 'setup',
+          group: 'group_access_control',
+          priority: 100,
+          items: [
+            { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
+            { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
+          ],
+        },
+      ],
     });
 
     ctx.logger.info('Security Plugin initialized', {

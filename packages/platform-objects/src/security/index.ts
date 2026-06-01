@@ -2,13 +2,17 @@
 
 /**
  * platform-objects/security — Security & Permission Platform Objects
+ *
+ * **Empty since ADR-0029 (K2).** The RBAC objects (role / permission-set /
+ * user-permission-set / role-permission-set + default permission sets) moved
+ * to `@objectstack/plugin-security`, and the sharing objects (record-share /
+ * sharing-rule / share-link) moved to `@objectstack/plugin-sharing`, so each
+ * plugin owns its data model and behavior as one unit. Import them from the
+ * owning plugin instead.
+ *
+ * The subpath (`@objectstack/platform-objects/security`) is retained as an
+ * empty barrel to avoid churning the package `exports` map / tsup entries
+ * during the incremental decomposition; it can be removed at ADR-0029 K4.
  */
 
-export { SysRole } from './sys-role.object.js';
-export { SysPermissionSet } from './sys-permission-set.object.js';
-export { SysUserPermissionSet } from './sys-user-permission-set.object.js';
-export { SysRolePermissionSet } from './sys-role-permission-set.object.js';
-export { SysRecordShare } from './sys-record-share.object.js';
-export { SysSharingRule } from './sys-sharing-rule.object.js';
-export { SysShareLink } from './sys-share-link.object.js';
-export { defaultPermissionSets } from './default-permission-sets.js';
+export {};

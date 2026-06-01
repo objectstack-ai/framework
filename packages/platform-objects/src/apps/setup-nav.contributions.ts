@@ -9,11 +9,13 @@
  * in `@objectstack/platform-objects`. They are registered alongside
  * `SETUP_APP` (via `plugin-auth`'s `manifest.register`).
  *
- * `group_integrations` is intentionally **absent** here — its Webhooks /
- * Webhook Deliveries entries are contributed by `@objectstack/plugin-webhooks`,
- * which owns `sys_webhook` / `sys_webhook_delivery` (ADR-0029 K2.a). As each
- * remaining domain moves to its capability plugin (K2.b+), its entries move
- * out of this file into that plugin the same way.
+ * Some entries are intentionally contributed by the capability plugin that owns
+ * the underlying objects rather than living here (ADR-0029 K2):
+ *   - `group_integrations` → `@objectstack/plugin-webhooks` (K2.a)
+ *   - `group_access_control` Roles / Permission Sets → `@objectstack/plugin-security`
+ *   - `group_access_control` Sharing Rules / Record Shares → `@objectstack/plugin-sharing`
+ * As each remaining domain moves to its capability plugin, its entries move out
+ * of this file into that plugin the same way.
  *
  * Priority 100 keeps platform-objects base entries ahead of later
  * contributions in the same group (mirrors object owner priority).
@@ -56,12 +58,15 @@ export const SETUP_NAV_CONTRIBUTIONS: NavigationContribution[] = [
   {
     app: 'setup',
     group: 'group_access_control',
-    priority: BASE_PRIORITY,
+    // Priority 300 keeps API Keys after plugin-security's Roles / Permission
+    // Sets (100) and plugin-sharing's Sharing Rules / Record Shares (200),
+    // preserving the original menu order.
+    priority: 300,
     items: [
-      { id: 'nav_roles', type: 'object', label: 'Roles', objectName: 'sys_role', icon: 'shield-check' },
-      { id: 'nav_permission_sets', type: 'object', label: 'Permission Sets', objectName: 'sys_permission_set', icon: 'lock' },
-      { id: 'nav_sharing_rules', type: 'object', label: 'Sharing Rules', objectName: 'sys_sharing_rule', icon: 'share-2', requiresObject: 'sys_sharing_rule', requiredPermissions: ['manage_platform_settings'] },
-      { id: 'nav_record_shares', type: 'object', label: 'Record Shares', objectName: 'sys_record_share', icon: 'link', requiresObject: 'sys_record_share', requiredPermissions: ['manage_platform_settings'] },
+      // Roles / Permission Sets are contributed by @objectstack/plugin-security
+      // and Sharing Rules / Record Shares by @objectstack/plugin-sharing
+      // (ADR-0029 K2). Only API Keys (sys_api_key, an identity object owned by
+      // plugin-auth) remains a platform-objects base entry here.
       { id: 'nav_api_keys', type: 'object', label: 'API Keys', objectName: 'sys_api_key', icon: 'key', requiredPermissions: ['manage_platform_settings'] },
     ],
   },

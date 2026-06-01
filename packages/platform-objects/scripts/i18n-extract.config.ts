@@ -51,15 +51,10 @@ import {
 } from '../src/identity/index.js';
 
 // ── Security ──────────────────────────────────────────────────────────────
-import {
-  SysRole,
-  SysPermissionSet,
-  SysUserPermissionSet,
-  SysRolePermissionSet,
-  SysRecordShare,
-  SysSharingRule,
-  SysShareLink,
-} from '../src/security/index.js';
+// RBAC objects moved to @objectstack/plugin-security and sharing objects to
+// @objectstack/plugin-sharing (ADR-0029 K2 / D8). Their i18n extraction must
+// move to those plugins before the next regeneration; existing generated
+// bundles keep working until then.
 
 // ── Audit ─────────────────────────────────────────────────────────────────
 import {
@@ -147,14 +142,8 @@ export default defineStack({
     SysOauthConsent,
     SysJwks,
 
-    // Security
-    SysRole,
-    SysPermissionSet,
-    SysUserPermissionSet,
-    SysRolePermissionSet,
-    SysRecordShare,
-    SysSharingRule,
-    SysShareLink,
+    // Security: RBAC moved to @objectstack/plugin-security, sharing to
+    // @objectstack/plugin-sharing (ADR-0029 K2 / D8).
 
     // Audit
     SysAuditLog,

@@ -14,7 +14,7 @@ import {
   SysUserPermissionSet,
   SysRolePermissionSet,
   defaultPermissionSets,
-} from '@objectstack/platform-objects/security';
+} from './objects/index.js';
 
 export const SECURITY_PLUGIN_ID = 'com.objectstack.plugin-security';
 export const SECURITY_PLUGIN_VERSION = '1.0.0';

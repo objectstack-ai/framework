@@ -3,7 +3,7 @@
 import type { Plugin, PluginContext } from '@objectstack/core';
 import type { EngineMiddleware, OperationContext } from '@objectstack/objectql';
 import type { IHttpServer } from '@objectstack/spec/contracts';
-import { SysRecordShare, SysSharingRule, SysShareLink } from '@objectstack/platform-objects/security';
+import { SysRecordShare, SysSharingRule, SysShareLink } from './objects/index.js';
 import { SysDepartment, SysDepartmentMember } from '@objectstack/platform-objects/identity';
 import { SharingService, type SharingEngine } from './sharing-service.js';
 import { SharingRuleService } from './sharing-rule-service.js';
@@ -89,6 +89,20 @@ export class SharingServicePlugin implements Plugin {
       defaultDatasource: 'cloud',
       namespace: 'sys',
       objects: [SysRecordShare, SysSharingRule, SysDepartment, SysDepartmentMember, SysShareLink],
+      // ADR-0029 D7 — contribute the sharing entries into the Setup app's
+      // `group_access_control` slot (priority 200 so they sit after plugin-
+      // security's Roles / Permission Sets). This plugin owns these objects (K2).
+      navigationContributions: [
+        {
+          app: 'setup',
+          group: 'group_access_control',
+          priority: 200,
+          items: [
+            { id: 'nav_sharing_rules', type: 'object', label: 'Sharing Rules', objectName: 'sys_sharing_rule', icon: 'share-2', requiresObject: 'sys_sharing_rule', requiredPermissions: ['manage_platform_settings'] },
+            { id: 'nav_record_shares', type: 'object', label: 'Record Shares', objectName: 'sys_record_share', icon: 'link', requiresObject: 'sys_record_share', requiredPermissions: ['manage_platform_settings'] },
+          ],
+        },
+      ],
     });
     ctx.logger.info('SharingServicePlugin: schema registered');
   }
