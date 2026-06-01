@@ -1,153 +1,169 @@
-# ADR-0031: Advanced flow-node executors (loop / parallel / boundary) and the DAG invariant
+# ADR-0031: Structured control-flow for flows (loop / parallel / try-catch) — native + AI-authored, BPMN as interop
 
-**Status**: Proposed (2026-06-01) — awaiting decision on D1–D4
+**Status**: Proposed (2026-06-01)
 **Deciders**: ObjectStack Protocol Architects
-**Builds on**: [ADR-0018](./0018-unified-node-action-registry.md) (open action registry — node types are an open vocabulary, executors are the source of truth), [ADR-0019](./0019-approval-as-flow-node.md) (durable-pause node via suspend/resume), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI flow authoring — the design center)
+**Builds on**: [ADR-0018](./0018-unified-node-action-registry.md) (open action registry — node types are an open vocabulary, executors are the source of truth), [ADR-0019](./0019-approval-as-flow-node.md) (durable-pause node via suspend/resume), [ADR-0010](./0010-nl-to-flow-authoring.md) + [ADR-0011](./0011-actions-as-ai-tools.md) (AI flow authoring — **the design center**)
 **Consumers**: `@objectstack/services/service-automation` (engine + builtin executors), `@objectstack/spec` (`automation/flow.zod.ts`, `automation/bpmn-interop.zod.ts`, `studio/flow-builder.zod.ts`), `../objectui` (flow designer)
 
 ---
 
 ## TL;DR
 
-The flow designer (and the spec's `FlowNodeAction` / BPMN-interop / flow-builder
-palette) expose `loop`, `parallel_gateway`, `join_gateway`, `boundary_event`,
-but the engine has **no executors** for them (and `loop` is a no-op stub). This
-session shipped executors for the two tractable ones — **`wait`** (durable
-timer/signal pause) and **`subflow`** (invoke another flow). The remaining four
-need decisions because they collide with a deliberate engine invariant and with
-a now-valued capability:
+The flow designer and protocol expose BPMN-style control nodes — `loop`,
+`parallel_gateway`, `join_gateway`, `boundary_event` — but the engine has **no
+executors** for them (`loop` is a no-op stub). The naive fix is "implement those
+four BPMN token nodes." **This ADR argues against that** and instead adopts
+**structured control-flow constructs** — a `loop` *container*, a `parallel`
+*block*, and `try/catch/retry` — as the **native + AI-authored model**, keeping
+the BPMN gateway/boundary node types in the protocol only as the **import/export
+representation** that maps to/from the structured constructs.
 
-1. **The engine is DAG-only.** `AutomationEngine.detectCycles()` throws on *any*
-   back-edge ("Only DAG flows are allowed"). A classic inline loop (body →
-   loop back-edge, Salesforce/Power-Automate "Apply to each") therefore **cannot
-   be registered** without relaxing this invariant.
-2. **BPMN import/export is valued** ([ADR-0018] open registry +
-   `automation/bpmn-interop.zod.ts`). So the *protocol* should stay
-   BPMN-complete (keep `parallel_gateway` / `join_gateway` / `boundary_event` as
-   modeling concepts) even where the *runtime* doesn't execute them yet.
-3. **The repo is multi-agent.** Edits to the shared core `engine.ts`
-   (traversal, cycle detection, error path) carry real collision risk and should
-   be deliberate, not incidental.
+The deciding lens is **AI authoring of flow metadata** ([ADR-0010/0011]). A
+free-form node+edge graph with BPMN gateways/boundary/back-edges is **easy to
+make semantically broken** (orphan joins, unbalanced gateways, deadlocks,
+infinite cycles) — exactly the failure an LLM will produce confidently. A small
+set of **structured constructs is well-formed by construction**, locally
+composable, and statically analyzable — the right substrate for AI.
 
-This ADR records the options and a recommendation per decision; it does **not**
-change code. Implementation follows once D1–D4 are decided.
+(Already shipped on this line: `wait` (#1469, durable timer/signal pause) and
+`subflow` (synchronous reusable invoke). `subflow` stays a first-class *reuse*
+primitive — it is **not** the loop mechanism.)
 
 ## Context — current state (verified 2026-06-01)
 
-| Node type | Designer | Spec (`FlowNodeAction`) | BPMN-interop | Engine executor |
-|---|---|---|---|---|
-| start, end, decision, assignment, screen, script, notify, http_request, connector_action, CRUD | ✅ | ✅ | — | ✅ |
-| `wait` | ✅ | ✅ | — | ✅ **shipped (#1469)** — durable timer/signal pause |
-| `subflow` | ✅ | ✅ | — | ✅ **shipped** — synchronous child-flow invoke |
-| `approval` | ✅ | ✅ | — | ✅ (plugin-approvals — durable pause) |
-| `loop` | ✅ | ✅ | — | ⚠️ **stub** — sets `$loopItems`/`$loopIndex`, does **not** iterate a body |
-| `parallel_gateway` | ✅ | ✅ | `bpmn:parallelGateway` | ❌ none |
-| `join_gateway` | ✅ | ✅ | `bpmn:parallelGateway` (join) | ❌ none |
-| `boundary_event` | ✅ | ✅ + `boundaryConfig` | `bpmn:boundaryEvent` | ❌ none |
+- **The engine is DAG-only.** `registerFlow()` → `detectCycles()` throws on any
+  back-edge ("Only DAG flows are allowed"). A classic inline loop (body → loop
+  back-edge) therefore cannot be registered.
+- **`parallel` is partly free**: `traverseNext()` already runs a node's
+  *unconditional* out-edges via `Promise.all`. The missing piece is a correct
+  **join** (wait-for-all-then-continue-once).
+- **Error handling already exists**: edges carry `type: 'fault'` (route on
+  failure) and `errorHandling.strategy: 'retry'` (exponential backoff). This is
+  already a structured-ish try/catch/retry — closer to what authors want than
+  BPMN boundary events.
+- **BPMN import/export is valued** (`automation/bpmn-interop.zod.ts`). The
+  *protocol* must stay BPMN-complete so external BPM tools round-trip.
+- **The repo is multi-agent.** Core `engine.ts` edits (traversal, cycle
+  detection) must be deliberate and well-sequenced.
 
-Relevant invariants / facts:
+## The reframing — why structured beats graph+token for AI authoring
 
-- **DAG-only**: `engine.ts` `registerFlow()` → `detectCycles()` (DFS, GRAY/BLACK)
-  throws `Flow contains a cycle … Only DAG flows are allowed` on any back-edge.
-- **Parallel is partly free**: `traverseNext()` already runs a node's
-  *unconditional* out-edges concurrently via `Promise.all`. So an AND-**split**
-  is essentially already supported; the missing piece is the AND-**join**
-  (wait-for-all-then-proceed-once).
-- **Error handling already exists**: edges carry `type: 'fault'`; on a node
-  failure the engine routes to its fault edge, and `errorHandling.strategy:
-  'retry'` does exponential-backoff retry. This is the low-code-native
-  error model — a BPMN `boundary_event` would be a *second*, heavier mechanism.
-- **Open vocabulary**: `FlowNode.type` is `z.string()` (ADR-0018) — the
-  `FlowNodeAction` enum is the *curated built-in list*, not a hard constraint;
-  plugins may register more types. Unknown types throw `NO_EXECUTOR` at run time.
-- **AI authoring** ([ADR-0010/0011]) is a design center: generation should be
-  driven by what's *executable*, not a static list that may overpromise.
+BPMN's gateway/boundary/token model is expressive but notoriously error-prone to
+*author* (for humans, and more so for LLMs). For AI generating flow metadata,
+**structured control-flow constructs** (like a programming language's AST:
+sequence, branch, **loop**, **parallel**, **try/catch**) win on the three things
+AI needs:
 
-## Decisions
+1. **Well-formed by construction.** A loop has a defined body + exit; a parallel
+   block's join is implicit at block end; there are no raw back-edges or
+   dangling tokens. An LLM can't easily emit a deadlock or an infinite loop.
+2. **Locally composable.** AI generates a self-contained subtree; variables are
+   in scope; no cross-node token wiring to get wrong.
+3. **Statically analyzable / terminating.** The engine can validate
+   well-formedness and bound iteration — and reject the malformed before run.
 
-### D1 — Keep the DAG invariant, or relax it for loop/cycle constructs?
+Concretely, the per-item-**subflow** loop (an earlier candidate) is *worse* for
+AI: one loop forces **two** flows (parent + body) plus input/output mapping —
+more artifacts, more plumbing to get wrong. A **self-contained inline loop** is
+simpler for AI and humans alike.
 
-- **D1a (recommended): keep strict DAG.** Model iteration *without* raw
-  back-edges (see D2b/D2c). Pros: preserves a simple, analyzable execution model
-  (termination, no infinite loops by construction, clean BPMN/AI reasoning); no
-  surgery on shared `engine.ts` cycle detection. Cons: inline back-edge loops
-  aren't expressible as raw cycles.
-- **D1b: relax DAG for designated loop nodes.** Allow a back-edge into a `loop`
-  node; make traversal loop-aware (iteration state + a hard max-iteration
-  guard). Pros: true inline-body loops (familiar UX). Cons: a core-engine
-  architecture change (cycle detection + traversal), recursion/termination
-  risk, higher multi-agent collision risk.
+## Decision
 
-### D2 — Loop semantics
+Adopt **structured control-flow constructs** as the native, AI-authored model:
 
-- **D2a: inline back-edge loop** — requires D1b.
-- **D2b (recommended now): per-item subflow loop** — `loop` runs a subflow body
-  once per collection item (`config.collection`, `config.bodyFlow`,
-  `config.iteratorVariable`), reusing the just-shipped `subflow` machinery.
-  DAG-safe; **new executor file only, no `engine.ts` surgery**; bounded by a max
-  iteration count. Body lives in a separate (template) flow — slightly less
-  ergonomic than inline, but a legitimate, common model.
-- **D2c (richer follow-up): bounded "for-each" container** — a `loop` whose body
-  is an inline sub-region the engine expands per item (no raw cycle: the body is
-  a bounded subgraph, not a back-edge). More ergonomic than D2b, still
-  DAG-safe, but needs engine support to scope the body region.
+### 1. Loop — a structured iteration *container* (not a back-edge, not a subflow)
+A `loop` node owns a **bounded body region** (a single-entry/single-exit
+subgraph) plus an "after-loop" continuation. The engine drives iteration over a
+collection (`collection`, `iteratorVariable`) with a **hard max-iteration
+guard**; the body region is scoped, not a raw cycle — so the **DAG invariant for
+ordinary edges is preserved** and termination stays analyzable. (Inline, local,
+AI-friendly.)
 
-### D3 — Parallel split / join
+### 2. Parallel — a structured *block* with implicit join
+A `parallel` construct declares N branch regions and continues **once when all
+branches complete** — the join is implicit at block end, engine-synchronized
+(per-run, race-free in single-threaded JS). No author-visible `join_gateway`
+arrival-counting node to mis-wire or deadlock. (The existing `Promise.all`
+fan-out is the execution substrate.)
 
-- **Split**: ship a trivial pass-through `parallel_gateway` executor now — the
-  existing `Promise.all` on unconditional edges already forks branches. Low risk,
-  contained.
-- **Join (`join_gateway`)**: needs the engine to track per-run arrivals at the
-  join node and proceed once all incoming branches arrive. JS is single-threaded
-  so a per-run arrival counter is race-free, but it's a deliberate
-  `traverseNext` enhancement (shared `engine.ts`). **Recommended**: split now;
-  join as a separate, deliberate PR (or defer).
+### 3. Errors — structured `try/catch/retry`
+Surface the engine's existing `fault` edge + `errorHandling.retry` as a
+**structured try/catch/retry** attached to a step or block, rather than BPMN
+boundary events. This is the low-code-native error model and is already
+engine-backed.
 
-### D4 — Boundary events
+### 4. DAG invariant — **kept**
+Ordinary step-to-step edges stay acyclic. Iteration and parallel are **structured
+containers**, not cycles or arbitrary token flow — so we get inline loops without
+giving up termination/analyzability.
 
-- **Recommended: lean on the existing `fault` edge + `errorHandling.retry`**
-  (already engine-backed) as the low-code error model; invest in *designer
-  support for fault edges + retry* rather than a parallel BPMN mechanism.
-- Keep `boundary_event` + `boundaryConfig` in the **protocol** for BPMN
-  import/export, but **defer the runtime executor** (timer/signal boundaries
-  especially need interruptible long-running hosts). Document it as
-  modeling/interop-only until demanded.
+### 5. BPMN — protocol/interop only, maps onto the constructs
+`parallel_gateway` / `join_gateway` / `boundary_event` and `boundaryConfig` stay
+in the protocol + `bpmn-interop` + designer *rendering* (for import/display).
+**BPMN import maps them onto the structured constructs** (parallel gateways → a
+parallel block; loop markers / multi-instance → a loop container; boundary error
+→ try/catch); export maps back. They are the interchange format, not the native
+authoring model.
 
-### D5 — Authoring honesty + AI (cross-cutting, low controversy)
+### 6. AI authoring — generate structured constructs from the live registry
+Runnable-flow authoring (designer + AI) composes the structured constructs +
+executable nodes from the live action registry (`/api/v1/automation/actions` +
+each node's `configSchema`). Validity is schema-enforced (well-formed
+containers), so AI output is runnable by construction. The full BPMN modeling set
+remains available for interop, not for native authoring.
 
-- Keep the **full modeling set** (incl. BPMN gateways/boundary) in spec +
-  BPMN-interop + designer *rendering* (needed for import/display).
-- Drive **runnable-flow authoring and AI generation from the live action
-  registry** (`GET /api/v1/automation/actions` + `configSchema`), so authors/AI
-  only compose *executable* nodes; the modeling superset stays available for
-  BPMN round-trip. Ensure `NO_EXECUTOR` run-time errors are clear.
+## Representation — open implementation question (flag, don't over-specify)
 
-## Recommendation (one line)
+The flow model is today a flat `nodes[]` + `edges[]` graph. Two ways to carry
+structured containers; **to be decided in the implementation ADR/PR**:
 
-**D1a + D2b + (D3 split now, join later) + D4 (fault-edge model; boundary
-deferred to interop-only) + D5.** I.e. keep the DAG invariant; ship a
-DAG-safe per-item-subflow `loop` and a pass-through `parallel_gateway` split as
-contained new executors; treat `join_gateway`, an inline-loop (D1b/D2c), and a
-runtime `boundary_event` as deliberate, ADR-gated engine work; keep the protocol
-BPMN-complete and drive authoring/AI from the executable registry.
+- **(A) Marker-delimited scoped regions** (recommended starting point): a `loop`
+  / `parallel` node plus a matching scope-end marker; edges inside the scope are
+  the body/branches; the engine validates single-entry/single-exit and executes
+  the region as a unit. Keeps the flat graph the designer + BPMN use; adds
+  structured *semantics* + validation on top.
+- **(B) Nested sub-structure**: the container node carries a nested mini-flow
+  (`config.body`). Cleaner AST, but diverges from the flat graph.
+
+(A) is least disruptive and most BPMN-mappable; (B) is the cleaner long-term AST.
+The choice, plus designer rendering of containers and migration of existing
+flows, is the first task below.
 
 ## Consequences
 
-- **Positive**: no risky surgery on the shared core engine now; real, runnable
-  `loop` + parallel-split shipped; BPMN import/export preserved; AI/authoring
-  honest (executable registry); a clear roadmap for the deferred items.
-- **Cost**: inline-body loops and true joins wait for a deliberate engine
-  iteration; per-item-subflow loop requires authoring the body as a (template)
-  subflow.
+- **Positive**: AI (and humans) author from a small set of constructs that are
+  valid + terminating by construction; no proliferation of error-prone BPMN
+  token nodes; inline loops without breaking the DAG invariant; BPMN
+  import/export preserved as interop; error handling unified on try/catch/retry.
+- **Cost**: bigger than "add four executors" — it introduces structured
+  control-flow into the flow model (spec + engine + designer + a BPMN mapping).
+  Delivered incrementally (below). Existing flat flows keep working (constructs
+  are additive).
 
-## Non-goals / deferred (roadmap)
+## Sequencing (roadmap)
 
-- Relaxing the DAG invariant (D1b) and inline-body loops (D2c).
-- `join_gateway` arrival synchronization.
-- Runtime `boundary_event` (timer/signal/error) — protocol/interop retained.
+1. **Spec-define the constructs** — `loop` container, `parallel` block,
+   `try/catch/retry`: their schema, `configSchema`, and **well-formedness
+   validation** (single-entry/single-exit regions; bounded loop). Pick
+   representation (A) vs (B).
+2. **Loop container** — engine execution (bounded iteration over a collection) +
+   designer + e2e. *(Highest value; replaces the stub.)*
+3. **Parallel block** — implicit-join execution (per-run synchronization) +
+   designer + e2e.
+4. **Try/catch/retry** — surface the existing `fault` + `retry` as a structured
+   construct in spec + designer.
+5. **BPMN mapping** — `bpmn-interop` import/export ↔ structured constructs.
+
+## Non-goals / deferred
+
+- Author-visible low-level BPMN `parallel_gateway` / `join_gateway` /
+  `boundary_event` as the *native* model (kept for interop only).
+- Relaxing the DAG invariant to allow arbitrary cycles (loops are structured
+  containers instead).
+- Runtime BPMN boundary events (timer/signal) — interop representation retained.
 
 ## Already shipped this line of work
 
 - `wait` executor (#1469) — durable timer/signal pause.
-- `subflow` executor — synchronous child-flow invoke (depth-guarded; nested
-  pause → clear error). Worked showcase examples for both.
+- `subflow` executor — synchronous reusable invoke (depth-guarded; nested pause
+  → clear error). Remains a reuse primitive, orthogonal to the loop container.
