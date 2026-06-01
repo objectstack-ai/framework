@@ -60,6 +60,32 @@ Other scripts: `objectui:bump` (pull only), `objectui:build`, `objectui:clean`. 
 
 ---
 
+## Multi-agent working discipline
+
+This repo is worked on by **multiple agents in parallel**. Branches get switched
+and shared files change *under you* mid-task — this is expected, not a bug.
+Operate defensively:
+
+1. **Only touch the files your task needs.** Don't "fix" unrelated diffs,
+   reverts, or other agents' in-flight edits, and don't try to manage the whole
+   working tree. If a file you didn't change shows as modified, leave it.
+2. **One feature branch + one PR per task.** Branch off `main`. **Never commit
+   task work straight to `main`.**
+3. **Never `git push --force` / `--force-with-lease`, and never push `main`.** A
+   force-push can clobber a parallel agent's work; `main` is shared — land
+   everything via PR.
+4. **Verify the current branch before every commit/push**
+   (`git rev-parse --abbrev-ref HEAD`). HEAD may have been switched by another
+   agent — if it isn't your feature branch, stop and re-checkout before pushing.
+5. **Shared files (barrels/registries like `builtin/index.ts`): edit → `git add`
+   → commit atomically, then confirm the commit really contains your lines**
+   (`git show HEAD:<file> | grep <yourChange>`). A concurrent edit can revert
+   your working-tree change between the edit and the commit. On a real conflict,
+   re-apply only *your* lines and let the PR merge integrate the rest.
+6. **Don't rebase or force-update shared branches** to tidy other agents' commits.
+
+---
+
 ## Monorepo Layout
 
 ```
