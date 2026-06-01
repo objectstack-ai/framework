@@ -1,5 +1,64 @@
 # @objectstack/service-automation
 
+## 7.5.0
+
+### Minor Changes
+
+- 1560880: Implement the `subflow` node executor — invoke another flow as a reusable step.
+
+  The designer offered a `subflow` node but the engine had no executor, so a flow
+  using it couldn't run. `subflow` now:
+
+  - resolves `config.input` (a `{token}` mapping) against the parent's variables,
+  - runs `config.flowName` via `engine.execute(...)`, and
+  - writes the child's output back — under `${nodeId}.output`, and under
+    `config.outputVariable` as a bare variable when given.
+
+  Scope (v1): **synchronous** subflows that run to completion. If the child
+  _suspends_ (a nested `approval` / `screen` / `wait`), the node fails with a
+  clear message rather than silently dropping the run — nested durable pause is a
+  deliberate follow-up. A depth guard (16) turns an accidental recursive cycle
+  into a clean error instead of a stack overflow.
+
+  A bare `AutomationServicePlugin` now ships 14 executors including `subflow`.
+
+  Tests: `subflow-node.test.ts` — invoke + input-mapping + output capture,
+  missing `flowName`, child-not-found, child-suspended, recursion guard.
+  service-automation **118 passing**. Worked examples added to the showcase: a
+  reusable `showcase_notify_owner` subflow (`template: true`) invoked by
+  `showcase_task_done_notify_owner`.
+
+- a2263e6: Implement the `wait` node executor — durable timer / signal pause.
+
+  The flow designer offered a `wait` node but the engine had no executor for it, so
+  a flow using it couldn't run. `wait` now suspends the run on entry (ADR-0019
+  durable pause, the same suspend/resume machinery as `screen` / `approval`) and
+  resumes by one of two paths, per `waitEventConfig.eventType`:
+
+  - **timer** — schedules a one-shot job (`IJobService`, `{ type: 'once', at }`)
+    that calls `engine.resume(runId)` when the ISO-8601 `timerDuration` elapses.
+    With no job service the run still suspends and is resumable via an external
+    `resume(runId)` (logged) — never silently no-ops or fails the flow.
+  - **signal / webhook / manual / condition** — suspends with the signal name as
+    the correlation key; an external producer resumes the run when the event
+    arrives.
+
+  Reads its run id from the engine-injected `$runId` variable (same mechanism the
+  approval node uses). Adds a `parseIsoDuration` helper (`PT1H`, `P3D`, `PT90M`,
+  `P1DT12H`, bare ms). Registered as a built-in node, so a bare
+  `AutomationServicePlugin` now ships 13 executors including `wait`.
+
+  Tests: `wait-node.test.ts` — duration parsing, suspend→resume traversal,
+  one-shot job scheduling + handler-driven resume, named-signal suspend.
+  service-automation **113 passing**. A worked `showcase_task_follow_up` flow
+  (wait → notify) demonstrates it end-to-end.
+
+### Patch Changes
+
+- @objectstack/spec@7.5.0
+- @objectstack/core@7.5.0
+- @objectstack/formula@7.5.0
+
 ## 7.4.1
 
 ### Patch Changes
