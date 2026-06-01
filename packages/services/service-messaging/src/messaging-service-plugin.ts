@@ -7,6 +7,7 @@ import { MessagingService } from './messaging-service.js';
 import { createInboxChannel } from './inbox-channel.js';
 import { SqlNotificationOutbox } from './sql-outbox.js';
 import { NotificationDispatcher, type DispatchCluster } from './dispatcher.js';
+import { NotificationRetention } from './retention.js';
 import { createEmailChannel } from './email-channel.js';
 import { NotificationTemplateStore } from './template-renderer.js';
 import {
@@ -40,6 +41,17 @@ export interface MessagingServicePluginOptions {
      * `prefix.` entry for a prefix match (default none).
      */
     mandatoryTopics?: readonly string[];
+    /**
+     * Retention window in days for the notification pipeline (ADR-0030
+     * hardening). When set (> 0), a periodic sweep prunes events, deliveries,
+     * inbox materializations and receipts older than this — bounding the
+     * event-log growth from high-frequency periodic flows. **Opt-in**: unset (or
+     * ≤ 0) disables retention (default), so no notification data is ever deleted
+     * without explicit operator policy.
+     */
+    retentionDays?: number;
+    /** Retention sweep interval in ms (default 1 hour). Only used when `retentionDays` is set. */
+    retentionSweepMs?: number;
 }
 
 /**
@@ -73,6 +85,7 @@ export class MessagingServicePlugin implements Plugin {
 
     private readonly options: Required<MessagingServicePluginOptions>;
     private dispatcher?: NotificationDispatcher;
+    private retentionTimer?: ReturnType<typeof setInterval>;
 
     constructor(options: MessagingServicePluginOptions = {}) {
         this.options = {
@@ -81,6 +94,8 @@ export class MessagingServicePlugin implements Plugin {
             partitionCount: 8,
             dispatchIntervalMs: 500,
             mandatoryTopics: [],
+            retentionDays: 0,
+            retentionSweepMs: 3_600_000,
             ...options,
         };
     }
@@ -200,14 +215,40 @@ export class MessagingServicePlugin implements Plugin {
             });
         }
 
+        // Retention sweep (ADR-0030 hardening): opt-in pruning of the
+        // notification pipeline so the event log can't grow unbounded. Runs once
+        // at ready then on a low-frequency interval; the timer is unref'd so it
+        // never keeps the process alive.
+        if (this.options.retentionDays > 0 && typeof ctx.hook === 'function') {
+            ctx.hook('kernel:ready', async () => {
+                const retention = new NotificationRetention({ getData, logger: ctx.logger });
+                const days = this.options.retentionDays;
+                const sweep = () => {
+                    void retention.prune(days).catch((err) =>
+                        ctx.logger.warn(`[messaging] retention sweep failed: ${(err as Error)?.message ?? err}`),
+                    );
+                };
+                sweep();
+                this.retentionTimer = setInterval(sweep, this.options.retentionSweepMs);
+                this.retentionTimer.unref?.();
+                ctx.logger.info(
+                    `[messaging] retention on (prune > ${days}d every ${Math.round(this.options.retentionSweepMs / 1000)}s)`,
+                );
+            });
+        }
+
         ctx.logger.info(
             `[messaging] service registered with channels: ${service.getRegisteredChannels().join(', ') || '(none)'}`,
         );
     }
 
-    /** Stop the dispatcher loop on shutdown. */
+    /** Stop the dispatcher loop + retention sweep on shutdown. */
     async stop(): Promise<void> {
         await this.dispatcher?.stop();
         this.dispatcher = undefined;
+        if (this.retentionTimer) {
+            clearInterval(this.retentionTimer);
+            this.retentionTimer = undefined;
+        }
     }
 }

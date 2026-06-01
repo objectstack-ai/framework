@@ -102,6 +102,8 @@ export type {
     DispatchCluster,
     DispatchLockHandle,
 } from './dispatcher.js';
+export { NotificationRetention, DEFAULT_RETENTION_TARGETS } from './retention.js';
+export type { NotificationRetentionOptions, RetentionTarget, PruneOutcome } from './retention.js';
 
 // Objects (metadata definitions)
 export {

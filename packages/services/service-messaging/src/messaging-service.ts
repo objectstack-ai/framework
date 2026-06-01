@@ -197,7 +197,29 @@ export class MessagingService {
         }
 
         // 2) Write the L2 event (or synthesize an id when there is no data layer).
-        const notificationId = await this.writeEvent(data, input);
+        //    The check at (1) is a fast-path. Where the driver materializes the
+        //    UNIQUE(dedup_key) index, it is the real guard: a concurrent emit
+        //    that raced past (1) and inserted first makes our insert hit the
+        //    unique violation — we catch it and converge to the winner's event
+        //    (treated as a dedup hit), so a record-change storm can't produce
+        //    duplicate notifications. Mirrors the delivery outbox's enqueue
+        //    convergence. (Drivers that don't enforce the index fall back to the
+        //    best-effort fast-path — the catch is then simply never taken.)
+        let notificationId: string;
+        try {
+            notificationId = await this.writeEvent(data, input);
+        } catch (err) {
+            if (input.dedupKey && data) {
+                const winner = await this.findEventByDedupKey(data, input.dedupKey);
+                if (winner) {
+                    this.ctx.logger.info(
+                        `[messaging] emit: dedupKey '${input.dedupKey}' raced; converged to ${winner}`,
+                    );
+                    return { notificationId: winner, deduped: true, deliveries: [], delivered: 0, failed: 0 };
+                }
+            }
+            throw err;
+        }
 
         // 3) Resolve the audience to recipient user ids (RecipientResolver owns
         //    role:/team:/owner_of:/email→id expansion).

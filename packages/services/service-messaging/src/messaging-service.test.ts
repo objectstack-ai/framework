@@ -365,5 +365,63 @@ describe('MessagingService', () => {
             expect(inbox.seen).toHaveLength(0); // no re-fan
             expect(data.inserts.some((i) => i.object === 'sys_notification')).toBe(false);
         });
+
+        it('converges to the winner when a concurrent emit wins the dedup_key unique index', async () => {
+            // Simulate the race: the fast-path findOne misses (no prior event),
+            // but the event insert hits the UNIQUE(dedup_key) violation because a
+            // concurrent emit inserted first. We must catch it and converge to
+            // that winner rather than throwing or double-emitting.
+            let firstLookup = true;
+            const engine = {
+                async insert(object: string) {
+                    if (object === 'sys_notification') throw new Error('UNIQUE constraint failed: sys_notification.dedup_key');
+                    return { id: 'row' };
+                },
+                async find() { return []; },
+                async findOne(object: string) {
+                    if (object !== 'sys_notification') return null;
+                    // First call = the fast-path miss; second = post-conflict lookup finds the winner.
+                    if (firstLookup) { firstLookup = false; return null; }
+                    return { id: 'evt_winner' };
+                },
+                async update() { return {}; },
+                async delete() { return {}; },
+                async count() { return 0; },
+                async aggregate() { return []; },
+            } as any;
+            service = new MessagingService({ logger: silentLogger(), getData: () => engine });
+            const inbox = recordingChannel('inbox');
+            service.registerChannel(inbox.channel);
+
+            const result = await service.emit({
+                topic: 'task.assigned',
+                audience: ['user_1'],
+                dedupKey: 'task.assigned:t_7:user_1',
+                payload: { title: 'Assigned' },
+            });
+
+            expect(result.deduped).toBe(true);
+            expect(result.notificationId).toBe('evt_winner');
+            expect(inbox.seen).toHaveLength(0); // loser does not re-fan
+        });
+
+        it('rethrows an event insert error that is not a dedup conflict', async () => {
+            // No dedupKey ⇒ no convergence path ⇒ a genuine write failure surfaces.
+            const engine = {
+                async insert() { throw new Error('disk full'); },
+                async find() { return []; },
+                async findOne() { return null; },
+                async update() { return {}; },
+                async delete() { return {}; },
+                async count() { return 0; },
+                async aggregate() { return []; },
+            } as any;
+            service = new MessagingService({ logger: silentLogger(), getData: () => engine });
+            service.registerChannel(recordingChannel('inbox').channel);
+
+            await expect(
+                service.emit({ topic: 't', audience: ['user_1'], payload: { title: 'x' } }),
+            ).rejects.toThrow('disk full');
+        });
     });
 });

@@ -137,7 +137,11 @@ export const SysNotification = ObjectSchema.create({
 
   indexes: [
     { fields: ['topic', 'created_at'] },
-    { fields: ['dedup_key'] },
+    // Idempotency spine (ADR-0030). UNIQUE so `emit()` dedup is race-safe: a
+    // concurrent emit with the same dedup_key loses the insert and converges to
+    // the winner (mirrors the delivery outbox). SQL treats NULLs as distinct, so
+    // the (common) events with no dedup_key are unconstrained.
+    { fields: ['dedup_key'], unique: true },
     { fields: ['source_object', 'source_id'] },
   ],
 });
