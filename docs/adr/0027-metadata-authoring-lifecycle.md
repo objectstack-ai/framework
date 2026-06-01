@@ -1,8 +1,9 @@
-# ADR-0025: `@objectstack/metadata-authoring` — Staged Authoring, Publish & Promotion Lifecycle
+# ADR-0027: `@objectstack/metadata-authoring` — Staged Authoring, Publish & Promotion Lifecycle
 
 **Status**: Proposed (2026-06-01)
 **Deciders**: ObjectStack Protocol Architects
 **Builds on**: [ADR-0002](./0002-environment-database-isolation.md) (per-environment database), [ADR-0003](./0003-package-as-first-class-citizen.md) (package · version · installation), [ADR-0005](./0005-metadata-customization-overlay.md) (one Zod source per type, org overlay), [ADR-0006 v4](./0006-project-environment-split.v4.md) (unify on package, drop project), [ADR-0008](./0008-metadata-repository-and-change-log.md) (Repository · ChangeLog · Cache · Registry; four write surfaces), [ADR-0010](./0010-metadata-protection-model.md) (L1/L2/L3 protection), [ADR-0016](./0016-studio-package-authoring-and-publish.md) (Studio authoring loop — **this ADR revives its §2 draft-workspace north-star**), [ADR-0019](./0019-approval-as-flow-node.md) (approvals)
+**Related (boundary)**: [ADR-0025](./0025-plugin-package-distribution.md) (plugin package distribution — code + dependencies) and [ADR-0026](./0026-client-ui-plugin-distribution.md) (client-side UI plugin distribution) own **how a *sealed* package is distributed and installed**; ADR-0027 owns **how a package is authored, staged, sealed, and promoted across environments**. The two meet at the sealed `sys_package_version` artifact: this ADR produces it, those ADRs ship it.
 **Consumers**: `@objectstack/rest` (HTTP `/meta/*` + `/api/v1/cloud/packages/*` routes), `@objectstack/objectql` (storage + schema-sync + destructive-check adapters), `@objectstack/runtime` (kernel bootstrap; owns env activation / install-pointer swap), `@objectstack/cli` (`os package publish`), `@objectstack/plugins/plugin-approvals` (publish gate), `../objectui` (Studio)
 
 ---
@@ -359,7 +360,7 @@ in-flight failures from live traffic.
 ### The complete capability map (where this is going)
 
 A mature metadata-authoring platform (Salesforce DX / OutSystems / Mendix class)
-needs the layers below. ADR-0025 designs *all* of them; the ports, the ordered
+needs the layers below. ADR-0027 designs *all* of them; the ports, the ordered
 `MigrationPlan`, the sealed-version artifact, and per-target-env execution are
 **baked in now** so later layers slot in without re-modelling.
 
@@ -371,7 +372,7 @@ needs the layers below. ADR-0025 designs *all* of them; the ports, the ordered
 | **Environments** | per-env DB execution · Dev→Staging→Prod promotion · ephemeral preview envs | M3 (promotion) → M4 (ephemeral) |
 | **Governance** | approval gates · RBAC by role · L1/L2/L3 protection · audit/changelog · prod destructive policy | M3 |
 | **Recovery** | rollback (pointer swap + reverse migration) · drift detection / schema-ahead reconcile · post-activate health checks | M3 (rollback) → M4 (drift/health) |
-| **Distribution** | local export/import (§9) · marketplace · **dependency resolution** (`versionRange`) · upgrade paths | §9 exists → M4 |
+| **Distribution** | local export/import (§9) · marketplace · **dependency resolution** (`versionRange`) · upgrade paths — *mechanics owned by ADR-0025/0026; this ADR only produces the sealed artifact they ship* | §9 exists → M4 |
 | **Collaboration** | edit locks · **branch + merge** · multi-author drafts | M5 |
 | **Source duality** | DB-backed drafts **and** file/Git authoring seal into the *same* version (ADR-0006 "two flows, one schema") | seal accepts either source from M2 |
 
