@@ -504,6 +504,63 @@ export const TaskDoneNotifyOwnerFlow = defineFlow({
   ],
 });
 
+/**
+ * Batch Reminders — demonstrates the ADR-0031 **structured loop container**.
+ *
+ * The `loop` node owns a bounded **body region** (`config.body`, a
+ * single-entry/single-exit sub-graph) and iterates it over a collection: each
+ * task is bound to `task` (and its index to `taskIndex`) in the enclosing
+ * variable scope, and the body sends a reminder. A hard `maxIterations` guard
+ * keeps iteration bounded. The loop node's ordinary out-edge (`→ end`) is the
+ * after-loop continuation — the DAG invariant for ordinary edges is preserved.
+ */
+export const BatchRemindersFlow = defineFlow({
+  name: 'showcase_batch_reminders',
+  label: 'Batch Task Reminders (Loop)',
+  description: 'Iterates a collection of tasks and sends a reminder for each (structured loop container, ADR-0031).',
+  type: 'autolaunched',
+  variables: [
+    { name: 'tasks', type: 'list', isInput: true, isOutput: false },
+  ],
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    {
+      id: 'loop_tasks',
+      type: 'loop',
+      label: 'For each task',
+      config: {
+        collection: '{tasks}',
+        iteratorVariable: 'task',
+        indexVariable: 'taskIndex',
+        maxIterations: 500,
+        body: {
+          nodes: [
+            {
+              id: 'send_reminder',
+              type: 'script',
+              label: 'Send Reminder',
+              config: {
+                actionType: 'email',
+                inputs: {
+                  to: '{task.owner.email}',
+                  subject: 'Reminder ({taskIndex}): {task.title}',
+                  template: 'showcase_task_reminder_email',
+                },
+              },
+            },
+          ],
+          edges: [],
+        },
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'loop_tasks' },
+    { id: 'e2', source: 'loop_tasks', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
@@ -515,4 +572,5 @@ export const allFlows = [
   TaskFollowUpFlow,
   NotifyOwnerSubflow,
   TaskDoneNotifyOwnerFlow,
+  BatchRemindersFlow,
 ];

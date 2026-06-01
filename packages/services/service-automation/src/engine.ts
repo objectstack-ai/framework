@@ -4,7 +4,8 @@ import type { FlowParsed, FlowNodeParsed, FlowEdgeParsed } from '@objectstack/sp
 import type { ExecutionLog, ActionDescriptor } from '@objectstack/spec/automation';
 import type { AutomationContext, AutomationResult, ResumeSignal, IAutomationService, ScreenSpec } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
-import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES } from '@objectstack/spec/automation';
+import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES, validateControlFlow, findRegionEntry } from '@objectstack/spec/automation';
+import type { FlowRegionParsed } from '@objectstack/spec/automation';
 import type { Connector } from '@objectstack/spec/integration';
 import { ConnectorSchema } from '@objectstack/spec/integration';
 // Static import (not a lazy `require`): the engine ships as ESM ("type":"module"),
@@ -537,6 +538,11 @@ export class AutomationEngine implements IAutomationService {
 
         // DAG cycle detection
         this.detectCycles(parsed);
+
+        // ADR-0031 — validate structured control-flow constructs (loop bodies,
+        // parallel branches, try/catch regions) are well-formed (single-entry/
+        // single-exit, acyclic). Reject the malformed before it can run.
+        validateControlFlow(parsed);
 
         // ADR-0018 §M1 — validate node types against the live action registry.
         // The protocol no longer gates `type` with a closed enum; membership is
@@ -1280,6 +1286,51 @@ export class AutomationEngine implements IAutomationService {
                 .map(nextNode => this.executeNode(nextNode, flow, variables, context, steps));
 
             await Promise.all(parallelTasks);
+        }
+    }
+
+    /**
+     * Execute a structured control-flow **region** (ADR-0031) — the nested
+     * body of a `loop` container (or, later, a `parallel` branch / `try_catch`
+     * region). The region is a self-contained single-entry/single-exit
+     * sub-graph carried in the container's `config`; it runs in the **enclosing
+     * variable scope** (the caller's `variables` map), so the iterator variable
+     * and any body mutations are visible to the surrounding flow — a region is
+     * NOT a separate `subflow` invocation.
+     *
+     * The region executes against a synthetic flow view of its own
+     * nodes/edges, so the main DAG traversal (`traverseNext`) is never aware of
+     * scope markers — keeping the shared traversal untouched.
+     *
+     * Body step logs are kept in a region-local array (not yet merged into the
+     * parent run log); surfacing per-iteration steps is a follow-up.
+     *
+     * Durable pause (`suspend`) inside a region is not supported in this
+     * iteration — it is converted into a clear error (mirrors the `subflow`
+     * nested-pause guard).
+     */
+    async runRegion(
+        region: FlowRegionParsed,
+        variables: Map<string, unknown>,
+        context: AutomationContext,
+    ): Promise<void> {
+        const entryId = findRegionEntry(region);
+        const entry = region.nodes.find(n => n.id === entryId);
+        if (!entry) {
+            throw new Error(`region entry node '${entryId}' not found`);
+        }
+        // A synthetic flow view — executeNode/traverseNext only read `nodes`/`edges`.
+        const subFlow = { nodes: region.nodes, edges: region.edges ?? [] } as unknown as FlowParsed;
+        const regionSteps: StepLogEntry[] = [];
+        try {
+            await this.executeNode(entry, subFlow, variables, context, regionSteps);
+        } catch (err) {
+            if (isSuspendSignal(err)) {
+                throw new Error(
+                    `durable pause inside a structured region (node '${err.nodeId}') is not supported`,
+                );
+            }
+            throw err;
         }
     }
 
