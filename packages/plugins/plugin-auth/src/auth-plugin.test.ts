@@ -1,7 +1,8 @@
 // Copyright (c) 2025 ObjectStack. Licensed under the Apache-2.0 license.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AuthPlugin } from './auth-plugin';
+import { AuthManager } from './auth-manager';
 import type { PluginContext } from '@objectstack/core';
 
 describe('AuthPlugin', () => {
@@ -381,6 +382,69 @@ describe('AuthPlugin', () => {
 
       await expect(uninitializedPlugin.start(mockContext)).rejects.toThrow(
         'Auth manager not initialized'
+      );
+    });
+  });
+
+  describe('Brand name binding (branding.workspace_name)', () => {
+    let hookCapture: ReturnType<typeof createHookCapture>;
+    let setAppNameSpy: ReturnType<typeof vi.spyOn>;
+
+    const makeSettings = (resolved: { value: unknown; source: string } | Error) => ({
+      get: vi.fn(async () => {
+        if (resolved instanceof Error) throw resolved;
+        return resolved;
+      }),
+      subscribe: vi.fn(),
+    });
+
+    const bootWithSettings = async (settings: unknown) => {
+      hookCapture = createHookCapture();
+      mockContext.hook = hookCapture.hookFn;
+      mockContext.getService = vi.fn((name: string) => {
+        if (name === 'manifest') return { register: vi.fn() };
+        if (name === 'settings') return settings;
+        // 'data', 'email', 'http-server' → absent in this harness
+        return undefined;
+      });
+      setAppNameSpy = vi.spyOn(AuthManager.prototype, 'setAppName');
+      authPlugin = new AuthPlugin({
+        secret: 'test-secret-at-least-32-chars-long',
+        baseUrl: 'http://localhost:3000',
+        appName: 'Configured Default',
+      });
+      await authPlugin.init(mockContext);
+      await authPlugin.start(mockContext);
+      await hookCapture.trigger('kernel:ready');
+    };
+
+    afterEach(() => {
+      setAppNameSpy?.mockRestore();
+    });
+
+    it('overrides appName when the setting is explicitly set', async () => {
+      const settings = makeSettings({ value: 'Acme Corp', source: 'global' });
+      await bootWithSettings(settings);
+
+      expect(settings.get).toHaveBeenCalledWith('branding', 'workspace_name', {});
+      expect(setAppNameSpy).toHaveBeenCalledWith('Acme Corp');
+      expect(settings.subscribe).toHaveBeenCalledWith('branding', expect.any(Function));
+    });
+
+    it('clears the override when the setting falls through to its manifest default', async () => {
+      const settings = makeSettings({ value: 'ObjectStack', source: 'default' });
+      await bootWithSettings(settings);
+
+      // source === 'default' means the operator never customised it, so the
+      // configured appName (e.g. OS_APP_NAME) must keep precedence.
+      expect(setAppNameSpy).toHaveBeenCalledWith(undefined);
+    });
+
+    it('does not throw when reading the setting fails', async () => {
+      const settings = makeSettings(new Error('boom'));
+      await expect(bootWithSettings(settings)).resolves.toBeUndefined();
+      expect(mockContext.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('failed to apply branding.workspace_name'),
       );
     });
   });

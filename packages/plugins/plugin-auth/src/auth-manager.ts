@@ -1100,9 +1100,25 @@ export class AuthManager {
     return this.config.emailService;
   }
 
+  /**
+   * Override the brand name surfaced in built-in auth emails (`{{appName}}`),
+   * sourced from the live `branding.workspace_name` setting.
+   *
+   * AuthPlugin calls this on `kernel:ready` (and again whenever the setting
+   * changes) once the `settings` service resolves. Passing `undefined` clears
+   * the override so resolution falls back to the configured `appName`. The
+   * value only reflects an *explicitly set* setting — when the operator has
+   * not customised it, AuthPlugin passes `undefined` so a deployment's
+   * configured `appName` (e.g. `OS_APP_NAME`) keeps precedence.
+   */
+  setAppName(name: string | undefined): void {
+    this.appNameOverride = name?.trim() || undefined;
+  }
+  private appNameOverride?: string;
+
   /** @internal `{{appName}}` placeholder value for built-in templates. */
   private getAppName(): string {
-    return this.config.appName ?? 'ObjectStack';
+    return this.appNameOverride ?? this.config.appName ?? 'ObjectStack';
   }
 
   /**

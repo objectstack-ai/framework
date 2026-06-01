@@ -201,6 +201,43 @@ export class AuthPlugin implements Plugin {
           } catch {
             ctx.logger.info('Auth: no email service registered — auth callbacks will log instead of sending');
           }
+
+          // Bind the email brand name (`{{appName}}`) to the live
+          // `branding.workspace_name` setting so the admin UI can rename the
+          // product without a redeploy. Only an *explicitly set* value
+          // overrides the configured `appName` — when the operator hasn't
+          // customised it (resolver returns the manifest default), we clear
+          // the override so the deployment's `appName` (e.g. `OS_APP_NAME`)
+          // keeps precedence. Mirrors EmailServicePlugin's settings binding.
+          try {
+            const settings = ctx.getService<any>('settings');
+            if (settings && typeof settings.get === 'function') {
+              const applyBrand = async () => {
+                try {
+                  const resolved = await settings.get('branding', 'workspace_name', {});
+                  const explicit = resolved && resolved.source !== 'default'
+                    ? resolved.value
+                    : undefined;
+                  this.authManager?.setAppName(
+                    typeof explicit === 'string' ? explicit : undefined,
+                  );
+                } catch (err: any) {
+                  ctx.logger.warn(
+                    'Auth: failed to apply branding.workspace_name: ' + (err?.message ?? err),
+                  );
+                }
+              };
+              await applyBrand();
+              if (typeof settings.subscribe === 'function') {
+                settings.subscribe('branding', () => {
+                  void applyBrand();
+                });
+                ctx.logger.info('Auth: bound appName to settings namespace=branding');
+              }
+            }
+          } catch {
+            // settings service is optional — keep the configured appName.
+          }
         }
 
         let httpServer: IHttpServer | null = null;
