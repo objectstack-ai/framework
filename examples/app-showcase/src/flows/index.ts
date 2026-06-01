@@ -423,6 +423,87 @@ export const TaskFollowUpFlow = defineFlow({
   ],
 });
 
+/**
+ * Notify Owner — a reusable **subflow** (`template: true`). Other flows invoke
+ * it through a `subflow` node, passing `ownerId` + `message`; it fans a
+ * notification to the owner. Centralising "how we notify an owner" here means
+ * callers don't duplicate the notify wiring.
+ */
+export const NotifyOwnerSubflow = defineFlow({
+  name: 'showcase_notify_owner',
+  label: 'Notify Owner (reusable subflow)',
+  description: 'Reusable subflow: notifies a record owner. Invoked by other flows via a subflow node.',
+  type: 'autolaunched',
+  template: true,
+  variables: [
+    { name: 'ownerId', type: 'text', isInput: true },
+    { name: 'message', type: 'text', isInput: true },
+  ],
+  nodes: [
+    { id: 'start', type: 'start', label: 'Start' },
+    {
+      id: 'notify',
+      type: 'notify',
+      label: 'Notify Owner',
+      config: {
+        topic: 'project.notice',
+        recipients: ['{ownerId}'],
+        channels: ['inbox'],
+        severity: 'info',
+        title: 'Project update',
+        message: '{message}',
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'notify' },
+    { id: 'e2', source: 'notify', target: 'end' },
+  ],
+});
+
+/**
+ * Task Done → Notify Owner (subflow) — the worked `subflow` example. On task
+ * completion it invokes {@link NotifyOwnerSubflow} via a `subflow` node, mapping
+ * the task's owner + a message into the subflow's input variables.
+ */
+export const TaskDoneNotifyOwnerFlow = defineFlow({
+  name: 'showcase_task_done_notify_owner',
+  label: 'Task Done → Notify Owner (subflow)',
+  description: 'On task completion, invokes the reusable notify-owner subflow — demonstrates subflow reuse.',
+  type: 'autolaunched',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Task Done',
+      config: {
+        objectName: 'showcase_task',
+        triggerType: 'record-after-update',
+        condition: 'status == "done" && previous.status != "done"',
+      },
+    },
+    {
+      id: 'call_notify',
+      type: 'subflow',
+      label: 'Notify Owner',
+      config: {
+        flowName: 'showcase_notify_owner',
+        input: {
+          ownerId: '{record.project.owner}',
+          message: 'Task "{record.title}" is done.',
+        },
+        outputVariable: 'notifyResult',
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'call_notify' },
+    { id: 'e2', source: 'call_notify', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
@@ -432,4 +513,6 @@ export const allFlows = [
   ScheduledDigestFlow,
   TaskCompletedRestPingFlow,
   TaskFollowUpFlow,
+  NotifyOwnerSubflow,
+  TaskDoneNotifyOwnerFlow,
 ];

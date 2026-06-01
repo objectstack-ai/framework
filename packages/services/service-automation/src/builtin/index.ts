@@ -34,6 +34,7 @@ import { registerHttpNodes } from './http-nodes.js';
 import { registerConnectorNodes } from './connector-nodes.js';
 import { registerNotifyNode } from './notify-node.js';
 import { registerWaitNode } from './wait-node.js';
+import { registerSubflowNode } from './subflow-node.js';
 
 export { registerLogicNodes } from './logic-nodes.js';
 export { registerCrudNodes } from './crud-nodes.js';
@@ -42,6 +43,7 @@ export { registerHttpNodes } from './http-nodes.js';
 export { registerConnectorNodes } from './connector-nodes.js';
 export { registerNotifyNode } from './notify-node.js';
 export { registerWaitNode, parseIsoDuration } from './wait-node.js';
+export { registerSubflowNode } from './subflow-node.js';
 
 /**
  * Seed every built-in node executor into the engine. Called by
@@ -56,6 +58,7 @@ export function installBuiltinNodes(engine: AutomationEngine, ctx: PluginContext
     registerConnectorNodes(engine, ctx);
     registerNotifyNode(engine, ctx);
     registerWaitNode(engine, ctx);
+    registerSubflowNode(engine, ctx);
 
     const types = engine.getRegisteredNodeTypes();
     ctx.logger.info(
