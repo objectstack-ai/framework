@@ -386,6 +386,67 @@ describe('HttpDispatcher', () => {
             });
         });
 
+        // ADR-0030: the /api/v1/notifications surface, resolved from the
+        // `notification` core service slot (the messaging service) and scoped to
+        // the authenticated user from the execution context.
+        describe('handleNotification (ADR-0030 inbox surface)', () => {
+            const notifKernel = (service: any) =>
+                ({ context: { getService: (name: string) => (name === 'notification' ? service : null) } } as any);
+            const ctx = (userId?: string) =>
+                ({ request: {}, executionContext: userId ? { userId } : undefined } as any);
+
+            it('GET /notifications lists the inbox for the authed user (with read/limit filters)', async () => {
+                const service = {
+                    listInbox: vi.fn().mockResolvedValue({ notifications: [{ id: 'n1', read: false }], unreadCount: 1 }),
+                };
+                const d = new HttpDispatcher(notifKernel(service));
+                const result = await d.handleNotification('', 'GET', undefined, { read: 'false', limit: '10' }, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(200);
+                expect(result.response?.body?.data?.unreadCount).toBe(1);
+                expect(service.listInbox).toHaveBeenCalledWith('u1', { read: false, type: undefined, limit: 10 });
+            });
+
+            it('POST /read marks the posted ids read', async () => {
+                const service = {
+                    listInbox: vi.fn(),
+                    markRead: vi.fn().mockResolvedValue({ success: true, readCount: 2 }),
+                };
+                const d = new HttpDispatcher(notifKernel(service));
+                const result = await d.handleNotification('/read', 'POST', { ids: ['n1', 'n2'] }, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.readCount).toBe(2);
+                expect(service.markRead).toHaveBeenCalledWith('u1', ['n1', 'n2']);
+            });
+
+            it('POST /read/all marks all read for the user', async () => {
+                const service = {
+                    listInbox: vi.fn(),
+                    markAllRead: vi.fn().mockResolvedValue({ success: true, readCount: 5 }),
+                };
+                const d = new HttpDispatcher(notifKernel(service));
+                const result = await d.handleNotification('/read/all', 'POST', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(true);
+                expect(result.response?.body?.data?.readCount).toBe(5);
+                expect(service.markAllRead).toHaveBeenCalledWith('u1');
+            });
+
+            it('returns 401 for an anonymous request and never touches the service', async () => {
+                const service = { listInbox: vi.fn() };
+                const d = new HttpDispatcher(notifKernel(service));
+                const result = await d.handleNotification('', 'GET', undefined, {}, ctx());
+                expect(result.handled).toBe(true);
+                expect(result.response?.status).toBe(401);
+                expect(service.listInbox).not.toHaveBeenCalled();
+            });
+
+            it('is unhandled (→ 404) when no notification service is registered', async () => {
+                const d = new HttpDispatcher(notifKernel(null));
+                const result = await d.handleNotification('', 'GET', undefined, {}, ctx('u1'));
+                expect(result.handled).toBe(false);
+            });
+        });
+
         describe('handleAuth with async service', () => {
             it('should resolve auth service from Promise', async () => {
                 const mockAuth = {

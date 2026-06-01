@@ -167,6 +167,12 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
   // span are left untouched. A naive two-pass replace double-wraps nested cases
   // like `{<id>}` into `` `{`<id>`}` `` — the inner backticks close the span
   // early and leak `<id>` as raw JSX (MDX: "Expected a closing tag for `<id>`").
+  //
+  // A matched `{…}` / `<…>` pair is wrapped in an inline-code span so it renders
+  // literally. A *lone* `<` or `{` with no closing partner (e.g. a SemVer range
+  // `">=4.0 <5"`, or prose like `count < 5`) can't be wrapped, so it is replaced
+  // with its HTML entity — otherwise MDX reads the `<` as the start of a JSX tag
+  // and the build dies ("Unexpected character `5` before name").
   const escapeMdxDescription = (raw: string): string => {
     let out = '';
     let inCode = false;
@@ -185,6 +191,9 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
           i = end;
           continue;
         }
+        // Unmatched: escape so MDX doesn't treat it as a JSX/expression opener.
+        out += ch === '<' ? '&lt;' : '&#123;';
+        continue;
       }
       out += ch;
     }
@@ -223,7 +232,7 @@ function generateMarkdown(schemaName: string, schema: any, category: string, zod
      variants.forEach((variant: any, index: number) => {
          const variantTitle = variant.title || `Option ${index + 1}`;
          md += `#### ${variantTitle}\n\n`;
-         if (variant.description) md += `${variant.description}\n\n`;
+         if (variant.description) md += `${escapeMdxDescription(variant.description)}\n\n`;
          
          if (variant.type === 'object' && variant.properties) {
               if (variant.properties.type && variant.properties.type.const) {
