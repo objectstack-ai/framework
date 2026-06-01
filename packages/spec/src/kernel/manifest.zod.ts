@@ -7,6 +7,109 @@ import { CORE_PLUGIN_TYPES } from './plugin.zod';
 import { DatasetSchema } from '../data/dataset.zod';
 import { NavigationContributionSchema } from '../ui/app.zod';
 
+// ─────────────────────────────────────────────────────────────────────
+// Plugin distribution (ADR-0025 §3.2) — authoritative shapes.
+//
+// These are the canonical schemas for a signed, permissioned plugin
+// package. The cloud control plane mirrors them when it validates a
+// published `.osplugin` manifest and persists the declared metadata onto
+// `sys_package_version`; cloud swaps its local stopgap for these imports
+// (see cloud docs/design/plugin-distribution-framework-tasks.md F1).
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Structured permission grants requested by a plugin (ADR-0025 §3.2).
+ * Each list scopes one capability surface the plugin may touch. The
+ * install-time consent flow (ADR §3.5 step 2) turns this declaration into
+ * the persisted `granted_permissions` set enforced at load by the
+ * PluginPermissionEnforcer.
+ *
+ * @example
+ * ```jsonc
+ * { "services": ["object", "http"], "hooks": ["record.beforeInsert"],
+ *   "network": ["api.acme.com"], "fs": [] }
+ * ```
+ */
+export const PluginPermissionsSchema = z
+  .object({
+    services: z.array(z.string()).optional()
+      .describe('Platform services the plugin may resolve (e.g. "object", "http")'),
+    hooks: z.array(z.string()).optional()
+      .describe('Lifecycle hooks the plugin may register (e.g. "record.beforeInsert")'),
+    network: z.array(z.string()).optional()
+      .describe('Network hosts the plugin may reach (e.g. "api.acme.com")'),
+    fs: z.array(z.string()).optional()
+      .describe('Filesystem paths the plugin may access'),
+  })
+  .strict()
+  .describe('Structured plugin permission grants (ADR-0025 §3.2)');
+
+export type PluginPermissions = z.infer<typeof PluginPermissionsSchema>;
+
+/**
+ * Backward-compatible manifest `permissions` value: either the legacy flat
+ * list of permission strings (apps / older packages) or the structured
+ * plugin permission block above. New code should prefer the structured form.
+ */
+export const ManifestPermissionsSchema = z.union([
+  z.array(z.string()),
+  PluginPermissionsSchema,
+]);
+
+export type ManifestPermissions = z.infer<typeof ManifestPermissionsSchema>;
+
+/**
+ * Compatibility ranges for a plugin (ADR-0025 §3.2, §3.10 #3).
+ * `protocol` (the metadata/runtime contract version) is checked first and
+ * takes precedence over `platform` (the engine release range), so a plugin
+ * keeps working across platform releases that preserve the protocol.
+ */
+export const PluginEnginesSchema = z
+  .object({
+    platform: z.string().optional()
+      .describe('ObjectStack platform release range (SemVer, e.g. ">=4.0 <5")'),
+    protocol: z.string().optional()
+      .describe('Runtime/metadata protocol range, checked first (ADR §3.10 #3)'),
+  })
+  .describe('Plugin compatibility ranges (ADR-0025 §3.2)');
+
+export type PluginEngines = z.infer<typeof PluginEnginesSchema>;
+
+/**
+ * Trust / isolation tier the plugin runs under (ADR-0025 §3.6):
+ * - `node`    — in-process, full PluginContext (first-party / verified only)
+ * - `sandbox` — QuickJS-WASM, capability-gated surface
+ * - `worker`  — out-of-process (reserved)
+ */
+export const PluginRuntimeSchema = z
+  .enum(['node', 'sandbox', 'worker'])
+  .describe('Plugin trust tier (ADR-0025 §3.6)');
+
+export type PluginRuntime = z.infer<typeof PluginRuntimeSchema>;
+
+/**
+ * Dependency packaging strategy (ADR-0025 §3.3):
+ * - `bundled`      — deps pre-bundled into the artifact, no install-time npm
+ * - `manifest-deps`— deps resolved at install (`pnpm install`, opt-in)
+ */
+export const PluginPackagingSchema = z
+  .enum(['bundled', 'manifest-deps'])
+  .describe('Dependency packaging strategy (ADR-0025 §3.3)');
+
+export type PluginPackaging = z.infer<typeof PluginPackagingSchema>;
+
+/**
+ * Per-file content digests of the packaged artifact (ADR-0025 §3.2),
+ * mapping artifact-relative path → digest string (e.g. "sha256-<base64>").
+ * Re-verified by the runtime when it unpacks the `.osplugin` (ADR §3.5
+ * step 5).
+ */
+export const PluginIntegritySchema = z
+  .record(z.string(), z.string())
+  .describe('Per-file content digests of the plugin artifact (ADR-0025 §3.2)');
+
+export type PluginIntegrity = z.infer<typeof PluginIntegritySchema>;
+
 /**
  * Schema for the ObjectStack Manifest.
  * This defines the structure of a package configuration in the ObjectStack ecosystem.
@@ -148,13 +251,18 @@ export const ManifestSchema = z.object({
    */
   description: z.string().optional().describe('Package description'),
   
-  /** 
-   * Array of permission strings that the package requires.
-   * These form the "Scope" requested by the package at installation.
-   * 
+  /**
+   * Permissions the package requires — the "Scope" requested at installation.
+   *
+   * Accepts either the legacy flat list of permission strings, or the
+   * structured plugin permission block ({@link PluginPermissionsSchema},
+   * ADR-0025 §3.2) that maps to service / hook / network / fs capabilities.
+   *
    * @example ["system.user.read", "system.data.write"]
+   * @example { "services": ["object", "http"], "hooks": ["record.beforeInsert"] }
    */
-  permissions: z.array(z.string()).optional().describe('Array of required permission strings'),
+  permissions: ManifestPermissionsSchema.optional()
+    .describe('Required permissions: legacy string[] or structured plugin block (ADR-0025 §3.2)'),
   
   /** 
    * Glob patterns specifying ObjectQL schemas files.
@@ -417,7 +525,35 @@ export const ManifestSchema = z.object({
     objectstack: z.string()
       .regex(/^[><=~^]*\d+\.\d+\.\d+/)
       .describe('ObjectStack platform version requirement (SemVer range, e.g. ">=3.0.0")'),
-  }).optional().describe('Platform compatibility requirements'),
+  }).optional().describe('Platform compatibility requirements (legacy; superseded by `engines`)'),
+
+  /**
+   * Compatibility ranges (ADR-0025 §3.2). Protocol-first: `engines.protocol`
+   * is checked before `engines.platform`. Supersedes the legacy single-field
+   * `engine`, which is retained for backward compatibility.
+   */
+  engines: PluginEnginesSchema.optional()
+    .describe('Plugin compatibility ranges (ADR-0025 §3.2; supersedes `engine`)'),
+
+  /**
+   * Trust / isolation tier the plugin runs under (ADR-0025 §3.6).
+   * Unset implies a pure-metadata package (no executable code).
+   */
+  runtime: PluginRuntimeSchema.optional()
+    .describe('Plugin trust tier (ADR-0025 §3.6)'),
+
+  /**
+   * Dependency packaging strategy for code-bearing plugins (ADR-0025 §3.3).
+   */
+  packaging: PluginPackagingSchema.optional()
+    .describe('Dependency packaging strategy (ADR-0025 §3.3)'),
+
+  /**
+   * Per-file content digests of the packaged artifact (ADR-0025 §3.2),
+   * verified at install/load time when the runtime unpacks the `.osplugin`.
+   */
+  integrity: PluginIntegritySchema.optional()
+    .describe('Per-file content digests of the plugin artifact (ADR-0025 §3.2)'),
 });
 
 /**
