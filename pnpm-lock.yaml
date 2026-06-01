@@ -244,6 +244,12 @@ importers:
 
   examples/app-showcase:
     dependencies:
+      '@objectstack/connector-rest':
+        specifier: workspace:*
+        version: link:../../packages/connectors/connector-rest
+      '@objectstack/connector-slack':
+        specifier: workspace:*
+        version: link:../../packages/connectors/connector-slack
       '@objectstack/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime

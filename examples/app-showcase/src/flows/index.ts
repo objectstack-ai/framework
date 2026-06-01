@@ -197,8 +197,12 @@ export const BudgetApprovalFlow = defineFlow({
     { id: 'e1', source: 'start', target: 'manager_review' },
     { id: 'e2', source: 'manager_review', target: 'needs_exec', label: 'approve' },
     { id: 'e3', source: 'manager_review', target: 'rejected', label: 'reject' },
-    { id: 'e4', source: 'needs_exec', target: 'exec_review', label: 'true' },
-    { id: 'e5', source: 'needs_exec', target: 'approved', label: 'false' },
+    // Decision branching is edge-condition driven (flow spec): the engine
+    // routes a decision node by evaluating each out-edge's `condition`. Carry
+    // the predicate on the edges (the node `config.condition` alone is not
+    // evaluated by the engine), so budgets ≤ $500k skip the executive step.
+    { id: 'e4', source: 'needs_exec', target: 'exec_review', label: 'true', condition: 'budget > 500000' },
+    { id: 'e5', source: 'needs_exec', target: 'approved', label: 'false', condition: 'budget <= 500000' },
     { id: 'e6', source: 'exec_review', target: 'approved', label: 'approve' },
     { id: 'e7', source: 'exec_review', target: 'rejected', label: 'reject' },
   ],
@@ -258,10 +262,112 @@ export const TaskCompletedSlackFlow = defineFlow({
   ],
 });
 
+/**
+ * Scheduled Digest — the worked `schedule` trigger example.
+ *
+ * A `type: 'schedule'` flow whose start node carries an interval descriptor.
+ * The automation engine parses that into a schedule binding; the schedule
+ * trigger plugin (`@objectstack/plugin-trigger-schedule`, paired with the job
+ * service) registers a job that fires this flow every interval. Each tick runs
+ * the `notify` node, dropping a fresh `sys_inbox_message` row — so the
+ * scheduled fire is observable end-to-end with no manual `engine.execute()`.
+ *
+ * Install `requires: ['automation', 'triggers', 'job', 'messaging']` and this
+ * flow auto-launches on the interval.
+ */
+export const ScheduledDigestFlow = defineFlow({
+  name: 'showcase_scheduled_digest',
+  label: 'Scheduled Project Digest (interval)',
+  description: 'Fires on a fixed interval and posts a digest to an inbox — demonstrates the schedule trigger.',
+  type: 'schedule',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'Every 20s',
+      config: {
+        // Interval keeps the demo observable in-session; production digests
+        // would use a cron expression, e.g. { type: 'cron', expression: '0 8 * * *' }.
+        schedule: { type: 'interval', intervalMs: 20000 },
+      },
+    },
+    {
+      id: 'digest',
+      type: 'notify',
+      label: 'Post Digest to Inbox',
+      config: {
+        topic: 'project.digest',
+        recipients: ['admin@objectos.ai'],
+        channels: ['inbox'],
+        severity: 'info',
+        title: 'Scheduled project digest',
+        message: 'Your periodic project digest is ready — open Projects for the latest health.',
+        actionUrl: '/showcase_project',
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'digest' },
+    { id: 'e2', source: 'digest', target: 'end' },
+  ],
+});
+
+/**
+ * Task Completed → REST Ping (self) — the worked `connector_action` example on
+ * the generic `rest` connector.
+ *
+ * Where {@link TaskCompletedSlackFlow} targets the `slack` connector (which
+ * needs a real bot token + channel), this flow dispatches to the `rest`
+ * connector contributed by `@objectstack/connector-rest`, configured to point
+ * at the running server itself. On task completion it issues
+ * `GET /api/v1/health`; the request and its `{ status: 'ok' }` response are
+ * captured on the flow run, so the connector dispatch is fully observable
+ * without any external service or credentials.
+ */
+export const TaskCompletedRestPingFlow = defineFlow({
+  name: 'showcase_task_completed_rest_ping',
+  label: 'REST Ping on Task Completed',
+  description: 'Calls the local server health endpoint via the rest connector when a task is marked Done.',
+  type: 'autolaunched',
+  nodes: [
+    {
+      id: 'start',
+      type: 'start',
+      label: 'On Task Update',
+      config: {
+        objectName: 'showcase_task',
+        triggerType: 'record-after-update',
+        condition: 'status == "done" && previous.status != "done"',
+      },
+    },
+    {
+      id: 'ping',
+      type: 'connector_action',
+      label: 'GET /api/v1/health',
+      connectorConfig: {
+        connectorId: 'rest',
+        actionId: 'request',
+        input: {
+          method: 'GET',
+          path: '/api/v1/health',
+        },
+      },
+    },
+    { id: 'end', type: 'end', label: 'End' },
+  ],
+  edges: [
+    { id: 'e1', source: 'start', target: 'ping' },
+    { id: 'e2', source: 'ping', target: 'end' },
+  ],
+});
+
 export const allFlows = [
   TaskCompletedFlow,
   ReassignWizardFlow,
   BudgetApprovalFlow,
   TaskCompletedSlackFlow,
   TaskAssignedNotifyFlow,
+  ScheduledDigestFlow,
+  TaskCompletedRestPingFlow,
 ];
