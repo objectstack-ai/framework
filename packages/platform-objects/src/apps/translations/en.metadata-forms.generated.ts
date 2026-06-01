@@ -60,17 +60,122 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       fields: {
         helpText: "Add the columns this object will store"
       },
-      "fields.name": {
-        helpText: "snake_case identifier"
-      },
       "fields.label": {
         helpText: "Display label"
       },
       "fields.type": {
         helpText: "Field type"
       },
+      "fields.description": {
+        helpText: "Developer documentation for this column"
+      },
+      "fields.required": {
+        helpText: "Must be set on every record"
+      },
+      "fields.unique": {
+        helpText: "Disallow duplicate values"
+      },
+      "fields.indexed": {
+        helpText: "Create a database index for faster querying"
+      },
+      "fields.readonly": {
+        helpText: "Visible but never user-editable"
+      },
+      "fields.immutable": {
+        helpText: "Editable on create, locked thereafter"
+      },
+      "fields.hidden": {
+        helpText: "Hidden from default UI"
+      },
+      "fields.searchable": {
+        helpText: "Include in full-text search"
+      },
+      "fields.sortable": {
+        helpText: "Allow sorting on this column"
+      },
+      "fields.filterable": {
+        helpText: "Allow filtering on this column"
+      },
+      "fields.defaultValue": {
+        helpText: "Default value for new records (JSON literal)"
+      },
+      "fields.placeholder": {
+        helpText: "Placeholder hint"
+      },
+      "fields.maxLength": {
+        helpText: "Max characters"
+      },
+      "fields.minLength": {
+        helpText: "Min characters"
+      },
+      "fields.min": {
+        helpText: "Minimum value"
+      },
+      "fields.max": {
+        helpText: "Maximum value"
+      },
+      "fields.precision": {
+        helpText: "Total digits"
+      },
+      "fields.scale": {
+        helpText: "Decimal places"
+      },
+      "fields.options": {
+        helpText: "Available choices"
+      },
+      "fields.options.icon": {
+        helpText: "Lucide icon name"
+      },
       "fields.reference": {
         helpText: "Target object (for lookup/master_detail)"
+      },
+      "fields.referenceFilter": {
+        helpText: "CEL filter applied to the picker"
+      },
+      "fields.cascadeDelete": {
+        helpText: "Delete children when parent is deleted"
+      },
+      "fields.multiple": {
+        helpText: "Allow selecting multiple records"
+      },
+      "fields.formula": {
+        helpText: "CEL formula expression"
+      },
+      "fields.returnType": {
+        helpText: "Result type for formulas"
+      },
+      "fields.summaryType": {
+        helpText: "Aggregation"
+      },
+      "fields.summaryField": {
+        helpText: "Field on child object to aggregate"
+      },
+      "fields.displayFormat": {
+        helpText: "e.g. \"INV-{0000}\""
+      },
+      "fields.startingNumber": {
+        helpText: "Starting sequence value"
+      },
+      "fields.language": {
+        helpText: "Editor language (e.g. sql, javascript)"
+      },
+      "fields.validation": {
+        helpText: "CEL predicate — must evaluate true"
+      },
+      "fields.errorMessage": {
+        helpText: "Shown when validation fails"
+      },
+      "fields.audit": {
+        helpText: "Audit changes to this field"
+      },
+      "fields.trackHistory": {
+        helpText: "Keep change history"
+      },
+      "fields.pii": {
+        helpText: "Personally identifiable information"
+      },
+      "fields.encrypted": {
+        helpText: "Encrypt at rest"
       },
       capabilities: {
         helpText: "Enable/disable system features"
@@ -742,57 +847,14 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
       }
     }
   },
-  workflow: {
-    label: "Workflow",
-    sections: {
-      basics: {
-        label: "Basics",
-        description: "Identity and the object/event that triggers it."
-      },
-      actions: {
-        label: "Actions",
-        description: "What this workflow does when fired."
-      },
-      advanced: {
-        label: "Advanced",
-        description: "Ordering and execution behaviour."
-      }
-    },
-    fields: {
-      name: {
-        helpText: "Unique identifier (snake_case)"
-      },
-      objectName: {
-        helpText: "Which object triggers this workflow"
-      },
-      triggerType: {
-        helpText: "When to run: on_create, on_update, on_delete, schedule"
-      },
-      active: {
-        helpText: "Enable/disable this workflow"
-      },
-      description: {
-        helpText: "What this workflow does"
-      },
-      criteria: {
-        helpText: "CEL expression: only run when this condition is true"
-      },
-      actions: {
-        helpText: "Actions to execute immediately (field update, email, API call, etc.)"
-      },
-      timeTriggers: {
-        helpText: "Scheduled actions (e.g., send reminder 1 day before deadline)"
-      },
-      executionOrder: {
-        helpText: "Run order when multiple workflows match (lower = earlier)"
-      }
-    }
-  },
   job: {
     label: "Background Job"
   },
   datasource: {
     label: "Datasource"
+  },
+  external_catalog: {
+    label: "External Catalog"
   },
   translation: {
     label: "Translation"
@@ -817,27 +879,47 @@ export const enMetadataForms: NonNullable<TranslationData['metadataForms']> = {
         label: "Subject",
         description: "Subject line. Supports {{var.path}} interpolation."
       },
-      body: {
-        label: "Body",
-        description: "Email body. Use {{var}} for variables. Editor highlights based on body type."
+      html_body: {
+        label: "HTML body",
+        description: "Rich HTML body. Most clients strip <head>, so use inline styles."
       },
-      variables_and_attachments: {
-        label: "Variables & Attachments",
-        description: "Declared template variables and optional file attachments."
+      plain_text_body: {
+        label: "Plain-text body",
+        description: "Optional plain-text alternative. When omitted, the service strips tags from the HTML body to derive one. Providing one improves spam scoring."
+      },
+      variables: {
+        label: "Variables",
+        description: "Declared variables. Rendered as hints in Studio and validated by sendTemplate() when required."
+      },
+      delivery_overrides: {
+        label: "Delivery overrides",
+        description: "Optional per-template overrides for From / Reply-To."
+      },
+      status: {
+        label: "Status"
       }
     },
     fields: {
-      id: {
-        helpText: "Template id (e.g. auth.password_reset)"
+      name: {
+        helpText: "Dotted snake_case (e.g. auth.password_reset, crm.welcome)"
       },
-      body: {
-        helpText: "Body content. Will be rendered as HTML, plain text, or Markdown based on Body Type."
+      locale: {
+        helpText: "BCP-47 tag — e.g. en-US, zh-CN"
       },
       variables: {
         helpText: "List of variable names referenced in subject/body"
       },
-      attachments: {
-        helpText: "[{ \"name\": \"...\", \"url\": \"...\" }]"
+      fromOverride: {
+        helpText: "{ \"name\": \"Acme Sales\", \"address\": \"sales@acme.com\" }"
+      },
+      replyTo: {
+        helpText: "Reply-To email address"
+      },
+      active: {
+        helpText: "When unchecked, sendTemplate() returns TEMPLATE_INACTIVE."
+      },
+      isSystem: {
+        helpText: "Built-in template; tenants may override but should not delete."
       }
     }
   },
