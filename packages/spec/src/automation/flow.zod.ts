@@ -29,7 +29,8 @@ export const FlowNodeAction = z.enum([
   'update_record',      // CRUD: Update
   'delete_record',      // CRUD: Delete
   'get_record',         // CRUD: Get/Query
-  'http_request',       // Webhook/API Call
+  'http',               // Outbound HTTP callout (ADR-0018 M3) — canonical; outbox-backed when durable
+  'http_request',       // Deprecated alias of `http` (ADR-0018 M3)
   'notify',             // Outbound notification (ADR-0012) — dispatched via the messaging service
   'script',             // Custom Script (JS/TS)
   'screen',             // Screen / User-Input Element

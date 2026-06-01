@@ -105,6 +105,34 @@ export type {
 export { NotificationRetention, DEFAULT_RETENTION_TARGETS } from './retention.js';
 export type { NotificationRetentionOptions, RetentionTarget, PruneOutcome } from './retention.js';
 
+// Generic outbound-HTTP delivery outbox (ADR-0018 M3) — the raw-callout
+// counterpart to the notification outbox, shared by the Flow `http` node and
+// webhook fan-out.
+export type {
+    IHttpOutbox,
+    HttpDelivery as HttpDeliveryRecord,
+    HttpDeliveryStatus,
+    EnqueueHttpInput,
+    HttpClaimOptions,
+    HttpAckResult,
+    HttpAckSuccess,
+    HttpAckFailure,
+} from './http-outbox.js';
+export { HttpRedeliverError } from './http-outbox.js';
+export { SqlHttpOutbox, type SqlHttpOutboxOptions } from './sql-http-outbox.js';
+export { MemoryHttpOutbox } from './memory-http-outbox.js';
+export { HttpDispatcher } from './http-dispatcher.js';
+export type { HttpDispatcherOptions, HttpDispatcherLogger } from './http-dispatcher.js';
+export {
+    sendOnce as sendHttpOnce,
+    classifyAttempt as classifyHttpAttempt,
+    nextHttpRetryDelayMs,
+    newDeliveryId as newHttpDeliveryId,
+    DEFAULT_HTTP_TIMEOUT_MS,
+    type FetchImpl,
+    type HttpAttemptOutcome,
+} from './http-sender.js';
+
 // Objects (metadata definitions)
 export {
     InboxMessage,
@@ -113,4 +141,6 @@ export {
     NotificationPreference,
     NotificationSubscription,
     NotificationTemplate,
+    HttpDelivery,
+    SYS_HTTP_DELIVERY,
 } from './objects/index.js';

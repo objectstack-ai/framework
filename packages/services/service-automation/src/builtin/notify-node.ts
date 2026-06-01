@@ -64,6 +64,9 @@ export function registerNotifyNode(engine: AutomationEngine, ctx: PluginContext)
             description: 'Send an outbound notification to users via the messaging service (inbox / email / push / …).',
             icon: 'bell', category: 'io', source: 'builtin',
             supportsRetry: true,
+            // Delivery is outbox-backed inside the messaging service (ADR-0030
+            // emit → sys_notification_delivery), so it inherits retry/dead-letter.
+            needsOutbox: true,
             paradigms: ['flow', 'workflow_rule', 'approval'],
         }),
         async execute(node, variables, context) {

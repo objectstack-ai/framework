@@ -4,7 +4,7 @@ import type { FlowParsed, FlowNodeParsed, FlowEdgeParsed } from '@objectstack/sp
 import type { ExecutionLog, ActionDescriptor } from '@objectstack/spec/automation';
 import type { AutomationContext, AutomationResult, ResumeSignal, IAutomationService, ScreenSpec } from '@objectstack/spec/contracts';
 import type { Logger } from '@objectstack/spec/contracts';
-import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES } from '@objectstack/spec/automation';
+import { FlowSchema, FLOW_STRUCTURAL_NODE_TYPES, defineActionDescriptor } from '@objectstack/spec/automation';
 import type { Connector } from '@objectstack/spec/integration';
 import { ConnectorSchema } from '@objectstack/spec/integration';
 // Static import (not a lazy `require`): the engine ships as ESM ("type":"module"),
@@ -314,6 +314,63 @@ export class AutomationEngine implements IAutomationService {
         }
 
         this.logger.info(`Node executor registered: ${executor.type}`);
+    }
+
+    /**
+     * Register a **deprecated alias** of a canonical node type (ADR-0018 M3).
+     *
+     * The alias is a real registered executor, so old saved flows whose nodes
+     * use the alias type keep validating and running with no migration. At
+     * execute time it delegates to the canonical executor (resolved live, so the
+     * canonical may be registered before or after the alias), logging a one-time
+     * deprecation warning. Its published descriptor is flagged `deprecated` +
+     * `aliasOf` so the designer palette can hide or mark it while the canonical
+     * type is the one offered for new authoring.
+     *
+     * This is how ADR-0018 collapses the five outbound verbs onto `http` /
+     * `notify`: `http_request` / `http_call` / `webhook` become aliases of
+     * `http`.
+     */
+    registerNodeAlias(
+        alias: string,
+        canonicalType: string,
+        meta?: { name?: string; category?: ActionDescriptor['category']; paradigms?: ActionDescriptor['paradigms']; needsOutbox?: boolean },
+    ): void {
+        const engine = this;
+        let warned = false;
+        this.registerNodeExecutor({
+            type: alias,
+            descriptor: defineActionDescriptor({
+                type: alias,
+                version: '1.0.0',
+                name: meta?.name ?? alias,
+                description: `Deprecated alias of '${canonicalType}' (ADR-0018 M3). Author new flows with '${canonicalType}'.`,
+                category: meta?.category ?? 'io',
+                source: 'builtin',
+                paradigms: meta?.paradigms ?? ['flow', 'workflow_rule', 'approval'],
+                supportsRetry: true,
+                needsOutbox: meta?.needsOutbox ?? false,
+                deprecated: true,
+                aliasOf: canonicalType,
+            }),
+            async execute(node, variables, context) {
+                if (!warned) {
+                    warned = true;
+                    engine.logger.warn(
+                        `Node type '${alias}' is deprecated; use '${canonicalType}' (ADR-0018 M3). Existing flows keep running via the alias.`,
+                    );
+                }
+                const target = engine.nodeExecutors.get(canonicalType);
+                if (!target) {
+                    return {
+                        success: false,
+                        error: `alias '${alias}' → '${canonicalType}': canonical executor not registered`,
+                    };
+                }
+                return target.execute(node, variables, context);
+            },
+        });
+        this.logger.info(`Node alias registered: ${alias} → ${canonicalType} (deprecated)`);
     }
 
     /** Unregister a node executor (hot-unplug) */

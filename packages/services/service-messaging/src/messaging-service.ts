@@ -9,6 +9,7 @@ import type {
 import { RecipientResolver } from './recipient-resolver.js';
 import { PreferenceResolver, type PreferenceTarget } from './preference-resolver.js';
 import type { INotificationOutbox } from './outbox.js';
+import type { EnqueueHttpInput, IHttpOutbox } from './http-outbox.js';
 
 /** The L2 event object every `emit()` writes one row to (ADR-0030). */
 export const NOTIFICATION_EVENT_OBJECT = 'sys_notification';
@@ -125,6 +126,7 @@ export class MessagingService {
     private readonly resolver: RecipientResolver;
     private readonly preferences: PreferenceResolver;
     private outbox?: INotificationOutbox;
+    private httpOutbox?: IHttpOutbox;
 
     constructor(private readonly ctx: MessagingServiceContext) {
         this.now = ctx.now ?? (() => new Date().toISOString());
@@ -148,6 +150,35 @@ export class MessagingService {
      */
     setOutbox(outbox: INotificationOutbox): void {
         this.outbox = outbox;
+    }
+
+    /**
+     * Attach the generic outbound-HTTP delivery outbox (ADR-0018 M3). Wired by
+     * the plugin at `kernel:ready` once the data engine is resolvable. Once set,
+     * {@link enqueueHttp} persists durable rows the {@link HttpDispatcher}
+     * drains with retry / dead-letter; the Flow `http` node enqueues through it.
+     */
+    setHttpOutbox(outbox: IHttpOutbox): void {
+        this.httpOutbox = outbox;
+    }
+
+    /**
+     * Whether durable HTTP delivery is available. Callers (e.g. the `http` node)
+     * fall back to a direct, non-durable send when this is `false`.
+     */
+    isHttpDeliveryReady(): boolean {
+        return this.httpOutbox !== undefined;
+    }
+
+    /**
+     * Enqueue a durable outbound-HTTP delivery (ADR-0018 M3). Returns the row id.
+     * Throws if no HTTP outbox is wired — guard with {@link isHttpDeliveryReady}.
+     */
+    async enqueueHttp(input: EnqueueHttpInput): Promise<string> {
+        if (!this.httpOutbox) {
+            throw new Error('messaging: HTTP delivery outbox not configured (no data engine / reliableDelivery off)');
+        }
+        return this.httpOutbox.enqueue(input);
     }
 
     /** Register a channel implementation. A duplicate id warns and replaces. */

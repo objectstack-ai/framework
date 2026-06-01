@@ -6,7 +6,9 @@ import type { IDataEngine } from '@objectstack/spec/contracts';
 import { MessagingService } from './messaging-service.js';
 import { createInboxChannel } from './inbox-channel.js';
 import { SqlNotificationOutbox } from './sql-outbox.js';
+import { SqlHttpOutbox } from './sql-http-outbox.js';
 import { NotificationDispatcher, type DispatchCluster } from './dispatcher.js';
+import { HttpDispatcher } from './http-dispatcher.js';
 import { NotificationRetention } from './retention.js';
 import { createEmailChannel } from './email-channel.js';
 import { NotificationTemplateStore } from './template-renderer.js';
@@ -17,6 +19,7 @@ import {
     NotificationPreference,
     NotificationSubscription,
     NotificationTemplate,
+    HttpDelivery,
 } from './objects/index.js';
 
 export interface MessagingServicePluginOptions {
@@ -85,6 +88,7 @@ export class MessagingServicePlugin implements Plugin {
 
     private readonly options: Required<MessagingServicePluginOptions>;
     private dispatcher?: NotificationDispatcher;
+    private httpDispatcher?: HttpDispatcher;
     private retentionTimer?: ReturnType<typeof setInterval>;
 
     constructor(options: MessagingServicePluginOptions = {}) {
@@ -142,6 +146,7 @@ export class MessagingServicePlugin implements Plugin {
                 NotificationPreference,
                 NotificationSubscription,
                 NotificationTemplate,
+                HttpDelivery,
             ],
             navigationContributions: [
                 {
@@ -212,6 +217,24 @@ export class MessagingServicePlugin implements Plugin {
                 ctx.logger.info(
                     `[messaging] reliable delivery on (outbox + dispatcher, ${this.options.partitionCount} partitions${cluster ? ', clustered' : ', single-node'})`,
                 );
+
+                // ADR-0018 M3: generic outbound-HTTP outbox + dispatcher. Backs
+                // the Flow `http` node (and, going forward, webhook fan-out) with
+                // the same retry / dead-letter substrate as notifications.
+                const httpOutbox = new SqlHttpOutbox(engine, { partitionCount: this.options.partitionCount });
+                service.setHttpOutbox(httpOutbox);
+                this.httpDispatcher = new HttpDispatcher({
+                    nodeId: `http-${process.pid}-${randomUUID().slice(0, 8)}`,
+                    outbox: httpOutbox,
+                    cluster,
+                    partitionCount: this.options.partitionCount,
+                    intervalMs: this.options.dispatchIntervalMs,
+                    logger: ctx.logger,
+                });
+                this.httpDispatcher.start();
+                ctx.logger.info(
+                    `[messaging] HTTP delivery on (sys_http_delivery outbox + dispatcher, ${this.options.partitionCount} partitions)`,
+                );
             });
         }
 
@@ -246,6 +269,8 @@ export class MessagingServicePlugin implements Plugin {
     async stop(): Promise<void> {
         await this.dispatcher?.stop();
         this.dispatcher = undefined;
+        await this.httpDispatcher?.stop();
+        this.httpDispatcher = undefined;
         if (this.retentionTimer) {
             clearInterval(this.retentionTimer);
             this.retentionTimer = undefined;
