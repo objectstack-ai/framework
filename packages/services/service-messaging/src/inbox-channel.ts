@@ -12,6 +12,12 @@ import type {
 /** The object the inbox channel writes rows to. */
 export const INBOX_OBJECT = 'sys_inbox_message';
 
+/** The user identity object an email-shaped recipient is resolved against. */
+export const USER_OBJECT = 'sys_user';
+
+/** Cheap RFC-ish heuristic — "looks like an email" so we attempt id resolution. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export interface InboxChannelOptions {
     /**
      * Resolve the runtime data engine. Returns `undefined` when no data layer
@@ -22,6 +28,15 @@ export interface InboxChannelOptions {
     getData(): IDataEngine | undefined;
     /** Object name override (default {@link INBOX_OBJECT}). */
     objectName?: string;
+    /**
+     * User identity object used to resolve an email-shaped recipient to its
+     * id (default {@link USER_OBJECT}). The inbox is keyed by user id, but
+     * flows commonly address recipients by email (e.g. an `assignee` field),
+     * so a recipient matching {@link EMAIL_SHAPE} is looked up by `email` and
+     * replaced with the matching user's `id`. Verbatim fallback applies when
+     * the recipient is not email-shaped, no user matches, or the lookup fails.
+     */
+    userObject?: string;
     /** Clock injection for deterministic tests. Defaults to `new Date()`. */
     now?(): string;
 }
@@ -36,7 +51,38 @@ export interface InboxChannelOptions {
  */
 export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel {
     const objectName = opts.objectName ?? INBOX_OBJECT;
+    const userObject = opts.userObject ?? USER_OBJECT;
     const now = opts.now ?? (() => new Date().toISOString());
+
+    /**
+     * Map an email-shaped recipient to its user id; return the recipient
+     * unchanged for non-email recipients, on no match, or on any lookup error
+     * (the inbox row is best-effort keyed and must never fail on resolution).
+     */
+    async function resolveRecipient(
+        ctx: MessagingChannelContext,
+        data: IDataEngine,
+        recipient: string,
+    ): Promise<string> {
+        if (!EMAIL_SHAPE.test(recipient)) return recipient;
+        try {
+            const user = await data.findOne(userObject, {
+                where: { email: recipient },
+                fields: ['id'],
+            });
+            const id = user?.id;
+            if (id != null && String(id).length > 0) return String(id);
+            ctx.logger.warn(
+                `[inbox] no '${userObject}' matched email '${recipient}'; keying inbox row by the email verbatim`,
+            );
+            return recipient;
+        } catch (err) {
+            ctx.logger.warn(
+                `[inbox] failed to resolve '${recipient}' to a user id (${(err as Error).message}); keying by the email verbatim`,
+            );
+            return recipient;
+        }
+    }
 
     return {
         id: 'inbox',
@@ -52,8 +98,10 @@ export function createInboxChannel(opts: InboxChannelOptions): MessagingChannel 
                 return { ok: true };
             }
 
+            const userId = await resolveRecipient(ctx, data, delivery.recipient);
+
             const row: Record<string, unknown> = {
-                user_id: delivery.recipient,
+                user_id: userId,
                 topic: n.topic,
                 title: n.title,
                 body_md: n.body,

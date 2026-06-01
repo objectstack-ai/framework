@@ -1357,6 +1357,30 @@ export default class Serve extends Command {
           export: 'JobServicePlugin',
           nameMatch: ['service-job', 'JobServicePlugin'],
         },
+        messaging: {
+          // Backs the `notify` flow node (ADR-0012): delivers to a user's
+          // channels (inbox by default → `sys_inbox_message` rows). Without
+          // this the notify node degrades to a logged no-op.
+          pkg: '@objectstack/service-messaging',
+          export: 'MessagingServicePlugin',
+          nameMatch: ['service-messaging', 'MessagingServicePlugin'],
+        },
+        triggers: {
+          // Makes autolaunched flows actually fire. The automation engine ships
+          // the `FlowTrigger` wiring; these plugins are the concrete triggers:
+          // record-change (ObjectQL lifecycle hooks) + schedule (cron/interval
+          // via the job service — so pair `triggers` with `job`).
+          pkg: '@objectstack/plugin-trigger-record-change',
+          export: 'RecordChangeTriggerPlugin',
+          nameMatch: ['trigger-record-change', 'RecordChangeTriggerPlugin'],
+          extras: [
+            {
+              pkg: '@objectstack/plugin-trigger-schedule',
+              export: 'ScheduleTriggerPlugin',
+              nameMatch: ['trigger-schedule', 'ScheduleTriggerPlugin'],
+            },
+          ],
+        },
         realtime: {
           pkg: '@objectstack/service-realtime',
           export: 'RealtimeServicePlugin',
