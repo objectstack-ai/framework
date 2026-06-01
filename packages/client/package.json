@@ -31,7 +31,7 @@
     "@objectstack/runtime": "workspace:*",
     "msw": "^2.14.6",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   },
   "keywords": [
     "objectstack",
