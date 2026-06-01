@@ -10,7 +10,7 @@
  *   @objectstack/platform-objects/identity     — user, session, org, team, api-key, ...
  *   @objectstack/platform-objects/security     — role, permission-set
  *   @objectstack/platform-objects/audit        — audit-log, presence
- *   @objectstack/platform-objects/integration  — webhook (outbound HTTP integrations)
+ *   @objectstack/platform-objects/integration  — (empty; sys_webhook moved to @objectstack/plugin-webhooks per ADR-0029)
  *   @objectstack/platform-objects/metadata     — sys_metadata, sys_metadata_history
  *   @objectstack/platform-objects/apps         — built-in platform Apps (Setup, ...)
  *

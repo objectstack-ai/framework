@@ -4,9 +4,12 @@
  * Public schema subpath: `@objectstack/plugin-webhooks/schema`.
  *
  * Thin re-export barrel kept stable across refactors. The actual object
- * definition lives in `sys-webhook-delivery.object.ts` (matching the
- * `*.object.ts` convention used everywhere else in the monorepo for
- * `sys_*` schemas).
+ * definitions live in `sys-webhook.object.ts` and
+ * `sys-webhook-delivery.object.ts` (matching the `*.object.ts` convention
+ * used everywhere else in the monorepo for `sys_*` schemas).
+ *
+ * `sys_webhook` moved here from `@objectstack/platform-objects` per
+ * ADR-0029 (K2.a) so this plugin owns both of its objects.
  *
  * Note: callers that just need the runtime should import from the
  * package root (`@objectstack/plugin-webhooks`), which auto-registers
@@ -16,6 +19,7 @@
  * different runtime).
  */
 
+export { SysWebhook } from './sys-webhook.object.js';
 export {
   SysWebhookDelivery,
   SYS_WEBHOOK_DELIVERY,

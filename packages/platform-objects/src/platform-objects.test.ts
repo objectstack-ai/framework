@@ -24,7 +24,7 @@ import {
   defaultPermissionSets,
 } from './security/index.js';
 import { SysAuditLog, SysPresence } from './audit/index.js';
-import { SysWebhook } from './integration/index.js';
+// sys_webhook moved to @objectstack/plugin-webhooks per ADR-0029 (K2.a).
 import {
   SysMetadata,
   SysMetadataHistoryObject,
@@ -52,7 +52,6 @@ const systemObjects = [
   ['SysRolePermissionSet', SysRolePermissionSet, 'sys_role_permission_set'],
   ['SysAuditLog', SysAuditLog, 'sys_audit_log'],
   ['SysPresence', SysPresence, 'sys_presence'],
-  ['SysWebhook', SysWebhook, 'sys_webhook'],
   ['SysMetadata', SysMetadata, 'sys_metadata'],
   ['SysMetadataHistoryObject', SysMetadataHistoryObject, 'sys_metadata_history'],
   ['SysSetting', SysSetting, 'sys_setting'],
