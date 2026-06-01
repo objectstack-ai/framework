@@ -7,7 +7,13 @@ import { MessagingService } from './messaging-service.js';
 import { createInboxChannel } from './inbox-channel.js';
 import { SqlNotificationOutbox } from './sql-outbox.js';
 import { NotificationDispatcher, type DispatchCluster } from './dispatcher.js';
-import { InboxMessage, NotificationReceipt, NotificationDelivery } from './objects/index.js';
+import {
+    InboxMessage,
+    NotificationReceipt,
+    NotificationDelivery,
+    NotificationPreference,
+    NotificationSubscription,
+} from './objects/index.js';
 
 export interface MessagingServicePluginOptions {
     /**
@@ -25,6 +31,12 @@ export interface MessagingServicePluginOptions {
     partitionCount?: number;
     /** Dispatcher tick interval in ms (default 500). */
     dispatchIntervalMs?: number;
+    /**
+     * Topics that bypass the per-user preference matrix (ADR-0030 P2) — e.g.
+     * security/system alerts users must not be able to mute. Exact match, or a
+     * `prefix.` entry for a prefix match (default none).
+     */
+    mandatoryTopics?: readonly string[];
 }
 
 /**
@@ -65,6 +77,7 @@ export class MessagingServicePlugin implements Plugin {
             reliableDelivery: true,
             partitionCount: 8,
             dispatchIntervalMs: 500,
+            mandatoryTopics: [],
             ...options,
         };
     }
@@ -82,7 +95,11 @@ export class MessagingServicePlugin implements Plugin {
             }
         };
 
-        const service = new MessagingService({ logger: ctx.logger, getData });
+        const service = new MessagingService({
+            logger: ctx.logger,
+            getData,
+            mandatoryTopics: this.options.mandatoryTopics,
+        });
 
         if (this.options.registerInbox) {
             service.registerChannel(createInboxChannel({ getData }));
@@ -90,14 +107,34 @@ export class MessagingServicePlugin implements Plugin {
 
         ctx.registerService('messaging', service);
 
-        // Register the messaging objects so their rows can be written.
+        // Register the messaging objects so their rows can be written. The
+        // preference/subscription objects (ADR-0030 P2) are Studio-configurable,
+        // so contribute them to the Setup app's Configuration slot (ADR-0029 D7)
+        // — they appear in nav only when this plugin is installed.
         ctx.getService<{ register(m: unknown): void }>('manifest').register({
             id: 'com.objectstack.service.messaging',
             name: 'Messaging Service',
             version: '1.0.0',
             type: 'plugin',
             scope: 'system',
-            objects: [InboxMessage, NotificationReceipt, NotificationDelivery],
+            objects: [
+                InboxMessage,
+                NotificationReceipt,
+                NotificationDelivery,
+                NotificationPreference,
+                NotificationSubscription,
+            ],
+            navigationContributions: [
+                {
+                    app: 'setup',
+                    group: 'group_configuration',
+                    priority: 120,
+                    items: [
+                        { id: 'nav_notification_preferences', type: 'object', label: 'Notification Preferences', objectName: 'sys_notification_preference', icon: 'bell-ring', requiresObject: 'sys_notification_preference' },
+                        { id: 'nav_notification_subscriptions', type: 'object', label: 'Notification Subscriptions', objectName: 'sys_notification_subscription', icon: 'rss', requiresObject: 'sys_notification_subscription' },
+                    ],
+                },
+            ],
         });
 
         // Reliable delivery (P1): wire the outbox + dispatcher once the engine

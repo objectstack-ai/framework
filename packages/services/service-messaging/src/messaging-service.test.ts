@@ -187,6 +187,47 @@ describe('MessagingService', () => {
             expect(result.delivered).toBe(2);
         });
 
+        it('applies the preference filter — a muted channel is dropped, a mandatory topic bypasses it', async () => {
+            // Engine returns a preference muting `email` for user_1 on topic 't'.
+            const prefRow = { user_id: 'user_1', topic: 't', channel: 'email', enabled: false };
+            const engine = {
+                async insert(_o: string, row: any) { return { id: 'evt_1', ...row }; },
+                async find(object: string, query: any) {
+                    if (object === 'sys_notification_preference') {
+                        return query?.where?.topic === 't' ? [prefRow] : [];
+                    }
+                    return [];
+                },
+                async findOne() { return null; },
+                async update() { return {}; },
+                async delete() { return {}; },
+                async count() { return 0; },
+                async aggregate() { return []; },
+            } as any;
+
+            // Non-mandatory topic 't': email is muted → only inbox delivered.
+            const svc = new MessagingService({ logger: silentLogger(), getData: () => engine });
+            const inbox = recordingChannel('inbox');
+            const email = recordingChannel('email');
+            svc.registerChannel(inbox.channel);
+            svc.registerChannel(email.channel);
+            const r1 = await svc.emit({ topic: 't', audience: ['user_1'], channels: ['inbox', 'email'], payload: { title: 'Hi' } });
+            expect(inbox.seen).toHaveLength(1);
+            expect(email.seen).toHaveLength(0); // muted
+            expect(r1.delivered).toBe(1);
+
+            // Same mute, but topic is mandatory → bypass → both channels delivered.
+            const mandatory = new MessagingService({ logger: silentLogger(), getData: () => engine, mandatoryTopics: ['t'] });
+            const inbox2 = recordingChannel('inbox');
+            const email2 = recordingChannel('email');
+            mandatory.registerChannel(inbox2.channel);
+            mandatory.registerChannel(email2.channel);
+            const r2 = await mandatory.emit({ topic: 't', audience: ['user_1'], channels: ['inbox', 'email'], payload: { title: 'Hi' } });
+            expect(inbox2.seen).toHaveLength(1);
+            expect(email2.seen).toHaveLength(1); // mandatory bypass
+            expect(r2.delivered).toBe(2);
+        });
+
         it('reports a failed delivery per recipient when a channel is unregistered, without throwing', async () => {
             const result = await service.emit({
                 topic: 't',
