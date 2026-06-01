@@ -1012,8 +1012,13 @@ export class SchemaRegistry {
    * Return a copy of `app` with all registered navigation contributions
    * merged into its `navigation` tree. The stored app is never mutated, so
    * repeated reads stay idempotent.
+   *
+   * Public so the protocol serving path (`getMetaItems` / `getMetaItem` for
+   * `app`) can merge contributions the same way `getApp` / `getAllApps` do —
+   * the REST app endpoints read through the protocol, not these helpers, so
+   * the merge must be reachable from there too (ADR-0029 D7).
    */
-  private applyNavContributions(app: any): any {
+  applyNavContributions(app: any): any {
     const contributions = this.appNavContributions.get(app?.name);
     if (!contributions || contributions.length === 0) return app;
 

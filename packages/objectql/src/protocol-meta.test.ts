@@ -792,6 +792,59 @@ describe('ObjectStackProtocolImplementation - Metadata Persistence', () => {
     });
 
     // ═══════════════════════════════════════════════════════════════
+    // ADR-0029 D7 — navigation contributions reach the serving path
+    //
+    // Regression: the setup app is a shell of empty group anchors; menu
+    // entries are injected as navigation contributions and merged lazily on
+    // read. `registry.getApp` / `getAllApps` did the merge, but the REST app
+    // endpoints read through `protocol.getMetaItems` / `getMetaItem`, which
+    // returned the raw shell — leaving every Setup menu group empty.
+    // ═══════════════════════════════════════════════════════════════
+
+    describe('app navigation contributions (ADR-0029 D7)', () => {
+        const shellApp = {
+            name: 'setup',
+            label: 'Setup',
+            navigation: [
+                { id: 'group_diagnostics', type: 'group', label: 'Diagnostics', children: [] },
+            ],
+        };
+
+        const contribution = {
+            app: 'setup',
+            group: 'group_diagnostics',
+            priority: 100,
+            items: [{ id: 'nav_audit_logs', type: 'object', label: 'Audit Logs', objectName: 'sys_audit_log' }],
+        };
+
+        it('getMetaItems({type:"app"}) merges contributions into the served app', async () => {
+            registry.registerItem('app', shellApp, 'name');
+            registry.registerAppNavContribution(contribution, 'platform-objects');
+
+            const result = await protocol.getMetaItems({ type: 'app' });
+
+            const setup = (result.items as any[]).find((a) => a.name === 'setup');
+            expect(setup).toBeDefined();
+            const group = setup.navigation.find((g: any) => g.id === 'group_diagnostics');
+            expect(group.children).toHaveLength(1);
+            expect(group.children[0].id).toBe('nav_audit_logs');
+            // The stored shell is never mutated — repeated reads stay idempotent.
+            expect((registry.getItem('app', 'setup') as any).navigation[0].children).toHaveLength(0);
+        });
+
+        it('getMetaItem({type:"app"}) merges contributions for a single-app fetch', async () => {
+            registry.registerItem('app', shellApp, 'name');
+            registry.registerAppNavContribution(contribution, 'platform-objects');
+
+            const result = await protocol.getMetaItem({ type: 'app', name: 'setup' });
+
+            const group = (result.item as any).navigation.find((g: any) => g.id === 'group_diagnostics');
+            expect(group.children).toHaveLength(1);
+            expect(group.children[0].id).toBe('nav_audit_logs');
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════════
     // loadMetaFromDb — startup hydration
     // ═══════════════════════════════════════════════════════════════
 

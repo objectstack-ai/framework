@@ -1281,6 +1281,16 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
             items = (items as any[]).filter((it) => !isAggregatedViewContainer(it));
         }
 
+        // Merge registered navigation contributions into each served app
+        // (ADR-0029 D7). The setup app is a shell of empty group anchors;
+        // platform-objects and capability plugins inject their menu entries as
+        // contributions, merged lazily on read. REST app endpoints read through
+        // this path (not registry.getAllApps), so the merge must happen here too
+        // or every contributed group renders empty.
+        if (request.type === 'app' || request.type === 'apps') {
+            items = (items as any[]).map((app) => this.engine.registry.applyNavContributions(app));
+        }
+
         return {
             type: request.type,
             items: decorateMetadataItems(
@@ -1415,6 +1425,14 @@ export class ObjectStackProtocolImplementation implements ObjectStackProtocol {
                 const alt = PLURAL_TO_SINGULAR[request.type] ?? SINGULAR_TO_PLURAL[request.type];
                 if (alt) item = this.engine.registry.getItem(alt, request.name);
             }
+        }
+
+        // Merge registered navigation contributions into a served app
+        // (ADR-0029 D7) — parity with the getMetaItems list path so a
+        // single-app fetch (GET /meta/app/<name>) also sees the contributed
+        // menu entries, not just the empty group-anchor shell.
+        if ((request.type === 'app' || request.type === 'apps') && item) {
+            item = this.engine.registry.applyNavContributions(item);
         }
 
         // ADR-0010 §3.3 — artifact-level protection (lock/packageId) always
